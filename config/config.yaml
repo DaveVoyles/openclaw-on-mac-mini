@@ -1,8 +1,8 @@
 # OpenClaw Configuration
 # Phase 1: Foundation
 
-version: "0.1.0"
-phase: 1
+version: "0.3.0"
+phase: 3
 
 # Bot settings
 bot:
@@ -17,6 +17,13 @@ llm:
   fallback_model: "gpt-4o-mini"
   max_tokens: 2000
   temperature: 0.7
+  max_tool_rounds: 5
+  rate_limits:
+    per_minute: 60
+    per_hour: 500
+  conversation:
+    ttl_minutes: 30
+    max_history: 20
 
 # Security settings
 security:

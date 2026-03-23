@@ -1,5 +1,5 @@
 """
-OpenClaw Discord Bot - Phase 2: Core Skills
+OpenClaw Discord Bot - Phase 3: LLM Integration
 Autonomous AI agent for home automation and system management.
 """
 
@@ -29,6 +29,9 @@ from skills import (
     restart_container,
 )
 
+from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
+from memory import store as conversation_store
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -47,7 +50,7 @@ AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -216,7 +219,7 @@ async def ping(interaction: discord.Interaction):
     )
     embed.add_field(name="Latency", value=f"{latency_ms} ms", inline=True)
     embed.add_field(name="Uptime", value=uptime_str, inline=True)
-    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 2")
+    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 3")
 
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "ping", f"latency={latency_ms}ms")
@@ -229,7 +232,7 @@ async def about(interaction: discord.Interaction):
         description="Autonomous AI agent for home automation and system management.",
         color=discord.Color.blurple(),
     )
-    embed.add_field(name="Version", value=f"{VERSION} (Phase 2)", inline=True)
+    embed.add_field(name="Version", value=f"{VERSION} (Phase 3)", inline=True)
     embed.add_field(name="Python", value=platform.python_version(), inline=True)
     embed.add_field(name="discord.py", value=discord.__version__, inline=True)
     embed.add_field(name="Host", value=platform.node(), inline=True)
@@ -266,6 +269,8 @@ async def help_cmd(interaction: discord.Interaction):
         color=discord.Color.blurple(),
     )
     commands_list = [
+        ("`/ask <question>`", "Ask OpenClaw anything (AI-powered)"),
+        ("`/clear`", "Clear your conversation history"),
         ("`/ping`", "Check if OpenClaw is alive"),
         ("`/about`", "Show version and system info"),
         ("`/whoami`", "Show your identity and permissions"),
@@ -280,7 +285,7 @@ async def help_cmd(interaction: discord.Interaction):
     for name, desc in commands_list:
         embed.add_field(name=name, value=desc, inline=False)
 
-    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 2")
+    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 3")
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "help")
 
@@ -400,6 +405,70 @@ async def restart_cmd(interaction: discord.Interaction, service: str):
     )
     await interaction.followup.send(embed=embed)
     audit_log(interaction.user, "restart", detail=service, result="success" if result.startswith("✅") else "failed")
+
+
+# ---------------------------------------------------------------------------
+# Slash commands — Phase 3 (LLM integration)
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="ask", description="Ask OpenClaw anything (AI-powered with function calling)")
+@app_commands.describe(question="Your question or request")
+async def ask_cmd(interaction: discord.Interaction, question: str):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+
+    if not llm_is_configured():
+        await interaction.response.send_message(
+            "⚠️ LLM not configured. Set `GOOGLE_API_KEY` in your `.env` file.",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer()
+
+    # Get or create conversation context
+    conv = conversation_store.get(
+        user_id=interaction.user.id,
+        channel_id=interaction.channel_id,
+        user_name=str(interaction.user.display_name),
+    )
+
+    try:
+        response_text, updated_history = await llm_chat(
+            user_message=question,
+            history=conv.history,
+            user_name=str(interaction.user.display_name),
+        )
+        conv.update_from_llm(updated_history)
+    except Exception as e:
+        log.error("LLM error: %s", e)
+        response_text = f"❌ LLM error: {e}"
+
+    # Truncate to Discord's limit
+    if len(response_text) > 1900:
+        response_text = response_text[:1880] + "\n… (truncated)"
+
+    embed = discord.Embed(
+        title="🧠 OpenClaw",
+        description=response_text,
+        color=discord.Color.purple(),
+    )
+    embed.set_footer(text=f"💬 {conv.message_count} msgs | {get_rate_info()}")
+
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "ask", detail=question[:200])
+
+    # Periodic cleanup
+    conversation_store.cleanup_expired()
+
+
+@bot.tree.command(name="clear", description="Clear your conversation history with OpenClaw")
+async def clear_cmd(interaction: discord.Interaction):
+    conversation_store.clear_user(interaction.user.id, interaction.channel_id)
+    await interaction.response.send_message("🧹 Conversation cleared. Starting fresh!", ephemeral=True)
+    audit_log(interaction.user, "clear")
 
 
 # ---------------------------------------------------------------------------

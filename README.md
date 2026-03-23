@@ -10,7 +10,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Port** | 8765 (health endpoint) |
 | **Interface** | Discord slash commands |
 | **LLM** | Google Gemini 2.0 Flash (paid tier) |
-| **Status** | Phase 2 — Core Skills |
+| **Status** | Phase 3 — LLM Integration |
 
 ## Features
 
@@ -27,8 +27,14 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/system` — CPU, memory, disk usage via Glances
 - `/restart <service>` — restart a container (approval required)
 
+**Phase 3 — LLM Integration** ✅
+- `/ask <question>` — AI-powered natural language queries via Gemini 2.0 Flash
+- Function calling — LLM autonomously invokes skills (container status, logs, system stats)
+- Conversation memory — multi-turn context per user/channel (30 min TTL)
+- `/clear` — reset conversation history
+- Rate limiting — 60 RPM / 500 RPH with graceful degradation
+
 **Planned**
-- Phase 3: LLM integration (Gemini-powered `/ask` command)
 - Phase 4: Approval workflows with Discord buttons
 - Phase 5: Media automation (Sonarr/Radarr/Plex queries)
 - Phase 6: Remote access via Tailscale + Traefik
@@ -98,13 +104,17 @@ Then type `/ping` in your Discord server.
 | `/logs <service>` | Tail last 30 lines of container logs | 2 |
 | `/system` | System resource usage (CPU, RAM, disk) | 2 |
 | `/restart <service>` | Restart a container (requires approval) | 2 |
+| `/ask <question>` | AI-powered natural language query (Gemini) | 3 |
+| `/clear` | Clear your conversation history | 3 |
 
 ## Architecture
 
 ```
 ~/openclaw/
-├── bot.py                 # Main Discord bot (commands + skills)
-├── skills.py              # Phase 2 skill implementations
+├── bot.py                 # Main Discord bot (commands + routing)
+├── skills.py              # Docker & system monitoring skills
+├── llm.py                 # Gemini LLM integration + function calling
+├── memory.py              # Per-user conversation memory
 ├── docker-compose.yml     # Container orchestration
 ├── Dockerfile             # Image build
 ├── .env                   # Secrets (not committed)
@@ -138,7 +148,7 @@ Then type `/ping` in your Discord server.
 
 - [x] **Phase 1**: Foundation — Discord bot with basic commands
 - [x] **Phase 2**: Core Skills — Docker management, system monitoring
-- [ ] **Phase 3**: LLM Integration — Gemini-powered AI responses
+- [x] **Phase 3**: LLM Integration — Gemini-powered AI responses + function calling
 - [ ] **Phase 4**: Security & Approvals — Approval workflows, audit logging
 - [ ] **Phase 5**: Advanced Skills — Media automation, scheduled tasks
 - [ ] **Phase 6**: Remote Access — Traefik routing, Uptime Kuma
