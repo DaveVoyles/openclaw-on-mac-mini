@@ -15,6 +15,7 @@ HOST = os.getenv("DOCKER_HOST_IP", "192.168.1.93")
 
 # Common Tailscale binary locations on macOS
 _TAILSCALE_PATHS = [
+    "/opt/homebrew/bin/tailscale",
     "/Applications/Tailscale.app/Contents/MacOS/tailscale",
     "/usr/local/bin/tailscale",
     "/usr/bin/tailscale",
