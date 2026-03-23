@@ -147,71 +147,247 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <title>OpenClaw Dashboard</title>
 <style>
   :root {
-    --bg: #0d1117; --surface: #161b22; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
-    --green: #3fb950; --yellow: #d29922; --red: #f85149;
-    --purple: #bc8cff;
+    /* JHU Primary */
+    --heritage-blue: #002D72;
+    --spirit-blue: #68ACE5;
+    /* JHU Cool Accents */
+    --medium-blue: #0077D8;
+    --harbor-blue: #4E97E0;
+    --mint-green: #86C8BC;
+    --homewood-green: #008767;
+    --forest-green: #275E3D;
+    --lavender: #9E8FB0;
+    --plum: #51284F;
+    /* JHU Warm Accents */
+    --gold: #F1C400;
+    --orange: #FF9E1B;
+    --red: #CF4520;
+    --dark-red: #A6192E;
+    /* JHU Grayscale */
+    --sable: #31261D;
+    --white: #FFFFFF;
+    --black: #000000;
+
+    /* Semantic mapping */
+    --bg: #001233;           /* deep navy (darker than heritage for bg) */
+    --surface: rgba(0, 45, 114, 0.35);  /* heritage blue glass */
+    --surface-solid: #001e4d;
+    --border: rgba(104, 172, 229, 0.2);
+    --text: #e8f0fe;
+    --muted: rgba(104, 172, 229, 0.7);
+    --accent: var(--spirit-blue);
+    --accent2: var(--gold);
+    --green: var(--homewood-green);
+    --yellow: var(--gold);
+    --warn: var(--orange);
+    --danger: var(--red);
+    --glow: rgba(104, 172, 229, 0.15);
   }
+
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-         background: var(--bg); color: var(--text); line-height: 1.5; padding: 1.5rem; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
-  h2 { font-size: 1.1rem; color: var(--accent); margin-bottom: 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
-  .header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-  .header-right { margin-left: auto; display: flex; gap: 0.75rem; align-items: center; }
-  .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600; }
-  .badge-green { background: rgba(63,185,80,0.15); color: var(--green); }
-  .badge-blue { background: rgba(88,166,255,0.15); color: var(--accent); }
-  .badge-purple { background: rgba(188,140,255,0.15); color: var(--purple); }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
-  .stat-row { display: flex; justify-content: space-between; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+    min-height: 100vh; overflow-x: hidden;
+  }
+
+  /* WebGL canvas background */
+  #gl-canvas {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none;
+  }
+
+  .container { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+  a { color: var(--spirit-blue); text-decoration: none; transition: color 0.2s; }
+  a:hover { color: var(--gold); }
+
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.02em; }
+  h2 {
+    font-size: 1rem; font-weight: 600; color: var(--gold);
+    margin-bottom: 0.75rem; padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+    padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+  }
+  .header-title { display: flex; align-items: center; gap: 0.75rem; }
+  .header-title .logo {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--heritage-blue), var(--medium-blue));
+    display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+    box-shadow: 0 0 20px rgba(0,119,216,0.3);
+  }
+  .header-right { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.25rem 0.7rem; border-radius: 2rem; font-size: 0.72rem;
+    font-weight: 600; letter-spacing: 0.02em;
+  }
+  .badge-green { background: rgba(0,135,103,0.2); color: var(--mint-green); border: 1px solid rgba(0,135,103,0.3); }
+  .badge-blue { background: rgba(104,172,229,0.15); color: var(--spirit-blue); border: 1px solid rgba(104,172,229,0.2); }
+  .badge-gold { background: rgba(241,196,0,0.12); color: var(--gold); border: 1px solid rgba(241,196,0,0.2); }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .badge-green .badge-dot { background: var(--mint-green); box-shadow: 0 0 6px var(--mint-green); }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.82rem;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+    border: 1px solid var(--border); color: var(--text);
+    background: var(--surface);
+    backdrop-filter: blur(8px); text-decoration: none;
+  }
+  .btn:hover {
+    background: rgba(0,119,216,0.25); border-color: var(--spirit-blue);
+    transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,119,216,0.2);
+    color: var(--white); text-decoration: none;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--heritage-blue), var(--medium-blue));
+    border-color: var(--medium-blue);
+  }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, var(--medium-blue), var(--harbor-blue));
+    box-shadow: 0 4px 16px rgba(0,119,216,0.35);
+  }
+  .btn-gold { border-color: rgba(241,196,0,0.3); color: var(--gold); }
+  .btn-gold:hover { background: rgba(241,196,0,0.15); border-color: var(--gold); }
+  .btn-refresh { border-color: rgba(134,200,188,0.3); color: var(--mint-green); }
+  .btn-refresh:hover { background: rgba(0,135,103,0.15); border-color: var(--mint-green); }
+  .btn-refresh.spinning .btn-icon { animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; margin-bottom: 1.25rem; }
+
+  /* Cards */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 0.75rem; padding: 1.25rem;
+    backdrop-filter: blur(12px);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    margin-bottom: 1.25rem;
+  }
+  .card:hover { border-color: rgba(104,172,229,0.35); box-shadow: 0 0 20px var(--glow); }
+
+  /* Stat rows */
+  .stat-row { display: flex; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid rgba(104,172,229,0.08); }
   .stat-row:last-child { border-bottom: none; }
-  .stat-label { color: var(--muted); }
-  .stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
-  .progress-bar { width: 100%; height: 1.25rem; background: var(--border); border-radius: 0.625rem; overflow: hidden; margin: 0.5rem 0; }
-  .progress-fill { height: 100%; border-radius: 0.625rem; transition: width 0.5s; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th { text-align: left; padding: 0.5rem; border-bottom: 2px solid var(--border); color: var(--muted); font-weight: 600; }
-  td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
-  tr:hover td { background: rgba(88,166,255,0.04); }
-  .cmd-cat { color: var(--accent); font-weight: 600; padding-top: 0.75rem; }
-  code { background: rgba(88,166,255,0.1); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.82rem; }
-  .links { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; }
-  .links a { padding: 0.4rem 0.8rem; border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.85rem; }
-  .links a:hover { border-color: var(--accent); background: rgba(88,166,255,0.08); text-decoration: none; }
-  #loading { text-align: center; padding: 3rem; color: var(--muted); }
-  .chart-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; }
-  .chart-bar-inner { height: 1rem; background: var(--accent); border-radius: 0.25rem; min-width: 2px; transition: width 0.3s; }
-  .chart-label { font-size: 0.75rem; color: var(--muted); min-width: 5.5rem; }
-  .chart-value { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
-  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } body { padding: 0.75rem; } }
+  .stat-label { color: var(--muted); font-size: 0.85rem; }
+  .stat-value { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+
+  /* Progress bar */
+  .progress-bar {
+    width: 100%; height: 1.4rem; border-radius: 0.7rem; overflow: hidden;
+    margin: 0.6rem 0; background: rgba(0,45,114,0.5);
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .progress-fill {
+    height: 100%; border-radius: 0.7rem; transition: width 0.8s ease;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.68rem; font-weight: 700; color: var(--white);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+  .pf-ok { background: linear-gradient(90deg, var(--homewood-green), var(--mint-green)); }
+  .pf-warn { background: linear-gradient(90deg, var(--gold), var(--orange)); }
+  .pf-danger { background: linear-gradient(90deg, var(--red), var(--dark-red)); }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th {
+    text-align: left; padding: 0.5rem 0.6rem;
+    border-bottom: 2px solid rgba(104,172,229,0.2);
+    color: var(--gold); font-weight: 600; font-size: 0.75rem;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  td { padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(104,172,229,0.06); }
+  tr:hover td { background: rgba(0,119,216,0.06); }
+  .cmd-cat {
+    color: var(--spirit-blue); font-weight: 700; padding-top: 0.85rem;
+    font-size: 0.78rem; letter-spacing: 0.03em;
+  }
+  code {
+    background: rgba(0,119,216,0.12); color: var(--spirit-blue);
+    padding: 0.15rem 0.45rem; border-radius: 0.3rem; font-size: 0.8rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* Daily chart bars */
+  .chart-bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+  .chart-bar-inner {
+    height: 1.1rem; border-radius: 0.3rem; min-width: 3px;
+    background: linear-gradient(90deg, var(--medium-blue), var(--spirit-blue));
+    transition: width 0.5s ease; box-shadow: 0 0 8px rgba(104,172,229,0.2);
+  }
+  .chart-label { font-size: 0.75rem; color: var(--muted); min-width: 4.5rem; font-variant-numeric: tabular-nums; }
+  .chart-value { font-size: 0.73rem; font-variant-numeric: tabular-nums; color: var(--spirit-blue); }
+
+  /* Skill search */
+  .search-box {
+    width: 100%; padding: 0.5rem 0.75rem; margin-bottom: 0.75rem;
+    background: rgba(0,45,114,0.4); border: 1px solid var(--border);
+    border-radius: 0.4rem; color: var(--text); font-size: 0.85rem;
+    outline: none; transition: border-color 0.2s;
+  }
+  .search-box:focus { border-color: var(--spirit-blue); box-shadow: 0 0 0 3px rgba(104,172,229,0.15); }
+  .search-box::placeholder { color: var(--muted); }
+
+  /* Loading */
+  #loading {
+    text-align: center; padding: 4rem; color: var(--muted);
+    font-size: 1.1rem;
+  }
+  .loader {
+    width: 36px; height: 36px; border: 3px solid var(--border);
+    border-top-color: var(--spirit-blue); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 1rem;
+  }
+
+  /* Footer */
+  .footer { text-align: center; color: var(--muted); font-size: 0.75rem; padding: 1.5rem 0 0.5rem; border-top: 1px solid var(--border); margin-top: 1rem; }
+
+  @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } .container { padding: 0.75rem; } }
 </style>
 </head>
 <body>
-<div id="loading">Loading dashboard data&hellip;</div>
+<canvas id="gl-canvas"></canvas>
+<div class="container">
+
+<div id="loading"><div class="loader"></div>Connecting to OpenClaw&hellip;</div>
 <div id="app" style="display:none">
 
   <!-- Header -->
   <div class="header">
-    <div>
-      <h1>&#128033; OpenClaw Dashboard</h1>
-      <span id="subtitle" class="badge badge-blue"></span>
+    <div class="header-title">
+      <div class="logo">&#129490;</div>
+      <div>
+        <h1>OpenClaw</h1>
+        <span id="subtitle" class="badge badge-blue" style="margin-top:2px"></span>
+      </div>
     </div>
     <div class="header-right">
-      <span id="status-badge" class="badge badge-green">Healthy</span>
-      <span id="uptime-badge" class="badge badge-purple"></span>
+      <span id="status-badge" class="badge badge-green"><span class="badge-dot"></span> Online</span>
+      <span id="uptime-badge" class="badge badge-gold"></span>
     </div>
   </div>
 
-  <!-- Quick Links -->
-  <div class="links" style="margin-bottom:1.25rem">
-    <a id="link-github" href="#" target="_blank">&#128279; GitHub Repo</a>
-    <a id="link-health" href="/health" target="_blank">&#128154; Health</a>
-    <a id="link-metrics" href="/metrics" target="_blank">&#128200; Prometheus</a>
-    <a id="link-api" href="/api/dashboard" target="_blank">&#128203; API JSON</a>
+  <!-- Buttons -->
+  <div class="btn-row">
+    <a id="link-github" class="btn btn-primary" href="#" target="_blank"><span class="btn-icon">&#128279;</span> GitHub</a>
+    <a class="btn" href="/health" target="_blank"><span class="btn-icon">&#128154;</span> Health</a>
+    <a class="btn" href="/metrics" target="_blank"><span class="btn-icon">&#128200;</span> Prometheus</a>
+    <a class="btn btn-gold" href="/api/dashboard" target="_blank"><span class="btn-icon">&#128203;</span> API JSON</a>
+    <button class="btn btn-refresh" onclick="refreshData(this)"><span class="btn-icon">&#8635;</span> Refresh</button>
   </div>
 
   <!-- Top cards -->
@@ -219,14 +395,14 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     <!-- Spending -->
     <div class="card">
       <h2>&#128176; Gemini Spending</h2>
-      <div class="stat-row"><span class="stat-label">Total Cost</span><span class="stat-value" id="sp-cost"></span></div>
-      <div class="stat-row"><span class="stat-label">Budget</span><span class="stat-value" id="sp-budget"></span></div>
+      <div class="stat-row"><span class="stat-label">Total Cost</span><span class="stat-value" id="sp-cost" style="color:var(--gold)"></span></div>
+      <div class="stat-row"><span class="stat-label">Remaining</span><span class="stat-value" id="sp-budget"></span></div>
       <div class="progress-bar"><div class="progress-fill" id="sp-bar"></div></div>
       <div class="stat-row"><span class="stat-label">Input Tokens</span><span class="stat-value" id="sp-in"></span></div>
       <div class="stat-row"><span class="stat-label">Output Tokens</span><span class="stat-value" id="sp-out"></span></div>
       <div class="stat-row"><span class="stat-label">API Calls</span><span class="stat-value" id="sp-calls"></span></div>
       <div class="stat-row"><span class="stat-label">Avg / Call</span><span class="stat-value" id="sp-avg"></span></div>
-      <div class="stat-row"><span class="stat-label">Est. Calls Left</span><span class="stat-value" id="sp-remaining"></span></div>
+      <div class="stat-row"><span class="stat-label">Est. Calls Left</span><span class="stat-value" id="sp-remaining" style="color:var(--mint-green)"></span></div>
     </div>
 
     <!-- System -->
@@ -234,8 +410,8 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
       <h2>&#9881;&#65039; System Info</h2>
       <div class="stat-row"><span class="stat-label">Version</span><span class="stat-value" id="sys-version"></span></div>
       <div class="stat-row"><span class="stat-label">Phase</span><span class="stat-value" id="sys-phase"></span></div>
-      <div class="stat-row"><span class="stat-label">Bot User</span><span class="stat-value" id="sys-bot"></span></div>
-      <div class="stat-row"><span class="stat-label">Model</span><span class="stat-value" id="sys-model"></span></div>
+      <div class="stat-row"><span class="stat-label">Bot User</span><span class="stat-value" id="sys-bot" style="color:var(--spirit-blue)"></span></div>
+      <div class="stat-row"><span class="stat-label">Model</span><span class="stat-value" id="sys-model" style="color:var(--gold)"></span></div>
       <div class="stat-row"><span class="stat-label">Rate Limits</span><span class="stat-value" id="sys-rates"></span></div>
       <div class="stat-row"><span class="stat-label">Python</span><span class="stat-value" id="sys-python"></span></div>
       <div class="stat-row"><span class="stat-label">discord.py</span><span class="stat-value" id="sys-discordpy"></span></div>
@@ -244,143 +420,301 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   </div>
 
   <!-- Daily spending chart -->
-  <div class="card" style="margin-bottom:1.25rem">
+  <div class="card">
     <h2>&#128202; Daily Spending</h2>
-    <div id="daily-chart"><span style="color:var(--muted)">No data yet — spending will appear after first /ask</span></div>
+    <div id="daily-chart"><span style="color:var(--muted);font-style:italic">No data yet &#8212; spending will appear after your first /ask</span></div>
   </div>
 
   <!-- Skills -->
-  <div class="card" style="margin-bottom:1.25rem">
+  <div class="card">
     <h2>&#129520; Skills (<span id="skill-count">0</span>)</h2>
+    <input type="text" class="search-box" id="skill-search" placeholder="&#128269; Search skills..." oninput="filterSkills()">
     <table>
-      <thead><tr><th>#</th><th>Skill</th><th>Description</th></tr></thead>
+      <thead><tr><th style="width:2rem">#</th><th style="width:12rem">Skill</th><th>Description</th></tr></thead>
       <tbody id="skills-body"></tbody>
     </table>
   </div>
 
   <!-- Commands -->
-  <div class="card" style="margin-bottom:1.25rem">
+  <div class="card">
     <h2>&#128172; Discord Commands</h2>
+    <input type="text" class="search-box" id="cmd-search" placeholder="&#128269; Search commands..." oninput="filterCmds()">
     <table>
-      <thead><tr><th>Command</th><th>Description</th></tr></thead>
+      <thead><tr><th style="width:14rem">Command</th><th>Description</th></tr></thead>
       <tbody id="commands-body"></tbody>
     </table>
   </div>
 
   <!-- Config -->
   <div class="card">
-    <h2>&#128272; Security & Config</h2>
+    <h2>&#128272; Security &amp; Config</h2>
     <div id="config-rows"></div>
   </div>
 
-</div>
+  <div class="footer">
+    OpenClaw &mdash; built with Heritage Blue &#128153; &mdash; <span id="refresh-ts"></span>
+  </div>
+
+</div><!-- /app -->
+</div><!-- /container -->
 
 <script>
+// =========================================================================
+// WebGL animated particle background
+// =========================================================================
+(function initGL() {
+  const canvas = document.getElementById('gl-canvas');
+  const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false });
+  if (!gl) return; // graceful fallback — no WebGL
+
+  function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; gl.viewport(0,0,canvas.width,canvas.height); }
+  resize(); window.addEventListener('resize', resize);
+
+  const vsrc = `
+    attribute vec2 aPos;
+    attribute float aSize;
+    attribute float aAlpha;
+    uniform vec2 uRes;
+    varying float vAlpha;
+    void main() {
+      vec2 clip = (aPos / uRes) * 2.0 - 1.0;
+      clip.y = -clip.y;
+      gl_Position = vec4(clip, 0.0, 1.0);
+      gl_PointSize = aSize;
+      vAlpha = aAlpha;
+    }`;
+  const fsrc = `
+    precision mediump float;
+    varying float vAlpha;
+    void main() {
+      float d = length(gl_PointCoord - 0.5) * 2.0;
+      if (d > 1.0) discard;
+      float a = smoothstep(1.0, 0.3, d) * vAlpha;
+      gl_FragColor = vec4(0.408, 0.675, 0.898, a); /* spirit blue */
+    }`;
+
+  function mkShader(src, type) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, mkShader(vsrc, gl.VERTEX_SHADER));
+  gl.attachShader(prog, mkShader(fsrc, gl.FRAGMENT_SHADER));
+  gl.linkProgram(prog); gl.useProgram(prog);
+
+  const N = 120;
+  const px = new Float32Array(N), py = new Float32Array(N);
+  const vx = new Float32Array(N), vy = new Float32Array(N);
+  const sz = new Float32Array(N), al = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    px[i] = Math.random() * canvas.width;
+    py[i] = Math.random() * canvas.height;
+    vx[i] = (Math.random() - 0.5) * 0.4;
+    vy[i] = (Math.random() - 0.5) * 0.3;
+    sz[i] = 1.5 + Math.random() * 3;
+    al[i] = 0.08 + Math.random() * 0.18;
+  }
+
+  const posBuf = gl.createBuffer(), sizeBuf = gl.createBuffer(), alphaBuf = gl.createBuffer();
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  const aSize = gl.getAttribLocation(prog, 'aSize');
+  const aAlpha = gl.getAttribLocation(prog, 'aAlpha');
+  const uRes = gl.getUniformLocation(prog, 'uRes');
+
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+
+  const posData = new Float32Array(N * 2);
+
+  function frame() {
+    gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform2f(uRes, canvas.width, canvas.height);
+
+    for (let i = 0; i < N; i++) {
+      px[i] += vx[i]; py[i] += vy[i];
+      if (px[i] < 0 || px[i] > canvas.width) vx[i] *= -1;
+      if (py[i] < 0 || py[i] > canvas.height) vy[i] *= -1;
+      posData[i*2] = px[i]; posData[i*2+1] = py[i];
+    }
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, posData, gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(aPos); gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, sizeBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, sz, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(aSize); gl.vertexAttribPointer(aSize, 1, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, alphaBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, al, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(aAlpha); gl.vertexAttribPointer(aAlpha, 1, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.POINTS, 0, N);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+
+// =========================================================================
+// Data fetch & render
+// =========================================================================
+let _allSkills = [], _allCmds = [];
+
+async function loadData() {
+  const r = await fetch('/api/dashboard');
+  return await r.json();
+}
+
+function render(d) {
+  // Header
+  const cmdCount = d.commands.reduce((a,c) => a + c.commands.length, 0);
+  document.getElementById('subtitle').textContent = `v${d.version} \u2022 ${d.skill_count} skills \u2022 ${cmdCount} commands`;
+  document.getElementById('uptime-badge').textContent = '\u23f1 ' + formatUptime(d.uptime_seconds);
+  document.getElementById('link-github').href = d.github_repo;
+
+  // Spending
+  const sp = d.spending;
+  document.getElementById('sp-cost').textContent = `$${sp.total_cost.toFixed(4)}`;
+  document.getElementById('sp-budget').textContent = `$${sp.budget_remaining.toFixed(4)} / $${sp.budget_limit.toFixed(2)}`;
+  const pct = sp.budget_pct;
+  const bar = document.getElementById('sp-bar');
+  bar.style.width = Math.max(pct, 2) + '%';
+  bar.className = 'progress-fill ' + (pct < 50 ? 'pf-ok' : pct < 80 ? 'pf-warn' : 'pf-danger');
+  bar.textContent = pct.toFixed(1) + '%';
+  document.getElementById('sp-in').textContent = sp.total_input_tokens.toLocaleString();
+  document.getElementById('sp-out').textContent = sp.total_output_tokens.toLocaleString();
+  document.getElementById('sp-calls').textContent = sp.calls.toLocaleString();
+  if (sp.calls > 0) {
+    const avg = sp.total_cost / sp.calls;
+    document.getElementById('sp-avg').textContent = `$${avg.toFixed(6)}`;
+    document.getElementById('sp-remaining').textContent = avg > 0 ? `~${Math.floor(sp.budget_remaining / avg).toLocaleString()}` : '\u2014';
+  } else {
+    document.getElementById('sp-avg').textContent = '\u2014';
+    document.getElementById('sp-remaining').textContent = '\u221e';
+  }
+
+  // Daily chart
+  const days = Object.entries(sp.daily).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 14);
+  const chartEl = document.getElementById('daily-chart');
+  if (days.length > 0) {
+    const maxCost = Math.max(...days.map(([,v]) => v.cost_usd), 0.0001);
+    chartEl.innerHTML = '';
+    days.reverse().forEach(([day, v]) => {
+      const p = (v.cost_usd / maxCost) * 100;
+      chartEl.innerHTML += `<div class="chart-bar"><span class="chart-label">${day.slice(5)}</span><div class="chart-bar-inner" style="width:${Math.max(p,2)}%"></div><span class="chart-value">$${v.cost_usd.toFixed(4)} &middot; ${v.calls} calls</span></div>`;
+    });
+  }
+
+  // System
+  document.getElementById('sys-version').textContent = d.version;
+  document.getElementById('sys-phase').textContent = 'Phase ' + d.config.phase;
+  document.getElementById('sys-bot').textContent = d.bot_user || 'N/A';
+  document.getElementById('sys-model').textContent = d.model;
+  document.getElementById('sys-rates').textContent = d.rate_info;
+  document.getElementById('sys-python').textContent = d.python;
+  document.getElementById('sys-discordpy').textContent = d.discord_py;
+  document.getElementById('sys-latency').textContent = d.latency_ms + ' ms';
+
+  // Skills
+  _allSkills = d.skills;
+  document.getElementById('skill-count').textContent = d.skill_count;
+  renderSkills(d.skills);
+
+  // Commands
+  _allCmds = d.commands;
+  renderCmds(d.commands);
+
+  // Config
+  const cr = document.getElementById('config-rows');
+  cr.innerHTML = '';
+  const sec = d.config.security || {};
+  const llm = d.config.llm || {};
+  [
+    ['Sandbox Mode', sec.sandbox_mode, true],
+    ['Require Approval', sec.require_approval, true],
+    ['Audit Logging', sec.audit_logging, true],
+    ['Max Tokens', llm.max_tokens || '?', false],
+    ['Temperature', llm.temperature || '?', false],
+    ['Max Tool Rounds', llm.max_tool_rounds || '?', false],
+    ['Conversation TTL', (llm.conversation?.ttl_minutes || '?') + ' min', false],
+    ['Max History', llm.conversation?.max_history || '?', false],
+  ].forEach(([k,v,isBool]) => {
+    const val = isBool ? (v ? '<span style="color:var(--mint-green)">&#10003; Enabled</span>' : '<span style="color:var(--danger)">&#10007; Disabled</span>') : v;
+    cr.innerHTML += `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-value">${val}</span></div>`;
+  });
+
+  document.getElementById('refresh-ts').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function renderSkills(skills) {
+  const sb = document.getElementById('skills-body');
+  sb.innerHTML = '';
+  skills.forEach((s, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="color:var(--muted)">${i+1}</td><td><code>${esc(s.name)}</code></td><td style="color:var(--muted)">${esc(s.description).slice(0,130)}</td>`;
+    sb.appendChild(tr);
+  });
+}
+
+function renderCmds(cmds) {
+  const cb = document.getElementById('commands-body');
+  cb.innerHTML = '';
+  cmds.forEach(cat => {
+    const hdr = document.createElement('tr');
+    hdr.innerHTML = `<td class="cmd-cat" colspan="2">${esc(cat.category)}</td>`;
+    hdr.dataset.cat = '1';
+    cb.appendChild(hdr);
+    cat.commands.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><code>${esc(c.name)}</code></td><td style="color:var(--muted)">${esc(c.desc)}</td>`;
+      tr.dataset.name = c.name.toLowerCase();
+      cb.appendChild(tr);
+    });
+  });
+}
+
+function filterSkills() {
+  const q = document.getElementById('skill-search').value.toLowerCase();
+  const filtered = q ? _allSkills.filter(s => s.name.includes(q) || s.description.toLowerCase().includes(q)) : _allSkills;
+  renderSkills(filtered);
+}
+
+function filterCmds() {
+  const q = document.getElementById('cmd-search').value.toLowerCase();
+  const rows = document.querySelectorAll('#commands-body tr');
+  rows.forEach(r => {
+    if (r.dataset.cat) { r.style.display = q ? 'none' : ''; return; }
+    r.style.display = (r.dataset.name || '').includes(q) || r.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+async function refreshData(btn) {
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+  try {
+    const d = await loadData();
+    render(d);
+  } catch(e) { console.error(e); }
+  if (btn) { setTimeout(() => { btn.classList.remove('spinning'); btn.disabled = false; }, 600); }
+}
+
+// Init
 (async () => {
   try {
-    const r = await fetch('/api/dashboard');
-    const d = await r.json();
-
-    // Header
-    document.getElementById('subtitle').textContent = `v${d.version} \u2022 ${d.skill_count} skills \u2022 ${d.commands.reduce((a,c) => a + c.commands.length, 0)} commands`;
-    document.getElementById('uptime-badge').textContent = formatUptime(d.uptime_seconds);
-    document.getElementById('link-github').href = d.github_repo;
-
-    // Spending
-    const sp = d.spending;
-    document.getElementById('sp-cost').textContent = `$${sp.total_cost.toFixed(4)}`;
-    document.getElementById('sp-budget').textContent = `$${sp.budget_remaining.toFixed(4)} / $${sp.budget_limit.toFixed(2)}`;
-    const pct = sp.budget_pct;
-    const bar = document.getElementById('sp-bar');
-    bar.style.width = Math.max(pct, 1) + '%';
-    bar.style.background = pct < 50 ? 'var(--green)' : pct < 80 ? 'var(--yellow)' : 'var(--red)';
-    bar.textContent = pct.toFixed(1) + '%';
-    document.getElementById('sp-in').textContent = sp.total_input_tokens.toLocaleString();
-    document.getElementById('sp-out').textContent = sp.total_output_tokens.toLocaleString();
-    document.getElementById('sp-calls').textContent = sp.calls.toLocaleString();
-    if (sp.calls > 0) {
-      const avg = sp.total_cost / sp.calls;
-      document.getElementById('sp-avg').textContent = `$${avg.toFixed(6)}`;
-      document.getElementById('sp-remaining').textContent = avg > 0 ? `~${Math.floor(sp.budget_remaining / avg).toLocaleString()}` : '\u2014';
-    } else {
-      document.getElementById('sp-avg').textContent = '\u2014';
-      document.getElementById('sp-remaining').textContent = '\u2014';
-    }
-
-    // Daily chart
-    const days = Object.entries(sp.daily).sort((a,b) => b[0].localeCompare(a[0])).slice(0, 14);
-    if (days.length > 0) {
-      const maxCost = Math.max(...days.map(([,v]) => v.cost_usd), 0.001);
-      const chartEl = document.getElementById('daily-chart');
-      chartEl.innerHTML = '';
-      days.reverse().forEach(([day, v]) => {
-        const pct = (v.cost_usd / maxCost) * 100;
-        chartEl.innerHTML += `<div class="chart-bar"><span class="chart-label">${day.slice(5)}</span><div class="chart-bar-inner" style="width:${Math.max(pct,1)}%"></div><span class="chart-value">$${v.cost_usd.toFixed(4)} (${v.calls} calls)</span></div>`;
-      });
-    }
-
-    // System
-    document.getElementById('sys-version').textContent = d.version;
-    document.getElementById('sys-phase').textContent = d.config.phase;
-    document.getElementById('sys-bot').textContent = d.bot_user || 'N/A';
-    document.getElementById('sys-model').textContent = d.model;
-    document.getElementById('sys-rates').textContent = d.rate_info;
-    document.getElementById('sys-python').textContent = d.python;
-    document.getElementById('sys-discordpy').textContent = d.discord_py;
-    document.getElementById('sys-latency').textContent = d.latency_ms + ' ms';
-
-    // Skills table
-    document.getElementById('skill-count').textContent = d.skill_count;
-    const sb = document.getElementById('skills-body');
-    d.skills.forEach((s, i) => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${i+1}</td><td><code>${s.name}</code></td><td>${esc(s.description).slice(0, 120)}</td>`;
-      sb.appendChild(tr);
-    });
-
-    // Commands table
-    const cb = document.getElementById('commands-body');
-    d.commands.forEach(cat => {
-      const hdr = document.createElement('tr');
-      hdr.innerHTML = `<td class="cmd-cat" colspan="2">${esc(cat.category)}</td>`;
-      cb.appendChild(hdr);
-      cat.commands.forEach(c => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td><code>${esc(c.name)}</code></td><td>${esc(c.desc)}</td>`;
-        cb.appendChild(tr);
-      });
-    });
-
-    // Config
-    const cr = document.getElementById('config-rows');
-    const sec = d.config.security || {};
-    const llm = d.config.llm || {};
-    const cfgItems = [
-      ['Sandbox Mode', sec.sandbox_mode ? 'Enabled' : 'Disabled'],
-      ['Require Approval', sec.require_approval ? 'Yes' : 'No'],
-      ['Audit Logging', sec.audit_logging ? 'Enabled' : 'Disabled'],
-      ['Max Tokens', llm.max_tokens || '?'],
-      ['Temperature', llm.temperature || '?'],
-      ['Max Tool Rounds', llm.max_tool_rounds || '?'],
-      ['Conversation TTL', (llm.conversation?.ttl_minutes || '?') + ' min'],
-      ['Max History', llm.conversation?.max_history || '?'],
-    ];
-    cfgItems.forEach(([k,v]) => {
-      cr.innerHTML += `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-value">${v}</span></div>`;
-    });
-
+    const d = await loadData();
+    render(d);
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display = 'block';
   } catch(e) {
-    document.getElementById('loading').textContent = 'Failed to load: ' + e.message;
+    document.getElementById('loading').innerHTML = `<span style="color:var(--danger)">Failed to connect: ${esc(e.message)}</span>`;
   }
 })();
+
+// Auto-refresh every 60s
+setInterval(() => refreshData(null), 60000);
 
 function formatUptime(s) {
   const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60);
   return d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function esc(s) { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; }
 </script>
 </body>
 </html>
