@@ -7,10 +7,12 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | | |
 |---|---|
 | **Host** | Mac Mini M4 Pro (192.168.1.93) |
-| **Port** | 8765 (health endpoint) |
-| **Interface** | Discord slash commands |
-| **LLM** | Google Gemini 2.0 Flash (paid tier) |
-| **Status** | Phase 5 — Advanced Skills |
+| **Health** | `http://192.168.1.93:8765/health` |
+| **Metrics** | `http://192.168.1.93:8765/metrics` (Prometheus) |
+| **External URL** | `openclaw.davevoyles.synology.me` (via Traefik) |
+| **Interface** | 28 Discord slash commands |
+| **LLM** | Google Gemini 2.0 Flash (paid tier, function calling) |
+| **Status** | **Phase 6 — Remote Access & Monitoring** ✅ |
 
 ## Features
 
@@ -53,13 +55,22 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/report` — comprehensive system status report
 - `/analyze` — AI-powered container log analysis (LLM or pattern-matching fallback)
 - `/schedule` — manage recurring scheduled tasks (daily or interval-based)
-- `/skills` — list all 18 available skills
-- 16 Gemini function-calling tools for natural language queries
+- `/skills` — list all 25 available skills
+- `/remember` / `/recall` — long-term QMD memory (persists to `qmd.json`)
+- `/mail` — send email via AgentMail.to
+- 25 Gemini function-calling tools for natural language queries
 - Persistent scheduled task system with JSON storage
 
+**Phase 6 — Remote Access & Monitoring** ✅
+- `/network` — LAN + internet + DNS + Tailscale + OpenClaw health summary
+- `/tailscale` — Tailscale VPN status and device IP
+- `/speedtest` — Cloudflare download speed + DNS latency
+- Prometheus metrics endpoint (`/metrics`) — `openclaw_up`, `openclaw_uptime_seconds`, `openclaw_latency_ms`, `openclaw_guilds`
+- Traefik reverse proxy route: `openclaw.davevoyles.synology.me`
+- Uptime Kuma monitor: polls `/health` every 60s with alerting
+
 **Planned**
-- Phase 6: Remote access via Tailscale + Traefik
-- Phase 7: Production hardening
+- Phase 7: Production hardening — comprehensive testing, backup/restore, Grafana dashboards
 
 ---
 
@@ -123,6 +134,7 @@ Then type `/ping` in your Discord server.
 | `/containers` | List all running Docker containers | 2 |
 | `/status <service>` | Detailed status for a specific container | 2 |
 | `/logs <service>` | Tail last 30 lines of container logs | 2 |
+| `/dockerstats` | Per-container resource usage snapshot | 2 |
 | `/system` | System resource usage (CPU, RAM, disk) | 2 |
 | `/restart <service>` | Restart a container (requires approval) | 2 |
 | `/ask <question>` | AI-powered natural language query (Gemini) | 3 |
@@ -139,40 +151,277 @@ Then type `/ping` in your Discord server.
 | `/report` | Generate comprehensive system status report | 5 |
 | `/analyze <service>` | AI-powered container log analysis | 5 |
 | `/schedule` | Manage scheduled tasks (add/list/remove/toggle) | 5 |
-| `/skills` | List all available skills (18 total) | 5 |
+| `/skills` | List all 25 available skills | 5 |
+| `/remember <content>` | Store a fact in long-term QMD memory | 5 |
+| `/recall <query>` | Search long-term QMD memory | 5 |
+| `/mail <to> <subject> <body>` | Send email via AgentMail.to | 5 |
+| `/network` | LAN + internet + DNS + Tailscale + health summary | 6 |
+| `/tailscale` | Tailscale VPN status and device IP | 6 |
+| `/speedtest` | Cloudflare download speed + DNS latency | 6 |
 
 ## Architecture
 
+### System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Your Devices                                 │
+│   📱 iPhone / iPad / MacBook (Discord app or browser)               │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ Discord API (outbound bot connection)
+                           ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                     Discord Gateway                                  │
+│   Slash commands, embeds, button UIs, approval flows                 │
+└──────────────────────────┬───────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│              OpenClaw Bot (Docker, port 8765)                        │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │   bot.py     │  │   llm.py     │  │  approvals   │               │
+│  │ 28 commands  │  │ Gemini Flash │  │ button UI    │               │
+│  └──────┬───────┘  └──────┬───────┘  └──────────────┘               │
+│         │                 │ function calling                         │
+│         ▼                 ▼                                          │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │                   Skill Registry (25 skills)                │    │
+│  │  Docker · System · Media(*arr) · Plex · Network ·           │    │
+│  │  AI Analysis · Scheduling · QMD Memory · AgentMail          │    │
+│  └───────────────────────────┬─────────────────────────────────┘    │
+│            /health            │           /metrics (Prometheus)      │
+└───────────────────────────────┼──────────────────────────────────────┘
+                                │ LAN (192.168.1.x)
+              ┌─────────────────┼──────────────────────┐
+              ▼                 ▼                      ▼
+     ┌────────────────┐ ┌───────────────┐   ┌──────────────────┐
+     │  Docker Engine │ │ *arr Services │   │ Synology NAS     │
+     │ (20 containers │ │ Sonarr/Radarr │   │ 192.168.1.8      │
+     │  on Mac Mini)  │ │ Lidarr/Prowlarr│  │ Media storage    │
+     └────────────────┘ │ SABnzbd/qBit  │   │ Traefik proxy    │
+                        │ Plex/Tautulli │   │ Uptime Kuma      │
+                        └───────────────┘   └──────────────────┘
+```
+
+### Request Flow — AI Function Calling
+
+```mermaid
+sequenceDiagram
+    participant U as Discord User
+    participant B as OpenClaw Bot
+    participant G as Gemini 2.0 Flash
+    participant S as Skills
+
+    U->>B: /ask "is sonarr healthy?"
+    B->>G: prompt + 25 tool declarations
+    G-->>B: call check_arr_health()
+    B->>S: invoke check_arr_health
+    S-->>B: {"sonarr": "healthy", ...}
+    B->>G: tool result
+    G-->>B: natural language summary
+    B-->>U: embed with answer
+```
+
+### Request Flow — Approval Workflow
+
+```mermaid
+sequenceDiagram
+    participant U as Discord User
+    participant B as OpenClaw Bot
+    participant A as Approver
+
+    U->>B: /restart sonarr
+    B->>B: check permissions.yaml
+    B-->>U: approval embed [✅ Approve] [❌ Deny]
+    A->>B: click ✅ Approve
+    B->>B: docker restart sonarr
+    B-->>U: ✅ sonarr restarted
+```
+
+### Network Architecture
+
+```
+Internet
+    │
+    ▼
+Synology DDNS (davevoyles.synology.me)
+    │
+    ▼
+Synology Built-in Reverse Proxy ──► Traefik (NAS, port 80/443)
+                                           │
+                    ┌──────────────────────┼──────────────────────┐
+                    ▼                      ▼                      ▼
+           sonarr.davevoyles.   openclaw.davevoyles.   plex.davevoyles.
+           synology.me          synology.me             synology.me
+                    │                      │                      │
+                    ▼                      ▼                      ▼
+        192.168.1.93:8989    192.168.1.93:8765         (plex direct)
+              (Sonarr)           (OpenClaw)
+
+ Remote Access via Tailscale:
+   Your Device → Tailscale mesh → 100.x.x.x:8765 (OpenClaw)
+```
+
+### Monitoring Stack
+
+```
+OpenClaw (:8765/metrics)  ◄── Prometheus scrape (optional)
+        │                              │
+        ▼                              ▼
+Uptime Kuma (:3001)              Grafana dashboard
+  - Polls /health every 60s       - openclaw_up
+  - Alerts on downtime            - openclaw_uptime_seconds
+  - Status page                   - openclaw_latency_ms
+                                   - openclaw_guilds
+```
+
+### File Structure
+
 ```
 ~/openclaw/
-├── bot.py                 # Main Discord bot (25 slash commands)
+├── bot.py                 # Main Discord bot (28 slash commands, health/metrics HTTP server)
 ├── skills.py              # Core Docker & system monitoring skills + unified registry
 ├── advanced_skills.py     # Media, network, Plex, health, and reporting skills
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
-├── llm.py                 # Gemini LLM integration + 16 function-calling tools
-├── memory.py              # Per-user conversation memory
+├── llm.py                 # Gemini LLM integration + 25 function-calling tools
+├── memory.py              # Per-user conversation memory (30 min TTL)
 ├── approvals.py           # Approval workflow engine + Discord button UI
+├── network.py             # Tailscale status, connectivity check, speed test
+├── qmd.py                 # Long-term memory (QMD pattern — persists to qmd.json)
+├── agentmail.py           # Email via AgentMail.to API
 ├── docker-compose.yml     # Container orchestration
-├── Dockerfile             # Image build
+├── Dockerfile             # COPY *.py — auto-includes all modules
 ├── .env                   # Secrets (not committed)
 ├── .env.example           # Template
 ├── config/
 │   ├── config.yaml        # Main configuration
-│   ├── permissions.yaml   # Risk levels and access control (22 skills)
+│   ├── permissions.yaml   # Risk levels and access control (25 skills)
 │   ├── skills/
 │   │   └── enabled.yaml   # Which skills are active
 │   └── prompts/
 │       └── system.txt     # LLM system prompt
 ├── data/
 │   ├── logs/              # Application logs
-│   ├── memory/            # Agent memory + scheduled tasks
-│   └── audit/             # Audit trail (JSONL)
+│   ├── memory/            # qmd.json, schedules.json
+│   └── audit/             # Audit trail (YYYY-MM-DD.jsonl)
 ├── docs/
 │   └── IMPLEMENTATION-PLAN.md  # Full 7-phase plan
 └── scripts/
-    └── health-check.sh    # Health monitoring
+    ├── health-check.sh
+    └── add-uptime-kuma-monitor.py
 ```
+
+## Getting the Most Out of OpenClaw
+
+### Power User Tips
+
+#### 1. Use `/ask` for everything first
+
+Instead of memorizing individual commands, just describe what you want:
+
+```
+/ask "what containers are using the most memory?"
+/ask "are there any errors in my arr services?"
+/ask "why isn't my new show showing up in plex?"
+/ask "give me a full health report"
+/ask "which services aren't running?"
+```
+
+The LLM will call the right skills, chain multiple tool calls if needed, and give you a synthesized answer.
+
+#### 2. Schedule your health checks
+
+Have OpenClaw proactively alert you instead of waiting for problems:
+
+```
+/schedule add  skill:check_arr_health  hour:8  minute:0
+/schedule add  skill:create_status_report  interval:360
+/schedule add  skill:check_download_clients  interval:60
+```
+
+OpenClaw runs these automatically and posts results to your Discord channel.
+
+#### 3. Use `/analyze` when something breaks
+
+When a service misbehaves, `analyze` feeds the last N log lines to Gemini:
+
+```
+/analyze sonarr 100
+/analyze sabnzbd 50
+/analyze flaresolverr 200
+```
+
+It identifies errors, explains root causes, and suggests fixes in plain English.
+
+#### 4. Build a long-term knowledge base with `/remember`
+
+Store facts that help OpenClaw give better answers in the future:
+
+```
+/remember "Plex token is in /config/Library/Preferences/com.plexapp.plexmediaserver.plist"
+/remember "SABnzbd incomplete downloads go to /tmp before moving to /downloads" tags:sabnzbd,downloads
+/remember "Sonarr uses port 8989, API v3" tags:sonarr,api
+```
+
+Then ask: `/ask "how do I get the plex token?"` — it will find and use the stored memory.
+
+#### 5. Emergency stop before risky operations
+
+Before doing anything potentially dangerous to your stack:
+
+```
+/estop
+```
+
+This blocks all `/restart` and LLM write actions until you type `/estop resume`. Use it during maintenance windows or when you're about to run bulk operations.
+
+#### 6. Check the audit log when something unexpected happens
+
+```
+/auditlog 25
+```
+
+Every command is logged to `data/audit/YYYY-MM-DD.jsonl`. Good for spotting repeated failures, debugging intermittent issues, or reviewing what the bot did while you were away.
+
+#### 7. Use `/report` as a morning brief
+
+```
+/report
+```
+
+Generates a comprehensive snapshot: container counts, download queue, *arr health, Plex status, and system stats — all in one embed.
+
+### Common AI Query Examples
+
+```
+# System health
+/ask "is everything running?"
+/ask "which containers have restarted recently?"
+/ask "what's using the most CPU?"
+
+# Downloads
+/ask "what's downloading right now?"
+/ask "why is my download speed slow?"
+/ask "is the usenet indexer working?"
+
+# Media library
+/ask "was The Substance added to Plex?"
+/ask "how many movies do I have?"
+/ask "what was added this week?"
+
+# Troubleshooting
+/ask "sonarr has been throwing errors — what's wrong?"
+/ask "why isn't radarr importing movies?"
+/ask "check if prowlarr is syncing with my indexers"
+
+# Network
+/ask "am I connected to tailscale?"
+/ask "is the NAS reachable?"
+/ask "what's my current download speed?"
+```
+
+---
 
 ## Security
 
@@ -192,9 +441,9 @@ Then type `/ping` in your Discord server.
 - [x] **Phase 2**: Core Skills — Docker management, system monitoring
 - [x] **Phase 3**: LLM Integration — Gemini-powered AI responses + function calling
 - [x] **Phase 4**: Security & Approvals — Button-based approval UI, emergency stop, audit viewer
-- [x] **Phase 5**: Advanced Skills — Media search, downloads, Plex, health checks, scheduling, AI log analysis
-- [ ] **Phase 6**: Remote Access — Traefik routing, Uptime Kuma
-- [ ] **Phase 7**: Polish — Documentation, testing, production hardening
+- [x] **Phase 5**: Advanced Skills — Media search, downloads, Plex, health checks, scheduling, AI log analysis, QMD memory, AgentMail
+- [x] **Phase 6**: Remote Access & Monitoring — Traefik routing, Uptime Kuma, Prometheus metrics
+- [ ] **Phase 7**: Production Hardening — Comprehensive testing, backup/restore, Grafana dashboards
 
 See [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) for the detailed plan.
 
@@ -247,3 +496,6 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
 - [ ] **First deploy**: `cd ~/openclaw && docker compose up -d --build`
 - [ ] **Verify**: type `/ping` in Discord, check `curl http://localhost:8765/health`
 - [ ] **Test `/ask`**: try "how's sonarr doing?" to confirm Gemini + function calling works
+- [ ] **Add to Uptime Kuma**: run `scripts/add-uptime-kuma-monitor.py` to add the monitor
+- [ ] **Traefik route** (optional): `openclaw.davevoyles.synology.me` → configured in NAS `mac-mini.yml`
+- [ ] **AgentMail** (optional): set `AGENTMAIL_API_KEY` in `.env` for `/mail` and email-via-AI
