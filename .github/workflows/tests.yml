@@ -1,0 +1,40 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run tests
+        env:
+          # Stub values so modules load cleanly — no real API calls are made
+          GOOGLE_API_KEY: ""
+          LOCAL_LLM_ENABLED: "false"
+          AGENTMAIL_API_KEY: ""
+          AGENTMAIL_INBOX: ""
+          MEMORY_DIR: /tmp/openclaw-test
+          QMD_MEMORY_FILE: /tmp/openclaw-test/qmd.json
+          SPENDING_FILE: /tmp/openclaw-test/spending.json
+          CONFIG_DIR: ${{ github.workspace }}/config
+        run: |
+          python -m pytest tests/ -v --tb=short

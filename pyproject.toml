@@ -1,0 +1,14 @@
+[tool.pytest.ini_options]
+# Discover tests in the tests/ directory
+testpaths = ["tests"]
+
+# Use asyncio as the default event loop for pytest-asyncio
+asyncio_mode = "auto"
+
+# Short output, stop on first failure (-x), show extra summary
+addopts = "-v --tb=short"
+
+# Custom markers
+markers = [
+    "requires_python312: test requires Python 3.12 (run via ./run_tests.sh)",
+]
