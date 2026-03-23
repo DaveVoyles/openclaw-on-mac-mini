@@ -268,3 +268,14 @@ SKILLS.update(ADVANCED_SKILLS)
 # Merge analyzer skills (AI log analysis)
 from analyzer import ANALYZER_SKILLS  # noqa: E402
 SKILLS.update(ANALYZER_SKILLS)
+
+# Add Phase 5 supplemental skills (QMD, AgentMail)
+from qmd import remember_fact, recall_fact, list_memories
+from agentmail import send_agent_mail
+
+SKILLS.update({
+    "remember_fact": remember_fact,
+    "recall_fact": recall_fact,
+    "list_memories": list_memories,
+    "send_agent_mail": send_agent_mail,
+})

@@ -886,6 +886,52 @@ async def estop_cmd(interaction: discord.Interaction, action: str = "stop"):
 
 
 # ---------------------------------------------------------------------------
+# QMD / AgentMail commands
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="remember", description="Store a fact in long-term memory (QMD)")
+@app_commands.describe(content="Fact to remember", tags="Comma-separated tags")
+async def remember_cmd(interaction: discord.Interaction, content: str, tags: str = ""):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    from qmd import remember_fact
+    result = await remember_fact(content, tags)
+    await interaction.response.send_message(result)
+    audit_log(interaction.user, "remember", detail=content)
+
+
+@bot.tree.command(name="recall", description="Search long-term memory (QMD)")
+@app_commands.describe(query="Keywords to search for")
+async def recall_cmd(interaction: discord.Interaction, query: str):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    from qmd import recall_fact
+    result = await recall_fact(query)
+    embed = discord.Embed(title=f"🧠 Recall: {query}", description=result, color=discord.Color.blue())
+    await interaction.response.send_message(embed=embed)
+    audit_log(interaction.user, "recall", detail=query)
+
+
+@bot.tree.command(name="mail", description="Send an automated e-mail message via AgentMail")
+@app_commands.describe(to="Recipient email", subject="Email subject", body="Message body")
+async def mail_cmd(interaction: discord.Interaction, to: str, subject: str, body: str):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    if is_emergency_stopped():
+        await interaction.response.send_message("🛑 Emergency stop active.", ephemeral=True)
+        return
+    from agentmail import send_agent_mail
+    await interaction.response.defer()
+    result = await send_agent_mail(to, subject, body)
+    await interaction.followup.send(result)
+    audit_log(interaction.user, "mail", detail=f"to={to} subj={subject}")
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

@@ -232,6 +232,69 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "required": ["service"],
         },
     },
+    # -- Phase 5: Augmented Skills (QMD, AgentMail) --
+    {
+        "name": "remember_fact",
+        "description": "Store a fact or piece of information in the long-term memory (QMD).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "The fact or information to remember",
+                },
+                "tags": {
+                    "type": "string",
+                    "description": "Optional comma-separated list of tags to associate with this memory",
+                },
+            },
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "recall_fact",
+        "description": "Search long-term memory (QMD) for a specific fact or information.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Keywords or topic to search for",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "list_memories",
+        "description": "List all facts stored in the long-term memory (QMD).",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "send_agent_mail",
+        "description": "Send an automated e-mail message to a single recipient.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "to": {
+                    "type": "string",
+                    "description": "The recipient's e-mail address",
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "The subject of the e-mail",
+                },
+                "body": {
+                    "type": "string",
+                    "description": "The message body (plain text)",
+                },
+            },
+            "required": ["to", "subject", "body"],
+        },
+    },
     # restart_container is intentionally EXCLUDED from LLM tool access.
     # The LLM can suggest a restart, but it must go through the /restart command
     # with proper authorization and policy checks.
