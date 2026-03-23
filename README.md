@@ -8,10 +8,11 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 |---|---|
 | **Host** | Mac Mini M4 Pro (192.168.1.93) |
 | **Health** | `http://192.168.1.93:8765/health` |
+| **Dashboard** | `http://192.168.1.93:8765/dashboard` |
 | **Metrics** | `http://192.168.1.93:8765/metrics` (Prometheus) |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik) |
-| **Interface** | 28 Discord slash commands |
-| **LLM** | Google Gemini 2.0 Flash (paid tier, function calling) |
+| **Interface** | 29 Discord slash commands |
+| **LLM** | Google Gemini 2.0 Flash (paid tier 1, $30 budget) |
 | **Status** | **Phase 6 — Remote Access & Monitoring** ✅ |
 
 ## Features
@@ -155,6 +156,7 @@ Then type `/ping` in your Discord server.
 | `/remember <content>` | Store a fact in long-term QMD memory | 5 |
 | `/recall <query>` | Search long-term QMD memory | 5 |
 | `/mail <to> <subject> <body>` | Send email via AgentMail.to | 5 |
+| `/spending [breakdown]` | View Gemini API spending and budget | 6 |
 | `/network` | LAN + internet + DNS + Tailscale + health summary | 6 |
 | `/tailscale` | Tailscale VPN status and device IP | 6 |
 | `/speedtest` | Cloudflare download speed + DNS latency | 6 |
@@ -290,6 +292,8 @@ Uptime Kuma (:3001)              Grafana dashboard
 ├── network.py             # Tailscale status, connectivity check, speed test
 ├── qmd.py                 # Long-term memory (QMD pattern — persists to qmd.json)
 ├── agentmail.py           # Email via AgentMail.to API
+├── spending.py            # Gemini API cost tracking ($30 budget, per-call token logging)
+├── dashboard.py           # Web dashboard (served at /dashboard, self-contained HTML)
 ├── docker-compose.yml     # Container orchestration
 ├── Dockerfile             # COPY *.py — auto-includes all modules
 ├── .env                   # Secrets (not committed)
@@ -461,6 +465,86 @@ docker compose up -d --build
 
 # Stop
 docker compose down
+```
+
+## Useful Daily Commands
+
+Commands you'll actually use day-to-day, grouped by scenario.
+
+### Morning Check
+
+```bash
+# Quick health check — is everything running?
+curl -s http://192.168.1.93:8765/health | python3 -m json.tool
+
+# Open the dashboard in your browser
+open http://192.168.1.93:8765/dashboard
+```
+
+Or in Discord:
+```
+/report                  # Full system snapshot
+/health                  # *arr + download health
+/spending                # How much Gemini budget used
+```
+
+### Troubleshooting
+
+```bash
+# Live-tail OpenClaw logs
+docker logs openclaw -f --tail 100
+
+# Check why a container is unhealthy
+docker inspect --format '{{json .State.Health}}' openclaw | python3 -m json.tool
+
+# View today's audit trail
+cat ~/openclaw/data/audit/$(date +%Y-%m-%d).jsonl | python3 -m json.tool
+
+# Check Gemini spending data directly
+cat ~/openclaw/data/memory/spending.json | python3 -m json.tool
+```
+
+Or in Discord:
+```
+/ask "why is sonarr throwing errors?"
+/analyze sonarr 100      # AI-powered log analysis
+/auditlog 25             # What happened recently
+/logs sonarr 50          # Raw container logs
+```
+
+### Deployment
+
+```bash
+# Rebuild after editing Python files
+cd ~/openclaw && docker compose up -d --build
+
+# Force full rebuild (no cache)
+docker compose build --no-cache && docker compose up -d
+
+# Check it came up healthy
+sleep 10 && docker ps --filter name=openclaw --format 'table {{.Names}}\t{{.Status}}'
+
+# Verify slash commands synced
+docker logs openclaw --tail 5 | grep "Synced commands"
+```
+
+### Monitoring
+
+```bash
+# Prometheus metrics (for Grafana)
+curl -s http://192.168.1.93:8765/metrics
+
+# Dashboard API (JSON — all data in one call)
+curl -s http://192.168.1.93:8765/api/dashboard | python3 -m json.tool
+
+# Spending summary
+curl -s http://192.168.1.93:8765/api/dashboard | python3 -c "
+import json, sys
+d = json.load(sys.stdin)['spending']
+print(f\"Cost: \${d['total_cost']:.4f} / \${d['budget_limit']:.2f}\")
+print(f\"Tokens: {d['total_input_tokens']:,} in / {d['total_output_tokens']:,} out\")
+print(f\"Calls: {d['calls']}\")
+"
 ```
 
 ## Related Documentation
