@@ -139,6 +139,11 @@ async def dashboard_handler(request: web.Request) -> web.Response:
     return web.Response(text=DASHBOARD_HTML, content_type="text/html")
 
 
+async def guide_handler(request: web.Request) -> web.Response:
+    """Serve the guide / tutorial HTML page."""
+    return web.Response(text=GUIDE_HTML, content_type="text/html")
+
+
 DASHBOARD_HTML = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -387,6 +392,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     <a class="btn" href="/health" target="_blank"><span class="btn-icon">&#128154;</span> Health</a>
     <a class="btn" href="/metrics" target="_blank"><span class="btn-icon">&#128200;</span> Prometheus</a>
     <a class="btn btn-gold" href="/api/dashboard" target="_blank"><span class="btn-icon">&#128203;</span> API JSON</a>
+    <a class="btn" href="/guide" target="_blank"><span class="btn-icon">&#128218;</span> Guide</a>
     <button class="btn btn-refresh" onclick="refreshData(this)"><span class="btn-icon">&#8635;</span> Refresh</button>
   </div>
 
@@ -716,6 +722,548 @@ function formatUptime(s) {
 }
 function esc(s) { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; }
 </script>
+</body>
+</html>
+"""
+
+
+# ---------------------------------------------------------------------------
+# Guide / Tutorial page
+# ---------------------------------------------------------------------------
+
+GUIDE_HTML = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenClaw Guide &amp; Tutorial</title>
+<style>
+  :root {
+    --heritage-blue: #002D72;
+    --spirit-blue: #68ACE5;
+    --medium-blue: #0077D8;
+    --harbor-blue: #4E97E0;
+    --mint-green: #86C8BC;
+    --homewood-green: #008767;
+    --gold: #F1C400;
+    --orange: #FF9E1B;
+    --red: #CF4520;
+    --sable: #31261D;
+    --bg: #001233;
+    --surface: rgba(0, 45, 114, 0.35);
+    --border: rgba(104, 172, 229, 0.2);
+    --text: #e8f0fe;
+    --muted: rgba(104, 172, 229, 0.7);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.7; padding: 2rem;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  a { color: var(--spirit-blue); text-decoration: none; }
+  a:hover { color: var(--gold); }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--spirit-blue); }
+  h2 {
+    font-size: 1.3rem; color: var(--gold); margin: 2rem 0 0.75rem;
+    padding-bottom: 0.4rem; border-bottom: 1px solid var(--border);
+  }
+  h3 { font-size: 1.05rem; color: var(--spirit-blue); margin: 1.25rem 0 0.5rem; }
+  p, li { color: var(--text); font-size: 0.92rem; }
+  ul, ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+  li { margin-bottom: 0.3rem; }
+  code {
+    background: rgba(0,119,216,0.12); color: var(--spirit-blue);
+    padding: 0.15rem 0.45rem; border-radius: 0.3rem; font-size: 0.85rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  pre {
+    background: rgba(0,45,114,0.5); border: 1px solid var(--border);
+    border-radius: 0.5rem; padding: 1rem; overflow-x: auto;
+    margin: 0.75rem 0; font-size: 0.84rem; line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; color: var(--text); }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 0.75rem; padding: 1.25rem; margin: 1rem 0;
+    backdrop-filter: blur(12px);
+  }
+  .badge {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 1rem;
+    font-size: 0.72rem; font-weight: 700; margin-right: 0.3rem;
+  }
+  .risk-low { background: rgba(0,135,103,0.2); color: var(--mint-green); }
+  .risk-high { background: rgba(207,69,32,0.2); color: var(--orange); }
+  .risk-crit { background: rgba(207,69,32,0.3); color: var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 0.75rem 0; }
+  th {
+    text-align: left; padding: 0.5rem 0.6rem; border-bottom: 2px solid var(--border);
+    color: var(--gold); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  td { padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(104,172,229,0.06); }
+  .toc { list-style: none; padding-left: 0; columns: 2; }
+  .toc li { margin-bottom: 0.4rem; }
+  .toc a { font-size: 0.88rem; }
+  .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.82rem;
+    font-weight: 600; border: 1px solid var(--border); color: var(--text);
+    background: var(--surface); text-decoration: none; margin-right: 0.5rem;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: rgba(0,119,216,0.25); border-color: var(--spirit-blue); color: #fff; }
+  .tip {
+    border-left: 3px solid var(--gold); padding: 0.75rem 1rem;
+    margin: 1rem 0; background: rgba(241,196,0,0.06); border-radius: 0 0.5rem 0.5rem 0;
+  }
+  .tip strong { color: var(--gold); }
+  @media (max-width: 600px) { .toc { columns: 1; } .container { padding: 0; } body { padding: 0.75rem; } }
+</style>
+</head>
+<body>
+<div class="container">
+
+<a class="btn" href="/dashboard">&larr; Back to Dashboard</a>
+
+<h1>&#128218; OpenClaw Guide &amp; Tutorial</h1>
+<p class="subtitle">Version 0.5.0 &mdash; Everything you need to know to get the most out of your AI-powered Mac Mini agent.</p>
+
+<!-- TOC -->
+<div class="card">
+<h3 style="margin-top:0">Table of Contents</h3>
+<ul class="toc">
+  <li><a href="#overview">1. Overview &amp; Architecture</a></li>
+  <li><a href="#getting-started">2. Getting Started</a></li>
+  <li><a href="#ask">3. The /ask Command (AI Chat)</a></li>
+  <li><a href="#docker">4. Docker &amp; System Commands</a></li>
+  <li><a href="#media">5. Media &amp; Downloads</a></li>
+  <li><a href="#monitoring">6. Network &amp; Monitoring</a></li>
+  <li><a href="#memory">7. Long-Term Memory (QMD)</a></li>
+  <li><a href="#scheduler">8. Scheduled Tasks</a></li>
+  <li><a href="#spending">9. Spending &amp; Budget Tracking</a></li>
+  <li><a href="#mail">10. AgentMail (Email)</a></li>
+  <li><a href="#security">11. Security &amp; Approvals</a></li>
+  <li><a href="#dashboard-guide">12. Dashboard &amp; Endpoints</a></li>
+  <li><a href="#tips">13. Power User Tips</a></li>
+  <li><a href="#troubleshooting">14. Troubleshooting</a></li>
+</ul>
+</div>
+
+<!-- 1. Overview -->
+<h2 id="overview">1. Overview &amp; Architecture</h2>
+<p>OpenClaw is a Discord bot that acts as an AI-powered operations agent for your Mac Mini Docker stack. It connects to:</p>
+<ul>
+  <li><strong>Google Gemini 2.0 Flash</strong> &mdash; AI reasoning with function calling (27 skills)</li>
+  <li><strong>Docker Engine</strong> &mdash; manage 26+ containers running on the Mac Mini</li>
+  <li><strong>*arr Stack</strong> &mdash; Sonarr, Radarr, Lidarr, Prowlarr, Bazarr via their APIs</li>
+  <li><strong>Download Clients</strong> &mdash; SABnzbd (Usenet) and qBittorrent (torrents)</li>
+  <li><strong>Plex / Tautulli</strong> &mdash; media server monitoring</li>
+  <li><strong>Synology NAS</strong> &mdash; storage backend</li>
+</ul>
+
+<div class="card">
+<h3>How It Works</h3>
+<pre><code>You type /ask "What's downloading right now?"
+    &darr;
+OpenClaw sends your question to Gemini 2.0 Flash
+    &darr;
+Gemini decides which skills to call (e.g., get_download_queue)
+    &darr;
+OpenClaw executes the skill (queries SABnzbd + qBittorrent APIs)
+    &darr;
+Gemini formats the results into a human-readable answer
+    &darr;
+You get a Discord message with your active downloads</code></pre>
+<p>Gemini can chain up to <strong>5 tool calls</strong> per question, so complex queries like <em>"Check if Sonarr is healthy and show me what downloaded today"</em> will invoke multiple skills automatically.</p>
+</div>
+
+<!-- 2. Getting Started -->
+<h2 id="getting-started">2. Getting Started</h2>
+<p>OpenClaw lives in your Discord server. All commands are slash commands &mdash; type <code>/</code> in any channel to see the full list.</p>
+
+<h3>First Commands to Try</h3>
+<div class="card">
+<table>
+  <tr><td><code>/ping</code></td><td>Verify the bot is alive. Shows latency and uptime.</td></tr>
+  <tr><td><code>/about</code></td><td>See version, Python version, discord.py version, OS info.</td></tr>
+  <tr><td><code>/whoami</code></td><td>Check your Discord ID and whether you're in the allowed-users list.</td></tr>
+  <tr><td><code>/help</code></td><td>Full list of all 29 commands grouped by category.</td></tr>
+  <tr><td><code>/skills</code></td><td>See all 27 LLM-callable skills that <code>/ask</code> can use.</td></tr>
+</table>
+</div>
+
+<!-- 3. /ask -->
+<h2 id="ask">3. The <code>/ask</code> Command (AI Chat)</h2>
+<p>This is the most powerful command. It sends your question to Gemini 2.0 Flash, which can autonomously call any of the 27 skills to answer you.</p>
+
+<h3>Example Queries</h3>
+<div class="card">
+<pre><code>/ask What containers are running?
+/ask Is Sonarr healthy? Any errors in the last 50 lines?
+/ask Show me active downloads
+/ask What was recently added to Plex?
+/ask Run a speed test
+/ask What's my Gemini spending so far?
+/ask Check all services and give me a status report
+/ask Search for "The Bear" on Sonarr
+/ask How much disk space is left?
+/ask Remember that the NAS IP is 192.168.1.8
+/ask What do you remember about the NAS?</code></pre>
+</div>
+
+<div class="tip">
+  <strong>&#128161; Tip:</strong> <code>/ask</code> maintains conversation context for 30 minutes. You can ask follow-up questions like <em>"Tell me more about that error"</em> or <em>"Now check Radarr too."</em> Use <code>/clear</code> to reset the conversation.
+</div>
+
+<h3>How Function Calling Works</h3>
+<p>When you ask a question, Gemini analyzes it and decides which skills to call. It can chain up to 5 calls per question:</p>
+<ol>
+  <li>You ask: <em>"Are my download clients working?"</em></li>
+  <li>Gemini calls <code>check_download_clients</code></li>
+  <li>The skill queries SABnzbd and qBittorrent APIs</li>
+  <li>Gemini reads the results and writes a human-friendly answer</li>
+</ol>
+<p>For complex questions, Gemini may call multiple skills. <em>"Give me a full status report"</em> triggers <code>create_status_report</code>, which internally calls health checks, download queues, Plex status, system stats, and more.</p>
+
+<h3>Rate Limits</h3>
+<table>
+  <tr><th>Limit</th><th>Value</th><th>What Happens</th></tr>
+  <tr><td>Per minute</td><td>60 requests</td><td>Queued, slight delay</td></tr>
+  <tr><td>Per hour</td><td>500 requests</td><td>Graceful rejection with retry message</td></tr>
+  <tr><td>Budget</td><td>$30.00</td><td>Bot warns at 80%, stops at 100%</td></tr>
+</table>
+
+<!-- 4. Docker & System -->
+<h2 id="docker">4. Docker &amp; System Commands</h2>
+
+<h3><code>/containers</code></h3>
+<p>Lists all running Docker containers with their name, status, and port mappings. Quick way to see what's up.</p>
+
+<h3><code>/status &lt;service&gt;</code></h3>
+<p>Deep-dive on one container: CPU usage, memory, network I/O, ports, restart count, image version.</p>
+<pre><code>/status sonarr
+/status qbittorrent
+/status openclaw</code></pre>
+
+<h3><code>/logs &lt;service&gt; [lines]</code></h3>
+<p>View the last N lines of a container's logs (default: 30, max: 100). Great for debugging.</p>
+<pre><code>/logs sonarr 50
+/logs sabnzbd</code></pre>
+
+<h3><code>/system</code></h3>
+<p>Mac Mini resource usage: CPU %, memory (used/total), disk space. Pulls from Glances if available, falls back to system commands.</p>
+
+<h3><code>/dockerstats</code></h3>
+<p>Per-container resource table: CPU %, memory usage, network RX/TX. Similar to <code>docker stats</code> but formatted nicely.</p>
+
+<h3><code>/restart &lt;service&gt;</code> <span class="badge risk-high">HIGH RISK</span></h3>
+<p>Restarts a container. This requires <strong>approval</strong> &mdash; you'll get a button prompt:</p>
+<pre><code>/restart sonarr
+  &rarr; "Restart sonarr? ✅ Approve | ❌ Deny"
+  &rarr; Click ✅ to confirm (expires in 5 minutes)</code></pre>
+<p><strong>Protected services</strong> that can never be restarted via the bot: <code>traefik</code>, <code>socket-proxy</code>, <code>homepage</code>, <code>watchtower</code>.</p>
+
+<!-- 5. Media -->
+<h2 id="media">5. Media &amp; Downloads</h2>
+
+<h3><code>/search &lt;query&gt; [type]</code></h3>
+<p>Search your Sonarr and Radarr libraries. The <code>type</code> parameter is optional: <code>tv</code>, <code>movie</code>, or <code>all</code> (default).</p>
+<pre><code>/search The Bear
+/search Oppenheimer movie
+/search breaking bad tv</code></pre>
+
+<h3><code>/queue</code></h3>
+<p>Shows active downloads from both SABnzbd (Usenet) and qBittorrent (torrents). Includes filename, progress %, speed, and ETA.</p>
+
+<h3><code>/recent [count]</code></h3>
+<p>Recently added media from Plex (via Tautulli). Default 10, max 25.</p>
+<pre><code>/recent
+/recent 5</code></pre>
+
+<h3><code>/health</code></h3>
+<p>Checks connectivity to all media services:</p>
+<ul>
+  <li><strong>*arr services:</strong> Sonarr, Radarr, Lidarr, Prowlarr &mdash; checks their <code>/ping</code> or <code>/api/v3/system/status</code> endpoints</li>
+  <li><strong>Download clients:</strong> SABnzbd API + qBittorrent API</li>
+  <li><strong>Plex:</strong> via Tautulli status endpoint</li>
+</ul>
+
+<h3><code>/ports</code></h3>
+<p>TCP connectivity check on 10 key services. Verifies each service is listening on its expected port. Useful after restarts or network changes.</p>
+
+<h3><code>/report</code></h3>
+<p>The big one &mdash; generates a comprehensive status report combining:</p>
+<ul>
+  <li>Service health checks</li>
+  <li>Active downloads</li>
+  <li>Recent Plex additions</li>
+  <li>System resource usage</li>
+  <li>Docker container stats</li>
+</ul>
+
+<!-- 6. Network -->
+<h2 id="monitoring">6. Network &amp; Monitoring</h2>
+
+<h3><code>/network</code></h3>
+<p>Full connectivity check:</p>
+<ul>
+  <li>&#9989; LAN (ping NAS at 192.168.1.8)</li>
+  <li>&#9989; Internet (ping 1.1.1.1)</li>
+  <li>&#9989; DNS resolution (resolve google.com)</li>
+  <li>&#9989; OpenClaw self health check</li>
+</ul>
+
+<h3><code>/speedtest</code></h3>
+<p>Downloads a 10MB file from Cloudflare to measure throughput, plus tests DNS resolution latency. Good for diagnosing slow downloads.</p>
+
+<h3><code>/spending [breakdown]</code></h3>
+<p>See how much the Gemini API has cost so far. Without the breakdown flag, shows a summary. With breakdown, shows daily spending for the last 7 days.</p>
+<pre><code>/spending
+/spending breakdown:True</code></pre>
+
+<!-- 7. Memory -->
+<h2 id="memory">7. Long-Term Memory (QMD)</h2>
+<p>OpenClaw has a persistent memory system that survives restarts. Store facts, preferences, IPs, credentials notes, or anything else you want the bot to remember.</p>
+
+<h3><code>/remember &lt;content&gt; [tags]</code></h3>
+<p>Store a fact. Tags are optional comma-separated labels for easier recall.</p>
+<pre><code>/remember The NAS IP is 192.168.1.8 tags:network,infrastructure
+/remember Sonarr API key rotated on 2026-03-15 tags:sonarr,security
+/remember Dave prefers dark mode dashboards tags:preferences
+/remember qBittorrent login: admin / check-secrets-env tags:credentials</code></pre>
+
+<h3><code>/recall &lt;query&gt;</code></h3>
+<p>Search your stored memories by keyword or tag.</p>
+<pre><code>/recall NAS
+/recall sonarr
+/recall credentials</code></pre>
+
+<div class="tip">
+  <strong>&#128161; Tip:</strong> The AI can also use memory! When you <code>/ask</code> a question, Gemini can call <code>recall_fact</code> to check if it already knows the answer from stored memories. Try: <code>/ask What do you remember about the NAS?</code>
+</div>
+
+<h3>How It Works Under the Hood</h3>
+<p>Memories are stored as JSON in <code>/memory/qmd.json</code>. Each entry has a timestamp, content, and tags. Search is case-insensitive keyword matching against both content and tags.</p>
+
+<!-- 8. Scheduler -->
+<h2 id="scheduler">8. Scheduled Tasks</h2>
+<p>Automate recurring operations. The scheduler runs any registered skill on a daily or interval basis.</p>
+
+<h3><code>/schedule list</code></h3>
+<p>View all scheduled tasks with their status, last run time, and run count.</p>
+
+<h3><code>/schedule add</code></h3>
+<p>Create a new scheduled task. Two modes:</p>
+
+<div class="card">
+<h3 style="margin-top:0">Daily Schedule (specific time)</h3>
+<pre><code>/schedule action:add skill:check_arr_health hour:6 minute:0
+  &rarr; Runs check_arr_health every day at 6:00 AM
+
+/schedule action:add skill:create_status_report hour:8 minute:30
+  &rarr; Daily status report at 8:30 AM</code></pre>
+
+<h3>Interval Schedule (every N minutes)</h3>
+<pre><code>/schedule action:add skill:check_download_clients interval:30
+  &rarr; Checks download clients every 30 minutes
+
+/schedule action:add skill:get_docker_stats interval:60
+  &rarr; Docker stats snapshot every hour</code></pre>
+</div>
+
+<h3><code>/schedule remove</code></h3>
+<pre><code>/schedule action:remove task_id:sched-1</code></pre>
+
+<h3><code>/schedule toggle</code></h3>
+<p>Enable or disable a task without deleting it.</p>
+<pre><code>/schedule action:toggle task_id:sched-1</code></pre>
+
+<div class="tip">
+  <strong>&#128161; Tip:</strong> Good scheduled tasks to set up:
+  <ul>
+    <li><code>check_arr_health</code> every 30 min &mdash; catch service issues early</li>
+    <li><code>create_status_report</code> daily at 8 AM &mdash; morning briefing</li>
+    <li><code>get_docker_stats</code> every 60 min &mdash; resource usage baseline</li>
+  </ul>
+</div>
+
+<!-- 9. Spending -->
+<h2 id="spending">9. Spending &amp; Budget Tracking</h2>
+<p>Every Gemini API call is tracked. The bot records input tokens, output tokens, cost, and timestamps.</p>
+
+<div class="card">
+<h3 style="margin-top:0">Pricing (Gemini 2.0 Flash &mdash; Paid Tier 1)</h3>
+<table>
+  <tr><th>Type</th><th>Rate</th><th>Typical /ask Cost</th></tr>
+  <tr><td>Input tokens</td><td>$0.10 / million</td><td>~$0.0001 per question</td></tr>
+  <tr><td>Output tokens</td><td>$0.40 / million</td><td>~$0.0004 per answer</td></tr>
+  <tr><td><strong>Typical /ask</strong></td><td colspan="2"><strong>~$0.0005 per round-trip</strong> (with function calling)</td></tr>
+</table>
+<p>At $0.0005 per query, your $30 budget allows roughly <strong>~60,000 queries</strong>.</p>
+</div>
+
+<h3>Budget Safeguards</h3>
+<ul>
+  <li><strong>50% used:</strong> Normal operation</li>
+  <li><strong>80% used:</strong> Warning in <code>/spending</code> output</li>
+  <li><strong>100% used:</strong> <code>/ask</code> is disabled to prevent runaway costs</li>
+</ul>
+
+<h3>Checking Spending</h3>
+<pre><code>/spending             &rarr; Summary: total cost, remaining, token counts
+/spending breakdown:True  &rarr; Daily breakdown for last 7 days</code></pre>
+<p>Also visible on the <a href="/dashboard">Dashboard</a> with a progress bar and daily chart.</p>
+
+<!-- 10. AgentMail -->
+<h2 id="mail">10. AgentMail (Email)</h2>
+<p>Send emails directly from Discord using the AgentMail.to API. Useful for alerts, notifications, or sending yourself reminders.</p>
+
+<h3><code>/mail &lt;to&gt; &lt;subject&gt; &lt;body&gt;</code></h3>
+<pre><code>/mail you@example.com "Server Alert" "Sonarr restarted at 3:15 AM"
+/mail user@example.com "Download Complete" "The Bear S03 finished downloading"</code></pre>
+
+<div class="card">
+<h3 style="margin-top:0">Setup Required</h3>
+<p><strong>Status: &#9888;&#65039; Not yet configured.</strong></p>
+<p>To enable AgentMail:</p>
+<ol>
+  <li>Sign up at <a href="https://agentmail.to" target="_blank">agentmail.to</a> for an API key</li>
+  <li>Add to your <code>.env</code> file: <code>AGENTMAIL_API_KEY=your_key_here</code></li>
+  <li>Rebuild the container: <code>cd ~/docker-stack/openclaw &amp;&amp; docker compose up -d --build</code></li>
+</ol>
+<p>Once configured, the AI can also send emails via <code>/ask</code>: <em>"Email me a status report at you@example.com"</em></p>
+</div>
+
+<!-- 11. Security -->
+<h2 id="security">11. Security &amp; Approvals</h2>
+
+<h3>Authorization</h3>
+<p>Only Discord users listed in <code>ALLOWED_USER_IDS</code> (in <code>.env</code>) can use the bot. All other users are silently rejected.</p>
+
+<h3>Risk Levels</h3>
+<table>
+  <tr><th>Level</th><th>Behavior</th><th>Examples</th></tr>
+  <tr><td><span class="badge risk-low">LOW</span></td><td>Auto-execute, no approval</td><td><code>/containers</code>, <code>/logs</code>, <code>/health</code>, <code>/search</code></td></tr>
+  <tr><td><span class="badge risk-high">HIGH</span></td><td>Requires button approval (5 min timeout)</td><td><code>/restart</code></td></tr>
+</table>
+
+<h3><code>/pending</code></h3>
+<p>See any pending approval requests (e.g., a <code>/restart</code> waiting for confirmation).</p>
+
+<h3><code>/auditlog [lines]</code></h3>
+<p>View the audit trail. Every action is logged to <code>/audit/{date}.jsonl</code> with timestamp, user, action, and result.</p>
+<pre><code>/auditlog
+/auditlog 25</code></pre>
+
+<h3><code>/estop [stop|resume]</code> <span class="badge risk-crit">EMERGENCY</span></h3>
+<p>Emergency stop. Immediately disables all write actions (<code>/restart</code>, <code>/ask</code>, scheduled tasks).</p>
+<pre><code>/estop          &rarr; Freezes everything
+/estop resume   &rarr; Resumes normal operation</code></pre>
+<p>Use this if the bot is behaving unexpectedly or you need to pause all automation.</p>
+
+<!-- 12. Dashboard -->
+<h2 id="dashboard-guide">12. Dashboard &amp; Endpoints</h2>
+
+<h3>Web Dashboard</h3>
+<p>The visual dashboard at <a href="/dashboard">/dashboard</a> shows real-time bot status, spending, skills, and commands. It auto-refreshes every 60 seconds.</p>
+
+<h3>All HTTP Endpoints</h3>
+<table>
+  <tr><th>Endpoint</th><th>Format</th><th>Purpose</th></tr>
+  <tr><td><code>/health</code></td><td>JSON</td><td>Bot status, uptime, guild count. Used by Uptime Kuma.</td></tr>
+  <tr><td><code>/metrics</code></td><td>Prometheus</td><td>Scraped by Prometheus/Grafana for graphing.</td></tr>
+  <tr><td><code>/dashboard</code></td><td>HTML</td><td>Visual dashboard with JHU brand styling.</td></tr>
+  <tr><td><code>/api/dashboard</code></td><td>JSON</td><td>Raw dashboard data (skills, commands, spending, config).</td></tr>
+  <tr><td><code>/guide</code></td><td>HTML</td><td>This guide page.</td></tr>
+</table>
+
+<h3>External Access</h3>
+<p>All endpoints are accessible externally via the Synology reverse proxy:</p>
+<pre><code>https://openclaw.davevoyles.synology.me/dashboard
+https://openclaw.davevoyles.synology.me/health
+https://openclaw.davevoyles.synology.me/guide</code></pre>
+
+<!-- 13. Tips -->
+<h2 id="tips">13. Power User Tips</h2>
+
+<div class="card">
+<h3 style="margin-top:0">&#127919; Best Practices</h3>
+<ol>
+  <li><strong>Use <code>/ask</code> for complex queries.</strong> Instead of running 5 separate commands, ask: <em>"Check all services, show downloads, and tell me if anything looks wrong."</em></li>
+  <li><strong>Store important info in memory.</strong> <code>/remember</code> API keys, server IPs, rotation dates. The AI can recall them later.</li>
+  <li><strong>Set up scheduled health checks.</strong> <code>/schedule add skill:check_arr_health interval:30</code> catches issues before you notice them.</li>
+  <li><strong>Use <code>/analyze</code> for debugging.</strong> When a service acts up, <code>/analyze sonarr 100</code> feeds 100 lines of logs to AI for analysis.</li>
+  <li><strong>Check <code>/spending</code> weekly.</strong> At ~$0.0005 per query, it'll last a long time, but it's good to monitor.</li>
+  <li><strong>Conversation context is your friend.</strong> Ask a question, then follow up: <em>"What caused that error?"</em> or <em>"Show me the logs for that service."</em></li>
+</ol>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">&#128296; Useful Daily Commands</h3>
+<pre><code>/report                    &rarr; Morning status check
+/health                    &rarr; Quick service health
+/queue                     &rarr; What's downloading?
+/recent 5                  &rarr; Latest Plex additions
+/spending                  &rarr; Budget check
+/ask Any errors in the last hour?  &rarr; AI-powered log scan</code></pre>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">&#128171; Advanced /ask Queries</h3>
+<pre><code>/ask Compare CPU usage of sonarr vs radarr
+/ask What downloaded this week? Summarize by media type
+/ask Is anything using more than 500MB of memory?
+/ask Check if ports 8989, 7878, and 8686 are open
+/ask Remember that I rotated the Sonarr API key today
+/ask Send me an email summary at you@example.com (requires AgentMail setup)
+/ask What's the NAS IP? (recalls from memory if stored)</code></pre>
+</div>
+
+<!-- 14. Troubleshooting -->
+<h2 id="troubleshooting">14. Troubleshooting</h2>
+
+<div class="card">
+<h3 style="margin-top:0">Common Issues</h3>
+<table>
+  <tr><th>Problem</th><th>Solution</th></tr>
+  <tr><td>Bot doesn't respond to commands</td><td>Check <code>/health</code> endpoint. If down, run <code>cd ~/docker-stack/openclaw && docker compose up -d</code></td></tr>
+  <tr><td><code>/ask</code> returns "over budget"</td><td>Check <code>/spending</code>. Increase budget in <code>.env</code>: <code>GEMINI_BUDGET_LIMIT=50</code>, then rebuild.</td></tr>
+  <tr><td><code>/ask</code> returns "rate limited"</td><td>Wait 1 minute. Default: 60 requests/min. Reduce usage or increase limits in <code>config.yaml</code>.</td></tr>
+  <tr><td><code>/restart</code> denied</td><td>Check if <code>/estop</code> is active. Also check that the service isn't in the denied list (traefik, socket-proxy, etc.).</td></tr>
+  <tr><td><code>/mail</code> fails</td><td><code>AGENTMAIL_API_KEY</code> not set. See <a href="#mail">AgentMail section</a>.</td></tr>
+  <tr><td>Skills show "error fetching"</td><td>Service may be down or API key invalid. Check <code>/health</code> first, then verify API keys in <code>.env</code>.</td></tr>
+  <tr><td>Dashboard blank</td><td>Bot container may be starting up. Wait 40 seconds after restart (health check start period).</td></tr>
+  <tr><td>Conversation lost context</td><td>Conversations expire after 30 minutes of inactivity. Use <code>/ask</code> again to start fresh.</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">Useful Terminal Commands</h3>
+<pre><code># Check bot container status
+docker logs openclaw --tail 50
+
+# Rebuild after config changes
+cd ~/docker-stack/openclaw && docker compose up -d --build
+
+# Check if bot is healthy
+curl http://192.168.1.93:8765/health
+
+# View spending data directly
+docker exec openclaw cat /memory/spending.json | python3 -m json.tool
+
+# View stored memories
+docker exec openclaw cat /memory/qmd.json | python3 -m json.tool
+
+# View scheduled tasks
+docker exec openclaw cat /memory/schedules.json | python3 -m json.tool</code></pre>
+</div>
+
+<div style="text-align:center; margin-top:2.5rem; color:var(--muted); font-size:0.8rem; border-top:1px solid var(--border); padding-top:1rem;">
+  OpenClaw v0.5.0 &mdash; <a href="/dashboard">Dashboard</a> &middot; <a href="https://github.com/DaveVoyles/openclaw-on-mac-mini" target="_blank">GitHub</a>
+</div>
+
+</div><!-- /container -->
 </body>
 </html>
 """

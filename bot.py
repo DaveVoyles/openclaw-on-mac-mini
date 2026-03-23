@@ -46,7 +46,7 @@ from network import get_network_status, get_tailscale_status, run_speed_test
 from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
 from memory import store as conversation_store
 from spending import tracker as spending_tracker, get_spending, get_daily_spending
-from dashboard import api_dashboard_handler, dashboard_handler
+from dashboard import api_dashboard_handler, dashboard_handler, guide_handler
 from approvals import (
     ApprovalView,
     RiskLevel,
@@ -212,12 +212,13 @@ class OpenClawBot(discord.Client):
         app.router.add_get("/metrics", self._metrics_handler)
         app.router.add_get("/dashboard", dashboard_handler)
         app.router.add_get("/api/dashboard", api_dashboard_handler)
+        app.router.add_get("/guide", guide_handler)
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
         await site.start()
         self._health_runner = runner
-        log.info("Health endpoint listening on :%d/health (and /metrics, /dashboard)", HEALTH_PORT)
+        log.info("Health endpoint listening on :%d/health (and /metrics, /dashboard, /guide)", HEALTH_PORT)
 
     async def _health_handler(self, _request: web.Request) -> web.Response:
         uptime_s = time.monotonic() - self.start_time
