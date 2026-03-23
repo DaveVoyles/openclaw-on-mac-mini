@@ -10,7 +10,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Port** | 8765 (health endpoint) |
 | **Interface** | Discord slash commands |
 | **LLM** | Google Gemini 2.0 Flash (paid tier) |
-| **Status** | Phase 3 — LLM Integration |
+| **Status** | Phase 4 — Security & Approvals |
 
 ## Features
 
@@ -34,8 +34,17 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/clear` — reset conversation history
 - Rate limiting — 60 RPM / 500 RPH with graceful degradation
 
+**Phase 4 — Security & Approvals** ✅
+- `/restart` now requires button-click approval before executing
+- Discord button UI — ✅ Approve / ❌ Deny with 5-minute timeout
+- `/pending` — view pending approval requests
+- `/auditlog [lines]` — view recent audit trail entries
+- `/estop` — emergency stop to halt all write actions instantly
+- `/estop resume` — resume normal operations after emergency stop
+- Risk classification system (LOW/MEDIUM/HIGH/CRITICAL)
+- Emergency stop blocks `/ask` and `/restart` when active
+
 **Planned**
-- Phase 4: Approval workflows with Discord buttons
 - Phase 5: Media automation (Sonarr/Radarr/Plex queries)
 - Phase 6: Remote access via Tailscale + Traefik
 - Phase 7: Production hardening
@@ -106,6 +115,10 @@ Then type `/ping` in your Discord server.
 | `/restart <service>` | Restart a container (requires approval) | 2 |
 | `/ask <question>` | AI-powered natural language query (Gemini) | 3 |
 | `/clear` | Clear your conversation history | 3 |
+| `/pending` | List pending approval requests | 4 |
+| `/auditlog [lines]` | View recent audit log entries | 4 |
+| `/estop` | Emergency stop — halt all write actions | 4 |
+| `/estop resume` | Resume bot after emergency stop | 4 |
 
 ## Architecture
 
@@ -115,6 +128,7 @@ Then type `/ping` in your Discord server.
 ├── skills.py              # Docker & system monitoring skills
 ├── llm.py                 # Gemini LLM integration + function calling
 ├── memory.py              # Per-user conversation memory
+├── approvals.py           # Approval workflow engine + Discord button UI
 ├── docker-compose.yml     # Container orchestration
 ├── Dockerfile             # Image build
 ├── .env                   # Secrets (not committed)
@@ -143,13 +157,17 @@ Then type `/ping` in your Discord server.
 - All actions logged to `data/audit/YYYY-MM-DD.jsonl`
 - Resource limits: 2 GB RAM, 2 CPU cores
 - Health endpoint on port 8765
+- **Approval workflow**: `/restart` requires button-click confirmation before executing
+- **Emergency stop**: `/estop` immediately halts all write actions and LLM queries
+- **Risk classification**: Commands categorized LOW→CRITICAL with escalating controls
+- **Policy enforcement**: `permissions.yaml` blocks restarts of critical infrastructure (traefik, socket-proxy, homepage, watchtower)
 
 ## Roadmap
 
 - [x] **Phase 1**: Foundation — Discord bot with basic commands
 - [x] **Phase 2**: Core Skills — Docker management, system monitoring
 - [x] **Phase 3**: LLM Integration — Gemini-powered AI responses + function calling
-- [ ] **Phase 4**: Security & Approvals — Approval workflows, audit logging
+- [x] **Phase 4**: Security & Approvals — Button-based approval UI, emergency stop, audit viewer
 - [ ] **Phase 5**: Advanced Skills — Media automation, scheduled tasks
 - [ ] **Phase 6**: Remote Access — Traefik routing, Uptime Kuma
 - [ ] **Phase 7**: Polish — Documentation, testing, production hardening
@@ -176,3 +194,24 @@ docker compose down
 
 - [Implementation Plan](docs/IMPLEMENTATION-PLAN.md) — Full 7-phase roadmap
 - [Docker Stack](https://github.com/DaveVoyles/docker-on-mac-mini) — The infrastructure OpenClaw manages
+
+---
+
+## Manual Setup Checklist
+
+Things you need to do by hand before OpenClaw is fully operational. Complete these whenever you're ready.
+
+- [ ] **Create Discord Bot** — [discord.com/developers/applications](https://discord.com/developers/applications)
+  - New Application → name it "OpenClaw"
+  - Bot tab → Reset Token → copy token
+  - Enable **Message Content Intent**
+  - OAuth2 → URL Generator: scopes `bot` + `applications.commands`, permissions: Send Messages, Embed Links, Use Slash Commands
+  - Open generated URL to invite bot to your server
+- [ ] **Fill in `~/openclaw/.env`** with:
+  - `DISCORD_BOT_TOKEN` — from the bot you just created
+  - `DISCORD_GUILD_ID` — right-click your Discord server → Copy Server ID
+  - `ALLOWED_USER_IDS` — right-click your Discord profile → Copy User ID
+  - `GOOGLE_API_KEY` — from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (paid Gemini tier)
+- [ ] **First deploy**: `cd ~/openclaw && docker compose up -d --build`
+- [ ] **Verify**: type `/ping` in Discord, check `curl http://localhost:8765/health`
+- [ ] **Test `/ask`**: try "how's sonarr doing?" to confirm Gemini + function calling works

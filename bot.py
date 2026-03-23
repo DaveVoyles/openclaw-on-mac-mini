@@ -1,5 +1,5 @@
 """
-OpenClaw Discord Bot - Phase 3: LLM Integration
+OpenClaw Discord Bot - Phase 4: Security & Approvals
 Autonomous AI agent for home automation and system management.
 """
 
@@ -31,6 +31,14 @@ from skills import (
 
 from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
 from memory import store as conversation_store
+from approvals import (
+    ApprovalView,
+    RiskLevel,
+    approval_store,
+    build_approval_embed,
+    is_emergency_stopped,
+    set_emergency_stop,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -50,7 +58,7 @@ AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -219,7 +227,7 @@ async def ping(interaction: discord.Interaction):
     )
     embed.add_field(name="Latency", value=f"{latency_ms} ms", inline=True)
     embed.add_field(name="Uptime", value=uptime_str, inline=True)
-    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 3")
+    embed.set_footer(text=f"OpenClaw v{VERSION} \u2022 Phase 4")
 
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "ping", f"latency={latency_ms}ms")
@@ -232,7 +240,7 @@ async def about(interaction: discord.Interaction):
         description="Autonomous AI agent for home automation and system management.",
         color=discord.Color.blurple(),
     )
-    embed.add_field(name="Version", value=f"{VERSION} (Phase 3)", inline=True)
+    embed.add_field(name="Version", value=f"{VERSION} (Phase 4)", inline=True)
     embed.add_field(name="Python", value=platform.python_version(), inline=True)
     embed.add_field(name="discord.py", value=discord.__version__, inline=True)
     embed.add_field(name="Host", value=platform.node(), inline=True)
@@ -279,13 +287,17 @@ async def help_cmd(interaction: discord.Interaction):
         ("`/logs <service> [lines]`", "View container logs (default 30 lines)"),
         ("`/system`", "Show system resource usage"),
         ("`/dockerstats`", "Show per-container resource usage"),
-        ("`/restart <service>`", "Restart a container (authorized users only)"),
+        ("`/restart <service>`", "Restart a container (requires approval)"),
+        ("`/pending`", "List pending approval requests"),
+        ("`/auditlog [lines]`", "View recent audit log entries"),
+        ("`/estop`", "Emergency stop — halt all bot actions"),
+        ("`/estop resume`", "Resume bot after emergency stop"),
         ("`/help`", "This help message"),
     ]
     for name, desc in commands_list:
         embed.add_field(name=name, value=desc, inline=False)
 
-    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 3")
+    embed.set_footer(text=f"OpenClaw v{VERSION} \u2022 Phase 4")
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "help")
 
@@ -379,12 +391,20 @@ async def dockerstats_cmd(interaction: discord.Interaction):
     audit_log(interaction.user, "dockerstats")
 
 
-@bot.tree.command(name="restart", description="Restart a Docker container (authorized users only)")
+@bot.tree.command(name="restart", description="Restart a Docker container (requires approval)")
 @app_commands.describe(service="Container name to restart")
 async def restart_cmd(interaction: discord.Interaction, service: str):
     if not is_allowed(interaction):
         await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
         audit_log(interaction.user, "restart", detail=service, result="denied")
+        return
+
+    if is_emergency_stopped():
+        await interaction.response.send_message(
+            "🛑 **Emergency stop is active.** All actions are halted. Use `/estop resume` to resume.",
+            ephemeral=True,
+        )
+        audit_log(interaction.user, "restart", detail=service, result="blocked_estop")
         return
 
     # Check permissions.yaml allow/deny lists
@@ -395,16 +415,37 @@ async def restart_cmd(interaction: discord.Interaction, service: str):
         audit_log(interaction.user, "restart", detail=service, result="blocked_by_policy")
         return
 
-    await interaction.response.defer()
-    result = await restart_container(service)
-    color = discord.Color.green() if result.startswith("✅") else discord.Color.red()
-    embed = discord.Embed(
-        title=f"🔄 Restart: {service}",
-        description=result,
-        color=color,
+    # Create approval request with button UI
+    req = approval_store.create(
+        action="restart_container",
+        target=service,
+        risk_level=RiskLevel.HIGH,
+        requester_id=interaction.user.id,
+        requester_name=str(interaction.user),
+        channel_id=interaction.channel_id,
     )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "restart", detail=service, result="success" if result.startswith("✅") else "failed")
+
+    async def execute_restart(approved_req):
+        """Callback invoked when the approval button is clicked."""
+        result = await restart_container(approved_req.target)
+        color = discord.Color.green() if result.startswith("✅") else discord.Color.red()
+        embed = discord.Embed(
+            title=f"🔄 Restart: {approved_req.target}",
+            description=result,
+            color=color,
+        )
+        audit_log(
+            None, "restart_executed",
+            detail=f"{approved_req.target} approved_by={approved_req.resolver_name}",
+            result="success" if result.startswith("✅") else "failed",
+        )
+        return embed
+
+    view = ApprovalView(req.request_id, execute_restart)
+    embed = build_approval_embed(req)
+
+    await interaction.response.send_message(embed=embed, view=view)
+    audit_log(interaction.user, "restart_requested", detail=service)
 
 
 # ---------------------------------------------------------------------------
@@ -417,6 +458,13 @@ async def restart_cmd(interaction: discord.Interaction, service: str):
 async def ask_cmd(interaction: discord.Interaction, question: str):
     if not is_allowed(interaction):
         await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+
+    if is_emergency_stopped():
+        await interaction.response.send_message(
+            "🛑 **Emergency stop is active.** `/ask` is disabled. Use `/estop resume` to resume.",
+            ephemeral=True,
+        )
         return
 
     if not llm_is_configured():
@@ -469,6 +517,102 @@ async def clear_cmd(interaction: discord.Interaction):
     conversation_store.clear_user(interaction.user.id, interaction.channel_id)
     await interaction.response.send_message("🧹 Conversation cleared. Starting fresh!", ephemeral=True)
     audit_log(interaction.user, "clear")
+
+
+# ---------------------------------------------------------------------------
+# Slash commands \u2014 Phase 4 (security & approvals)
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="pending", description="List pending approval requests")
+async def pending_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("\u274c Not authorized.", ephemeral=True)
+        return
+
+    pending = approval_store.list_pending()
+    if not pending:
+        await interaction.response.send_message("\u2705 No pending approval requests.", ephemeral=True)
+        return
+
+    lines = []
+    for req in pending:
+        lines.append(
+            f"\u2022 `{req.request_id}` \u2014 **{req.action}** `{req.target}` "
+            f"(by {req.requester_name}, {req.age_seconds}s ago)"
+        )
+
+    embed = discord.Embed(
+        title=f"\u23f3 Pending Approvals ({len(pending)})",
+        description="\n".join(lines),
+        color=discord.Color.gold(),
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+    audit_log(interaction.user, "pending")
+
+
+@bot.tree.command(name="auditlog", description="View recent audit log entries")
+@app_commands.describe(lines="Number of entries to show (default 10, max 25)")
+async def auditlog_cmd(interaction: discord.Interaction, lines: int = 10):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("\u274c Not authorized.", ephemeral=True)
+        return
+
+    lines = min(max(lines, 1), 25)
+    today = datetime.date.today().isoformat()
+    audit_file = AUDIT_DIR / f"{today}.jsonl"
+
+    if not audit_file.exists():
+        await interaction.response.send_message("No audit entries for today.", ephemeral=True)
+        return
+
+    # Read last N lines
+    all_lines = audit_file.read_text().strip().split("\n")
+    recent = all_lines[-lines:]
+
+    formatted = []
+    for line in recent:
+        try:
+            entry = json.loads(line)
+            ts = entry.get("ts", "")[:19].replace("T", " ")
+            user = entry.get("user", "?")
+            action = entry.get("action", "?")
+            detail = entry.get("detail", "")
+            result = entry.get("result", "")
+            formatted.append(f"`{ts}` **{action}** {detail} [{result}] \u2014 {user}")
+        except json.JSONDecodeError:
+            continue
+
+    embed = discord.Embed(
+        title=f"\U0001f4cb Audit Log (last {len(formatted)})",
+        description="\n".join(formatted) or "No entries.",
+        color=discord.Color.light_grey(),
+    )
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+    audit_log(interaction.user, "auditlog", detail=f"lines={lines}")
+
+
+@bot.tree.command(name="estop", description="Emergency stop \u2014 halt or resume all bot actions")
+@app_commands.describe(action="'stop' to halt, 'resume' to resume (default: stop)")
+async def estop_cmd(interaction: discord.Interaction, action: str = "stop"):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("\u274c Not authorized.", ephemeral=True)
+        return
+
+    if action.lower() in ("resume", "start", "off", "deactivate"):
+        set_emergency_stop(False)
+        await interaction.response.send_message(
+            "\u2705 **Emergency stop deactivated.** Bot is now accepting actions."
+        )
+        audit_log(interaction.user, "estop", detail="resume")
+    else:
+        set_emergency_stop(True)
+        await interaction.response.send_message(
+            "\U0001f6d1 **EMERGENCY STOP ACTIVATED**\n"
+            "All write actions (restart, etc.) are now blocked.\n"
+            "Use `/estop resume` to resume normal operations."
+        )
+        audit_log(interaction.user, "estop", detail="activated")
 
 
 # ---------------------------------------------------------------------------
