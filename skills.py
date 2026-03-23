@@ -288,3 +288,11 @@ SKILLS.update({
     "get_tailscale_status": get_tailscale_status,
     "run_speed_test": run_speed_test,
 })
+
+# Add spending tracker skills
+from spending import get_spending, get_daily_spending
+
+SKILLS.update({
+    "get_spending": get_spending,
+    "get_daily_spending": get_daily_spending,
+})

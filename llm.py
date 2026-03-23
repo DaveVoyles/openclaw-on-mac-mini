@@ -14,6 +14,7 @@ from typing import Any
 import google.generativeai as genai
 
 from skills import SKILLS
+from spending import tracker as spending_tracker
 
 log = logging.getLogger("openclaw.llm")
 
@@ -320,6 +321,28 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "properties": {},
         },
     },
+    # -- Spending Tracker --
+    {
+        "name": "get_spending",
+        "description": "Get current Gemini API spending summary including total cost, budget remaining, and token usage.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "get_daily_spending",
+        "description": "Get daily spending breakdown for the last N days.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to show (1-30, default 7)",
+                },
+            },
+        },
+    },
     # restart_container is intentionally EXCLUDED from LLM tool access.
     # The LLM can suggest a restart, but it must go through the /restart command
     # with proper authorization and policy checks.
@@ -497,6 +520,7 @@ async def chat(
     response = await loop.run_in_executor(
         None, lambda: chat_session.send_message(user_message)
     )
+    _record_usage(response)
 
     # Handle function-call loop
     rounds = 0
@@ -536,6 +560,7 @@ async def chat(
                 )
             ),
         )
+        _record_usage(response)
         rounds += 1
 
     # Extract final text
@@ -570,6 +595,19 @@ def _extract_history(chat_session) -> list[dict]:
 # ---------------------------------------------------------------------------
 # Convenience: check if LLM is configured
 # ---------------------------------------------------------------------------
+
+
+def _record_usage(response) -> None:
+    """Extract usage_metadata from a Gemini response and record spending."""
+    try:
+        meta = response.usage_metadata
+        if meta:
+            inp = getattr(meta, "prompt_token_count", 0) or 0
+            out = getattr(meta, "candidates_token_count", 0) or 0
+            if inp or out:
+                spending_tracker.record(inp, out)
+    except Exception as e:
+        log.debug("Could not extract usage_metadata: %s", e)
 
 
 def is_configured() -> bool:

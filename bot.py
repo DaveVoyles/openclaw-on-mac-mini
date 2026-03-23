@@ -45,6 +45,7 @@ from network import get_network_status, get_tailscale_status, run_speed_test
 
 from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
 from memory import store as conversation_store
+from spending import tracker as spending_tracker, get_spending, get_daily_spending
 from approvals import (
     ApprovalView,
     RiskLevel,
@@ -346,6 +347,7 @@ async def help_cmd(interaction: discord.Interaction):
         ("`/report`", "Generate full system status report"),
         ("`/analyze <service> [lines]`", "AI-powered log analysis"),
         ("`/schedule`", "Manage scheduled tasks"),
+        ("`/spending`", "View Gemini API spending & budget"),
         ("`/skills`", "List all available skills"),
         ("`/pending`", "List pending approval requests"),
         ("`/auditlog [lines]`", "View recent audit log entries"),
@@ -1015,6 +1017,26 @@ async def speedtest_cmd(interaction: discord.Interaction):
     embed.set_footer(text="Download test via Cloudflare (10MB sample)")
     await interaction.followup.send(embed=embed)
     audit_log(interaction.user, "speedtest")
+
+
+@bot.tree.command(name="spending", description="View Gemini API spending and budget status")
+@app_commands.describe(breakdown="Show daily breakdown (default: summary)")
+async def spending_cmd(interaction: discord.Interaction, breakdown: bool = False):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    if breakdown:
+        text = spending_tracker.daily_breakdown()
+    else:
+        text = spending_tracker.summary()
+    embed = discord.Embed(
+        title="💰 Gemini API Spending",
+        description=text,
+        color=discord.Color.green() if not spending_tracker.is_over_budget else discord.Color.red(),
+    )
+    embed.set_footer(text=f"Model: gemini-2.0-flash | Tier 1 | Budget: ${spending_tracker._data['budget_limit']:.2f}")
+    await interaction.response.send_message(embed=embed)
+    audit_log(interaction.user, "spending")
 
 
 # ---------------------------------------------------------------------------
