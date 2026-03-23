@@ -1,10 +1,38 @@
-# OpenClaw
+# OpenClaw 🤖
 
 Autonomous AI agent for home automation and system management, accessible via Discord.
 
-**Host**: Mac Mini M4 Pro (192.168.1.93)
-**Port**: 8765
-**Status**: Phase 1 — Foundation
+Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alongside a Synology NAS.
+
+| | |
+|---|---|
+| **Host** | Mac Mini M4 Pro (192.168.1.93) |
+| **Port** | 8765 (health endpoint) |
+| **Interface** | Discord slash commands |
+| **LLM** | Google Gemini 2.0 Flash (paid tier) |
+| **Status** | Phase 2 — Core Skills |
+
+## Features
+
+**Phase 1 — Foundation** ✅
+- Discord bot with `/ping`, `/about`, `/whoami`, `/help`
+- Health check HTTP endpoint (`/health`)
+- Audit logging (JSONL)
+- Security-hardened Docker container
+
+**Phase 2 — Core Skills** ✅
+- `/containers` — list all running Docker containers
+- `/status <service>` — detailed container status
+- `/logs <service>` — tail recent container logs
+- `/system` — CPU, memory, disk usage via Glances
+- `/restart <service>` — restart a container (approval required)
+
+**Planned**
+- Phase 3: LLM integration (Gemini-powered `/ask` command)
+- Phase 4: Approval workflows with Discord buttons
+- Phase 5: Media automation (Sonarr/Radarr/Plex queries)
+- Phase 6: Remote access via Tailscale + Traefik
+- Phase 7: Production hardening
 
 ---
 
@@ -59,18 +87,24 @@ Then type `/ping` in your Discord server.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `/ping` | Check if OpenClaw is alive (latency + uptime) |
-| `/about` | Show version and system info |
-| `/whoami` | Show your Discord identity and permissions |
-| `/help` | List available commands |
+| Command | Description | Phase |
+|---------|-------------|-------|
+| `/ping` | Check if OpenClaw is alive (latency + uptime) | 1 |
+| `/about` | Show version and system info | 1 |
+| `/whoami` | Show your identity and permissions | 1 |
+| `/help` | List available commands | 1 |
+| `/containers` | List all running Docker containers | 2 |
+| `/status <service>` | Detailed status for a specific container | 2 |
+| `/logs <service>` | Tail last 30 lines of container logs | 2 |
+| `/system` | System resource usage (CPU, RAM, disk) | 2 |
+| `/restart <service>` | Restart a container (requires approval) | 2 |
 
 ## Architecture
 
 ```
 ~/openclaw/
-├── bot.py                 # Main Discord bot
+├── bot.py                 # Main Discord bot (commands + skills)
+├── skills.py              # Phase 2 skill implementations
 ├── docker-compose.yml     # Container orchestration
 ├── Dockerfile             # Image build
 ├── .env                   # Secrets (not committed)
@@ -78,12 +112,16 @@ Then type `/ping` in your Discord server.
 ├── config/
 │   ├── config.yaml        # Main configuration
 │   ├── permissions.yaml   # Risk levels and access control
+│   ├── skills/
+│   │   └── enabled.yaml   # Which skills are active
 │   └── prompts/
 │       └── system.txt     # LLM system prompt (Phase 3)
 ├── data/
 │   ├── logs/              # Application logs
 │   ├── memory/            # Agent memory (Phase 3)
 │   └── audit/             # Audit trail (JSONL)
+├── docs/
+│   └── IMPLEMENTATION-PLAN.md  # Full 7-phase plan
 └── scripts/
     └── health-check.sh    # Health monitoring
 ```
@@ -99,12 +137,14 @@ Then type `/ping` in your Discord server.
 ## Roadmap
 
 - [x] **Phase 1**: Foundation — Discord bot with basic commands
-- [ ] **Phase 2**: Core Skills — Docker management, system monitoring
+- [x] **Phase 2**: Core Skills — Docker management, system monitoring
 - [ ] **Phase 3**: LLM Integration — Gemini-powered AI responses
 - [ ] **Phase 4**: Security & Approvals — Approval workflows, audit logging
 - [ ] **Phase 5**: Advanced Skills — Media automation, scheduled tasks
 - [ ] **Phase 6**: Remote Access — Traefik routing, Uptime Kuma
 - [ ] **Phase 7**: Polish — Documentation, testing, production hardening
+
+See [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) for the detailed plan.
 
 ## Maintenance
 
@@ -124,6 +164,5 @@ docker compose down
 
 ## Related Documentation
 
-- [Implementation Plan](~/docker-stack/docs/OPENCLAW-IMPLEMENTATION-PLAN.md)
-- [Docker Stack Services](~/docker-stack/docs/SERVICES.md)
-- [Port Reference](~/docker-stack/PORT-REFERENCE.md)
+- [Implementation Plan](docs/IMPLEMENTATION-PLAN.md) — Full 7-phase roadmap
+- [Docker Stack](https://github.com/DaveVoyles/docker-on-mac-mini) — The infrastructure OpenClaw manages
