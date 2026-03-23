@@ -1,5 +1,5 @@
 """
-OpenClaw Discord Bot - Phase 4: Security & Approvals
+OpenClaw Discord Bot - Phase 5: Advanced Skills
 Autonomous AI agent for home automation and system management.
 """
 
@@ -28,6 +28,19 @@ from skills import (
     list_containers,
     restart_container,
 )
+from advanced_skills import (
+    check_arr_health,
+    check_download_clients,
+    check_plex_status,
+    check_service_ports,
+    create_status_report,
+    get_download_queue,
+    get_recent_additions,
+    ping_host,
+    search_media,
+)
+from analyzer import analyze_logs
+from scheduler import scheduler
 
 from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
 from memory import store as conversation_store
@@ -58,7 +71,7 @@ AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -179,6 +192,12 @@ class OpenClawBot(discord.Client):
         log.info("OpenClaw online as %s (ID %s)", self.user, self.user.id)
         audit_log(None, "bot_ready", f"Logged in as {self.user}")
 
+        # Start scheduler and register skills
+        from skills import SKILLS as all_skills
+        scheduler.register_skills(all_skills)
+        scheduler.start()
+        log.info("Scheduler started with %d registered skills", len(all_skills))
+
     # ------------------------------------------------------------------
     # Health-check HTTP server (for Docker HEALTHCHECK / Uptime Kuma)
     # ------------------------------------------------------------------
@@ -227,7 +246,7 @@ async def ping(interaction: discord.Interaction):
     )
     embed.add_field(name="Latency", value=f"{latency_ms} ms", inline=True)
     embed.add_field(name="Uptime", value=uptime_str, inline=True)
-    embed.set_footer(text=f"OpenClaw v{VERSION} \u2022 Phase 4")
+    embed.set_footer(text=f"OpenClaw v{VERSION} \u2022 Phase 5")
 
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "ping", f"latency={latency_ms}ms")
@@ -240,7 +259,7 @@ async def about(interaction: discord.Interaction):
         description="Autonomous AI agent for home automation and system management.",
         color=discord.Color.blurple(),
     )
-    embed.add_field(name="Version", value=f"{VERSION} (Phase 4)", inline=True)
+    embed.add_field(name="Version", value=f"{VERSION} (Phase 5)", inline=True)
     embed.add_field(name="Python", value=platform.python_version(), inline=True)
     embed.add_field(name="discord.py", value=discord.__version__, inline=True)
     embed.add_field(name="Host", value=platform.node(), inline=True)
@@ -288,6 +307,15 @@ async def help_cmd(interaction: discord.Interaction):
         ("`/system`", "Show system resource usage"),
         ("`/dockerstats`", "Show per-container resource usage"),
         ("`/restart <service>`", "Restart a container (requires approval)"),
+        ("`/search <query> [type]`", "Search Sonarr/Radarr for media"),
+        ("`/queue`", "Show active downloads (SABnzbd + qBit)"),
+        ("`/recent [count]`", "Recently added media (via Plex)"),
+        ("`/health`", "Check *arr services and download clients"),
+        ("`/ports`", "Check service port connectivity"),
+        ("`/report`", "Generate full system status report"),
+        ("`/analyze <service> [lines]`", "AI-powered log analysis"),
+        ("`/schedule`", "Manage scheduled tasks"),
+        ("`/skills`", "List all available skills"),
         ("`/pending`", "List pending approval requests"),
         ("`/auditlog [lines]`", "View recent audit log entries"),
         ("`/estop`", "Emergency stop — halt all bot actions"),
@@ -297,7 +325,7 @@ async def help_cmd(interaction: discord.Interaction):
     for name, desc in commands_list:
         embed.add_field(name=name, value=desc, inline=False)
 
-    embed.set_footer(text=f"OpenClaw v{VERSION} \u2022 Phase 4")
+    embed.set_footer(text=f"OpenClaw v{VERSION} \u2022 Phase 5")
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "help")
 
@@ -517,6 +545,248 @@ async def clear_cmd(interaction: discord.Interaction):
     conversation_store.clear_user(interaction.user.id, interaction.channel_id)
     await interaction.response.send_message("🧹 Conversation cleared. Starting fresh!", ephemeral=True)
     audit_log(interaction.user, "clear")
+
+
+# ---------------------------------------------------------------------------
+# Slash commands — Phase 5 (advanced skills)
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="search", description="Search for TV shows or movies")
+@app_commands.describe(
+    query="Search term (e.g. 'Breaking Bad')",
+    media_type="'tv', 'movie', or 'all' (default: all)",
+)
+async def search_cmd(interaction: discord.Interaction, query: str, media_type: str = "all"):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await search_media(query, media_type)
+    embed = discord.Embed(
+        title=f"🔍 Search: {query}",
+        description=result,
+        color=discord.Color.teal(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "search", detail=f"{query} type={media_type}")
+
+
+@bot.tree.command(name="queue", description="Show active downloads from SABnzbd and qBittorrent")
+async def queue_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await get_download_queue()
+    embed = discord.Embed(
+        title="📥 Download Queue",
+        description=result,
+        color=discord.Color.dark_teal(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "queue")
+
+
+@bot.tree.command(name="recent", description="Show recently added media from Plex")
+@app_commands.describe(count="Number of items to show (1-25, default 10)")
+async def recent_cmd(interaction: discord.Interaction, count: int = 10):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await get_recent_additions(count)
+    embed = discord.Embed(
+        title=f"🆕 Recently Added ({count})",
+        description=result,
+        color=discord.Color.purple(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "recent", detail=f"count={count}")
+
+
+@bot.tree.command(name="health", description="Check *arr services and download client health")
+async def health_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    arr_health = await check_arr_health()
+    dl_health = await check_download_clients()
+    plex_health = await check_plex_status()
+
+    embed = discord.Embed(
+        title="🏥 Service Health",
+        color=discord.Color.green(),
+    )
+    embed.add_field(name="*arr Services", value=arr_health, inline=False)
+    embed.add_field(name="Download Clients", value=dl_health, inline=False)
+    embed.add_field(name="Plex", value=plex_health, inline=False)
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "health")
+
+
+@bot.tree.command(name="ports", description="Check service port connectivity")
+async def ports_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await check_service_ports()
+    embed = discord.Embed(
+        title="🔌 Port Status",
+        description=result,
+        color=discord.Color.blue(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "ports")
+
+
+@bot.tree.command(name="report", description="Generate a comprehensive system status report")
+async def report_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await create_status_report()
+    embed = discord.Embed(
+        title="📊 System Report",
+        description=result,
+        color=discord.Color.gold(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "report")
+
+
+@bot.tree.command(name="analyze", description="AI-powered container log analysis")
+@app_commands.describe(service="Container name to analyze", lines="Log lines to analyze (10-200, default 50)")
+async def analyze_cmd(interaction: discord.Interaction, service: str, lines: int = 50):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await analyze_logs(service, lines)
+    if len(result) > 4000:
+        result = result[:3980] + "\n… (truncated)"
+    embed = discord.Embed(
+        title=f"🔬 Log Analysis: {service}",
+        description=result,
+        color=discord.Color.dark_orange(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "analyze", detail=f"{service} lines={lines}")
+
+
+@bot.tree.command(name="schedule", description="Manage scheduled tasks")
+@app_commands.describe(
+    action="list, add, remove, or toggle",
+    skill="Skill name for 'add' (e.g. check_arr_health)",
+    hour="Hour (0-23) for daily schedule (-1 for interval)",
+    minute="Minute (0-59)",
+    interval="Interval in minutes (overrides hour/minute)",
+    task_id="Task ID for remove/toggle (e.g. sched-1)",
+)
+async def schedule_cmd(
+    interaction: discord.Interaction,
+    action: str = "list",
+    skill: str = "",
+    hour: int = -1,
+    minute: int = 0,
+    interval: int = 0,
+    task_id: str = "",
+):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+
+    if action == "list":
+        tasks = scheduler.list_tasks()
+        if not tasks:
+            await interaction.response.send_message("📅 No scheduled tasks.", ephemeral=True)
+            return
+        lines = []
+        for t in tasks:
+            status = "✅" if t.enabled else "⏸️"
+            schedule_str = f"every {t.interval_minutes}m" if t.interval_minutes > 0 else f"{t.cron_hour:02d}:{t.cron_minute:02d}"
+            lines.append(
+                f"{status} `{t.task_id}` — **{t.action}** @ {schedule_str} "
+                f"(runs: {t.run_count}, next: {t.next_run_str})"
+            )
+        embed = discord.Embed(
+            title=f"📅 Scheduled Tasks ({len(tasks)})",
+            description="\n".join(lines),
+            color=discord.Color.blue(),
+        )
+        await interaction.response.send_message(embed=embed)
+
+    elif action == "add":
+        if not skill:
+            await interaction.response.send_message(
+                "❌ Provide a skill name. Example: `/schedule add check_arr_health hour:6`",
+                ephemeral=True,
+            )
+            return
+        task = scheduler.create(
+            action=skill,
+            hour=hour,
+            minute=minute,
+            interval_minutes=interval,
+            created_by=str(interaction.user),
+        )
+        schedule_str = f"every {interval}m" if interval > 0 else f"daily at {hour:02d}:{minute:02d}"
+        await interaction.response.send_message(
+            f"✅ Scheduled `{task.task_id}`: **{skill}** — {schedule_str}"
+        )
+        audit_log(interaction.user, "schedule_add", detail=f"{task.task_id} {skill}")
+
+    elif action == "remove":
+        if not task_id:
+            await interaction.response.send_message("❌ Provide a task_id. Example: `/schedule remove task_id:sched-1`", ephemeral=True)
+            return
+        if scheduler.remove(task_id):
+            await interaction.response.send_message(f"🗑️ Removed `{task_id}`.")
+            audit_log(interaction.user, "schedule_remove", detail=task_id)
+        else:
+            await interaction.response.send_message(f"❌ Task `{task_id}` not found.", ephemeral=True)
+
+    elif action == "toggle":
+        if not task_id:
+            await interaction.response.send_message("❌ Provide a task_id.", ephemeral=True)
+            return
+        new_state = scheduler.toggle(task_id)
+        if new_state is None:
+            await interaction.response.send_message(f"❌ Task `{task_id}` not found.", ephemeral=True)
+        else:
+            emoji = "✅" if new_state else "⏸️"
+            await interaction.response.send_message(f"{emoji} Task `{task_id}` {'enabled' if new_state else 'disabled'}.")
+            audit_log(interaction.user, "schedule_toggle", detail=f"{task_id} enabled={new_state}")
+    else:
+        await interaction.response.send_message(
+            "❌ Unknown action. Use: `list`, `add`, `remove`, or `toggle`.",
+            ephemeral=True,
+        )
+
+
+@bot.tree.command(name="skills", description="List all available OpenClaw skills")
+async def skills_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+
+    from skills import SKILLS as all_skills
+    lines = []
+    for name, fn in sorted(all_skills.items()):
+        doc = (fn.__doc__ or "No description").strip().split("\n")[0][:80]
+        lines.append(f"• `{name}` — {doc}")
+
+    embed = discord.Embed(
+        title=f"🧰 Available Skills ({len(all_skills)})",
+        description="\n".join(lines),
+        color=discord.Color.blurple(),
+    )
+    embed.set_footer(text="Skills are callable by the LLM via /ask or via scheduled tasks")
+    await interaction.response.send_message(embed=embed)
+    audit_log(interaction.user, "skills")
 
 
 # ---------------------------------------------------------------------------

@@ -10,7 +10,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Port** | 8765 (health endpoint) |
 | **Interface** | Discord slash commands |
 | **LLM** | Google Gemini 2.0 Flash (paid tier) |
-| **Status** | Phase 4 — Security & Approvals |
+| **Status** | Phase 5 — Advanced Skills |
 
 ## Features
 
@@ -44,8 +44,20 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Risk classification system (LOW/MEDIUM/HIGH/CRITICAL)
 - Emergency stop blocks `/ask` and `/restart` when active
 
+**Phase 5 — Advanced Skills** ✅
+- `/search` — search TV shows/movies across Sonarr & Radarr
+- `/queue` — view active downloads from SABnzbd + qBittorrent
+- `/recent` — recently added media from Plex (via Tautulli)
+- `/health` — check *arr service + download client health
+- `/ports` — verify all services are listening on expected ports
+- `/report` — comprehensive system status report
+- `/analyze` — AI-powered container log analysis (LLM or pattern-matching fallback)
+- `/schedule` — manage recurring scheduled tasks (daily or interval-based)
+- `/skills` — list all 18 available skills
+- 16 Gemini function-calling tools for natural language queries
+- Persistent scheduled task system with JSON storage
+
 **Planned**
-- Phase 5: Media automation (Sonarr/Radarr/Plex queries)
 - Phase 6: Remote access via Tailscale + Traefik
 - Phase 7: Production hardening
 
@@ -119,14 +131,26 @@ Then type `/ping` in your Discord server.
 | `/auditlog [lines]` | View recent audit log entries | 4 |
 | `/estop` | Emergency stop — halt all write actions | 4 |
 | `/estop resume` | Resume bot after emergency stop | 4 |
+| `/search <query>` | Search Sonarr/Radarr for TV shows or movies | 5 |
+| `/queue` | Show active downloads (SABnzbd + qBittorrent) | 5 |
+| `/recent [count]` | Recently added media from Plex | 5 |
+| `/health` | Check *arr services and download client health | 5 |
+| `/ports` | Check service port connectivity | 5 |
+| `/report` | Generate comprehensive system status report | 5 |
+| `/analyze <service>` | AI-powered container log analysis | 5 |
+| `/schedule` | Manage scheduled tasks (add/list/remove/toggle) | 5 |
+| `/skills` | List all available skills (18 total) | 5 |
 
 ## Architecture
 
 ```
 ~/openclaw/
-├── bot.py                 # Main Discord bot (commands + routing)
-├── skills.py              # Docker & system monitoring skills
-├── llm.py                 # Gemini LLM integration + function calling
+├── bot.py                 # Main Discord bot (25 slash commands)
+├── skills.py              # Core Docker & system monitoring skills + unified registry
+├── advanced_skills.py     # Media, network, Plex, health, and reporting skills
+├── analyzer.py            # AI-powered log analysis
+├── scheduler.py           # Scheduled task system with persistence
+├── llm.py                 # Gemini LLM integration + 16 function-calling tools
 ├── memory.py              # Per-user conversation memory
 ├── approvals.py           # Approval workflow engine + Discord button UI
 ├── docker-compose.yml     # Container orchestration
@@ -135,14 +159,14 @@ Then type `/ping` in your Discord server.
 ├── .env.example           # Template
 ├── config/
 │   ├── config.yaml        # Main configuration
-│   ├── permissions.yaml   # Risk levels and access control
+│   ├── permissions.yaml   # Risk levels and access control (22 skills)
 │   ├── skills/
 │   │   └── enabled.yaml   # Which skills are active
 │   └── prompts/
-│       └── system.txt     # LLM system prompt (Phase 3)
+│       └── system.txt     # LLM system prompt
 ├── data/
 │   ├── logs/              # Application logs
-│   ├── memory/            # Agent memory (Phase 3)
+│   ├── memory/            # Agent memory + scheduled tasks
 │   └── audit/             # Audit trail (JSONL)
 ├── docs/
 │   └── IMPLEMENTATION-PLAN.md  # Full 7-phase plan
@@ -168,7 +192,7 @@ Then type `/ping` in your Discord server.
 - [x] **Phase 2**: Core Skills — Docker management, system monitoring
 - [x] **Phase 3**: LLM Integration — Gemini-powered AI responses + function calling
 - [x] **Phase 4**: Security & Approvals — Button-based approval UI, emergency stop, audit viewer
-- [ ] **Phase 5**: Advanced Skills — Media automation, scheduled tasks
+- [x] **Phase 5**: Advanced Skills — Media search, downloads, Plex, health checks, scheduling, AI log analysis
 - [ ] **Phase 6**: Remote Access — Traefik routing, Uptime Kuma
 - [ ] **Phase 7**: Polish — Documentation, testing, production hardening
 
@@ -212,6 +236,14 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
   - `DISCORD_GUILD_ID` — right-click your Discord server → Copy Server ID
   - `ALLOWED_USER_IDS` — right-click your Discord profile → Copy User ID
   - `GOOGLE_API_KEY` — from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (paid Gemini tier)
+- [ ] **Fill in service API keys in `~/openclaw/.env`** (Phase 5):
+  - `SONARR_API_KEY` — from `docker-stack/sonarr/config/config.xml`
+  - `RADARR_API_KEY` — from `docker-stack/radarr/config/config.xml`
+  - `LIDARR_API_KEY` — from `docker-stack/lidarr/config/config.xml`
+  - `PROWLARR_API_KEY` — from `docker-stack/prowlarr/config/config.xml`
+  - `SABNZBD_API_KEY` — from `docker-stack/sabnzbd/config/sabnzbd.ini`
+  - `TAUTULLI_API_KEY` — from `docker-stack/tautulli/config/config.ini`
+  - `OVERSEERR_API_KEY` — from `docker-stack/overseerr/config/settings.json`
 - [ ] **First deploy**: `cd ~/openclaw && docker compose up -d --build`
 - [ ] **Verify**: type `/ping` in Discord, check `curl http://localhost:8765/health`
 - [ ] **Test `/ask`**: try "how's sonarr doing?" to confirm Gemini + function calling works

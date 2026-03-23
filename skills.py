@@ -1,6 +1,6 @@
 """
-OpenClaw Skills — Phase 2: Core Docker & System Monitoring
-Each skill is a standalone async function that returns a string result.
+OpenClaw Skills — Phase 5: Unified Skill Registry
+Core Docker & System Monitoring + Advanced Media/Network/Analysis skills.
 """
 
 import asyncio
@@ -260,3 +260,11 @@ SKILLS = {
     "get_system_stats": get_system_stats,
     "get_uptime": get_uptime,
 }
+
+# Merge advanced skills (media, network, Plex, reports)
+from advanced_skills import ADVANCED_SKILLS  # noqa: E402
+SKILLS.update(ADVANCED_SKILLS)
+
+# Merge analyzer skills (AI log analysis)
+from analyzer import ANALYZER_SKILLS  # noqa: E402
+SKILLS.update(ANALYZER_SKILLS)

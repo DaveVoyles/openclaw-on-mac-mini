@@ -1,5 +1,5 @@
 """
-OpenClaw LLM Integration — Phase 3: Gemini + Function Calling
+OpenClaw LLM Integration — Phase 5: Gemini + Function Calling
 Manages the Gemini API connection, tool declarations, and chat sessions.
 """
 
@@ -118,6 +118,118 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "object",
             "properties": {},
+        },
+    },
+    # -- Phase 5: Advanced Skills --
+    {
+        "name": "check_arr_health",
+        "description": "Check health status of all *arr services (Sonarr, Radarr, Lidarr, Prowlarr).",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "check_download_clients",
+        "description": "Check connectivity of download clients (SABnzbd and qBittorrent).",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "check_plex_status",
+        "description": "Check Plex server status and version via Tautulli.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "search_media",
+        "description": "Search for TV shows or movies across Sonarr and Radarr catalogs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search term (e.g. 'Breaking Bad', 'The Matrix')",
+                },
+                "media_type": {
+                    "type": "string",
+                    "description": "Type filter: 'tv', 'movie', or 'all' (default: all)",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "get_download_queue",
+        "description": "Get active downloads from SABnzbd (Usenet) and qBittorrent (torrents).",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "get_recent_additions",
+        "description": "Get recently added media from Plex (via Tautulli).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of recent items to return (1-25, default 10)",
+                },
+            },
+        },
+    },
+    {
+        "name": "ping_host",
+        "description": "Ping a hostname or IP to check connectivity and latency.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "description": "Hostname or IP address to ping",
+                },
+            },
+            "required": ["host"],
+        },
+    },
+    {
+        "name": "check_service_ports",
+        "description": "Check if all key services are listening on their expected ports.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "create_status_report",
+        "description": "Generate a comprehensive system status report covering all services, downloads, and Plex.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "analyze_logs",
+        "description": "Analyze container logs using AI to identify errors, warnings, and suggest fixes.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Container name to analyze logs for",
+                },
+                "lines": {
+                    "type": "integer",
+                    "description": "Number of log lines to analyze (10-200, default 50)",
+                },
+            },
+            "required": ["service"],
         },
     },
     # restart_container is intentionally EXCLUDED from LLM tool access.

@@ -25,6 +25,47 @@ commands:
     risk_level: LOW
     require_approval: false
 
+  # Phase 5: Advanced read-only skills
+  check_arr_health:
+    risk_level: LOW
+    require_approval: false
+
+  check_download_clients:
+    risk_level: LOW
+    require_approval: false
+
+  check_plex_status:
+    risk_level: LOW
+    require_approval: false
+
+  search_media:
+    risk_level: LOW
+    require_approval: false
+
+  get_download_queue:
+    risk_level: LOW
+    require_approval: false
+
+  get_recent_additions:
+    risk_level: LOW
+    require_approval: false
+
+  ping_host:
+    risk_level: LOW
+    require_approval: false
+
+  check_service_ports:
+    risk_level: LOW
+    require_approval: false
+
+  create_status_report:
+    risk_level: LOW
+    require_approval: false
+
+  analyze_logs:
+    risk_level: LOW
+    require_approval: false
+
   # Write operations (HIGH risk)
   restart_container:
     risk_level: HIGH
