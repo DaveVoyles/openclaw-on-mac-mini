@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 LABEL maintainer="davevoyles"
 LABEL description="OpenClaw - Autonomous AI agent with Discord interface"
-LABEL version="0.1.0"
+LABEL version="0.2.0"
 
 # Prevent Python from writing .pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -15,7 +15,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY bot.py .
+COPY bot.py skills.py ./
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \

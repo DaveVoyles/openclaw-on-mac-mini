@@ -1,5 +1,5 @@
 """
-OpenClaw Discord Bot - Phase 1: Foundation
+OpenClaw Discord Bot - Phase 2: Core Skills
 Autonomous AI agent for home automation and system management.
 """
 
@@ -14,9 +14,20 @@ import time
 from pathlib import Path
 
 import discord
+import yaml
 from aiohttp import web
 from discord import app_commands
 from dotenv import load_dotenv
+
+from skills import (
+    get_container_logs,
+    get_container_status,
+    get_docker_stats,
+    get_system_stats,
+    get_uptime,
+    list_containers,
+    restart_container,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -34,6 +45,9 @@ ALLOWED_USER_IDS = [
 HEALTH_PORT = int(os.getenv("HEALTH_PORT", "8765"))
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
+CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
+
+VERSION = "0.2.0"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -84,6 +98,39 @@ def is_allowed(interaction: discord.Interaction) -> bool:
     if not ALLOWED_USER_IDS:
         return True  # No allowlist configured → allow all (dev mode)
     return interaction.user.id in ALLOWED_USER_IDS
+
+
+# ---------------------------------------------------------------------------
+# Permissions helper (reads config/permissions.yaml)
+# ---------------------------------------------------------------------------
+
+_permissions_cache: dict | None = None
+
+
+def _load_permissions() -> dict:
+    global _permissions_cache
+    if _permissions_cache is not None:
+        return _permissions_cache
+    perms_file = CONFIG_DIR / "permissions.yaml"
+    if perms_file.exists():
+        with open(perms_file) as f:
+            _permissions_cache = yaml.safe_load(f) or {}
+    else:
+        _permissions_cache = {}
+    return _permissions_cache
+
+
+def is_service_allowed(skill: str, service: str) -> bool:
+    """Check permissions.yaml to see if a service is allowed for a skill."""
+    perms = _load_permissions()
+    cmd_perms = perms.get("commands", {}).get(skill, {})
+    denied = cmd_perms.get("denied_services", [])
+    allowed = cmd_perms.get("allowed_services", [])
+    if service in denied:
+        return False
+    if allowed and service not in allowed:
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +216,7 @@ async def ping(interaction: discord.Interaction):
     )
     embed.add_field(name="Latency", value=f"{latency_ms} ms", inline=True)
     embed.add_field(name="Uptime", value=uptime_str, inline=True)
-    embed.set_footer(text="OpenClaw v0.1.0 • Phase 1")
+    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 2")
 
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "ping", f"latency={latency_ms}ms")
@@ -182,7 +229,7 @@ async def about(interaction: discord.Interaction):
         description="Autonomous AI agent for home automation and system management.",
         color=discord.Color.blurple(),
     )
-    embed.add_field(name="Version", value="0.1.0 (Phase 1)", inline=True)
+    embed.add_field(name="Version", value=f"{VERSION} (Phase 2)", inline=True)
     embed.add_field(name="Python", value=platform.python_version(), inline=True)
     embed.add_field(name="discord.py", value=discord.__version__, inline=True)
     embed.add_field(name="Host", value=platform.node(), inline=True)
@@ -222,14 +269,137 @@ async def help_cmd(interaction: discord.Interaction):
         ("`/ping`", "Check if OpenClaw is alive"),
         ("`/about`", "Show version and system info"),
         ("`/whoami`", "Show your identity and permissions"),
+        ("`/containers`", "List all running Docker containers"),
+        ("`/status <service>`", "Get detailed container status"),
+        ("`/logs <service> [lines]`", "View container logs (default 30 lines)"),
+        ("`/system`", "Show system resource usage"),
+        ("`/dockerstats`", "Show per-container resource usage"),
+        ("`/restart <service>`", "Restart a container (authorized users only)"),
         ("`/help`", "This help message"),
     ]
     for name, desc in commands_list:
         embed.add_field(name=name, value=desc, inline=False)
 
-    embed.set_footer(text="Phase 2 will add /docker, /status, /logs commands")
+    embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 2")
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "help")
+
+
+# ---------------------------------------------------------------------------
+# Slash commands — Phase 2 (core skills)
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="containers", description="List all running Docker containers")
+async def containers_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await list_containers()
+    embed = discord.Embed(
+        title="🐳 Running Containers",
+        description=f"```\n{result}\n```",
+        color=discord.Color.blue(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "containers")
+
+
+@bot.tree.command(name="status", description="Get detailed status for a container")
+@app_commands.describe(service="Container name (e.g. sonarr, radarr, plex)")
+async def status_cmd(interaction: discord.Interaction, service: str):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await get_container_status(service)
+    embed = discord.Embed(
+        title=f"📦 Status: {service}",
+        description=f"```\n{result}\n```",
+        color=discord.Color.blue(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "status", detail=service)
+
+
+@bot.tree.command(name="logs", description="View recent logs from a container")
+@app_commands.describe(service="Container name", lines="Number of lines (5-100, default 30)")
+async def logs_cmd(interaction: discord.Interaction, service: str, lines: int = 30):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await get_container_logs(service, lines)
+    embed = discord.Embed(
+        title=f"📜 Logs: {service} (last {min(max(lines, 5), 100)})",
+        description=f"```\n{result}\n```",
+        color=discord.Color.greyple(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "logs", detail=f"{service} lines={lines}")
+
+
+@bot.tree.command(name="system", description="Show system resource usage")
+async def system_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    stats = await get_system_stats()
+    uptime_str = await get_uptime()
+    embed = discord.Embed(
+        title="🖥️ System Stats",
+        description=stats,
+        color=discord.Color.green(),
+    )
+    embed.add_field(name="Uptime", value=f"```{uptime_str}```", inline=False)
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "system")
+
+
+@bot.tree.command(name="dockerstats", description="Show resource usage per container")
+async def dockerstats_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await get_docker_stats()
+    embed = discord.Embed(
+        title="📊 Docker Resource Usage",
+        description=f"```\n{result}\n```",
+        color=discord.Color.orange(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "dockerstats")
+
+
+@bot.tree.command(name="restart", description="Restart a Docker container (authorized users only)")
+@app_commands.describe(service="Container name to restart")
+async def restart_cmd(interaction: discord.Interaction, service: str):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        audit_log(interaction.user, "restart", detail=service, result="denied")
+        return
+
+    # Check permissions.yaml allow/deny lists
+    if not is_service_allowed("restart_container", service):
+        await interaction.response.send_message(
+            f"🚫 Restarting `{service}` is not permitted by policy.", ephemeral=True,
+        )
+        audit_log(interaction.user, "restart", detail=service, result="blocked_by_policy")
+        return
+
+    await interaction.response.defer()
+    result = await restart_container(service)
+    color = discord.Color.green() if result.startswith("✅") else discord.Color.red()
+    embed = discord.Embed(
+        title=f"🔄 Restart: {service}",
+        description=result,
+        color=color,
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "restart", detail=service, result="success" if result.startswith("✅") else "failed")
 
 
 # ---------------------------------------------------------------------------
