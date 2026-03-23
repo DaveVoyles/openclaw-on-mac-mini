@@ -1,0 +1,17 @@
+# OpenClaw Discord Bot - Dependencies
+# Phase 1: Foundation
+
+# Discord bot framework
+discord.py==2.4.0
+
+# Google Gemini AI SDK
+google-generativeai==0.8.4
+
+# Web server for health check endpoint
+aiohttp==3.11.11
+
+# Environment variable management
+python-dotenv==1.0.1
+
+# YAML configuration parsing
+PyYAML==6.0.2

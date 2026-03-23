@@ -1,0 +1,58 @@
+services:
+  openclaw:
+    build: .
+    container_name: openclaw
+    hostname: openclaw
+    restart: unless-stopped
+
+    # Security hardening (consistent with docker-stack)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+
+    # Resource limits
+    mem_limit: 2g
+    cpus: '2.0'
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Port mappings
+    ports:
+      - "8765:8765"  # Health check / Web UI
+
+    # Environment variables
+    env_file:
+      - .env
+
+    environment:
+      - HEALTH_PORT=8765
+      - LOG_DIR=/logs
+      - AUDIT_DIR=/audit
+
+    # Volume mounts
+    volumes:
+      # Configuration (read-only)
+      - ./config:/config:ro
+
+      # Persistent data (read-write)
+      - ./data/logs:/logs:rw
+      - ./data/memory:/memory:rw
+      - ./data/audit:/audit:rw
+
+      # Temp directories (required for read_only: true)
+      - /tmp/openclaw:/tmp:rw
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

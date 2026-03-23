@@ -1,0 +1,73 @@
+# OpenClaw Permissions Configuration
+# Controls what actions require approval and who can execute them
+
+# Risk levels: LOW, MEDIUM, HIGH, CRITICAL
+# LOW: Auto-execute, no approval needed
+# MEDIUM: Execute with logging
+# HIGH: Requires explicit user approval
+# CRITICAL: Requires approval + dry-run preview
+
+commands:
+  # Read-only operations (LOW risk)
+  list_containers:
+    risk_level: LOW
+    require_approval: false
+
+  get_container_status:
+    risk_level: LOW
+    require_approval: false
+
+  get_container_logs:
+    risk_level: LOW
+    require_approval: false
+
+  get_system_stats:
+    risk_level: LOW
+    require_approval: false
+
+  # Write operations (HIGH risk)
+  restart_container:
+    risk_level: HIGH
+    require_approval: true
+    allowed_services:
+      - sonarr
+      - radarr
+      - lidarr
+      - prowlarr
+      - bazarr
+      - kapowarr
+      - hardcoverr
+      - overseerr
+      - sabnzbd
+      - qbittorrent
+      - tautulli
+      - speedtest
+      - flaresolverr
+      - kometa
+      - dozzle
+      - glances
+    # NEVER allow restart of critical infrastructure:
+    denied_services:
+      - traefik
+      - socket-proxy
+      - homepage
+      - watchtower
+
+  stop_container:
+    risk_level: HIGH
+    require_approval: true
+
+  start_container:
+    risk_level: MEDIUM
+    require_approval: true
+
+  # Destructive operations (CRITICAL risk)
+  delete_container:
+    risk_level: CRITICAL
+    require_approval: true
+    enabled: false  # Disabled in Phase 1
+
+  update_container:
+    risk_level: CRITICAL
+    require_approval: true
+    enabled: false  # Disabled in Phase 1

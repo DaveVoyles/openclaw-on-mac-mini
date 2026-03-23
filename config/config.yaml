@@ -1,0 +1,39 @@
+# OpenClaw Configuration
+# Phase 1: Foundation
+
+version: "0.1.0"
+phase: 1
+
+# Bot settings
+bot:
+  name: "OpenClaw"
+  prefix: "/"
+  status: "Watching Mac Mini"
+  health_port: 8765
+
+# LLM settings (Phase 3)
+llm:
+  primary_model: "gemini-2.0-flash"
+  fallback_model: "gpt-4o-mini"
+  max_tokens: 2000
+  temperature: 0.7
+
+# Security settings
+security:
+  sandbox_mode: true
+  require_approval: true
+  audit_logging: true
+  max_commands_per_minute: 10
+  max_llm_calls_per_hour: 100
+
+# Docker stack reference (Phase 2)
+docker_stack:
+  path: "/Users/davevoyles/docker-stack"
+  host: "192.168.1.93"
+
+# NAS reference (Phase 2)
+nas:
+  host: "192.168.1.8"
+  ssh_port: 24
+  user: "dave"
+  docker_path: "/volume1/docker"
