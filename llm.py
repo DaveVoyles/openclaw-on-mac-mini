@@ -295,6 +295,31 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "required": ["to", "subject", "body"],
         },
     },
+    # -- Phase 6: Network & Remote Access --
+    {
+        "name": "get_network_status",
+        "description": "Check LAN, internet, DNS, and Tailscale VPN connectivity and return a full status summary.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "get_tailscale_status",
+        "description": "Show Tailscale VPN status and this device's Tailscale IP address.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "run_speed_test",
+        "description": "Run a brief network speed test and return measured download speed and DNS latency.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
     # restart_container is intentionally EXCLUDED from LLM tool access.
     # The LLM can suggest a restart, but it must go through the /restart command
     # with proper authorization and policy checks.

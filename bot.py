@@ -1,5 +1,5 @@
 """
-OpenClaw Discord Bot - Phase 5: Advanced Skills
+OpenClaw Discord Bot - Phase 6: Remote Access & Monitoring
 Autonomous AI agent for home automation and system management.
 """
 
@@ -41,6 +41,7 @@ from advanced_skills import (
 )
 from analyzer import analyze_logs
 from scheduler import scheduler
+from network import get_network_status, get_tailscale_status, run_speed_test
 
 from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
 from memory import store as conversation_store
@@ -205,12 +206,13 @@ class OpenClawBot(discord.Client):
     async def _start_health_server(self):
         app = web.Application()
         app.router.add_get("/health", self._health_handler)
+        app.router.add_get("/metrics", self._metrics_handler)
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
         await site.start()
         self._health_runner = runner
-        log.info("Health endpoint listening on :%d/health", HEALTH_PORT)
+        log.info("Health endpoint listening on :%d/health (and /metrics)", HEALTH_PORT)
 
     async def _health_handler(self, _request: web.Request) -> web.Response:
         uptime_s = time.monotonic() - self.start_time
@@ -223,6 +225,35 @@ class OpenClawBot(discord.Client):
             "discord_py": discord.__version__,
         }
         return web.json_response(payload)
+
+    async def _metrics_handler(self, _request: web.Request) -> web.Response:
+        """Expose Prometheus-format metrics for Grafana / Uptime Kuma scraping."""
+        uptime_s = time.monotonic() - self.start_time
+        guilds = len(self.guilds)
+        latency_ms = round(self.latency * 1000, 1) if self.latency else 0
+
+        lines = [
+            "# HELP openclaw_up Whether the bot is running (1=up)",
+            "# TYPE openclaw_up gauge",
+            "openclaw_up 1",
+            "",
+            "# HELP openclaw_uptime_seconds Seconds since bot started",
+            "# TYPE openclaw_uptime_seconds counter",
+            f"openclaw_uptime_seconds {uptime_s:.1f}",
+            "",
+            "# HELP openclaw_guilds Number of Discord guilds connected to",
+            "# TYPE openclaw_guilds gauge",
+            f"openclaw_guilds {guilds}",
+            "",
+            "# HELP openclaw_latency_ms Discord gateway latency in milliseconds",
+            "# TYPE openclaw_latency_ms gauge",
+            f"openclaw_latency_ms {latency_ms}",
+            "",
+        ]
+        return web.Response(
+            text="\n".join(lines),
+            content_type="text/plain",
+        )
 
 
 bot = OpenClawBot()
@@ -929,6 +960,61 @@ async def mail_cmd(interaction: discord.Interaction, to: str, subject: str, body
     result = await send_agent_mail(to, subject, body)
     await interaction.followup.send(result)
     audit_log(interaction.user, "mail", detail=f"to={to} subj={subject}")
+
+
+# ---------------------------------------------------------------------------
+# Phase 6: Network & Remote Access commands
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="network", description="Show network connectivity status (LAN, internet, Tailscale)")
+async def network_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await get_network_status()
+    embed = discord.Embed(
+        title="🌐 Network Status",
+        description=result,
+        color=discord.Color.blue(),
+    )
+    embed.set_footer(text="LAN • Internet • DNS • Tailscale • OpenClaw health")
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "network")
+
+
+@bot.tree.command(name="tailscale", description="Show Tailscale VPN status and this device's Tailscale IP")
+async def tailscale_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await get_tailscale_status()
+    embed = discord.Embed(
+        title="🔒 Tailscale Status",
+        description=result,
+        color=discord.Color.dark_green(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "tailscale")
+
+
+@bot.tree.command(name="speedtest", description="Run a quick network speed test")
+async def speedtest_cmd(interaction: discord.Interaction):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    result = await run_speed_test()
+    embed = discord.Embed(
+        title="⚡ Speed Test",
+        description=result,
+        color=discord.Color.gold(),
+    )
+    embed.set_footer(text="Download test via Cloudflare (10MB sample)")
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "speedtest")
 
 
 # ---------------------------------------------------------------------------

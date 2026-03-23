@@ -279,3 +279,12 @@ SKILLS.update({
     "list_memories": list_memories,
     "send_agent_mail": send_agent_mail,
 })
+
+# Add Phase 6 network skills (Tailscale, connectivity, speed)
+from network import get_network_status, get_tailscale_status, run_speed_test
+
+SKILLS.update({
+    "get_network_status": get_network_status,
+    "get_tailscale_status": get_tailscale_status,
+    "run_speed_test": run_speed_test,
+})
