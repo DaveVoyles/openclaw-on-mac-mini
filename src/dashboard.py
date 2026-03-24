@@ -40,18 +40,27 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     bot = request.app.get("bot")
     uptime_s = time.monotonic() - bot.start_time if bot else 0
 
-    from skills import SKILLS, list_containers, get_docker_stats
+    from skills import SKILLS, list_containers, get_docker_stats, get_system_stats
     from ontology_skills import ontology_query
     from llm import _TOOL_DECLARATIONS, get_rate_info, MODEL_NAME, OLLAMA_MODEL, LOCAL_LLM_ENABLED
 
     # Get container status list
     container_text = await list_containers()
     containers = []
-    if not container_text.startswith("❌"):
-        # Skip header, split lines
+    if not container_text.startswith("\u274c"):
+        # The output uses multiple spaces instead of tabs sometimes. Split by 2+ spaces.
+        import re
         lines = [line.strip() for line in container_text.split("\n") if line.strip() and not line.startswith("NAMES")]
         for line in lines:
+            # Match Names (first col), Status (middle), ignore Ports (last)
+            # Docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+            # But skills/__init__.py uses actual tab characters (\t) in the format string.
+            # Let's check if it's splitting correctly.
             parts = [p.strip() for p in line.split("\t") if p.strip()]
+            if not parts or len(parts) < 2:
+                # Fallback to regex split if tabs aren't present
+                parts = [p.strip() for p in re.split(r'\s{2,}', line) if p.strip()]
+
             if len(parts) >= 2:
                 name = parts[0]
                 status = parts[1]
@@ -66,17 +75,32 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     # Get resource stats
     stats_text = await get_docker_stats()
     stats_list = []
-    if not stats_text.startswith("❌"):
+    if not stats_text.startswith("\u274c"):
         # Parse table Format: NAME CPU% MEM NET
         stat_lines = [l.strip() for l in stats_text.split("\n") if l.strip() and not l.startswith("NAME")]
         for sl in stat_lines:
             parts = [p.strip() for p in sl.split("\t") if p.strip()]
+            if not parts or len(parts) < 2:
+                # Fallback to regex split if tabs aren't present
+                import re
+                parts = [p.strip() for p in re.split(r'\s{2,}', sl) if p.strip()]
+
             if len(parts) >= 2:
                 stats_list.append({
                     "name": parts[0],
                     "cpu": parts[1] if len(parts) > 1 else "?",
                     "mem": parts[2] if len(parts) > 2 else "?",
                 })
+
+    # Get server system stats (CPU/MEM/Disk)
+    sys_stats_text = await get_system_stats()
+    # Format: **CPU**: 10.5% (8 cores)\n**Memory**: 4.2 / 16.0 GB (26.3%)\n**Disk** `/`: 200GB used / 500GB total (40%)
+    sys_stats = {"cpu": "N/A", "mem": "N/A", "disk": "N/A"}
+    for line in sys_stats_text.split("\n"):
+        if "**CPU**" in line: sys_stats["cpu"] = line.split(":", 1)[1].strip()
+        elif "Average" in line: sys_stats["cpu"] = line.split(":", 1)[1].strip() # Fallback for Load Avg
+        elif "**Memory**" in line: sys_stats["mem"] = line.split(":", 1)[1].strip()
+        elif "**Disk**" in line: sys_stats["disk"] = line.split(":", 1)[1].strip()
 
     # Get ontology facts (limit to recent 5)
     ontology_text = await ontology_query()
@@ -112,6 +136,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "github_repo": GITHUB_REPO,
         "containers": containers,
         "stats": stats_list,
+        "sys_stats": sys_stats,
         "ontology": ontology_facts,
         "config": {
             "llm": cfg.get("llm", {}),
@@ -153,7 +178,9 @@ def _command_list() -> list[dict]:
             {"name": "/restart <service>", "desc": "Restart a container (requires approval)"},
         ]},
         {"category": "🤖 AI & LLM", "commands": [
-            {"name": "/ask <question>", "desc": "AI-powered query — Gemini (tools) or Ollama (chat)"},
+            {"name": "/ask <question>", "desc": "AI-powered query — Gemini (tools) or Ollama (chat). Weather/live-data queries auto-route to Gemini."},
+            {"name": "/research <query>", "desc": "Deep multi-step research — Discord thread, planned sub-queries, 3-tier search (Tavily → DDG → Bing), source browsing, synthesized report"},
+            {"name": "/weather [location]", "desc": "Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var)"},
             {"name": "/clear", "desc": "Clear active conversation history"},
             {"name": "/save <name>", "desc": "Save current conversation as a named thread (persisted to disk)"},
             {"name": "/resume <name>", "desc": "Resume a previously saved conversation thread"},
@@ -198,12 +225,14 @@ def _command_list() -> list[dict]:
             {"name": "ontology_relate", "desc": "Create a typed link between two entities (e.g., 'blocks', 'manages')."},
             {"name": "ontology_query", "desc": "Search the knowledge graph for entities by name or type."},
         ]},
-        {"category": "Self-Management & Enhanced Browsing (via /ask)", "commands": [
+        {"category": "Self-Management & Autonomy (via /ask)", "commands": [
             {"name": "webfetch_md", "desc": "Smartly scrape any URL and convert main content to clean Markdown."},
             {"name": "git_status", "desc": "Check project repository status for code changes."},
             {"name": "git_log", "desc": "View recent code change history (commit log)."},
             {"name": "git_diff", "desc": "Compare code changes or view uncommitted changes."},
             {"name": "git_commit", "desc": "Commit all current changes with a brief summary message."},
+            {"name": "init_planning_files", "desc": "Initialize task_plan.md, findings.md, progress.md for complex tasks."},
+            {"name": "update_plan_status", "desc": "Log progress or update status of a phase in planning files."},
         ]},
     ]
 
@@ -492,9 +521,9 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <!-- Header -->
   <div class="header">
     <div class="header-title">
-      <div class="logo">&#129490;</div>
+      <div class="logo"></div>
       <div>
-        <h1>OpenClaw</h1>
+        <h1>Dave's OpenClaw on a Mac Mini</h1>
         <span id="subtitle" class="badge badge-blue" style="margin-top:2px"></span>
       </div>
     </div>
@@ -508,9 +537,7 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
   <div class="btn-row">
     <a id="link-github" class="btn btn-primary" href="#" target="_blank"><span class="btn-icon">&#128279;</span> GitHub</a>
     <a class="btn btn-gold" href="https://davevoyles.github.io/openclaw-dashboard/" target="_blank" rel="noopener"><span class="btn-icon">&#127918;</span> Mission Control</a>
-    <a class="btn" href="/health" target="_blank"><span class="btn-icon">&#128154;</span> Health</a>
-    <a class="btn" href="/metrics" target="_blank"><span class="btn-icon">&#128200;</span> Prometheus</a>
-    <a class="btn btn-gold" href="/api/dashboard" target="_blank"><span class="btn-icon">&#128203;</span> API JSON</a>
+    <a class="btn btn-gold" href="https://homepage.davevoyles.synology.me/" target="_blank" rel="noopener"><span class="btn-icon">&#127968;</span> Synology NAS</a>
     <a class="btn" href="/guide" target="_blank"><span class="btn-icon">&#128218;</span> Guide</a>
     <button class="btn btn-refresh" onclick="refreshData(this)"><span class="btn-icon">&#8635;</span> Refresh</button>
   </div>
@@ -520,6 +547,25 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
     <h2>&#128373; Container Health Status</h2>
     <div id="container-grid" class="health-grid">
       <div style="color:var(--muted);font-style:italic">Loading container status...</div>
+    </div>
+  </div>
+
+  <!-- Mac Mini Resource Usage -->
+  <div class="card" id="mac-mini-usage" style="display:none">
+    <h2>&#128187; Mac Mini Resource Usage</h2>
+    <div class="grid" style="grid-template-columns: repeat(3, 1fr); margin-top: 0.5rem; gap: 1rem;">
+      <div class="stat-item" style="text-align:center; background: rgba(104, 172, 229, 0.05); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
+        <div style="font-size: 0.7rem; color: var(--gold); text-transform: uppercase; margin-bottom: 0.25rem;">CPU Usage</div>
+        <div id="server-cpu" style="font-size: 1.1rem; font-weight: 700;">--</div>
+      </div>
+      <div class="stat-item" style="text-align:center; background: rgba(104, 172, 229, 0.05); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
+        <div style="font-size: 0.7rem; color: var(--spirit-blue); text-transform: uppercase; margin-bottom: 0.25rem;">Memory</div>
+        <div id="server-mem" style="font-size: 1.1rem; font-weight: 700;">--</div>
+      </div>
+      <div class="stat-item" style="text-align:center; background: rgba(104, 172, 229, 0.05); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border);">
+        <div style="font-size: 0.7rem; color: var(--mint-green); text-transform: uppercase; margin-bottom: 0.25rem;">Storage (Root)</div>
+        <div id="server-disk" style="font-size: 1.1rem; font-weight: 700;">--</div>
+      </div>
     </div>
   </div>
 
@@ -722,7 +768,7 @@ async function loadData() {
 function render(d) {
   // Header
   const cmdCount = d.commands.reduce((a,c) => a + c.commands.length, 0);
-  document.getElementById('subtitle').textContent = `v${d.version} \u2022 ${d.skill_count} skills \u2022 ${cmdCount} commands`;
+  document.getElementById('subtitle').innerHTML = `v${d.version} \u2022 ${d.skill_count} skills \u2022 ${cmdCount} commands &middot; <a href="https://openclaw.davevoyles.synology.me/dashboard" target="_blank" style="color:var(--muted);text-decoration:none;font-weight:bold">openclaw.davevoyles.synology.me</a>`;
   document.getElementById('uptime-badge').textContent = '\u23f1 ' + formatUptime(d.uptime_seconds);
   document.getElementById('link-github').href = d.github_repo;
 
@@ -775,6 +821,14 @@ function render(d) {
 
   // Resource usage stats
   if (d.stats) renderStats(d.stats);
+
+  // Server Resource stats
+  if (d.sys_stats) {
+    document.getElementById('mac-mini-usage').style.display = 'block';
+    document.getElementById('server-cpu').textContent = d.sys_stats.cpu || '--';
+    document.getElementById('server-mem').textContent = d.sys_stats.mem || '--';
+    document.getElementById('server-disk').textContent = d.sys_stats.disk || '--';
+  }
 
   // Ontology
   renderOntology(d.ontology);
@@ -1036,7 +1090,7 @@ GUIDE_HTML = r"""<!DOCTYPE html>
 <a class="btn" href="/dashboard">&larr; Back to Dashboard</a>
 
 <h1>&#128218; OpenClaw Guide &amp; Tutorial</h1>
-<p class="subtitle">Version 0.7.0 &mdash; Everything you need to know to get the most out of your AI-powered Mac Mini agent.</p>
+<p class="subtitle">Version 0.6.0 &mdash; Everything you need to know to get the most out of your AI-powered Mac Mini agent.</p>
 
 <!-- TOC -->
 <div class="card">
@@ -1053,12 +1107,16 @@ GUIDE_HTML = r"""<!DOCTYPE html>
   <li><a href="#scheduler">9. Scheduled Tasks</a></li>
   <li><a href="#spending">10. Spending &amp; Budget Tracking</a></li>
   <li><a href="#mail">11. AgentMail (Email)</a></li>
-  <li><a href="#scraping">12. Web Scraping &amp; Git</a></li>
-  <li><a href="#security">13. Security &amp; Approvals</a></li>
-  <li><a href="#dashboard-guide">14. Dashboard &amp; Endpoints</a></li>
-  <li><a href="#tips">15. Power User Tips</a></li>
-  <li><a href="#troubleshooting">16. Troubleshooting</a></li>
-  <li><a href="#gateway">17. API Gateway (Maton)</a></li>
+  <li><a href="#scraping">12. Web Search &amp; Git</a></li>
+  <li><a href="#weather">13. Weather (/weather)</a></li>
+  <li><a href="#research">14. Deep Research (/research)</a></li>
+  <li><a href="#session-memory">15. Session Memory &amp; Recall</a></li>
+  <li><a href="#autonomy">16. Autonomous Operations</a></li>
+  <li><a href="#security">17. Security &amp; Approvals</a></li>
+  <li><a href="#dashboard-guide">18. Dashboard &amp; Endpoints</a></li>
+  <li><a href="#tips">19. Power User Tips</a></li>
+  <li><a href="#troubleshooting">20. Troubleshooting</a></li>
+  <li><a href="#gateway">21. API Gateway (Maton)</a></li>
 </ul>
 </div>
 
@@ -1066,8 +1124,8 @@ GUIDE_HTML = r"""<!DOCTYPE html>
 <h2 id="overview">1. Overview &amp; Architecture</h2>
 <p>OpenClaw is a Discord bot that acts as an AI-powered operations agent for your Mac Mini Docker stack. It connects to:</p>
 <ul>
-  <li><strong>Google Gemini 2.5 Flash</strong> &mdash; AI reasoning with function calling (27 skills) — used for tool-requiring queries</li>
-  <li><strong>Ollama llama3.2:3b</strong> &mdash; local LLM running on the Mac Mini for conversational queries (free, no rate limits)</li>
+  <li><strong>Google Gemini 2.5 Flash</strong> &mdash; AI reasoning with function calling (66 skills) — used for tool-requiring, weather, and research queries</li>
+  <li><strong>Ollama gemma3:12b</strong> &mdash; local LLM running on the Mac Mini for conversational queries (free, no rate limits, ~15&ndash;20 tok/s on M4 Neural Engine)</li>
   <li><strong>Docker Engine</strong> &mdash; manage 26+ containers running on the Mac Mini</li>
   <li><strong>*arr Stack</strong> &mdash; Sonarr, Radarr, Lidarr, Prowlarr, Bazarr via their APIs</li>
   <li><strong>Download Clients</strong> &mdash; SABnzbd (Usenet) and qBittorrent (torrents)</li>
@@ -1146,8 +1204,10 @@ You get a Discord embed with your active downloads</code></pre>
 <h3>How Hybrid Routing Works</h3>
 <table>
   <tr><th>Query type</th><th>Routed to</th><th>Cost</th><th>Footer shows</th></tr>
-  <tr><td>Conversational ("hello", "what time is it")</td><td>Ollama llama3.2:3b (local)</td><td>Free</td><td><code>local &middot; unlimited</code></td></tr>
+  <tr><td>Conversational ("hello", "what time is it", "who wrote Hamlet")</td><td>Ollama gemma3:12b (local)</td><td>Free</td><td><code>local &middot; unlimited</code></td></tr>
   <tr><td>Tool-requiring ("sonarr", "status", "docker", "download", etc.)</td><td>Gemini 2.5 Flash</td><td>~$0.0005/query</td><td>Rate counters</td></tr>
+  <tr><td>Weather / forecast ("weather", "rain", "forecast", "temperature")</td><td>Gemini 2.5 Flash + <code>get_weather</code> tool</td><td>~$0.0005/query</td><td>Rate counters</td></tr>
+  <tr><td>Hallucination detected in Ollama response</td><td>Gemini 2.5 Flash (re-routed automatically)</td><td>~$0.0005/query</td><td>Rate counters</td></tr>
 </table>
 
 <h3>Rate Limits (Gemini only)</h3>
@@ -1399,8 +1459,112 @@ You get a Discord embed with your active downloads</code></pre>
 <p>Once configured, the AI can also send emails via <code>/ask</code>: <em>"Email me a status report at you@example.com"</em></p>
 </div>
 
-<!-- 11. Security -->
-<h2 id="security">12. Security &amp; Approvals</h2>
+<!-- 11. Web Scraping & Git -->
+<h2 id="scraping">12. Web Search, Real Estate &amp; Git</h2>
+<p>OpenClaw can extract content from the web, perform deep market research, and interact with Git repositories for code-related tasks.</p>
+
+<h3>3-Tier Search Cascade</h3>
+<p>Every <code>search_web</code> call tries three sources in order until one succeeds:</p>
+<div class="card"><table>
+  <tr><th>Tier</th><th>Method</th><th>Requires</th></tr>
+  <tr><td><strong>1 &mdash; Tavily</strong></td><td>AI-optimized semantic search; returns direct answers, not just links</td><td><code>TAVILY_API_KEY</code></td></tr>
+  <tr><td><strong>2 &mdash; DuckDuckGo</strong></td><td>Free DDG Lite via <code>free-web-search</code> ClawHub skill</td><td>None</td></tr>
+  <tr><td><strong>3 &mdash; Bing HTML</strong></td><td>Scraped with BeautifulSoup4 as last resort</td><td>None</td></tr>
+</table></div>
+<p>For deep multi-source topic research, use <a href="#research"><code>/research</code></a>.</p>
+
+<h3>Inline Search (via <code>/ask</code>)</h3>
+<p>The AI can search the web and fetch content to answer questions:</p>
+<ul>
+  <li><code>search_web</code>: 3-tier cascade search (Tavily &rarr; DuckDuckGo &rarr; Bing).</li>
+  <li><code>browse_url</code>: Extract clean text and markdown from a specific URL.</li>
+</ul>
+
+<div class="tip">
+  <strong>🏠 Real Estate Investigator:</strong> Gemini is specifically configured to handle property research. Try asking: <br>
+  <code>/ask "Find homes in Narberth under $450k with low taxes"</code> <br>
+  The agent will search current listings, analyze property taxes, and identify key features like fenced yards.
+</div>
+
+<h3>Git Operations</h3>
+<ul>
+  <li><code>git_search</code>: Search for code patterns in a local repository</li>
+  <li><code>git_diff</code>: Compare changes between branches or commits</li>
+  <li><code>git_commit_info</code>: Retrieve details about specific commits</li>
+</ul>
+
+<!-- 13. Weather -->
+<h2 id="weather">13. Weather</h2>
+<p>Get current conditions and a 3-day forecast via <a href="https://wttr.in" target="_blank">wttr.in</a> &mdash; no API key required.</p>
+
+<h3><code>/weather [location]</code></h3>
+<pre><code>/weather
+/weather Philadelphia
+/weather London, UK
+/weather 19072</code></pre>
+<p>With no argument, uses the <code>WEATHER_DEFAULT_LOCATION</code> env var (defaults to your configured city).</p>
+
+<div class="tip">
+  <strong>&#128161; Also via /ask:</strong> Any weather-related query containing "weather", "rain", "forecast", "temperature", etc. is automatically routed to Gemini, which calls the <code>get_weather</code> tool. Try:<br>
+  <code>/ask What&rsquo;s the weather in Narberth this weekend?</code>
+</div>
+
+<div class="card">
+<h3 style="margin-top:0">Sample Output</h3>
+<pre><code>&#127748; Weather for Philadelphia, PA
+Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
+&#128197; 3-Day Forecast:
+  Today   &#9925; High 62&deg;F / Low 44&deg;F &mdash; Overcast
+  Tue     &#127783; High 55&deg;F / Low 40&deg;F &mdash; Light rain
+  Wed     &#9728; High 68&deg;F / Low 48&deg;F &mdash; Sunny</code></pre>
+</div>
+
+<!-- 14. Deep Research -->
+<h2 id="research">14. Deep Research (<code>/research</code>)</h2>
+<p>Multi-step autonomous research. Given a question or topic, the bot:</p>
+<ol>
+  <li><strong>Plans</strong> a set of focused sub-queries using Gemini</li>
+  <li><strong>Searches</strong> each sub-query in parallel (3-tier cascade: Tavily &rarr; DuckDuckGo &rarr; Bing)</li>
+  <li><strong>Browses</strong> the top source URLs to extract full article content</li>
+  <li><strong>Synthesizes</strong> a structured report using low-temperature Gemini in a new Discord thread</li>
+</ol>
+
+<h3><code>/research &lt;query&gt;</code></h3>
+<pre><code>/research Best neighborhoods in Philadelphia under $400k with good schools
+/research Docker vs Podman tradeoffs for home lab usage
+/research How to set up Tailscale exit nodes on Synology NAS
+/research Current Sonarr v4 migration breaking changes</code></pre>
+
+<div class="tip">
+  <strong>&#128161; Live progress:</strong> A Discord thread is created immediately. The bot posts progress messages as each search and URL is processed. The final report appears with action buttons:<br>
+  &nbsp;&nbsp;<strong>&#128204; Save to Memory</strong> &mdash; stores the report summary in QMD long-term memory<br>
+  &nbsp;&nbsp;<strong>&#128260; Re-run in 24h</strong> &mdash; schedules the research query to repeat tomorrow
+</div>
+
+<!-- 15. Session Memory -->
+<h2 id="session-memory">15. Session Memory &amp; Cross-Session Recall</h2>
+<p>OpenClaw automatically summarizes conversations and injects context into new sessions.</p>
+
+<div class="card">
+<h3 style="margin-top:0">How It Works</h3>
+<ol>
+  <li>You have a conversation with <code>/ask</code> (4+ turns)</li>
+  <li>After 30 minutes of inactivity the session expires</li>
+  <li>Gemini auto-summarizes the session (~300 tokens)</li>
+  <li>Summary saved to disk and QMD memory (<code>/memory/summaries/{user_id}_last_session.json</code>)</li>
+  <li>Next conversation: the bot injects &ldquo;Last time we talked about&hellip;&rdquo; into context automatically</li>
+</ol>
+</div>
+
+<div class="tip">
+  <strong>&#128161; No action needed:</strong> This is fully automatic. To query it explicitly:<br>
+  <code>/ask What did we talk about last time?</code>
+</div>
+
+<p>For facts you always want the bot to retain (not just session summaries), use <code>/remember</code> and <code>/recall</code> &mdash; see <a href="#memory">Section 8</a>.</p>
+
+<!-- 17. Security -->
+<h2 id="security">17. Security &amp; Approvals</h2>
 
 <h3>Authorization</h3>
 <p>Only Discord users listed in <code>ALLOWED_USER_IDS</code> (in <code>.env</code>) can use the bot. All other users are silently rejected.</p>
@@ -1426,8 +1590,38 @@ You get a Discord embed with your active downloads</code></pre>
 /estop resume   &rarr; Resumes normal operation</code></pre>
 <p>Use this if the bot is behaving unexpectedly or you need to pause all automation.</p>
 
-<!-- 12. Dashboard -->
-<h2 id="dashboard-guide">13. Dashboard &amp; Endpoints</h2>
+<!-- 12. Autonomous Operations -->
+<h2 id="autonomy">16. Autonomous Agent Operations</h2>
+<p>OpenClaw includes dedicated tools for long-running, multi-step tasks that require planning, research, and persistent working memory. These tools enable the AI to work autonomously on complex goals (Manus-style) without constant user prompting.</p>
+
+<div class="card">
+<h3 style="margin-top:0">The Planning Workflow</h3>
+<p>When you give a complex goal via <code>/ask</code> (e.g., <em>"Research and document a full upgrade path for our Docker stack"</em>), the AI uses three persistent files to track its progress:</p>
+<ol>
+  <li><strong><code>task_plan.md</code></strong>: The master checklist of phases and steps.</li>
+  <li><strong><code>findings.md</code></strong>: Raw data, command outputs, and research notes.</li>
+  <li><strong><code>progress.md</code></strong>: A high-level executive summary of current status.</li>
+</ol>
+<p>This "working memory on disk" allows the AI to maintain context over long periods and across multiple <code>/ask</code> sessions.</p>
+</div>
+
+<h3>Core Autonomy Tools (via <code>/ask</code>)</h3>
+<ul>
+    <li><strong><code>init_planning_files</code></strong>: Creates the base plan and finding files for a new goal.</li>
+    <li><strong><code>update_plan_status</code></strong>: Marks phases as complete and updates the current progress note.</li>
+    <li><strong><code>autonomous_loop</code></strong>: Starts a continuous execution cycle where the AI checks its plan, performs the next action, evaluates the result, and loops until completion.</li>
+</ul>
+
+<h3>Controlling Autonomous Loops</h3>
+<p>Safety is built into the autonomous execution system:</p>
+<ul>
+    <li><strong>Emergency Stop:</strong> If a file named <code>STOP_AUTONOMOUS</code> is created in the <code>data/</code> directory, all loops immediately terminate.</li>
+    <li><strong>Iteration Limit:</strong> Loops have a hard-coded maximum number of steps to prevent runaway resource usage.</li>
+    <li><strong>Manual Resume:</strong> You can always check <code>progress.md</code> to see where the agent left off and resume the task later.</li>
+</ul>
+
+<!-- 13. Dashboard -->
+<h2 id="dashboard-guide">18. Dashboard &amp; Endpoints</h2>
 
 <h3>Web Dashboard</h3>
 <p>The visual dashboard at <a href="/dashboard">/dashboard</a> shows real-time bot status, spending, skills, and commands. It auto-refreshes every 60 seconds.</p>
@@ -1449,7 +1643,7 @@ https://openclaw.davevoyles.synology.me/health
 https://openclaw.davevoyles.synology.me/guide</code></pre>
 
 <!-- 13. Tips -->
-<h2 id="tips">14. Power User Tips</h2>
+<h2 id="tips">19. Power User Tips</h2>
 
 <div class="card">
 <h3 style="margin-top:0">&#127919; Best Practices</h3>
@@ -1507,7 +1701,7 @@ https://openclaw.davevoyles.synology.me/guide</code></pre>
 </div>
 
 <!-- 14. Troubleshooting -->
-<h2 id="troubleshooting">15. Troubleshooting</h2>
+<h2 id="troubleshooting">20. Troubleshooting</h2>
 
 <div class="card">
 <h3 style="margin-top:0">Common Issues</h3>
@@ -1550,7 +1744,7 @@ docker exec openclaw cat /memory/schedules.json | python3 -m json.tool</code></p
 </div>
 
 <!-- 16. API Gateway -->
-<h2 id="gateway">16. API Gateway (Maton)</h2>
+<h2 id="gateway">21. API Gateway (Maton)</h2>
 <p>The API Gateway gives OpenClaw access to <strong>100+ third-party APIs</strong> &mdash; Slack, GitHub, Google Workspace, Notion, HubSpot, Stripe, Airtable, and more &mdash; through a single <a href="https://maton.ai" target="_blank">Maton</a> API key with fully managed OAuth. No need to handle OAuth flows yourself; Maton stores and refreshes the tokens.</p>
 
 <div class="card">

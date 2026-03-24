@@ -36,15 +36,20 @@ CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 
 # Local LLM (Ollama) settings
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
 LOCAL_LLM_ENABLED = os.getenv("LOCAL_LLM_ENABLED", "true").lower() == "true"
+
+# Deep / thinking mode — used for /research and multi-step synthesis
+# Set to a thinking-capable model (e.g. gemini-2.5-flash or gemini-2.0-flash-thinking-exp)
+THINKING_MODEL = os.getenv("THINKING_MODEL", "gemini-2.5-flash")
+THINKING_BUDGET = int(os.getenv("THINKING_BUDGET", "8000"))  # tokens for reasoning
 
 # Rate limits (paid tier: 1000 RPM Flash, 50 RPM Pro)
 MAX_CALLS_PER_MINUTE = int(os.getenv("LLM_RPM_LIMIT", "60"))
 MAX_CALLS_PER_HOUR = int(os.getenv("LLM_RPH_LIMIT", "500"))
 
 # Function-call loop limit (prevent infinite tool invocations)
-MAX_TOOL_ROUNDS = 5
+MAX_TOOL_ROUNDS = 12
 
 # ---------------------------------------------------------------------------
 # System prompt (cached with mtime-based invalidation)
@@ -558,7 +563,7 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
     # -- Phase 8: Web Search & Browsing --
     {
         "name": "search_web",
-        "description": "Search the live web for current information using Tavily AI Search. Use when the user asks about news, current events, facts, documentation, or anything that requires up-to-date information from the internet.",
+        "description": "Search the live web for current information using Tavily AI Search (with DuckDuckGo and Bing fallbacks). Use when the user asks about news, current events, facts, documentation, real estate listings, weather, or anything that requires up-to-date information from the internet.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -572,6 +577,23 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
                 },
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "get_weather",
+        "description": "Get current weather conditions and a 3-day forecast for any location (city, airport code, or landmark). No API key required.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City name, airport code, or landmark (e.g. 'Philadelphia PA', 'JFK', 'Narberth PA'). Leave empty to use the default configured location.",
+                },
+                "units": {
+                    "type": "string",
+                    "description": "Unit system: 'uscs' for Fahrenheit/mph (default) or 'metric' for Celsius/kmh",
+                },
+            },
         },
     },
     {
@@ -650,6 +672,42 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "required": ["message"],
         },
     },
+    {
+        "name": "init_planning_files",
+        "description": "Initialize Manus-style file-based planning (task_plan.md, findings.md, progress.md) in the project workspace. Use this for ANY multi-step or complex task to ensure the agent maintains state and context.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {
+                    "type": "string",
+                    "description": "A clear, one-sentence description of the end goal of the task.",
+                },
+            },
+            "required": ["goal"],
+        },
+    },
+    {
+        "name": "update_plan_status",
+        "description": "Log progress or update status of a phase in the current planning files (progress.md). Use this after completing significant steps or hitting errors to record findings.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "phase": {
+                    "type": "integer",
+                    "description": "The current phase number being worked on.",
+                },
+                "status": {
+                    "type": "string",
+                    "description": "Updated status summary (e.g., 'complete', 'in progress', 'error encountered').",
+                },
+                "note": {
+                    "type": "string",
+                    "description": "Optional detailed progress note or error report.",
+                },
+            },
+            "required": ["phase", "status"],
+        },
+    },
     # restart_container is intentionally EXCLUDED from LLM tool access.
     # The LLM can suggest a restart, but it must go through the /restart command
     # with proper authorization and policy checks.
@@ -724,6 +782,94 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
                 },
             },
             "required": ["app"],
+        },
+    },
+    # -- File Creation --
+    {
+        "name": "nas_create_folder",
+        "description": "Create a new folder on the Synology NAS FileStation.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Full folder path to create, e.g. '/volume1/documents/reports'.",
+                },
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "nas_write_file",
+        "description": (
+            "Write a text or markdown file directly to the Synology NAS. "
+            "Use this to save research reports, notes, or any generated content to network storage."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "Full text content to write to the file.",
+                },
+                "remote_folder": {
+                    "type": "string",
+                    "description": "Destination folder on the NAS, e.g. '/volume1/documents'. Default: '/volume1/documents'.",
+                },
+                "filename": {
+                    "type": "string",
+                    "description": "File name including extension, e.g. 'research_report.md'. Default: 'openclaw_output.md'.",
+                },
+            },
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "create_google_doc",
+        "description": (
+            "Create a Google Doc with a title and text content. "
+            "Requires a 'google-docs' connection via Maton. "
+            "Returns the document URL."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Title for the new Google Doc.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Full text content to insert into the document.",
+                },
+            },
+            "required": ["title", "content"],
+        },
+    },
+    {
+        "name": "create_onedrive_file",
+        "description": (
+            "Save a text or markdown file to OneDrive. "
+            "Requires a 'microsoft-onedrive' connection via Maton. "
+            "Returns the file URL."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "description": "File name including extension, e.g. 'report.md'.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Text content to write to the file.",
+                },
+                "folder_path": {
+                    "type": "string",
+                    "description": "OneDrive folder path (default: 'OpenClaw'). Use '/' for root.",
+                },
+            },
+            "required": ["filename", "content"],
         },
     },
     # Ontology - structured graph memory
@@ -936,43 +1082,71 @@ async def _get_ollama_session() -> aiohttp.ClientSession:
     return _ollama_session
 
 
-# Keywords that strongly suggest tool/function use is needed → route to Gemini
+# ---------------------------------------------------------------------------
+# Routing heuristics — decide whether to use Gemma (local) or Gemini
+# ---------------------------------------------------------------------------
 import re as _re
 
-_TOOL_HINT_PATTERNS = _re.compile(
-    r"\b("
-    # Docker / system
-    r"restart|container|docker|logs|status|health"
-    r"|download|queue|sonarr|radarr|lidarr|plex|tautulli"
-    r"|sabnzbd|qbittorrent|ping|ports|network|tailscale"
-    r"|speed\s?test|system\s?stats|cpu|memory|disk"
-    r"|uptime|report|analyze|spending|budget|schedule"
-    r"|mail|email"
-    # Web search & browsing
-    r"|search\s+web|web\s+search|look\s+up|browse"
-    r"|website|webpage|web\s+page|article"
-    r"|news|latest|today"
-    # Git & Webfetch
-    r"|git|commit|diff|status|history|log|scrape|fetch"
-    # Gateway
-    r"|gateway|maton|slack|notion|hubspot|airtable"
-    r"|github\s+api|google\s+sheets|stripe|connection"
-    # Ontology / structured memory
-    r"|ontology|knowledge\s+graph|entity|entities|relation|related"
-    r"|depends\s+on|dependencies|what\s+do\s+we\s+know"
-    # Mission Control
-    r"|tasks?|kanban|backlog|in\s+progress|mission\s+control"
-    r"|ticket|to-?do"
-    r")\b"
-    # URLs always need tools
+# Tier 1 — Route DIRECTLY to Gemini.
+# These are imperative action+noun combos that require live tool execution.
+# Gemma has no tools, so these would produce hallucinations or refusals.
+_LIVE_ACTION_PATTERN = _re.compile(
+    # Container / service control verbs
+    r"\b(restart|reboot|stop|start|kill)\b.{0,40}\b(container|service|plex|sonarr|radarr|lidarr|sabnzbd|qbittorrent|prowlarr|jellyfin)\b"
+    # Requests for live system data
+    r"|\b(show|list|get|check|pull|view)\b.{0,40}\b(log|stats?|status|health|container|queue|request|download|backup|alert|metric)\b"
+    # Explicit web-search actions
+    r"|\b(search|find|look\s+up)\b.{0,40}\b(web|online|house|home|listing|property|zillow|redfin|real[\s-]?estate|news|current\s+price|weather)\b"
+    # Weather: any standalone weather request routes through Gemini (needs get_weather tool)
+    r"|\b(weather|forecast|temperature|rain|snow|sunny|humidity|wind\s+speed)\b"
+    # Live-data questions: "is plex up?", "what's the current…"
+    r"|\bis\s+(the\s+)?(server|plex|sonarr|radarr|nas|docker)\s+(up|running|online|working|down)\b"
+    r"|\bwhat'?s?\s+(?:the\s+)?(?:current|latest|running)\b.{0,50}\b(status|usage|queue|activity)\b"
+    # Approvals, sends, creates
+    r"|\b(approve|deny)\b.{0,20}\b(request|id)\b"
+    r"|\bsend\b.{0,20}\b(email|mail)\b"
+    r"|\bcreate\b.{0,30}\b(task|event|entity|connection|calendar)\b"
+    # Diagnostics / jobs
+    r"|\brun\b.{0,20}\b(speed\s+test|status\s+report|ping|backup|diagnostic)\b"
+    r"|\bping\s+[\w.]+"
+    # URLs always need browse_url
     r"|https?://",
+    _re.IGNORECASE,
+)
+
+# Tier 2 — Well-known domains where Gemma consistently fabricates answers.
+# These are proper nouns tied to live services or specialised data sources.
+_GEMMA_WEAK_DOMAINS = _re.compile(
+    r"\b(zillow|redfin|trulia|narberth|upper\s+darby|maton|tailscale|tautulli"
+    r"|overseerr|prowlarr|sabnzbd|synology|hyper\s+backup|ontology)\b",
     _re.IGNORECASE,
 )
 
 
 def _needs_tools(message: str) -> bool:
-    """Heuristic: return True if the query likely needs function-calling."""
-    return bool(_TOOL_HINT_PATTERNS.search(message))
+    """Return True if the query requires live tool execution and should bypass Gemma."""
+    return bool(_LIVE_ACTION_PATTERN.search(message) or _GEMMA_WEAK_DOMAINS.search(message))
+
+
+# Compiled patterns that signal Gemma is pretending to call tools it doesn't have.
+# Any match in Gemma's response triggers an automatic fallback to Gemini.
+_GEMMA_HALLUCINATION_RE = _re.compile(
+    r"(i'?m?\s+)?(now\s+)?(searching|browsing|checking|fetching|looking\s+up)\b"
+    r"|\b(let\s+me\s+)?(search|check|look\s+that\s+up|fetch)\s+(that|the|for)\b"
+    r"|(checking|querying)\s+(zillow|redfin|the\s+server|docker|container|plex)\b"
+    r"|\b(i\s+)?(don'?t|cannot|can'?t)\s+(access|browse|check|reach)\s+(the\s+)?(internet|web|real[\s-]?time|live|current)\b"
+    r"|\b(as\s+an?\s+ai|as\s+a\s+language\s+model)\b.{0,80}\b(cannot|don'?t|no\s+access)\b"
+    r"|\bi\s+don'?t\s+have\s+(real[\s-]?time|access\s+to|live)\b"
+    r"|(would\s+need\s+to\s+|i\s+could\s+)?(search|check|query)\s+(this|that|it)\s+for\s+you\b",
+    _re.IGNORECASE,
+)
+
+
+def _gemma_response_seems_valid(reply: str) -> bool:
+    """Return True if the Gemma response is genuine and not a tool-use hallucination."""
+    if len(reply.strip()) < 10:
+        return False
+    return not bool(_GEMMA_HALLUCINATION_RE.search(reply))
 
 
 async def _ollama_available() -> bool:
@@ -1184,28 +1358,43 @@ async def chat(
     """
     Send a message and return (response_text, updated_history, model_used).
 
-    Routing:
-      1. If LOCAL_LLM_ENABLED and query likely doesn't need tools → try Ollama first (free, fast)
-      2. If Ollama unavailable, query needs tools, or Ollama response is empty → Gemini
-      3. Gemini handles all function-calling (tool rounds)
+    Routing decision tree:
+      1. Does the query need live tool execution? (_needs_tools)
+            YES → Gemini directly (function-calling capable)
+      2. Is Gemma available and LOCAL_LLM_ENABLED?
+            NO  → Gemini
+      3. Does Gemma's response pass the hallucination / quality check?
+            YES → Return Gemma response (fast, free, private)
+            NO  → Silently retry with Gemini
     """
     history = history or []
 
-    # ── Ollama fast-path: no tool hints + local LLM enabled ──────────────────
+    # ── Local model (Gemma) path ──────────────────────────────────────────────
+    # Use Gemma for conversational queries that don't require live tool calls.
+    # Falls through to Gemini if:
+    #   • the query pattern requires tools (_needs_tools)
+    #   • Gemma is unreachable
+    #   • Gemma returns an empty or hallucinated response
     if LOCAL_LLM_ENABLED and not _needs_tools(user_message):
         if await _ollama_available():
             system_prompt = _load_system_prompt()
-            ollama_reply = await _chat_ollama(user_message, history, system_prompt)
-            if ollama_reply:
-                log.info("Served by Ollama (%s): %.60s…", OLLAMA_MODEL, user_message)
+            gemma_reply = await _chat_ollama(user_message, history, system_prompt)
+
+            if gemma_reply and _gemma_response_seems_valid(gemma_reply):
+                log.info("Served by Gemma (%s): %.60s…", OLLAMA_MODEL, user_message)
                 updated = list(history) + [
                     {"role": "user", "parts": [user_message]},
-                    {"role": "model", "parts": [ollama_reply]},
+                    {"role": "model", "parts": [gemma_reply]},
                 ]
-                return ollama_reply, updated, OLLAMA_MODEL
-            log.info("Ollama returned empty response, falling back to Gemini")
+                return gemma_reply, updated, OLLAMA_MODEL
+
+            if gemma_reply:
+                log.info("Gemma response failed validation (hallucination signals detected), falling back to Gemini")
+            else:
+                log.info("Gemma returned empty response, falling back to Gemini")
         else:
-            log.debug("Ollama not available, using Gemini")
+            log.debug("Gemma/Ollama not reachable, using Gemini")
+    # Falls through to Gemini ↓
 
     # ── Gemini path: rate-limit check ────────────────────────────────────────
     if not _rate_limiter.check():
@@ -1280,10 +1469,42 @@ async def chat(
     try:
         text = response.text
     except (AttributeError, ValueError):
-        text = "I processed your request but couldn't generate a text response."
+        # response.text can fail if the last turn was a function call or blocked.
+        # First try to join text parts manually.
+        try:
+            parts = response.candidates[0].content.parts
+            text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
+        except Exception:
+            text = ""
+
+        if not text:
+            # If we used all rounds, the model may still be mid-tool-chain.
+            # Ask it to synthesize everything it has gathered so far.
+            if rounds >= MAX_TOOL_ROUNDS:
+                log.info("Tool round limit hit with no synthesis — requesting forced summary")
+                try:
+                    _rate_limiter.record()
+                    synthesis_response = await loop.run_in_executor(
+                        None,
+                        lambda: chat_session.send_message(
+                            "You have reached the maximum number of tool calls. "
+                            "Please synthesize everything you have gathered so far "
+                            "into a final, helpful answer for the user. "
+                            "Do not call any more tools."
+                        ),
+                    )
+                    await _record_usage(synthesis_response)
+                    text = synthesis_response.text
+                except Exception as e:
+                    log.error("Forced synthesis failed: %s", e)
+
+            if not text:
+                text = "I processed your request but the model returned no text content."
+                if hasattr(response, "prompt_feedback") and response.prompt_feedback:
+                    text += f" (Safety/Blocked: {response.prompt_feedback})"
 
     if rounds >= MAX_TOOL_ROUNDS:
-        text += "\n\n⚠️ *Tool call limit reached — response may be incomplete.*"
+        text += "\n\n⚠️ *Tool call limit reached (12) — some sources may not have been checked.*"
 
     # Build updated history
     updated_history = _extract_history(chat_session)
@@ -1343,6 +1564,187 @@ def is_configured() -> bool:
 def get_rate_info() -> str:
     """Return a human-readable rate limit status for Gemini Flash."""
     return f"{_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining"
+
+
+# ---------------------------------------------------------------------------
+# Deep research chat — Gemini with extended thinking (for /research)
+# ---------------------------------------------------------------------------
+
+_thinking_model: genai.GenerativeModel | None = None
+_thinking_model_prompt: str | None = None
+
+
+def _get_thinking_model() -> genai.GenerativeModel:
+    """Lazy-init the thinking/deep-research variant of the Gemini model."""
+    global _thinking_model, _thinking_model_prompt
+    system_prompt = _load_system_prompt()
+    if _thinking_model is not None and _thinking_model_prompt == system_prompt:
+        return _thinking_model
+
+    if not GOOGLE_API_KEY:
+        raise RuntimeError("GOOGLE_API_KEY not set.")
+
+    genai.configure(api_key=GOOGLE_API_KEY)
+
+    # Build generation config — ThinkingConfig was added in SDK >0.8.4.
+    # Fall back gracefully if the installed SDK doesn't support it yet.
+    gen_config_kwargs: dict[str, Any] = {
+        "max_output_tokens": MAX_TOKENS * 2,
+        "temperature": 0.3,
+    }
+    thinking_cfg = getattr(genai.types, "ThinkingConfig", None)
+    if thinking_cfg is not None:
+        gen_config_kwargs["thinking_config"] = thinking_cfg(thinking_budget=THINKING_BUDGET)
+        log.info("ThinkingConfig enabled (budget=%d tokens)", THINKING_BUDGET)
+    else:
+        log.info("ThinkingConfig not available in this SDK version — using low-temperature deep mode")
+
+    _thinking_model = genai.GenerativeModel(
+        model_name=THINKING_MODEL,
+        system_instruction=system_prompt,
+        tools=_build_tools(),
+        generation_config=genai.GenerationConfig(**gen_config_kwargs),
+    )
+    _thinking_model_prompt = system_prompt
+    log.info("Thinking model initialized: %s", THINKING_MODEL)
+    return _thinking_model
+
+
+async def chat_deep(
+    user_message: str,
+    history: list[dict] | None = None,
+    on_tool_call: Any | None = None,
+) -> tuple[str, list[dict]]:
+    """
+    Deep research chat — always uses Gemini with extended thinking.
+    Supports a progress callback ``on_tool_call(tool_name, round_num)``
+    for streaming progress updates to a Discord thread.
+
+    Returns (response_text, updated_history).
+    """
+    history = history or []
+
+    if not _rate_limiter.check():
+        return (
+            "⚠️ Rate limit reached. Please wait a moment.",
+            history,
+        )
+
+    try:
+        model = _get_thinking_model()
+    except Exception:
+        # Fall back to normal model if thinking config is unsupported
+        log.warning("Thinking model unavailable, falling back to standard model")
+        model = _get_model()
+
+    gemini_history = [
+        genai.types.ContentDict(role=m["role"], parts=m["parts"])
+        for m in history
+    ]
+    chat_session = model.start_chat(history=gemini_history)
+
+    loop = asyncio.get_event_loop()
+    _rate_limiter.record()
+    response = await loop.run_in_executor(
+        None, lambda: chat_session.send_message(user_message)
+    )
+    await _record_usage(response)
+
+    rounds = 0
+    while rounds < MAX_TOOL_ROUNDS * 2:  # allow more rounds for deep research
+        part = response.candidates[0].content.parts[0]
+        if not hasattr(part, "function_call") or not part.function_call.name:
+            break
+
+        fc = part.function_call
+        fn_name = fc.name
+        fn_args = dict(fc.args) if fc.args else {}
+
+        if on_tool_call:
+            try:
+                await on_tool_call(fn_name, rounds + 1)
+            except Exception:
+                pass
+
+        log.info("Deep research tool call [round %d]: %s(%s)", rounds + 1, fn_name, fn_args)
+        result_str = await _execute_function_call(fn_name, fn_args)
+
+        _rate_limiter.record()
+        response = await loop.run_in_executor(
+            None,
+            lambda result=result_str, name=fn_name: chat_session.send_message(
+                genai.protos.Content(
+                    parts=[genai.protos.Part(
+                        function_response=genai.protos.FunctionResponse(
+                            name=name,
+                            response={"result": result},
+                        )
+                    )]
+                )
+            ),
+        )
+        await _record_usage(response)
+        rounds += 1
+
+    try:
+        text = response.text
+    except (AttributeError, ValueError):
+        try:
+            parts = response.candidates[0].content.parts
+            text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
+            if not text:
+                text = "Research completed but no text summary was generated."
+        except Exception as e:
+            text = f"Research completed but summary extraction failed: {e}"
+
+    return text, _extract_history(chat_session)
+
+
+async def summarize_conversation(history: list[dict]) -> str:
+    """
+    Produce a 3-5 sentence summary of a conversation history for
+    long-term memory storage. Uses the standard Gemini model directly
+    (no tools, no conversation context).
+    """
+    if not GOOGLE_API_KEY or not history:
+        return ""
+
+    # Build a compact transcript (user turns only for efficiency)
+    lines = []
+    for msg in history[-20:]:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        content = " ".join(str(p) for p in msg["parts"] if isinstance(p, str))[:200]
+        if content:
+            lines.append(f"{role}: {content}")
+
+    if not lines:
+        return ""
+
+    transcript = "\n".join(lines)
+    prompt = (
+        "Summarize the following conversation in 3-5 concise sentences. "
+        "Capture the main topics, any decisions made, and key facts mentioned. "
+        "Write in third person (e.g. 'The user asked about...').\n\n"
+        f"Conversation:\n{transcript}"
+    )
+
+    try:
+        genai.configure(api_key=GOOGLE_API_KEY)
+        summary_model = genai.GenerativeModel(
+            model_name=MODEL_NAME,
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=300,
+                temperature=0.2,
+            ),
+        )
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None, lambda: summary_model.generate_content(prompt)
+        )
+        return response.text.strip()
+    except Exception as e:
+        log.warning("Failed to summarize conversation: %s", e)
+        return ""
 
 
 # ---------------------------------------------------------------------------

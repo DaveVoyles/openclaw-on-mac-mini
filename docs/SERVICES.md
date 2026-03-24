@@ -9,7 +9,7 @@ Agents working on this codebase should read this file to understand what is avai
 
 | Service | Link | Description | Why We Use It | Env Var(s) |
 |---------|------|-------------|---------------|------------|
-| **Google Gemini** | https://ai.google.dev | Google's flagship LLM (gemini-2.5-flash) | Primary LLM for all tool-calling, multi-step reasoning, and complex queries | `GOOGLE_API_KEY` |
+| **Google Gemini** | https://ai.google.dev | Google's flagship LLM (gemini-2.5-flash) | Primary LLM for all tool-calling, multi-step reasoning, and complex queries. Supports "Real Estate Investigator" and "Location Specialist" personas. | `GOOGLE_API_KEY` |
 | **Ollama (Local)** | https://ollama.com | Self-hosted LLM runtime (gemma3:12b) | Low-latency local model for simple conversational turns; keeps costs near zero for lightweight tasks. Runs on M4 Neural Engine (~15–20 tok/s, 8.1 GB). Upgraded from llama3.2:3b. | `OLLAMA_URL`, `OLLAMA_MODEL` |
 | **OpenAI** | https://platform.openai.com | GPT-family models | Optional fallback LLM if Gemini is unavailable | `OPENAI_API_KEY` *(optional)* |
 | **Anthropic Claude** | https://www.anthropic.com | Claude-family models | Optional fallback LLM | `ANTHROPIC_API_KEY` *(optional)* |
@@ -39,9 +39,10 @@ Agents working on this codebase should read this file to understand what is avai
 
 | Service | Link | Description | Why We Use It | Env Var(s) |
 |---------|------|-------------|---------------|------------|
-| **Tavily Search** | https://tavily.com | AI-optimized web search with semantic answer extraction | Best-in-class search results for agent queries; surfaces direct answers, not just links | `TAVILY_API_KEY` |
+| **Tavily Search** | https://tavily.com | AI-optimized web search with semantic answer extraction | Best-in-class search results for agent queries; surfaces direct answers, not just links. Used for real estate listing research and local property tax analysis. | `TAVILY_API_KEY` |
 | **DuckDuckGo (Lite)** | https://lite.duckduckgo.com | Privacy-focused web search, no API key required | Free fallback web search with no rate limits or registration | *(none)* |
-| **Bing Search** | https://www.bing.com | General web search | Secondary fallback when DuckDuckGo fails | *(none)* |
+| **Bing Search** | https://www.bing.com | General web search | Second fallback when DuckDuckGo fails | *(none)* |
+| **wttr.in** | https://wttr.in | Free weather API (JSON format, no key) | Current conditions + 3-day forecast; used by `/weather` command and `get_weather` skill | `WEATHER_DEFAULT_LOCATION` *(optional)* |
 
 ---
 
@@ -136,8 +137,16 @@ ALLOWED_USER_IDS
 # API Gateway
 MATON_API_KEY
 
-# Search
+# Search & Weather
 TAVILY_API_KEY
+WEATHER_DEFAULT_LOCATION     # default city for /weather (e.g. "Philadelphia")
+
+# Proactive Notifications
+ALERT_CHANNEL_ID             # Discord channel ID for morning briefings (optional)
+
+# Research / Deep Reasoning
+THINKING_MODEL               # Gemini model for /research synthesis (default: gemini-2.5-flash)
+THINKING_BUDGET              # Thinking token budget (used when google-genai SDK is installed)
 
 # Email
 GMAIL_USER / GMAIL_APP_PASSWORD

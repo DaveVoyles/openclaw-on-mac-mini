@@ -75,6 +75,9 @@ _DDG_SCRIPT = _SKILLS_DIR / "free-web-search" / "scripts" / "web_search.py"
 
 COMMAND_TIMEOUT = 15
 
+# Default location for weather queries (overridable via env var)
+WEATHER_DEFAULT_LOCATION = os.getenv("WEATHER_DEFAULT_LOCATION", "Philadelphia, PA")
+
 # ---------------------------------------------------------------------------
 # HTTP helper
 # ---------------------------------------------------------------------------
@@ -444,11 +447,13 @@ async def search_web(query: str, num_results: int = 5) -> str:
 
     # ── Tavily path (higher quality, needs API key) ────────────────────────
     if TAVILY_API_KEY and _TAVILY_SCRIPT.exists():
+        # Ensure num_results is a solid integer for the CLI
+        clean_num = int(float(num_results))
         cmd = [
             sys.executable,
             str(_TAVILY_SCRIPT),
             "--query", query,
-            "--max-results", str(num_results),
+            "--max-results", str(clean_num),
             "--include-answer",
             "--format", "raw",
         ]
@@ -465,8 +470,11 @@ async def search_web(query: str, num_results: int = 5) -> str:
                 # Fall through to DDG if Tavily fails at runtime
                 log.warning("Tavily script failed: %s", err)
             else:
-                data = json.loads(stdout.decode())
-                return _format_tavily_results(data, num_results)
+                try:
+                    data = json.loads(stdout.decode())
+                    return _format_tavily_results(data, int(float(num_results)))
+                except json.JSONDecodeError:
+                    log.error("Tavily script returned invalid JSON: %s", stdout.decode()[:200])
         except asyncio.TimeoutError:
             log.warning("Tavily script timed out")
         except Exception as e:
@@ -474,12 +482,14 @@ async def search_web(query: str, num_results: int = 5) -> str:
 
     # ── Free DuckDuckGo fallback (no API key required) ─────────────────────
     if _DDG_SCRIPT.exists():
+        # Ensure num_results is an integer for the CLI
+        clean_num = int(float(num_results))
         cmd = [
             sys.executable,
             str(_DDG_SCRIPT),
             query,
             "--json",
-            "--pages", str(min(num_results, 5)),
+            "--pages", str(min(clean_num, 5)),
         ]
         try:
             proc = await asyncio.create_subprocess_exec(
@@ -493,13 +503,51 @@ async def search_web(query: str, num_results: int = 5) -> str:
             data = json.loads(stdout.decode())
             if "error" in data:
                 return f"❌ {data['error']}"
-            return _format_ddg_results(data, num_results)
+            return _format_ddg_results(data, int(float(num_results)))
         except asyncio.TimeoutError:
             return "❌ Web search timed out (25s)."
         except Exception as e:
             return f"❌ Web search error: {e}"
 
-    # ── Neither script available ───────────────────────────────────────────
+    # ── Bing lite fallback (multi-search-engine skill provides pattern) ──────
+    # Parse HTML from Bing lite search (no API key, no script required)
+    log.info("Falling back to Bing lite for: %s", query)
+    try:
+        import urllib.parse
+        bing_url = "https://www.bing.com/search?q=" + urllib.parse.quote_plus(query)
+        bing_headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+        }
+        session = await _get_session()
+        async with session.get(
+            bing_url, headers=bing_headers, timeout=aiohttp.ClientTimeout(total=15)
+        ) as resp:
+            if resp.status == 200:
+                html = await resp.text()
+                # Extract result snippets via basic HTML parsing
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(html, "html.parser")
+                    lines = []
+                    for i, result in enumerate(soup.select("li.b_algo")[:int(float(num_results))], 1):
+                        title_el = result.select_one("h2 a")
+                        snippet_el = result.select_one(".b_caption p")
+                        if title_el:
+                            title = title_el.get_text(strip=True)
+                            url_link = title_el.get("href", "")
+                            snippet = snippet_el.get_text(strip=True)[:250] if snippet_el else ""
+                            lines.append(f"**{i}. {title}**\n{snippet}\n🔗 <{url_link}>")
+                    if lines:
+                        return "\n\n".join(lines) + "\n\n*via Bing (fallback)*"
+                except ImportError:
+                    pass
+    except Exception as e:
+        log.warning("Bing fallback failed: %s", e)
+
+    # ── Nothing worked ────────────────────────────────────────────────────
     if not TAVILY_API_KEY:
         return (
             "⚠️ Web search not configured. Either:\n"
@@ -507,7 +555,7 @@ async def search_web(query: str, num_results: int = 5) -> str:
             "• Ensure `skills/free-web-search/` is installed (run: "
             "`npx clawhub@latest install free-web-search`)"
         )
-    return "❌ Web search scripts not found. Re-install ClawHub skills."
+    return "❌ All web search methods exhausted. Check logs for details."
 
 
 def _format_tavily_results(data: dict, num_results: int) -> str:
@@ -539,6 +587,70 @@ def _format_ddg_results(data: dict, num_results: int) -> str:
         lines.append(f"**{i}. {title}**\n{text}\n🔗 <{url}>")
     src = "DuckDuckGo (free)"
     return "\n\n".join(lines) + f"\n\n*via {src}*"
+
+
+# ---------------------------------------------------------------------------
+# Weather — via wttr.in (no API key; uses installed weather skill pattern)
+# ---------------------------------------------------------------------------
+
+
+async def get_weather(location: str = "", units: str = "uscs") -> str:
+    """Get current weather and 3-day forecast for a location via wttr.in.
+
+    Args:
+        location: City name, airport code, or landmark (default: WEATHER_DEFAULT_LOCATION env var)
+        units: 'uscs' (Fahrenheit/mph) or 'metric' (Celsius/kmh)
+    """
+    loc = (location or WEATHER_DEFAULT_LOCATION).strip()
+    # URL encode the location
+    import urllib.parse
+    encoded = urllib.parse.quote_plus(loc)
+    unit_param = "u" if units.lower().startswith("u") else "m"
+
+    # Compact format: summary + today + tomorrow (no color codes)
+    url = f"https://wttr.in/{encoded}?format=j1"
+    try:
+        session = await _get_session()
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            if resp.status != 200:
+                return f"❌ Weather not available for `{loc}` (HTTP {resp.status})"
+            data = await resp.json(content_type=None)
+    except asyncio.TimeoutError:
+        return f"❌ Weather request timed out for `{loc}`"
+    except Exception as e:
+        return f"❌ Weather error: {e}"
+
+    try:
+        cc = data["current_condition"][0]
+        is_fahrenheit = unit_param == "u"
+        temp = cc.get("temp_F" if is_fahrenheit else "temp_C", "?")
+        feels = cc.get("FeelsLike" + ("F" if is_fahrenheit else "C"), "?")
+        weather_desc = cc["weatherDesc"][0]["value"] if cc.get("weatherDesc") else "Unknown"
+        humidity = cc.get("humidity", "?")
+        wind_speed = cc.get("windspeedMiles" if is_fahrenheit else "windspeedKmph", "?")
+        wind_dir = cc.get("winddir16Point", "?")
+        unit_sym = "°F" if is_fahrenheit else "°C"
+        speed_unit = "mph" if is_fahrenheit else "km/h"
+
+        area = data.get("nearest_area", [{}])[0]
+        area_name = area.get("areaName", [{}])[0].get("value", loc)
+        country = area.get("country", [{}])[0].get("value", "")
+
+        lines = [f"🌤️ **Weather: {area_name}, {country}**"]
+        lines.append(f"**Current**: {weather_desc} · {temp}{unit_sym} (feels {feels}{unit_sym})")
+        lines.append(f"**Wind**: {wind_speed} {speed_unit} {wind_dir} · **Humidity**: {humidity}%")
+
+        # 3-day forecast
+        for day in data.get("weather", [])[:3]:
+            date = day.get("date", "?")
+            max_t = day.get("maxtempF" if is_fahrenheit else "maxtempC", "?")
+            min_t = day.get("mintempF" if is_fahrenheit else "mintempC", "?")
+            desc = day.get("hourly", [{}])[4].get("weatherDesc", [{}])[0].get("value", "") if day.get("hourly") else ""
+            lines.append(f"📅 **{date}**: {desc} · High {max_t}{unit_sym} / Low {min_t}{unit_sym}")
+
+        return "\n".join(lines)
+    except (KeyError, IndexError, TypeError) as e:
+        return f"⚠️ Could not parse weather data for `{loc}`: {e}"
 
 
 async def browse_url(url: str) -> str:
@@ -582,6 +694,19 @@ async def browse_url(url: str) -> str:
             headers=headers,
             timeout=aiohttp.ClientTimeout(total=20),
         ) as resp:
+            if resp.status == 403:
+                return (
+                    f"🚫 {url} returned HTTP 403 (bot-blocking). "
+                    "This site (e.g. Zillow, Redfin, Realtor.com) actively blocks automated access. "
+                    "Do NOT retry this URL. Instead, use your own knowledge about this neighborhood, "
+                    "typical prices, and property tax rates to provide a detailed, helpful answer."
+                )
+            if resp.status == 429:
+                return (
+                    f"🚫 {url} returned HTTP 429 (rate-limited/bot-blocked). "
+                    "This site is blocking automated requests. "
+                    "Do NOT retry. Use your own knowledge to answer the user's question."
+                )
             if resp.status != 200:
                 return f"❌ Could not fetch URL (HTTP {resp.status})."
             # Limit response size to 5MB to avoid memory issues
@@ -640,4 +765,6 @@ ADVANCED_SKILLS = {
     # Phase 8: Web skills
     "search_web": search_web,
     "browse_url": browse_url,
+    # Phase E: Weather
+    "get_weather": get_weather,
 }

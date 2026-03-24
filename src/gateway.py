@@ -255,6 +255,120 @@ async def gateway_create_connection(app: str) -> str:
     return f"✅ Connection created for **{app}** (ID: `{cid}`)."
 
 
+async def create_google_doc(title: str, content: str) -> str:
+    """
+    Create a Google Doc with the given title and populate it with content.
+    Requires an active Maton 'google-docs' OAuth connection.
+
+    Args:
+        title: Title for the new document.
+        content: Full text content to insert into the document body.
+    """
+    if not MATON_API_KEY:
+        return _api_key_hint()
+
+    # Step 1: Create empty document
+    try:
+        doc = await _http_request(
+            f"{GATEWAY_BASE}/google-docs/v1/documents",
+            "POST",
+            {"title": title},
+        )
+    except RuntimeError as e:
+        return f"❌ Could not create Google Doc: {e}"
+
+    doc_id = doc.get("documentId")  # type: ignore[union-attr]
+    if not doc_id:
+        return "❌ Google Docs API did not return a document ID. Is 'google-docs' connected via Maton?"
+
+    # Step 2: Insert content via batchUpdate
+    try:
+        await _http_request(
+            f"{GATEWAY_BASE}/google-docs/v1/documents/{doc_id}:batchUpdate",
+            "POST",
+            {
+                "requests": [
+                    {
+                        "insertText": {
+                            "text": content,
+                            "location": {"index": 1},
+                        }
+                    }
+                ]
+            },
+        )
+    except RuntimeError as e:
+        # Doc was created but content insert failed — return partial success
+        return (
+            f"⚠️ Google Doc created but content insert failed: {e}\n"
+            f"Doc ID: `{doc_id}` — open at https://docs.google.com/document/d/{doc_id}/edit"
+        )
+
+    return (
+        f"✅ Google Doc created: **{title}**\n"
+        f"🔗 https://docs.google.com/document/d/{doc_id}/edit"
+    )
+
+
+async def create_onedrive_file(
+    filename: str,
+    content: str,
+    folder_path: str = "OpenClaw",
+) -> str:
+    """
+    Save a text or markdown file to OneDrive.
+    Requires an active Maton 'microsoft-onedrive' OAuth connection.
+
+    Args:
+        filename: File name including extension, e.g. 'report.md'.
+        content: Text content to write.
+        folder_path: Destination folder in OneDrive (default: 'OpenClaw').
+                     Use '/' for the root, or 'Documents/Reports' for subdirectories.
+    """
+    if not MATON_API_KEY:
+        return _api_key_hint()
+
+    # Microsoft Graph: PUT /v1.0/me/drive/root:/{folder}/{file}:/content
+    # The Maton proxy forwards the body; we send it as plain text via a raw request.
+    clean_folder = folder_path.strip("/")
+    clean_file = filename.lstrip("/")
+    remote_path = f"{clean_folder}/{clean_file}" if clean_folder else clean_file
+
+    session = await _get_gateway_session()
+    url = f"{GATEWAY_BASE}/microsoft-onedrive/v1.0/me/drive/root:/{remote_path}:/content"
+    headers = {
+        "Authorization": f"Bearer {MATON_API_KEY}",
+        "Content-Type": "text/plain",
+    }
+
+    try:
+        async with session.put(
+            url,
+            data=content.encode("utf-8"),
+            headers=headers,
+            timeout=aiohttp.ClientTimeout(total=_TIMEOUT),
+        ) as resp:
+            if resp.status >= 400:
+                body = await resp.text()
+                if resp.status == 401:
+                    return "❌ OneDrive: authentication failed. Connect via: `/ask Connect me to microsoft-onedrive via Maton`"
+                if resp.status == 404:
+                    return "❌ OneDrive: path not found. Check the folder path or connect microsoft-onedrive via Maton."
+                return f"❌ OneDrive upload failed (HTTP {resp.status}): {body[:300]}"
+            result = await resp.json(content_type=None)
+    except asyncio.TimeoutError:
+        return f"❌ OneDrive upload timed out after {_TIMEOUT}s."
+    except Exception as e:
+        return f"❌ OneDrive upload error: {e}"
+
+    file_url = result.get("webUrl", "")
+    name = result.get("name", filename)
+    return (
+        f"✅ Saved to OneDrive: **{name}** in `{folder_path}`\n"
+        + (f"🔗 {file_url}" if file_url else "")
+    )
+
+
 # ---------------------------------------------------------------------------
 # Skill registry
 # ---------------------------------------------------------------------------
@@ -263,4 +377,6 @@ GATEWAY_SKILLS: dict[str, Any] = {
     "gateway_request": gateway_request,
     "gateway_list_connections": gateway_list_connections,
     "gateway_create_connection": gateway_create_connection,
+    "create_google_doc": create_google_doc,
+    "create_onedrive_file": create_onedrive_file,
 }

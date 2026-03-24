@@ -77,8 +77,10 @@ HEALTH_PORT = int(os.getenv("HEALTH_PORT", "8765"))
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
+# Channel for proactive push notifications (morning briefing, alerts)
+ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -231,6 +233,12 @@ class OpenClawBot(discord.Client):
         asyncio.create_task(self._background_cleanup())
         # Background audit log flusher
         asyncio.create_task(self._audit_writer())
+        # Proactive features: morning briefing, real estate watcher
+        if ALERT_CHANNEL_ID:
+            asyncio.create_task(self._morning_briefing_loop())
+            log.info("Proactive tasks started (alert channel: %d)", ALERT_CHANNEL_ID)
+        else:
+            log.info("ALERT_CHANNEL_ID not set — proactive push notifications disabled")
 
     async def _audit_writer(self):
         """Flush buffered audit entries to disk every 30 seconds."""
@@ -263,6 +271,82 @@ class OpenClawBot(discord.Client):
                 approval_store.cleanup_expired()
             except Exception as e:
                 log.warning("Background cleanup error: %s", e)
+
+    # ------------------------------------------------------------------
+    # Proactive: morning briefing (Phase C)
+    # ------------------------------------------------------------------
+
+    async def _morning_briefing_loop(self):
+        """Post a morning briefing to ALERT_CHANNEL_ID each day at ~8:00 AM."""
+        import datetime as _dt
+        last_briefing_date: str = ""
+        while True:
+            try:
+                now = _dt.datetime.now()
+                if now.hour == 8 and now.minute < 5:
+                    today_str = now.strftime("%Y-%m-%d")
+                    if today_str != last_briefing_date:
+                        last_briefing_date = today_str
+                        asyncio.create_task(self._send_morning_briefing())
+            except Exception as e:
+                log.warning("Morning briefing scheduler error: %s", e)
+            await asyncio.sleep(60)  # check every minute
+
+    async def _send_morning_briefing(self):
+        """Compose and post the daily morning briefing."""
+        if not ALERT_CHANNEL_ID:
+            return
+        channel = self.get_channel(ALERT_CHANNEL_ID)
+        if not channel:
+            log.warning("Morning briefing: channel %d not found", ALERT_CHANNEL_ID)
+            return
+
+        log.info("Generating morning briefing for channel %d", ALERT_CHANNEL_ID)
+        try:
+            from skills.advanced_skills import check_arr_health, get_download_queue, get_weather
+            from skills import get_system_stats
+            from calendar_skills import get_upcoming_events
+            from llm import chat as llm_chat
+
+            # Gather data concurrently
+            health, queue, weather, sysstat = await asyncio.gather(
+                check_arr_health(),
+                get_download_queue(),
+                get_weather(),
+                get_system_stats(),
+                return_exceptions=True,
+            )
+
+            try:
+                calendar = await asyncio.wait_for(get_upcoming_events(days=1), timeout=8)
+            except Exception:
+                calendar = "Calendar not available."
+
+            import datetime as _dt
+            today = _dt.date.today().strftime("%A, %B %d, %Y")
+            prompt = (
+                f"Good morning! Generate a concise morning briefing for {today}. "
+                "Keep it under 600 words. Include:\n"
+                f"**Weather**: {weather}\n"
+                f"**System health**: {health}\n"
+                f"**Downloads**: {queue}\n"
+                f"**Today's calendar**: {calendar}\n"
+                f"**System**: {sysstat}\n"
+                "Format with clear sections, use emojis, be friendly but brief."
+            )
+
+            response_text, _, _ = await llm_chat(prompt)
+
+            embed = discord.Embed(
+                title=f"🌅 Morning Briefing — {today}",
+                description=response_text[:4000],
+                color=discord.Color.from_rgb(255, 165, 0),
+            )
+            embed.set_footer(text="🤖 OpenClaw Autonomous Briefing")
+            await channel.send(embed=embed)
+            audit_log(None, "morning_briefing", detail=f"channel={ALERT_CHANNEL_ID}")
+        except Exception as e:
+            log.error("Morning briefing failed: %s", e)
 
     async def close(self):
         """Graceful shutdown: flush audit log, close sessions, stop health server."""
@@ -331,6 +415,7 @@ class OpenClawBot(discord.Client):
     async def _start_health_server(self):
         app = web.Application()
         app["bot"] = self
+        app.router.add_get("/", dashboard_handler)
         app.router.add_get("/health", self._health_handler)
         app.router.add_get("/metrics", self._metrics_handler)
         app.router.add_get("/dashboard", dashboard_handler)
@@ -721,7 +806,13 @@ async def ask_cmd(interaction: discord.Interaction, question: str):
         )
     except Exception as e:
         log.error("LLM error: %s", e)
-        response_text = f"❌ LLM error: {e}"
+        # Wrap the original message in a code block for easy copy-pasting
+        safe_question = discord.utils.escape_markdown(question)
+        response_text = (
+            f"❌ **LLM Error:** {str(e)}\n\n"
+            "**Your message was saved below for easy copy-pasting/retry:**\n"
+            f"```\n{safe_question}\n```"
+        )
         model_used = "error"
 
     # Split into multiple messages if response exceeds Discord's embed limit
@@ -732,6 +823,15 @@ async def ask_cmd(interaction: discord.Interaction, question: str):
             description=chunk,
             color=discord.Color.purple(),
         )
+        if i == 0:
+            # Add the user's question in a collapsed-style field on the first embed
+            # Discord limits author.name to 256 chars. We use 200 for safety + "..."
+            display_question = question if len(question) < 200 else question[:197] + "..."
+            embed.set_author(
+                name=f"Replying to: {display_question}",
+                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None
+            )
+
         if i == len(chunks) - 1:
             # Footer only on the last embed
             if model_used and "gemini" not in model_used.lower():
@@ -1498,6 +1598,157 @@ async def tasks_cmd(interaction: discord.Interaction, status: str = ""):
     embed.set_footer(text="davevoyles.github.io/openclaw-dashboard")
     await interaction.followup.send(embed=embed)
     audit_log(interaction.user, "tasks", detail=f"status={status or 'all'}")
+
+
+# ---------------------------------------------------------------------------
+# Phase B: Research command — fire-and-forget multi-step autonomous research
+# Phase E: Weather command
+# ---------------------------------------------------------------------------
+
+
+class _ResearchView(discord.ui.View):
+    """Action buttons attached to a completed research report."""
+
+    def __init__(self, query: str, report: str):
+        super().__init__(timeout=300)
+        self._query = query
+        self._report = report
+
+    @discord.ui.button(label="📌 Save to Memory", style=discord.ButtonStyle.secondary)
+    async def save_to_memory(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        if not is_allowed(interaction):
+            await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+            return
+        from qmd import remember_fact
+        # Store first 500 chars as the memory fact
+        snippet = self._report[:500].strip()
+        result = await remember_fact(
+            content=f"[Research] {self._query}: {snippet}",
+            tags="research",
+        )
+        await interaction.response.send_message(result, ephemeral=True)
+        audit_log(interaction.user, "research_save_memory", detail=self._query[:80])
+
+    @discord.ui.button(label="🔄 Re-run in 24h", style=discord.ButtonStyle.secondary)
+    async def schedule_rerun(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        if not is_allowed(interaction):
+            await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+            return
+        task = scheduler.create(
+            action="search_web",
+            args={"query": self._query, "num_results": 5},
+            hour=-1,
+            minute=0,
+            interval_minutes=1440,  # 24 hours
+            created_by=str(interaction.user),
+        )
+        await interaction.response.send_message(
+            f"✅ Scheduled daily re-search for **{self._query[:60]}** (task `{task.task_id}`).",
+            ephemeral=True,
+        )
+        audit_log(interaction.user, "research_schedule_rerun", detail=self._query[:80])
+
+
+@bot.tree.command(name="research", description="Autonomous multi-step research — searches, reads sources, synthesizes a report")
+@app_commands.describe(query="What you want researched (be specific for best results)")
+async def research_cmd(interaction: discord.Interaction, query: str):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+
+    if is_emergency_stopped():
+        await interaction.response.send_message(
+            "🛑 **Emergency stop active.** Use `/estop resume` to resume.", ephemeral=True
+        )
+        return
+
+    if not llm_is_configured():
+        await interaction.response.send_message(
+            "⚠️ LLM not configured. Set `GOOGLE_API_KEY`.", ephemeral=True
+        )
+        return
+
+    # Acknowledge the interaction immediately (Discord requires response within 3s)
+    await interaction.response.send_message(
+        f"🔍 **Research started** — I'll post updates and a final report here.\n> {query[:120]}"
+    )
+    original = await interaction.original_response()
+
+    # Create a Discord thread for streaming progress
+    try:
+        thread = await original.create_thread(
+            name=f"Research: {query[:80]}",
+            auto_archive_duration=1440,  # archive after 24h idle
+        )
+        await thread.send(f"🗺️ Planning research strategy…")
+    except discord.HTTPException as e:
+        log.warning("Could not create research thread: %s", e)
+        thread = None
+
+    async def on_progress(msg: str):
+        """Stream step updates to the Discord thread."""
+        if thread:
+            try:
+                await thread.send(msg)
+            except Exception:
+                pass
+
+    # Run the research agent
+    from research_agent import ResearchAgent
+    agent = ResearchAgent(max_searches=4, browse_top_n=2, timeout_seconds=180)
+
+    try:
+        report = await agent.run(query, on_progress=on_progress)
+    except Exception as e:
+        log.error("Research command failed: %s", e)
+        report = f"❌ Research failed: {e}"
+
+    # Post the final report to the thread with action buttons
+    view = _ResearchView(query=query, report=report)
+    chunks = _split_response(report)
+    for i, chunk in enumerate(chunks):
+        embed = discord.Embed(
+            description=chunk,
+            color=discord.Color.from_rgb(0, 150, 200),
+        )
+        if i == 0:
+            embed.set_author(name=f"Research: {query[:100]}")
+        if i == len(chunks) - 1:
+            embed.set_footer(text="✅ Research complete — Gemini 2.5 Flash with extended thinking")
+            target = thread or interaction
+            if thread:
+                await thread.send(embed=embed, view=view)
+            else:
+                await interaction.followup.send(embed=embed, view=view)
+        else:
+            if thread:
+                await thread.send(embed=embed)
+            else:
+                await interaction.followup.send(embed=embed)
+
+    audit_log(interaction.user, "research", detail=query[:200])
+
+
+@bot.tree.command(name="weather", description="Get current weather and forecast for a location")
+@app_commands.describe(
+    location="City, airport code, or landmark (default: your configured home city)",
+    units="'uscs' for °F/mph (default) or 'metric' for °C/km/h",
+)
+async def weather_cmd(interaction: discord.Interaction, location: str = "", units: str = "uscs"):
+    if not is_allowed(interaction):
+        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    from skills.advanced_skills import get_weather
+    result = await get_weather(location=location, units=units)
+    embed = discord.Embed(
+        title="🌤️ Weather",
+        description=result,
+        color=discord.Color.from_rgb(135, 206, 235),
+    )
+    embed.set_footer(text="via wttr.in — no API key required")
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "weather", detail=f"loc={location or 'default'}")
 
 
 # ---------------------------------------------------------------------------

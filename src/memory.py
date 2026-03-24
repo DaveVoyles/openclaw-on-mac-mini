@@ -25,6 +25,10 @@ MAX_HISTORY_LENGTH = 20
 MEMORY_DIR = Path("/memory")
 # Sub-directory for saved (named) threads
 THREADS_DIR = MEMORY_DIR / "threads"
+# Directory for auto-generated session summaries
+SUMMARIES_DIR = MEMORY_DIR / "summaries"
+# Minimum messages before we bother summarizing (avoid trivial sessions)
+MIN_MESSAGES_TO_SUMMARIZE = 4
 
 # Valid thread name: letters, digits, hyphens, underscores, up to 32 chars
 _THREAD_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
@@ -85,13 +89,25 @@ class ConversationStore:
         # Key: (user_id, channel_id) → Conversation
         self._conversations: dict[tuple[int, int], Conversation] = {}
 
-    def get(self, user_id: int, channel_id: int, user_name: str = "User") -> Conversation:
-        """Get or create a conversation for a user+channel pair."""
+    def get(self, user_id: int, channel_id: int, user_name: str = "User") -> "Conversation":
+        """Get or create a conversation for a user+channel pair.
+
+        If the previous conversation expired, attaches a recall note so the
+        model knows what was discussed last time.
+        """
         key = (user_id, channel_id)
         conv = self._conversations.get(key)
-        if conv is None or conv.is_expired:
+        expired = conv is not None and conv.is_expired
+        if conv is None or expired:
             conv = Conversation(user_name=user_name)
             self._conversations[key] = conv
+            # Inject a brief recall note from the last session summary
+            recall = _load_last_summary(user_id)
+            if recall:
+                conv.history.append({
+                    "role": "model",
+                    "parts": [f"[Recall from last session] {recall}"],
+                })
         return conv
 
     def clear_user(self, user_id: int, channel_id: int):
@@ -105,12 +121,25 @@ class ConversationStore:
         self._conversations.clear()
 
     def cleanup_expired(self):
-        """Remove expired conversations to free memory."""
+        """Remove expired conversations to free memory. Auto-summarizes before discarding."""
         expired = [k for k, v in self._conversations.items() if v.is_expired]
         for k in expired:
-            del self._conversations[k]
+            conv = self._conversations.pop(k)
+            # Fire-and-forget background summarization for sessions worth keeping
+            if conv.message_count >= MIN_MESSAGES_TO_SUMMARIZE:
+                user_id, channel_id = k
+                import asyncio
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            _summarize_and_store(user_id, conv.user_name, conv.history)
+                        )
+                except Exception:
+                    pass
         if expired:
-            log.info("Cleaned up %d expired conversations", len(expired))
+            log.info("Cleaned up %d expired conversations (summarized those with %d+ msgs)",
+                     len(expired), MIN_MESSAGES_TO_SUMMARIZE)
 
     @property
     def active_count(self) -> int:
@@ -285,3 +314,60 @@ class ConversationStore:
 # ---------------------------------------------------------------------------
 
 store = ConversationStore()
+
+
+# ---------------------------------------------------------------------------
+# Session summary helpers  (Phase A)
+# ---------------------------------------------------------------------------
+
+def _summary_path(user_id: int) -> Path:
+    """Return the path to the rolling session summary file for a user."""
+    SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
+    return SUMMARIES_DIR / f"{user_id}_last_session.json"
+
+
+def _load_last_summary(user_id: int) -> str:
+    """Load the most recent session summary for a user, or '' if none."""
+    path = _summary_path(user_id)
+    if not path.exists():
+        return ""
+    try:
+        data = json.loads(path.read_text())
+        return data.get("summary", "")
+    except Exception:
+        return ""
+
+
+async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]) -> None:
+    """
+    Generate a concise summary of the conversation and persist it so it
+    can be recalled at the start of the user's next session.
+    Also stores the summary as a QMD memory fact for long-term recall.
+    """
+    try:
+        from llm import summarize_conversation
+        summary = await summarize_conversation(history)
+        if not summary:
+            return
+
+        path = _summary_path(user_id)
+        payload = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "saved_at": time.time(),
+            "summary": summary,
+        }
+        path.write_text(json.dumps(payload, indent=2))
+        log.info("Saved session summary for user %d (%d chars)", user_id, len(summary))
+
+        # Also push to QMD for long-term semantic recall
+        try:
+            from qmd import remember_fact
+            await remember_fact(
+                content=f"[Session summary for {user_name}] {summary}",
+                tags=f"session,{user_name.split('#')[0].lower().replace(' ', '_')}",
+            )
+        except Exception as e:
+            log.debug("QMD session save failed (non-critical): %s", e)
+    except Exception as e:
+        log.warning("Session summarization failed: %s", e)

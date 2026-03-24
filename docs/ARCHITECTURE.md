@@ -14,22 +14,26 @@ graph TB
     subgraph OpenClaw ["🐾 OpenClaw (Docker Container)"]
         Bot["bot.py\nCommand Router"]
         LLM["llm.py\nLLM Dispatcher"]
+        ResearchAgent["research_agent.py\nReAct Research Loop"]
         Skills["skills/\nadvanced_skills.py"]
         Gateway["gateway.py\nMaton Client"]
         Approvals["approvals.py\nApproval Workflow"]
         Scheduler["scheduler.py\nCron Jobs"]
-        Memory["memory.py\nContext Store"]
+        Memory["memory.py\nContext Store + Session Summaries"]
         Spending["spending.py\nCost Tracker"]
         Metrics["/metrics\nPrometheus Endpoint\n:8765"]
     end
 
     Discord -->|"events & interactions"| Bot
     Bot --> LLM
+    Bot --> ResearchAgent
     Bot --> Approvals
     Bot --> Scheduler
     LLM --> Skills
     LLM --> Gateway
     LLM --> Memory
+    ResearchAgent -->|"plan + synthesize"| LLM
+    ResearchAgent -->|"search + browse"| Skills
     Memory --> LLM
     Scheduler -->|"cron jobs"| Skills
 
@@ -64,7 +68,8 @@ graph TB
     Skills -->|"subprocess"| Tavily
     Skills -->|"subprocess fallback"| DDG
     Tavily -->|"TAVILY_API_KEY"| TavilyAPI["Tavily API\nhttps://api.tavily.com"]
-    DDG --> DDGNet["DuckDuckGo Lite\n+ Bing fallback"]
+    DDG --> DDGNet["DuckDuckGo Lite\n+ Bing HTML fallback"]
+    Skills -->|"get_weather"| WttrIn["wttr.in\nWeather API (free)"]
 
     %% ── Mission Control ─────────────────────────────────────────
     subgraph MissionControl ["📋 Mission Control (ClawHub)"]
@@ -179,7 +184,7 @@ graph TB
     classDef infra fill:#3a2d1e,stroke:#c08040,color:#fff
     classDef actor fill:#1e1e3a,stroke:#6060d9,color:#fff
 
-    class Discord,Bot,LLM,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics service
+    class Discord,Bot,LLM,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics service
     class Gemini,Ollama,OpenAI,Anthropic,TavilyAPI,DDGNet,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
     class DockerEngine,Glances,Tailscale,Cloudflare,Prometheus,UptimeKuma,NAS,Traefik,SynDDNS infra
@@ -194,7 +199,10 @@ graph TB
 |------|------|
 | **User command → response** | User → Discord → `bot.py` → `llm.py` (Gemini) → `skills/` → target service → Discord |
 | **Media request approval** | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit → Plex |
-| **Web search** | `llm.py` → `skills/` → subprocess → `tavily_search.py` or `web_search.py` → search API |
+| **Web search (3-tier cascade)** | `search_web()` → Tavily API (primary) → DuckDuckGo Lite (fallback) → Bing HTML scrape (last resort) |
+| **Weather** | `/weather` or `/ask weather…` → `llm.py` → `get_weather()` → `wttr.in` JSON API |
+| **Deep research** | `/research` → `research_agent.py` → Gemini (plan) → `search_web()` × N → `browse_url()` → Gemini (synthesize) → Discord thread |
+| **Session recall** | Session expires → `memory.py` → `summarize_conversation()` → saved to disk + QMD; next session → recall note injected |
 | **Task management** | User → Discord `/tasks` or `/ask "show tasks"` → `mission_control.py` → `data/tasks.json` → GitHub Pages dashboard |
 | **Structured memory** | `llm.py` → `ontology_skills.py` → `skills/ontology/scripts/ontology.py` → `data/memory/ontology/graph.jsonl` |
 | **Third-party API call** | `llm.py` → `gateway.py` → Maton OAuth proxy → target SaaS API |

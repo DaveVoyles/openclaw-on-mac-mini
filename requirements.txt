@@ -5,7 +5,7 @@
 discord.py==2.4.0
 
 # Google Gemini AI SDK
-google-generativeai==0.8.4
+google-generativeai>=0.8.4
 
 # Web server for health check endpoint
 aiohttp==3.11.11

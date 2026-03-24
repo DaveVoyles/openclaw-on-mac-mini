@@ -144,8 +144,6 @@ async def get_system_stats() -> str:
             if not isinstance(cpu_resp, BaseException) and cpu_resp.status == 200:
                 cpu = await cpu_resp.json()
                 lines.append(f"**CPU**: {cpu.get('cpu', 'N/A')}% ({cpu.get('cpu_number', '?')} cores)")
-            else:
-                lines.append("**CPU**: unavailable")
 
             # Memory
             if not isinstance(mem_resp, BaseException) and mem_resp.status == 200:
@@ -154,8 +152,6 @@ async def get_system_stats() -> str:
                 total_gb = mem.get("total", 0) / (1024 ** 3)
                 pct = mem.get("percent", 0)
                 lines.append(f"**Memory**: {used_gb:.1f} / {total_gb:.1f} GB ({pct}%)")
-            else:
-                lines.append("**Memory**: unavailable")
 
             # Disk
             if not isinstance(disk_resp, BaseException) and disk_resp.status == 200:
@@ -166,10 +162,9 @@ async def get_system_stats() -> str:
                     total_gb = d.get("size", 0) / (1024 ** 3)
                     pct = d.get("percent", 0)
                     lines.append(f"**Disk** `{mp}`: {used_gb:.1f} / {total_gb:.1f} GB ({pct}%)")
-            else:
-                lines.append("**Disk**: unavailable")
 
-            return "\n".join(lines)
+            if lines:
+                return "\n".join(lines)
     except Exception:
         pass
 
@@ -178,38 +173,55 @@ async def get_system_stats() -> str:
 
 
 async def _get_system_stats_fallback() -> str:
-    """Fallback system stats using shell commands (no Glances)."""
+    """Fallback system stats using shell commands or /proc (Linux container)."""
     lines = []
 
-    # CPU load average
-    rc, out, _ = await _run(["sysctl", "-n", "vm.loadavg"])
-    if rc == 0:
-        lines.append(f"**Load Average**: {out.strip()}")
+    # CPU load average (read from /proc/loadavg)
+    try:
+        with open("/proc/loadavg", "r") as f:
+            lines.append(f"**Load Average**: {f.read().split()[0]}")
+    except (FileNotFoundError, IndexError):
+        rc, out, _ = await _run(["sysctl", "-n", "vm.loadavg"])
+        if rc == 0:
+            lines.append(f"**Load Average**: {out.strip()}")
 
-    # Memory (macOS)
-    rc, out, _ = await _run(["vm_stat"])
-    if rc == 0:
-        # Parse page size and used/free pages
-        page_lines = out.strip().split("\n")
-        page_size = 16384  # default on Apple Silicon
-        free = active = inactive = wired = 0
-        for line in page_lines:
-            if "page size of" in line:
-                parts = line.split()
-                page_size = int(parts[-2])
-            elif "Pages free:" in line:
-                free = int(line.split(":")[1].strip().rstrip("."))
-            elif "Pages active:" in line:
-                active = int(line.split(":")[1].strip().rstrip("."))
-            elif "Pages inactive:" in line:
-                inactive = int(line.split(":")[1].strip().rstrip("."))
-            elif "Pages wired" in line:
-                wired = int(line.split(":")[1].strip().rstrip("."))
-        total_pages = free + active + inactive + wired
-        used_gb = (active + wired) * page_size / (1024 ** 3)
-        total_gb = total_pages * page_size / (1024 ** 3)
-        pct = round(used_gb / total_gb * 100, 1) if total_gb > 0 else 0
-        lines.append(f"**Memory**: {used_gb:.1f} / {total_gb:.1f} GB ({pct}%)")
+    # Memory (Linux/Docker)
+    try:
+        with open("/proc/meminfo", "r") as f:
+            mem_info = {line.split(":")[0]: line.split(":")[1].strip() for line in f}
+            if "MemTotal" in mem_info and "MemAvailable" in mem_info:
+                total_kb = int(mem_info["MemTotal"].split()[0])
+                avail_kb = int(mem_info["MemAvailable"].split()[0])
+                used_kb = total_kb - avail_kb
+                used_gb = used_kb / (1024 ** 2)
+                total_gb = total_kb / (1024 ** 2)
+                pct = round((used_kb / total_kb) * 100, 1)
+                lines.append(f"**Memory**: {used_gb:.1f} / {total_gb:.1f} GB ({pct}%)")
+    except (FileNotFoundError, KeyError, ValueError):
+        # Memory (macOS fallback)
+        rc, out, _ = await _run(["vm_stat"])
+        if rc == 0:
+            # Parse page size and used/free pages
+            page_lines = out.strip().split("\n")
+            page_size = 16384  # default on Apple Silicon
+            free = active = inactive = wired = 0
+            for line in page_lines:
+                if "page size of" in line:
+                    parts = line.split()
+                    page_size = int(parts[-2])
+                elif "Pages free:" in line:
+                    free = int(line.split(":")[1].strip().rstrip("."))
+                elif "Pages active:" in line:
+                    active = int(line.split(":")[1].strip().rstrip("."))
+                elif "Pages inactive:" in line:
+                    inactive = int(line.split(":")[1].strip().rstrip("."))
+                elif "Pages wired" in line:
+                    wired = int(line.split(":")[1].strip().rstrip("."))
+            total_pages = free + active + inactive + wired
+            used_gb = (active + wired) * page_size / (1024 ** 3)
+            total_gb = total_pages * page_size / (1024 ** 3)
+            pct = round(used_gb / total_gb * 100, 1) if total_gb > 0 else 0
+            lines.append(f"**Memory**: {used_gb:.1f} / {total_gb:.1f} GB ({pct}%)")
 
     # Disk
     rc, out, _ = await _run(["df", "-h", "/"])
@@ -274,11 +286,15 @@ SKILLS.update({
 
 # Add spending tracker skills
 from spending import get_spending, get_daily_spending
+from autonomous_skills import AUTONOMOUS_SKILLS
 
 SKILLS.update({
     "get_spending": get_spending,
     "get_daily_spending": get_daily_spending,
 })
+
+# Add Phase 12 autonomous skills (Planning, Agent Loop)
+SKILLS.update(AUTONOMOUS_SKILLS)
 
 # Add Phase 6 extended integrations (Overseerr, NAS, Email, Calendar)
 from overseerr import OVERSEERR_SKILLS
@@ -306,3 +322,7 @@ SKILLS.update(ONTOLOGY_SKILLS)
 # Web & Git skills (webfetch-md, git-essentials)
 from git_skills import GIT_SKILLS
 SKILLS.update(GIT_SKILLS)
+
+# Weather skill (Phase E — wraps wttr.in via aiohttp, no API key)
+from .advanced_skills import get_weather
+SKILLS.update({"get_weather": get_weather})

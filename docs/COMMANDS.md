@@ -148,6 +148,22 @@ OpenClaw can now manage its own project structure and perform more robust web sc
 | `git_log` | View recent code change history (commit log). |
 | `git_diff` | Compare code changes or view uncommitted changes. |
 | `git_commit` | Commit all current changes with a brief summary message. |
+| `init_planning_files` | Initialize task_plan.md, findings.md, progress.md for complex tasks. |
+| `update_plan_status` | Log progress or update status of a phase in planning files. |
+
+---
+
+## Phase 12 — Autonomous Agent Operations
+
+Enhanced self-driving capabilities using the `planning-with-files` and `autonomous-loop` skills.
+
+**Planning With Files:**
+This pattern allows the agent to maintain "working memory on disk." Use `init_planning_files` at the start of any complex task.
+
+**Autonomous Loop:**
+When configured, the agent can work continuously in the background. Stop/Resume is handled via control files:
+- `touch autonomous-loop.stop` — Pause current loops
+- `rm autonomous-loop.stop` — Resume loops
 
 ---
 

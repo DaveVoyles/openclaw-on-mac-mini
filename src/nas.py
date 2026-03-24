@@ -348,6 +348,94 @@ async def get_disk_smart_status() -> str:
 
 
 # ---------------------------------------------------------------------------
+# FileStation — write operations
+# ---------------------------------------------------------------------------
+
+async def nas_create_folder(path: str) -> str:
+    """
+    Create a folder on the Synology NAS via FileStation.
+
+    Args:
+        path: Full folder path to create, e.g. '/volume1/documents/reports'.
+    """
+    if not NAS_USER or not NAS_PASSWORD:
+        return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
+
+    result = await _dsm(
+        "SYNO.FileStation.CreateFolder",
+        2,
+        "create",
+        {
+            "folder_path": '["' + path.rsplit("/", 1)[0] + '"]',
+            "name": '["' + path.rsplit("/", 1)[-1] + '"]',
+            "force_parent": "true",
+        },
+    )
+    if not result.get("success"):
+        err = result.get("_err") or result.get("error", {}).get("code", "unknown")
+        return f"❌ Could not create folder `{path}`: {err}"
+    return f"✅ Folder created: `{path}`"
+
+
+async def nas_write_file(
+    content: str,
+    remote_folder: str = "/volume1/documents",
+    filename: str = "openclaw_output.md",
+) -> str:
+    """
+    Write a text or markdown file to the Synology NAS via FileStation upload.
+
+    Args:
+        content: Text content to write.
+        remote_folder: Destination folder path on the NAS, e.g. '/volume1/documents'.
+        filename: Name for the file, e.g. 'research_report.md'.
+    """
+    if not NAS_USER or not NAS_PASSWORD:
+        return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
+
+    session = await _get_nas_session()
+    sid = await _login(session)
+    if not sid:
+        return "❌ DSM authentication failed. Check NAS_USER / NAS_PASSWORD."
+
+    try:
+        data = aiohttp.FormData()
+        data.add_field("api", "SYNO.FileStation.Upload")
+        data.add_field("version", "2")
+        data.add_field("method", "upload")
+        data.add_field("_sid", sid)
+        data.add_field("path", remote_folder)
+        data.add_field("create_parents", "true")
+        data.add_field("overwrite", "true")
+        data.add_field(
+            "file",
+            content.encode("utf-8"),
+            filename=filename,
+            content_type="text/plain",
+        )
+        async with session.post(
+            f"{NAS_URL}/webapi/entry.cgi",
+            data=data,
+            ssl=_SSL_CTX,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            result = await resp.json(content_type=None)
+    except Exception as e:
+        result = {"success": False, "_err": str(e)}
+    finally:
+        await _logout(session, sid)
+
+    if not result.get("success"):
+        err = result.get("_err") or result.get("error", {}).get("code", "unknown")
+        return f"❌ File upload failed: {err}"
+
+    return (
+        f"✅ Saved `{filename}` to NAS at `{remote_folder}/{filename}` "
+        f"({len(content.encode())} bytes)"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -356,4 +444,6 @@ NAS_SKILLS = {
     "get_backup_status": get_backup_status,
     "get_nas_alerts": get_nas_alerts,
     "get_disk_smart_status": get_disk_smart_status,
+    "nas_create_folder": nas_create_folder,
+    "nas_write_file": nas_write_file,
 }
