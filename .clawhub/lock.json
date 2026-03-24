@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "skills": {
+    "free-web-search": {
+      "version": "9.3.0",
+      "installedAt": 1774301953289
+    },
+    "openclaw-tavily-search": {
+      "version": "0.1.0",
+      "installedAt": 1774302060997
+    },
+    "mission-control": {
+      "version": "2.3.1",
+      "installedAt": 1774313943760
+    },
+    "ontology": {
+      "version": "1.0.4",
+      "installedAt": 1774356661171
+    },
+    "self-improving": {
+      "version": "1.2.16",
+      "installedAt": 1774356663061
+    },
+    "skill-vetter": {
+      "version": "1.0.0",
+      "installedAt": 1774356664340
+    },
+    "webfetch-md": {
+      "version": "1.1.0",
+      "installedAt": 1774357956189
+    },
+    "git-essentials": {
+      "version": "1.0.0",
+      "installedAt": 1774357957474
+    }
+  }
+}

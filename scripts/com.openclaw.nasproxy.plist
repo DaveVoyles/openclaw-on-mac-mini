@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.openclaw.nasproxy</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>/Users/davevoyles/openclaw/scripts/nas_proxy.py</string>
+    </array>
+
+    <!-- Restart automatically if it crashes -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Start at login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Log output -->
+    <key>StandardOutPath</key>
+    <string>/Users/davevoyles/openclaw/data/logs/nas_proxy.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/davevoyles/openclaw/data/logs/nas_proxy.log</string>
+
+    <!-- Environment — override defaults here if needed -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>NAS_PROXY_PORT</key>
+        <string>19501</string>
+        <key>NAS_TARGET</key>
+        <string>https://192.168.1.8:5001</string>
+    </dict>
+</dict>
+</plist>

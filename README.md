@@ -7,13 +7,16 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | | |
 |---|---|
 | **Host** | Mac Mini M4 Pro (192.168.1.93) |
+| **Tailscale IP** | `100.116.47.67` (`daves-mac-mini`) |
 | **Health** | `http://192.168.1.93:8765/health` |
 | **Dashboard** | `http://192.168.1.93:8765/dashboard` |
 | **Metrics** | `http://192.168.1.93:8765/metrics` (Prometheus) |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik) |
-| **Interface** | 29 Discord slash commands |
-| **LLM** | Google Gemini 2.0 Flash (paid tier 1, $30 budget) |
-| **Status** | **Phase 6 — Remote Access & Monitoring** ✅ |
+| **Remote SSH** | `ssh davevoyles@daves-mac-mini` (Tailscale) |
+| **Interface** | 38 Discord slash commands |
+| **LLM** | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries) |
+| **Local LLM** | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
+| **Status** | **Phase 9 — Mission Control (Kanban)** ✅ |
 
 ## Features
 
@@ -31,11 +34,15 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/restart <service>` — restart a container (approval required)
 
 **Phase 3 — LLM Integration** ✅
-- `/ask <question>` — AI-powered natural language queries via Gemini 2.0 Flash
+- `/ask <question>` — AI-powered natural language queries
+- **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
 - Conversation memory — multi-turn context per user/channel (30 min TTL)
 - `/clear` — reset conversation history
-- Rate limiting — 60 RPM / 500 RPH with graceful degradation
+- `/save <name>` / `/resume <name>` — persist conversations to disk; resume later
+- `/threads` — list saved threads; `/forget <name>` — delete one
+- Long responses auto-split across multiple embeds (no truncation)
+- Rate limiting — 60 RPM / 500 RPH (Gemini only; Ollama is unlimited)
 
 **Phase 4 — Security & Approvals** ✅
 - `/restart` now requires button-click approval before executing
@@ -70,8 +77,34 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Traefik reverse proxy route: `openclaw.davevoyles.synology.me`
 - Uptime Kuma monitor: polls `/health` every 60s with alerting
 
+**Phase 7 — Local LLM & Production Hardening** 🔄
+- Ollama integration — `gemma3:12b` running natively on Mac Mini M4 Pro (8.1 GB, ~15–20 tok/s on M4 Neural Engine)
+- Hybrid routing in `llm.py` — keyword heuristic routes simple queries to Ollama, tool-calling queries to Gemini
+- Silent fallback — Ollama unavailable → seamlessly falls back to Gemini
+- `LOCAL_LLM_ENABLED` toggle in `.env` — disable local LLM without a code change
+- Response footer shows `via gemma3:12b` (local · unlimited) or `via gemini-2.5-flash` with rate info
+- AgentMail fixed: correct `/v0/inboxes/{inbox_id}/messages/send` endpoint
+- `skills/` reorganized as a Python package (`skills/__init__.py` + `skills/advanced_skills.py`)
+
+**Phase 8 — Web, Browsing & Vision** ✅
+- `/websearch` — live web search via Tavily (falls back to DuckDuckGo)
+- `/browse <url>` — fetch and read a web page; optional Q&A
+- `/analyze-image` — analyze an uploaded image with Gemini vision
+- `/analyze-file` — analyze a document (PDF, TXT, JSON…) with Gemini
+- ClawHub `free-web-search` and `openclaw-tavily-search` skill bundles installed
+
+**Phase 9 — Mission Control (Kanban Task Board)** ✅
+- `/tasks [status]` — view Kanban tasks; filter by backlog / in_progress / done
+- `/ask` natural-language task management — create, move, complete, and comment on tasks
+- ClawHub `mission-control` skill installed (`skills/mission-control/`)
+- Tasks persisted in `data/tasks.json` (Docker volume mount)
+- Dashboard published at https://davevoyles.github.io/openclaw-dashboard/ (GitHub Pages)
+- 5 Gemini tool declarations for LLM-driven task management
+- LLM routing keywords: _task_, _kanban_, _backlog_, _in progress_, _todo_, _ticket_
+- 51 total registered skills
+
 **Planned**
-- Phase 7: Production hardening — comprehensive testing, backup/restore, Grafana dashboards
+- Grafana dashboards, backup/restore, comprehensive test suite
 
 ---
 
@@ -124,7 +157,40 @@ Then type `/ping` in your Discord server.
 
 ---
 
-## Commands
+## Operations & Common Tasks
+
+### Applying `.env` changes
+
+> ⚠️ **`docker restart` does NOT reload `.env`.**
+> It reuses the environment snapshot captured when the container was first created.
+> Any change to `.env` (new API keys, updated values) requires a **full recreate**:
+
+```bash
+# Correct — reloads all env_file values from .env:
+docker compose up -d
+
+# Wrong — environment vars stay stale from the last create:
+docker restart openclaw   # ← does NOT re-read .env
+```
+
+### Rebuilding after code changes
+
+```bash
+docker compose up -d --build
+```
+
+### Viewing logs
+
+```bash
+docker logs openclaw --tail 30 -f
+```
+
+### Verifying a specific env var is loaded in the container
+
+```bash
+docker exec openclaw env | grep VARIABLE_NAME | wc -c
+# Result of 16 or less = blank value; more = key is set
+```
 
 | Command | Description | Phase |
 |---------|-------------|-------|
@@ -138,8 +204,12 @@ Then type `/ping` in your Discord server.
 | `/dockerstats` | Per-container resource usage snapshot | 2 |
 | `/system` | System resource usage (CPU, RAM, disk) | 2 |
 | `/restart <service>` | Restart a container (requires approval) | 2 |
-| `/ask <question>` | AI-powered natural language query (Gemini) | 3 |
-| `/clear` | Clear your conversation history | 3 |
+| `/ask <question>` | AI-powered natural language query (Gemini 2.5 Flash or Ollama) | 3 |
+| `/clear` | Clear your active conversation history | 3 |
+| `/save <name>` | Save current conversation as a named thread (persisted to disk) | 7 |
+| `/resume <name>` | Resume a previously saved conversation thread | 7 |
+| `/threads` | List all your saved conversation threads | 7 |
+| `/forget <name>` | Delete a saved conversation thread | 7 |
 | `/pending` | List pending approval requests | 4 |
 | `/auditlog [lines]` | View recent audit log entries | 4 |
 | `/estop` | Emergency stop — halt all write actions | 4 |
@@ -163,6 +233,8 @@ Then type `/ping` in your Discord server.
 
 ## Architecture
 
+> **For a detailed breakdown of the Docker infrastructure running on this Mac Mini** — including all container definitions, network topology, volume mounts, and service configuration — see the **`docker-stack/`** folder. It contains the full Compose files and documentation for every service in the stack.
+
 ### System Overview
 
 ```
@@ -180,17 +252,21 @@ Then type `/ping` in your Discord server.
                            ▼
 ┌──────────────────────────────────────────────────────────────────────┐
 │              OpenClaw Bot (Docker, port 8765)                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
-│  │   bot.py     │  │   llm.py     │  │  approvals   │               │
-│  │ 28 commands  │  │ Gemini Flash │  │ button UI    │               │
-│  └──────┬───────┘  └──────┬───────┘  └──────────────┘               │
-│         │                 │ function calling                         │
-│         ▼                 ▼                                          │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │                   Skill Registry (25 skills)                │    │
-│  │  Docker · System · Media(*arr) · Plex · Network ·           │    │
-│  │  AI Analysis · Scheduling · QMD Memory · AgentMail          │    │
-│  └───────────────────────────┬─────────────────────────────────┘    │
+│  ┌──────────────┐  ┌──────────────────────────┐  ┌────────────┐  │
+│  │   bot.py     │  │         llm.py           │  │ approvals  │  │
+│  │ 28 commands  │  │  ┌─────────┬───────────┐ │  │ button UI  │  │
+│  └──────┬───────┘  │  │ Ollama  │  Gemini   │ │  └────────────┘  │
+│         │           │  │3.2:3b  │ 2.5 Flash │ │                  │
+│         │           │  │(local) │(tool use) │ │                  │
+│         │           │  └────┬───┴─────┬─────┘ │                  │
+│         │           └───────┼─────────┼───────┘                  │
+│         │    hybrid routing │         │ function calling          │
+│         ▼                   ▼         ▼                           │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                   Skill Registry (27 skills)            │    │
+│  │  Docker · System · Media(*arr) · Plex · Network ·       │    │
+│  │  AI Analysis · Scheduling · QMD Memory · AgentMail      │    │
+│  └───────────────────────────┬─────────────────────────────┘    │
 │            /health            │           /metrics (Prometheus)      │
 └───────────────────────────────┼──────────────────────────────────────┘
                                 │ LAN (192.168.1.x)
@@ -205,23 +281,31 @@ Then type `/ping` in your Discord server.
                         └───────────────┘   └──────────────────┘
 ```
 
-### Request Flow — AI Function Calling
+### Request Flow — AI Hybrid Routing
 
 ```mermaid
 sequenceDiagram
     participant U as Discord User
     participant B as OpenClaw Bot
-    participant G as Gemini 2.0 Flash
+    participant O as Ollama (local)
+    participant G as Gemini 2.5 Flash
     participant S as Skills
 
+    U->>B: /ask "hello"
+    B->>B: _needs_tools()? → No
+    B->>O: chat (local, free)
+    O-->>B: conversational reply
+    B-->>U: embed · local · unlimited
+
     U->>B: /ask "is sonarr healthy?"
-    B->>G: prompt + 25 tool declarations
+    B->>B: _needs_tools()? → Yes ("sonarr")
+    B->>G: prompt + 27 tool declarations
     G-->>B: call check_arr_health()
     B->>S: invoke check_arr_health
     S-->>B: {"sonarr": "healthy", ...}
     B->>G: tool result
     G-->>B: natural language summary
-    B-->>U: embed with answer
+    B-->>U: embed · via gemini-2.5-flash
 ```
 
 ### Request Flow — Approval Workflow
@@ -261,7 +345,8 @@ Synology Built-in Reverse Proxy ──► Traefik (NAS, port 80/443)
               (Sonarr)           (OpenClaw)
 
  Remote Access via Tailscale:
-   Your Device → Tailscale mesh → 100.x.x.x:8765 (OpenClaw)
+   MacBook Pro (100.70.195.63) → Tailscale mesh → 100.116.47.67:8765 (OpenClaw @ daves-mac-mini)
+   SSH: ssh davevoyles@daves-mac-mini
 ```
 
 ### Monitoring Stack
@@ -281,12 +366,13 @@ Uptime Kuma (:3001)              Grafana dashboard
 
 ```
 ~/openclaw/
-├── bot.py                 # Main Discord bot (28 slash commands, health/metrics HTTP server)
-├── skills.py              # Core Docker & system monitoring skills + unified registry
-├── advanced_skills.py     # Media, network, Plex, health, and reporting skills
+├── bot.py                 # Main Discord bot (33 slash commands, health/metrics HTTP server)
+├── skills/
+│   ├── __init__.py        # Core Docker & system monitoring skills + unified registry
+│   └── advanced_skills.py # Media, network, Plex, health, and reporting skills
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
-├── llm.py                 # Gemini LLM integration + 25 function-calling tools
+├── llm.py                 # Hybrid LLM: Ollama (local) + Gemini 2.5 Flash (tool use), 27 tools
 ├── memory.py              # Per-user conversation memory (30 min TTL)
 ├── approvals.py           # Approval workflow engine + Discord button UI
 ├── network.py             # Tailscale status, connectivity check, speed test
@@ -294,13 +380,14 @@ Uptime Kuma (:3001)              Grafana dashboard
 ├── agentmail.py           # Email via AgentMail.to API
 ├── spending.py            # Gemini API cost tracking ($30 budget, per-call token logging)
 ├── dashboard.py           # Web dashboard (served at /dashboard, self-contained HTML)
+├── openclaw.code-workspace  # VS Code workspace — opens project via Remote SSH
 ├── docker-compose.yml     # Container orchestration
-├── Dockerfile             # COPY *.py — auto-includes all modules
+├── Dockerfile             # Copies *.py + skills/ package into container
 ├── .env                   # Secrets (not committed)
 ├── .env.example           # Template
 ├── config/
 │   ├── config.yaml        # Main configuration
-│   ├── permissions.yaml   # Risk levels and access control (25 skills)
+│   ├── permissions.yaml   # Risk levels and access control (27 skills)
 │   ├── skills/
 │   │   └── enabled.yaml   # Which skills are active
 │   └── prompts/
@@ -311,6 +398,8 @@ Uptime Kuma (:3001)              Grafana dashboard
 │   └── audit/             # Audit trail (YYYY-MM-DD.jsonl)
 ├── docs/
 │   └── IMPLEMENTATION-PLAN.md  # Full 7-phase plan
+├── docker-stack/          # Full Docker infrastructure for the Mac Mini (see this folder
+│                        #   for architecture, networks, containers, and service config)
 └── scripts/
     ├── health-check.sh
     └── add-uptime-kuma-monitor.py
@@ -447,7 +536,8 @@ Generates a comprehensive snapshot: container counts, download queue, *arr healt
 - [x] **Phase 4**: Security & Approvals — Button-based approval UI, emergency stop, audit viewer
 - [x] **Phase 5**: Advanced Skills — Media search, downloads, Plex, health checks, scheduling, AI log analysis, QMD memory, AgentMail
 - [x] **Phase 6**: Remote Access & Monitoring — Traefik routing, Uptime Kuma, Prometheus metrics
-- [ ] **Phase 7**: Production Hardening — Comprehensive testing, backup/restore, Grafana dashboards
+- [x] **Phase 7**: Local LLM — Ollama hybrid routing (llama3.2:3b + Gemini 2.5 Flash)
+- [ ] **Phase 8**: Production Hardening — Comprehensive testing, backup/restore, Grafana dashboards
 
 See [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) for the detailed plan.
 
@@ -569,6 +659,10 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
   - `DISCORD_GUILD_ID` — right-click your Discord server → Copy Server ID
   - `ALLOWED_USER_IDS` — right-click your Discord profile → Copy User ID
   - `GOOGLE_API_KEY` — from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (paid Gemini tier)
+  - `OLLAMA_URL=http://host.docker.internal:11434` — Ollama endpoint (host machine)
+  - `OLLAMA_MODEL=llama3.2:3b` — local model name
+  - `LOCAL_LLM_ENABLED=true` — set false to route all queries to Gemini
+- [ ] **Install Ollama** (local LLM): `brew install ollama && brew services start ollama && ollama pull llama3.2:3b`
 - [ ] **Fill in service API keys in `~/openclaw/.env`** (Phase 5):
   - `SONARR_API_KEY` — from `docker-stack/sonarr/config/config.xml`
   - `RADARR_API_KEY` — from `docker-stack/radarr/config/config.xml`
@@ -579,7 +673,8 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
   - `OVERSEERR_API_KEY` — from `docker-stack/overseerr/config/settings.json`
 - [ ] **First deploy**: `cd ~/openclaw && docker compose up -d --build`
 - [ ] **Verify**: type `/ping` in Discord, check `curl http://localhost:8765/health`
-- [ ] **Test `/ask`**: try "how's sonarr doing?" to confirm Gemini + function calling works
+- [ ] **Test `/ask`**: try `/ask "hello"` (→ Ollama, free) then `/ask "how's sonarr doing?"` (→ Gemini + function calling)
+- [ ] **Ollama**: runs on host via `brew services start ollama`; model is `llama3.2:3b` (auto-pulled). Set `LOCAL_LLM_ENABLED=false` in `.env` to disable.
 - [ ] **Add to Uptime Kuma**: run `scripts/add-uptime-kuma-monitor.py` to add the monitor
 - [ ] **Traefik route** (optional): `openclaw.davevoyles.synology.me` → configured in NAS `mac-mini.yml`
 - [ ] **AgentMail** (optional): set `AGENTMAIL_API_KEY` in `.env` for `/mail` and email-via-AI

@@ -1,0 +1,266 @@
+"""
+OpenClaw API Gateway Skill — Maton managed OAuth proxy
+Connects to 100+ third-party APIs (Slack, Google Workspace, Notion, GitHub,
+HubSpot, Stripe, etc.) through a single MATON_API_KEY using managed OAuth.
+
+Based on the ClawHub skill: https://clawhub.ai/byungkyu/api-gateway
+
+Setup:
+  1. Sign in at https://maton.ai/ and go to https://maton.ai/settings
+  2. Copy your API key and add it to .env:
+       MATON_API_KEY=your_api_key_here
+  3. Create an OAuth connection for each app you want to use:
+       gateway_create_connection("slack")
+     Open the returned URL in a browser to complete OAuth.
+
+Gateway base URL:  https://gateway.maton.ai/{app}/{native-api-path}
+Control plane URL: https://ctrl.maton.ai/connections
+
+Rate limit: 10 requests/second per account.
+"""
+
+import asyncio
+import json
+import logging
+import os
+from typing import Any
+from urllib.parse import quote as urlquote
+
+import aiohttp
+
+log = logging.getLogger("openclaw.gateway")
+
+MATON_API_KEY = os.getenv("MATON_API_KEY", "")
+GATEWAY_BASE = "https://gateway.maton.ai"
+CTRL_BASE = "https://ctrl.maton.ai"
+
+_TIMEOUT = 30
+
+# Module-level aiohttp session (reused across calls)
+_gateway_session: aiohttp.ClientSession | None = None
+
+
+async def _get_gateway_session() -> aiohttp.ClientSession:
+    global _gateway_session
+    if _gateway_session is None or _gateway_session.closed:
+        _gateway_session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=_TIMEOUT)
+        )
+    return _gateway_session
+
+
+async def close_gateway_session() -> None:
+    """Close the shared session. Call on bot shutdown."""
+    global _gateway_session
+    if _gateway_session and not _gateway_session.closed:
+        await _gateway_session.close()
+        _gateway_session = None
+
+
+def _headers(connection_id: str | None = None) -> dict[str, str]:
+    h = {
+        "Authorization": f"Bearer {MATON_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    if connection_id:
+        h["Maton-Connection"] = connection_id
+    return h
+
+
+def _api_key_hint() -> str:
+    return (
+        "❌ MATON_API_KEY is not set. "
+        "Sign in at https://maton.ai/settings, copy your API key, "
+        "and add `MATON_API_KEY=...` to your .env file."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Async HTTP helper
+# ---------------------------------------------------------------------------
+
+async def _http_request(
+    url: str,
+    method: str = "GET",
+    body: dict | None = None,
+    extra_headers: dict | None = None,
+    retries: int = 2,
+) -> dict | list:
+    """Make an authenticated async request to Maton with retry on transient failures."""
+    session = await _get_gateway_session()
+    headers = _headers()
+    if extra_headers:
+        headers.update(extra_headers)
+    last_exc: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            async with session.request(method, url, json=body, headers=headers) as resp:
+                if resp.status >= 500 and attempt < retries:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                if resp.status >= 400:
+                    text = await resp.text()
+                    raise RuntimeError(f"HTTP {resp.status} from {url}: {text[:300]}")
+                return await resp.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            last_exc = e
+            if attempt < retries:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            raise RuntimeError(str(e)) from e
+    # Unreachable in practice, but satisfies type checkers
+    raise RuntimeError(str(last_exc))  # pragma: no cover
+
+
+# ---------------------------------------------------------------------------
+# Skills
+# ---------------------------------------------------------------------------
+
+async def gateway_request(
+    app: str,
+    path: str,
+    method: str = "GET",
+    body: dict | None = None,
+    connection_id: str | None = None,
+) -> str:
+    """
+    Call a third-party API through the Maton gateway using managed OAuth.
+
+    Args:
+        app: Service name, e.g. "slack", "github", "google-sheets", "notion".
+        path: Native API path (without the leading app prefix), e.g.
+              "api/chat.postMessage" for Slack or "repos/owner/repo/issues" for GitHub.
+        method: HTTP method — GET, POST, PUT, PATCH, DELETE (default: GET).
+        body: Optional JSON request body as a dict.
+        connection_id: Optional specific connection UUID if you have multiple
+                       OAuth connections for the same app.
+
+    Returns a formatted JSON string of the API response, or an error message.
+
+    Examples:
+      # List GitHub repos
+      gateway_request("github", "user/repos")
+
+      # Post Slack message
+      gateway_request("slack", "api/chat.postMessage", "POST",
+                      {"channel": "C0123456", "text": "Hello!"})
+
+      # Read Google Sheet values
+      gateway_request("google-sheets",
+                      "v4/spreadsheets/SHEET_ID/values/Sheet1!A1:B10")
+    """
+    if not MATON_API_KEY:
+        return _api_key_hint()
+
+    # Validate app name: only lowercase alphanumeric and hyphens
+    import re as _re
+    if not _re.match(r"^[a-z0-9][a-z0-9-]*$", app.lower()):
+        return "❌ Invalid app name. Only lowercase letters, digits, and hyphens are allowed."
+
+    # Normalise: strip leading slash from path so we can build {app}/{path}
+    clean_path = path.lstrip("/")
+    url = f"{GATEWAY_BASE}/{app}/{clean_path}"
+    method = method.upper()
+
+    if body:
+        try:
+            json.dumps(body)
+        except (TypeError, ValueError) as e:
+            return f"❌ Request body is not JSON-serializable: {e}"
+
+    try:
+        extra: dict[str, str] = {}
+        if connection_id:
+            extra["Maton-Connection"] = connection_id
+        result = await _http_request(url, method, body, extra)
+    except RuntimeError as e:
+        return f"❌ Gateway error: {e}"
+    except asyncio.TimeoutError:
+        return f"❌ Gateway request timed out after {_TIMEOUT}s."
+    except Exception as e:
+        return f"❌ Unexpected error: {e}"
+
+    return f"✅ `{method} /{app}/{clean_path}`\n```json\n{json.dumps(result, indent=2)[:1800]}\n```"
+
+
+async def gateway_list_connections(app: str = "") -> str:
+    """
+    List all active Maton OAuth connections.
+
+    Args:
+        app: Optional service name to filter by (e.g. "slack"). Leave empty for all.
+
+    Returns one connection per line with its ID, app name, and status.
+    """
+    if not MATON_API_KEY:
+        return _api_key_hint()
+
+    url = f"{CTRL_BASE}/connections"
+    if app:
+        url += f"?app={urlquote(app, safe='')}&status=ACTIVE"
+
+    try:
+        result = await _http_request(url)
+    except RuntimeError as e:
+        return f"❌ Could not list connections: {e}"
+    except Exception as e:
+        return f"❌ Unexpected error: {e}"
+
+    connections: list[dict[str, Any]] = result.get("connections", [])  # type: ignore[union-attr]
+    if not connections:
+        filter_note = f" for `{app}`" if app else ""
+        return f"ℹ️ No active connections found{filter_note}. Use `gateway_create_connection` to add one."
+
+    lines = ["**Maton Connections**"]
+    for conn in connections:
+        cid = conn.get("connection_id", "?")[:8]
+        status = conn.get("status", "?")
+        service = conn.get("app", "?")
+        updated = conn.get("last_updated_time", "")[:10]
+        lines.append(f"• **{service}** `{cid}…` — {status} (updated {updated})")
+
+    return "\n".join(lines)
+
+
+async def gateway_create_connection(app: str) -> str:
+    """
+    Create a new Maton OAuth connection for a third-party app.
+    Returns a URL that the user must open in a browser to complete the OAuth flow.
+
+    Args:
+        app: Service name to connect, e.g. "slack", "github", "google-calendar",
+             "notion", "hubspot", "stripe". See the full list at
+             https://clawhub.ai/byungkyu/api-gateway#supported-services
+    """
+    if not MATON_API_KEY:
+        return _api_key_hint()
+
+    url = f"{CTRL_BASE}/connections"
+    try:
+        result = await _http_request(url, "POST", {"app": app})
+    except RuntimeError as e:
+        return f"❌ Could not create connection for `{app}`: {e}"
+    except Exception as e:
+        return f"❌ Unexpected error: {e}"
+
+    conn = result.get("connection", result)  # type: ignore[union-attr]
+    auth_url = conn.get("url", "")
+    cid = conn.get("connection_id", "?")
+
+    if auth_url:
+        return (
+            f"✅ Connection created for **{app}** (ID: `{cid}`).\n"
+            f"Open this URL to complete OAuth authorization:\n{auth_url}"
+        )
+    return f"✅ Connection created for **{app}** (ID: `{cid}`)."
+
+
+# ---------------------------------------------------------------------------
+# Skill registry
+# ---------------------------------------------------------------------------
+
+GATEWAY_SKILLS: dict[str, Any] = {
+    "gateway_request": gateway_request,
+    "gateway_list_connections": gateway_list_connections,
+    "gateway_create_connection": gateway_create_connection,
+}

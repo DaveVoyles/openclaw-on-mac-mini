@@ -2,6 +2,9 @@
 # Discover tests in the tests/ directory
 testpaths = ["tests"]
 
+# Add src/ and project root to Python path so test imports resolve
+pythonpath = ["src", "."]
+
 # Use asyncio as the default event loop for pytest-asyncio
 asyncio_mode = "auto"
 

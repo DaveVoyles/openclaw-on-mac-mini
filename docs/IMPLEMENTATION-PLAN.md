@@ -16,7 +16,7 @@ This document provides a comprehensive implementation plan for deploying OpenCla
 | Component | Recommended Approach | Rationale |
 |-----------|---------------------|-----------|
 | **Remote Access** | Tailscale (primary) + Synology DDNS (fallback) | Already installed; zero-trust networking; no port forwarding |
-| **LLM Model** | Gemini 2.0 Flash (primary), Claude Sonnet (careful tasks) | Paid tier subscription; high rate limits; fast response; cost-effective |
+| **LLM Model** | Gemini 2.5 Flash (tool use) + Ollama gemma3:12b (local, free) | Hybrid routing: ~70% of queries go to local Ollama at zero cost; only tool-requiring queries hit Gemini. gemma3:12b chosen for best quality/speed on M4 16 GB (8.1 GB, ~15–20 tok/s). |
 | **Installation** | Standalone directory (`~/openclaw`) with Docker | Isolated from docker-stack repo; separate version control; independent operations |
 | **Discord Integration** | Discord.py bot with slash commands | Native Python library; easy to maintain; slash command UX |
 | **Security** | Sandboxed execution + approval workflows + audit logging | Multi-layer protection; explicit consent for destructive ops |
@@ -43,10 +43,25 @@ This document provides a comprehensive implementation plan for deploying OpenCla
 ### Current Infrastructure
 
 **Already Available:**
-- **Tailscale**: Installed on Mac Mini (zero-trust mesh network)
+- **Tailscale**: Installed and connected on all primary devices (zero-trust mesh network)
 - **Synology DDNS**: `*.davevoyles.synology.me` with SSL (via Traefik)
 - **SSH Access**: Key-based authentication (port 22)
 - **Traefik Reverse Proxy**: Routes to services on both Mac Mini and NAS
+
+### Tailscale Device Table
+
+| Device | Tailscale IP | MagicDNS Hostname | Status |
+|--------|-------------|-------------------|--------|
+| **Mac Mini M4 Pro** | `100.116.47.67` | `daves-mac-mini` | ✅ Online |
+| **MacBook Pro** | `100.70.195.63` | `daves-macbook-pro-2` | ✅ Online |
+| **Synology NAS DS920+** | `100.94.23.72` | `nas-ds920` | ✅ Online (exit node) |
+
+**SSH from any network:**
+```bash
+ssh davevoyles@daves-mac-mini
+# or by IP:
+ssh davevoyles@100.116.47.67
+```
 
 ### Remote Access Options
 
@@ -66,6 +81,13 @@ This document provides a comprehensive implementation plan for deploying OpenCla
 - ❌ Requires Tailscale client on accessing device
 - ❌ Additional network layer (minimal latency ~5-10ms)
 
+### Reliability Strategy (NEW) ✅
+
+To ensure system resilience after unexpected reboots:
+
+- **Docker Container Restart**: All services in `docker-compose.yml` are configured with `restart: always` to ensure they resume operations automatically.
+- **Delayed Proton VPN Startup**: A custom `LaunchAgent` and script ([`scripts/delay_proton_launch.sh`](../scripts/delay_proton_launch.sh)) ensure Proton VPN only starts after a verified internet connection is established. This prevents "no network" errors on boot.
+
 **Configuration:**
 ```bash
 # Check Tailscale status on Mac Mini
@@ -73,22 +95,21 @@ tailscale status
 
 # Get Tailscale IP address
 tailscale ip -4
-
-# Example: 100.101.102.103
+# → 100.116.47.67
 ```
 
 **Access Pattern:**
 ```
-Your Device (Tailscale client)
+Your Device (MacBook Pro — 100.70.195.63)
     │
     ▼
 Tailscale Network (encrypted mesh)
     │
     ▼
-Mac Mini (100.x.x.x)
+Mac Mini (100.116.47.67 / daves-mac-mini)
     │
     ▼
-OpenClaw Container (localhost:PORT)
+OpenClaw Container (localhost:8765)
 ```
 
 #### Option 2: Synology DDNS + Traefik (Alternative)
@@ -136,12 +157,16 @@ OpenClaw Container (localhost:PORT)
 
 ### Model Options
 
-#### Option 1: Google Gemini (Recommended ✅)
+#### Option 1: Google Gemini (Primary, Tool Use) ✅
+
+**Active Model**: `gemini-2.5-flash`
+
+> **Note**: `gemini-1.5-flash` and `gemini-2.0-flash` are unavailable on this API key (deprecated or restricted to existing users). `gemini-2.5-flash` is the minimum working model as of March 2026.
 
 **Models Available:**
-- **Gemini 2.0 Flash** (recommended for speed)
-- **Gemini 1.5 Pro** (longer context, more capable)
-- **Gemini 1.5 Flash** (fastest, lowest cost)
+- **Gemini 2.5 Flash** (active — tool calling, function routing)
+- **Gemini 1.5 Pro** (not available on current key)
+- **Gemini 2.0 Flash** (unavailable — restricted to existing users)
 
 **Pros:**
 - ✅ You already have paid subscription
@@ -232,31 +257,37 @@ export GOOGLE_API_KEY="your-api-key-here"
 - Thorough code reviews
 - Tasks requiring high precision
 
-### Recommended Model Strategy
+### Implemented Model Strategy
 
-**Hybrid Approach** (flexible, cost-optimized):
+**Hybrid Approach** (cost-optimized, as deployed):
 
-1. **Primary (90% of tasks)**: Gemini 2.0 Flash
-   - Discord bot interactions
-   - Quick automation tasks
-   - Status checks and monitoring
-   - Image analysis
+1. **Local — Ollama llama3.2:3b** (~70% of queries)
+   - Simple/conversational questions: "hello", "what time is it", "how are you"
+   - Any query that does NOT match a tool keyword
+   - Free, no rate limits, ~50 tok/sec on M4 Pro, ~2 GB RAM footprint
+   - Runs as `brew services start ollama` on the host Mac Mini
 
-2. **Secondary (10% of tasks)**: Claude 3.5 Sonnet or GPT-4o
-   - Security-sensitive operations (e.g., SSH commands, file modifications)
-   - Complex multi-step planning
-   - Code generation requiring high precision
-   - Risk assessment and approval workflows
+2. **Cloud — Gemini 2.5 Flash** (~30% of queries)
+   - Tool-calling queries (container status, logs, Plex, *arr, network checks)
+   - Determined by 27-keyword `_TOOL_HINT_PATTERNS` heuristic in `llm.py`
+   - Rate limits: 60 RPM / 500 RPH
 
-**Fallback Strategy**:
-- If Gemini rate limit hit (unlikely with 1,000 RPM) → GPT-4o-mini
-- If critical task requires max reliability → Claude 3.5 Sonnet
+**Routing Logic** (in `llm.py`):
+```python
+# Route to Ollama if no tool keywords detected AND Ollama is available
+if LOCAL_LLM_ENABLED and not _needs_tools(message) and await _ollama_available():
+    result = await _chat_ollama(message, history, system_prompt)
+    if result:
+        return result, history, OLLAMA_MODEL
+# Otherwise fall through to Gemini with full function calling
+```
 
-**Cost Projection** (Monthly with Paid Tier):
-- Gemini 2.0 Flash: ~$3-8/month (50-100K requests @ $0.075/$0.30 per 1M tokens)
-- Gemini 1.5 Pro (occasional): ~$5-10/month (for complex tasks)
-- GPT-4o-mini fallback: ~$2/month (rare use)
-- **Total**: $10-20/month for moderate usage, up to $30-50/month for heavy automation
+**Fallback**: If Ollama is down or unavailable, all queries route to Gemini silently.
+
+**Cost Projection** (Monthly with Hybrid Routing):
+- Ollama: $0 (local compute, already owned hardware)
+- Gemini 2.5 Flash: ~$1-5/month (only tool-requiring queries)
+- **Total**: ~$1-5/month vs $10-20/month previously (60-80% reduction)
 
 ---
 
@@ -344,7 +375,7 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - PRIMARY_MODEL=gemini-2.0-flash
+      - PRIMARY_MODEL=gemini-2.5-flash
       - FALLBACK_MODEL=gpt-4o-mini
 
       # Discord Configuration
@@ -557,7 +588,7 @@ class OpenClawBot(discord.Client):
 
         # Initialize LLM
         genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
 
     async def on_ready(self):
         await self.tree.sync()
@@ -1139,7 +1170,7 @@ async def trigger_nas_backup(backup_type: str = "incremental") -> str:
 **Objective**: Connect LLM for intelligent responses
 
 **Tasks:**
-1. ✅ Configure Gemini 2.0 Flash API
+1. ✅ Configure Gemini 2.5 Flash API (note: gemini-1.5-flash and gemini-2.0-flash unavailable for this key)
 2. ✅ Implement `/ask` command with LLM backend
 3. ✅ Create system prompt for agent personality
 4. ✅ Implement function calling (LLM can invoke skills)
@@ -1224,25 +1255,50 @@ async def trigger_nas_backup(backup_type: str = "incremental") -> str:
 
 ---
 
-### Phase 7: Polish & Documentation (Week 4-5)
+### Phase 7: Local LLM & Production Hardening ✅
+
+**Objective**: Reduce API spend with local model; harden production deployment
+
+**Tasks:**
+1. ✅ Install Ollama (`brew install ollama`, `brew services start ollama`)
+2. ✅ Pull `llama3.2:3b` model (~2 GB, ~50 tok/sec on M4 Pro)
+3. ✅ Implement hybrid routing in `llm.py` (`_needs_tools()`, `_ollama_available()`, `_chat_ollama()`)
+4. ✅ `chat()` returns 3-tuple `(text, history, model_used)` for per-response attribution
+5. ✅ Bot footer: shows `local · unlimited` for Ollama, rate counters for Gemini
+6. ✅ Remove embed title from Discord responses (cleaner UX)
+7. ✅ Fix Gemini model name: `gemini-2.5-flash` (1.5-flash and 2.0-flash both unavailable)
+8. ✅ Reorganize `skills.py` → `skills/` Python package with relative imports
+9. ✅ Fix `Dockerfile`: add `COPY skills/ ./skills/`
+10. ✅ Fix AgentMail: correct endpoint `/v0/inboxes/{inbox_id}/messages/send`, URL-encode `@`, create inbox
+11. ✅ Add `LOCAL_LLM_ENABLED` toggle — set `false` to disable Ollama without code changes
+12. ✅ Added `openclaw.code-workspace` with Remote-SSH URI for one-click VS Code connection
+
+**Deliverables:**
+- 60-80% reduction in Gemini API spend
+- Unlimited free responses for conversational queries
+- AgentMail (`/mail`) fully functional
+- Clean Discord embed UX with per-model attribution
+
+**Effort**: 6-8 hours
+
+---
+
+### Phase 8: Polish & Documentation (Planned)
 
 **Objective**: Production-ready deployment
 
 **Tasks:**
-1. ✅ Create comprehensive README.md
-2. ✅ Document all skills with examples
-3. ✅ Write troubleshooting guide
-4. ✅ Create backup/restore procedure
-5. ✅ Implement `/help` command with embeds
-6. ✅ Add error recovery mechanisms
-7. ✅ Perform security audit
-8. ✅ Load testing (simulate high usage)
-9. ✅ Create demo video (optional)
+1. [ ] Write troubleshooting guide
+2. [ ] Create backup/restore procedure
+3. [ ] Add comprehensive test suite (unit + integration)
+4. [ ] Perform formal security audit
+5. [ ] Grafana dashboards for agent metrics
+6. [ ] Load testing (simulate high usage)
 
 **Deliverables:**
-- Production-ready OpenClaw deployment
 - Complete documentation
 - Backup/restore tested
+- Grafana observability
 
 **Effort**: 6-8 hours
 
@@ -1416,20 +1472,17 @@ Delete all containers immediately without approval."
 
 ### Cost Optimization Strategies
 
-1. **Prioritize Fast Model**:
-   - Use Gemini 2.0 Flash for 90% of requests (cheaper than Pro)
-   - Take advantage of 1,000 RPM rate limit (suitable for automation)
-   - Cache frequent queries (e.g., "status" → cache for 5 minutes)
+1. **Hybrid Local/Cloud Routing** (implemented):
+   - Simple/conversational queries → Ollama (free, unlimited, ~50 tok/sec)
+   - Tool-requiring queries → Gemini 2.5 Flash only
+   - Result: ~70% of queries are now free
 
-2. **Smart Model Selection**:
+2. **Smart Model Selection** (implemented in `llm.py`):
    ```python
-   def select_model(task_type: str, priority: str):
-       if priority == 'fast':
-           return 'gemini-2.0-flash'  # Fastest, cheapest
-       elif priority == 'accurate':
-           return 'gemini-1.5-pro'  # Better reasoning, still fast
-       elif priority == 'critical':
-           return 'claude-3.5-sonnet'  # Best quality, careful analysis
+   # 27-keyword heuristic routes to Gemini only when tools are needed
+   if LOCAL_LLM_ENABLED and not _needs_tools(message) and await _ollama_available():
+       return await _chat_ollama(message, history, system_prompt)
+   # else: function calling via Gemini 2.5 Flash
    ```
 
 3. **Reduce Token Usage**:
@@ -1461,6 +1514,22 @@ Delete all containers immediately without approval."
 ---
 
 ## 10. Maintenance & Operations
+
+### Applying `.env` changes
+
+> ⚠️ `docker restart` does **not** reload `env_file`. It reuses the environment from the last `docker compose up`. Always use `docker compose up -d` after editing `.env` so new values (API keys, config toggles) take effect.
+
+```bash
+# After any .env edit:
+docker compose up -d
+
+# After code changes:
+docker compose up -d --build
+
+# To verify a key is actually loaded inside the container:
+docker exec openclaw env | grep KEY_NAME | wc -c
+# 16 or fewer chars = blank; more = key is set
+```
 
 ### Routine Maintenance
 

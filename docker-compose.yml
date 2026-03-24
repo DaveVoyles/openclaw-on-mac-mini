@@ -3,7 +3,7 @@ services:
     build: .
     container_name: openclaw
     hostname: openclaw
-    restart: unless-stopped
+    restart: always
 
     # Security hardening (consistent with docker-stack)
     security_opt:
@@ -35,9 +35,13 @@ services:
       - HEALTH_PORT=8765
       - LOG_DIR=/logs
       - AUDIT_DIR=/audit
+      - MC_TASKS_FILE=/app/data/tasks.json
 
     # Volume mounts
     volumes:
+      # Docker socket access
+      - /Users/davevoyles/.docker/run/docker.sock:/var/run/docker.sock:rw
+
       # Configuration (read-only)
       - ./config:/config:ro
 
@@ -45,6 +49,7 @@ services:
       - ./data/logs:/logs:rw
       - ./data/memory:/memory:rw
       - ./data/audit:/audit:rw
+      - ./data/tasks.json:/app/data/tasks.json:rw
 
       # Temp directories (required for read_only: true)
       - /tmp/openclaw:/tmp:rw

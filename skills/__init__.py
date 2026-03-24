@@ -8,30 +8,13 @@ import logging
 import shlex
 from typing import Optional
 
+from subprocess_utils import run as _run, COMMAND_TIMEOUT
+
 log = logging.getLogger("openclaw.skills")
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-COMMAND_TIMEOUT = 15  # seconds
-
-
-async def _run(cmd: list[str], timeout: int = COMMAND_TIMEOUT) -> tuple[int, str, str]:
-    """Run a subprocess asynchronously and return (returncode, stdout, stderr)."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        return proc.returncode or 0, stdout.decode(), stderr.decode()
-    except asyncio.TimeoutError:
-        proc.kill()  # type: ignore[union-attr]
-        return 1, "", f"Command timed out after {timeout}s"
-    except FileNotFoundError:
-        return 1, "", f"Command not found: {cmd[0]}"
 
 
 def _truncate(text: str, limit: int = 1900) -> str:
@@ -307,3 +290,19 @@ SKILLS.update(OVERSEERR_SKILLS)
 SKILLS.update(NAS_SKILLS)
 SKILLS.update(EMAIL_SKILLS)
 SKILLS.update(CALENDAR_SKILLS)
+
+# Add Maton API Gateway skill (managed OAuth proxy to 100+ APIs)
+from gateway import GATEWAY_SKILLS
+SKILLS.update(GATEWAY_SKILLS)
+
+# Mission Control — Kanban task management
+from mission_control import MISSION_CONTROL_SKILLS
+SKILLS.update(MISSION_CONTROL_SKILLS)
+
+# Ontology — structured graph memory
+from ontology_skills import ONTOLOGY_SKILLS
+SKILLS.update(ONTOLOGY_SKILLS)
+
+# Web & Git skills (webfetch-md, git-essentials)
+from git_skills import GIT_SKILLS
+SKILLS.update(GIT_SKILLS)
