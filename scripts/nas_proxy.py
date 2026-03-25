@@ -23,6 +23,7 @@ To run at startup, install the provided LaunchAgent:
 import http.server
 import logging
 import os
+import socketserver
 import subprocess
 import sys
 from urllib.parse import urlparse
@@ -57,7 +58,11 @@ class NASProxyHandler(http.server.BaseHTTPRequestHandler):
             "--silent",
             "--show-error",
             "--insecure",          # allow self-signed NAS cert
-            "--max-time", "15",
+            "--max-time", "20",
+            "--connect-timeout", "5",
+            "--retry", "2",
+            "--retry-delay", "1",
+            "--retry-connrefused",
             "--write-out", "\n###STATUS:%{http_code}###",
             "-X", self.command,
             target_url,
@@ -119,12 +124,17 @@ class NASProxyHandler(http.server.BaseHTTPRequestHandler):
     do_DELETE = _proxy
 
 
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    """Handle each request in a new thread so concurrent NAS calls don't queue."""
+    daemon_threads = True
+
+
 def main():
     parsed = urlparse(NAS_TARGET)
     log.info("NAS Proxy starting — listening on %s:%d → %s", PROXY_HOST, PROXY_PORT, NAS_TARGET)
     log.info("Set NAS_URL=http://%s:%d in .env (or docker-compose environment)", "192.168.1.93", PROXY_PORT)
 
-    server = http.server.HTTPServer((PROXY_HOST, PROXY_PORT), NASProxyHandler)
+    server = ThreadedHTTPServer((PROXY_HOST, PROXY_PORT), NASProxyHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

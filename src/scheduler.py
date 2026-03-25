@@ -23,6 +23,9 @@ SCHEDULE_FILE = Path(os.getenv("MEMORY_DIR", "/memory")) / "schedules.json"
 # ---------------------------------------------------------------------------
 
 
+_ALERT_PATTERNS = ("error", "warn", "exception", "critical", "fatal", "❌", "⚠️", "failed", "unreachable", "timeout")
+
+
 @dataclass
 class ScheduledTask:
     """A single scheduled task."""
@@ -39,6 +42,8 @@ class ScheduledTask:
     last_run: str = ""
     last_result: str = ""
     run_count: int = 0
+    notify_channel_id: int = 0  # if set, post result to this Discord channel after each run
+    alert_only: bool = True     # if True, only post when result contains alert keywords
 
     @property
     def next_run_str(self) -> str:
@@ -80,6 +85,10 @@ class TaskScheduler:
         self._skill_registry: dict[str, Callable[..., Awaitable[str]]] = {}
         self._runner_task: asyncio.Task | None = None
         self._running_tasks: set[str] = set()  # task IDs currently executing
+        self._running_lock = asyncio.Lock()  # protects _running_tasks
+        # Optional async callback: (task_id, action, result, is_alert) -> None
+        # Set by bot.py after startup to enable Discord notifications
+        self.notify_callback: Optional[Callable[[str, str, str, bool], Awaitable[None]]] = None
         self._load()
 
     # -- Persistence --
@@ -103,10 +112,15 @@ class TaskScheduler:
                 # Do NOT overwrite the corrupted file; leave _tasks empty until fixed
 
     def _save(self):
-        """Persist tasks to disk."""
+        """Persist tasks to disk atomically."""
         SCHEDULE_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = [asdict(t) for t in self._tasks.values()]
-        SCHEDULE_FILE.write_text(json.dumps(data, indent=2))
+        tmp = SCHEDULE_FILE.with_suffix(".tmp")
+        with open(tmp, "w") as f:
+            f.write(json.dumps(data, indent=2))
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(SCHEDULE_FILE)
 
     # -- CRUD --
 
@@ -122,6 +136,8 @@ class TaskScheduler:
         minute: int = 0,
         interval_minutes: int = 0,
         created_by: str = "",
+        notify_channel_id: int = 0,
+        alert_only: bool = True,
     ) -> ScheduledTask:
         """Create a new scheduled task."""
         self._counter += 1
@@ -135,6 +151,8 @@ class TaskScheduler:
             interval_minutes=interval_minutes,
             created_by=created_by,
             created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            notify_channel_id=notify_channel_id,
+            alert_only=alert_only,
         )
         self._tasks[task_id] = task
         self._save()
@@ -211,17 +229,19 @@ class TaskScheduler:
 
     async def _execute_task(self, task: ScheduledTask):
         """Execute a scheduled task, guarded against concurrent duplicate runs."""
-        if task.task_id in self._running_tasks:
-            log.debug("Task %s already running, skipping duplicate execution", task.task_id)
-            return
+        async with self._running_lock:
+            if task.task_id in self._running_tasks:
+                log.debug("Task %s already running, skipping duplicate execution", task.task_id)
+                return
+            self._running_tasks.add(task.task_id)
 
-        self._running_tasks.add(task.task_id)
         skill_fn = self._skill_registry.get(task.action)
         if skill_fn is None:
             task.last_result = f"Unknown skill: {task.action}"
             task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self._save()
-            self._running_tasks.discard(task.task_id)
+            async with self._running_lock:
+                self._running_tasks.discard(task.task_id)
             return
 
         log.info("Executing scheduled task %s: %s(%s)", task.task_id, task.action, task.args)
@@ -235,12 +255,116 @@ class TaskScheduler:
             task.last_result = f"Error: {e}"
             log.error("Scheduled task %s failed: %s", task.task_id, e)
         finally:
-            self._running_tasks.discard(task.task_id)
+            async with self._running_lock:
+                self._running_tasks.discard(task.task_id)
 
         task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
         task.run_count += 1
         self._save()
 
+        # Post result to Discord if configured
+        if task.notify_channel_id and self.notify_callback:
+            result_text = task.last_result or ""
+            is_alert = any(kw in result_text.lower() for kw in _ALERT_PATTERNS)
+            should_notify = (not task.alert_only) or is_alert
+            if should_notify:
+                try:
+                    await self.notify_callback(task.task_id, task.action, result_text, is_alert)
+                except Exception as e:
+                    log.error("Scheduler notify callback failed for %s: %s", task.task_id, e)
+
 
 # Global instance
 scheduler = TaskScheduler()
+
+
+# ---------------------------------------------------------------------------
+# LLM-callable scheduling skills
+# These functions are registered in the skill registry so Gemini can
+# autonomously create, list, and cancel scheduled tasks.
+# ---------------------------------------------------------------------------
+
+
+async def create_scheduled_task(
+    skill_name: str,
+    interval_minutes: int = 0,
+    hour: int = -1,
+    minute: int = 0,
+    args_json: str = "{}",
+    label: str = "",
+) -> str:
+    """
+    Create a new scheduled task (callable by the LLM).
+
+    Either provide interval_minutes for recurring tasks (e.g. every 30 min),
+    or hour+minute for a daily cron (e.g. 08:00 every day).
+    """
+    import json as _json
+
+    if skill_name not in scheduler._skill_registry:
+        available = ", ".join(sorted(scheduler._skill_registry.keys())[:20])
+        return f"❌ Unknown skill `{skill_name}`. Available: {available}…"
+
+    try:
+        args = _json.loads(args_json) if args_json.strip() not in ("", "{}") else {}
+    except _json.JSONDecodeError as e:
+        return f"❌ Invalid args_json: {e}"
+
+    task = scheduler.create(
+        action=skill_name,
+        args=args,
+        hour=hour,
+        minute=minute,
+        interval_minutes=interval_minutes,
+        created_by="llm",
+    )
+
+    if interval_minutes > 0:
+        schedule_desc = f"every {interval_minutes} minutes"
+    elif hour >= 0:
+        schedule_desc = f"daily at {hour:02d}:{minute:02d}"
+    else:
+        schedule_desc = "on demand"
+
+    hint = f" ({label})" if label else ""
+    return f"✅ Scheduled task `{task.task_id}` created: `{skill_name}` runs {schedule_desc}{hint}."
+
+
+async def cancel_scheduled_task(task_id: str) -> str:
+    """Cancel (remove) a scheduled task by its task ID."""
+    if not scheduler.get(task_id):
+        tasks = [t.task_id for t in scheduler.list_tasks()]
+        hint = f" Active tasks: {tasks}" if tasks else " No active tasks."
+        return f"❌ Task `{task_id}` not found.{hint}"
+
+    scheduler.remove(task_id)
+    return f"✅ Scheduled task `{task_id}` cancelled."
+
+
+async def list_scheduled_tasks() -> str:
+    """List all active scheduled tasks."""
+    tasks = scheduler.list_tasks()
+    if not tasks:
+        return "No scheduled tasks."
+
+    lines = []
+    for t in tasks:
+        state = "✅" if t.enabled else "⏸️"
+        if t.interval_minutes > 0:
+            when = f"every {t.interval_minutes}m"
+        elif t.cron_hour >= 0:
+            when = f"daily {t.cron_hour:02d}:{t.cron_minute:02d}"
+        else:
+            when = "manual"
+        lines.append(
+            f"{state} `{t.task_id}` — `{t.action}` ({when}) "
+            f"· runs: {t.run_count} · next: {t.next_run_str}"
+        )
+    return "\n".join(lines)
+
+
+SCHEDULER_SKILLS = {
+    "create_scheduled_task": create_scheduled_task,
+    "cancel_scheduled_task": cancel_scheduled_task,
+    "list_scheduled_tasks": list_scheduled_tasks,
+}

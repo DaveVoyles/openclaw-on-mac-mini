@@ -1,0 +1,119 @@
+"""
+OpenClaw Centralized Configuration
+
+Single source of truth for all config values. Loads from:
+  1. config/config.yaml (base defaults)
+  2. Environment variables (override YAML values)
+
+Usage:
+    from config import cfg
+    print(cfg.discord_token)
+    print(cfg.llm_model)
+"""
+
+import os
+from pathlib import Path
+
+import yaml
+
+# ---------------------------------------------------------------------------
+# Load YAML base config
+# ---------------------------------------------------------------------------
+
+CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
+_CONFIG_YAML_PATH = CONFIG_DIR / "config.yaml"
+
+
+def _load_yaml() -> dict:
+    if _CONFIG_YAML_PATH.exists():
+        with open(_CONFIG_YAML_PATH) as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+_yaml = _load_yaml()
+_bot = _yaml.get("bot", {})
+_llm = _yaml.get("llm", {})
+_local_llm = _yaml.get("local_llm", {})
+_security = _yaml.get("security", {})
+_rate_limits = _llm.get("rate_limits", {})
+_conversation = _llm.get("conversation", {})
+
+
+# ---------------------------------------------------------------------------
+# Config namespace — env vars take precedence over YAML
+# ---------------------------------------------------------------------------
+
+class _Config:
+    """Read-only config namespace. Env vars override YAML defaults."""
+
+    # -- Discord ---------------------------------------------------------------
+    discord_token: str = os.getenv("DISCORD_BOT_TOKEN", "")
+    discord_guild_id: str = os.getenv("DISCORD_GUILD_ID", "")
+    allowed_user_ids: list[int] = [
+        int(uid.strip())
+        for uid in os.getenv("ALLOWED_USER_IDS", "").split(",")
+        if uid.strip()
+    ]
+    alert_channel_id: int = int(os.getenv("ALERT_CHANNEL_ID", "0"))
+
+    # -- Paths -----------------------------------------------------------------
+    config_dir: Path = CONFIG_DIR
+    audit_dir: Path = Path(os.getenv("AUDIT_DIR", "/audit"))
+    log_dir: Path = Path(os.getenv("LOG_DIR", "/logs"))
+    memory_dir: Path = Path(os.getenv("MEMORY_DIR", "/memory"))
+
+    # -- Bot -------------------------------------------------------------------
+    bot_name: str = _bot.get("name", "OpenClaw")
+    version: str = _yaml.get("version", "0.6.0")
+    health_port: int = int(os.getenv("HEALTH_PORT", str(_bot.get("health_port", 8765))))
+
+    # -- LLM (Gemini) ---------------------------------------------------------
+    google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
+    llm_model: str = os.getenv("LLM_MODEL", _llm.get("primary_model", "gemini-2.5-flash"))
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", str(_llm.get("max_tokens", 2000))))
+    llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", str(_llm.get("temperature", 0.7))))
+    llm_rpm_limit: int = int(os.getenv("LLM_RPM_LIMIT", str(_rate_limits.get("per_minute", 60))))
+    llm_rph_limit: int = int(os.getenv("LLM_RPH_LIMIT", str(_rate_limits.get("per_hour", 500))))
+    llm_max_tool_rounds: int = int(os.getenv("LLM_MAX_TOOL_ROUNDS", str(_llm.get("max_tool_rounds", 12))))
+    llm_max_history_turns: int = int(os.getenv("LLM_MAX_HISTORY_TURNS", str(_conversation.get("max_history", 20))))
+
+    # -- Deep / Thinking -------------------------------------------------------
+    thinking_model: str = os.getenv("THINKING_MODEL", "gemini-2.5-flash")
+    thinking_budget: int = int(os.getenv("THINKING_BUDGET", "8000"))
+
+    # -- Local LLM (Ollama) ----------------------------------------------------
+    ollama_url: str = os.getenv("OLLAMA_URL", _local_llm.get("url", "http://host.docker.internal:11434"))
+    ollama_model: str = os.getenv("OLLAMA_MODEL", _local_llm.get("model", "gemma3:12b"))
+    local_llm_enabled: bool = os.getenv("LOCAL_LLM_ENABLED", str(_local_llm.get("enabled", True))).lower() == "true"
+
+    # -- Spending / Budget -----------------------------------------------------
+    spending_file: Path = Path(os.getenv("SPENDING_FILE", "/memory/spending.json"))
+    gemini_price_input_per_m: float = float(os.getenv("GEMINI_PRICE_INPUT_PER_M", "0.10"))
+    gemini_price_output_per_m: float = float(os.getenv("GEMINI_PRICE_OUTPUT_PER_M", "0.40"))
+    gemini_budget_limit: float = float(os.getenv("GEMINI_BUDGET_LIMIT", "30.00"))
+
+    # -- NAS -------------------------------------------------------------------
+    nas_url: str = os.getenv("NAS_URL", "http://host.docker.internal:19501")
+    nas_user: str = os.getenv("NAS_USER", "")
+    nas_password: str = os.getenv("NAS_PASSWORD", "")
+    nas_verify_ssl: bool = os.getenv("NAS_VERIFY_SSL", "false").lower() == "true"
+
+    # -- Gateway (Maton) -------------------------------------------------------
+    maton_api_key: str = os.getenv("MATON_API_KEY", "")
+
+    # -- Docker host -----------------------------------------------------------
+    docker_host_ip: str = os.getenv("DOCKER_HOST_IP", "192.168.1.93")
+
+    # -- Response limits -------------------------------------------------------
+    response_max_length: int = 4000
+    response_truncate_at: int = 3980
+    max_file_size: int = 20 * 1024 * 1024  # 20 MB
+
+    # -- Timeouts (seconds) ----------------------------------------------------
+    default_timeout: int = 20
+    browse_timeout: int = 20
+    research_timeout: int = 120
+
+
+cfg = _Config()

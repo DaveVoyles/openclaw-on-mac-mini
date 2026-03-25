@@ -150,6 +150,24 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "properties": {},
         },
     },
+    {
+        "name": "get_compose_config",
+        "description": (
+            "Read the Docker Compose configuration file and return port mappings, volume mounts, "
+            "and environment variable names for all services (or a specific one). "
+            "Use this when troubleshooting permission errors, port conflicts, or when you need "
+            "to know exactly how a container is configured."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "service": {
+                    "type": "string",
+                    "description": "Optional service name to filter results (e.g. 'sonarr', 'plex'). Leave empty for all services.",
+                },
+            },
+        },
+    },
     # -- Phase 5: Advanced Skills --
     {
         "name": "check_arr_health",
@@ -170,6 +188,19 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
     {
         "name": "check_plex_status",
         "description": "Check Plex server status and version via Tautulli.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "get_plex_activity",
+        "description": (
+            "Get real-time Plex activity: who is currently watching, what they're watching, "
+            "playback progress, video quality, and whether the stream is direct play or transcode. "
+            "Use this when the user asks 'what's playing on Plex', 'is anyone watching?', "
+            "'who's using Plex right now', or similar."
+        ),
         "parameters": {
             "type": "object",
             "properties": {},
@@ -1063,6 +1094,282 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "required": ["task_id", "comment"],
         },
     },
+    # -- Autonomous: Worker sub-agent --
+    {
+        "name": "spawn_worker",
+        "description": (
+            "Spawn a focused AI sub-agent to accomplish a specific goal autonomously. "
+            "The worker runs its own tool loop and returns a clean result. "
+            "Use this to delegate complex subtasks that require multiple independent tool calls, "
+            "such as gathering data from several sources, doing research and summarizing it, "
+            "or performing a multi-step diagnostic while you handle the rest of the response. "
+            "Examples: 'check Sonarr health AND search web for that error', "
+            "'look up my calendar AND get the weather for tomorrow'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {
+                    "type": "string",
+                    "description": "Clear, specific description of what the worker should accomplish.",
+                },
+                "context": {
+                    "type": "string",
+                    "description": "Optional background context or constraints for the worker.",
+                },
+                "max_rounds": {
+                    "type": "integer",
+                    "description": "Maximum tool call rounds for the worker (1-8, default 6).",
+                },
+            },
+            "required": ["goal"],
+        },
+    },
+    # -- Autonomous: LLM-controlled scheduling --
+    {
+        "name": "create_scheduled_task",
+        "description": (
+            "Create a recurring scheduled task that runs a skill automatically. "
+            "Use interval_minutes for 'every N minutes' tasks, or hour+minute for a daily cron. "
+            "Examples: schedule a daily health check at 07:00, run speed test every 60 min, "
+            "check Overseerr requests every 30 min."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "skill_name": {
+                    "type": "string",
+                    "description": "The skill name to schedule (e.g. check_arr_health, run_speed_test).",
+                },
+                "interval_minutes": {
+                    "type": "integer",
+                    "description": "Run every N minutes (e.g. 30 for every 30 min). Use 0 for daily cron.",
+                },
+                "hour": {
+                    "type": "integer",
+                    "description": "Hour (0-23) for a daily cron schedule. Use -1 if using interval_minutes.",
+                },
+                "minute": {
+                    "type": "integer",
+                    "description": "Minute (0-59) for a daily cron schedule (default 0).",
+                },
+                "args_json": {
+                    "type": "string",
+                    "description": "Optional JSON object of arguments for the skill, e.g. '{\"days\": 7}'.",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Optional human-readable label describing the task purpose.",
+                },
+            },
+            "required": ["skill_name"],
+        },
+    },
+    {
+        "name": "cancel_scheduled_task",
+        "description": "Cancel (remove) a scheduled task by its task ID. Use list_scheduled_tasks to find IDs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {
+                    "type": "string",
+                    "description": "The task ID to cancel, e.g. 'sched-3'.",
+                },
+            },
+            "required": ["task_id"],
+        },
+    },
+    {
+        "name": "list_scheduled_tasks",
+        "description": "List all active scheduled tasks with their IDs, actions, schedules, and run counts.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    # -- RSS Feed Monitoring --
+    {
+        "name": "fetch_rss_feed",
+        "description": (
+            "Fetch recent items from any RSS or Atom feed URL. Use this to read news sources, "
+            "tech blogs, GitHub release notes, Reddit feeds, podcast listings, or any site that "
+            "publishes an RSS/Atom feed. Returns titles, dates, and summaries."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Full URL of the RSS or Atom feed (e.g. https://feeds.bbci.co.uk/news/rss.xml).",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Number of items to return (1-20, default 10).",
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "search_rss",
+        "description": "Fetch a feed and filter items matching a keyword or phrase.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Full RSS/Atom feed URL.",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Keyword or phrase to search for in titles and summaries.",
+                },
+            },
+            "required": ["url", "query"],
+        },
+    },
+    {
+        "name": "get_rss_digest",
+        "description": (
+            "Fetch multiple RSS/Atom feeds in parallel and synthesize a combined digest. "
+            "Use this for a quick news summary across several sources, or to monitor "
+            "multiple topics at once. The LLM summarizes the most notable items."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "urls_json": {
+                    "type": "string",
+                    "description": "JSON array of feed URLs, e.g. '[\"https://news.ycombinator.com/rss\"]'.",
+                },
+                "topic": {
+                    "type": "string",
+                    "description": "Optional focus topic — only surface articles related to this subject.",
+                },
+            },
+            "required": ["urls_json"],
+        },
+    },
+    {
+        "name": "list_rss_feeds",
+        "description": "List all RSS/Atom feed URLs that have been fetched or saved.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    # -- URL Change Monitoring --
+    {
+        "name": "snapshot_url",
+        "description": (
+            "Take a baseline snapshot of a URL for change monitoring. "
+            "Call this once to record the current content, then schedule "
+            "check_url_for_changes to run periodically and alert on differences. "
+            "Use for competitor pricing pages, job boards, status pages, listings, etc."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Full https URL to monitor.",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Human-readable name for this monitor (e.g. 'Amazon GPU Pricing').",
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "check_url_for_changes",
+        "description": (
+            "Compare the current content of a URL against its stored snapshot. "
+            "Returns a change alert with before/after diff if content changed, "
+            "or a clean status if unchanged. Designed to be called by the scheduler."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to check (must have been snapshotted with snapshot_url first).",
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "list_monitored_urls",
+        "description": "List all URLs currently being monitored for content changes, with their last-checked and last-changed timestamps.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "remove_url_monitor",
+        "description": "Stop monitoring a URL and remove its snapshot record.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "The URL to stop monitoring.",
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    # -- Multi-source comparison --
+    {
+        "name": "compare_sources",
+        "description": (
+            "Browse multiple URLs in parallel and synthesize a comparison answer. "
+            "Use this for competitive analysis, comparing documentation pages, "
+            "fact-checking across multiple sources, or getting a balanced view "
+            "of a topic from several sites at once."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "urls_json": {
+                    "type": "string",
+                    "description": "JSON array of up to 5 URLs to compare, e.g. '[\"https://a.com\",\"https://b.com\"]'.",
+                },
+                "question": {
+                    "type": "string",
+                    "description": "The question to answer or aspect to compare across the sources.",
+                },
+            },
+            "required": ["urls_json", "question"],
+        },
+    },
+    # -- Goal decomposition --
+    {
+        "name": "decompose_goal",
+        "description": (
+            "Break a complex goal into concrete Mission Control tasks using AI planning. "
+            "The agent analyzes the goal, produces an ordered task list, and creates each "
+            "task in the Mission Control kanban board for tracking. "
+            "Use when the user says 'plan X', 'set up a project for Y', or gives a multi-step goal."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "goal": {
+                    "type": "string",
+                    "description": "Clear description of what needs to be accomplished.",
+                },
+                "project_name": {
+                    "type": "string",
+                    "description": "Optional short prefix for task titles (e.g. 'HomeReno', 'Q2Launch').",
+                },
+            },
+            "required": ["goal"],
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -1295,6 +1602,38 @@ _rate_limiter = RateLimiter()
 
 
 # ---------------------------------------------------------------------------
+# Tool result TTL cache — avoid redundant calls for read-only snapshot tools
+# ---------------------------------------------------------------------------
+
+# Tools whose results are safe to cache within a short window.
+# These don't change faster than 30 seconds and are frequently chained together.
+_CACHEABLE_TOOLS: frozenset[str] = frozenset({
+    "get_system_stats",
+    "get_docker_stats",
+    "get_nas_storage_health",
+    "get_nas_alerts",
+    "get_disk_smart_status",
+    "get_backup_status",
+    "get_uptime",
+    "check_arr_health",
+    "check_download_clients",
+    "check_plex_status",
+    "get_plex_activity",
+    "get_network_status",
+    "get_tailscale_status",
+})
+_TOOL_CACHE_TTL = 30  # seconds
+
+# {"tool_name|arg_hash": (result, timestamp)}
+_tool_cache: dict[str, tuple[str, float]] = {}
+
+
+def _cache_key(name: str, args: dict) -> str:
+    import hashlib
+    return f"{name}|{hashlib.md5(str(sorted(args.items())).encode()).hexdigest()[:8]}"
+
+
+# ---------------------------------------------------------------------------
 # Execute a function call from the LLM
 # ---------------------------------------------------------------------------
 
@@ -1305,9 +1644,20 @@ async def _execute_function_call(name: str, args: dict) -> str:
     if skill_fn is None:
         return f"Unknown function: {name}"
 
+    # Return cached result for read-only snapshot tools if still fresh
+    if name in _CACHEABLE_TOOLS:
+        key = _cache_key(name, args)
+        if key in _tool_cache:
+            cached_result, cached_at = _tool_cache[key]
+            if time.monotonic() - cached_at < _TOOL_CACHE_TTL:
+                log.debug("Returning cached result for %s (age: %.1fs)", name, time.monotonic() - cached_at)
+                return cached_result
+
     log.info("LLM invoking skill: %s(%s)", name, args)
     try:
         result = await skill_fn(**args)
+        if name in _CACHEABLE_TOOLS:
+            _tool_cache[_cache_key(name, args)] = (result, time.monotonic())
         return result
     except Exception as e:
         log.error("Skill %s failed: %s", name, e)
@@ -1324,6 +1674,41 @@ _model: genai.GenerativeModel | None = None
 _model_system_prompt: str | None = None
 
 
+def _init_gemini_model(
+    model_name: str,
+    *,
+    temperature: float = TEMPERATURE,
+    max_tokens: int = MAX_TOKENS,
+    thinking_budget: int | None = None,
+    with_tools: bool = True,
+) -> genai.GenerativeModel:
+    """Create a configured GenerativeModel instance (shared factory)."""
+    if not GOOGLE_API_KEY:
+        raise RuntimeError("GOOGLE_API_KEY not set. Add it to your .env file.")
+
+    genai.configure(api_key=GOOGLE_API_KEY)
+
+    gen_config_kwargs: dict[str, Any] = {
+        "max_output_tokens": max_tokens,
+        "temperature": temperature,
+    }
+
+    if thinking_budget is not None:
+        thinking_cfg = getattr(genai.types, "ThinkingConfig", None)
+        if thinking_cfg is not None:
+            gen_config_kwargs["thinking_config"] = thinking_cfg(thinking_budget=thinking_budget)
+            log.info("ThinkingConfig enabled (budget=%d tokens)", thinking_budget)
+        else:
+            log.info("ThinkingConfig not available in this SDK version — using low-temperature deep mode")
+
+    return genai.GenerativeModel(
+        model_name=model_name,
+        system_instruction=_load_system_prompt(),
+        tools=_build_tools() if with_tools else None,
+        generation_config=genai.GenerationConfig(**gen_config_kwargs),
+    )
+
+
 def _get_model() -> genai.GenerativeModel:
     """Lazy-init the Gemini model; reloads when system prompt changes."""
     global _model, _model_system_prompt
@@ -1331,32 +1716,117 @@ def _get_model() -> genai.GenerativeModel:
     if _model is not None and _model_system_prompt == system_prompt:
         return _model
 
-    if not GOOGLE_API_KEY:
-        raise RuntimeError("GOOGLE_API_KEY not set. Add it to your .env file.")
-
-    genai.configure(api_key=GOOGLE_API_KEY)
-
-    _model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        system_instruction=system_prompt,
-        tools=_build_tools(),
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-        ),
-    )
+    _model = _init_gemini_model(MODEL_NAME, temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
     _model_system_prompt = system_prompt
     log.info("Gemini model initialized: %s (temp=%.1f, max_tokens=%d)", MODEL_NAME, TEMPERATURE, MAX_TOKENS)
     return _model
+
+
+# ---------------------------------------------------------------------------
+# Shared tool-calling loop (used by chat and chat_deep)
+# ---------------------------------------------------------------------------
+
+async def _run_tool_loop(
+    chat_session,
+    response,
+    *,
+    max_rounds: int = MAX_TOOL_ROUNDS,
+    on_tool_call: Any | None = None,
+    parallel: bool = True,
+    label: str = "LLM",
+) -> tuple[Any, int]:
+    """Execute the function-call loop on *chat_session*.
+
+    Returns ``(final_response, rounds_executed)``.
+
+    When *parallel* is True (default for normal chat), all function_call
+    parts in a single response are gathered concurrently.  When False
+    (deep research), only the first function_call part is executed per
+    round — matching the sequential research pattern that's easier to
+    follow in Discord progress updates.
+    """
+    loop = asyncio.get_event_loop()
+    rounds = 0
+
+    while rounds < max_rounds:
+        # Collect function_call parts from this response
+        try:
+            all_parts = response.candidates[0].content.parts
+        except (IndexError, AttributeError):
+            break
+
+        function_calls = [
+            (part.function_call.name, dict(part.function_call.args) if part.function_call.args else {})
+            for part in all_parts
+            if hasattr(part, "function_call") and part.function_call.name
+        ]
+
+        if not function_calls:
+            break
+
+        # In sequential mode, process only the first call per round
+        if not parallel:
+            function_calls = function_calls[:1]
+
+        log.info("%s function call(s) [round %d]: %s", label, rounds + 1,
+                 ", ".join(f"{n}({a})" for n, a in function_calls))
+
+        # Fire progress callbacks
+        if on_tool_call:
+            for fn_name, _ in function_calls:
+                try:
+                    await on_tool_call(fn_name, rounds + 1)
+                except Exception:
+                    pass
+
+        # Execute tool calls
+        results = await asyncio.gather(*[
+            _execute_function_call(fn_name, fn_args)
+            for fn_name, fn_args in function_calls
+        ])
+
+        # Rate-limit check before sending results back
+        _rate_limiter.record()
+        if not _rate_limiter.check():
+            # Return partial results as a courtesy message
+            partial = "\n".join(results)
+            # Build a fake text-only response — caller handles this
+            return response, rounds + 1
+
+        # Send all function results back to the model
+        response_parts = [
+            genai.protos.Part(
+                function_response=genai.protos.FunctionResponse(
+                    name=fn_name,
+                    response={"result": result},
+                )
+            )
+            for (fn_name, _), result in zip(function_calls, results)
+        ]
+
+        response = await loop.run_in_executor(
+            None,
+            lambda parts=response_parts: chat_session.send_message(
+                genai.protos.Content(parts=parts)
+            ),
+        )
+        await _record_usage(response)
+        rounds += 1
+
+    return response, rounds
 
 
 async def chat(
     user_message: str,
     history: list[dict] | None = None,
     user_name: str = "User",
+    on_tool_call: Any | None = None,
 ) -> tuple[str, list[dict], str]:
     """
     Send a message and return (response_text, updated_history, model_used).
+
+    ``on_tool_call(tool_name, round_num)`` is an optional async callback invoked
+    before each tool execution — used for progressive Discord status updates.
 
     Routing decision tree:
       1. Does the query need live tool execution? (_needs_tools)
@@ -1369,7 +1839,14 @@ async def chat(
     """
     history = history or []
 
-    # ── Local model (Gemma) path ──────────────────────────────────────────────
+    # -- History trimming: keep first 2 turns (persona context) + last 18 ------
+    # Prevents context overflow on long conversations without losing important
+    # early context (e.g. preferences established at the start of a session).
+    _MAX_HISTORY_TURNS = 20
+    if len(history) > _MAX_HISTORY_TURNS:
+        history = history[:2] + history[-((_MAX_HISTORY_TURNS - 2)):]
+
+    # -- Local model (Gemma) path ---------------------------------------------──
     # Use Gemma for conversational queries that don't require live tool calls.
     # Falls through to Gemini if:
     #   • the query pattern requires tools (_needs_tools)
@@ -1396,14 +1873,22 @@ async def chat(
             log.debug("Gemma/Ollama not reachable, using Gemini")
     # Falls through to Gemini ↓
 
-    # ── Gemini path: rate-limit check ────────────────────────────────────────
-    if not _rate_limiter.check():
-        return (
-            "⚠️ Rate limit reached. Please wait a moment before asking again. "
-            f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
-            history,
-            MODEL_NAME,
-        )
+    # -- Gemini path: rate-limit check with exponential backoff on throttle ---
+    _MAX_RETRIES = 3
+    _backoff = 2.0  # seconds; doubles per retry
+    for _attempt in range(_MAX_RETRIES):
+        if _rate_limiter.check():
+            break
+        if _attempt == _MAX_RETRIES - 1:
+            return (
+                "⚠️ Rate limit reached. Please wait a moment before asking again. "
+                f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
+                history,
+                MODEL_NAME,
+            )
+        log.info("Rate limit hit, backing off %.1fs (attempt %d/%d)", _backoff, _attempt + 1, _MAX_RETRIES)
+        await asyncio.sleep(_backoff)
+        _backoff *= 2
 
     model = _get_model()
 
@@ -1424,53 +1909,19 @@ async def chat(
     )
     await _record_usage(response)
 
-    # Handle function-call loop
-    rounds = 0
-    while rounds < MAX_TOOL_ROUNDS:
-        # Check if the response contains function calls
-        part = response.candidates[0].content.parts[0]
-        if not hasattr(part, "function_call") or not part.function_call.name:
-            break
-
-        fc = part.function_call
-        fn_name = fc.name
-        fn_args = dict(fc.args) if fc.args else {}
-
-        log.info("LLM function call [round %d]: %s(%s)", rounds + 1, fn_name, fn_args)
-
-        # Execute the skill
-        result_str = await _execute_function_call(fn_name, fn_args)
-
-        # Send function result back to the model
-        _rate_limiter.record()
-        if not _rate_limiter.check():
-            return (
-                "⚠️ Rate limit reached during function execution. Partial result:\n" + result_str,
-                _extract_history(chat_session),
-            )
-
-        response = await loop.run_in_executor(
-            None,
-            lambda result=result_str, name=fn_name: chat_session.send_message(
-                genai.protos.Content(
-                    parts=[genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=name,
-                            response={"result": result},
-                        )
-                    )]
-                )
-            ),
-        )
-        await _record_usage(response)
-        rounds += 1
+    # Handle function-call loop (shared implementation)
+    response, rounds = await _run_tool_loop(
+        chat_session, response,
+        max_rounds=MAX_TOOL_ROUNDS,
+        on_tool_call=on_tool_call,
+        parallel=True,
+        label="LLM",
+    )
 
     # Extract final text
     try:
         text = response.text
     except (AttributeError, ValueError):
-        # response.text can fail if the last turn was a function call or blocked.
-        # First try to join text parts manually.
         try:
             parts = response.candidates[0].content.parts
             text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
@@ -1478,8 +1929,6 @@ async def chat(
             text = ""
 
         if not text:
-            # If we used all rounds, the model may still be mid-tool-chain.
-            # Ask it to synthesize everything it has gathered so far.
             if rounds >= MAX_TOOL_ROUNDS:
                 log.info("Tool round limit hit with no synthesis — requesting forced summary")
                 try:
@@ -1504,7 +1953,7 @@ async def chat(
                     text += f" (Safety/Blocked: {response.prompt_feedback})"
 
     if rounds >= MAX_TOOL_ROUNDS:
-        text += "\n\n⚠️ *Tool call limit reached (12) — some sources may not have been checked.*"
+        text += f"\n\n⚠️ *Tool call limit reached ({MAX_TOOL_ROUNDS}) — some sources may not have been checked.*"
 
     # Build updated history
     updated_history = _extract_history(chat_session)
@@ -1581,29 +2030,11 @@ def _get_thinking_model() -> genai.GenerativeModel:
     if _thinking_model is not None and _thinking_model_prompt == system_prompt:
         return _thinking_model
 
-    if not GOOGLE_API_KEY:
-        raise RuntimeError("GOOGLE_API_KEY not set.")
-
-    genai.configure(api_key=GOOGLE_API_KEY)
-
-    # Build generation config — ThinkingConfig was added in SDK >0.8.4.
-    # Fall back gracefully if the installed SDK doesn't support it yet.
-    gen_config_kwargs: dict[str, Any] = {
-        "max_output_tokens": MAX_TOKENS * 2,
-        "temperature": 0.3,
-    }
-    thinking_cfg = getattr(genai.types, "ThinkingConfig", None)
-    if thinking_cfg is not None:
-        gen_config_kwargs["thinking_config"] = thinking_cfg(thinking_budget=THINKING_BUDGET)
-        log.info("ThinkingConfig enabled (budget=%d tokens)", THINKING_BUDGET)
-    else:
-        log.info("ThinkingConfig not available in this SDK version — using low-temperature deep mode")
-
-    _thinking_model = genai.GenerativeModel(
-        model_name=THINKING_MODEL,
-        system_instruction=system_prompt,
-        tools=_build_tools(),
-        generation_config=genai.GenerationConfig(**gen_config_kwargs),
+    _thinking_model = _init_gemini_model(
+        THINKING_MODEL,
+        temperature=0.3,
+        max_tokens=MAX_TOKENS * 2,
+        thinking_budget=THINKING_BUDGET,
     )
     _thinking_model_prompt = system_prompt
     log.info("Thinking model initialized: %s", THINKING_MODEL)
@@ -1650,41 +2081,14 @@ async def chat_deep(
     )
     await _record_usage(response)
 
-    rounds = 0
-    while rounds < MAX_TOOL_ROUNDS * 2:  # allow more rounds for deep research
-        part = response.candidates[0].content.parts[0]
-        if not hasattr(part, "function_call") or not part.function_call.name:
-            break
-
-        fc = part.function_call
-        fn_name = fc.name
-        fn_args = dict(fc.args) if fc.args else {}
-
-        if on_tool_call:
-            try:
-                await on_tool_call(fn_name, rounds + 1)
-            except Exception:
-                pass
-
-        log.info("Deep research tool call [round %d]: %s(%s)", rounds + 1, fn_name, fn_args)
-        result_str = await _execute_function_call(fn_name, fn_args)
-
-        _rate_limiter.record()
-        response = await loop.run_in_executor(
-            None,
-            lambda result=result_str, name=fn_name: chat_session.send_message(
-                genai.protos.Content(
-                    parts=[genai.protos.Part(
-                        function_response=genai.protos.FunctionResponse(
-                            name=name,
-                            response={"result": result},
-                        )
-                    )]
-                )
-            ),
-        )
-        await _record_usage(response)
-        rounds += 1
+    # Use shared tool loop — sequential mode for deep research
+    response, rounds = await _run_tool_loop(
+        chat_session, response,
+        max_rounds=MAX_TOOL_ROUNDS * 2,
+        on_tool_call=on_tool_call,
+        parallel=False,
+        label="Deep research",
+    )
 
     try:
         text = response.text

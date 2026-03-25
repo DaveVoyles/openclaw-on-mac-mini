@@ -15,6 +15,7 @@ import datetime
 import logging
 import os
 import ssl
+import time
 
 import aiohttp
 
@@ -41,13 +42,33 @@ def _truncate(text: str, limit: int = 1900) -> str:
 
 _nas_session: aiohttp.ClientSession | None = None
 
+# Cached SID with TTL — avoids login/logout on every API call.
+# DSM sessions last ~20 min by default; we refresh at 10 min to be safe.
+_SID_TTL = 600  # seconds
+_cached_sid: str | None = None
+_sid_obtained_at: float = 0.0
+_sid_lock: asyncio.Lock | None = None  # created lazily inside event loop
+
+
+def _get_sid_lock() -> asyncio.Lock:
+    global _sid_lock
+    if _sid_lock is None:
+        _sid_lock = asyncio.Lock()
+    return _sid_lock
+
 
 async def _get_nas_session() -> aiohttp.ClientSession:
     global _nas_session
     if _nas_session is None or _nas_session.closed:
-        connector = aiohttp.TCPConnector(limit=10, limit_per_host=5, ssl=_SSL_CTX)
+        connector = aiohttp.TCPConnector(
+            limit=10,
+            limit_per_host=5,
+            ssl=_SSL_CTX,
+            keepalive_timeout=60,
+            enable_cleanup_closed=True,
+        )
         _nas_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=15),
+            timeout=aiohttp.ClientTimeout(total=20),
             connector=connector,
         )
     return _nas_session
@@ -55,13 +76,18 @@ async def _get_nas_session() -> aiohttp.ClientSession:
 
 async def close_session() -> None:
     """Close the shared NAS session. Call on bot shutdown."""
-    global _nas_session
+    global _nas_session, _cached_sid, _sid_obtained_at
+    # Logout the cached SID before closing
+    if _cached_sid and _nas_session and not _nas_session.closed:
+        await _raw_logout(_nas_session, _cached_sid)
+    _cached_sid = None
+    _sid_obtained_at = 0.0
     if _nas_session and not _nas_session.closed:
         await _nas_session.close()
         _nas_session = None
 
 
-async def _login(session: aiohttp.ClientSession) -> str | None:
+async def _raw_login(session: aiohttp.ClientSession) -> str | None:
     """Authenticate to DSM and return a session ID (SID), or None on failure."""
     params = {
         "api": "SYNO.API.Auth",
@@ -91,7 +117,7 @@ async def _login(session: aiohttp.ClientSession) -> str | None:
         return None
 
 
-async def _logout(session: aiohttp.ClientSession, sid: str) -> None:
+async def _raw_logout(session: aiohttp.ClientSession, sid: str) -> None:
     params = {
         "api": "SYNO.API.Auth",
         "version": "1",
@@ -107,38 +133,89 @@ async def _logout(session: aiohttp.ClientSession, sid: str) -> None:
         pass
 
 
+async def _get_sid(session: aiohttp.ClientSession) -> str | None:
+    """Return a cached SID, refreshing only when expired or invalid."""
+    global _cached_sid, _sid_obtained_at
+    lock = _get_sid_lock()
+    async with lock:
+        now = time.monotonic()
+        if _cached_sid and (now - _sid_obtained_at) < _SID_TTL:
+            return _cached_sid
+        # Existing SID expired — get a fresh one (no need to logout, DSM auto-expires)
+        sid = await _raw_login(session)
+        if sid:
+            _cached_sid = sid
+            _sid_obtained_at = now
+        else:
+            _cached_sid = None
+            _sid_obtained_at = 0.0
+        return sid
+
+
+async def _invalidate_sid() -> None:
+    """Force re-login on next call (e.g. after an auth error)."""
+    global _cached_sid, _sid_obtained_at
+    lock = _get_sid_lock()
+    async with lock:
+        _cached_sid = None
+        _sid_obtained_at = 0.0
+
+
+_DSM_MAX_RETRIES = 3
+_DSM_BACKOFF_BASE = 1.5  # seconds
+
+
 async def _dsm(
     api: str, version: int, method: str, extra: dict | None = None
 ) -> dict:
-    """Make a single DSM API call with automatic auth. Returns response dict."""
+    """Make a single DSM API call with automatic auth and retry. Returns response dict."""
     if not NAS_USER or not NAS_PASSWORD:
         return {"success": False, "_err": "NAS_USER / NAS_PASSWORD not configured."}
 
     session = await _get_nas_session()
-    sid = await _login(session)
-    if not sid:
-        return {"success": False, "_err": "DSM authentication failed. Check NAS_USER / NAS_PASSWORD."}
 
-    params: dict = {
-        "api": api,
-        "version": str(version),
-        "method": method,
-        "_sid": sid,
-    }
-    if extra:
-        params.update(extra)
+    last_err = "unknown"
+    for attempt in range(_DSM_MAX_RETRIES):
+        sid = await _get_sid(session)
+        if not sid:
+            return {"success": False, "_err": "DSM authentication failed. Check NAS_USER / NAS_PASSWORD."}
 
-    try:
-        async with session.get(
-            f"{NAS_URL}/webapi/entry.cgi", params=params, ssl=_SSL_CTX
-        ) as resp:
-            result = await resp.json(content_type=None)
-    except Exception as e:
-        result = {"success": False, "_err": str(e)}
-    finally:
-        await _logout(session, sid)
+        params: dict = {
+            "api": api,
+            "version": str(version),
+            "method": method,
+            "_sid": sid,
+        }
+        if extra:
+            params.update(extra)
 
-    return result
+        try:
+            async with session.get(
+                f"{NAS_URL}/webapi/entry.cgi", params=params, ssl=_SSL_CTX
+            ) as resp:
+                result = await resp.json(content_type=None)
+
+            # Check for auth errors (DSM error code 105 = invalid SID, 119 = no perm)
+            if not result.get("success"):
+                err_code = result.get("error", {}).get("code")
+                if err_code == 105:  # SID expired/invalid
+                    log.info("DSM SID expired for %s, re-authenticating (attempt %d)", api, attempt + 1)
+                    await _invalidate_sid()
+                    continue
+            return result
+
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as e:
+            last_err = str(e)
+            log.warning(
+                "DSM request %s failed (attempt %d/%d): %s",
+                api, attempt + 1, _DSM_MAX_RETRIES, last_err,
+            )
+            # Invalidate SID in case the connection dropped mid-session
+            await _invalidate_sid()
+            if attempt < _DSM_MAX_RETRIES - 1:
+                await asyncio.sleep(_DSM_BACKOFF_BASE * (attempt + 1))
+
+    return {"success": False, "_err": f"Failed after {_DSM_MAX_RETRIES} retries: {last_err}"}
 
 
 # ---------------------------------------------------------------------------
@@ -394,7 +471,7 @@ async def nas_write_file(
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
 
     session = await _get_nas_session()
-    sid = await _login(session)
+    sid = await _get_sid(session)
     if not sid:
         return "❌ DSM authentication failed. Check NAS_USER / NAS_PASSWORD."
 
@@ -422,8 +499,6 @@ async def nas_write_file(
             result = await resp.json(content_type=None)
     except Exception as e:
         result = {"success": False, "_err": str(e)}
-    finally:
-        await _logout(session, sid)
 
     if not result.get("success"):
         err = result.get("_err") or result.get("error", {}).get("code", "unknown")

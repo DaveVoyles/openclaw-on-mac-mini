@@ -72,19 +72,51 @@ async def get_container_status(service: str) -> str:
     return out.strip()
 
 
-async def get_container_logs(service: str, lines: int = 30) -> str:
-    """Retrieve the last N lines of logs from a container."""
+async def get_container_logs(service: str, lines: int = 100) -> str:
+    """Retrieve the last N lines of logs from a container, with smart noise filtering.
+
+    Always returns the last 100 lines.  Lines containing 'error', 'warn',
+    'exception', 'critical', or 'fatal' are surfaced first so signal doesn't
+    get buried in verbose health-check output.
+    """
+    import re as _re
     safe_name = shlex.quote(service).strip("'")
-    lines = min(max(lines, 5), 100)  # clamp 5–100
+    # Fetch up to 500 lines so we have enough to extract signal from
+    fetch_lines = max(min(lines, 500), 100)
 
     rc, out, err = await _run([
         "docker", "logs", safe_name,
-        "--tail", str(lines),
+        "--tail", str(fetch_lines),
         "--timestamps",
     ], timeout=20)
     if rc != 0:
         return f"❌ Could not fetch logs for '{service}': {err.strip()}"
-    return _truncate(out.strip()) or "(empty log output)"
+    if not out.strip():
+        return "(empty log output)"
+
+    all_lines = out.strip().splitlines()
+
+    _signal_re = _re.compile(r"error|warn|exception|critical|fatal|traceback", _re.IGNORECASE)
+    signal_lines = [l for l in all_lines if _signal_re.search(l)]
+    tail_lines = all_lines[-100:]
+
+    # Merge: signal lines first (deduplicated), then the tail
+    seen: set[str] = set()
+    merged: list[str] = []
+    for line in signal_lines:
+        if line not in seen:
+            seen.add(line)
+            merged.append(line)
+
+    if signal_lines:
+        merged.append("--- last 100 lines ---")
+
+    for line in tail_lines:
+        if line not in seen:
+            seen.add(line)
+            merged.append(line)
+
+    return _truncate("\n".join(merged)) or "(empty log output)"
 
 
 async def restart_container(service: str) -> str:
@@ -243,6 +275,99 @@ async def get_uptime() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Docker Compose config awareness (#12)
+# ---------------------------------------------------------------------------
+
+import os as _os
+from pathlib import Path as _Path
+import yaml as _yaml
+
+_COMPOSE_PATHS = [
+    _Path(_os.getenv("COMPOSE_FILE", "/app/docker-compose.yml")),
+    _Path("/docker-compose.yml"),
+    _Path("/app/docker-compose.yaml"),
+]
+
+
+async def get_compose_config(service: str = "") -> str:
+    """Read the Docker Compose configuration and return port mappings, volumes,
+    and environment variable names for all services (or a specific one).
+
+    This gives the LLM full context for troubleshooting — e.g. which host port
+    maps to which container port, which volumes are mounted, and what env vars
+    each service expects.
+    """
+    compose_file: _Path | None = None
+    for p in _COMPOSE_PATHS:
+        if p.exists():
+            compose_file = p
+            break
+
+    if compose_file is None:
+        return (
+            "⚠️ docker-compose.yml not found at any of the expected paths. "
+            "Set the COMPOSE_FILE env var to the correct path."
+        )
+
+    try:
+        with open(compose_file) as fh:
+            data = _yaml.safe_load(fh) or {}
+    except Exception as e:
+        return f"❌ Failed to read {compose_file}: {e}"
+
+    services = data.get("services", {})
+    if not services:
+        return "⚠️ No services defined in docker-compose.yml."
+
+    if service:
+        svc_lower = service.lower()
+        # Support fuzzy match (e.g. "sonarr" matches "sonarr" key exactly)
+        key = next((k for k in services if k.lower() == svc_lower), None)
+        if key is None:
+            key = next((k for k in services if svc_lower in k.lower()), None)
+        if key is None:
+            available = ", ".join(sorted(services.keys()))
+            return f"❌ Service '{service}' not found. Available: {available}"
+        services = {key: services[key]}
+
+    lines: list[str] = []
+    for svc_name, cfg in sorted(services.items()):
+        lines.append(f"**{svc_name}**")
+        image = cfg.get("image", cfg.get("build", "(local build)"))
+        lines.append(f"  image: {image}")
+
+        ports = cfg.get("ports", [])
+        if ports:
+            lines.append("  ports: " + ", ".join(str(p) for p in ports))
+
+        volumes = cfg.get("volumes", [])
+        if volumes:
+            lines.append("  volumes: " + ", ".join(str(v) for v in volumes))
+
+        env = cfg.get("environment", [])
+        if isinstance(env, dict):
+            env_names = list(env.keys())
+        else:
+            # list of "KEY=value" or "KEY"
+            env_names = [e.split("=")[0] if "=" in str(e) else str(e) for e in env]
+        if env_names:
+            lines.append("  env_vars: " + ", ".join(env_names))
+
+        restart = cfg.get("restart", "")
+        if restart:
+            lines.append(f"  restart: {restart}")
+
+        networks = cfg.get("networks", [])
+        if networks:
+            net_names = list(networks.keys()) if isinstance(networks, dict) else networks
+            lines.append("  networks: " + ", ".join(str(n) for n in net_names))
+
+        lines.append("")
+
+    return _truncate("\n".join(lines).strip())
+
+
+# ---------------------------------------------------------------------------
 # Registry — skill name → callable (used by bot.py)
 # ---------------------------------------------------------------------------
 
@@ -254,6 +379,7 @@ SKILLS = {
     "get_docker_stats": get_docker_stats,
     "get_system_stats": get_system_stats,
     "get_uptime": get_uptime,
+    "get_compose_config": get_compose_config,
 }
 
 # Merge advanced skills (media, network, Plex, reports)
@@ -322,6 +448,22 @@ SKILLS.update(ONTOLOGY_SKILLS)
 # Web & Git skills (webfetch-md, git-essentials)
 from git_skills import GIT_SKILLS
 SKILLS.update(GIT_SKILLS)
+
+# Worker sub-agent (autonomous task delegation)
+from worker_agent import WORKER_SKILLS
+SKILLS.update(WORKER_SKILLS)
+
+# Scheduler LLM controls (create/cancel/list scheduled tasks)
+from scheduler import SCHEDULER_SKILLS
+SKILLS.update(SCHEDULER_SKILLS)
+
+# RSS feed monitoring
+from rss_skills import RSS_SKILLS
+SKILLS.update(RSS_SKILLS)
+
+# URL change monitoring
+from monitor_skills import MONITOR_SKILLS
+SKILLS.update(MONITOR_SKILLS)
 
 # Weather skill (Phase E — wraps wttr.in via aiohttp, no API key)
 from .advanced_skills import get_weather

@@ -9,6 +9,7 @@ lazily inside chat(), which we do not call here.
 
 import sys
 import time
+from collections import deque
 import pytest
 from unittest.mock import MagicMock, patch
 
@@ -54,7 +55,7 @@ class TestRateLimiter:
         rl = RateLimiter(per_minute=2, per_hour=500)
         # Inject two timestamps that are >60s in the past
         old_time = time.monotonic() - 70
-        rl._timestamps = [old_time, old_time]
+        rl._timestamps = deque([old_time, old_time])
         # Old calls should be pruned; new check should succeed
         assert rl.check() is True
 
@@ -91,14 +92,14 @@ class TestRateLimiter:
     def test_stale_minute_calls_are_pruned(self):
         rl = RateLimiter(per_minute=3, per_hour=500)
         old = time.monotonic() - 70  # >60 s ago — outside minute window
-        rl._timestamps = [old, old, old]  # All stale for the minute window
+        rl._timestamps = deque([old, old, old])  # All stale for the minute window
         rl.record()  # Triggers prune + record
         assert rl.remaining_minute == 2  # 3 - 1 recent call
 
     def test_stale_hour_calls_are_pruned(self):
         rl = RateLimiter(per_minute=100, per_hour=3)
         old = time.monotonic() - 3700  # >1 hour ago — pruned from _timestamps
-        rl._timestamps = [old, old, old]  # All stale for the hour window
+        rl._timestamps = deque([old, old, old])  # All stale for the hour window
         rl.record()
         assert rl.remaining_hour == 2  # 3 - 1 recent call
 

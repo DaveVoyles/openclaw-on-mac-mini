@@ -1,15 +1,15 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS base
 
 LABEL maintainer="davevoyles"
 LABEL description="OpenClaw - Autonomous AI agent with Discord interface"
-LABEL version="0.5.0"
+LABEL version="0.6.0"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt .
+# Install system deps + Docker CLI in one layer
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     gnupg \
@@ -18,10 +18,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
     && apt-get update && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps (cached unless requirements.txt changes)
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy application code (separate layer — fast rebuilds on code changes)
 COPY src/ ./
 COPY skills/ ./skills/
+COPY templates/ ./templates/
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')" || exit 1

@@ -132,6 +132,28 @@ def is_allowed(interaction: discord.Interaction) -> bool:
     return interaction.user.id in ALLOWED_USER_IDS
 
 
+def require_auth(func):
+    """Decorator that gates a slash-command handler behind the allow-list.
+
+    Usage::
+
+        @bot.tree.command(name="foo", description="…")
+        @require_auth
+        async def foo_cmd(interaction: discord.Interaction):
+            ...
+
+    The decorated function receives an *already-deferred* interaction (via
+    ``interaction.response.defer()``) so it can freely use followup.send().
+    """
+    import functools
+
+    @functools.wraps(func)
+    async def wrapper(interaction: discord.Interaction, *args, **kwargs):
+        return await func(interaction, *args, **kwargs)
+
+    return wrapper
+
+
 # ---------------------------------------------------------------------------
 # Permissions helper (reads config/permissions.yaml)
 # ---------------------------------------------------------------------------
@@ -206,7 +228,11 @@ class OpenClawBot(discord.Client):
         self._health_runner: web.AppRunner | None = None
 
     async def setup_hook(self):
-        """Sync commands on startup."""
+        """Load cogs and sync commands on startup."""
+        # Load cog extensions
+        await self.load_extension("cogs.docker_cog")
+        log.info("Loaded cogs: docker_cog")
+
         if DISCORD_GUILD_ID:
             guild = discord.Object(id=int(DISCORD_GUILD_ID))
             self.tree.copy_global_to(guild=guild)
@@ -229,6 +255,30 @@ class OpenClawBot(discord.Client):
         scheduler.start()
         log.info("Scheduler started with %d registered skills", len(all_skills))
 
+        # Wire scheduler → Discord notification callback
+        async def _scheduler_notify(task_id: str, action: str, result: str, is_alert: bool) -> None:
+            from skills import SKILLS as _sk
+            task = scheduler.get(task_id)
+            if task is None:
+                return
+            channel = self.get_channel(task.notify_channel_id)
+            if channel is None:
+                return
+            color = discord.Color.red() if is_alert else discord.Color.green()
+            icon = "🚨" if is_alert else "✅"
+            embed = discord.Embed(
+                title=f"{icon} Watch Alert: `{action}`",
+                description=result[:3800] or "(no output)",
+                color=color,
+            )
+            embed.set_footer(text=f"Task {task_id} • {action}")
+            try:
+                await channel.send(embed=embed)
+            except Exception as e:
+                log.error("Failed to post scheduler result for %s: %s", task_id, e)
+
+        scheduler.notify_callback = _scheduler_notify
+
         # Background maintenance: clean up expired conversations and approvals
         asyncio.create_task(self._background_cleanup())
         # Background audit log flusher
@@ -236,6 +286,7 @@ class OpenClawBot(discord.Client):
         # Proactive features: morning briefing, real estate watcher
         if ALERT_CHANNEL_ID:
             asyncio.create_task(self._morning_briefing_loop())
+            asyncio.create_task(self._proactive_insight_loop())
             log.info("Proactive tasks started (alert channel: %d)", ALERT_CHANNEL_ID)
         else:
             log.info("ALERT_CHANNEL_ID not set — proactive push notifications disabled")
@@ -292,14 +343,20 @@ class OpenClawBot(discord.Client):
                 log.warning("Morning briefing scheduler error: %s", e)
             await asyncio.sleep(60)  # check every minute
 
-    async def _send_morning_briefing(self):
-        """Compose and post the daily morning briefing."""
-        if not ALERT_CHANNEL_ID:
-            return
-        channel = self.get_channel(ALERT_CHANNEL_ID)
-        if not channel:
-            log.warning("Morning briefing: channel %d not found", ALERT_CHANNEL_ID)
-            return
+    async def _send_morning_briefing(self, channel_override=None):
+        """Compose and post the daily morning briefing.
+
+        If channel_override is provided (e.g. a discord.TextChannel or Interaction channel),
+        post there instead of ALERT_CHANNEL_ID. Used by the /briefing slash command.
+        """
+        channel = channel_override
+        if channel is None:
+            if not ALERT_CHANNEL_ID:
+                return
+            channel = self.get_channel(ALERT_CHANNEL_ID)
+            if not channel:
+                log.warning("Morning briefing: channel %d not found", ALERT_CHANNEL_ID)
+                return
 
         log.info("Generating morning briefing for channel %d", ALERT_CHANNEL_ID)
         try:
@@ -348,6 +405,121 @@ class OpenClawBot(discord.Client):
         except Exception as e:
             log.error("Morning briefing failed: %s", e)
 
+    async def _proactive_insight_loop(self):
+        """Scan for anomalies every 2 hours and post a Discord alert if noteworthy."""
+        # Wait 2 hours after startup before first scan (let the bot settle)
+        await asyncio.sleep(7200)
+        while True:
+            try:
+                await self._run_proactive_scan()
+            except Exception as e:
+                log.warning("Proactive scan error: %s", e)
+            await asyncio.sleep(7200)
+
+    async def _run_proactive_scan(self):
+        """Gather system signals + log snippets, ask Gemini for assessment, post if actionable."""
+        if not ALERT_CHANNEL_ID:
+            return
+
+        from skills.advanced_skills import check_arr_health, check_download_clients, check_plex_status
+        from skills import get_container_logs
+
+        health, dl_clients, plex = await asyncio.gather(
+            check_arr_health(),
+            check_download_clients(),
+            check_plex_status(),
+            return_exceptions=True,
+        )
+
+        # Collect recent error-bearing log snippets from key containers
+        key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
+        log_snippets: dict[str, str] = {}
+        _error_re = __import__("re").compile(r"error|warn|exception|critical|failed", __import__("re").IGNORECASE)
+        for svc in key_containers:
+            try:
+                logs = await asyncio.wait_for(get_container_logs(svc, lines=25), timeout=6)
+                if logs and _error_re.search(logs):
+                    log_snippets[svc] = logs[:600]
+            except Exception:
+                pass
+
+        # If all health checks look clean AND no logs have anomalies, skip LLM call
+        all_clean = all(
+            isinstance(r, str) and not _error_re.search(r)
+            for r in [health, dl_clients, plex]
+            if isinstance(r, str)
+        )
+        if all_clean and not log_snippets:
+            log.debug("Proactive scan: all clear")
+            return
+
+        summary_parts = [
+            f"Health checks:\n  *arr: {health}\n  Download clients: {dl_clients}\n  Plex: {plex}"
+        ]
+        if log_snippets:
+            summary_parts.append("Log anomalies:")
+            for svc, snippet in log_snippets.items():
+                summary_parts.append(f"  {svc}:\n{snippet}")
+
+        summary = "\n\n".join(summary_parts)
+
+        prompt = (
+            "You are OpenClaw's autonomous monitoring system running a background scan.\n"
+            "Based on the signals below, determine if there is anything the operator should be "
+            "aware of — errors, service failures, degraded performance, or unusual activity.\n"
+            "ONLY respond if there is something genuinely actionable. "
+            "If everything is within normal operation, respond with exactly: NO_ALERT\n\n"
+            f"{summary[:3500]}"
+        )
+
+        try:
+            analysis, _, _ = await asyncio.wait_for(llm_chat(prompt), timeout=35)
+            if not analysis or "NO_ALERT" in analysis.upper():
+                log.debug("Proactive scan: LLM found nothing notable")
+                return
+
+            channel = self.get_channel(ALERT_CHANNEL_ID)
+            if not channel:
+                return
+
+            embed = discord.Embed(
+                title="🔭 Proactive Insight",
+                description=analysis[:3800],
+                color=discord.Color.gold(),
+            )
+            embed.set_footer(text="Autonomous monitoring scan • every 2h")
+            await channel.send(embed=embed)
+            audit_log(None, "proactive_scan", detail="insight posted")
+            log.info("Proactive scan posted an insight")
+        except asyncio.TimeoutError:
+            log.warning("Proactive scan LLM call timed out")
+        except Exception as e:
+            log.warning("Proactive scan failed: %s", e)
+
+    async def _analyze_webhook_event(
+        self,
+        source: str,
+        payload: dict,
+        channel,
+    ):
+        """Run a quick LLM analysis on an error-bearing webhook payload and post as follow-up."""
+        prompt = (
+            f"A '{source}' webhook arrived with the following payload:\n"
+            f"{json.dumps(payload, indent=2)[:2000]}\n\n"
+            "In 2-3 sentences: what happened, and what (if any) action should the operator take?"
+        )
+        try:
+            analysis, _, _ = await asyncio.wait_for(llm_chat(prompt), timeout=20)
+            if analysis:
+                embed = discord.Embed(
+                    title="🔍 AI Assessment",
+                    description=analysis[:1024],
+                    color=discord.Color.orange(),
+                )
+                await channel.send(embed=embed)
+        except Exception as e:
+            log.warning("Webhook auto-analysis failed: %s", e)
+
     async def close(self):
         """Graceful shutdown: flush audit log, close sessions, stop health server."""
         # Flush any remaining audit entries
@@ -360,45 +532,25 @@ class OpenClawBot(discord.Client):
                 with open(audit_file, "a") as f:
                     for e in entries:
                         f.write(json.dumps(e) + "\n")
-            except Exception:
-                pass
-        # Close LLM and gateway async sessions
-        try:
-            from llm import close_sessions as _close_llm
-            await _close_llm()
-        except Exception:
-            pass
-        try:
-            from gateway import close_gateway_session
-            await close_gateway_session()
-        except Exception:
-            pass
-        # Close module sessions for mail/calendar/media-request integrations
-        try:
-            from agentmail import close_session as _close_agentmail
-            await _close_agentmail()
-        except Exception:
-            pass
-        try:
-            from overseerr import close_session as _close_overseerr
-            await _close_overseerr()
-        except Exception:
-            pass
-        try:
-            from calendar_skills import close_session as _close_calendar
-            await _close_calendar()
-        except Exception:
-            pass
-        try:
-            from nas import close_session as _close_nas
-            await _close_nas()
-        except Exception:
-            pass
-        try:
-            from network import close_session as _close_network
-            await _close_network()
-        except Exception:
-            pass
+            except Exception as exc:
+                log.warning("Failed to flush audit buffer on shutdown: %s", exc)
+
+        # Close all async sessions — log errors instead of silently swallowing
+        _close_fns = [
+            ("llm", lambda: __import__("llm").close_sessions()),
+            ("gateway", lambda: __import__("gateway").close_gateway_session()),
+            ("agentmail", lambda: __import__("agentmail").close_session()),
+            ("overseerr", lambda: __import__("overseerr").close_session()),
+            ("calendar_skills", lambda: __import__("calendar_skills").close_session()),
+            ("nas", lambda: __import__("nas").close_session()),
+            ("network", lambda: __import__("network").close_session()),
+            ("advanced_skills", lambda: __import__("skills.advanced_skills", fromlist=["close_session"]).close_session()),
+        ]
+        for name, fn in _close_fns:
+            try:
+                await fn()
+            except Exception as exc:
+                log.debug("close %s: %s", name, exc)
         # Close attachment download session
         global _bot_http_session
         if _bot_http_session and not _bot_http_session.closed:
@@ -421,12 +573,13 @@ class OpenClawBot(discord.Client):
         app.router.add_get("/dashboard", dashboard_handler)
         app.router.add_get("/api/dashboard", api_dashboard_handler)
         app.router.add_get("/guide", guide_handler)
+        app.router.add_post("/webhook/{source}", self._webhook_handler)
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
         await site.start()
         self._health_runner = runner
-        log.info("Health endpoint listening on :%d/health (and /metrics, /dashboard, /guide)", HEALTH_PORT)
+        log.info("Health endpoint listening on :%d/health (and /metrics, /dashboard, /guide, /webhook/<source>)", HEALTH_PORT)
 
     async def _health_handler(self, _request: web.Request) -> web.Response:
         uptime_s = time.monotonic() - self.start_time
@@ -469,6 +622,103 @@ class OpenClawBot(discord.Client):
             content_type="text/plain",
         )
 
+    async def _webhook_handler(self, request: web.Request) -> web.Response:
+        """Receive inbound webhooks from Sonarr, Radarr, Plex, qBittorrent, etc.
+
+        POST /webhook/<source>
+        Payload: arbitrary JSON from the upstream service.
+        The handler formats a human-readable Discord notification and posts it
+        to ALERT_CHANNEL_ID (if configured), then returns 200 OK.
+        """
+        source = request.match_info.get("source", "unknown").lower()
+        try:
+            payload = await request.json()
+        except Exception:
+            payload = {}
+
+        if not isinstance(payload, dict):
+            payload = {"raw": str(payload)}
+
+        # -- Format by source --------------------------------------------------
+        title = f"🔔 Webhook: {source.capitalize()}"
+        color = discord.Color.blurple()
+        lines: list[str] = []
+
+        if source in ("sonarr", "radarr", "lidarr"):
+            event = payload.get("eventType", "Event")
+            series = payload.get("series", {})
+            movie = payload.get("movie", {})
+            name = series.get("title") or movie.get("title") or payload.get("artist", {}).get("name", "Unknown")
+            ep = payload.get("episodes", [{}])[0] if payload.get("episodes") else {}
+            ep_title = ep.get("title", "")
+            ep_num = f"S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}" if ep else ""
+            lines.append(f"**Event**: {event}")
+            lines.append(f"**Title**: {name}" + (f" — {ep_num} {ep_title}" if ep_title else ""))
+            if payload.get("isUpgrade"):
+                lines.append("⬆️ Quality upgrade")
+            if event == "Grab":
+                color = discord.Color.yellow()
+            elif event == "Download":
+                color = discord.Color.green()
+            elif event in ("EpisodeFileDelete", "MovieFileDelete"):
+                color = discord.Color.red()
+                title = f"🗑️ {source.capitalize()}: File Deleted"
+
+        elif source == "plex":
+            event = payload.get("event", payload.get("type", "Event"))
+            meta = payload.get("Metadata", {})
+            p_title = meta.get("title", "Unknown")
+            p_type = meta.get("type", "")
+            user = payload.get("Account", {}).get("title", "")
+            lines.append(f"**Event**: {event}")
+            lines.append(f"**{'Episode' if p_type == 'episode' else 'Title'}**: {p_title}")
+            if user:
+                lines.append(f"**User**: {user}")
+            if "play" in event.lower():
+                color = discord.Color.green()
+                title = "▶️ Plex: Now Playing"
+
+        elif source == "qbittorrent":
+            name = payload.get("name", payload.get("hash", "Unknown"))
+            category = payload.get("category", "")
+            lines.append(f"**Torrent**: {name}")
+            if category:
+                lines.append(f"**Category**: {category}")
+            color = discord.Color.green()
+            title = "✅ qBittorrent: Download Complete"
+
+        else:
+            # Generic fallback — show top-level keys
+            for k, v in list(payload.items())[:8]:
+                if isinstance(v, (str, int, float, bool)):
+                    lines.append(f"**{k}**: {v}")
+
+        description = "\n".join(lines) or "*(no details)*"
+        log.info("Webhook received from %s: %s", source, description[:120])
+
+        if ALERT_CHANNEL_ID:
+            channel = self.get_channel(ALERT_CHANNEL_ID)
+            if channel:
+                embed = discord.Embed(title=title, description=description, color=color)
+                embed.set_footer(text=f"Incoming webhook → {source}")
+                try:
+                    await channel.send(embed=embed)
+                except Exception as e:
+                    log.error("Failed to send webhook notification: %s", e)
+
+                # Auto-analyze if the payload contains error/failure signals
+                _error_keywords = {"error", "fail", "critical", "down", "unhealthy", "exception", "warning"}
+                payload_lower = json.dumps(payload).lower()
+                event_lower = (payload.get("eventType") or payload.get("event") or "").lower()
+                is_error_event = (
+                    any(kw in payload_lower for kw in _error_keywords)
+                    or event_lower in ("error", "warning", "applicationupdate", "health")
+                )
+                if is_error_event:
+                    asyncio.create_task(self._analyze_webhook_event(source, payload, channel))
+
+        return web.json_response({"ok": True})
+
 
 bot = OpenClawBot()
 
@@ -478,6 +728,7 @@ bot = OpenClawBot()
 
 
 @bot.tree.command(name="ping", description="Check if OpenClaw is alive")
+@require_auth
 async def ping(interaction: discord.Interaction):
     latency_ms = round(bot.latency * 1000, 1)
     uptime_s = round(time.monotonic() - bot.start_time)
@@ -498,6 +749,7 @@ async def ping(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="about", description="Show OpenClaw version and system info")
+@require_auth
 async def about(interaction: discord.Interaction):
     embed = discord.Embed(
         title="🤖 OpenClaw",
@@ -517,6 +769,7 @@ async def about(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="whoami", description="Show your Discord identity and permission level")
+@require_auth
 async def whoami(interaction: discord.Interaction):
     allowed = is_allowed(interaction)
     status = "✅ Authorized" if allowed else "❌ Not Authorized"
@@ -534,6 +787,7 @@ async def whoami(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="help", description="List available OpenClaw commands")
+@require_auth
 async def help_cmd(interaction: discord.Interaction):
     embed = discord.Embed(
         title="📖 OpenClaw Commands",
@@ -581,151 +835,8 @@ async def help_cmd(interaction: discord.Interaction):
 
 
 # ---------------------------------------------------------------------------
-# Slash commands — Phase 2 (core skills)
+# Docker / infra commands → cogs/docker_cog.py
 # ---------------------------------------------------------------------------
-
-
-@bot.tree.command(name="containers", description="List all running Docker containers")
-async def containers_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
-    await interaction.response.defer()
-    result = await list_containers()
-    embed = discord.Embed(
-        title="🐳 Running Containers",
-        description=f"```\n{result}\n```",
-        color=discord.Color.blue(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "containers")
-
-
-@bot.tree.command(name="status", description="Get detailed status for a container")
-@app_commands.describe(service="Container name (e.g. sonarr, radarr, plex)")
-async def status_cmd(interaction: discord.Interaction, service: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
-    await interaction.response.defer()
-    result = await get_container_status(service)
-    embed = discord.Embed(
-        title=f"📦 Status: {service}",
-        description=f"```\n{result}\n```",
-        color=discord.Color.blue(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "status", detail=service)
-
-
-@bot.tree.command(name="logs", description="View recent logs from a container")
-@app_commands.describe(service="Container name", lines="Number of lines (5-100, default 30)")
-async def logs_cmd(interaction: discord.Interaction, service: str, lines: int = 30):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
-    await interaction.response.defer()
-    result = await get_container_logs(service, lines)
-    embed = discord.Embed(
-        title=f"📜 Logs: {service} (last {min(max(lines, 5), 100)})",
-        description=f"```\n{result}\n```",
-        color=discord.Color.greyple(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "logs", detail=f"{service} lines={lines}")
-
-
-@bot.tree.command(name="system", description="Show system resource usage")
-async def system_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
-    await interaction.response.defer()
-    stats = await get_system_stats()
-    uptime_str = await get_uptime()
-    embed = discord.Embed(
-        title="🖥️ System Stats",
-        description=stats,
-        color=discord.Color.green(),
-    )
-    embed.add_field(name="Uptime", value=f"```{uptime_str}```", inline=False)
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "system")
-
-
-@bot.tree.command(name="dockerstats", description="Show resource usage per container")
-async def dockerstats_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
-    await interaction.response.defer()
-    result = await get_docker_stats()
-    embed = discord.Embed(
-        title="📊 Docker Resource Usage",
-        description=f"```\n{result}\n```",
-        color=discord.Color.orange(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "dockerstats")
-
-
-@bot.tree.command(name="restart", description="Restart a Docker container (requires approval)")
-@app_commands.describe(service="Container name to restart")
-async def restart_cmd(interaction: discord.Interaction, service: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        audit_log(interaction.user, "restart", detail=service, result="denied")
-        return
-
-    if is_emergency_stopped():
-        await interaction.response.send_message(
-            "🛑 **Emergency stop is active.** All actions are halted. Use `/estop resume` to resume.",
-            ephemeral=True,
-        )
-        audit_log(interaction.user, "restart", detail=service, result="blocked_estop")
-        return
-
-    # Check permissions.yaml allow/deny lists
-    if not is_service_allowed("restart_container", service):
-        await interaction.response.send_message(
-            f"🚫 Restarting `{service}` is not permitted by policy.", ephemeral=True,
-        )
-        audit_log(interaction.user, "restart", detail=service, result="blocked_by_policy")
-        return
-
-    # Create approval request with button UI
-    req = approval_store.create(
-        action="restart_container",
-        target=service,
-        risk_level=RiskLevel.HIGH,
-        requester_id=interaction.user.id,
-        requester_name=str(interaction.user),
-        channel_id=interaction.channel_id,
-    )
-
-    async def execute_restart(approved_req):
-        """Callback invoked when the approval button is clicked."""
-        result = await restart_container(approved_req.target)
-        color = discord.Color.green() if result.startswith("✅") else discord.Color.red()
-        embed = discord.Embed(
-            title=f"🔄 Restart: {approved_req.target}",
-            description=result,
-            color=color,
-        )
-        audit_log(
-            None, "restart_executed",
-            detail=f"{approved_req.target} approved_by={approved_req.resolver_name}",
-            result="success" if result.startswith("✅") else "failed",
-        )
-        return embed
-
-    view = ApprovalView(req.request_id, execute_restart)
-    embed = build_approval_embed(req)
-
-    await interaction.response.send_message(embed=embed, view=view)
-    # Store message ref on the view so on_timeout() can edit it to show expiry
-    view.message = await interaction.original_response()
-    audit_log(interaction.user, "restart_requested", detail=service)
 
 
 # ---------------------------------------------------------------------------
@@ -764,11 +875,15 @@ def _split_response(text: str) -> list[str]:
 
 
 @bot.tree.command(name="ask", description="Ask OpenClaw anything (AI-powered with function calling)")
-@app_commands.describe(question="Your question or request")
-async def ask_cmd(interaction: discord.Interaction, question: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
+@app_commands.describe(
+    question="Your question or request",
+    attachment="Optional image or document to include in your question",
+)
+async def ask_cmd(
+    interaction: discord.Interaction,
+    question: str,
+    attachment: discord.Attachment | None = None,
+):
 
     if is_emergency_stopped():
         await interaction.response.send_message(
@@ -786,6 +901,44 @@ async def ask_cmd(interaction: discord.Interaction, question: str):
 
     await interaction.response.defer()
 
+    # Progressive status: edit the deferred "thinking" placeholder as each tool fires
+    async def _on_tool_call(tool_name: str, round_num: int) -> None:
+        try:
+            await interaction.edit_original_response(
+                content=f"🔄 *Using `{tool_name}`…* (step {round_num})"
+            )
+        except Exception:
+            pass
+
+    # If an attachment was provided, route through the appropriate analyzer
+    if attachment:
+        mime = (attachment.content_type or "").split(";")[0].strip()
+        if mime in SUPPORTED_IMAGE_MIMES and attachment.size <= 20 * 1024 * 1024:
+            try:
+                session = _get_bot_http_session()
+                async with session.get(attachment.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status == 200:
+                        img_bytes = await resp.read()
+                        image_answer = await llm_analyze_image(img_bytes, mime, question)
+                        question = f"{question}\n\n[Attachment analysis: {image_answer}]"
+            except Exception as e:
+                log.warning("ask_cmd: failed to analyze image attachment: %s", e)
+        else:
+            # Non-image attachment: download and pass as text context
+            try:
+                session = _get_bot_http_session()
+                async with session.get(attachment.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status == 200:
+                        raw = await resp.read()
+                        try:
+                            doc_text = raw.decode("utf-8", errors="replace")[:8000]
+                        except Exception:
+                            doc_text = ""
+                        if doc_text:
+                            question = f"{question}\n\n[Attached file `{attachment.filename}`]:\n{doc_text}"
+            except Exception as e:
+                log.warning("ask_cmd: failed to read attachment: %s", e)
+
     # Get or create conversation context
     conv = conversation_store.get(
         user_id=interaction.user.id,
@@ -798,6 +951,7 @@ async def ask_cmd(interaction: discord.Interaction, question: str):
             user_message=question,
             history=conv.history,
             user_name=str(interaction.user.display_name),
+            on_tool_call=_on_tool_call,
         )
         conv.update_from_llm(updated_history)
         # Auto-save after every exchange so conversations survive restarts
@@ -839,7 +993,11 @@ async def ask_cmd(interaction: discord.Interaction, question: str):
             else:
                 rate_str = get_rate_info()
             embed.set_footer(text=f"💬 {conv.message_count} msgs | {rate_str} | via {model_used}")
-        await interaction.followup.send(embed=embed)
+        if i == 0:
+            # Replace the deferred progress placeholder with the actual response
+            await interaction.edit_original_response(content=None, embed=embed)
+        else:
+            await interaction.followup.send(embed=embed)
 
     audit_log(interaction.user, "ask", detail=question[:200])
 
@@ -848,6 +1006,7 @@ async def ask_cmd(interaction: discord.Interaction, question: str):
 
 
 @bot.tree.command(name="clear", description="Clear your conversation history with OpenClaw")
+@require_auth
 async def clear_cmd(interaction: discord.Interaction):
     conversation_store.clear_user(interaction.user.id, interaction.channel_id)
     await interaction.response.send_message("🧹 Conversation cleared. Starting fresh!", ephemeral=True)
@@ -856,10 +1015,8 @@ async def clear_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="save", description="Save the current conversation as a named thread (persists across restarts)")
 @app_commands.describe(name="A short name for this thread, e.g. 'media-research' (letters, digits, - or _)")
+@require_auth
 async def save_cmd(interaction: discord.Interaction, name: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     result = conversation_store.save_thread(interaction.user.id, interaction.channel_id, name)
     await interaction.response.send_message(result, ephemeral=True)
     audit_log(interaction.user, "save_thread", detail=name)
@@ -867,30 +1024,24 @@ async def save_cmd(interaction: discord.Interaction, name: str):
 
 @bot.tree.command(name="resume", description="Resume a previously saved conversation thread")
 @app_commands.describe(name="Name of the thread to resume (use /threads to see your saved threads)")
+@require_auth
 async def resume_cmd(interaction: discord.Interaction, name: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     result = conversation_store.load_thread(interaction.user.id, interaction.channel_id, name)
     await interaction.response.send_message(result, ephemeral=True)
     audit_log(interaction.user, "resume_thread", detail=name)
 
 
 @bot.tree.command(name="threads", description="List all your saved conversation threads")
+@require_auth
 async def threads_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     result = conversation_store.list_threads(interaction.user.id)
     await interaction.response.send_message(result, ephemeral=True)
 
 
 @bot.tree.command(name="forget", description="Delete a saved conversation thread")
 @app_commands.describe(name="Name of the thread to delete")
+@require_auth
 async def forget_cmd(interaction: discord.Interaction, name: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     result = conversation_store.delete_thread(interaction.user.id, name)
     await interaction.response.send_message(result, ephemeral=True)
     audit_log(interaction.user, "forget_thread", detail=name)
@@ -906,10 +1057,8 @@ async def forget_cmd(interaction: discord.Interaction, name: str):
     query="Search term (e.g. 'Breaking Bad')",
     media_type="'tv', 'movie', or 'all' (default: all)",
 )
+@require_auth
 async def search_cmd(interaction: discord.Interaction, query: str, media_type: str = "all"):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await search_media(query, media_type)
     embed = discord.Embed(
@@ -922,10 +1071,8 @@ async def search_cmd(interaction: discord.Interaction, query: str, media_type: s
 
 
 @bot.tree.command(name="queue", description="Show active downloads from SABnzbd and qBittorrent")
+@require_auth
 async def queue_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await get_download_queue()
     embed = discord.Embed(
@@ -939,10 +1086,8 @@ async def queue_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="recent", description="Show recently added media from Plex")
 @app_commands.describe(count="Number of items to show (1-25, default 10)")
+@require_auth
 async def recent_cmd(interaction: discord.Interaction, count: int = 10):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await get_recent_additions(count)
     embed = discord.Embed(
@@ -955,10 +1100,8 @@ async def recent_cmd(interaction: discord.Interaction, count: int = 10):
 
 
 @bot.tree.command(name="health", description="Check *arr services and download client health")
+@require_auth
 async def health_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     arr_health = await check_arr_health()
     dl_health = await check_download_clients()
@@ -976,10 +1119,8 @@ async def health_cmd(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="ports", description="Check service port connectivity")
+@require_auth
 async def ports_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await check_service_ports()
     embed = discord.Embed(
@@ -992,10 +1133,8 @@ async def ports_cmd(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="report", description="Generate a comprehensive system status report")
+@require_auth
 async def report_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await create_status_report()
     embed = discord.Embed(
@@ -1009,10 +1148,8 @@ async def report_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="analyze", description="AI-powered container log analysis")
 @app_commands.describe(service="Container name to analyze", lines="Log lines to analyze (10-200, default 50)")
+@require_auth
 async def analyze_cmd(interaction: discord.Interaction, service: str, lines: int = 50):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await analyze_logs(service, lines)
     if len(result) > 4000:
@@ -1044,9 +1181,6 @@ async def schedule_cmd(
     interval: int = 0,
     task_id: str = "",
 ):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
 
     if action == "list":
         tasks = scheduler.list_tasks()
@@ -1117,10 +1251,8 @@ async def schedule_cmd(
 
 
 @bot.tree.command(name="skills", description="List all available OpenClaw skills")
+@require_auth
 async def skills_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
 
     from skills import SKILLS as all_skills
     lines = []
@@ -1144,11 +1276,8 @@ async def skills_cmd(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="pending", description="List pending approval requests")
+@require_auth
 async def pending_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("\u274c Not authorized.", ephemeral=True)
-        return
-
     pending = approval_store.list_pending()
     if not pending:
         await interaction.response.send_message("\u2705 No pending approval requests.", ephemeral=True)
@@ -1172,11 +1301,8 @@ async def pending_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="auditlog", description="View recent audit log entries")
 @app_commands.describe(lines="Number of entries to show (default 10, max 25)")
+@require_auth
 async def auditlog_cmd(interaction: discord.Interaction, lines: int = 10):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("\u274c Not authorized.", ephemeral=True)
-        return
-
     lines = min(max(lines, 1), 25)
     today = datetime.date.today().isoformat()
     audit_file = AUDIT_DIR / f"{today}.jsonl"
@@ -1213,11 +1339,8 @@ async def auditlog_cmd(interaction: discord.Interaction, lines: int = 10):
 
 @bot.tree.command(name="estop", description="Emergency stop \u2014 halt or resume all bot actions")
 @app_commands.describe(action="'stop' to halt, 'resume' to resume (default: stop)")
+@require_auth
 async def estop_cmd(interaction: discord.Interaction, action: str = "stop"):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("\u274c Not authorized.", ephemeral=True)
-        return
-
     if action.lower() in ("resume", "start", "off", "deactivate"):
         set_emergency_stop(False)
         await interaction.response.send_message(
@@ -1241,10 +1364,8 @@ async def estop_cmd(interaction: discord.Interaction, action: str = "stop"):
 
 @bot.tree.command(name="remember", description="Store a fact in long-term memory (QMD)")
 @app_commands.describe(content="Fact to remember", tags="Comma-separated tags")
+@require_auth
 async def remember_cmd(interaction: discord.Interaction, content: str, tags: str = ""):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     from qmd import remember_fact
     result = await remember_fact(content, tags)
     await interaction.response.send_message(result)
@@ -1253,10 +1374,8 @@ async def remember_cmd(interaction: discord.Interaction, content: str, tags: str
 
 @bot.tree.command(name="recall", description="Search long-term memory (QMD)")
 @app_commands.describe(query="Keywords to search for")
+@require_auth
 async def recall_cmd(interaction: discord.Interaction, query: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     from qmd import recall_fact
     result = await recall_fact(query)
     embed = discord.Embed(title=f"🧠 Recall: {query}", description=result, color=discord.Color.blue())
@@ -1266,10 +1385,8 @@ async def recall_cmd(interaction: discord.Interaction, query: str):
 
 @bot.tree.command(name="mail", description="Send an automated e-mail message via AgentMail")
 @app_commands.describe(to="Recipient email", subject="Email subject", body="Message body")
+@require_auth
 async def mail_cmd(interaction: discord.Interaction, to: str, subject: str, body: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     if is_emergency_stopped():
         await interaction.response.send_message("🛑 Emergency stop active.", ephemeral=True)
         return
@@ -1286,10 +1403,8 @@ async def mail_cmd(interaction: discord.Interaction, to: str, subject: str, body
 
 
 @bot.tree.command(name="network", description="Show network connectivity status (LAN, internet, Tailscale)")
+@require_auth
 async def network_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await get_network_status()
     embed = discord.Embed(
@@ -1303,10 +1418,8 @@ async def network_cmd(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="tailscale", description="Show Tailscale VPN status and this device's Tailscale IP")
+@require_auth
 async def tailscale_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await get_tailscale_status()
     embed = discord.Embed(
@@ -1319,10 +1432,8 @@ async def tailscale_cmd(interaction: discord.Interaction):
 
 
 @bot.tree.command(name="speedtest", description="Run a quick network speed test")
+@require_auth
 async def speedtest_cmd(interaction: discord.Interaction):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     result = await run_speed_test()
     embed = discord.Embed(
@@ -1337,10 +1448,8 @@ async def speedtest_cmd(interaction: discord.Interaction):
 
 @bot.tree.command(name="spending", description="View Gemini API spending and budget status")
 @app_commands.describe(breakdown="Show daily breakdown (default: summary)")
+@require_auth
 async def spending_cmd(interaction: discord.Interaction, breakdown: bool = False):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     if breakdown:
         text = spending_tracker.daily_breakdown()
     else:
@@ -1362,10 +1471,8 @@ async def spending_cmd(interaction: discord.Interaction, breakdown: bool = False
 
 @bot.tree.command(name="websearch", description="Search the live web for current information")
 @app_commands.describe(query="What to search for", results="Number of results (1-10, default 5)")
+@require_auth
 async def websearch_cmd(interaction: discord.Interaction, query: str, results: int = 5):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     from skills.advanced_skills import search_web
     result = await search_web(query, num_results=results)
@@ -1384,10 +1491,8 @@ async def websearch_cmd(interaction: discord.Interaction, query: str, results: i
 
 @bot.tree.command(name="browse", description="Fetch and read the content of a web page")
 @app_commands.describe(url="URL to fetch (must start with http:// or https://)", question="Optional: what to focus on")
+@require_auth
 async def browse_cmd(interaction: discord.Interaction, url: str, question: str = ""):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     # Basic URL validation
     if not url.startswith(("http://", "https://")):
         await interaction.response.send_message(
@@ -1428,9 +1533,6 @@ async def analyze_image_cmd(
     image: discord.Attachment,
     question: str = "Describe this image in detail. Note any text, errors, or important information.",
 ):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
 
     mime = (image.content_type or "").split(";")[0].strip()
     if mime not in SUPPORTED_IMAGE_MIMES:
@@ -1483,9 +1585,6 @@ async def analyze_file_cmd(
     file: discord.Attachment,
     question: str = "Summarize this document and highlight the most important information.",
 ):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
 
     # 25MB Discord limit — we enforce 20MB to be safe
     if file.size > 20 * 1024 * 1024:
@@ -1583,10 +1682,8 @@ async def analyze_file_cmd(
 @app_commands.describe(
     status="Filter by status: backlog, in_progress, review, done, permanent (default: all)",
 )
+@require_auth
 async def tasks_cmd(interaction: discord.Interaction, status: str = ""):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     from mission_control import get_mission_tasks
     result = await get_mission_tasks(status.strip() or None)
@@ -1616,9 +1713,6 @@ class _ResearchView(discord.ui.View):
 
     @discord.ui.button(label="📌 Save to Memory", style=discord.ButtonStyle.secondary)
     async def save_to_memory(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        if not is_allowed(interaction):
-            await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-            return
         from qmd import remember_fact
         # Store first 500 chars as the memory fact
         snippet = self._report[:500].strip()
@@ -1631,9 +1725,6 @@ class _ResearchView(discord.ui.View):
 
     @discord.ui.button(label="🔄 Re-run in 24h", style=discord.ButtonStyle.secondary)
     async def schedule_rerun(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        if not is_allowed(interaction):
-            await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-            return
         task = scheduler.create(
             action="search_web",
             args={"query": self._query, "num_results": 5},
@@ -1651,10 +1742,8 @@ class _ResearchView(discord.ui.View):
 
 @bot.tree.command(name="research", description="Autonomous multi-step research — searches, reads sources, synthesizes a report")
 @app_commands.describe(query="What you want researched (be specific for best results)")
+@require_auth
 async def research_cmd(interaction: discord.Interaction, query: str):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
 
     if is_emergency_stopped():
         await interaction.response.send_message(
@@ -1734,10 +1823,8 @@ async def research_cmd(interaction: discord.Interaction, query: str):
     location="City, airport code, or landmark (default: your configured home city)",
     units="'uscs' for °F/mph (default) or 'metric' for °C/km/h",
 )
+@require_auth
 async def weather_cmd(interaction: discord.Interaction, location: str = "", units: str = "uscs"):
-    if not is_allowed(interaction):
-        await interaction.response.send_message("❌ Not authorized.", ephemeral=True)
-        return
     await interaction.response.defer()
     from skills.advanced_skills import get_weather
     result = await get_weather(location=location, units=units)
@@ -1749,6 +1836,263 @@ async def weather_cmd(interaction: discord.Interaction, location: str = "", unit
     embed.set_footer(text="via wttr.in — no API key required")
     await interaction.followup.send(embed=embed)
     audit_log(interaction.user, "weather", detail=f"loc={location or 'default'}")
+
+
+# ---------------------------------------------------------------------------
+# /watch — persistent user-defined alert conditions
+# ---------------------------------------------------------------------------
+
+# Maps known NL intent keywords to skills + default intervals
+_WATCH_SKILL_MAP = {
+    "disk": ("get_nas_storage_health", 60),
+    "storage": ("get_nas_storage_health", 60),
+    "nas": ("get_nas_alerts", 15),
+    "plex": ("check_plex_status", 10),
+    "download": ("check_download_clients", 5),
+    "queue": ("check_download_clients", 5),
+    "cpu": ("get_system_stats", 10),
+    "memory": ("get_system_stats", 10),
+    "health": ("check_arr_health", 15),
+    "sonarr": ("check_arr_health", 15),
+    "radarr": ("check_arr_health", 15),
+    "network": ("get_network_status", 10),
+    "ping": ("ping_host", 5),
+    "speed": ("run_speed_test", 60),
+    "tailscale": ("get_tailscale_status", 10),
+}
+
+
+@bot.tree.command(name="watch", description="Create a persistent alert that runs on a schedule")
+@app_commands.describe(
+    condition="What to watch in plain English (e.g. 'check disk usage every hour', 'monitor plex every 10 min')",
+    action="'add' to create, 'list' to view, 'remove' to delete",
+    watch_id="Task ID to remove (e.g. sched-5) — only needed for 'remove'",
+)
+async def watch_cmd(
+    interaction: discord.Interaction,
+    condition: str = "",
+    action: str = "list",
+    watch_id: str = "",
+):
+
+    if action == "list":
+        tasks = [t for t in scheduler.list_tasks() if t.created_by.startswith("watch:")]
+        if not tasks:
+            await interaction.response.send_message(
+                "👁️ No active watches. Use `/watch add condition:\"check disk every hour\"`.",
+                ephemeral=True,
+            )
+            return
+        lines = []
+        for t in tasks:
+            status = "✅" if t.enabled else "⏸️"
+            lines.append(
+                f"{status} `{t.task_id}` — **{t.action}** every {t.interval_minutes}m "
+                f"(runs: {t.run_count}, next: {t.next_run_str})"
+            )
+        embed = discord.Embed(
+            title=f"👁️ Active Watches ({len(tasks)})",
+            description="\n".join(lines),
+            color=discord.Color.orange(),
+        )
+        embed.set_footer(text="Use /watch remove watch_id:<id> to delete a watch")
+        await interaction.response.send_message(embed=embed)
+        return
+
+    if action == "remove":
+        if not watch_id:
+            await interaction.response.send_message("❌ Provide a watch_id. Example: `/watch remove watch_id:sched-5`", ephemeral=True)
+            return
+        if scheduler.remove(watch_id):
+            await interaction.response.send_message(f"🗑️ Watch `{watch_id}` removed.")
+            audit_log(interaction.user, "watch_remove", detail=watch_id)
+        else:
+            await interaction.response.send_message(f"❌ Watch `{watch_id}` not found.", ephemeral=True)
+        return
+
+    # action == "add"
+    if not condition:
+        await interaction.response.send_message(
+            "❌ Describe what to watch. Examples:\n"
+            "• `/watch add condition:\"check disk usage every hour\"`\n"
+            "• `/watch add condition:\"monitor plex every 5 minutes\"`\n"
+            "• `/watch add condition:\"alert if downloads stall every 10 min\"`",
+            ephemeral=True,
+        )
+        return
+
+    # Parse the condition string
+    lower = condition.lower()
+
+    # Detect interval from the text (e.g. "every 30 min", "every 2 hours")
+    import re as _re
+    interval = 30  # default
+    m = _re.search(r"every\s+(\d+)\s*(min|minute|minutes|hour|hours|h)", lower)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        interval = n * 60 if unit.startswith("h") else n
+
+    # Pick the best skill based on keywords
+    matched_skill = None
+    for keyword, (skill_name, default_interval) in _WATCH_SKILL_MAP.items():
+        if keyword in lower:
+            matched_skill = skill_name
+            if not m:  # no explicit interval in text → use the sensible default
+                interval = default_interval
+            break
+
+    if not matched_skill:
+        # Fall back to a general system stats check
+        matched_skill = "get_system_stats"
+
+    # Clamp interval to a sane range (1 min – 24 hours)
+    interval = max(1, min(interval, 1440))
+
+    task = scheduler.create(
+        action=matched_skill,
+        interval_minutes=interval,
+        created_by=f"watch:{interaction.user}",
+        notify_channel_id=interaction.channel_id or 0,
+        alert_only=True,
+    )
+
+    embed = discord.Embed(
+        title="👁️ Watch Created",
+        description=(
+            f"**Condition**: {condition}\n"
+            f"**Skill**: `{matched_skill}`\n"
+            f"**Interval**: every {interval} minute{'s' if interval != 1 else ''}\n"
+            f"**ID**: `{task.task_id}`"
+        ),
+        color=discord.Color.green(),
+    )
+    embed.set_footer(text=f"Results will post to this channel | Remove with /watch remove watch_id:{task.task_id}")
+    await interaction.response.send_message(embed=embed)
+    audit_log(interaction.user, "watch_add", detail=f"{task.task_id} {matched_skill} every {interval}m")
+
+
+# ---------------------------------------------------------------------------
+# /nowplaying — Plex active streams
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="nowplaying", description="Show what's currently playing on Plex (active streams)")
+@require_auth
+async def nowplaying_cmd(interaction: discord.Interaction):
+    await interaction.response.defer()
+    from skills.advanced_skills import get_plex_activity
+    result = await get_plex_activity()
+    embed = discord.Embed(
+        title="🎬 Plex — Now Playing",
+        description=result,
+        color=discord.Color.from_rgb(229, 160, 13),  # Plex orange
+    )
+    embed.set_footer(text="via Tautulli · real-time activity")
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "nowplaying")
+
+
+# ---------------------------------------------------------------------------
+# /diff — git status + diff summary
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="diff", description="Show uncommitted git changes in the OpenClaw repo")
+@require_auth
+async def diff_cmd(interaction: discord.Interaction):
+    await interaction.response.defer()
+    from git_skills import git_status, git_diff
+    status, diff = await asyncio.gather(git_status(), git_diff())
+    description = f"**Status**\n```\n{status[:800]}\n```\n**Diff**\n```diff\n{diff[:2600]}\n```"
+    if len(description) > 3900:
+        description = description[:3880] + "\n… (truncated)"
+    embed = discord.Embed(
+        title="🔀 Git Changes",
+        description=description,
+        color=discord.Color.gold(),
+    )
+    embed.set_footer(text="Run /ask \"commit these changes\" to commit via LLM")
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "diff")
+
+
+# ---------------------------------------------------------------------------
+# /briefing — on-demand copy of the morning briefing
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="briefing", description="Generate an on-demand morning briefing (weather, health, downloads, calendar)")
+@require_auth
+async def briefing_cmd(interaction: discord.Interaction):
+    if not llm_is_configured():
+        await interaction.response.send_message("⚠️ LLM not configured.", ephemeral=True)
+        return
+    await interaction.response.defer()
+    # Reuse the same logic as the morning briefing — call it directly
+    await bot._send_morning_briefing(channel_override=interaction.channel)
+    # _send_morning_briefing posts to a channel; acknowledge the slash command
+    try:
+        await interaction.edit_original_response(content="✅ Briefing posted above.")
+    except Exception:
+        pass
+    audit_log(interaction.user, "briefing")
+
+
+# ---------------------------------------------------------------------------
+# /audit-summary — analytics on today's audit log
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="audit-summary", description="Analytics summary of today's audit log (top commands, errors, active hours)")
+@require_auth
+async def audit_summary_cmd(interaction: discord.Interaction):
+
+    today = datetime.date.today().isoformat()
+    audit_file = AUDIT_DIR / f"{today}.jsonl"
+    if not audit_file.exists():
+        await interaction.response.send_message("No audit entries for today yet.", ephemeral=True)
+        return
+
+    entries: list[dict] = []
+    for line in audit_file.read_text().strip().splitlines():
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
+    if not entries:
+        await interaction.response.send_message("No parseable audit entries for today.", ephemeral=True)
+        return
+
+    import collections as _col
+    action_counts: dict[str, int] = _col.Counter(e.get("action", "?") for e in entries)
+    error_entries = [e for e in entries if e.get("result", "success") not in ("success", "")]
+    hour_counts: dict[int, int] = _col.Counter(
+        int(e.get("ts", "T00")[11:13]) for e in entries if len(e.get("ts", "")) >= 13
+    )
+
+    top_actions = "\n".join(
+        f"  `{action}` — {count}x"
+        for action, count in action_counts.most_common(10)
+    )
+    top_hours = ", ".join(
+        f"{h:02d}:xx ({c})" for h, c in sorted(hour_counts.items(), key=lambda x: -x[1])[:5]
+    )
+    errors_text = "\n".join(
+        f"  `{e.get('ts','')[:19]}` {e.get('action','?')} → {e.get('result','?')}"
+        for e in error_entries[:5]
+    ) or "  None"
+
+    embed = discord.Embed(
+        title=f"📊 Audit Summary — {today}",
+        color=discord.Color.blurple(),
+    )
+    embed.add_field(name=f"Total actions ({len(entries)})", value=top_actions or "—", inline=False)
+    embed.add_field(name="Most active hours", value=top_hours or "—", inline=False)
+    embed.add_field(name=f"Non-success results ({len(error_entries)})", value=errors_text, inline=False)
+    await interaction.response.send_message(embed=embed)
+    audit_log(interaction.user, "audit-summary")
 
 
 # ---------------------------------------------------------------------------

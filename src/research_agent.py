@@ -211,10 +211,48 @@ class ResearchAgent:
 
         report = await self._synthesize(query, combined_data)
 
-        elapsed = round(time.monotonic() - (time.monotonic() - 1))  # approx
         await post("done", f"Research complete — {len(raw_results)} searches, {len(browsed_pages)} pages read")
 
+        # ── Step 5: Auto-save report to NAS (if configured) ──────────────────
+        await self._auto_save(query, report, post)
+
         return report
+
+    async def _auto_save(self, query: str, report: str, post) -> None:
+        """Silently save the research report to NAS and/or Google Docs."""
+        import re as _re
+        import datetime as _dt
+
+        safe_slug = _re.sub(r"[^a-zA-Z0-9]+", "_", query[:40]).strip("_").lower()
+        date_str = _dt.date.today().isoformat()
+        filename = f"research_{date_str}_{safe_slug}.md"
+        header = f"# Research Report\n**Query**: {query}\n**Date**: {date_str}\n\n---\n\n"
+        full_doc = header + report
+
+        # Try NAS first
+        try:
+            from nas import nas_write_file
+            nas_result = await asyncio.wait_for(
+                nas_write_file(full_doc, remote_folder="/volume1/documents/research", filename=filename),
+                timeout=20,
+            )
+            if nas_result.startswith("✅"):
+                await post("done", f"Report saved to NAS: `{filename}`")
+                # Also try Google Docs if Maton is configured
+                try:
+                    from gateway import create_google_doc
+                    import os as _os
+                    if _os.getenv("MATON_API_KEY"):
+                        doc_result = await asyncio.wait_for(
+                            create_google_doc(title=f"Research: {query[:60]}", content=full_doc),
+                            timeout=20,
+                        )
+                        if doc_result.startswith("✅"):
+                            await post("done", f"Also saved to Google Docs")
+                except Exception:
+                    pass
+        except Exception as e:
+            log.debug("Research auto-save skipped: %s", e)
 
     async def _plan_searches(self, query: str) -> list[str]:
         """Ask Gemini to decompose the query into sub-searches."""

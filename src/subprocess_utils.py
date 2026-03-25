@@ -15,10 +15,11 @@ async def run(cmd: list[str], timeout: int = COMMAND_TIMEOUT) -> tuple[int, str,
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-        return proc.returncode or 0, stdout.decode(), stderr.decode()
+        return proc.returncode, stdout.decode(), stderr.decode()
     except asyncio.TimeoutError:
         if proc:
             proc.kill()
+            await proc.wait()
         return 1, "", f"Command timed out after {timeout}s"
     except FileNotFoundError:
         return 1, "", f"Command not found: {cmd[0]}"

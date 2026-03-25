@@ -35,6 +35,14 @@ async def _get_session() -> aiohttp.ClientSession:
         _http_session = aiohttp.ClientSession(connector=connector)
     return _http_session
 
+
+async def close_session() -> None:
+    """Close the shared advanced_skills HTTP session. Call on bot shutdown."""
+    global _http_session
+    if _http_session and not _http_session.closed:
+        await _http_session.close()
+        _http_session = None
+
 # ---------------------------------------------------------------------------
 # Configuration — loaded from environment
 # ---------------------------------------------------------------------------
@@ -190,6 +198,61 @@ async def check_plex_status() -> str:
             return f"✅ **{name}**: v{version} ({platform})"
         return f"❌ Plex: {resp.get('message', 'unknown error')}"
     return f"❌ Plex: {data}"
+
+
+async def get_plex_activity() -> str:
+    """Get real-time Plex activity: who is watching what, progress, quality, and stream type.
+
+    Uses the Tautulli /api/v2?cmd=get_activity endpoint which returns current streams.
+    Returns a formatted summary of active sessions or "Nothing playing" if idle.
+    """
+    if not TAUTULLI_API_KEY:
+        return "⚠️ Tautulli API key not configured. Set TAUTULLI_API_KEY in .env."
+
+    data = await _api_get(
+        f"{TAUTULLI_URL}/api/v2?apikey={TAUTULLI_API_KEY}&cmd=get_activity"
+    )
+    if not isinstance(data, dict):
+        return f"❌ Plex activity: {data}"
+
+    resp = data.get("response", {})
+    if resp.get("result") != "success":
+        return f"❌ Plex activity: {resp.get('message', 'unknown error')}"
+
+    activity = resp.get("data", {})
+    stream_count = activity.get("stream_count", 0)
+
+    if not stream_count or stream_count == 0:
+        return "🎬 Plex — nothing currently playing."
+
+    sessions = activity.get("sessions", [])
+    lines: list[str] = [f"🎬 **{stream_count} active stream{'s' if stream_count != 1 else ''}**"]
+
+    for s in sessions:
+        user = s.get("friendly_name") or s.get("username", "Unknown")
+        title = s.get("full_title") or s.get("title", "Unknown title")
+        media_type = s.get("media_type", "")
+        type_icon = "📺" if media_type == "episode" else "🎬" if media_type == "movie" else "🎵"
+
+        progress_pct = s.get("progress_percent", 0)
+        view_offset = int(s.get("view_offset", 0)) // 1000  # ms → seconds
+        duration = int(s.get("duration", 0)) // 1000
+        time_str = f"{view_offset // 60}:{view_offset % 60:02d}/{duration // 60}:{duration % 60:02d}" if duration else ""
+
+        quality = s.get("quality_profile") or s.get("stream_video_resolution") or "?"
+        transcode = s.get("transcode_decision", "")
+        stream_type = "🔄 Transcode" if transcode == "transcode" else "▶️ Direct"
+        player = s.get("player", "")
+        platform = s.get("platform", "")
+
+        lines.append(
+            f"{type_icon} **{user}** — {title} "
+            f"({progress_pct}% · {time_str}) "
+            f"[{quality} · {stream_type}]"
+            + (f" on {player}/{platform}" if player else "")
+        )
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -749,6 +812,71 @@ async def browse_url(url: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Multi-source comparison
+# ---------------------------------------------------------------------------
+
+async def compare_sources(urls_json: str, question: str) -> str:
+    """
+    Browse multiple URLs in parallel and synthesize a comparison answer.
+
+    Fetches up to 5 URLs concurrently, then asks the LLM to compare/contrast
+    the content and answer the question. Great for competitive analysis,
+    comparing documentation pages, or fact-checking across sources.
+
+    Args:
+        urls_json: JSON array of URLs, e.g. '["https://site1.com","https://site2.com"]'
+        question:  What to compare or answer from these sources.
+
+    Returns a synthesized comparison using all successfully fetched pages.
+    """
+    import json as _json
+
+    try:
+        urls = _json.loads(urls_json)
+        if not isinstance(urls, list) or not urls:
+            return "❌ urls_json must be a non-empty JSON array of URL strings."
+    except _json.JSONDecodeError as e:
+        return f"❌ Invalid urls_json: {e}"
+
+    urls = urls[:5]  # cap at 5
+
+    # Fetch all in parallel
+    pages = await asyncio.gather(
+        *[asyncio.wait_for(browse_url(u), timeout=20) for u in urls],
+        return_exceptions=True,
+    )
+
+    sections: list[str] = []
+    for url, result in zip(urls, pages):
+        if isinstance(result, Exception):
+            sections.append(f"[{url}: error — {result}]")
+        elif isinstance(result, str):
+            sections.append(f"=== Source: {url} ===\n{result[:2000]}")
+        else:
+            sections.append(f"[{url}: no content]")
+
+    if not sections:
+        return "❌ Could not fetch any of the provided URLs."
+
+    combined = "\n\n".join(sections)[:7000]
+    prompt = (
+        f"You have {len(sections)} source(s) to compare. "
+        f"Answer this question: **{question}**\n\n"
+        "Use only the source content below. Cite which source supports each point. "
+        "Note any contradictions or gaps.\n\n"
+        f"{combined}"
+    )
+
+    try:
+        from llm import chat as _llm_chat
+        synthesis, _, _ = await asyncio.wait_for(_llm_chat(prompt), timeout=35)
+        return synthesis[:1900]
+    except Exception as e:
+        log.warning("compare_sources LLM synthesis failed: %s", e)
+        return f"📄 **Raw sources** (LLM synthesis unavailable):\n\n{combined[:1800]}"
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -756,6 +884,7 @@ ADVANCED_SKILLS = {
     "check_arr_health": check_arr_health,
     "check_download_clients": check_download_clients,
     "check_plex_status": check_plex_status,
+    "get_plex_activity": get_plex_activity,
     "search_media": search_media,
     "get_download_queue": get_download_queue,
     "get_recent_additions": get_recent_additions,
@@ -765,6 +894,7 @@ ADVANCED_SKILLS = {
     # Phase 8: Web skills
     "search_web": search_web,
     "browse_url": browse_url,
+    "compare_sources": compare_sources,
     # Phase E: Weather
     "get_weather": get_weather,
 }

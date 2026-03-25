@@ -1283,14 +1283,14 @@ async def trigger_nas_backup(backup_type: str = "incremental") -> str:
 
 ---
 
-### Phase 8: Polish & Documentation (Planned)
+### Phase 8: Polish & Documentation (In Progress)
 
 **Objective**: Production-ready deployment
 
 **Tasks:**
-1. [ ] Write troubleshooting guide
-2. [ ] Create backup/restore procedure
-3. [ ] Add comprehensive test suite (unit + integration)
+1. [x] Write troubleshooting guide — `docs/TROUBLESHOOTING.md`
+2. [x] Create backup/restore procedure — `scripts/backup_restore.sh`
+3. [x] Add comprehensive test suite (unit + integration) — 5 new test files covering llm chat, monitor_skills, subprocess_utils, mission_control, git_skills
 4. [ ] Perform formal security audit
 5. [ ] Grafana dashboards for agent metrics
 6. [ ] Load testing (simulate high usage)

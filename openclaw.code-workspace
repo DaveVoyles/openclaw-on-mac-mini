@@ -1,14 +1,13 @@
 {
-    "folders": [
-        {
-            "uri": "vscode-remote://ssh-remote+macmini/Users/davevoyles/openclaw",
-            "name": "OpenClaw (Mac Mini)"
-        }
+  "folders": [
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+    "remote.SSH.defaultExtensions": [
+      "ms-python.python",
+      "ms-vscode-remote.remote-ssh",
     ],
-    "settings": {
-        "remote.SSH.defaultExtensions": [
-            "ms-python.python",
-            "ms-vscode-remote.remote-ssh"
-        ]
-    }
+  },
 }

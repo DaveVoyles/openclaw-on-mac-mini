@@ -12,6 +12,8 @@ from unittest.mock import patch
 import spending as spending_module
 from spending import SpendingTracker, PRICE_INPUT_PER_M, PRICE_OUTPUT_PER_M, BUDGET_LIMIT
 
+pytestmark = pytest.mark.asyncio
+
 
 @pytest.fixture
 def tracker(tmp_path):
@@ -27,59 +29,59 @@ def tracker(tmp_path):
 
 
 class TestRecord:
-    def test_record_increments_call_count(self, tracker):
-        tracker.record(100, 50)
+    async def test_record_increments_call_count(self, tracker):
+        await tracker.record(100, 50)
         assert tracker._data["calls"] == 1
 
-    def test_record_accumulates_input_tokens(self, tracker):
-        tracker.record(1000, 0)
-        tracker.record(500, 0)
+    async def test_record_accumulates_input_tokens(self, tracker):
+        await tracker.record(1000, 0)
+        await tracker.record(500, 0)
         assert tracker._data["total_input_tokens"] == 1500
 
-    def test_record_accumulates_output_tokens(self, tracker):
-        tracker.record(0, 200)
-        tracker.record(0, 300)
+    async def test_record_accumulates_output_tokens(self, tracker):
+        await tracker.record(0, 200)
+        await tracker.record(0, 300)
         assert tracker._data["total_output_tokens"] == 500
 
-    def test_record_computes_correct_cost_input_only(self, tracker):
+    async def test_record_computes_correct_cost_input_only(self, tracker):
         # 1M input tokens at $0.10/M = $0.10
-        tracker.record(1_000_000, 0)
+        await tracker.record(1_000_000, 0)
         assert abs(tracker.total_cost - PRICE_INPUT_PER_M) < 1e-9
 
-    def test_record_computes_correct_cost_output_only(self, tracker):
+    async def test_record_computes_correct_cost_output_only(self, tracker):
         # 1M output tokens at $0.40/M = $0.40
-        tracker.record(0, 1_000_000)
+        await tracker.record(0, 1_000_000)
         assert abs(tracker.total_cost - PRICE_OUTPUT_PER_M) < 1e-9
 
-    def test_record_computes_combined_cost(self, tracker):
-        tracker.record(1_000_000, 1_000_000)
+    async def test_record_computes_combined_cost(self, tracker):
+        await tracker.record(1_000_000, 1_000_000)
         expected = PRICE_INPUT_PER_M + PRICE_OUTPUT_PER_M
         assert abs(tracker.total_cost - expected) < 1e-9
 
-    def test_record_zero_tokens_adds_zero_cost(self, tracker):
-        tracker.record(0, 0)
+    async def test_record_zero_tokens_adds_zero_cost(self, tracker):
+        await tracker.record(0, 0)
         assert tracker.total_cost == 0.0
         assert tracker._data["calls"] == 1  # Call still counted
 
-    def test_record_updates_daily_bucket(self, tracker):
+    async def test_record_updates_daily_bucket(self, tracker):
         import datetime
         today = datetime.date.today().isoformat()
-        tracker.record(500, 250)
+        await tracker.record(500, 250)
         assert today in tracker._data["daily"]
         day = tracker._data["daily"][today]
         assert day["input_tokens"] == 500
         assert day["output_tokens"] == 250
         assert day["calls"] == 1
 
-    def test_record_sets_first_call_on_first_use(self, tracker):
+    async def test_record_sets_first_call_on_first_use(self, tracker):
         assert tracker._data["first_call"] is None
-        tracker.record(1, 1)
+        await tracker.record(1, 1)
         assert tracker._data["first_call"] is not None
 
-    def test_record_updates_last_call_each_time(self, tracker):
-        tracker.record(1, 1)
+    async def test_record_updates_last_call_each_time(self, tracker):
+        await tracker.record(1, 1)
         first = tracker._data["last_call"]
-        tracker.record(1, 1)
+        await tracker.record(1, 1)
         second = tracker._data["last_call"]
         # Both should be set; last_call is a timestamp string
         assert first is not None
@@ -98,8 +100,8 @@ class TestProperties:
     def test_budget_remaining_starts_at_full_budget(self, tracker):
         assert abs(tracker.budget_remaining - BUDGET_LIMIT) < 1e-9
 
-    def test_budget_remaining_decreases_after_spending(self, tracker):
-        tracker.record(1_000_000, 0)  # costs PRICE_INPUT_PER_M
+    async def test_budget_remaining_decreases_after_spending(self, tracker):
+        await tracker.record(1_000_000, 0)  # costs PRICE_INPUT_PER_M
         expected = BUDGET_LIMIT - PRICE_INPUT_PER_M
         assert abs(tracker.budget_remaining - expected) < 1e-6
 
@@ -161,14 +163,14 @@ class TestFormatting:
         result = tracker.daily_breakdown()
         assert "No daily data" in result
 
-    def test_daily_breakdown_shows_data_after_record(self, tracker):
-        tracker.record(1000, 500)
+    async def test_daily_breakdown_shows_data_after_record(self, tracker):
+        await tracker.record(1000, 500)
         result = tracker.daily_breakdown()
         assert isinstance(result, str)
         assert "$" in result  # Shows cost
 
-    def test_reset_clears_all_data(self, tracker):
-        tracker.record(1000, 500)
+    async def test_reset_clears_all_data(self, tracker):
+        await tracker.record(1000, 500)
         tracker.reset()
         assert tracker.total_cost == 0.0
         assert tracker._data["calls"] == 0
@@ -180,11 +182,11 @@ class TestFormatting:
 
 
 class TestPersistence:
-    def test_data_persists_across_instances(self, tmp_path):
+    async def test_data_persists_across_instances(self, tmp_path):
         temp_file = tmp_path / "spending.json"
         with patch.object(spending_module, "SPENDING_FILE", temp_file):
             t1 = SpendingTracker()
-            t1.record(1000, 500)
+            await t1.record(1000, 500)
             cost1 = t1.total_cost
             calls1 = t1._data["calls"]
 
@@ -200,11 +202,11 @@ class TestPersistence:
             t = SpendingTracker()
             assert t.total_cost == 0.0  # Graceful fallback
 
-    def test_save_writes_valid_json(self, tmp_path):
+    async def test_save_writes_valid_json(self, tmp_path):
         temp_file = tmp_path / "spending.json"
         with patch.object(spending_module, "SPENDING_FILE", temp_file):
             t = SpendingTracker()
-            t.record(100, 50)
+            await t.record(100, 50)
 
         data = json.loads(temp_file.read_text())
         assert "total_cost_usd" in data

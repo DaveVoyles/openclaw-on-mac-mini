@@ -5,6 +5,7 @@ Tracks token usage per API call and persists cumulative spending to disk.
 
 import asyncio
 import datetime
+import fcntl
 import json
 import logging
 import os
@@ -41,7 +42,12 @@ class SpendingTracker:
     def _load(self) -> dict[str, Any]:
         if SPENDING_FILE.exists():
             try:
-                return json.loads(SPENDING_FILE.read_text())
+                with open(SPENDING_FILE) as f:
+                    fcntl.flock(f, fcntl.LOCK_SH)
+                    try:
+                        return json.load(f)
+                    finally:
+                        fcntl.flock(f, fcntl.LOCK_UN)
             except Exception as e:
                 log.error("Failed to load spending data: %s", e)
         return self._empty()
@@ -63,7 +69,10 @@ class SpendingTracker:
         SPENDING_FILE.parent.mkdir(parents=True, exist_ok=True)
         try:
             tmp = SPENDING_FILE.with_suffix(".tmp")
-            tmp.write_text(json.dumps(self._data, indent=2))
+            with open(tmp, "w") as f:
+                f.write(json.dumps(self._data, indent=2))
+                f.flush()
+                os.fsync(f.fileno())
             tmp.replace(SPENDING_FILE)
         except Exception as e:
             log.error("Failed to save spending data: %s", e)

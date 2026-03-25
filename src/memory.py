@@ -7,6 +7,7 @@ Named threads can be saved to disk and resumed later (survive restarts).
 
 import json
 import logging
+import os
 import re
 import time
 from pathlib import Path
@@ -32,6 +33,17 @@ MIN_MESSAGES_TO_SUMMARIZE = 4
 
 # Valid thread name: letters, digits, hyphens, underscores, up to 32 chars
 _THREAD_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
+
+
+def _atomic_write(path: Path, data: str) -> None:
+    """Write data to *path* atomically via temp-file + fsync + rename."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    with open(tmp, "w") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(path)
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +198,7 @@ class ConversationStore:
             "history": conv.history,
         }
         try:
-            path.write_text(json.dumps(payload, indent=2))
+            _atomic_write(path, json.dumps(payload, indent=2))
             log.info("Saved thread '%s' for user %d (%d msgs)", name, user_id, len(conv.history))
             return f"✅ Saved thread **{name}** ({len(conv.history)} messages)."
         except Exception as e:
@@ -248,7 +260,7 @@ class ConversationStore:
             "history": conv.history,
         }
         try:
-            path.write_text(json.dumps(payload, indent=2))
+            _atomic_write(path, json.dumps(payload, indent=2))
         except Exception as e:
             log.warning("Auto-save failed for user %d: %s", user_id, e)
 
@@ -357,7 +369,7 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
             "saved_at": time.time(),
             "summary": summary,
         }
-        path.write_text(json.dumps(payload, indent=2))
+        _atomic_write(path, json.dumps(payload, indent=2))
         log.info("Saved session summary for user %d (%d chars)", user_id, len(summary))
 
         # Also push to QMD for long-term semantic recall
