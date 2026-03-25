@@ -40,23 +40,11 @@ _http_session: aiohttp.ClientSession | None = None
 
 # Cached access token with TTL (Google tokens last ~3600s)
 _access_token_cache: str | None = None
-_access_token_expiry: float = 0.0
+from http_session import SessionManager
 
-
-async def _get_session() -> aiohttp.ClientSession:
-    global _http_session
-    if _http_session is None or _http_session.closed:
-        _http_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10)
-        )
-    return _http_session
-
-
-async def close_session() -> None:
-    global _http_session
-    if _http_session and not _http_session.closed:
-        await _http_session.close()
-        _http_session = None
+_sessions = SessionManager(timeout=10, name="calendar")
+_get_session = _sessions.get
+close_session = _sessions.close
 
 
 def _truncate(text: str, limit: int = 1900) -> str:

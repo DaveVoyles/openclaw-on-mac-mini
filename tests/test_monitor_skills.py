@@ -22,8 +22,8 @@ def isolate_snapshots(tmp_path, monkeypatch):
     """Redirect snapshot storage to a temp directory for every test."""
     monkeypatch.setattr(ms, "MEMORY_DIR", tmp_path)
     monkeypatch.setattr(ms, "_SNAPSHOTS_FILE", tmp_path / "url_snapshots.json")
-    # Reset session so tests don't share connections
-    monkeypatch.setattr(ms, "_monitor_session", None)
+    # Reset the SessionManager's cached session so tests don't share connections
+    ms._sessions._session = None
 
 
 # ---------------------------------------------------------------------------

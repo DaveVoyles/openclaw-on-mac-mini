@@ -259,7 +259,7 @@ async def guide_handler(request: web.Request) -> web.Response:
     return web.Response(text=GUIDE_HTML, content_type="text/html")
 
 
-_TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+_TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()
 
 
@@ -269,4 +269,3 @@ DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()
 # ---------------------------------------------------------------------------
 
 GUIDE_HTML = (_TEMPLATES_DIR / "guide.html").read_text()
-

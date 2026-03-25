@@ -99,6 +99,8 @@ async def get_mission_tasks(status: str | None = None) -> str:
 
 async def get_task_detail(task_id: str) -> str:
     """Get full details for a specific task by ID."""
+    if not task_id or len(task_id) > 200:
+        return "❌ Invalid task_id (must be 1–200 characters)."
     data = _load_tasks()
     task = next((t for t in data.get("tasks", []) if t.get("id") == task_id), None)
 
@@ -153,6 +155,8 @@ async def _run_mc_script(*args: str) -> str:
 
 async def update_task_status(task_id: str, new_status: str) -> str:
     """Update a task's status (backlog, in_progress, review, done)."""
+    if not task_id or len(task_id) > 200:
+        return "❌ Invalid task_id (must be 1–200 characters)."
     valid = {"backlog", "in_progress", "review", "done", "permanent"}
     if new_status not in valid:
         return f"❌ Invalid status. Valid: {', '.join(sorted(valid))}"
@@ -162,12 +166,16 @@ async def update_task_status(task_id: str, new_status: str) -> str:
 
 async def complete_task(task_id: str, summary: str) -> str:
     """Mark a task as complete (moves to review) with a summary."""
+    if not task_id or len(task_id) > 200:
+        return "❌ Invalid task_id (must be 1–200 characters)."
     result = await _run_mc_script("complete", task_id, summary)
     return f"{'✅' if '✓' in result else '❌'} {result}"
 
 
 async def add_task_comment(task_id: str, comment: str) -> str:
     """Add a comment to a task."""
+    if not task_id or len(task_id) > 200:
+        return "❌ Invalid task_id (must be 1–200 characters)."
     result = await _run_mc_script("comment", task_id, comment)
     return f"{'✅' if '✓' in result else '❌'} {result}"
 

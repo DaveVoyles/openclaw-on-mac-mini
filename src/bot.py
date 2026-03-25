@@ -6,6 +6,7 @@ Autonomous AI agent for home automation and system management.
 import asyncio
 import collections
 import datetime
+import functools
 import json
 import logging
 import os
@@ -16,12 +17,14 @@ from pathlib import Path
 
 import aiohttp
 import discord
+from discord.ext import commands
 import yaml
 from aiohttp import web
 from discord import app_commands
 from dotenv import load_dotenv
 
 from skills import (
+    SKILLS,
     get_container_logs,
     get_container_status,
     get_docker_stats,
@@ -31,25 +34,32 @@ from skills import (
     restart_container,
 )
 from skills.advanced_skills import (
+    browse_url,
     check_arr_health,
     check_download_clients,
     check_plex_status,
     check_service_ports,
     create_status_report,
     get_download_queue,
-    get_recent_additions,
+    get_plex_activity,
+    get_weather,
     ping_host,
-    search_media,
+    search_web,
 )
 from analyzer import analyze_logs
 from scheduler import scheduler
-from network import get_network_status, get_tailscale_status, run_speed_test
+
+from agentmail import send_agent_mail
+from calendar_skills import get_upcoming_events
+from git_skills import git_status, git_diff
+from mission_control import get_mission_tasks
+from qmd import remember_fact, recall_fact
+from research_agent import ResearchAgent
 
 from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
 from llm import analyze_image as llm_analyze_image, analyze_document as llm_analyze_document
 from llm import SUPPORTED_IMAGE_MIMES
 from memory import store as conversation_store
-from spending import tracker as spending_tracker, get_spending, get_daily_spending
 from dashboard import api_dashboard_handler, dashboard_handler, guide_handler
 from approvals import (
     ApprovalView,
@@ -58,6 +68,26 @@ from approvals import (
     build_approval_embed,
     is_emergency_stopped,
     set_emergency_stop,
+)
+from constants import (
+    EMBED_DESC_LIMIT,
+    EMBED_SPLIT_LIMIT,
+    EMBED_FIELD_LIMIT,
+    EMBED_PROMPT_LIMIT,
+    PROACTIVE_SCAN_INTERVAL,
+    CLEANUP_INTERVAL,
+    AUDIT_FLUSH_INTERVAL,
+    BRIEFING_CHECK_INTERVAL,
+    BRIEFING_HOUR,
+    BRIEFING_MINUTE_WINDOW,
+    LOG_SNIPPET_MAX_CHARS,
+    MEMORY_SNIPPET_MAX_CHARS,
+    DOCUMENT_MAX_CHARS,
+    ATTACHMENT_TEXT_MAX_CHARS,
+    PROACTIVE_LOG_LINES,
+    DEFAULT_ANALYZE_LINES,
+    PDF_MAX_PAGES,
+    MAX_FILE_SIZE,
 )
 
 # ---------------------------------------------------------------------------
@@ -80,6 +110,48 @@ CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 # Channel for proactive push notifications (morning briefing, alerts)
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 
+# ---------------------------------------------------------------------------
+# Channel role architecture — prevents context bleed between workflows
+# ---------------------------------------------------------------------------
+
+# Map: Discord channel_id → role name ('research', 'analytics', 'bookmarks')
+_CHANNEL_ROLES: dict[int, str] = {}
+# Map: role name → prompt override text (loaded from config.yaml)
+_CHANNEL_PROMPTS: dict[str, str] = {}
+
+
+def _load_channel_config() -> None:
+    """Load channel roles from config.yaml and map them to env-provided IDs."""
+    global _CHANNEL_ROLES, _CHANNEL_PROMPTS
+    config_file = CONFIG_DIR / "config.yaml"
+    if config_file.exists():
+        try:
+            with open(config_file) as f:
+                cfg = yaml.safe_load(f) or {}
+            roles = cfg.get("channels", {}).get("roles", {})
+            for role_name, role_cfg in roles.items():
+                prompt = role_cfg.get("prompt_override", "")
+                if prompt:
+                    _CHANNEL_PROMPTS[role_name] = prompt
+        except Exception as e:
+            log.warning("Failed to load channel config: %s", e)
+
+    for role in ("research", "analytics", "bookmarks"):
+        raw = os.getenv(f"DISCORD_CHANNEL_{role.upper()}_ID", "0")
+        try:
+            cid = int(raw)
+            if cid:
+                _CHANNEL_ROLES[cid] = role
+        except ValueError:
+            pass
+
+    if _CHANNEL_ROLES:
+        role_summary = {v: k for k, v in _CHANNEL_ROLES.items()}
+        log.info("Channel roles loaded: %s", role_summary)
+    else:
+        log.info("No channel role IDs configured (DISCORD_CHANNEL_<ROLE>_ID not set)")
+
+
 VERSION = "0.6.0"
 
 # ---------------------------------------------------------------------------
@@ -97,6 +169,17 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger("openclaw")
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:
+    """Truncate *text* to fit in a Discord embed description."""
+    if len(text) <= limit:
+        return text
+    return text[: limit - 20] + "\n… (truncated)"
+
 
 # ---------------------------------------------------------------------------
 # Audit logger — buffered write to avoid per-command file open
@@ -145,7 +228,6 @@ def require_auth(func):
     The decorated function receives an *already-deferred* interaction (via
     ``interaction.response.defer()``) so it can freely use followup.send().
     """
-    import functools
 
     @functools.wraps(func)
     async def wrapper(interaction: discord.Interaction, *args, **kwargs):
@@ -218,20 +300,21 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 
-class OpenClawBot(discord.Client):
-    """Discord client with an application-command tree."""
+class OpenClawBot(commands.Bot):
+    """Discord bot with slash commands, cog extensions, and app-command tree."""
 
     def __init__(self):
-        super().__init__(intents=intents)
-        self.tree = app_commands.CommandTree(self)
+        # command_prefix is required by commands.Bot — unused since we only use slash commands
+        super().__init__(command_prefix="!", intents=intents)
         self.start_time = time.monotonic()
         self._health_runner: web.AppRunner | None = None
 
     async def setup_hook(self):
         """Load cogs and sync commands on startup."""
         # Load cog extensions
-        await self.load_extension("cogs.docker_cog")
-        log.info("Loaded cogs: docker_cog")
+        for cog in ("cogs.docker_cog", "cogs.media_cog", "cogs.network_cog", "cogs.analytics_cog"):
+            await self.load_extension(cog)
+        log.info("Loaded cogs: docker, media, network, analytics")
 
         if DISCORD_GUILD_ID:
             guild = discord.Object(id=int(DISCORD_GUILD_ID))
@@ -249,15 +332,41 @@ class OpenClawBot(discord.Client):
         log.info("OpenClaw online as %s (ID %s)", self.user, self.user.id)
         audit_log(None, "bot_ready", f"Logged in as {self.user}")
 
+        # Load channel role configuration
+        _load_channel_config()
+
         # Start scheduler and register skills
-        from skills import SKILLS as all_skills
-        scheduler.register_skills(all_skills)
+        scheduler.register_skills(SKILLS)
         scheduler.start()
-        log.info("Scheduler started with %d registered skills", len(all_skills))
+        log.info("Scheduler started with %d registered skills", len(SKILLS))
+
+        # Register recurring cron jobs (idempotent — skip if already persisted)
+        existing_actions = {t.action for t in scheduler.list_tasks()}
+        if "run_maintenance" not in existing_actions:
+            scheduler.create(
+                action="run_maintenance",
+                args={},
+                hour=4,
+                minute=0,
+                created_by="system",
+                notify_channel_id=ALERT_CHANNEL_ID,
+                alert_only=False,
+            )
+            log.info("Registered 4:00 AM maintenance cron job")
+        if "index_vault_to_qmd" not in existing_actions:
+            scheduler.create(
+                action="index_vault_to_qmd",
+                args={},
+                hour=3,
+                minute=50,
+                created_by="system",
+                notify_channel_id=0,
+                alert_only=False,
+            )
+            log.info("Registered 3:50 AM vault indexer cron job")
 
         # Wire scheduler → Discord notification callback
         async def _scheduler_notify(task_id: str, action: str, result: str, is_alert: bool) -> None:
-            from skills import SKILLS as _sk
             task = scheduler.get(task_id)
             if task is None:
                 return
@@ -268,7 +377,7 @@ class OpenClawBot(discord.Client):
             icon = "🚨" if is_alert else "✅"
             embed = discord.Embed(
                 title=f"{icon} Watch Alert: `{action}`",
-                description=result[:3800] or "(no output)",
+                description=result[:EMBED_SPLIT_LIMIT] or "(no output)",
                 color=color,
             )
             embed.set_footer(text=f"Task {task_id} • {action}")
@@ -294,7 +403,7 @@ class OpenClawBot(discord.Client):
     async def _audit_writer(self):
         """Flush buffered audit entries to disk every 30 seconds."""
         while True:
-            await asyncio.sleep(30)
+            await asyncio.sleep(AUDIT_FLUSH_INTERVAL)
             if not _audit_buffer:
                 continue
             entries = []
@@ -316,7 +425,7 @@ class OpenClawBot(discord.Client):
     async def _background_cleanup(self):
         """Periodically clean up expired conversations and approval requests."""
         while True:
-            await asyncio.sleep(300)  # every 5 minutes
+            await asyncio.sleep(CLEANUP_INTERVAL)  # every 5 minutes
             try:
                 conversation_store.cleanup_expired()
                 approval_store.cleanup_expired()
@@ -329,19 +438,18 @@ class OpenClawBot(discord.Client):
 
     async def _morning_briefing_loop(self):
         """Post a morning briefing to ALERT_CHANNEL_ID each day at ~8:00 AM."""
-        import datetime as _dt
         last_briefing_date: str = ""
         while True:
             try:
-                now = _dt.datetime.now()
-                if now.hour == 8 and now.minute < 5:
+                now = datetime.datetime.now()
+                if now.hour == BRIEFING_HOUR and now.minute < BRIEFING_MINUTE_WINDOW:
                     today_str = now.strftime("%Y-%m-%d")
                     if today_str != last_briefing_date:
                         last_briefing_date = today_str
                         asyncio.create_task(self._send_morning_briefing())
             except Exception as e:
                 log.warning("Morning briefing scheduler error: %s", e)
-            await asyncio.sleep(60)  # check every minute
+            await asyncio.sleep(BRIEFING_CHECK_INTERVAL)  # check every minute
 
     async def _send_morning_briefing(self, channel_override=None):
         """Compose and post the daily morning briefing.
@@ -360,11 +468,6 @@ class OpenClawBot(discord.Client):
 
         log.info("Generating morning briefing for channel %d", ALERT_CHANNEL_ID)
         try:
-            from skills.advanced_skills import check_arr_health, get_download_queue, get_weather
-            from skills import get_system_stats
-            from calendar_skills import get_upcoming_events
-            from llm import chat as llm_chat
-
             # Gather data concurrently
             health, queue, weather, sysstat = await asyncio.gather(
                 check_arr_health(),
@@ -379,8 +482,7 @@ class OpenClawBot(discord.Client):
             except Exception:
                 calendar = "Calendar not available."
 
-            import datetime as _dt
-            today = _dt.date.today().strftime("%A, %B %d, %Y")
+            today = datetime.date.today().strftime("%A, %B %d, %Y")
             prompt = (
                 f"Good morning! Generate a concise morning briefing for {today}. "
                 "Keep it under 600 words. Include:\n"
@@ -396,7 +498,7 @@ class OpenClawBot(discord.Client):
 
             embed = discord.Embed(
                 title=f"🌅 Morning Briefing — {today}",
-                description=response_text[:4000],
+                description=response_text[:EMBED_DESC_LIMIT],
                 color=discord.Color.from_rgb(255, 165, 0),
             )
             embed.set_footer(text="🤖 OpenClaw Autonomous Briefing")
@@ -408,21 +510,18 @@ class OpenClawBot(discord.Client):
     async def _proactive_insight_loop(self):
         """Scan for anomalies every 2 hours and post a Discord alert if noteworthy."""
         # Wait 2 hours after startup before first scan (let the bot settle)
-        await asyncio.sleep(7200)
+        await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)
         while True:
             try:
                 await self._run_proactive_scan()
             except Exception as e:
                 log.warning("Proactive scan error: %s", e)
-            await asyncio.sleep(7200)
+            await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)
 
     async def _run_proactive_scan(self):
         """Gather system signals + log snippets, ask Gemini for assessment, post if actionable."""
         if not ALERT_CHANNEL_ID:
             return
-
-        from skills.advanced_skills import check_arr_health, check_download_clients, check_plex_status
-        from skills import get_container_logs
 
         health, dl_clients, plex = await asyncio.gather(
             check_arr_health(),
@@ -437,11 +536,11 @@ class OpenClawBot(discord.Client):
         _error_re = __import__("re").compile(r"error|warn|exception|critical|failed", __import__("re").IGNORECASE)
         for svc in key_containers:
             try:
-                logs = await asyncio.wait_for(get_container_logs(svc, lines=25), timeout=6)
+                logs = await asyncio.wait_for(get_container_logs(svc, lines=PROACTIVE_LOG_LINES), timeout=6)
                 if logs and _error_re.search(logs):
-                    log_snippets[svc] = logs[:600]
-            except Exception:
-                pass
+                    log_snippets[svc] = logs[:LOG_SNIPPET_MAX_CHARS]
+            except Exception as exc:
+                log.debug("Container log fetch for %s failed: %s", svc, exc)
 
         # If all health checks look clean AND no logs have anomalies, skip LLM call
         all_clean = all(
@@ -469,7 +568,7 @@ class OpenClawBot(discord.Client):
             "aware of — errors, service failures, degraded performance, or unusual activity.\n"
             "ONLY respond if there is something genuinely actionable. "
             "If everything is within normal operation, respond with exactly: NO_ALERT\n\n"
-            f"{summary[:3500]}"
+            f"{summary[:EMBED_PROMPT_LIMIT]}"
         )
 
         try:
@@ -484,7 +583,7 @@ class OpenClawBot(discord.Client):
 
             embed = discord.Embed(
                 title="🔭 Proactive Insight",
-                description=analysis[:3800],
+                description=analysis[:EMBED_SPLIT_LIMIT],
                 color=discord.Color.gold(),
             )
             embed.set_footer(text="Autonomous monitoring scan • every 2h")
@@ -513,7 +612,7 @@ class OpenClawBot(discord.Client):
             if analysis:
                 embed = discord.Embed(
                     title="🔍 AI Assessment",
-                    description=analysis[:1024],
+                    description=analysis[:EMBED_FIELD_LIMIT],
                     color=discord.Color.orange(),
                 )
                 await channel.send(embed=embed)
@@ -538,13 +637,9 @@ class OpenClawBot(discord.Client):
         # Close all async sessions — log errors instead of silently swallowing
         _close_fns = [
             ("llm", lambda: __import__("llm").close_sessions()),
-            ("gateway", lambda: __import__("gateway").close_gateway_session()),
             ("agentmail", lambda: __import__("agentmail").close_session()),
-            ("overseerr", lambda: __import__("overseerr").close_session()),
-            ("calendar_skills", lambda: __import__("calendar_skills").close_session()),
             ("nas", lambda: __import__("nas").close_session()),
-            ("network", lambda: __import__("network").close_session()),
-            ("advanced_skills", lambda: __import__("skills.advanced_skills", fromlist=["close_session"]).close_session()),
+            ("http_sessions", lambda: __import__("http_session").close_all()),
         ]
         for name, fn in _close_fns:
             try:
@@ -630,6 +725,8 @@ class OpenClawBot(discord.Client):
         The handler formats a human-readable Discord notification and posts it
         to ALERT_CHANNEL_ID (if configured), then returns 200 OK.
         """
+        from webhook_formatter import FORMATTERS, format_generic
+
         source = request.match_info.get("source", "unknown").lower()
         try:
             payload = await request.json()
@@ -640,60 +737,11 @@ class OpenClawBot(discord.Client):
             payload = {"raw": str(payload)}
 
         # -- Format by source --------------------------------------------------
-        title = f"🔔 Webhook: {source.capitalize()}"
-        color = discord.Color.blurple()
-        lines: list[str] = []
-
-        if source in ("sonarr", "radarr", "lidarr"):
-            event = payload.get("eventType", "Event")
-            series = payload.get("series", {})
-            movie = payload.get("movie", {})
-            name = series.get("title") or movie.get("title") or payload.get("artist", {}).get("name", "Unknown")
-            ep = payload.get("episodes", [{}])[0] if payload.get("episodes") else {}
-            ep_title = ep.get("title", "")
-            ep_num = f"S{ep.get('seasonNumber', 0):02d}E{ep.get('episodeNumber', 0):02d}" if ep else ""
-            lines.append(f"**Event**: {event}")
-            lines.append(f"**Title**: {name}" + (f" — {ep_num} {ep_title}" if ep_title else ""))
-            if payload.get("isUpgrade"):
-                lines.append("⬆️ Quality upgrade")
-            if event == "Grab":
-                color = discord.Color.yellow()
-            elif event == "Download":
-                color = discord.Color.green()
-            elif event in ("EpisodeFileDelete", "MovieFileDelete"):
-                color = discord.Color.red()
-                title = f"🗑️ {source.capitalize()}: File Deleted"
-
-        elif source == "plex":
-            event = payload.get("event", payload.get("type", "Event"))
-            meta = payload.get("Metadata", {})
-            p_title = meta.get("title", "Unknown")
-            p_type = meta.get("type", "")
-            user = payload.get("Account", {}).get("title", "")
-            lines.append(f"**Event**: {event}")
-            lines.append(f"**{'Episode' if p_type == 'episode' else 'Title'}**: {p_title}")
-            if user:
-                lines.append(f"**User**: {user}")
-            if "play" in event.lower():
-                color = discord.Color.green()
-                title = "▶️ Plex: Now Playing"
-
-        elif source == "qbittorrent":
-            name = payload.get("name", payload.get("hash", "Unknown"))
-            category = payload.get("category", "")
-            lines.append(f"**Torrent**: {name}")
-            if category:
-                lines.append(f"**Category**: {category}")
-            color = discord.Color.green()
-            title = "✅ qBittorrent: Download Complete"
-
+        formatter = FORMATTERS.get(source)
+        if formatter:
+            title, description, color = formatter(payload)
         else:
-            # Generic fallback — show top-level keys
-            for k, v in list(payload.items())[:8]:
-                if isinstance(v, (str, int, float, bool)):
-                    lines.append(f"**{k}**: {v}")
-
-        description = "\n".join(lines) or "*(no details)*"
+            title, description, color = format_generic(source, payload)
         log.info("Webhook received from %s: %s", source, description[:120])
 
         if ALERT_CHANNEL_ID:
@@ -844,7 +892,7 @@ async def help_cmd(interaction: discord.Interaction):
 # ---------------------------------------------------------------------------
 
 # Discord embed description limit is 4096 chars; stay safely under it
-_EMBED_LIMIT = 3800
+_EMBED_LIMIT = EMBED_SPLIT_LIMIT
 
 
 def _split_response(text: str) -> list[str]:
@@ -872,6 +920,55 @@ def _split_response(text: str) -> list[str]:
             chunks.append(text[:split_at])
             text = text[split_at:].lstrip("\n")
     return chunks
+
+
+async def _handle_image_attachment(
+    attachment: discord.Attachment, question: str
+) -> str:
+    """Download and analyze an image attachment via Gemini vision.
+
+    Returns the augmented question string with the analysis appended.
+    """
+    try:
+        session = _get_bot_http_session()
+        async with session.get(
+            attachment.url, timeout=aiohttp.ClientTimeout(total=30)
+        ) as resp:
+            if resp.status == 200:
+                img_bytes = await resp.read()
+                mime = (attachment.content_type or "").split(";")[0].strip()
+                image_answer = await llm_analyze_image(img_bytes, mime, question)
+                return f"{question}\n\n[Attachment analysis: {image_answer}]"
+    except Exception as e:
+        log.warning("ask_cmd: failed to analyze image attachment: %s", e)
+    return question
+
+
+async def _handle_doc_attachment(
+    attachment: discord.Attachment, question: str
+) -> str:
+    """Download and analyze a document attachment via Gemini.
+
+    Returns the augmented question string with the document text appended.
+    """
+    try:
+        session = _get_bot_http_session()
+        async with session.get(
+            attachment.url, timeout=aiohttp.ClientTimeout(total=30)
+        ) as resp:
+            if resp.status == 200:
+                raw = await resp.read()
+                try:
+                    doc_text = raw.decode("utf-8", errors="replace")[
+                        :ATTACHMENT_TEXT_MAX_CHARS
+                    ]
+                except Exception:
+                    doc_text = ""
+                if doc_text:
+                    return f"{question}\n\n[Attached file `{attachment.filename}`]:\n{doc_text}"
+    except Exception as e:
+        log.warning("ask_cmd: failed to read attachment: %s", e)
+    return question
 
 
 @bot.tree.command(name="ask", description="Ask OpenClaw anything (AI-powered with function calling)")
@@ -907,37 +1004,18 @@ async def ask_cmd(
             await interaction.edit_original_response(
                 content=f"🔄 *Using `{tool_name}`…* (step {round_num})"
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Failed to update tool progress: %s", exc)
 
     # If an attachment was provided, route through the appropriate analyzer
     if attachment:
         mime = (attachment.content_type or "").split(";")[0].strip()
-        if mime in SUPPORTED_IMAGE_MIMES and attachment.size <= 20 * 1024 * 1024:
-            try:
-                session = _get_bot_http_session()
-                async with session.get(attachment.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status == 200:
-                        img_bytes = await resp.read()
-                        image_answer = await llm_analyze_image(img_bytes, mime, question)
-                        question = f"{question}\n\n[Attachment analysis: {image_answer}]"
-            except Exception as e:
-                log.warning("ask_cmd: failed to analyze image attachment: %s", e)
+        if mime in SUPPORTED_IMAGE_MIMES and attachment.size <= MAX_FILE_SIZE:
+            question = await _handle_image_attachment(attachment, question)
+        elif attachment.size > MAX_FILE_SIZE:
+            log.info("ask_cmd: attachment too large (%d bytes), skipping", attachment.size)
         else:
-            # Non-image attachment: download and pass as text context
-            try:
-                session = _get_bot_http_session()
-                async with session.get(attachment.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status == 200:
-                        raw = await resp.read()
-                        try:
-                            doc_text = raw.decode("utf-8", errors="replace")[:8000]
-                        except Exception:
-                            doc_text = ""
-                        if doc_text:
-                            question = f"{question}\n\n[Attached file `{attachment.filename}`]:\n{doc_text}"
-            except Exception as e:
-                log.warning("ask_cmd: failed to read attachment: %s", e)
+            question = await _handle_doc_attachment(attachment, question)
 
     # Get or create conversation context
     conv = conversation_store.get(
@@ -945,6 +1023,18 @@ async def ask_cmd(
         channel_id=interaction.channel_id,
         user_name=str(interaction.user.display_name),
     )
+
+    # Channel role injection — inject prompt once at session start to prevent context bleed
+    if not conv.history:
+        channel_role = _CHANNEL_ROLES.get(interaction.channel_id)
+        if channel_role:
+            role_prompt = _CHANNEL_PROMPTS.get(channel_role, "")
+            if role_prompt:
+                conv.history.append({
+                    "role": "model",
+                    "parts": [f"📌 *{channel_role.capitalize()} mode active.* {role_prompt}"],
+                })
+                log.debug("Injected %s channel role prompt for channel %d", channel_role, interaction.channel_id)
 
     try:
         response_text, updated_history, model_used = await llm_chat(
@@ -1048,76 +1138,6 @@ async def forget_cmd(interaction: discord.Interaction, name: str):
 
 
 # ---------------------------------------------------------------------------
-# Slash commands — Phase 5 (advanced skills)
-# ---------------------------------------------------------------------------
-
-
-@bot.tree.command(name="search", description="Search for TV shows or movies")
-@app_commands.describe(
-    query="Search term (e.g. 'Breaking Bad')",
-    media_type="'tv', 'movie', or 'all' (default: all)",
-)
-@require_auth
-async def search_cmd(interaction: discord.Interaction, query: str, media_type: str = "all"):
-    await interaction.response.defer()
-    result = await search_media(query, media_type)
-    embed = discord.Embed(
-        title=f"🔍 Search: {query}",
-        description=result,
-        color=discord.Color.teal(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "search", detail=f"{query} type={media_type}")
-
-
-@bot.tree.command(name="queue", description="Show active downloads from SABnzbd and qBittorrent")
-@require_auth
-async def queue_cmd(interaction: discord.Interaction):
-    await interaction.response.defer()
-    result = await get_download_queue()
-    embed = discord.Embed(
-        title="📥 Download Queue",
-        description=result,
-        color=discord.Color.dark_teal(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "queue")
-
-
-@bot.tree.command(name="recent", description="Show recently added media from Plex")
-@app_commands.describe(count="Number of items to show (1-25, default 10)")
-@require_auth
-async def recent_cmd(interaction: discord.Interaction, count: int = 10):
-    await interaction.response.defer()
-    result = await get_recent_additions(count)
-    embed = discord.Embed(
-        title=f"🆕 Recently Added ({count})",
-        description=result,
-        color=discord.Color.purple(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "recent", detail=f"count={count}")
-
-
-@bot.tree.command(name="health", description="Check *arr services and download client health")
-@require_auth
-async def health_cmd(interaction: discord.Interaction):
-    await interaction.response.defer()
-    arr_health = await check_arr_health()
-    dl_health = await check_download_clients()
-    plex_health = await check_plex_status()
-
-    embed = discord.Embed(
-        title="🏥 Service Health",
-        color=discord.Color.green(),
-    )
-    embed.add_field(name="*arr Services", value=arr_health, inline=False)
-    embed.add_field(name="Download Clients", value=dl_health, inline=False)
-    embed.add_field(name="Plex", value=plex_health, inline=False)
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "health")
-
-
 @bot.tree.command(name="ports", description="Check service port connectivity")
 @require_auth
 async def ports_cmd(interaction: discord.Interaction):
@@ -1149,11 +1169,10 @@ async def report_cmd(interaction: discord.Interaction):
 @bot.tree.command(name="analyze", description="AI-powered container log analysis")
 @app_commands.describe(service="Container name to analyze", lines="Log lines to analyze (10-200, default 50)")
 @require_auth
-async def analyze_cmd(interaction: discord.Interaction, service: str, lines: int = 50):
+async def analyze_cmd(interaction: discord.Interaction, service: str, lines: int = DEFAULT_ANALYZE_LINES):
     await interaction.response.defer()
     result = await analyze_logs(service, lines)
-    if len(result) > 4000:
-        result = result[:3980] + "\n… (truncated)"
+    result = truncate_for_embed(result)
     embed = discord.Embed(
         title=f"🔬 Log Analysis: {service}",
         description=result,
@@ -1254,14 +1273,13 @@ async def schedule_cmd(
 @require_auth
 async def skills_cmd(interaction: discord.Interaction):
 
-    from skills import SKILLS as all_skills
     lines = []
-    for name, fn in sorted(all_skills.items()):
+    for name, fn in sorted(SKILLS.items()):
         doc = (fn.__doc__ or "No description").strip().split("\n")[0][:80]
         lines.append(f"• `{name}` — {doc}")
 
     embed = discord.Embed(
-        title=f"🧰 Available Skills ({len(all_skills)})",
+        title=f"🧰 Available Skills ({len(SKILLS)})",
         description="\n".join(lines),
         color=discord.Color.blurple(),
     )
@@ -1299,44 +1317,6 @@ async def pending_cmd(interaction: discord.Interaction):
     audit_log(interaction.user, "pending")
 
 
-@bot.tree.command(name="auditlog", description="View recent audit log entries")
-@app_commands.describe(lines="Number of entries to show (default 10, max 25)")
-@require_auth
-async def auditlog_cmd(interaction: discord.Interaction, lines: int = 10):
-    lines = min(max(lines, 1), 25)
-    today = datetime.date.today().isoformat()
-    audit_file = AUDIT_DIR / f"{today}.jsonl"
-
-    if not audit_file.exists():
-        await interaction.response.send_message("No audit entries for today.", ephemeral=True)
-        return
-
-    # Read last N lines
-    all_lines = audit_file.read_text().strip().split("\n")
-    recent = all_lines[-lines:]
-
-    formatted = []
-    for line in recent:
-        try:
-            entry = json.loads(line)
-            ts = entry.get("ts", "")[:19].replace("T", " ")
-            user = entry.get("user", "?")
-            action = entry.get("action", "?")
-            detail = entry.get("detail", "")
-            result = entry.get("result", "")
-            formatted.append(f"`{ts}` **{action}** {detail} [{result}] \u2014 {user}")
-        except json.JSONDecodeError:
-            continue
-
-    embed = discord.Embed(
-        title=f"\U0001f4cb Audit Log (last {len(formatted)})",
-        description="\n".join(formatted) or "No entries.",
-        color=discord.Color.light_grey(),
-    )
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-    audit_log(interaction.user, "auditlog", detail=f"lines={lines}")
-
-
 @bot.tree.command(name="estop", description="Emergency stop \u2014 halt or resume all bot actions")
 @app_commands.describe(action="'stop' to halt, 'resume' to resume (default: stop)")
 @require_auth
@@ -1366,7 +1346,6 @@ async def estop_cmd(interaction: discord.Interaction, action: str = "stop"):
 @app_commands.describe(content="Fact to remember", tags="Comma-separated tags")
 @require_auth
 async def remember_cmd(interaction: discord.Interaction, content: str, tags: str = ""):
-    from qmd import remember_fact
     result = await remember_fact(content, tags)
     await interaction.response.send_message(result)
     audit_log(interaction.user, "remember", detail=content)
@@ -1376,7 +1355,6 @@ async def remember_cmd(interaction: discord.Interaction, content: str, tags: str
 @app_commands.describe(query="Keywords to search for")
 @require_auth
 async def recall_cmd(interaction: discord.Interaction, query: str):
-    from qmd import recall_fact
     result = await recall_fact(query)
     embed = discord.Embed(title=f"🧠 Recall: {query}", description=result, color=discord.Color.blue())
     await interaction.response.send_message(embed=embed)
@@ -1390,78 +1368,10 @@ async def mail_cmd(interaction: discord.Interaction, to: str, subject: str, body
     if is_emergency_stopped():
         await interaction.response.send_message("🛑 Emergency stop active.", ephemeral=True)
         return
-    from agentmail import send_agent_mail
     await interaction.response.defer()
     result = await send_agent_mail(to, subject, body)
     await interaction.followup.send(result)
     audit_log(interaction.user, "mail", detail=f"to={to} subj={subject}")
-
-
-# ---------------------------------------------------------------------------
-# Phase 6: Network & Remote Access commands
-# ---------------------------------------------------------------------------
-
-
-@bot.tree.command(name="network", description="Show network connectivity status (LAN, internet, Tailscale)")
-@require_auth
-async def network_cmd(interaction: discord.Interaction):
-    await interaction.response.defer()
-    result = await get_network_status()
-    embed = discord.Embed(
-        title="🌐 Network Status",
-        description=result,
-        color=discord.Color.blue(),
-    )
-    embed.set_footer(text="LAN • Internet • DNS • Tailscale • OpenClaw health")
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "network")
-
-
-@bot.tree.command(name="tailscale", description="Show Tailscale VPN status and this device's Tailscale IP")
-@require_auth
-async def tailscale_cmd(interaction: discord.Interaction):
-    await interaction.response.defer()
-    result = await get_tailscale_status()
-    embed = discord.Embed(
-        title="🔒 Tailscale Status",
-        description=result,
-        color=discord.Color.dark_green(),
-    )
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "tailscale")
-
-
-@bot.tree.command(name="speedtest", description="Run a quick network speed test")
-@require_auth
-async def speedtest_cmd(interaction: discord.Interaction):
-    await interaction.response.defer()
-    result = await run_speed_test()
-    embed = discord.Embed(
-        title="⚡ Speed Test",
-        description=result,
-        color=discord.Color.gold(),
-    )
-    embed.set_footer(text="Download test via Cloudflare (10MB sample)")
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "speedtest")
-
-
-@bot.tree.command(name="spending", description="View Gemini API spending and budget status")
-@app_commands.describe(breakdown="Show daily breakdown (default: summary)")
-@require_auth
-async def spending_cmd(interaction: discord.Interaction, breakdown: bool = False):
-    if breakdown:
-        text = spending_tracker.daily_breakdown()
-    else:
-        text = spending_tracker.summary()
-    embed = discord.Embed(
-        title="💰 Gemini API Spending",
-        description=text,
-        color=discord.Color.green() if not spending_tracker.is_over_budget else discord.Color.red(),
-    )
-    embed.set_footer(text=f"Model: gemini-1.5-flash | Tier 1 | Budget: ${spending_tracker.budget_limit:.2f}")
-    await interaction.response.send_message(embed=embed)
-    audit_log(interaction.user, "spending")
 
 
 # ---------------------------------------------------------------------------
@@ -1474,11 +1384,8 @@ async def spending_cmd(interaction: discord.Interaction, breakdown: bool = False
 @require_auth
 async def websearch_cmd(interaction: discord.Interaction, query: str, results: int = 5):
     await interaction.response.defer()
-    from skills.advanced_skills import search_web
     result = await search_web(query, num_results=results)
-    # Discord embed description limit is 4096 chars
-    if len(result) > 4000:
-        result = result[:3980] + "\n… (truncated)"
+    result = truncate_for_embed(result)
     embed = discord.Embed(
         title=f"🔍 Web Search: {query[:80]}",
         description=result,
@@ -1500,20 +1407,17 @@ async def browse_cmd(interaction: discord.Interaction, url: str, question: str =
         )
         return
     await interaction.response.defer()
-    from skills.advanced_skills import browse_url
     page_text = await browse_url(url)
     if question and not page_text.startswith("❌") and not page_text.startswith("⚠️"):
         # Use Gemini to answer a specific question about the page content
-        from llm import analyze_document as llm_doc
-        answer = await llm_doc(
+        answer = await llm_analyze_document(
             page_text,
             f"Based on the page content above, answer this question: {question}",
         )
         result = f"**Question**: {question}\n\n**Answer**: {answer}"
     else:
         result = page_text
-    if len(result) > 4000:
-        result = result[:3980] + "\n… (truncated)"
+    result = truncate_for_embed(result)
     embed = discord.Embed(
         title=f"🌐 Browse: {url[:80]}",
         description=result,
@@ -1543,7 +1447,7 @@ async def analyze_image_cmd(
         )
         return
 
-    if image.size > 20 * 1024 * 1024:
+    if image.size > MAX_FILE_SIZE:
         await interaction.response.send_message("❌ Image too large (max 20 MB).", ephemeral=True)
         return
 
@@ -1561,9 +1465,7 @@ async def analyze_image_cmd(
         return
 
     result = await llm_analyze_image(image_bytes, mime, question)
-
-    if len(result) > 4000:
-        result = result[:3980] + "\n… (truncated)"
+    result = truncate_for_embed(result)
 
     embed = discord.Embed(
         title="🖼️ Image Analysis",
@@ -1587,7 +1489,7 @@ async def analyze_file_cmd(
 ):
 
     # 25MB Discord limit — we enforce 20MB to be safe
-    if file.size > 20 * 1024 * 1024:
+    if file.size > MAX_FILE_SIZE:
         await interaction.response.send_message("❌ File too large (max 20 MB).", ephemeral=True)
         return
 
@@ -1619,7 +1521,7 @@ async def analyze_file_cmd(
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
             pages_text = []
-            for page in reader.pages[:50]:  # limit to first 50 pages
+            for page in reader.pages[:PDF_MAX_PAGES]:  # limit to first 50 pages
                 page_text = page.extract_text()
                 if page_text:
                     pages_text.append(page_text)
@@ -1650,16 +1552,14 @@ async def analyze_file_cmd(
     del file_bytes
 
     # Trim to a reasonable context size (Gemini handles large inputs, but be practical)
-    MAX_CHARS = 50_000
+    MAX_CHARS = DOCUMENT_MAX_CHARS
     truncated = False
     if len(extracted_text) > MAX_CHARS:
         extracted_text = extracted_text[:MAX_CHARS]
         truncated = True
 
     result = await llm_analyze_document(extracted_text, question)
-
-    if len(result) > 4000:
-        result = result[:3980] + "\n… (truncated)"
+    result = truncate_for_embed(result)
 
     embed = discord.Embed(
         title=f"📄 {file_type_label} Analysis",
@@ -1685,7 +1585,6 @@ async def analyze_file_cmd(
 @require_auth
 async def tasks_cmd(interaction: discord.Interaction, status: str = ""):
     await interaction.response.defer()
-    from mission_control import get_mission_tasks
     result = await get_mission_tasks(status.strip() or None)
     embed = discord.Embed(
         title="📋 Mission Control",
@@ -1700,7 +1599,81 @@ async def tasks_cmd(interaction: discord.Interaction, status: str = ""):
 # ---------------------------------------------------------------------------
 # Phase B: Research command — fire-and-forget multi-step autonomous research
 # Phase E: Weather command
+# Bookmark command — save URLs and notes to the Obsidian vault
 # ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="bookmark", description="Save a URL or note to the Obsidian vault")
+@app_commands.describe(
+    url="URL to bookmark (optional)",
+    note="Description or notes about this bookmark",
+    tags="Comma-separated tags, e.g. 'docker,reference' (optional)",
+)
+@require_auth
+async def bookmark_cmd(
+    interaction: discord.Interaction,
+    url: str = "",
+    note: str = "",
+    tags: str = "",
+):
+    await interaction.response.defer()
+
+    from obsidian_writer import save_to_vault
+
+    title = note[:80] or url[:80] or "Untitled Bookmark"
+    content_parts: list[str] = []
+
+    if url.startswith("http"):
+        content_parts.append(f"**URL**: {url}")
+
+        # Try to fetch + summarize the page for richer vault notes
+        try:
+            from skills.advanced_skills import browse_url
+            page_text = await asyncio.wait_for(browse_url(url), timeout=15)
+            if page_text and not page_text.startswith("❌"):
+                prompt = (
+                    f"Summarize this webpage in 3-5 bullet points for a bookmark note.\n"
+                    f"URL: {url}\n\nContent:\n{page_text[:3000]}"
+                )
+                summary, _, model_used = await asyncio.wait_for(
+                    llm_chat(user_message=prompt), timeout=30
+                )
+                content_parts.append(f"\n## Summary\n\n{summary}")
+                # Extract page title from first H1 for the vault filename
+                import re as _re
+                h1 = _re.search(r"^#\s+(.+)$", page_text, _re.MULTILINE)
+                if h1:
+                    title = h1.group(1)[:80]
+        except Exception as e:
+            log.debug("Bookmark URL summarize failed: %s", e)
+
+    if note:
+        content_parts.append(f"\n## Notes\n\n{note}")
+
+    content = "\n".join(content_parts) or note or url
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+
+    result = await save_to_vault(
+        title=title,
+        content=content,
+        source_url=url if url.startswith("http") else "",
+        tags=tag_list,
+        content_type="bookmark",
+    )
+
+    embed = discord.Embed(
+        title="📎 Bookmark Saved",
+        description=result,
+        color=discord.Color.green() if result.startswith("✅") else discord.Color.red(),
+    )
+    if url.startswith("http"):
+        embed.add_field(name="URL", value=url[:200], inline=False)
+    if tags:
+        embed.add_field(name="Tags", value=tags[:100], inline=True)
+
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "bookmark", detail=url[:200] or note[:200])
+
 
 
 class _ResearchView(discord.ui.View):
@@ -1713,9 +1686,8 @@ class _ResearchView(discord.ui.View):
 
     @discord.ui.button(label="📌 Save to Memory", style=discord.ButtonStyle.secondary)
     async def save_to_memory(self, interaction: discord.Interaction, _button: discord.ui.Button):
-        from qmd import remember_fact
         # Store first 500 chars as the memory fact
-        snippet = self._report[:500].strip()
+        snippet = self._report[:MEMORY_SNIPPET_MAX_CHARS].strip()
         result = await remember_fact(
             content=f"[Research] {self._query}: {snippet}",
             tags="research",
@@ -1779,11 +1751,10 @@ async def research_cmd(interaction: discord.Interaction, query: str):
         if thread:
             try:
                 await thread.send(msg)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Research progress send failed: %s", exc)
 
     # Run the research agent
-    from research_agent import ResearchAgent
     agent = ResearchAgent(max_searches=4, browse_top_n=2, timeout_seconds=180)
 
     try:
@@ -1826,7 +1797,6 @@ async def research_cmd(interaction: discord.Interaction, query: str):
 @require_auth
 async def weather_cmd(interaction: discord.Interaction, location: str = "", units: str = "uscs"):
     await interaction.response.defer()
-    from skills.advanced_skills import get_weather
     result = await get_weather(location=location, units=units)
     embed = discord.Embed(
         title="🌤️ Weather",
@@ -1839,161 +1809,6 @@ async def weather_cmd(interaction: discord.Interaction, location: str = "", unit
 
 
 # ---------------------------------------------------------------------------
-# /watch — persistent user-defined alert conditions
-# ---------------------------------------------------------------------------
-
-# Maps known NL intent keywords to skills + default intervals
-_WATCH_SKILL_MAP = {
-    "disk": ("get_nas_storage_health", 60),
-    "storage": ("get_nas_storage_health", 60),
-    "nas": ("get_nas_alerts", 15),
-    "plex": ("check_plex_status", 10),
-    "download": ("check_download_clients", 5),
-    "queue": ("check_download_clients", 5),
-    "cpu": ("get_system_stats", 10),
-    "memory": ("get_system_stats", 10),
-    "health": ("check_arr_health", 15),
-    "sonarr": ("check_arr_health", 15),
-    "radarr": ("check_arr_health", 15),
-    "network": ("get_network_status", 10),
-    "ping": ("ping_host", 5),
-    "speed": ("run_speed_test", 60),
-    "tailscale": ("get_tailscale_status", 10),
-}
-
-
-@bot.tree.command(name="watch", description="Create a persistent alert that runs on a schedule")
-@app_commands.describe(
-    condition="What to watch in plain English (e.g. 'check disk usage every hour', 'monitor plex every 10 min')",
-    action="'add' to create, 'list' to view, 'remove' to delete",
-    watch_id="Task ID to remove (e.g. sched-5) — only needed for 'remove'",
-)
-async def watch_cmd(
-    interaction: discord.Interaction,
-    condition: str = "",
-    action: str = "list",
-    watch_id: str = "",
-):
-
-    if action == "list":
-        tasks = [t for t in scheduler.list_tasks() if t.created_by.startswith("watch:")]
-        if not tasks:
-            await interaction.response.send_message(
-                "👁️ No active watches. Use `/watch add condition:\"check disk every hour\"`.",
-                ephemeral=True,
-            )
-            return
-        lines = []
-        for t in tasks:
-            status = "✅" if t.enabled else "⏸️"
-            lines.append(
-                f"{status} `{t.task_id}` — **{t.action}** every {t.interval_minutes}m "
-                f"(runs: {t.run_count}, next: {t.next_run_str})"
-            )
-        embed = discord.Embed(
-            title=f"👁️ Active Watches ({len(tasks)})",
-            description="\n".join(lines),
-            color=discord.Color.orange(),
-        )
-        embed.set_footer(text="Use /watch remove watch_id:<id> to delete a watch")
-        await interaction.response.send_message(embed=embed)
-        return
-
-    if action == "remove":
-        if not watch_id:
-            await interaction.response.send_message("❌ Provide a watch_id. Example: `/watch remove watch_id:sched-5`", ephemeral=True)
-            return
-        if scheduler.remove(watch_id):
-            await interaction.response.send_message(f"🗑️ Watch `{watch_id}` removed.")
-            audit_log(interaction.user, "watch_remove", detail=watch_id)
-        else:
-            await interaction.response.send_message(f"❌ Watch `{watch_id}` not found.", ephemeral=True)
-        return
-
-    # action == "add"
-    if not condition:
-        await interaction.response.send_message(
-            "❌ Describe what to watch. Examples:\n"
-            "• `/watch add condition:\"check disk usage every hour\"`\n"
-            "• `/watch add condition:\"monitor plex every 5 minutes\"`\n"
-            "• `/watch add condition:\"alert if downloads stall every 10 min\"`",
-            ephemeral=True,
-        )
-        return
-
-    # Parse the condition string
-    lower = condition.lower()
-
-    # Detect interval from the text (e.g. "every 30 min", "every 2 hours")
-    import re as _re
-    interval = 30  # default
-    m = _re.search(r"every\s+(\d+)\s*(min|minute|minutes|hour|hours|h)", lower)
-    if m:
-        n = int(m.group(1))
-        unit = m.group(2)
-        interval = n * 60 if unit.startswith("h") else n
-
-    # Pick the best skill based on keywords
-    matched_skill = None
-    for keyword, (skill_name, default_interval) in _WATCH_SKILL_MAP.items():
-        if keyword in lower:
-            matched_skill = skill_name
-            if not m:  # no explicit interval in text → use the sensible default
-                interval = default_interval
-            break
-
-    if not matched_skill:
-        # Fall back to a general system stats check
-        matched_skill = "get_system_stats"
-
-    # Clamp interval to a sane range (1 min – 24 hours)
-    interval = max(1, min(interval, 1440))
-
-    task = scheduler.create(
-        action=matched_skill,
-        interval_minutes=interval,
-        created_by=f"watch:{interaction.user}",
-        notify_channel_id=interaction.channel_id or 0,
-        alert_only=True,
-    )
-
-    embed = discord.Embed(
-        title="👁️ Watch Created",
-        description=(
-            f"**Condition**: {condition}\n"
-            f"**Skill**: `{matched_skill}`\n"
-            f"**Interval**: every {interval} minute{'s' if interval != 1 else ''}\n"
-            f"**ID**: `{task.task_id}`"
-        ),
-        color=discord.Color.green(),
-    )
-    embed.set_footer(text=f"Results will post to this channel | Remove with /watch remove watch_id:{task.task_id}")
-    await interaction.response.send_message(embed=embed)
-    audit_log(interaction.user, "watch_add", detail=f"{task.task_id} {matched_skill} every {interval}m")
-
-
-# ---------------------------------------------------------------------------
-# /nowplaying — Plex active streams
-# ---------------------------------------------------------------------------
-
-
-@bot.tree.command(name="nowplaying", description="Show what's currently playing on Plex (active streams)")
-@require_auth
-async def nowplaying_cmd(interaction: discord.Interaction):
-    await interaction.response.defer()
-    from skills.advanced_skills import get_plex_activity
-    result = await get_plex_activity()
-    embed = discord.Embed(
-        title="🎬 Plex — Now Playing",
-        description=result,
-        color=discord.Color.from_rgb(229, 160, 13),  # Plex orange
-    )
-    embed.set_footer(text="via Tautulli · real-time activity")
-    await interaction.followup.send(embed=embed)
-    audit_log(interaction.user, "nowplaying")
-
-
-# ---------------------------------------------------------------------------
 # /diff — git status + diff summary
 # ---------------------------------------------------------------------------
 
@@ -2002,11 +1817,9 @@ async def nowplaying_cmd(interaction: discord.Interaction):
 @require_auth
 async def diff_cmd(interaction: discord.Interaction):
     await interaction.response.defer()
-    from git_skills import git_status, git_diff
     status, diff = await asyncio.gather(git_status(), git_diff())
     description = f"**Status**\n```\n{status[:800]}\n```\n**Diff**\n```diff\n{diff[:2600]}\n```"
-    if len(description) > 3900:
-        description = description[:3880] + "\n… (truncated)"
+    description = truncate_for_embed(description)
     embed = discord.Embed(
         title="🔀 Git Changes",
         description=description,
@@ -2034,65 +1847,9 @@ async def briefing_cmd(interaction: discord.Interaction):
     # _send_morning_briefing posts to a channel; acknowledge the slash command
     try:
         await interaction.edit_original_response(content="✅ Briefing posted above.")
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Briefing edit_original_response failed: %s", exc)
     audit_log(interaction.user, "briefing")
-
-
-# ---------------------------------------------------------------------------
-# /audit-summary — analytics on today's audit log
-# ---------------------------------------------------------------------------
-
-
-@bot.tree.command(name="audit-summary", description="Analytics summary of today's audit log (top commands, errors, active hours)")
-@require_auth
-async def audit_summary_cmd(interaction: discord.Interaction):
-
-    today = datetime.date.today().isoformat()
-    audit_file = AUDIT_DIR / f"{today}.jsonl"
-    if not audit_file.exists():
-        await interaction.response.send_message("No audit entries for today yet.", ephemeral=True)
-        return
-
-    entries: list[dict] = []
-    for line in audit_file.read_text().strip().splitlines():
-        try:
-            entries.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-
-    if not entries:
-        await interaction.response.send_message("No parseable audit entries for today.", ephemeral=True)
-        return
-
-    import collections as _col
-    action_counts: dict[str, int] = _col.Counter(e.get("action", "?") for e in entries)
-    error_entries = [e for e in entries if e.get("result", "success") not in ("success", "")]
-    hour_counts: dict[int, int] = _col.Counter(
-        int(e.get("ts", "T00")[11:13]) for e in entries if len(e.get("ts", "")) >= 13
-    )
-
-    top_actions = "\n".join(
-        f"  `{action}` — {count}x"
-        for action, count in action_counts.most_common(10)
-    )
-    top_hours = ", ".join(
-        f"{h:02d}:xx ({c})" for h, c in sorted(hour_counts.items(), key=lambda x: -x[1])[:5]
-    )
-    errors_text = "\n".join(
-        f"  `{e.get('ts','')[:19]}` {e.get('action','?')} → {e.get('result','?')}"
-        for e in error_entries[:5]
-    ) or "  None"
-
-    embed = discord.Embed(
-        title=f"📊 Audit Summary — {today}",
-        color=discord.Color.blurple(),
-    )
-    embed.add_field(name=f"Total actions ({len(entries)})", value=top_actions or "—", inline=False)
-    embed.add_field(name="Most active hours", value=top_hours or "—", inline=False)
-    embed.add_field(name=f"Non-success results ({len(error_entries)})", value=errors_text, inline=False)
-    await interaction.response.send_message(embed=embed)
-    audit_log(interaction.user, "audit-summary")
 
 
 # ---------------------------------------------------------------------------

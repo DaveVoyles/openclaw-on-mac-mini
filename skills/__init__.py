@@ -468,3 +468,11 @@ SKILLS.update(MONITOR_SKILLS)
 # Weather skill (Phase E — wraps wttr.in via aiohttp, no API key)
 from .advanced_skills import get_weather
 SKILLS.update({"get_weather": get_weather})
+
+# Obsidian vault — save/list/index markdown notes
+from obsidian_writer import OBSIDIAN_SKILLS
+SKILLS.update(OBSIDIAN_SKILLS)
+
+# Maintenance — 4AM cron: skill updates, gateway restart, NAS backup
+from maintenance_skills import MAINTENANCE_SKILLS
+SKILLS.update(MAINTENANCE_SKILLS)

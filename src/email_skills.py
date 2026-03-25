@@ -263,8 +263,9 @@ async def send_email(
     if not creds:
         return _config_hint(provider)
 
-    # Basic recipient validation at the boundary
-    if "@" not in to or "." not in to.split("@")[-1]:
+    # Validate recipient email address
+    import re as _re
+    if not _re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', to.strip()):
         return "❌ Invalid recipient email address."
 
     user, password, _, smtp_host, smtp_port = creds

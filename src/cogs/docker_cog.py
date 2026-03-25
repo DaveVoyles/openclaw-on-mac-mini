@@ -23,17 +23,7 @@ from approvals import (
     build_approval_embed,
     is_emergency_stopped,
 )
-
-
-def _audit_log(user, action, detail="", result="success"):
-    """Forward to bot.py's audit_log — imported lazily to avoid circular imports."""
-    from bot import audit_log
-    audit_log(user, action, detail=detail, result=result)
-
-
-def _is_service_allowed(skill: str, service: str) -> bool:
-    from bot import is_service_allowed
-    return is_service_allowed(skill, service)
+from cog_helpers import audit_log, is_service_allowed
 
 
 class DockerCog(commands.Cog, name="Docker"):
@@ -52,7 +42,7 @@ class DockerCog(commands.Cog, name="Docker"):
             color=discord.Color.blue(),
         )
         await interaction.followup.send(embed=embed)
-        _audit_log(interaction.user, "containers")
+        audit_log(interaction.user, "containers")
 
     @app_commands.command(name="status", description="Get detailed status for a container")
     @app_commands.describe(service="Container name (e.g. sonarr, radarr, plex)")
@@ -65,7 +55,7 @@ class DockerCog(commands.Cog, name="Docker"):
             color=discord.Color.blue(),
         )
         await interaction.followup.send(embed=embed)
-        _audit_log(interaction.user, "status", detail=service)
+        audit_log(interaction.user, "status", detail=service)
 
     @app_commands.command(name="logs", description="View recent logs from a container")
     @app_commands.describe(service="Container name", lines="Number of lines (5-100, default 30)")
@@ -78,7 +68,7 @@ class DockerCog(commands.Cog, name="Docker"):
             color=discord.Color.greyple(),
         )
         await interaction.followup.send(embed=embed)
-        _audit_log(interaction.user, "logs", detail=f"{service} lines={lines}")
+        audit_log(interaction.user, "logs", detail=f"{service} lines={lines}")
 
     @app_commands.command(name="system", description="Show system resource usage")
     async def system_cmd(self, interaction: discord.Interaction):
@@ -92,7 +82,7 @@ class DockerCog(commands.Cog, name="Docker"):
         )
         embed.add_field(name="Uptime", value=f"```{uptime_str}```", inline=False)
         await interaction.followup.send(embed=embed)
-        _audit_log(interaction.user, "system")
+        audit_log(interaction.user, "system")
 
     @app_commands.command(name="dockerstats", description="Show resource usage per container")
     async def dockerstats_cmd(self, interaction: discord.Interaction):
@@ -104,7 +94,7 @@ class DockerCog(commands.Cog, name="Docker"):
             color=discord.Color.orange(),
         )
         await interaction.followup.send(embed=embed)
-        _audit_log(interaction.user, "dockerstats")
+        audit_log(interaction.user, "dockerstats")
 
     @app_commands.command(name="restart", description="Restart a Docker container (requires approval)")
     @app_commands.describe(service="Container name to restart")
@@ -114,14 +104,14 @@ class DockerCog(commands.Cog, name="Docker"):
                 "🛑 **Emergency stop is active.** All actions are halted. Use `/estop resume` to resume.",
                 ephemeral=True,
             )
-            _audit_log(interaction.user, "restart", detail=service, result="blocked_estop")
+            audit_log(interaction.user, "restart", detail=service, result="blocked_estop")
             return
 
-        if not _is_service_allowed("restart_container", service):
+        if not is_service_allowed("restart_container", service):
             await interaction.response.send_message(
                 f"🚫 Restarting `{service}` is not permitted by policy.", ephemeral=True,
             )
-            _audit_log(interaction.user, "restart", detail=service, result="blocked_by_policy")
+            audit_log(interaction.user, "restart", detail=service, result="blocked_by_policy")
             return
 
         req = approval_store.create(
@@ -141,7 +131,7 @@ class DockerCog(commands.Cog, name="Docker"):
                 description=result,
                 color=color,
             )
-            _audit_log(
+            audit_log(
                 None, "restart_executed",
                 detail=f"{approved_req.target} approved_by={approved_req.resolver_name}",
                 result="success" if result.startswith("✅") else "failed",
@@ -153,7 +143,7 @@ class DockerCog(commands.Cog, name="Docker"):
 
         await interaction.response.send_message(embed=embed, view=view)
         view.message = await interaction.original_response()
-        _audit_log(interaction.user, "restart_requested", detail=service)
+        audit_log(interaction.user, "restart_requested", detail=service)
 
 
 async def setup(bot: commands.Bot):

@@ -158,7 +158,7 @@ class TestAnalyzeLogs:
 
         mock_llm = types.SimpleNamespace(
             is_configured=lambda: True,
-            chat=AsyncMock(return_value=(llm_response, [])),
+            chat=AsyncMock(return_value=(llm_response, [], None)),
         )
 
         with patch("analyzer._run", new=AsyncMock(return_value=(0, sample_logs, ""))):

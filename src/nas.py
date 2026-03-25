@@ -438,6 +438,13 @@ async def nas_create_folder(path: str) -> str:
     if not NAS_USER or not NAS_PASSWORD:
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
 
+    import posixpath
+    normed = posixpath.normpath(path)
+    if normed.startswith("..") or "/../" in path or path.endswith("/.."):
+        return "❌ Invalid path: directory traversal is not allowed."
+    if not normed.startswith("/"):
+        return "❌ Invalid path: must be an absolute path (e.g. '/volume1/folder')."
+
     result = await _dsm(
         "SYNO.FileStation.CreateFolder",
         2,
@@ -469,6 +476,15 @@ async def nas_write_file(
     """
     if not NAS_USER or not NAS_PASSWORD:
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
+
+    import posixpath
+    normed = posixpath.normpath(remote_folder)
+    if normed.startswith("..") or "/../" in remote_folder or remote_folder.endswith("/.."):
+        return "❌ Invalid path: directory traversal is not allowed."
+    if not normed.startswith("/"):
+        return "❌ Invalid path: must be an absolute path (e.g. '/volume1/documents')."
+    if ".." in filename or "/" in filename:
+        return "❌ Invalid filename: must not contain '..' or '/'."
 
     session = await _get_nas_session()
     sid = await _get_sid(session)

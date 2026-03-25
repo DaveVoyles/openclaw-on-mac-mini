@@ -42,21 +42,11 @@ _SNAPSHOTS_FILE = MEMORY_DIR / "url_snapshots.json"
 
 _TIMEOUT = aiohttp.ClientTimeout(total=20)
 
-_monitor_session: aiohttp.ClientSession | None = None
+from http_session import SessionManager
 
-
-async def _get_session() -> aiohttp.ClientSession:
-    global _monitor_session
-    if _monitor_session is None or _monitor_session.closed:
-        _monitor_session = aiohttp.ClientSession(timeout=_TIMEOUT)
-    return _monitor_session
-
-
-async def close_session() -> None:
-    global _monitor_session
-    if _monitor_session and not _monitor_session.closed:
-        await _monitor_session.close()
-        _monitor_session = None
+_sessions = SessionManager(timeout=20, name="monitor")
+_get_session = _sessions.get
+close_session = _sessions.close
 
 
 # ---------------------------------------------------------------------------
@@ -68,8 +58,8 @@ def _load_snapshots() -> dict[str, dict]:
     if _SNAPSHOTS_FILE.exists():
         try:
             return json.loads(_SNAPSHOTS_FILE.read_text())
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Failed to load snapshots: %s", exc)
     return {}
 
 

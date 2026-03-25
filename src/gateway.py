@@ -36,25 +36,11 @@ CTRL_BASE = "https://ctrl.maton.ai"
 
 _TIMEOUT = 30
 
-# Module-level aiohttp session (reused across calls)
-_gateway_session: aiohttp.ClientSession | None = None
+from http_session import SessionManager
 
-
-async def _get_gateway_session() -> aiohttp.ClientSession:
-    global _gateway_session
-    if _gateway_session is None or _gateway_session.closed:
-        _gateway_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=_TIMEOUT)
-        )
-    return _gateway_session
-
-
-async def close_gateway_session() -> None:
-    """Close the shared session. Call on bot shutdown."""
-    global _gateway_session
-    if _gateway_session and not _gateway_session.closed:
-        await _gateway_session.close()
-        _gateway_session = None
+_sessions = SessionManager(timeout=_TIMEOUT, name="gateway")
+_get_gateway_session = _sessions.get
+close_gateway_session = _sessions.close
 
 
 def _headers(connection_id: str | None = None) -> dict[str, str]:
@@ -152,7 +138,9 @@ async def gateway_request(
     if not MATON_API_KEY:
         return _api_key_hint()
 
-    # Validate app name: only lowercase alphanumeric and hyphens
+    # Validate app name: only lowercase alphanumeric and hyphens, max 100 chars
+    if len(app) > 100:
+        return "❌ App name too long (max 100 characters)."
     import re as _re
     if not _re.match(r"^[a-z0-9][a-z0-9-]*$", app.lower()):
         return "❌ Invalid app name. Only lowercase letters, digits, and hyphens are allowed."

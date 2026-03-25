@@ -27,9 +27,9 @@ llm:
 
 # Local LLM (Ollama) — hybrid routing
 local_llm:
-  enabled: true                          # set LOCAL_LLM_ENABLED=false in .env to disable
-  model: "llama3.2:3b"                   # override with OLLAMA_MODEL env var
-  url: "http://host.docker.internal:11434"  # override with OLLAMA_URL env var
+  enabled: true # set LOCAL_LLM_ENABLED=false in .env to disable
+  model: "llama3.2:3b" # override with OLLAMA_MODEL env var
+  url: "http://host.docker.internal:11434" # override with OLLAMA_URL env var
   # Queries containing these keywords bypass Ollama and go straight to Gemini
   # (because they need function/tool calling)
   tool_routed_to_gemini:
@@ -56,3 +56,31 @@ nas:
   ssh_port: 24
   user: "dave"
   docker_path: "/volume1/docker"
+
+# Channel roles — prevents context bleed between different workflows.
+# Set the matching env vars (DISCORD_CHANNEL_<ROLE>_ID) in .env with real IDs.
+# Each channel gets a prompt override injected at conversation start so the
+# bot behaves consistently with the channel's purpose.
+channels:
+  roles:
+    research:
+      prompt_override: >-
+        You are a focused research assistant operating in the #research channel.
+        Prioritize factual accuracy, cite all sources, and structure responses
+        as formal research reports with clear headers and bullet points.
+    analytics:
+      prompt_override: >-
+        You are a data analyst operating in the #analytics channel.
+        Focus on metrics, trends, and structured analysis of system performance
+        data. Use tables and ranked lists. Be concise and numbers-driven.
+    bookmarks:
+      prompt_override: >-
+        You are a knowledge organizer operating in the #bookmarks channel.
+        When given a URL or topic, extract the key information and confirm
+        what was saved to the vault. Keep responses brief and structured.
+
+# Obsidian vault settings
+vault:
+  dir: "/vault" # Docker volume mount point — matches VAULT_DIR env var
+  index_hour: 3 # Hour for nightly vault-to-QMD indexing (3:50 AM)
+  index_minute: 50

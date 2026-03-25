@@ -11,6 +11,7 @@ Hybrid routing:
 import asyncio
 import logging
 import os
+import threading
 import time
 from collections import defaultdict, deque
 from pathlib import Path
@@ -29,6 +30,8 @@ log = logging.getLogger("openclaw.llm")
 # ---------------------------------------------------------------------------
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
 MODEL_NAME = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2000"))
 TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
@@ -57,6 +60,7 @@ MAX_TOOL_ROUNDS = 12
 
 _system_prompt_cache: str | None = None
 _system_prompt_mtime: float = 0.0
+_system_prompt_lock = threading.Lock()
 
 
 def _load_system_prompt() -> str:
@@ -67,17 +71,18 @@ def _load_system_prompt() -> str:
         current_mtime = prompt_file.stat().st_mtime if prompt_file.exists() else 0.0
     except OSError:
         current_mtime = 0.0
-    if _system_prompt_cache is not None and current_mtime == _system_prompt_mtime:
+    with _system_prompt_lock:
+        if _system_prompt_cache is not None and current_mtime == _system_prompt_mtime:
+            return _system_prompt_cache
+        if prompt_file.exists():
+            _system_prompt_cache = prompt_file.read_text().strip()
+        else:
+            _system_prompt_cache = (
+                "You are OpenClaw, a helpful AI assistant managing a home media server. "
+                "Be concise, professional, and use emojis sparingly."
+            )
+        _system_prompt_mtime = current_mtime
         return _system_prompt_cache
-    if prompt_file.exists():
-        _system_prompt_cache = prompt_file.read_text().strip()
-    else:
-        _system_prompt_cache = (
-            "You are OpenClaw, a helpful AI assistant managing a home media server. "
-            "Be concise, professional, and use emojis sparingly."
-        )
-    _system_prompt_mtime = current_mtime
-    return _system_prompt_cache
 
 
 # ---------------------------------------------------------------------------
@@ -85,1292 +90,23 @@ def _load_system_prompt() -> str:
 # ---------------------------------------------------------------------------
 
 # Map skill names → Gemini FunctionDeclarations
-_TOOL_DECLARATIONS: list[dict[str, Any]] = [
-    {
-        "name": "list_containers",
-        "description": "List all running Docker containers with name, status, and ports.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_container_status",
-        "description": "Get detailed status, resource usage, and port mapping for a specific Docker container.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "service": {
-                    "type": "string",
-                    "description": "Container name (e.g. sonarr, radarr, plex, sabnzbd)",
-                },
-            },
-            "required": ["service"],
-        },
-    },
-    {
-        "name": "get_container_logs",
-        "description": "Retrieve the last N lines of logs from a Docker container.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "service": {
-                    "type": "string",
-                    "description": "Container name",
-                },
-                "lines": {
-                    "type": "integer",
-                    "description": "Number of log lines to retrieve (5-100, default 30)",
-                },
-            },
-            "required": ["service"],
-        },
-    },
-    {
-        "name": "get_docker_stats",
-        "description": "Get CPU, memory, and network usage for all running containers.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_system_stats",
-        "description": "Get Mac Mini system resource usage (CPU, memory, disk).",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_uptime",
-        "description": "Get system uptime of the Mac Mini.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_compose_config",
-        "description": (
-            "Read the Docker Compose configuration file and return port mappings, volume mounts, "
-            "and environment variable names for all services (or a specific one). "
-            "Use this when troubleshooting permission errors, port conflicts, or when you need "
-            "to know exactly how a container is configured."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "service": {
-                    "type": "string",
-                    "description": "Optional service name to filter results (e.g. 'sonarr', 'plex'). Leave empty for all services.",
-                },
-            },
-        },
-    },
-    # -- Phase 5: Advanced Skills --
-    {
-        "name": "check_arr_health",
-        "description": "Check health status of all *arr services (Sonarr, Radarr, Lidarr, Prowlarr).",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "check_download_clients",
-        "description": "Check connectivity of download clients (SABnzbd and qBittorrent).",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "check_plex_status",
-        "description": "Check Plex server status and version via Tautulli.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_plex_activity",
-        "description": (
-            "Get real-time Plex activity: who is currently watching, what they're watching, "
-            "playback progress, video quality, and whether the stream is direct play or transcode. "
-            "Use this when the user asks 'what's playing on Plex', 'is anyone watching?', "
-            "'who's using Plex right now', or similar."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "search_media",
-        "description": "Search for TV shows or movies across Sonarr and Radarr catalogs.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search term (e.g. 'Breaking Bad', 'The Matrix')",
-                },
-                "media_type": {
-                    "type": "string",
-                    "description": "Type filter: 'tv', 'movie', or 'all' (default: all)",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "get_download_queue",
-        "description": "Get active downloads from SABnzbd (Usenet) and qBittorrent (torrents).",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_recent_additions",
-        "description": "Get recently added media from Plex (via Tautulli).",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of recent items to return (1-25, default 10)",
-                },
-            },
-        },
-    },
-    {
-        "name": "ping_host",
-        "description": "Ping a hostname or IP to check connectivity and latency.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "host": {
-                    "type": "string",
-                    "description": "Hostname or IP address to ping",
-                },
-            },
-            "required": ["host"],
-        },
-    },
-    {
-        "name": "check_service_ports",
-        "description": "Check if all key services are listening on their expected ports.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "create_status_report",
-        "description": "Generate a comprehensive system status report covering all services, downloads, and Plex.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "analyze_logs",
-        "description": "Analyze container logs using AI to identify errors, warnings, and suggest fixes.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "service": {
-                    "type": "string",
-                    "description": "Container name to analyze logs for",
-                },
-                "lines": {
-                    "type": "integer",
-                    "description": "Number of log lines to analyze (10-200, default 50)",
-                },
-            },
-            "required": ["service"],
-        },
-    },
-    # -- Phase 5: Augmented Skills (QMD, AgentMail) --
-    {
-        "name": "remember_fact",
-        "description": "Store a fact or piece of information in the long-term memory (QMD).",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The fact or information to remember",
-                },
-                "tags": {
-                    "type": "string",
-                    "description": "Optional comma-separated list of tags to associate with this memory",
-                },
-            },
-            "required": ["content"],
-        },
-    },
-    {
-        "name": "recall_fact",
-        "description": "Search long-term memory (QMD) for a specific fact or information.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Keywords or topic to search for",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "list_memories",
-        "description": "List all facts stored in the long-term memory (QMD).",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "send_agent_mail",
-        "description": "Send an automated e-mail message to a single recipient.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "to": {
-                    "type": "string",
-                    "description": "The recipient's e-mail address",
-                },
-                "subject": {
-                    "type": "string",
-                    "description": "The subject of the e-mail",
-                },
-                "body": {
-                    "type": "string",
-                    "description": "The message body (plain text)",
-                },
-            },
-            "required": ["to", "subject", "body"],
-        },
-    },
-    # -- Phase 6: Network & Remote Access --
-    {
-        "name": "get_network_status",
-        "description": "Check LAN, internet, DNS, and Tailscale VPN connectivity and return a full status summary.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_tailscale_status",
-        "description": "Show Tailscale VPN status and this device's Tailscale IP address.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "run_speed_test",
-        "description": "Run a brief network speed test and return measured download speed and DNS latency.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    # -- Spending Tracker --
-    {
-        "name": "get_spending",
-        "description": "Get current Gemini API spending summary including total cost, budget remaining, and token usage.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_daily_spending",
-        "description": "Get daily spending breakdown for the last N days.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "days": {
-                    "type": "integer",
-                    "description": "Number of days to show (1-30, default 7)",
-                },
-            },
-        },
-    },
-    # -- Phase 6: Overseerr Media Requests --
-    {
-        "name": "get_pending_requests",
-        "description": "List all pending media requests awaiting approval in Overseerr.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "approve_request",
-        "description": "Approve a pending Overseerr media request by its numeric ID.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "request_id": {
-                    "type": "integer",
-                    "description": "The numeric ID of the request to approve (from get_pending_requests)",
-                },
-            },
-            "required": ["request_id"],
-        },
-    },
-    {
-        "name": "deny_request",
-        "description": "Decline a pending Overseerr media request by its numeric ID.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "request_id": {
-                    "type": "integer",
-                    "description": "The numeric ID of the request to decline (from get_pending_requests)",
-                },
-            },
-            "required": ["request_id"],
-        },
-    },
-    {
-        "name": "get_request_stats",
-        "description": "Get a summary count of all Overseerr media requests by status (pending, approved, available, etc.).",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    # -- Phase 6: Synology NAS --
-    {
-        "name": "get_nas_storage_health",
-        "description": "Get Synology NAS storage volume and disk health status.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_backup_status",
-        "description": "Get Synology Hyper Backup task status and last run time.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_nas_alerts",
-        "description": "Get Synology DSM system health alerts (fans, temperature, power, disk warnings).",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "get_disk_smart_status",
-        "description": "Get SMART health status for all physical disks in the Synology NAS.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    # -- Phase 6: Email (Gmail / Outlook) --
-    {
-        "name": "read_inbox",
-        "description": "Read the most recent emails from a Gmail or Outlook inbox.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "provider": {
-                    "type": "string",
-                    "description": "Email provider: 'gmail' or 'outlook' (default: gmail)",
-                },
-                "count": {
-                    "type": "integer",
-                    "description": "Number of recent messages to return (1-25, default 10)",
-                },
-            },
-        },
-    },
-    {
-        "name": "search_emails",
-        "description": "Search for emails by keyword in the Gmail or Outlook inbox.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Keyword or phrase to search for in email subjects and bodies",
-                },
-                "provider": {
-                    "type": "string",
-                    "description": "Email provider: 'gmail' or 'outlook' (default: gmail)",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "send_email",
-        "description": "Send an email via Gmail or Outlook.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "to": {
-                    "type": "string",
-                    "description": "Recipient email address",
-                },
-                "subject": {
-                    "type": "string",
-                    "description": "Email subject line",
-                },
-                "body": {
-                    "type": "string",
-                    "description": "Email body (plain text)",
-                },
-                "provider": {
-                    "type": "string",
-                    "description": "Email provider: 'gmail' or 'outlook' (default: gmail)",
-                },
-            },
-            "required": ["to", "subject", "body"],
-        },
-    },
-    # -- Phase 6: Google Calendar --
-    {
-        "name": "get_upcoming_events",
-        "description": "Get Google Calendar events scheduled in the next N days.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "days": {
-                    "type": "integer",
-                    "description": "Number of days ahead to look (1-30, default 7)",
-                },
-            },
-        },
-    },
-    {
-        "name": "create_calendar_event",
-        "description": "Create a Google Calendar event with a title, start/end time, and optional description.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "summary": {
-                    "type": "string",
-                    "description": "Event title",
-                },
-                "start_time": {
-                    "type": "string",
-                    "description": "Start time in ISO 8601 format (e.g. '2026-03-25T14:00:00' or '2026-03-25' for all-day)",
-                },
-                "end_time": {
-                    "type": "string",
-                    "description": "End time in ISO 8601 format (for all-day, use the next day's date)",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Optional event notes or description",
-                },
-            },
-            "required": ["summary", "start_time", "end_time"],
-        },
-    },
-    {
-        "name": "get_todays_events",
-        "description": "Get all Google Calendar events scheduled for today.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    # -- Phase 8: Web Search & Browsing --
-    {
-        "name": "search_web",
-        "description": "Search the live web for current information using Tavily AI Search (with DuckDuckGo and Bing fallbacks). Use when the user asks about news, current events, facts, documentation, real estate listings, weather, or anything that requires up-to-date information from the internet.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query (be specific for better results)",
-                },
-                "num_results": {
-                    "type": "integer",
-                    "description": "Number of results to return (1-10, default 5)",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "get_weather",
-        "description": "Get current weather conditions and a 3-day forecast for any location (city, airport code, or landmark). No API key required.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "City name, airport code, or landmark (e.g. 'Philadelphia PA', 'JFK', 'Narberth PA'). Leave empty to use the default configured location.",
-                },
-                "units": {
-                    "type": "string",
-                    "description": "Unit system: 'uscs' for Fahrenheit/mph (default) or 'metric' for Celsius/kmh",
-                },
-            },
-        },
-    },
-    {
-        "name": "browse_url",
-        "description": "Fetch and read the content of a specific web page or URL. Use when the user provides a URL to read, or after a web search when you want to get the full content of a result.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The full URL to fetch (must start with http:// or https://)",
-                },
-            },
-            "required": ["url"],
-        },
-    },
-    {
-        "name": "webfetch_md",
-        "description": "Smartly scrape and fetch any URL, converting it into clean Markdown (optimized for AI reading). Use this as a more robust alternative to browse_url.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The full URL to fetch",
-                },
-            },
-            "required": ["url"],
-        },
-    },
-    {
-        "name": "git_status",
-        "description": "Check the project's Git status, showing which files are staged, unstaged, or untracked.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "git_log",
-        "description": "View recent commit history for the project codebase.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of commits to return (default 5)",
-                },
-            },
-        },
-    },
-    {
-        "name": "git_diff",
-        "description": "Compare code changes between current state and previous commits.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "staged": {
-                    "type": "boolean",
-                    "description": "If true, show staged changes; if false, show unstaged changes.",
-                },
-            },
-        },
-    },
-    {
-        "name": "git_commit",
-        "description": "Commit all current changes with a brief descriptive message.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "message": {
-                    "type": "string",
-                    "description": "The commit message summarizing the work done",
-                },
-            },
-            "required": ["message"],
-        },
-    },
-    {
-        "name": "init_planning_files",
-        "description": "Initialize Manus-style file-based planning (task_plan.md, findings.md, progress.md) in the project workspace. Use this for ANY multi-step or complex task to ensure the agent maintains state and context.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "goal": {
-                    "type": "string",
-                    "description": "A clear, one-sentence description of the end goal of the task.",
-                },
-            },
-            "required": ["goal"],
-        },
-    },
-    {
-        "name": "update_plan_status",
-        "description": "Log progress or update status of a phase in the current planning files (progress.md). Use this after completing significant steps or hitting errors to record findings.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "phase": {
-                    "type": "integer",
-                    "description": "The current phase number being worked on.",
-                },
-                "status": {
-                    "type": "string",
-                    "description": "Updated status summary (e.g., 'complete', 'in progress', 'error encountered').",
-                },
-                "note": {
-                    "type": "string",
-                    "description": "Optional detailed progress note or error report.",
-                },
-            },
-            "required": ["phase", "status"],
-        },
-    },
-    # restart_container is intentionally EXCLUDED from LLM tool access.
-    # The LLM can suggest a restart, but it must go through the /restart command
-    # with proper authorization and policy checks.
+def _load_tool_declarations() -> list[dict[str, Any]]:
+    """Load tool declarations from config/tools.yaml."""
+    tools_file = Path(os.getenv("TOOLS_CONFIG", "config/tools.yaml"))
+    if not tools_file.exists():
+        # Fallback: try relative to this file's parent (Docker layout)
+        tools_file = Path(__file__).resolve().parent.parent / "config" / "tools.yaml"
+    if not tools_file.exists():
+        log.error("tools.yaml not found — no tools will be available")
+        return []
+    import yaml
+    with open(tools_file) as f:
+        declarations = yaml.safe_load(f)
+    log.info("Loaded %d tool declarations from %s", len(declarations), tools_file)
+    return declarations
 
-    # -- Maton API Gateway (managed OAuth proxy to 100+ third-party APIs) --
-    {
-        "name": "gateway_request",
-        "description": (
-            "Call any third-party API (Slack, GitHub, Google Sheets, Notion, HubSpot, "
-            "Stripe, Airtable, and 100+ more) through the Maton managed OAuth gateway. "
-            "Requires an active Maton connection for the target app."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "app": {
-                    "type": "string",
-                    "description": (
-                        "Service slug, e.g. 'slack', 'github', 'google-sheets', "
-                        "'notion', 'hubspot', 'stripe', 'airtable'."
-                    ),
-                },
-                "path": {
-                    "type": "string",
-                    "description": (
-                        "Native API path without the app prefix, e.g. "
-                        "'api/chat.postMessage' for Slack, "
-                        "'repos/owner/repo/issues' for GitHub."
-                    ),
-                },
-                "method": {
-                    "type": "string",
-                    "description": "HTTP method: GET, POST, PUT, PATCH, or DELETE (default: GET).",
-                },
-                "body": {
-                    "type": "string",
-                    "description": "Optional JSON-encoded request body as a string.",
-                },
-                "connection_id": {
-                    "type": "string",
-                    "description": "Optional connection UUID if you have multiple connections for the same app.",
-                },
-            },
-            "required": ["app", "path"],
-        },
-    },
-    {
-        "name": "gateway_list_connections",
-        "description": "List all active Maton OAuth connections, optionally filtered by app name.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "app": {
-                    "type": "string",
-                    "description": "Optional service name to filter (e.g. 'slack'). Leave empty for all.",
-                },
-            },
-        },
-    },
-    {
-        "name": "gateway_create_connection",
-        "description": (
-            "Create a new Maton OAuth connection for a third-party app. "
-            "Returns a URL for the user to open in a browser to complete OAuth."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "app": {
-                    "type": "string",
-                    "description": "Service to connect, e.g. 'slack', 'github', 'google-calendar', 'notion'.",
-                },
-            },
-            "required": ["app"],
-        },
-    },
-    # -- File Creation --
-    {
-        "name": "nas_create_folder",
-        "description": "Create a new folder on the Synology NAS FileStation.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "path": {
-                    "type": "string",
-                    "description": "Full folder path to create, e.g. '/volume1/documents/reports'.",
-                },
-            },
-            "required": ["path"],
-        },
-    },
-    {
-        "name": "nas_write_file",
-        "description": (
-            "Write a text or markdown file directly to the Synology NAS. "
-            "Use this to save research reports, notes, or any generated content to network storage."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "Full text content to write to the file.",
-                },
-                "remote_folder": {
-                    "type": "string",
-                    "description": "Destination folder on the NAS, e.g. '/volume1/documents'. Default: '/volume1/documents'.",
-                },
-                "filename": {
-                    "type": "string",
-                    "description": "File name including extension, e.g. 'research_report.md'. Default: 'openclaw_output.md'.",
-                },
-            },
-            "required": ["content"],
-        },
-    },
-    {
-        "name": "create_google_doc",
-        "description": (
-            "Create a Google Doc with a title and text content. "
-            "Requires a 'google-docs' connection via Maton. "
-            "Returns the document URL."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "Title for the new Google Doc.",
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Full text content to insert into the document.",
-                },
-            },
-            "required": ["title", "content"],
-        },
-    },
-    {
-        "name": "create_onedrive_file",
-        "description": (
-            "Save a text or markdown file to OneDrive. "
-            "Requires a 'microsoft-onedrive' connection via Maton. "
-            "Returns the file URL."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "filename": {
-                    "type": "string",
-                    "description": "File name including extension, e.g. 'report.md'.",
-                },
-                "content": {
-                    "type": "string",
-                    "description": "Text content to write to the file.",
-                },
-                "folder_path": {
-                    "type": "string",
-                    "description": "OneDrive folder path (default: 'OpenClaw'). Use '/' for root.",
-                },
-            },
-            "required": ["filename", "content"],
-        },
-    },
-    # Ontology - structured graph memory
-    {
-        "name": "ontology_create_entity",
-        "description": "Create a structured ontology entity in the local graph memory. Use for people, projects, tasks, events, documents, devices, and durable facts that should be linked and queried later.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "entity_type": {
-                    "type": "string",
-                    "description": "Entity type, e.g. Person, Project, Task, Event, Document, Note, Device.",
-                },
-                "properties_json": {
-                    "type": "string",
-                    "description": "Entity properties as a JSON object string, e.g. '{\"name\":\"Alice\"}' or '{\"title\":\"Fix parser\",\"status\":\"open\"}'.",
-                },
-                "entity_id": {
-                    "type": "string",
-                    "description": "Optional explicit entity ID. Leave empty to auto-generate.",
-                },
-            },
-            "required": ["entity_type", "properties_json"],
-        },
-    },
-    {
-        "name": "ontology_get_entity",
-        "description": "Fetch a single ontology entity by ID.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "entity_id": {
-                    "type": "string",
-                    "description": "Entity ID to fetch.",
-                },
-            },
-            "required": ["entity_id"],
-        },
-    },
-    {
-        "name": "ontology_query",
-        "description": "Query ontology entities by type and property filters. Use to answer 'what do we know about X', list project tasks, or find structured records.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "entity_type": {
-                    "type": "string",
-                    "description": "Optional entity type filter, e.g. Task or Project.",
-                },
-                "where_json": {
-                    "type": "string",
-                    "description": "Optional JSON filter on entity properties, e.g. '{\"status\":\"open\"}'.",
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "ontology_update_entity",
-        "description": "Update properties on an existing ontology entity.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "entity_id": {
-                    "type": "string",
-                    "description": "Entity ID to update.",
-                },
-                "properties_json": {
-                    "type": "string",
-                    "description": "Properties to merge into the entity as a JSON object string.",
-                },
-            },
-            "required": ["entity_id", "properties_json"],
-        },
-    },
-    {
-        "name": "ontology_relate",
-        "description": "Create a typed relation between two ontology entities, such as project->has_task->task or task->blocks->task.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "from_id": {
-                    "type": "string",
-                    "description": "Source entity ID.",
-                },
-                "relation": {
-                    "type": "string",
-                    "description": "Relation type, e.g. has_task, has_owner, blocks, for_event.",
-                },
-                "to_id": {
-                    "type": "string",
-                    "description": "Target entity ID.",
-                },
-                "properties_json": {
-                    "type": "string",
-                    "description": "Optional relation properties as a JSON object string.",
-                },
-            },
-            "required": ["from_id", "relation", "to_id"],
-        },
-    },
-    {
-        "name": "ontology_get_related",
-        "description": "Get entities related to a given ontology entity. Use for dependency tracing, project membership, ownership, and graph traversal.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "entity_id": {
-                    "type": "string",
-                    "description": "Entity ID to traverse from.",
-                },
-                "relation": {
-                    "type": "string",
-                    "description": "Optional relation filter.",
-                },
-                "direction": {
-                    "type": "string",
-                    "description": "Traversal direction: outgoing, incoming, or both. Default both.",
-                },
-            },
-            "required": ["entity_id"],
-        },
-    },
-    {
-        "name": "ontology_validate",
-        "description": "Validate the ontology graph against the local schema and report any structural errors.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    # Mission Control
-    {
-        "name": "get_mission_tasks",
-        "description": "List Mission Control Kanban tasks. Optionally filter by status: backlog, in_progress, review, done, permanent.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "status": {
-                    "type": "string",
-                    "description": "Filter by status: backlog, in_progress, review, done, permanent. Omit for all tasks.",
-                },
-            },
-            "required": [],
-        },
-    },
-    {
-        "name": "get_task_detail",
-        "description": "Get full details for a specific Mission Control task including subtasks and comments.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "The task ID, e.g. 'task_001'."},
-            },
-            "required": ["task_id"],
-        },
-    },
-    {
-        "name": "update_task_status",
-        "description": "Update a Mission Control task's status.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "The task ID."},
-                "new_status": {"type": "string", "description": "New status: backlog, in_progress, review, done."},
-            },
-            "required": ["task_id", "new_status"],
-        },
-    },
-    {
-        "name": "complete_task",
-        "description": "Mark a Mission Control task as complete (moves to review) with a summary of what was done.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "The task ID."},
-                "summary": {"type": "string", "description": "Summary of what was accomplished."},
-            },
-            "required": ["task_id", "summary"],
-        },
-    },
-    {
-        "name": "add_task_comment",
-        "description": "Add a comment or progress update to a Mission Control task.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "string", "description": "The task ID."},
-                "comment": {"type": "string", "description": "The comment text."},
-            },
-            "required": ["task_id", "comment"],
-        },
-    },
-    # -- Autonomous: Worker sub-agent --
-    {
-        "name": "spawn_worker",
-        "description": (
-            "Spawn a focused AI sub-agent to accomplish a specific goal autonomously. "
-            "The worker runs its own tool loop and returns a clean result. "
-            "Use this to delegate complex subtasks that require multiple independent tool calls, "
-            "such as gathering data from several sources, doing research and summarizing it, "
-            "or performing a multi-step diagnostic while you handle the rest of the response. "
-            "Examples: 'check Sonarr health AND search web for that error', "
-            "'look up my calendar AND get the weather for tomorrow'."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "goal": {
-                    "type": "string",
-                    "description": "Clear, specific description of what the worker should accomplish.",
-                },
-                "context": {
-                    "type": "string",
-                    "description": "Optional background context or constraints for the worker.",
-                },
-                "max_rounds": {
-                    "type": "integer",
-                    "description": "Maximum tool call rounds for the worker (1-8, default 6).",
-                },
-            },
-            "required": ["goal"],
-        },
-    },
-    # -- Autonomous: LLM-controlled scheduling --
-    {
-        "name": "create_scheduled_task",
-        "description": (
-            "Create a recurring scheduled task that runs a skill automatically. "
-            "Use interval_minutes for 'every N minutes' tasks, or hour+minute for a daily cron. "
-            "Examples: schedule a daily health check at 07:00, run speed test every 60 min, "
-            "check Overseerr requests every 30 min."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "skill_name": {
-                    "type": "string",
-                    "description": "The skill name to schedule (e.g. check_arr_health, run_speed_test).",
-                },
-                "interval_minutes": {
-                    "type": "integer",
-                    "description": "Run every N minutes (e.g. 30 for every 30 min). Use 0 for daily cron.",
-                },
-                "hour": {
-                    "type": "integer",
-                    "description": "Hour (0-23) for a daily cron schedule. Use -1 if using interval_minutes.",
-                },
-                "minute": {
-                    "type": "integer",
-                    "description": "Minute (0-59) for a daily cron schedule (default 0).",
-                },
-                "args_json": {
-                    "type": "string",
-                    "description": "Optional JSON object of arguments for the skill, e.g. '{\"days\": 7}'.",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Optional human-readable label describing the task purpose.",
-                },
-            },
-            "required": ["skill_name"],
-        },
-    },
-    {
-        "name": "cancel_scheduled_task",
-        "description": "Cancel (remove) a scheduled task by its task ID. Use list_scheduled_tasks to find IDs.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task_id": {
-                    "type": "string",
-                    "description": "The task ID to cancel, e.g. 'sched-3'.",
-                },
-            },
-            "required": ["task_id"],
-        },
-    },
-    {
-        "name": "list_scheduled_tasks",
-        "description": "List all active scheduled tasks with their IDs, actions, schedules, and run counts.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    # -- RSS Feed Monitoring --
-    {
-        "name": "fetch_rss_feed",
-        "description": (
-            "Fetch recent items from any RSS or Atom feed URL. Use this to read news sources, "
-            "tech blogs, GitHub release notes, Reddit feeds, podcast listings, or any site that "
-            "publishes an RSS/Atom feed. Returns titles, dates, and summaries."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "Full URL of the RSS or Atom feed (e.g. https://feeds.bbci.co.uk/news/rss.xml).",
-                },
-                "limit": {
-                    "type": "integer",
-                    "description": "Number of items to return (1-20, default 10).",
-                },
-            },
-            "required": ["url"],
-        },
-    },
-    {
-        "name": "search_rss",
-        "description": "Fetch a feed and filter items matching a keyword or phrase.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "Full RSS/Atom feed URL.",
-                },
-                "query": {
-                    "type": "string",
-                    "description": "Keyword or phrase to search for in titles and summaries.",
-                },
-            },
-            "required": ["url", "query"],
-        },
-    },
-    {
-        "name": "get_rss_digest",
-        "description": (
-            "Fetch multiple RSS/Atom feeds in parallel and synthesize a combined digest. "
-            "Use this for a quick news summary across several sources, or to monitor "
-            "multiple topics at once. The LLM summarizes the most notable items."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "urls_json": {
-                    "type": "string",
-                    "description": "JSON array of feed URLs, e.g. '[\"https://news.ycombinator.com/rss\"]'.",
-                },
-                "topic": {
-                    "type": "string",
-                    "description": "Optional focus topic — only surface articles related to this subject.",
-                },
-            },
-            "required": ["urls_json"],
-        },
-    },
-    {
-        "name": "list_rss_feeds",
-        "description": "List all RSS/Atom feed URLs that have been fetched or saved.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    # -- URL Change Monitoring --
-    {
-        "name": "snapshot_url",
-        "description": (
-            "Take a baseline snapshot of a URL for change monitoring. "
-            "Call this once to record the current content, then schedule "
-            "check_url_for_changes to run periodically and alert on differences. "
-            "Use for competitor pricing pages, job boards, status pages, listings, etc."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "Full https URL to monitor.",
-                },
-                "label": {
-                    "type": "string",
-                    "description": "Human-readable name for this monitor (e.g. 'Amazon GPU Pricing').",
-                },
-            },
-            "required": ["url"],
-        },
-    },
-    {
-        "name": "check_url_for_changes",
-        "description": (
-            "Compare the current content of a URL against its stored snapshot. "
-            "Returns a change alert with before/after diff if content changed, "
-            "or a clean status if unchanged. Designed to be called by the scheduler."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The URL to check (must have been snapshotted with snapshot_url first).",
-                },
-            },
-            "required": ["url"],
-        },
-    },
-    {
-        "name": "list_monitored_urls",
-        "description": "List all URLs currently being monitored for content changes, with their last-checked and last-changed timestamps.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-    },
-    {
-        "name": "remove_url_monitor",
-        "description": "Stop monitoring a URL and remove its snapshot record.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "url": {
-                    "type": "string",
-                    "description": "The URL to stop monitoring.",
-                },
-            },
-            "required": ["url"],
-        },
-    },
-    # -- Multi-source comparison --
-    {
-        "name": "compare_sources",
-        "description": (
-            "Browse multiple URLs in parallel and synthesize a comparison answer. "
-            "Use this for competitive analysis, comparing documentation pages, "
-            "fact-checking across multiple sources, or getting a balanced view "
-            "of a topic from several sites at once."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "urls_json": {
-                    "type": "string",
-                    "description": "JSON array of up to 5 URLs to compare, e.g. '[\"https://a.com\",\"https://b.com\"]'.",
-                },
-                "question": {
-                    "type": "string",
-                    "description": "The question to answer or aspect to compare across the sources.",
-                },
-            },
-            "required": ["urls_json", "question"],
-        },
-    },
-    # -- Goal decomposition --
-    {
-        "name": "decompose_goal",
-        "description": (
-            "Break a complex goal into concrete Mission Control tasks using AI planning. "
-            "The agent analyzes the goal, produces an ordered task list, and creates each "
-            "task in the Mission Control kanban board for tracking. "
-            "Use when the user says 'plan X', 'set up a project for Y', or gives a multi-step goal."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "goal": {
-                    "type": "string",
-                    "description": "Clear description of what needs to be accomplished.",
-                },
-                "project_name": {
-                    "type": "string",
-                    "description": "Optional short prefix for task titles (e.g. 'HomeReno', 'Q2Launch').",
-                },
-            },
-            "required": ["goal"],
-        },
-    },
-]
+
+_TOOL_DECLARATIONS: list[dict[str, Any]] = _load_tool_declarations()
 
 # ---------------------------------------------------------------------------
 # Ollama — local LLM for simple / conversational queries
@@ -1378,15 +114,17 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = [
 
 # Shared aiohttp session for all Ollama requests (avoids per-request TCP handshakes)
 _ollama_session: aiohttp.ClientSession | None = None
+_ollama_session_lock = asyncio.Lock()
 
 
 async def _get_ollama_session() -> aiohttp.ClientSession:
     """Return the shared Ollama aiohttp session, (re)creating if closed."""
     global _ollama_session
-    if _ollama_session is None or _ollama_session.closed:
-        connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
-        _ollama_session = aiohttp.ClientSession(connector=connector)
-    return _ollama_session
+    async with _ollama_session_lock:
+        if _ollama_session is None or _ollama_session.closed:
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+            _ollama_session = aiohttp.ClientSession(connector=connector)
+        return _ollama_session
 
 
 # ---------------------------------------------------------------------------
@@ -1623,6 +361,7 @@ _CACHEABLE_TOOLS: frozenset[str] = frozenset({
     "get_tailscale_status",
 })
 _TOOL_CACHE_TTL = 30  # seconds
+_TOOL_CACHE_MAX_SIZE = 256
 
 # {"tool_name|arg_hash": (result, timestamp)}
 _tool_cache: dict[str, tuple[str, float]] = {}
@@ -1631,6 +370,17 @@ _tool_cache: dict[str, tuple[str, float]] = {}
 def _cache_key(name: str, args: dict) -> str:
     import hashlib
     return f"{name}|{hashlib.md5(str(sorted(args.items())).encode()).hexdigest()[:8]}"
+
+
+def _evict_tool_cache() -> None:
+    """Evict expired entries; if still over max, drop oldest."""
+    now = time.monotonic()
+    expired = [k for k, (_, ts) in _tool_cache.items() if now - ts >= _TOOL_CACHE_TTL]
+    for k in expired:
+        del _tool_cache[k]
+    while len(_tool_cache) > _TOOL_CACHE_MAX_SIZE:
+        oldest_key = min(_tool_cache, key=lambda k: _tool_cache[k][1])
+        del _tool_cache[oldest_key]
 
 
 # ---------------------------------------------------------------------------
@@ -1658,6 +408,7 @@ async def _execute_function_call(name: str, args: dict) -> str:
         result = await skill_fn(**args)
         if name in _CACHEABLE_TOOLS:
             _tool_cache[_cache_key(name, args)] = (result, time.monotonic())
+            _evict_tool_cache()
         return result
     except Exception as e:
         log.error("Skill %s failed: %s", name, e)
@@ -1672,6 +423,7 @@ _model: genai.GenerativeModel | None = None
 
 
 _model_system_prompt: str | None = None
+_model_lock = asyncio.Lock()
 
 
 def _init_gemini_model(
@@ -1685,8 +437,6 @@ def _init_gemini_model(
     """Create a configured GenerativeModel instance (shared factory)."""
     if not GOOGLE_API_KEY:
         raise RuntimeError("GOOGLE_API_KEY not set. Add it to your .env file.")
-
-    genai.configure(api_key=GOOGLE_API_KEY)
 
     gen_config_kwargs: dict[str, Any] = {
         "max_output_tokens": max_tokens,
@@ -1709,17 +459,18 @@ def _init_gemini_model(
     )
 
 
-def _get_model() -> genai.GenerativeModel:
+async def _get_model() -> genai.GenerativeModel:
     """Lazy-init the Gemini model; reloads when system prompt changes."""
     global _model, _model_system_prompt
-    system_prompt = _load_system_prompt()
-    if _model is not None and _model_system_prompt == system_prompt:
-        return _model
+    async with _model_lock:
+        system_prompt = _load_system_prompt()
+        if _model is not None and _model_system_prompt == system_prompt:
+            return _model
 
-    _model = _init_gemini_model(MODEL_NAME, temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-    _model_system_prompt = system_prompt
-    log.info("Gemini model initialized: %s (temp=%.1f, max_tokens=%d)", MODEL_NAME, TEMPERATURE, MAX_TOKENS)
-    return _model
+        _model = _init_gemini_model(MODEL_NAME, temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+        _model_system_prompt = system_prompt
+        log.info("Gemini model initialized: %s (temp=%.1f, max_tokens=%d)", MODEL_NAME, TEMPERATURE, MAX_TOKENS)
+        return _model
 
 
 # ---------------------------------------------------------------------------
@@ -1776,8 +527,8 @@ async def _run_tool_loop(
             for fn_name, _ in function_calls:
                 try:
                     await on_tool_call(fn_name, rounds + 1)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("on_tool_call callback failed: %s", exc)
 
         # Execute tool calls
         results = await asyncio.gather(*[
@@ -1816,6 +567,143 @@ async def _run_tool_loop(
     return response, rounds
 
 
+# ---------------------------------------------------------------------------
+# chat() helper decomposition
+# ---------------------------------------------------------------------------
+
+_MAX_HISTORY_TURNS = 20
+
+
+def _trim_history(history: list[dict]) -> list[dict]:
+    """Keep first 2 turns (persona context) + last N to avoid context overflow."""
+    if len(history) > _MAX_HISTORY_TURNS:
+        return history[:2] + history[-(_MAX_HISTORY_TURNS - 2):]
+    return list(history)
+
+
+async def _try_local_model(
+    user_message: str, history: list[dict]
+) -> str | None:
+    """Attempt to serve via Gemma/Ollama. Returns reply text or None to fall through."""
+    if not LOCAL_LLM_ENABLED or _needs_tools(user_message):
+        return None
+    if not await _ollama_available():
+        log.debug("Gemma/Ollama not reachable, using Gemini")
+        return None
+
+    system_prompt = _load_system_prompt()
+    gemma_reply = await _chat_ollama(user_message, history, system_prompt)
+
+    if gemma_reply and _gemma_response_seems_valid(gemma_reply):
+        log.info("Served by Gemma (%s): %.60s…", OLLAMA_MODEL, user_message)
+        return gemma_reply
+
+    if gemma_reply:
+        log.info("Gemma response failed validation (hallucination signals detected), falling back to Gemini")
+    else:
+        log.info("Gemma returned empty response, falling back to Gemini")
+    return None
+
+
+def _extract_final_text(response, rounds: int, chat_session) -> str:
+    """Pull the final answer text out of *response*, requesting synthesis if needed."""
+    try:
+        text = response.text
+    except (AttributeError, ValueError):
+        try:
+            parts = response.candidates[0].content.parts
+            text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
+        except Exception:
+            text = ""
+
+        if not text and rounds >= MAX_TOOL_ROUNDS:
+            log.info("Tool round limit hit with no synthesis — requesting forced summary")
+            try:
+                _rate_limiter.record()
+                synthesis_response = chat_session.send_message(
+                    "You have reached the maximum number of tool calls. "
+                    "Please synthesize everything you have gathered so far "
+                    "into a final, helpful answer for the user. "
+                    "Do not call any more tools."
+                )
+                # Note: usage recording must happen in the caller for async compat
+                text = synthesis_response.text
+            except Exception as e:
+                log.error("Forced synthesis failed: %s", e)
+
+        if not text:
+            text = "I processed your request but the model returned no text content."
+            if hasattr(response, "prompt_feedback") and response.prompt_feedback:
+                text += f" (Safety/Blocked: {response.prompt_feedback})"
+
+    if rounds >= MAX_TOOL_ROUNDS:
+        text += f"\n\n⚠️ *Tool call limit reached ({MAX_TOOL_ROUNDS}) — some sources may not have been checked.*"
+    return text
+
+
+async def _gemini_chat(
+    user_message: str,
+    history: list[dict],
+    model: genai.GenerativeModel,
+    *,
+    on_tool_call: Any | None = None,
+    parallel_tools: bool = True,
+    max_tool_rounds: int = MAX_TOOL_ROUNDS,
+    label: str = "LLM",
+) -> tuple[str, list[dict], str]:
+    """Common Gemini chat path: rate-limit, send, tool-loop, extract text.
+
+    Returns (response_text, updated_history, model_name).
+    """
+    # Rate-limit check with exponential backoff
+    _MAX_RETRIES = 3
+    _backoff = 2.0
+    for _attempt in range(_MAX_RETRIES):
+        if _rate_limiter.check():
+            break
+        if _attempt == _MAX_RETRIES - 1:
+            return (
+                "⚠️ Rate limit reached. Please wait a moment before asking again. "
+                f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
+                history,
+                model.model_name if hasattr(model, "model_name") else "unknown",
+            )
+        log.info("Rate limit hit, backing off %.1fs (attempt %d/%d)", _backoff, _attempt + 1, _MAX_RETRIES)
+        await asyncio.sleep(_backoff)
+        _backoff *= 2
+
+    # Build Gemini-compatible history
+    gemini_history = [
+        genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
+        for msg in history
+    ]
+
+    chat_session = model.start_chat(history=gemini_history)
+
+    # Send user message (runs in executor to not block the event loop)
+    loop = asyncio.get_event_loop()
+    _rate_limiter.record()
+    response = await loop.run_in_executor(
+        None, lambda: chat_session.send_message(user_message)
+    )
+    await _record_usage(response)
+
+    # Handle function-call loop
+    response, rounds = await _run_tool_loop(
+        chat_session, response,
+        max_rounds=max_tool_rounds,
+        on_tool_call=on_tool_call,
+        parallel=parallel_tools,
+        label=label,
+    )
+
+    text = _extract_final_text(response, rounds, chat_session)
+    updated_history = _extract_history(chat_session)
+    model_name = model.model_name if hasattr(model, "model_name") else "unknown"
+
+    return text, updated_history, model_name
+
+
 async def chat(
     user_message: str,
     history: list[dict] | None = None,
@@ -1837,128 +725,38 @@ async def chat(
             YES → Return Gemma response (fast, free, private)
             NO  → Silently retry with Gemini
     """
-    history = history or []
+    history = _trim_history(history or [])
 
-    # -- History trimming: keep first 2 turns (persona context) + last 18 ------
-    # Prevents context overflow on long conversations without losing important
-    # early context (e.g. preferences established at the start of a session).
-    _MAX_HISTORY_TURNS = 20
-    if len(history) > _MAX_HISTORY_TURNS:
-        history = history[:2] + history[-((_MAX_HISTORY_TURNS - 2)):]
+    # -- Local model (Gemma) path ─────────────────────────────────────────────
+    gemma_reply = await _try_local_model(user_message, history)
+    if gemma_reply is not None:
+        updated = history + [
+            {"role": "user", "parts": [user_message]},
+            {"role": "model", "parts": [gemma_reply]},
+        ]
+        return gemma_reply, updated, OLLAMA_MODEL
 
-    # -- Local model (Gemma) path ---------------------------------------------──
-    # Use Gemma for conversational queries that don't require live tool calls.
-    # Falls through to Gemini if:
-    #   • the query pattern requires tools (_needs_tools)
-    #   • Gemma is unreachable
-    #   • Gemma returns an empty or hallucinated response
-    if LOCAL_LLM_ENABLED and not _needs_tools(user_message):
-        if await _ollama_available():
-            system_prompt = _load_system_prompt()
-            gemma_reply = await _chat_ollama(user_message, history, system_prompt)
-
-            if gemma_reply and _gemma_response_seems_valid(gemma_reply):
-                log.info("Served by Gemma (%s): %.60s…", OLLAMA_MODEL, user_message)
-                updated = list(history) + [
-                    {"role": "user", "parts": [user_message]},
-                    {"role": "model", "parts": [gemma_reply]},
-                ]
-                return gemma_reply, updated, OLLAMA_MODEL
-
-            if gemma_reply:
-                log.info("Gemma response failed validation (hallucination signals detected), falling back to Gemini")
-            else:
-                log.info("Gemma returned empty response, falling back to Gemini")
-        else:
-            log.debug("Gemma/Ollama not reachable, using Gemini")
-    # Falls through to Gemini ↓
-
-    # -- Gemini path: rate-limit check with exponential backoff on throttle ---
-    _MAX_RETRIES = 3
-    _backoff = 2.0  # seconds; doubles per retry
-    for _attempt in range(_MAX_RETRIES):
-        if _rate_limiter.check():
-            break
-        if _attempt == _MAX_RETRIES - 1:
-            return (
-                "⚠️ Rate limit reached. Please wait a moment before asking again. "
-                f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
-                history,
-                MODEL_NAME,
-            )
-        log.info("Rate limit hit, backing off %.1fs (attempt %d/%d)", _backoff, _attempt + 1, _MAX_RETRIES)
-        await asyncio.sleep(_backoff)
-        _backoff *= 2
-
-    model = _get_model()
-
-    # Build Gemini-compatible history
-    gemini_history = []
-    for msg in (history or []):
-        gemini_history.append(
-            genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
+    # -- Gemini path (shared helper) ──────────────────────────────────────────
+    # Quick rate-limit pre-check before expensive model init — the full
+    # backoff loop runs inside _gemini_chat, but if we're already exhausted
+    # we can bail out without touching the API-key-gated model constructor.
+    if not _rate_limiter.check():
+        return (
+            "⚠️ Rate limit reached. Please wait a moment before asking again. "
+            f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
+            history,
+            MODEL_NAME,
         )
 
-    chat_session = model.start_chat(history=gemini_history)
-
-    # Send user message (runs in executor to not block the event loop)
-    loop = asyncio.get_event_loop()
-    _rate_limiter.record()
-    response = await loop.run_in_executor(
-        None, lambda: chat_session.send_message(user_message)
-    )
-    await _record_usage(response)
-
-    # Handle function-call loop (shared implementation)
-    response, rounds = await _run_tool_loop(
-        chat_session, response,
-        max_rounds=MAX_TOOL_ROUNDS,
+    model = await _get_model()
+    return await _gemini_chat(
+        user_message,
+        history,
+        model,
         on_tool_call=on_tool_call,
-        parallel=True,
+        parallel_tools=True,
         label="LLM",
     )
-
-    # Extract final text
-    try:
-        text = response.text
-    except (AttributeError, ValueError):
-        try:
-            parts = response.candidates[0].content.parts
-            text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
-        except Exception:
-            text = ""
-
-        if not text:
-            if rounds >= MAX_TOOL_ROUNDS:
-                log.info("Tool round limit hit with no synthesis — requesting forced summary")
-                try:
-                    _rate_limiter.record()
-                    synthesis_response = await loop.run_in_executor(
-                        None,
-                        lambda: chat_session.send_message(
-                            "You have reached the maximum number of tool calls. "
-                            "Please synthesize everything you have gathered so far "
-                            "into a final, helpful answer for the user. "
-                            "Do not call any more tools."
-                        ),
-                    )
-                    await _record_usage(synthesis_response)
-                    text = synthesis_response.text
-                except Exception as e:
-                    log.error("Forced synthesis failed: %s", e)
-
-            if not text:
-                text = "I processed your request but the model returned no text content."
-                if hasattr(response, "prompt_feedback") and response.prompt_feedback:
-                    text += f" (Safety/Blocked: {response.prompt_feedback})"
-
-    if rounds >= MAX_TOOL_ROUNDS:
-        text += f"\n\n⚠️ *Tool call limit reached ({MAX_TOOL_ROUNDS}) — some sources may not have been checked.*"
-
-    # Build updated history
-    updated_history = _extract_history(chat_session)
-
-    return text, updated_history, MODEL_NAME
 
 
 def _extract_history(chat_session) -> list[dict]:
@@ -2021,24 +819,26 @@ def get_rate_info() -> str:
 
 _thinking_model: genai.GenerativeModel | None = None
 _thinking_model_prompt: str | None = None
+_thinking_model_lock = threading.Lock()
 
 
 def _get_thinking_model() -> genai.GenerativeModel:
     """Lazy-init the thinking/deep-research variant of the Gemini model."""
     global _thinking_model, _thinking_model_prompt
     system_prompt = _load_system_prompt()
-    if _thinking_model is not None and _thinking_model_prompt == system_prompt:
-        return _thinking_model
+    with _thinking_model_lock:
+        if _thinking_model is not None and _thinking_model_prompt == system_prompt:
+            return _thinking_model
 
-    _thinking_model = _init_gemini_model(
-        THINKING_MODEL,
-        temperature=0.3,
-        max_tokens=MAX_TOKENS * 2,
-        thinking_budget=THINKING_BUDGET,
-    )
-    _thinking_model_prompt = system_prompt
-    log.info("Thinking model initialized: %s", THINKING_MODEL)
-    return _thinking_model
+        _thinking_model = _init_gemini_model(
+            THINKING_MODEL,
+            temperature=0.3,
+            max_tokens=MAX_TOKENS * 2,
+            thinking_budget=THINKING_BUDGET,
+        )
+        _thinking_model_prompt = system_prompt
+        log.info("Thinking model initialized: %s", THINKING_MODEL)
+        return _thinking_model
 
 
 async def chat_deep(
@@ -2055,53 +855,24 @@ async def chat_deep(
     """
     history = history or []
 
-    if not _rate_limiter.check():
-        return (
-            "⚠️ Rate limit reached. Please wait a moment.",
-            history,
-        )
-
     try:
         model = _get_thinking_model()
     except Exception:
         # Fall back to normal model if thinking config is unsupported
         log.warning("Thinking model unavailable, falling back to standard model")
-        model = _get_model()
+        model = await _get_model()
 
-    gemini_history = [
-        genai.types.ContentDict(role=m["role"], parts=m["parts"])
-        for m in history
-    ]
-    chat_session = model.start_chat(history=gemini_history)
-
-    loop = asyncio.get_event_loop()
-    _rate_limiter.record()
-    response = await loop.run_in_executor(
-        None, lambda: chat_session.send_message(user_message)
-    )
-    await _record_usage(response)
-
-    # Use shared tool loop — sequential mode for deep research
-    response, rounds = await _run_tool_loop(
-        chat_session, response,
-        max_rounds=MAX_TOOL_ROUNDS * 2,
+    text, updated_history, _ = await _gemini_chat(
+        user_message,
+        history,
+        model,
         on_tool_call=on_tool_call,
-        parallel=False,
+        parallel_tools=False,
+        max_tool_rounds=MAX_TOOL_ROUNDS * 2,
         label="Deep research",
     )
 
-    try:
-        text = response.text
-    except (AttributeError, ValueError):
-        try:
-            parts = response.candidates[0].content.parts
-            text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
-            if not text:
-                text = "Research completed but no text summary was generated."
-        except Exception as e:
-            text = f"Research completed but summary extraction failed: {e}"
-
-    return text, _extract_history(chat_session)
+    return text, updated_history
 
 
 async def summarize_conversation(history: list[dict]) -> str:
@@ -2133,7 +904,6 @@ async def summarize_conversation(history: list[dict]) -> str:
     )
 
     try:
-        genai.configure(api_key=GOOGLE_API_KEY)
         summary_model = genai.GenerativeModel(
             model_name=MODEL_NAME,
             generation_config=genai.GenerationConfig(
@@ -2176,7 +946,6 @@ async def analyze_image(
     if mime_type not in SUPPORTED_IMAGE_MIMES:
         return f"❌ Unsupported image type: {mime_type}"
 
-    genai.configure(api_key=GOOGLE_API_KEY)
     # Use a fresh model without tools for vision tasks
     vision_model = genai.GenerativeModel(
         model_name=MODEL_NAME,
@@ -2209,7 +978,6 @@ async def analyze_document(text: str, prompt: str) -> str:
     if not GOOGLE_API_KEY:
         return "❌ GOOGLE_API_KEY not configured."
 
-    genai.configure(api_key=GOOGLE_API_KEY)
     doc_model = genai.GenerativeModel(
         model_name=MODEL_NAME,
         generation_config=genai.GenerationConfig(

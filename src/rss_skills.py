@@ -35,22 +35,11 @@ _FEEDS_FILE = MEMORY_DIR / "rss_feeds.json"
 _TIMEOUT = aiohttp.ClientTimeout(total=15)
 _MAX_ITEMS = 20
 
-# Shared session
-_rss_session: aiohttp.ClientSession | None = None
+from http_session import SessionManager
 
-
-async def _get_session() -> aiohttp.ClientSession:
-    global _rss_session
-    if _rss_session is None or _rss_session.closed:
-        _rss_session = aiohttp.ClientSession(timeout=_TIMEOUT)
-    return _rss_session
-
-
-async def close_session() -> None:
-    global _rss_session
-    if _rss_session and not _rss_session.closed:
-        await _rss_session.close()
-        _rss_session = None
+_sessions = SessionManager(timeout=15, name="rss")
+_get_session = _sessions.get
+close_session = _sessions.close
 
 
 # ---------------------------------------------------------------------------
@@ -62,14 +51,16 @@ def _load_feeds() -> list[dict]:
     if _FEEDS_FILE.exists():
         try:
             return json.loads(_FEEDS_FILE.read_text())
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Failed to load feeds: %s", exc)
     return []
 
 
 def _save_feeds(feeds: list[dict]) -> None:
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
-    _FEEDS_FILE.write_text(json.dumps(feeds, indent=2))
+    tmp = _FEEDS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(feeds, indent=2))
+    tmp.replace(_FEEDS_FILE)
 
 
 # ---------------------------------------------------------------------------

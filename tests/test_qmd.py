@@ -11,6 +11,8 @@ from unittest.mock import patch
 import qmd as qmd_module
 from qmd import QMDMemory, remember_fact, recall_fact, list_memories
 
+pytestmark = pytest.mark.asyncio
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -32,93 +34,93 @@ def mem(tmp_path):
 
 
 class TestQMDMemoryAdd:
-    def test_add_creates_entry(self, mem):
-        mem.add("Plex server is running on port 32400")
+    async def test_add_creates_entry(self, mem):
+        await mem.add("Plex server is running on port 32400")
         assert len(mem._memory) == 1
 
-    def test_add_stores_content(self, mem):
+    async def test_add_stores_content(self, mem):
         content = "SABnzbd API key was reset"
-        mem.add(content)
+        await mem.add(content)
         assert mem._memory[0]["content"] == content
 
-    def test_add_stores_tags(self, mem):
-        mem.add("disk usage is high", tags=["disk", "alert"])
+    async def test_add_stores_tags(self, mem):
+        await mem.add("disk usage is high", tags=["disk", "alert"])
         assert "disk" in mem._memory[0]["tags"]
         assert "alert" in mem._memory[0]["tags"]
 
-    def test_add_stores_timestamp(self, mem):
-        mem.add("test fact")
+    async def test_add_stores_timestamp(self, mem):
+        await mem.add("test fact")
         assert "ts" in mem._memory[0]
         assert len(mem._memory[0]["ts"]) > 0
 
-    def test_add_empty_tags_defaults_to_empty_list(self, mem):
-        mem.add("no tags here")
+    async def test_add_empty_tags_defaults_to_empty_list(self, mem):
+        await mem.add("no tags here")
         assert mem._memory[0]["tags"] == []
 
-    def test_add_multiple_entries(self, mem):
-        mem.add("fact one")
-        mem.add("fact two")
+    async def test_add_multiple_entries(self, mem):
+        await mem.add("fact one")
+        await mem.add("fact two")
         assert len(mem._memory) == 2
 
 
 class TestQMDMemorySearch:
-    def test_search_finds_by_content_substring(self, mem):
-        mem.add("Plex is running on port 32400")
-        result = mem.search("Plex")
+    async def test_search_finds_by_content_substring(self, mem):
+        await mem.add("Plex is running on port 32400")
+        result = await mem.search("Plex")
         assert "Plex is running" in result
 
-    def test_search_is_case_insensitive(self, mem):
-        mem.add("PLEX server info")
-        result = mem.search("plex")
+    async def test_search_is_case_insensitive(self, mem):
+        await mem.add("PLEX server info")
+        result = await mem.search("plex")
         assert "PLEX server info" in result
 
-    def test_search_finds_by_tag(self, mem):
-        mem.add("high memory usage", tags=["performance", "memory"])
-        result = mem.search("performance")
+    async def test_search_finds_by_tag(self, mem):
+        await mem.add("high memory usage", tags=["performance", "memory"])
+        result = await mem.search("performance")
         assert "high memory usage" in result
 
-    def test_search_tag_is_case_insensitive(self, mem):
-        mem.add("disk alert", tags=["DISK"])
-        result = mem.search("disk")
+    async def test_search_tag_is_case_insensitive(self, mem):
+        await mem.add("disk alert", tags=["DISK"])
+        result = await mem.search("disk")
         assert "disk alert" in result
 
-    def test_search_returns_no_match_message(self, mem):
-        mem.add("something completely unrelated")
-        result = mem.search("xyz-no-match")
+    async def test_search_returns_no_match_message(self, mem):
+        await mem.add("something completely unrelated")
+        result = await mem.search("xyz-no-match")
         assert "No matching memories" in result
 
-    def test_search_on_empty_memory(self, mem):
-        result = mem.search("anything")
+    async def test_search_on_empty_memory(self, mem):
+        result = await mem.search("anything")
         assert "No matching memories" in result
 
-    def test_search_returns_at_most_10_results(self, mem):
+    async def test_search_returns_at_most_10_results(self, mem):
         for i in range(15):
-            mem.add(f"matching fact {i}")
-        result = mem.search("matching")
+            await mem.add(f"matching fact {i}")
+        result = await mem.search("matching")
         lines = [l for l in result.split("\n") if l.strip().startswith("•")]
         assert len(lines) <= 10
 
-    def test_search_bullet_format(self, mem):
-        mem.add("the quick brown fox")
-        result = mem.search("quick")
+    async def test_search_bullet_format(self, mem):
+        await mem.add("the quick brown fox")
+        result = await mem.search("quick")
         assert result.startswith("•")
 
 
 class TestQMDMemoryListAll:
-    def test_list_all_empty_returns_message(self, mem):
-        result = mem.list_all()
+    async def test_list_all_empty_returns_message(self, mem):
+        result = await mem.list_all()
         assert "empty" in result.lower() or "Memory is empty" in result
 
-    def test_list_all_shows_all_entries(self, mem):
-        mem.add("fact one")
-        mem.add("fact two")
-        result = mem.list_all()
+    async def test_list_all_shows_all_entries(self, mem):
+        await mem.add("fact one")
+        await mem.add("fact two")
+        result = await mem.list_all()
         assert "fact one" in result
         assert "fact two" in result
 
-    def test_list_all_includes_date(self, mem):
-        mem.add("some fact")
-        result = mem.list_all()
+    async def test_list_all_includes_date(self, mem):
+        await mem.add("some fact")
+        result = await mem.list_all()
         # Each line shows [YYYY-MM-DD]
         assert "[" in result and "]" in result
 
@@ -129,15 +131,15 @@ class TestQMDMemoryListAll:
 
 
 class TestQMDPersistence:
-    def test_data_survives_across_instances(self, tmp_path):
+    async def test_data_survives_across_instances(self, tmp_path):
         temp_file = tmp_path / "qmd.json"
         with patch.object(qmd_module, "MEMORY_FILE", temp_file):
             m1 = QMDMemory()
-            m1.add("persistent fact", tags=["test"])
+            await m1.add("persistent fact", tags=["test"])
 
         with patch.object(qmd_module, "MEMORY_FILE", temp_file):
             m2 = QMDMemory()
-            result = m2.search("persistent")
+            result = await m2.search("persistent")
             assert "persistent fact" in result
 
     def test_corrupted_file_falls_back_to_empty(self, tmp_path):

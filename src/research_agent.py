@@ -136,9 +136,6 @@ class ResearchAgent:
         query: str,
         post: Callable,
     ) -> str:
-        from skills.advanced_skills import search_web, browse_url
-        import json, re
-
         await post("plan", f"Planning research strategy for: *{query[:80]}*")
 
         # ── Step 1: Decompose query into sub-searches ─────────────────────────
@@ -150,50 +147,14 @@ class ResearchAgent:
             await post("plan", f"Decomposed into {len(sub_queries)} sub-searches")
 
         # ── Step 2: Execute searches ──────────────────────────────────────────
-        raw_results: list[dict] = []  # [{query, results_text, urls}]
-
-        for i, sq in enumerate(sub_queries[:self.max_searches], 1):
-            await post("search", f"Search {i}/{min(len(sub_queries), self.max_searches)}: *{sq[:60]}*")
-            try:
-                results_text = await search_web(sq, num_results=5)
-                urls = _extract_urls(results_text)
-                raw_results.append({"query": sq, "results": results_text, "urls": urls})
-            except Exception as e:
-                raw_results.append({"query": sq, "results": f"Search failed: {e}", "urls": []})
+        raw_results = await self._perform_searches(sub_queries, post)
 
         # ── Step 3: Browse top URLs ───────────────────────────────────────────
-        all_urls = []
+        all_urls: list[str] = []
         for r in raw_results:
             all_urls.extend(r["urls"])
-
-        # Deduplicate, prefer non-social-media URLs
-        seen: set[str] = set()
-        priority_urls = []
-        fallback_urls = []
-        skip_domains = {"twitter.com", "x.com", "facebook.com", "instagram.com", "reddit.com", "youtube.com"}
-        for url in all_urls:
-            if url in seen:
-                continue
-            seen.add(url)
-            domain = url.split("/")[2] if url.count("/") >= 2 else ""
-            if any(skip in domain for skip in skip_domains):
-                fallback_urls.append(url)
-            else:
-                priority_urls.append(url)
-
-        browse_targets = (priority_urls + fallback_urls)[:self.browse_top_n]
-        browsed_pages: list[dict] = []
-
-        for i, url in enumerate(browse_targets, 1):
-            await post("browse", f"Reading source {i}/{len(browse_targets)}: `{url[:60]}`")
-            try:
-                content = await asyncio.wait_for(browse_url(url), timeout=20)
-                if content and not content.startswith("❌"):
-                    browsed_pages.append({"url": url, "content": content[:3000]})
-            except asyncio.TimeoutError:
-                log.warning("Browse timed out: %s", url)
-            except Exception as e:
-                log.warning("Browse error %s: %s", url, e)
+        browse_targets = self._prioritize_urls(all_urls)
+        browsed_pages = await self._fetch_pages(browse_targets, post)
 
         # ── Step 4: Synthesize ────────────────────────────────────────────────
         await post("synthesize", "Synthesizing findings with Gemini…")
@@ -205,7 +166,6 @@ class ResearchAgent:
             data_sections.append(f"### Page: {p['url']}\n{p['content']}")
 
         combined_data = "\n\n".join(data_sections)
-        # Trim to stay within Gemini's context window
         if len(combined_data) > 40_000:
             combined_data = combined_data[:40_000] + "\n\n[...truncated for length...]"
 
@@ -218,8 +178,69 @@ class ResearchAgent:
 
         return report
 
+    async def _perform_searches(
+        self,
+        sub_queries: list[str],
+        post: Callable,
+    ) -> list[dict]:
+        """Execute all sub-queries in parallel using asyncio.gather()."""
+        from skills.advanced_skills import search_web
+
+        queries = sub_queries[:self.max_searches]
+        total = len(queries)
+        await post("search", f"Launching {total} parallel search workers\u2026")
+
+        async def _one_search(i: int, sq: str) -> dict:
+            try:
+                results_text = await search_web(sq, num_results=5)
+                await post("search", f"Worker {i}/{total} done: *{sq[:50]}*")
+                return {"query": sq, "results": results_text, "urls": _extract_urls(results_text)}
+            except Exception as e:
+                return {"query": sq, "results": f"Search failed: {e}", "urls": []}
+
+        results = await asyncio.gather(*(_one_search(i + 1, sq) for i, sq in enumerate(queries)))
+        return list(results)
+
+    def _prioritize_urls(self, all_urls: list[str]) -> list[str]:
+        """Deduplicate and prioritize URLs, deprioritizing social media."""
+        seen: set[str] = set()
+        priority_urls: list[str] = []
+        fallback_urls: list[str] = []
+        skip_domains = {"twitter.com", "x.com", "facebook.com", "instagram.com", "reddit.com", "youtube.com"}
+        for url in all_urls:
+            if url in seen:
+                continue
+            seen.add(url)
+            domain = url.split("/")[2] if url.count("/") >= 2 else ""
+            if any(skip in domain for skip in skip_domains):
+                fallback_urls.append(url)
+            else:
+                priority_urls.append(url)
+        return (priority_urls + fallback_urls)[:self.browse_top_n]
+
+    async def _fetch_pages(
+        self,
+        urls: list[str],
+        post: Callable,
+    ) -> list[dict]:
+        """Browse top URLs, returning list of {url, content} dicts."""
+        from skills.advanced_skills import browse_url
+
+        browsed_pages: list[dict] = []
+        for i, url in enumerate(urls, 1):
+            await post("browse", f"Reading source {i}/{len(urls)}: `{url[:60]}`")
+            try:
+                content = await asyncio.wait_for(browse_url(url), timeout=20)
+                if content and not content.startswith("❌"):
+                    browsed_pages.append({"url": url, "content": content[:3000]})
+            except asyncio.TimeoutError:
+                log.warning("Browse timed out: %s", url)
+            except Exception as e:
+                log.warning("Browse error %s: %s", url, e)
+        return browsed_pages
+
     async def _auto_save(self, query: str, report: str, post) -> None:
-        """Silently save the research report to NAS and/or Google Docs."""
+        """Save research report to the Obsidian vault (primary) and NAS (secondary)."""
         import re as _re
         import datetime as _dt
 
@@ -229,7 +250,24 @@ class ResearchAgent:
         header = f"# Research Report\n**Query**: {query}\n**Date**: {date_str}\n\n---\n\n"
         full_doc = header + report
 
-        # Try NAS first
+        # Save to Obsidian vault (primary — always attempted)
+        try:
+            from obsidian_writer import save_to_vault
+            vault_result = await asyncio.wait_for(
+                save_to_vault(
+                    title=f"Research: {query[:60]}",
+                    content=report,
+                    tags=["research", "auto-saved"],
+                    content_type="research",
+                ),
+                timeout=10,
+            )
+            if vault_result.startswith("✅"):
+                await post("done", vault_result)
+        except Exception as e:
+            log.debug("Research vault save skipped: %s", e)
+
+        # Also sync to NAS
         try:
             from nas import nas_write_file
             nas_result = await asyncio.wait_for(
@@ -237,7 +275,7 @@ class ResearchAgent:
                 timeout=20,
             )
             if nas_result.startswith("✅"):
-                await post("done", f"Report saved to NAS: `{filename}`")
+                await post("done", f"Report also saved to NAS: `{filename}`")
                 # Also try Google Docs if Maton is configured
                 try:
                     from gateway import create_google_doc
@@ -248,11 +286,11 @@ class ResearchAgent:
                             timeout=20,
                         )
                         if doc_result.startswith("✅"):
-                            await post("done", f"Also saved to Google Docs")
-                except Exception:
-                    pass
+                            await post("done", "Also saved to Google Docs")
+                except Exception as exc:
+                    log.debug("Research auto-save to Google Docs failed: %s", exc)
         except Exception as e:
-            log.debug("Research auto-save skipped: %s", e)
+            log.debug("Research NAS save skipped: %s", e)
 
     async def _plan_searches(self, query: str) -> list[str]:
         """Ask Gemini to decompose the query into sub-searches."""

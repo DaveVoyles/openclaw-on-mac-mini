@@ -24,24 +24,17 @@ log = logging.getLogger("openclaw.advanced_skills")
 # Shared HTTP session (created on first use, reused across all API calls)
 # ---------------------------------------------------------------------------
 
-_http_session: aiohttp.ClientSession | None = None
+from http_session import SessionManager
 
-
-async def _get_session() -> aiohttp.ClientSession:
-    """Return the module-level shared aiohttp session, creating it if needed."""
-    global _http_session
-    if _http_session is None or _http_session.closed:
-        connector = aiohttp.TCPConnector(limit=50, limit_per_host=15, ttl_dns_cache=600)
-        _http_session = aiohttp.ClientSession(connector=connector)
-    return _http_session
-
-
-async def close_session() -> None:
-    """Close the shared advanced_skills HTTP session. Call on bot shutdown."""
-    global _http_session
-    if _http_session and not _http_session.closed:
-        await _http_session.close()
-        _http_session = None
+_sessions = SessionManager(
+    timeout=30,
+    name="advanced_skills",
+    connector_limit=50,
+    connector_limit_per_host=15,
+    ttl_dns_cache=600,
+)
+_get_session = _sessions.get
+close_session = _sessions.close
 
 # ---------------------------------------------------------------------------
 # Configuration — loaded from environment

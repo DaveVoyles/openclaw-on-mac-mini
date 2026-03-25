@@ -1,0 +1,891 @@
+- name: list_containers
+  description: List all running Docker containers with name, status, and ports.
+  parameters:
+    type: object
+    properties: {}
+- name: get_container_status
+  description: Get detailed status, resource usage, and port mapping for a specific Docker container.
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Container name (e.g. sonarr, radarr, plex, sabnzbd)
+    required:
+    - service
+- name: get_container_logs
+  description: Retrieve the last N lines of logs from a Docker container.
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Container name
+      lines:
+        type: integer
+        description: Number of log lines to retrieve (5-100, default 30)
+    required:
+    - service
+- name: get_docker_stats
+  description: Get CPU, memory, and network usage for all running containers.
+  parameters:
+    type: object
+    properties: {}
+- name: get_system_stats
+  description: Get Mac Mini system resource usage (CPU, memory, disk).
+  parameters:
+    type: object
+    properties: {}
+- name: get_uptime
+  description: Get system uptime of the Mac Mini.
+  parameters:
+    type: object
+    properties: {}
+- name: get_compose_config
+  description: Read the Docker Compose configuration file and return port mappings, volume mounts, and environment variable
+    names for all services (or a specific one). Use this when troubleshooting permission errors, port conflicts, or when you
+    need to know exactly how a container is configured.
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Optional service name to filter results (e.g. 'sonarr', 'plex'). Leave empty for all services.
+- name: check_arr_health
+  description: Check health status of all *arr services (Sonarr, Radarr, Lidarr, Prowlarr).
+  parameters:
+    type: object
+    properties: {}
+- name: check_download_clients
+  description: Check connectivity of download clients (SABnzbd and qBittorrent).
+  parameters:
+    type: object
+    properties: {}
+- name: check_plex_status
+  description: Check Plex server status and version via Tautulli.
+  parameters:
+    type: object
+    properties: {}
+- name: get_plex_activity
+  description: 'Get real-time Plex activity: who is currently watching, what they''re watching, playback progress, video quality,
+    and whether the stream is direct play or transcode. Use this when the user asks ''what''s playing on Plex'', ''is anyone
+    watching?'', ''who''s using Plex right now'', or similar.'
+  parameters:
+    type: object
+    properties: {}
+- name: search_media
+  description: Search for TV shows or movies across Sonarr and Radarr catalogs.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: Search term (e.g. 'Breaking Bad', 'The Matrix')
+      media_type:
+        type: string
+        description: 'Type filter: ''tv'', ''movie'', or ''all'' (default: all)'
+    required:
+    - query
+- name: get_download_queue
+  description: Get active downloads from SABnzbd (Usenet) and qBittorrent (torrents).
+  parameters:
+    type: object
+    properties: {}
+- name: get_recent_additions
+  description: Get recently added media from Plex (via Tautulli).
+  parameters:
+    type: object
+    properties:
+      limit:
+        type: integer
+        description: Number of recent items to return (1-25, default 10)
+- name: ping_host
+  description: Ping a hostname or IP to check connectivity and latency.
+  parameters:
+    type: object
+    properties:
+      host:
+        type: string
+        description: Hostname or IP address to ping
+    required:
+    - host
+- name: check_service_ports
+  description: Check if all key services are listening on their expected ports.
+  parameters:
+    type: object
+    properties: {}
+- name: create_status_report
+  description: Generate a comprehensive system status report covering all services, downloads, and Plex.
+  parameters:
+    type: object
+    properties: {}
+- name: analyze_logs
+  description: Analyze container logs using AI to identify errors, warnings, and suggest fixes.
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Container name to analyze logs for
+      lines:
+        type: integer
+        description: Number of log lines to analyze (10-200, default 50)
+    required:
+    - service
+- name: remember_fact
+  description: Store a fact or piece of information in the long-term memory (QMD).
+  parameters:
+    type: object
+    properties:
+      content:
+        type: string
+        description: The fact or information to remember
+      tags:
+        type: string
+        description: Optional comma-separated list of tags to associate with this memory
+    required:
+    - content
+- name: recall_fact
+  description: Search long-term memory (QMD) for a specific fact or information.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: Keywords or topic to search for
+    required:
+    - query
+- name: list_memories
+  description: List all facts stored in the long-term memory (QMD).
+  parameters:
+    type: object
+    properties: {}
+- name: send_agent_mail
+  description: Send an automated e-mail message to a single recipient.
+  parameters:
+    type: object
+    properties:
+      to:
+        type: string
+        description: The recipient's e-mail address
+      subject:
+        type: string
+        description: The subject of the e-mail
+      body:
+        type: string
+        description: The message body (plain text)
+    required:
+    - to
+    - subject
+    - body
+- name: get_network_status
+  description: Check LAN, internet, DNS, and Tailscale VPN connectivity and return a full status summary.
+  parameters:
+    type: object
+    properties: {}
+- name: get_tailscale_status
+  description: Show Tailscale VPN status and this device's Tailscale IP address.
+  parameters:
+    type: object
+    properties: {}
+- name: run_speed_test
+  description: Run a brief network speed test and return measured download speed and DNS latency.
+  parameters:
+    type: object
+    properties: {}
+- name: get_spending
+  description: Get current Gemini API spending summary including total cost, budget remaining, and token usage.
+  parameters:
+    type: object
+    properties: {}
+- name: get_daily_spending
+  description: Get daily spending breakdown for the last N days.
+  parameters:
+    type: object
+    properties:
+      days:
+        type: integer
+        description: Number of days to show (1-30, default 7)
+- name: get_pending_requests
+  description: List all pending media requests awaiting approval in Overseerr.
+  parameters:
+    type: object
+    properties: {}
+- name: approve_request
+  description: Approve a pending Overseerr media request by its numeric ID.
+  parameters:
+    type: object
+    properties:
+      request_id:
+        type: integer
+        description: The numeric ID of the request to approve (from get_pending_requests)
+    required:
+    - request_id
+- name: deny_request
+  description: Decline a pending Overseerr media request by its numeric ID.
+  parameters:
+    type: object
+    properties:
+      request_id:
+        type: integer
+        description: The numeric ID of the request to decline (from get_pending_requests)
+    required:
+    - request_id
+- name: get_request_stats
+  description: Get a summary count of all Overseerr media requests by status (pending, approved, available, etc.).
+  parameters:
+    type: object
+    properties: {}
+- name: get_nas_storage_health
+  description: Get Synology NAS storage volume and disk health status.
+  parameters:
+    type: object
+    properties: {}
+- name: get_backup_status
+  description: Get Synology Hyper Backup task status and last run time.
+  parameters:
+    type: object
+    properties: {}
+- name: get_nas_alerts
+  description: Get Synology DSM system health alerts (fans, temperature, power, disk warnings).
+  parameters:
+    type: object
+    properties: {}
+- name: get_disk_smart_status
+  description: Get SMART health status for all physical disks in the Synology NAS.
+  parameters:
+    type: object
+    properties: {}
+- name: read_inbox
+  description: Read the most recent emails from a Gmail or Outlook inbox.
+  parameters:
+    type: object
+    properties:
+      provider:
+        type: string
+        description: 'Email provider: ''gmail'' or ''outlook'' (default: gmail)'
+      count:
+        type: integer
+        description: Number of recent messages to return (1-25, default 10)
+- name: search_emails
+  description: Search for emails by keyword in the Gmail or Outlook inbox.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: Keyword or phrase to search for in email subjects and bodies
+      provider:
+        type: string
+        description: 'Email provider: ''gmail'' or ''outlook'' (default: gmail)'
+    required:
+    - query
+- name: send_email
+  description: Send an email via Gmail or Outlook.
+  parameters:
+    type: object
+    properties:
+      to:
+        type: string
+        description: Recipient email address
+      subject:
+        type: string
+        description: Email subject line
+      body:
+        type: string
+        description: Email body (plain text)
+      provider:
+        type: string
+        description: 'Email provider: ''gmail'' or ''outlook'' (default: gmail)'
+    required:
+    - to
+    - subject
+    - body
+- name: get_upcoming_events
+  description: Get Google Calendar events scheduled in the next N days.
+  parameters:
+    type: object
+    properties:
+      days:
+        type: integer
+        description: Number of days ahead to look (1-30, default 7)
+- name: create_calendar_event
+  description: Create a Google Calendar event with a title, start/end time, and optional description.
+  parameters:
+    type: object
+    properties:
+      summary:
+        type: string
+        description: Event title
+      start_time:
+        type: string
+        description: Start time in ISO 8601 format (e.g. '2026-03-25T14:00:00' or '2026-03-25' for all-day)
+      end_time:
+        type: string
+        description: End time in ISO 8601 format (for all-day, use the next day's date)
+      description:
+        type: string
+        description: Optional event notes or description
+    required:
+    - summary
+    - start_time
+    - end_time
+- name: get_todays_events
+  description: Get all Google Calendar events scheduled for today.
+  parameters:
+    type: object
+    properties: {}
+- name: search_web
+  description: Search the live web for current information using Tavily AI Search (with DuckDuckGo and Bing fallbacks). Use
+    when the user asks about news, current events, facts, documentation, real estate listings, weather, or anything that requires
+    up-to-date information from the internet.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: The search query (be specific for better results)
+      num_results:
+        type: integer
+        description: Number of results to return (1-10, default 5)
+    required:
+    - query
+- name: get_weather
+  description: Get current weather conditions and a 3-day forecast for any location (city, airport code, or landmark). No
+    API key required.
+  parameters:
+    type: object
+    properties:
+      location:
+        type: string
+        description: City name, airport code, or landmark (e.g. 'Philadelphia PA', 'JFK', 'Narberth PA'). Leave empty to use
+          the default configured location.
+      units:
+        type: string
+        description: 'Unit system: ''uscs'' for Fahrenheit/mph (default) or ''metric'' for Celsius/kmh'
+- name: browse_url
+  description: Fetch and read the content of a specific web page or URL. Use when the user provides a URL to read, or after
+    a web search when you want to get the full content of a result.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: The full URL to fetch (must start with http:// or https://)
+    required:
+    - url
+- name: webfetch_md
+  description: Smartly scrape and fetch any URL, converting it into clean Markdown (optimized for AI reading). Use this as
+    a more robust alternative to browse_url.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: The full URL to fetch
+    required:
+    - url
+- name: git_status
+  description: Check the project's Git status, showing which files are staged, unstaged, or untracked.
+  parameters:
+    type: object
+    properties: {}
+- name: git_log
+  description: View recent commit history for the project codebase.
+  parameters:
+    type: object
+    properties:
+      limit:
+        type: integer
+        description: Number of commits to return (default 5)
+- name: git_diff
+  description: Compare code changes between current state and previous commits.
+  parameters:
+    type: object
+    properties:
+      staged:
+        type: boolean
+        description: If true, show staged changes; if false, show unstaged changes.
+- name: git_commit
+  description: Commit all current changes with a brief descriptive message.
+  parameters:
+    type: object
+    properties:
+      message:
+        type: string
+        description: The commit message summarizing the work done
+    required:
+    - message
+- name: init_planning_files
+  description: Initialize Manus-style file-based planning (task_plan.md, findings.md, progress.md) in the project workspace.
+    Use this for ANY multi-step or complex task to ensure the agent maintains state and context.
+  parameters:
+    type: object
+    properties:
+      goal:
+        type: string
+        description: A clear, one-sentence description of the end goal of the task.
+    required:
+    - goal
+- name: update_plan_status
+  description: Log progress or update status of a phase in the current planning files (progress.md). Use this after completing
+    significant steps or hitting errors to record findings.
+  parameters:
+    type: object
+    properties:
+      phase:
+        type: integer
+        description: The current phase number being worked on.
+      status:
+        type: string
+        description: Updated status summary (e.g., 'complete', 'in progress', 'error encountered').
+      note:
+        type: string
+        description: Optional detailed progress note or error report.
+    required:
+    - phase
+    - status
+- name: gateway_request
+  description: Call any third-party API (Slack, GitHub, Google Sheets, Notion, HubSpot, Stripe, Airtable, and 100+ more) through
+    the Maton managed OAuth gateway. Requires an active Maton connection for the target app.
+  parameters:
+    type: object
+    properties:
+      app:
+        type: string
+        description: Service slug, e.g. 'slack', 'github', 'google-sheets', 'notion', 'hubspot', 'stripe', 'airtable'.
+      path:
+        type: string
+        description: Native API path without the app prefix, e.g. 'api/chat.postMessage' for Slack, 'repos/owner/repo/issues'
+          for GitHub.
+      method:
+        type: string
+        description: 'HTTP method: GET, POST, PUT, PATCH, or DELETE (default: GET).'
+      body:
+        type: string
+        description: Optional JSON-encoded request body as a string.
+      connection_id:
+        type: string
+        description: Optional connection UUID if you have multiple connections for the same app.
+    required:
+    - app
+    - path
+- name: gateway_list_connections
+  description: List all active Maton OAuth connections, optionally filtered by app name.
+  parameters:
+    type: object
+    properties:
+      app:
+        type: string
+        description: Optional service name to filter (e.g. 'slack'). Leave empty for all.
+- name: gateway_create_connection
+  description: Create a new Maton OAuth connection for a third-party app. Returns a URL for the user to open in a browser
+    to complete OAuth.
+  parameters:
+    type: object
+    properties:
+      app:
+        type: string
+        description: Service to connect, e.g. 'slack', 'github', 'google-calendar', 'notion'.
+    required:
+    - app
+- name: nas_create_folder
+  description: Create a new folder on the Synology NAS FileStation.
+  parameters:
+    type: object
+    properties:
+      path:
+        type: string
+        description: Full folder path to create, e.g. '/volume1/documents/reports'.
+    required:
+    - path
+- name: nas_write_file
+  description: Write a text or markdown file directly to the Synology NAS. Use this to save research reports, notes, or any
+    generated content to network storage.
+  parameters:
+    type: object
+    properties:
+      content:
+        type: string
+        description: Full text content to write to the file.
+      remote_folder:
+        type: string
+        description: 'Destination folder on the NAS, e.g. ''/volume1/documents''. Default: ''/volume1/documents''.'
+      filename:
+        type: string
+        description: 'File name including extension, e.g. ''research_report.md''. Default: ''openclaw_output.md''.'
+    required:
+    - content
+- name: create_google_doc
+  description: Create a Google Doc with a title and text content. Requires a 'google-docs' connection via Maton. Returns the
+    document URL.
+  parameters:
+    type: object
+    properties:
+      title:
+        type: string
+        description: Title for the new Google Doc.
+      content:
+        type: string
+        description: Full text content to insert into the document.
+    required:
+    - title
+    - content
+- name: create_onedrive_file
+  description: Save a text or markdown file to OneDrive. Requires a 'microsoft-onedrive' connection via Maton. Returns the
+    file URL.
+  parameters:
+    type: object
+    properties:
+      filename:
+        type: string
+        description: File name including extension, e.g. 'report.md'.
+      content:
+        type: string
+        description: Text content to write to the file.
+      folder_path:
+        type: string
+        description: 'OneDrive folder path (default: ''OpenClaw''). Use ''/'' for root.'
+    required:
+    - filename
+    - content
+- name: ontology_create_entity
+  description: Create a structured ontology entity in the local graph memory. Use for people, projects, tasks, events, documents,
+    devices, and durable facts that should be linked and queried later.
+  parameters:
+    type: object
+    properties:
+      entity_type:
+        type: string
+        description: Entity type, e.g. Person, Project, Task, Event, Document, Note, Device.
+      properties_json:
+        type: string
+        description: Entity properties as a JSON object string, e.g. '{"name":"Alice"}' or '{"title":"Fix parser","status":"open"}'.
+      entity_id:
+        type: string
+        description: Optional explicit entity ID. Leave empty to auto-generate.
+    required:
+    - entity_type
+    - properties_json
+- name: ontology_get_entity
+  description: Fetch a single ontology entity by ID.
+  parameters:
+    type: object
+    properties:
+      entity_id:
+        type: string
+        description: Entity ID to fetch.
+    required:
+    - entity_id
+- name: ontology_query
+  description: Query ontology entities by type and property filters. Use to answer 'what do we know about X', list project
+    tasks, or find structured records.
+  parameters:
+    type: object
+    properties:
+      entity_type:
+        type: string
+        description: Optional entity type filter, e.g. Task or Project.
+      where_json:
+        type: string
+        description: Optional JSON filter on entity properties, e.g. '{"status":"open"}'.
+    required: []
+- name: ontology_update_entity
+  description: Update properties on an existing ontology entity.
+  parameters:
+    type: object
+    properties:
+      entity_id:
+        type: string
+        description: Entity ID to update.
+      properties_json:
+        type: string
+        description: Properties to merge into the entity as a JSON object string.
+    required:
+    - entity_id
+    - properties_json
+- name: ontology_relate
+  description: Create a typed relation between two ontology entities, such as project->has_task->task or task->blocks->task.
+  parameters:
+    type: object
+    properties:
+      from_id:
+        type: string
+        description: Source entity ID.
+      relation:
+        type: string
+        description: Relation type, e.g. has_task, has_owner, blocks, for_event.
+      to_id:
+        type: string
+        description: Target entity ID.
+      properties_json:
+        type: string
+        description: Optional relation properties as a JSON object string.
+    required:
+    - from_id
+    - relation
+    - to_id
+- name: ontology_get_related
+  description: Get entities related to a given ontology entity. Use for dependency tracing, project membership, ownership,
+    and graph traversal.
+  parameters:
+    type: object
+    properties:
+      entity_id:
+        type: string
+        description: Entity ID to traverse from.
+      relation:
+        type: string
+        description: Optional relation filter.
+      direction:
+        type: string
+        description: 'Traversal direction: outgoing, incoming, or both. Default both.'
+    required:
+    - entity_id
+- name: ontology_validate
+  description: Validate the ontology graph against the local schema and report any structural errors.
+  parameters:
+    type: object
+    properties: {}
+- name: get_mission_tasks
+  description: 'List Mission Control Kanban tasks. Optionally filter by status: backlog, in_progress, review, done, permanent.'
+  parameters:
+    type: object
+    properties:
+      status:
+        type: string
+        description: 'Filter by status: backlog, in_progress, review, done, permanent. Omit for all tasks.'
+    required: []
+- name: get_task_detail
+  description: Get full details for a specific Mission Control task including subtasks and comments.
+  parameters:
+    type: object
+    properties:
+      task_id:
+        type: string
+        description: The task ID, e.g. 'task_001'.
+    required:
+    - task_id
+- name: update_task_status
+  description: Update a Mission Control task's status.
+  parameters:
+    type: object
+    properties:
+      task_id:
+        type: string
+        description: The task ID.
+      new_status:
+        type: string
+        description: 'New status: backlog, in_progress, review, done.'
+    required:
+    - task_id
+    - new_status
+- name: complete_task
+  description: Mark a Mission Control task as complete (moves to review) with a summary of what was done.
+  parameters:
+    type: object
+    properties:
+      task_id:
+        type: string
+        description: The task ID.
+      summary:
+        type: string
+        description: Summary of what was accomplished.
+    required:
+    - task_id
+    - summary
+- name: add_task_comment
+  description: Add a comment or progress update to a Mission Control task.
+  parameters:
+    type: object
+    properties:
+      task_id:
+        type: string
+        description: The task ID.
+      comment:
+        type: string
+        description: The comment text.
+    required:
+    - task_id
+    - comment
+- name: spawn_worker
+  description: 'Spawn a focused AI sub-agent to accomplish a specific goal autonomously. The worker runs its own tool loop
+    and returns a clean result. Use this to delegate complex subtasks that require multiple independent tool calls, such as
+    gathering data from several sources, doing research and summarizing it, or performing a multi-step diagnostic while you
+    handle the rest of the response. Examples: ''check Sonarr health AND search web for that error'', ''look up my calendar
+    AND get the weather for tomorrow''.'
+  parameters:
+    type: object
+    properties:
+      goal:
+        type: string
+        description: Clear, specific description of what the worker should accomplish.
+      context:
+        type: string
+        description: Optional background context or constraints for the worker.
+      max_rounds:
+        type: integer
+        description: Maximum tool call rounds for the worker (1-8, default 6).
+    required:
+    - goal
+- name: create_scheduled_task
+  description: 'Create a recurring scheduled task that runs a skill automatically. Use interval_minutes for ''every N minutes''
+    tasks, or hour+minute for a daily cron. Examples: schedule a daily health check at 07:00, run speed test every 60 min,
+    check Overseerr requests every 30 min.'
+  parameters:
+    type: object
+    properties:
+      skill_name:
+        type: string
+        description: The skill name to schedule (e.g. check_arr_health, run_speed_test).
+      interval_minutes:
+        type: integer
+        description: Run every N minutes (e.g. 30 for every 30 min). Use 0 for daily cron.
+      hour:
+        type: integer
+        description: Hour (0-23) for a daily cron schedule. Use -1 if using interval_minutes.
+      minute:
+        type: integer
+        description: Minute (0-59) for a daily cron schedule (default 0).
+      args_json:
+        type: string
+        description: 'Optional JSON object of arguments for the skill, e.g. ''{"days": 7}''.'
+      label:
+        type: string
+        description: Optional human-readable label describing the task purpose.
+    required:
+    - skill_name
+- name: cancel_scheduled_task
+  description: Cancel (remove) a scheduled task by its task ID. Use list_scheduled_tasks to find IDs.
+  parameters:
+    type: object
+    properties:
+      task_id:
+        type: string
+        description: The task ID to cancel, e.g. 'sched-3'.
+    required:
+    - task_id
+- name: list_scheduled_tasks
+  description: List all active scheduled tasks with their IDs, actions, schedules, and run counts.
+  parameters:
+    type: object
+    properties: {}
+- name: fetch_rss_feed
+  description: Fetch recent items from any RSS or Atom feed URL. Use this to read news sources, tech blogs, GitHub release
+    notes, Reddit feeds, podcast listings, or any site that publishes an RSS/Atom feed. Returns titles, dates, and summaries.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: Full URL of the RSS or Atom feed (e.g. https://feeds.bbci.co.uk/news/rss.xml).
+      limit:
+        type: integer
+        description: Number of items to return (1-20, default 10).
+    required:
+    - url
+- name: search_rss
+  description: Fetch a feed and filter items matching a keyword or phrase.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: Full RSS/Atom feed URL.
+      query:
+        type: string
+        description: Keyword or phrase to search for in titles and summaries.
+    required:
+    - url
+    - query
+- name: get_rss_digest
+  description: Fetch multiple RSS/Atom feeds in parallel and synthesize a combined digest. Use this for a quick news summary
+    across several sources, or to monitor multiple topics at once. The LLM summarizes the most notable items.
+  parameters:
+    type: object
+    properties:
+      urls_json:
+        type: string
+        description: JSON array of feed URLs, e.g. '["https://news.ycombinator.com/rss"]'.
+      topic:
+        type: string
+        description: Optional focus topic — only surface articles related to this subject.
+    required:
+    - urls_json
+- name: list_rss_feeds
+  description: List all RSS/Atom feed URLs that have been fetched or saved.
+  parameters:
+    type: object
+    properties: {}
+- name: snapshot_url
+  description: Take a baseline snapshot of a URL for change monitoring. Call this once to record the current content, then
+    schedule check_url_for_changes to run periodically and alert on differences. Use for competitor pricing pages, job boards,
+    status pages, listings, etc.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: Full https URL to monitor.
+      label:
+        type: string
+        description: Human-readable name for this monitor (e.g. 'Amazon GPU Pricing').
+    required:
+    - url
+- name: check_url_for_changes
+  description: Compare the current content of a URL against its stored snapshot. Returns a change alert with before/after
+    diff if content changed, or a clean status if unchanged. Designed to be called by the scheduler.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: The URL to check (must have been snapshotted with snapshot_url first).
+    required:
+    - url
+- name: list_monitored_urls
+  description: List all URLs currently being monitored for content changes, with their last-checked and last-changed timestamps.
+  parameters:
+    type: object
+    properties: {}
+- name: remove_url_monitor
+  description: Stop monitoring a URL and remove its snapshot record.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: The URL to stop monitoring.
+    required:
+    - url
+- name: compare_sources
+  description: Browse multiple URLs in parallel and synthesize a comparison answer. Use this for competitive analysis, comparing
+    documentation pages, fact-checking across multiple sources, or getting a balanced view of a topic from several sites at
+    once.
+  parameters:
+    type: object
+    properties:
+      urls_json:
+        type: string
+        description: JSON array of up to 5 URLs to compare, e.g. '["https://a.com","https://b.com"]'.
+      question:
+        type: string
+        description: The question to answer or aspect to compare across the sources.
+    required:
+    - urls_json
+    - question
+- name: decompose_goal
+  description: Break a complex goal into concrete Mission Control tasks using AI planning. The agent analyzes the goal, produces
+    an ordered task list, and creates each task in the Mission Control kanban board for tracking. Use when the user says 'plan
+    X', 'set up a project for Y', or gives a multi-step goal.
+  parameters:
+    type: object
+    properties:
+      goal:
+        type: string
+        description: Clear description of what needs to be accomplished.
+      project_name:
+        type: string
+        description: Optional short prefix for task titles (e.g. 'HomeReno', 'Q2Launch').
+    required:
+    - goal

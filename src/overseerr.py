@@ -17,23 +17,11 @@ log = logging.getLogger("openclaw.overseerr")
 OVERSEERR_URL = os.getenv("OVERSEERR_URL", "http://192.168.1.93:5055")
 OVERSEERR_API_KEY = os.getenv("OVERSEERR_API_KEY", "")
 
-_http_session: aiohttp.ClientSession | None = None
+from http_session import SessionManager
 
-
-async def _get_session() -> aiohttp.ClientSession:
-    global _http_session
-    if _http_session is None or _http_session.closed:
-        _http_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10)
-        )
-    return _http_session
-
-
-async def close_session() -> None:
-    global _http_session
-    if _http_session and not _http_session.closed:
-        await _http_session.close()
-        _http_session = None
+_sessions = SessionManager(timeout=10, name="overseerr")
+_get_session = _sessions.get
+close_session = _sessions.close
 
 
 def _truncate(text: str, limit: int = 1900) -> str:
@@ -128,18 +116,26 @@ async def get_pending_requests() -> str:
 
 async def approve_request(request_id: int) -> str:
     """Approve a pending Overseerr media request by its numeric ID."""
-    result = await _post(f"/request/{int(request_id)}/approve")
+    try:
+        rid = int(request_id)
+    except (ValueError, TypeError):
+        return f"❌ Invalid request ID: `{request_id}` — must be a number."
+    result = await _post(f"/request/{rid}/approve")
     if isinstance(result, str):
-        return f"❌ Failed to approve request #{request_id}: {result}"
-    return f"✅ Request #{request_id} approved."
+        return f"❌ Failed to approve request #{rid}: {result}"
+    return f"✅ Request #{rid} approved."
 
 
 async def deny_request(request_id: int) -> str:
     """Decline a pending Overseerr media request by its numeric ID."""
-    result = await _post(f"/request/{int(request_id)}/decline")
+    try:
+        rid = int(request_id)
+    except (ValueError, TypeError):
+        return f"❌ Invalid request ID: `{request_id}` — must be a number."
+    result = await _post(f"/request/{rid}/decline")
     if isinstance(result, str):
-        return f"❌ Failed to decline request #{request_id}: {result}"
-    return f"❌ Request #{request_id} declined."
+        return f"❌ Failed to decline request #{rid}: {result}"
+    return f"❌ Request #{rid} declined."
 
 
 async def get_request_stats() -> str:

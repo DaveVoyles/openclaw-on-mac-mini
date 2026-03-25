@@ -13,10 +13,20 @@ import aiohttp
 
 log = logging.getLogger("openclaw.network")
 
-_http_session: aiohttp.ClientSession | None = None
+from http_session import SessionManager
+
+_sessions = SessionManager(timeout=5, name="network")
+close_session = _sessions.close
 
 
 def _get_session() -> aiohttp.ClientSession:
+    """Sync wrapper — session created lazily on first await in caller."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    if not loop.is_running():
+        return loop.run_until_complete(_sessions.get())
+    # Called from async context — return a coro result via __await__ won't work,
+    # so just do the lazy init inline (matches original behaviour).
     global _http_session
     if _http_session is None or _http_session.closed:
         _http_session = aiohttp.ClientSession(
@@ -25,13 +35,11 @@ def _get_session() -> aiohttp.ClientSession:
     return _http_session
 
 
-async def close_session() -> None:
-    global _http_session
-    if _http_session and not _http_session.closed:
-        await _http_session.close()
-        _http_session = None
+_http_session: aiohttp.ClientSession | None = None
 
 HOST = os.getenv("DOCKER_HOST_IP", "192.168.1.93")
+DNS_TEST_HOST = os.getenv("DNS_TEST_HOST", "8.8.8.8")
+PING_TEST_HOST = os.getenv("PING_TEST_HOST", "1.1.1.1")
 
 # Common Tailscale binary locations on macOS
 _TAILSCALE_PATHS = [
@@ -67,8 +75,8 @@ def _find_tailscale() -> Optional[str]:
             import os as _os
             if _os.path.isfile(path) and _os.access(path, _os.X_OK):
                 return path
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Tailscale path check failed for %s: %s", path, exc)
     return None
 
 
@@ -157,7 +165,7 @@ async def get_network_status() -> str:
         health_result,
     ) = await asyncio.gather(
         _run(["ping", "-c", "1", "-W", "1", nas_ip]),
-        _run(["ping", "-c", "1", "-W", "2", "1.1.1.1"]),
+        _run(["ping", "-c", "1", "-W", "2", PING_TEST_HOST]),
         _check_dns(),
         _check_tailscale(),
         _check_health(),
@@ -165,7 +173,7 @@ async def get_network_status() -> str:
 
     results = [
         f"{'✅' if rc_nas == 0 else '❌'} LAN (NAS {nas_ip})",
-        f"{'✅' if rc_inet == 0 else '❌'} Internet (1.1.1.1)",
+        f"{'✅' if rc_inet == 0 else '❌'} Internet ({PING_TEST_HOST})",
         dns_result,
         ts_result,
         health_result,
