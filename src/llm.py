@@ -806,11 +806,13 @@ async def chat_stream(
             ]
             yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
             return
-        yield "⚠️ Local model returned an empty response. Try rephrasing or switch to Gemini.", True, {"model_used": OLLAMA_MODEL, "updated_history": history, "needs_tools": False}
-        return
+        # Gemma returned empty — silently fall through to Gemini instead
+        # of dead-ending with an unhelpful error message.
+        log.info("Local model returned empty, auto-falling back to Gemini")
 
     # ── Forced Gemini mode ───────────────────────────────────────────────
-    if model_preference == "gemini":
+    if model_preference in ("gemini", "local"):
+        # "local" lands here only when Gemma failed and we're falling back
         if not GOOGLE_API_KEY:
             yield "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
             return
@@ -940,10 +942,12 @@ async def chat(
                 {"role": "model", "parts": [gemma_reply]},
             ]
             return gemma_reply, updated, OLLAMA_MODEL
-        return "⚠️ Local model returned an empty response. Try rephrasing or switch to Gemini.", history, OLLAMA_MODEL
+        # Gemma returned empty — silently fall through to Gemini
+        log.info("Local model returned empty, auto-falling back to Gemini")
 
     # -- Forced Gemini mode ───────────────────────────────────────────────────
-    if model_preference == "gemini":
+    if model_preference in ("gemini", "local"):
+        # "local" lands here only when Gemma failed and we're falling back
         if not GOOGLE_API_KEY:
             return "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", history, "none"
         if not _rate_limiter.check():
