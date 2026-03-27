@@ -2,7 +2,7 @@
 
 Quick reference for all source files. Consult this before exploring the codebase.
 
-## Core Modules (src/\*.py) — 35 files
+## Core Modules (src/\*.py) — 39 files
 
 | File                    | Purpose                                                                  | Key Exports                                                          |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
@@ -42,6 +42,10 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `user_profile.py`       | Structured user profile — preferences, interests, working style          | `load_profile()`, `learn_from_message()`, `get_profile_prompt()`     |
 | `vector_store.py`       | ChromaDB semantic memory — memories, conversations, research collections | `VectorStore` class with `search()`, `add_memory()`, `recall()`      |
 | `worker_agent.py`       | Sub-agent spawning for task delegation                                   | `spawn_worker()`                                                     |
+| `json_utils.py`         | JSON validation, repair, and extraction for robust tool result parsing   | `validate_json()`, `repair_json()`, `extract_json()`                 |
+| `ollama_tools.py`       | Ollama native tool calling protocol for local Gemma model                | `ollama_chat_with_tools()`, `OLLAMA_TOOL_DECLARATIONS`               |
+| `model_router.py`       | Multi-model query classification and routing (Gemini/GPT-4o/Claude/Gemma) | `classify_query()`, `route_to_model()`, `MODEL_CONFIGS`            |
+| `fact_extractor.py`     | Automatic fact extraction from conversations for long-term memory        | `extract_facts()`, `should_store()`, `deduplicate()`                 |
 
 ## Cog Modules (src/cogs/\*.py) — 4 cogs, 18 commands
 
@@ -253,6 +257,65 @@ Read and send email via Gmail or Outlook/Microsoft 365 using IMAP + SMTP with Ap
 **Setup:** Requires 2FA + App Password for each provider. Gmail: `GMAIL_USER`, `GMAIL_APP_PASSWORD`. Outlook: `OUTLOOK_USER`, `OUTLOOK_APP_PASSWORD`.
 **Exports:** `EMAIL_SKILLS` dict.
 **Dependencies:** `imaplib`, `smtplib`, `email` (stdlib), `utils.truncate`.
+
+---
+
+---
+
+## Module Details — Phase 15 Additions
+
+### json_utils.py — Structured Output Utilities
+
+JSON validation, repair, and extraction for robust tool result parsing. Handles malformed LLM outputs by attempting progressive repair strategies (strip markdown fences, fix trailing commas, bracket matching).
+
+**Key Functions:**
+- `validate_json(text)` — validate a string as JSON, returns parsed object or None
+- `repair_json(text)` — attempt to repair malformed JSON (strip fences, fix commas, match brackets)
+- `extract_json(text)` — extract the first JSON object or array from mixed text
+
+**Exports:** `validate_json`, `repair_json`, `extract_json`.
+**Dependencies:** `json`, `re` (stdlib only).
+
+---
+
+### ollama_tools.py — Ollama Native Tool Calling
+
+Implements the Ollama tool calling protocol so the local Gemma model can invoke read-only tools natively (system stats, container status, weather, etc.) instead of hallucinating results. Only exposes safe, read-only tools to the local model.
+
+**Key Functions:**
+- `ollama_chat_with_tools(prompt, conversation_history, tools)` — chat with tool calling loop
+- `OLLAMA_TOOL_DECLARATIONS` — read-only subset of tool declarations formatted for Ollama's API
+
+**Exports:** `ollama_chat_with_tools`, `OLLAMA_TOOL_DECLARATIONS`.
+**Dependencies:** `aiohttp`, `http_session.SessionManager`, `json_utils`.
+
+---
+
+### model_router.py — Multi-Model Query Classification & Routing
+
+Classifies incoming queries and routes them to the optimal model backend. Code queries → Claude (via Copilot proxy), creative writing → GPT-4o (via Copilot proxy), tool-requiring queries → Gemini, simple chat → local Gemma.
+
+**Key Functions:**
+- `classify_query(query, has_tools)` — classify a query into a category (code, creative, tool, chat)
+- `route_to_model(category, user_preference)` — resolve category + user pref to a model backend
+- `MODEL_CONFIGS` — dict of model backends with endpoints, context limits, and capabilities
+
+**Exports:** `classify_query`, `route_to_model`, `MODEL_CONFIGS`.
+**Dependencies:** `re`, `config`.
+
+---
+
+### fact_extractor.py — Automatic Fact Extraction
+
+Extracts memorable facts from conversations and stores them in long-term memory. Checks for >90% similarity before storing to prevent duplicates. Explicit `/remember` facts get higher confidence than auto-extracted ones.
+
+**Key Functions:**
+- `extract_facts(message, response)` — extract notable facts from a conversation exchange
+- `should_store(fact, existing_memories)` — check if a fact is novel (>90% similarity threshold)
+- `deduplicate(facts)` — remove near-duplicate facts from a batch
+
+**Exports:** `extract_facts`, `should_store`, `deduplicate`.
+**Dependencies:** `vector_store`, `qmd`, `llm.chat`.
 
 ---
 

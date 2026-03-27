@@ -109,16 +109,21 @@ graph TB
 
     %% ── LLM Backends ────────────────────────────────────────────
     subgraph AI ["🤖 AI / LLM Backends"]
-        Gemini["Google Gemini\ngemini-2.5-flash\n(primary)"]
-        Ollama["Ollama Local\ngemma3:12b\n(conversational)"]
-        OpenAI["OpenAI GPT\n(fallback)"]
-        Anthropic["Anthropic Claude\n(fallback)"]
+        Gemini["Google Gemini\ngemini-2.5-flash\n(primary, tools)"]
+        Ollama["Ollama Local\ngemma3:12b\n(chat + native tools)"]
+        OpenAI["OpenAI GPT-4o\n(via Copilot proxy)"]
+        Anthropic["Anthropic Claude\nSonnet 4.5\n(via Copilot proxy)"]
+        CopilotProxy["Copilot Proxy\nlocalhost:9191\n(routes to OpenAI/Anthropic)"]
+        ModelRouter["model_router.py\nQuery Classifier"]
     end
 
-    LLM -->|"tool-calling queries"| Gemini
-    LLM -->|"simple turns"| Ollama
-    LLM -.->|"optional fallback"| OpenAI
-    LLM -.->|"optional fallback"| Anthropic
+    LLM -->|"model_router.py"| ModelRouter
+    ModelRouter -->|"tool-calling queries"| Gemini
+    ModelRouter -->|"simple chat"| Ollama
+    ModelRouter -->|"code queries"| CopilotProxy
+    ModelRouter -->|"creative writing"| CopilotProxy
+    CopilotProxy -->|"code/reasoning"| Anthropic
+    CopilotProxy -->|"creative/general"| OpenAI
     Gemini -->|"token cost"| Spending
 
     %% ── API Gateway ─────────────────────────────────────────────
@@ -249,7 +254,7 @@ graph TB
 
     class Discord,Bot,LLM,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
     class DockerCog,MediaCog,NetworkCog,AnalyticsCog service
-    class Gemini,Ollama,OpenAI,Anthropic,TavilyAPI,DDGNet,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
+    class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,TavilyAPI,DDGNet,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
     class DockerEngine,Glances,Tailscale,Cloudflare,Prometheus,UptimeKuma,NAS,Traefik,SynDDNS infra
     class User actor
@@ -293,6 +298,75 @@ graph TB
 | **Memory decay**               | `maintenance_skills.py` `run_memory_decay()` (daily 4AM) → `vector_store.py` `get_decayed_documents()` → `mark_decayed()` → 10% similarity penalty |
 | **Session handover**           | `memory.py` `cleanup_expired()` → `create_session_handover()` → JSON + ChromaDB; injected at start of next conversation                          |
 | **Knowledge routing**          | `qmd.py` `remember_fact()` → `_classify_fact()` → routes to `user_profile` / `rules_engine` / QMD+ChromaDB based on content                     |
+| **Auto-RAG injection**        | `bot.py` pre-LLM → `vector_store.recall(top_k=5)` + `user_profile` + `rules_engine` → context block injected before every LLM call              |
+| **Multi-model routing**       | `bot.py` → `model_router.py` `classify_query()` → code→Claude, creative→GPT-4o, tools→Gemini, chat→Gemma                                       |
+| **Copilot proxy**             | `llm.py` → `aiohttp` POST to `localhost:9191/v1/chat/completions` → GitHub Copilot API → OpenAI/Anthropic response                              |
+| **Fact extraction**           | `bot.py` post-response → `fact_extractor.extract_facts()` → `should_store()` similarity check → `qmd.remember_fact()` with confidence=0.6       |
+| **Ollama tool calling**       | `llm.py` → `ollama_tools.py` `ollama_chat_with_tools()` → Ollama API with tool declarations → execute read-only tools → return result           |
+
+---
+
+## Multi-Model Routing (Phase 15)
+
+OpenClaw supports 5 model backends, selected automatically by `model_router.py` or manually via `/ask model:<pref>`:
+
+| Backend    | Model              | Endpoint                  | Use Case                          |
+| ---------- | ------------------ | ------------------------- | --------------------------------- |
+| `gemini`   | Gemini 2.5 Flash   | Google AI API             | Tool calling, complex analysis    |
+| `local`    | Gemma 3 12B        | Ollama (localhost:11434)  | Simple chat, native tool calling  |
+| `openai`   | GPT-4o             | Copilot proxy (:9191)     | Creative writing, general knowledge |
+| `anthropic`| Claude Sonnet 4.5  | Copilot proxy (:9191)     | Code review, careful reasoning    |
+| `auto`     | (classified)       | (routed by category)      | Default — picks best model        |
+
+### Copilot Proxy Architecture
+
+GPT-4o and Claude are accessed through a local proxy server that translates OpenAI-compatible API calls using your GitHub Copilot subscription. No separate API keys needed.
+
+```
+Bot (llm.py) → model_router.py (classify) → Copilot Proxy (:9191) → GitHub Copilot API → OpenAI/Anthropic
+```
+
+Setup: `bash scripts/setup-copilot-proxy.sh`
+
+---
+
+## Auto-RAG Pipeline
+
+Every `/ask` call goes through the Auto-RAG pipeline before reaching the LLM:
+
+```
+User message
+    │
+    ├─→ vector_store.recall(query, top_k=5)  → top 5 relevant memories
+    ├─→ user_profile.get_profile_prompt()    → structured user preferences
+    ├─→ rules_engine.get_relevant_rules()    → learned correction rules
+    │
+    └─→ [context block] injected before system prompt → LLM call
+```
+
+This ensures the LLM always has access to relevant facts, user preferences, and past corrections without explicit recall commands.
+
+---
+
+## Memory Pipeline
+
+Automatic fact extraction and deduplication flow:
+
+```
+Conversation exchange (user message + LLM response)
+    │
+    ├─→ fact_extractor.extract_facts()       → candidate facts
+    ├─→ fact_extractor.should_store()         → similarity check (>90% = skip)
+    ├─→ qmd.remember_fact()                  → persist to QMD + ChromaDB
+    │       └─→ confidence: 0.9 (explicit /remember) or 0.6 (auto-extracted)
+    │
+    └─→ user_profile.learn_from_message()    → update structured profile
+```
+
+Key properties:
+- **Deduplication**: >90% cosine similarity with existing memories → skip
+- **Confidence weighting**: explicit `/remember` = 0.9, auto-extracted = 0.6
+- **Configurable embeddings**: set `EMBEDDING_MODEL` env var to swap models (default: `all-MiniLM-L6-v2`)
 
 ---
 

@@ -14,10 +14,10 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
 | **Interface**    | 56 Discord slash commands                                              |
-| **LLM**          | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries)       |
-| **Local LLM**    | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
-| **Model Control** | `/ask model:auto\|local\|gemini` per-message + `/model set` sticky pref |
-| **Status**       | **Phase 14 — Genesis-Inspired Intelligence** ✅                        |
+| **LLM**          | Gemini 2.5 Flash + GPT-4o + Claude Sonnet 4.5 + Gemma 3 12B local     |
+| **Local LLM**    | Ollama (`gemma3:12b`) — free, with native tool calling support         |
+| **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
+| **Status**       | **Phase 15 — Frontier Intelligence** ✅                                |
 
 ## Features
 
@@ -163,10 +163,31 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Knowledge router — `/remember` auto-classifies: preferences → profile, rules → rules engine, facts → QMD
 - New commands: `/rules`, `/profile`, `/profile-edit`, `/memory-refresh`
 
+**Phase 15 — Frontier Intelligence** ✅
+
+_Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemini Pro)._
+
+- **Auto-RAG** — automatically recalls relevant memories, user profile, and learned rules before every LLM call (no more "I forgot")
+- **Code Interpreter** — LLM can autonomously write and execute Python code in a sandboxed Docker container for calculations, data analysis, and text processing
+- **Vision + Tools** — image analysis can now trigger tool calls in the same turn (e.g. "analyze this dashboard screenshot and restart the unhealthy service")
+- **Ollama Tool Calling** — local Gemma model can now call read-only tools natively (system stats, container status, weather, etc.) instead of hallucinating
+- **Context Window Expansion** — model-aware limits: Gemini 500K chars (~125K tokens), Gemma 400K chars (~100K tokens), up from 80K
+- **Structured Output** — JSON validation, repair, and extraction utilities for robust tool result parsing
+- **Agentic Reflection** — self-evaluates complex responses and refines them if issues are found (enable with `REFLECTION_ENABLED=true`)
+- **Multi-Model Routing** — code queries → Claude, creative writing → GPT-4o, tools → Gemini, simple chat → local Gemma
+- **Copilot Proxy** — routes GPT-4o and Claude through your GitHub Copilot subscription (no separate API keys needed)
+- **Automatic Fact Extraction** — memorable facts are auto-extracted from conversations and stored in long-term memory
+- **Smarter Recall** — top-5 memories + user profile + active rules injected into every LLM call
+- **Memory Deduplication** — checks for >90% similarity before storing, prevents duplicate facts
+- **Confidence-Weighted Memory** — explicit `/remember` facts rank higher than auto-extracted ones
+- **Configurable Embeddings** — swap to EmbeddingGemma or other Ollama models via `EMBEDDING_MODEL` env var
+- New model options: `/ask model:openai` and `/ask model:anthropic` for per-message routing
+- Setup script: `bash scripts/setup-copilot-proxy.sh` for one-command Copilot proxy deployment
+
 **Planned**
 
 - Grafana dashboards
-- Research digest — weekly automated summaries of research activity
+- EmbeddingGemma migration (requires `ollama pull embeddinggemma` + re-index)
 
 ---
 
@@ -267,7 +288,7 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 | `/dockerstats`                | Per-container resource usage snapshot                           | 2     |
 | `/system`                     | System resource usage (CPU, RAM, disk)                          | 2     |
 | `/restart <service>`          | Restart a container (requires approval)                         | 2     |
-| `/ask <question>`             | AI-powered natural language query (Gemini 2.5 Flash or Ollama)  | 3     |
+| `/ask <question>`             | AI query — auto-routes to best model (Gemini/GPT-4o/Claude/Gemma) | 3/15  |
 | `/clear`                      | Clear your active conversation history                          | 3     |
 | `/save <name>`                | Save current conversation as a named thread (persisted to disk) | 7     |
 | `/resume <name>`              | Resume a previously saved conversation thread                   | 7     |
@@ -293,6 +314,8 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 | `/network`                    | LAN + internet + DNS + Tailscale + health summary               | 6     |
 | `/tailscale`                  | Tailscale VPN status and device IP                              | 6     |
 | `/speedtest`                  | Cloudflare download speed + DNS latency                         | 6     |
+| `/model set <pref>`           | Set default model: auto/local/gemini/openai/anthropic           | 15    |
+| `/run <code>`                 | Execute Python code in sandboxed Docker container               | 15    |
 
 ## Architecture
 
@@ -319,7 +342,7 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 │  │   bot.py     │  │         llm.py           │  │ approvals  │  │
 │  │ 28 commands  │  │  ┌─────────┬───────────┐ │  │ button UI  │  │
 │  └──────┬───────┘  │  │ Ollama  │  Gemini   │ │  └────────────┘  │
-│         │           │  │3.2:3b  │ 2.5 Flash │ │                  │
+│         │           │  │gemma3  │ 2.5 Flash │ │                  │
 │         │           │  │(local) │(tool use) │ │                  │
 │         │           │  └────┬───┴─────┬─────┘ │                  │
 │         │           └───────┼─────────┼───────┘                  │
@@ -332,6 +355,11 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 │  └───────────────────────────┬─────────────────────────────┘    │
 │            /health            │           /metrics (Prometheus)      │
 └───────────────────────────────┼──────────────────────────────────────┘
+
+> **Multi-model routing (Phase 15):** In addition to Gemini and Ollama, OpenClaw can route
+> queries to GPT-4o and Claude Sonnet 4.5 through a local Copilot proxy server (port 9191).
+> Code queries → Claude, creative writing → GPT-4o, tools → Gemini, simple chat → Gemma.
+
                                 │ LAN (192.168.1.x)
               ┌─────────────────┼──────────────────────┐
               ▼                 ▼                      ▼
@@ -369,6 +397,21 @@ sequenceDiagram
     B->>G: tool result
     G-->>B: natural language summary
     B-->>U: embed · via gemini-2.5-flash
+```
+
+### Request Flow — Multi-Model Routing (Phase 15)
+
+```mermaid
+sequenceDiagram
+    participant U as Discord User
+    participant B as OpenClaw Bot
+    participant CP as Copilot Proxy (localhost:9191)
+
+    U->>B: /ask model:anthropic "review this code"
+    B->>B: model_preference = anthropic
+    B->>CP: chat (Claude via Copilot proxy)
+    CP-->>B: code review response
+    B-->>U: embed · via anthropic/claude-sonnet-4.5
 ```
 
 ### Request Flow — Approval Workflow
@@ -601,6 +644,7 @@ Generates a comprehensive snapshot: container counts, download queue, \*arr heal
 - [x] **Phase 6**: Remote Access & Monitoring — Traefik routing, Uptime Kuma, Prometheus metrics
 - [x] **Phase 7**: Local LLM — Ollama hybrid routing (gemma3:12b + Gemini 2.5 Flash)
 - [ ] **Phase 8**: Production Hardening — Comprehensive testing, backup/restore, Grafana dashboards
+- [x] **Phase 15**: Frontier Intelligence — Auto-RAG, code interpreter, multi-model routing, Copilot proxy, persistent memory
 
 See [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) for the detailed plan.
 

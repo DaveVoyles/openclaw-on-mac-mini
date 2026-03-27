@@ -18,10 +18,10 @@ General-purpose commands for identity, help, and conversation management.
 | `/about`         | Show OpenClaw version and system info                     | —                                              | ✅   | LOW    | `bot.py` |
 | `/whoami`        | Show your Discord identity and permission level           | —                                              | ✅   | LOW    | `bot.py` |
 | `/help`          | List available OpenClaw commands                          | —                                              | ✅   | LOW    | `bot.py` |
-| `/ask`           | AI-powered natural language query (Gemini or Ollama)      | `question: str`, `attachment: file (optional)`, `model: auto\|local\|gemini (optional)` | —    | MEDIUM | `bot.py` |
+| `/ask`           | AI-powered natural language query (auto-routes to Gemini/GPT-4o/Claude/Ollama) | `question: str`, `attachment: file (optional)`, `model: auto\|local\|gemini\|openai\|anthropic (optional)` | —    | MEDIUM | `bot.py` |
 | `/clear`         | Clear your conversation history                           | —                                              | ✅   | LOW    | `bot.py` |
 | `/model show`    | Show your current model routing preference                | —                                              | —    | LOW    | `bot.py` |
-| `/model set`     | Set your default model routing preference                 | `preference: auto\|local\|gemini`              | —    | LOW    | `bot.py` |
+| `/model set`     | Set your default model routing preference                 | `preference: auto\|local\|gemini\|openai\|anthropic` | —    | LOW    | `bot.py` |
 | `/save`          | Save current conversation as a named thread               | `name: str`                                    | ✅   | LOW    | `bot.py` |
 | `/resume`        | Resume a previously saved conversation thread             | `name: str`                                    | ✅   | LOW    | `bot.py` |
 | `/threads`       | List all your saved conversation threads                  | —                                              | ✅   | LOW    | `bot.py` |
@@ -30,13 +30,15 @@ General-purpose commands for identity, help, and conversation management.
 | `/remember`      | Store a fact in long-term QMD memory                      | `content: str`, `tags: str (optional)`         | ✅   | LOW    | `bot.py` |
 | `/recall`        | Search long-term QMD memory                               | `query: str`                                   | ✅   | LOW    | `bot.py` |
 
-**`/ask` routing** — By default, simple queries go to local Ollama (`gemma3:12b`, free) and tool-requiring queries go to Gemini 2.5 Flash. You can override this per-message with the `model:` parameter, or set a sticky default with `/model set`. The response footer shows which model handled the request.
+**`/ask` routing** — By default, queries are auto-routed: code queries → Claude (via Copilot proxy), creative writing → GPT-4o (via Copilot proxy), tool-requiring queries → Gemini 2.5 Flash, simple/conversational queries → Ollama (`gemma3:12b`, free). Auto-RAG injects top-5 relevant memories, user profile, and active rules before every call. You can override routing per-message with the `model:` parameter, or set a sticky default with `/model set`. The response footer shows which model handled the request.
 
 | Model choice | Icon | Behavior |
 |---|---|---|
-| `auto` | 🔄 | Smart routing — tries local first, falls back to Gemini |
+| `auto` | 🔄 | Smart routing — classifies query and picks the best model |
 | `local` | 🏠 | Always use Gemma/Ollama (auto-upgrades to Gemini if tools are needed) |
 | `gemini` | ☁️ | Always use Gemini cloud (best quality, uses API quota) |
+| `openai` | 🧠 | Route to GPT-4o via Copilot proxy (creative writing, general knowledge) |
+| `anthropic` | 🔬 | Route to Claude Sonnet 4.5 via Copilot proxy (code review, reasoning) |
 
 ---
 
