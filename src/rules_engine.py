@@ -19,7 +19,6 @@ import logging
 import re
 import time
 from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger("openclaw.rules_engine")
 

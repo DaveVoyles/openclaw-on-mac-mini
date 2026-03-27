@@ -330,7 +330,7 @@ async def get_stats() -> dict:
     """Return stats for all collections."""
 
     def _stats():
-        client = _get_client()
+        _get_client()  # ensure collections are initialized
         stats = {}
         for name in [MEMORIES_COLLECTION, CONVERSATIONS_COLLECTION, RESEARCH_COLLECTION]:
             col = _get_collection(name)

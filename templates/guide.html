@@ -258,6 +258,12 @@
           <li>
             <a href="#deep-threads">28. Persistent Threads &amp; Research Memory</a>
           </li>
+          <li>
+            <a href="#correction-rules">29. Correction Learning &amp; Rules Engine</a>
+          </li>
+          <li>
+            <a href="#profile-lifecycle">30. User Profile &amp; Memory Lifecycle</a>
+          </li>
         </ul>
       </div>
 
@@ -2453,6 +2459,154 @@ Marple Township millage rate is 25.46...
         </p>
       </div>
 
+      <!-- 29. Correction Learning & Rules Engine -->
+      <h2 id="correction-rules">29. Correction Learning &amp; Rules Engine</h2>
+      <p>
+        Phase 14 adds a <strong>correction learning system</strong> inspired by
+        the Genesis framework. When you correct the bot (&ldquo;no, that&rsquo;s
+        wrong&rdquo;, &ldquo;I told you&rdquo;, &ldquo;I prefer&rdquo;), it
+        automatically extracts a behavioral rule and stores it so the mistake
+        never repeats.
+      </p>
+
+      <h3>How It Works</h3>
+      <ul>
+        <li>
+          <strong>13 correction patterns</strong> are monitored in every
+          <code>/ask</code> response: &ldquo;no,&rdquo;, &ldquo;that&rsquo;s
+          wrong&rdquo;, &ldquo;actually&rdquo;, &ldquo;I prefer&rdquo;, etc.
+        </li>
+        <li>
+          When detected, Gemini extracts a concise one-liner rule from the
+          correction.
+        </li>
+        <li>
+          Rules are stored in both <code>/memory/rules.json</code> (human-
+          readable) and ChromaDB (semantic search).
+        </li>
+        <li>
+          Before each <code>/ask</code>, the top 3 relevant rules are
+          retrieved semantically and injected into the conversation context.
+        </li>
+        <li>
+          The bot confirms: &ldquo;&#128221; Got it &mdash; I&rsquo;ll
+          remember: <em>[rule]</em>&rdquo;
+        </li>
+      </ul>
+
+      <h3>Commands</h3>
+      <table>
+        <tr>
+          <td><code>/rules</code></td>
+          <td>
+            List all learned rules. Use <code>action:search query:&lt;topic&gt;</code>
+            to find specific rules, or <code>action:delete query:&lt;rule_id&gt;</code>
+            to remove one.
+          </td>
+        </tr>
+      </table>
+
+      <div class="tip">
+        <strong>&#128161; Rules compound over time.</strong> After a few weeks of
+        corrections, the bot builds institutional knowledge about your
+        preferences. Rules are included in the 4 AM backup to NAS.
+      </div>
+
+      <!-- 30. User Profile & Memory Lifecycle -->
+      <h2 id="profile-lifecycle">
+        30. User Profile &amp; Memory Lifecycle
+      </h2>
+      <p>
+        Phase 14 adds a <strong>structured user profile</strong> that the bot
+        learns from naturally, plus <strong>memory decay</strong> and
+        <strong>session handover</strong> to keep memory relevant over time.
+      </p>
+
+      <h3>User Profile</h3>
+      <ul>
+        <li>
+          The bot auto-learns your preferences, interests, tools, and
+          communication style from conversations (no explicit setup needed).
+        </li>
+        <li>
+          Profile data is stored in
+          <code>data/memory/user_profile.json</code> and embedded in ChromaDB.
+        </li>
+        <li>
+          Profile context is injected before each <code>/ask</code> so the bot
+          calibrates tone and relevance.
+        </li>
+        <li>
+          <code>/profile</code> to view, <code>/profile-edit</code> to
+          manually adjust preferences, interests, or notes.
+        </li>
+      </ul>
+
+      <h3>Memory Lifecycle</h3>
+      <ul>
+        <li>
+          <strong>Reinforcement:</strong> Memories accessed frequently rank
+          higher in search results (<code>access_count</code> tracking).
+        </li>
+        <li>
+          <strong>Decay:</strong> Memories not accessed in 30+ days get a 10%
+          similarity penalty (still searchable, just ranked lower).
+        </li>
+        <li>
+          <strong>Consolidation:</strong> Weekly, session summaries are
+          distilled into a &ldquo;weekly digest&rdquo; memory.
+        </li>
+        <li>
+          <strong>Session handover:</strong> When conversations go idle,
+          the bot writes decisions, pending items, and next steps. This
+          context is injected when you return to a similar topic.
+        </li>
+        <li>
+          <code>/memory-refresh &lt;query&gt;</code> to manually reinforce
+          a memory so it doesn&rsquo;t decay.
+        </li>
+      </ul>
+
+      <h3>Knowledge Router</h3>
+      <p>
+        <code>/remember</code> now auto-classifies facts:
+      </p>
+      <ul>
+        <li>
+          &ldquo;I prefer dark mode&rdquo; &rarr; saved to
+          <strong>user profile</strong>
+        </li>
+        <li>
+          &ldquo;Never send emails without asking&rdquo; &rarr; saved as a
+          <strong>learned rule</strong>
+        </li>
+        <li>
+          Everything else &rarr; saved to <strong>QMD + ChromaDB</strong>
+          (default)
+        </li>
+      </ul>
+
+      <h3>Commands</h3>
+      <table>
+        <tr>
+          <td><code>/profile</code></td>
+          <td>View your user profile (preferences, interests, tools).</td>
+        </tr>
+        <tr>
+          <td><code>/profile-edit</code></td>
+          <td>
+            Manually update profile. Fields: preference, interest, note,
+            working_style, communication_style.
+          </td>
+        </tr>
+        <tr>
+          <td><code>/memory-refresh &lt;query&gt;</code></td>
+          <td>
+            Reinforce matching memories so they don&rsquo;t decay.
+          </td>
+        </tr>
+      </table>
+
       <div
         style="
           text-align: center;
@@ -2463,7 +2617,7 @@ Marple Township millage rate is 25.46...
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.7.0 &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.8.0 &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"

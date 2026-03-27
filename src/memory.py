@@ -7,7 +7,6 @@ Named threads can be saved to disk and resumed later (survive restarts).
 
 import json
 import logging
-import os
 import re
 import time
 from pathlib import Path
