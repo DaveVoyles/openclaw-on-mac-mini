@@ -143,7 +143,7 @@ async def chat_openai(
     if not api_key and not COPILOT_PROXY_ENABLED:
         return None
 
-    model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
 
     try:
         import aiohttp
@@ -159,10 +159,10 @@ async def chat_openai(
         # Use Copilot proxy if available, otherwise direct OpenAI
         if COPILOT_PROXY_ENABLED:
             base_url = COPILOT_PROXY_URL.rstrip("/")
+            proxy_token = os.getenv("COPILOT_PROXY_TOKEN", api_key or "")
             headers = {"Content-Type": "application/json"}
-            # Copilot proxy handles auth internally
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
+            if proxy_token:
+                headers["Authorization"] = f"Bearer {proxy_token}"
         else:
             base_url = "https://api.openai.com/v1"
             headers = {
@@ -209,7 +209,7 @@ async def chat_anthropic(
     if COPILOT_PROXY_ENABLED:
         return await chat_openai(
             message, history, system_prompt,
-            model=model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            model=model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5"),
             temperature=temperature,
             max_tokens=max_tokens,
         )
@@ -218,7 +218,7 @@ async def chat_anthropic(
     if not api_key:
         return None
 
-    model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
 
     try:
         import aiohttp

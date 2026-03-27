@@ -1010,7 +1010,7 @@ async def chat_stream(
                         {"role": "user", "parts": [user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    yield reply, True, {"model_used": f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}", "updated_history": updated, "needs_tools": False}
+                    yield reply, True, {"model_used": f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False}
                     return
 
             elif route.model_type == "anthropic":
@@ -1022,7 +1022,7 @@ async def chat_stream(
                         {"role": "user", "parts": [user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    yield reply, True, {"model_used": f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')}", "updated_history": updated, "needs_tools": False}
+                    yield reply, True, {"model_used": f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}", "updated_history": updated, "needs_tools": False}
                     return
         except Exception as e:
             log.debug("Multi-model routing failed (non-fatal, stream): %s", e)
@@ -1204,7 +1204,7 @@ async def chat(
                         {"role": "user", "parts": [user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    return reply, updated, f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}"
+                    return reply, updated, f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
                 log.info("OpenAI call failed, falling through to default routing")
 
             elif route.model_type == "anthropic":
@@ -1216,7 +1216,7 @@ async def chat(
                         {"role": "user", "parts": [user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    return reply, updated, f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')}"
+                    return reply, updated, f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
                 log.info("Anthropic call failed, falling through to default routing")
         except Exception as e:
             log.debug("Multi-model routing failed (non-fatal): %s", e)
