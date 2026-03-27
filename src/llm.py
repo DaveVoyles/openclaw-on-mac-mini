@@ -1027,6 +1027,32 @@ async def chat_stream(
         except Exception as e:
             log.debug("Multi-model routing failed (non-fatal, stream): %s", e)
 
+    # ── Forced OpenAI / Anthropic mode ─────────────────────────────────
+    if model_preference in ("openai", "anthropic"):
+        try:
+            from model_router import chat_openai, chat_anthropic
+            import os
+            system_prompt = _load_system_prompt()
+            if model_preference == "openai":
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                model_label = f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
+            else:
+                reply = await chat_anthropic(model_message, history, system_prompt,
+                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                model_label = f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
+            if reply:
+                updated = history + [
+                    {"role": "user", "parts": [user_message]},
+                    {"role": "model", "parts": [reply]},
+                ]
+                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False}
+                return
+            # Fall through to Gemini if the call failed
+            log.info("%s call failed, falling back to Gemini", model_preference)
+        except Exception as e:
+            log.info("%s call failed, falling back to Gemini: %s", model_preference, e)
+
     # ── Forced local mode ────────────────────────────────────────────────
     if model_preference == "local":
         if not LOCAL_LLM_ENABLED:
@@ -1220,6 +1246,30 @@ async def chat(
                 log.info("Anthropic call failed, falling through to default routing")
         except Exception as e:
             log.debug("Multi-model routing failed (non-fatal): %s", e)
+
+    # -- Forced OpenAI / Anthropic mode ──────────────────────────────────────
+    if model_preference in ("openai", "anthropic"):
+        try:
+            from model_router import chat_openai, chat_anthropic
+            import os
+            system_prompt = _load_system_prompt()
+            if model_preference == "openai":
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                model_label = f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
+            else:
+                reply = await chat_anthropic(model_message, history, system_prompt,
+                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                model_label = f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
+            if reply:
+                updated = history + [
+                    {"role": "user", "parts": [user_message]},
+                    {"role": "model", "parts": [reply]},
+                ]
+                return reply, updated, model_label
+            log.info("%s call failed, falling back to Gemini", model_preference)
+        except Exception as e:
+            log.info("%s call failed, falling back to Gemini: %s", model_preference, e)
 
     # -- Forced local mode ────────────────────────────────────────────────────
     if model_preference == "local":

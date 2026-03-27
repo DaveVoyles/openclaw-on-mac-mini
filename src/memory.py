@@ -339,7 +339,7 @@ store = ConversationStore()
 # ---------------------------------------------------------------------------
 
 _PREFS_DIR = MEMORY_DIR / "preferences"
-_VALID_MODEL_PREFS = {"auto", "local", "gemini"}
+_VALID_MODEL_PREFS = {"auto", "local", "gemini", "openai", "anthropic"}
 
 
 def _prefs_path(user_id: int) -> Path:
@@ -371,12 +371,12 @@ def set_model_preference(user_id: int, pref: str) -> str:
     """Set the user's sticky model preference. Returns status message."""
     pref = pref.lower().strip()
     if pref not in _VALID_MODEL_PREFS:
-        return f"❌ Invalid preference `{pref}`. Choose: `auto`, `local`, or `gemini`."
+        return f"❌ Invalid preference `{pref}`. Choose: `auto`, `local`, `gemini`, `openai`, or `anthropic`."
     prefs = _load_prefs(user_id)
     prefs["model_preference"] = pref
     _save_prefs(user_id, prefs)
-    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)"}
-    return f"✅ Model preference set to **{labels[pref]}**."
+    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)", "openai": "🟢 OpenAI (GPT-4o)", "anthropic": "🟣 Anthropic (Claude)"}
+    return f"✅ Model preference set to **{labels.get(pref, pref)}**."
 
 
 # ---------------------------------------------------------------------------

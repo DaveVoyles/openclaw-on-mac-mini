@@ -1314,12 +1314,14 @@ async def _handle_doc_attachment(
 @app_commands.describe(
     question="Your question or request",
     attachment="Optional image or document to include in your question",
-    model="LLM routing: auto (smart), local (Gemma), or gemini (cloud)",
+    model="LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude)",
 )
 @app_commands.choices(model=[
     app_commands.Choice(name="🔄 Auto (smart routing)", value="auto"),
     app_commands.Choice(name="🏠 Local (Gemma/Ollama)", value="local"),
     app_commands.Choice(name="☁️ Gemini (cloud)", value="gemini"),
+    app_commands.Choice(name="🟢 OpenAI (GPT-4o)", value="openai"),
+    app_commands.Choice(name="🟣 Anthropic (Claude)", value="anthropic"),
 ])
 async def ask_cmd(
     interaction: discord.Interaction,
@@ -1541,7 +1543,7 @@ async def ask_cmd(
                 rate_str = "local · unlimited"
             else:
                 rate_str = get_rate_info()
-            mode_label = {"auto": "🔄", "local": "🏠", "gemini": "☁️"}.get(model_pref, "🔄")
+            mode_label = {"auto": "🔄", "local": "🏠", "gemini": "☁️", "openai": "🟢", "anthropic": "🟣"}.get(model_pref, "🔄")
             embed.set_footer(text=f"💬 {conv.message_count} msgs | {rate_str} | {mode_label} {model_used}")
 
         if i == 0:
@@ -1624,7 +1626,7 @@ model_group = app_commands.Group(name="model", description="View or change your 
 @model_group.command(name="show", description="Show your current model routing preference")
 async def model_show_cmd(interaction: discord.Interaction):
     pref = get_model_preference(interaction.user.id)
-    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)"}
+    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)", "openai": "🟢 OpenAI (GPT-4o)", "anthropic": "🟣 Anthropic (Claude)"}
     embed = discord.Embed(
         title="🤖 Model Preference",
         description=f"**Current:** {labels.get(pref, pref)}\n\n"
@@ -1651,6 +1653,8 @@ async def model_show_cmd(interaction: discord.Interaction):
     app_commands.Choice(name="🔄 Auto — smart routing (default)", value="auto"),
     app_commands.Choice(name="🏠 Local — Gemma/Ollama (free, fast)", value="local"),
     app_commands.Choice(name="☁️ Gemini — cloud (tools, best quality)", value="gemini"),
+    app_commands.Choice(name="🟢 OpenAI — GPT-4o via Copilot", value="openai"),
+    app_commands.Choice(name="🟣 Anthropic — Claude via Copilot", value="anthropic"),
 ])
 async def model_set_cmd(interaction: discord.Interaction, preference: app_commands.Choice[str]):
     result = set_model_preference(interaction.user.id, preference.value)
