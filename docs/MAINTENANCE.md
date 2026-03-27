@@ -121,5 +121,124 @@ All persistent data is stored in the `data/` directory and volume-mounted into t
 
 - `data/logs/`: Application logs.
 - `data/memory/`: LLM conversation context and memory.
-- `data/audit/`: Audit logs for security-sensitive actions.
+- `data/memory/spending.json`: Gemini API cost tracking (input/output tokens, daily totals).
+- `data/memory/ontology/`: Structured graph memory (`graph.jsonl` + `schema.yaml`).
+- `data/audit/`: Audit logs for security-sensitive actions (JSONL, one file per day).
 - `data/tasks.json`: Mission Control task data.
+- `data/vault/`: Obsidian vault — research reports, bookmarks, notes, analytics as `.md` files with YAML frontmatter.
+  - Subfolders: `Research/`, `Bookmarks/`, `Notes/`, `Analytics/`
+
+## 🐳 Docker Volume Mounts
+
+| Host Path                   | Container Path         | Mode | Purpose                                       |
+| --------------------------- | ---------------------- | ---- | --------------------------------------------- |
+| `./config`                  | `/config`              | `ro` | YAML config, tools, prompts                   |
+| `./data/logs`               | `/logs`                | `rw` | Application logs                              |
+| `./data/memory`             | `/memory`              | `rw` | Conversation context, QMD, ontology, spending |
+| `./data/audit`              | `/audit`               | `rw` | Security audit trail (JSONL)                  |
+| `./data/tasks.json`         | `/app/data/tasks.json` | `rw` | Mission Control tasks                         |
+| `./data/vault`              | `/vault`               | `rw` | Obsidian vault (research, bookmarks, notes)   |
+| `/tmp/openclaw`             | `/tmp`                 | `rw` | Temp files (required by `read_only: true`)    |
+| `~/.docker/run/docker.sock` | `/var/run/docker.sock` | `rw` | Docker API access                             |
+
+## 🔧 Automated 4:00 AM Maintenance
+
+OpenClaw runs an automated maintenance cycle at **4:00 AM daily** via `maintenance_skills.py`:
+
+1. **Skill update** — `git pull --rebase --autostash` in `/app` to fetch latest skill code
+2. **Session restart** — Clears LLM gateway and HTTP sessions to prevent memory leaks
+3. **NAS backup** — Full backup of all persistent data to Synology NAS via SSH
+
+### What gets backed up
+
+| Source | Destination on NAS | Method | Contents |
+| ------ | ------------------ | ------ | -------- |
+| `/config/` | `{BACKUP_PATH}/{date}/config/` | rsync --delete | YAML config, prompts, permissions, tools |
+| `/app/data/tasks.json` | `{BACKUP_PATH}/{date}/tasks.json` | scp | Scheduler task definitions |
+| `/app/.env` | `{BACKUP_PATH}/{date}/dot-env` (chmod 600) | scp | API keys, secrets (**critical**) |
+| `/memory/` | `{BACKUP_PATH}/{date}/memory/` | rsync | QMD knowledge base, conversation threads, spending tracker |
+| `/vault/` | `{BACKUP_PATH}/{date}/vault/` | rsync | Obsidian research reports, bookmarks, notes |
+| `/audit/` | `{BACKUP_PATH}/{date}/audit/` | rsync | Command audit trail (JSONL) |
+
+**NAS destination:** `/volume1/docker/openclaw/backups/{YYYY-MM-DD}/`
+
+Each source is backed up independently — a failure in one doesn't block the others. The `.env` file is stored as `dot-env` with `chmod 600` to prevent accidental exposure.
+
+### What's NOT backed up (already safe)
+
+| Data | Protected by |
+| ---- | ------------ |
+| Source code (`src/`, `skills/`, `templates/`) | GitHub repo |
+| `config/` (YAML, prompts) | GitHub repo + NAS backup |
+| `docker-compose.yml`, `Dockerfile` | GitHub repo |
+| `.env.example` (template) | GitHub repo |
+
+### Connection details
+
+Uses **SSH key-based authentication** (no password). The connection uses `BatchMode=yes` which prevents hanging if keys aren't configured — it will fail gracefully with a clear error instead.
+
+### Environment variables
+
+| Env Var           | Default                            | Purpose                     |
+| ----------------- | ---------------------------------- | --------------------------- |
+| `NAS_HOST`        | `192.168.1.8`                      | Synology NAS IP address     |
+| `NAS_SSH_PORT`    | `24`                               | SSH port on NAS             |
+| `NAS_SSH_USER`    | `dave`                             | SSH username for backup     |
+| `NAS_BACKUP_PATH` | `/volume1/docker/openclaw/backups` | Remote backup directory     |
+| `CONFIG_DIR`      | `/config`                          | Config directory to back up |
+
+### Manual backup
+
+For on-demand local backups (includes `.env`):
+
+```bash
+./scripts/backup_restore.sh backup    # Creates timestamped tar.gz
+./scripts/backup_restore.sh list      # List available backups
+./scripts/backup_restore.sh restore <file>  # Restore from backup
+```
+
+### Disabling maintenance
+
+Remove or comment out the 4 AM scheduler entry. The schedule is registered in `bot.py` during startup.
+
+## 🏷️ Channel-Role Architecture
+
+OpenClaw supports **per-channel prompt overrides** that adjust the bot's personality and behavior based on which Discord channel the message arrives in.
+
+| Channel        | Purpose           | Prompt behavior                                                       |
+| -------------- | ----------------- | --------------------------------------------------------------------- |
+| `#research`    | Focused research  | Prioritize accuracy, cite sources, structured reports                 |
+| `#analytics`   | Data analysis     | Metrics-driven, tables, ranked lists, concise                         |
+| `#bookmarks`   | Knowledge capture | Brief confirmations, organize saved content                           |
+| `#real-estate` | Property research | Listings, market analysis, comps, tax records, school ratings, tables |
+
+**Configuration:** Set channel IDs in `.env` and customize prompts in `config/config.yaml` under `channels.roles`.
+
+```bash
+# .env
+DISCORD_CHANNEL_RESEARCH_ID=1234567890
+DISCORD_CHANNEL_ANALYTICS_ID=1234567891
+DISCORD_CHANNEL_BOOKMARKS_ID=1234567892
+DISCORD_CHANNEL_REAL_ESTATE_ID=1486358540246319135
+```
+
+## 🌐 Dashboard & API Endpoints
+
+OpenClaw serves a lightweight web dashboard alongside its health endpoint on port `8765`:
+
+| Endpoint         | Purpose                                                             |
+| ---------------- | ------------------------------------------------------------------- |
+| `/health`        | JSON health check (uptime, version)                                 |
+| `/metrics`       | Prometheus metrics (`openclaw_up`, `openclaw_uptime_seconds`, etc.) |
+| `/dashboard`     | HTML dashboard with system status, command reference, and guide     |
+| `/api/dashboard` | JSON API for dashboard data                                         |
+
+## 🧪 CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration:
+
+- **Workflow**: `.github/workflows/tests.yml`
+- **Lint**: `ruff check src/ tests/` — runs before tests
+- **Tests**: `pytest tests/ --cov=src --cov-report=xml --timeout=30`
+- **Coverage**: XML report uploaded as artifact
+- **Plugins**: `pytest-cov` (coverage), `pytest-timeout` (30s per-test timeout), `pytest-asyncio`

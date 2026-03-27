@@ -140,7 +140,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Per-channel prompt overrides — `#research`, `#analytics`, `#bookmarks` each get tailored bot behavior
 - Obsidian vault integration — `/bookmark` and research reports saved as Markdown with YAML frontmatter
 - Parallel worker sub-agents — `spawn_worker()` delegates focused subtasks to independent Gemini sessions
-- 4:00 AM automated maintenance — skill updates (git pull), session cleanup, config backup to NAS via rsync
+- 4:00 AM automated maintenance — skill updates, session cleanup, full backup to NAS (config, .env, memory, vault, audit)
 
 **Planned**
 
