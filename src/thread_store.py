@@ -404,3 +404,41 @@ async def get_stats() -> dict:
 
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, _stats)
+
+
+# ---------------------------------------------------------------------------
+# Auto-titling via LLM
+# ---------------------------------------------------------------------------
+
+
+async def auto_title_thread(thread_id: int) -> Optional[str]:
+    """Generate a short title for a thread using the LLM.
+
+    Called after 3+ message exchanges. Returns the title or None on failure.
+    """
+    messages = await get_thread_messages(thread_id, limit=6)
+    if len(messages) < 3:
+        return None
+
+    # Build a compact summary of the conversation for title generation
+    snippet = "\n".join(
+        f"{m['role']}: {m['content'][:150]}" for m in messages[:6]
+    )
+
+    try:
+        from llm import chat_deep
+        prompt = (
+            "Summarize this conversation in 6 words or fewer as a short title. "
+            "Reply with ONLY the title text, no quotes or punctuation.\n\n"
+            f"{snippet}"
+        )
+        title, _ = await chat_deep(prompt)
+        title = title.strip().strip('"\'')[:60]
+        if title:
+            await set_thread_title(thread_id, title)
+            log.info("Auto-titled thread %d: %s", thread_id, title)
+            return title
+    except Exception as e:
+        log.debug("Auto-title failed for thread %d: %s", thread_id, e)
+
+    return None

@@ -1468,6 +1468,60 @@ async def threads_cmd(interaction: discord.Interaction):
     await interaction.response.send_message(result, ephemeral=True)
 
 
+@bot.tree.command(name="threads-search", description="Search across all your saved threads by keyword or topic")
+@app_commands.describe(query="Search term to find in thread titles, names, or message content")
+@require_auth
+async def threads_search_cmd(interaction: discord.Interaction, query: str):
+    await interaction.response.defer(ephemeral=True)
+
+    # Keyword search in SQLite thread store
+    try:
+        from thread_store import search_threads as sqlite_search
+        db_results = await sqlite_search(interaction.user.id, query, limit=10)
+    except Exception as e:
+        log.debug("SQLite thread search failed: %s", e)
+        db_results = []
+
+    # Semantic search in ChromaDB conversations collection
+    semantic_lines = []
+    try:
+        import vector_store
+        vec_results = await vector_store.search(
+            vector_store.CONVERSATIONS_COLLECTION, query, top_k=5
+        )
+        for r in vec_results:
+            meta = r.get("metadata", {})
+            name = meta.get("thread_name", "unknown")
+            sim = r.get("similarity", 0)
+            preview = r["text"][:100].replace("\n", " ")
+            semantic_lines.append(f"🔮 **{name}** ({sim:.0%} match) — {preview}…")
+    except Exception as e:
+        log.debug("Vector thread search failed: %s", e)
+
+    # Format results
+    lines = [f"🔍 **Thread search: *{query}***\n"]
+
+    if db_results:
+        lines.append("**Keyword matches:**")
+        for t in db_results:
+            import time as _t
+            name = t.get("name") or t.get("title") or f"thread-{t['id']}"
+            msgs = t.get("message_count", 0)
+            updated = _t.strftime("%Y-%m-%d", _t.localtime(t.get("updated_at", 0)))
+            status_icon = {"active": "💬", "archived": "📦", "pinned": "📌"}.get(t.get("status", ""), "💬")
+            lines.append(f"{status_icon} **{name}** — {msgs} msgs · {updated}")
+
+    if semantic_lines:
+        lines.append("\n**Semantic matches:**")
+        lines.extend(semantic_lines)
+
+    if not db_results and not semantic_lines:
+        lines.append("No matching threads found.")
+
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+    audit_log(interaction.user, "threads_search", detail=query)
+
+
 @bot.tree.command(name="forget", description="Delete a saved conversation thread")
 @app_commands.describe(name="Name of the thread to delete")
 @require_auth
