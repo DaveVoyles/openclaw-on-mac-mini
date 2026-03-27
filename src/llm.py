@@ -871,8 +871,17 @@ async def chat_stream(
     accumulated = ""
     try:
         for chunk in response:
-            if hasattr(chunk, "text") and chunk.text:
-                accumulated += chunk.text
+            # chunk.text is a property that raises ValueError when the
+            # chunk contains function_call parts instead of text.
+            # hasattr() only catches AttributeError, so we must catch
+            # ValueError explicitly to avoid "Could not convert
+            # part.function.call to text" errors.
+            try:
+                text = chunk.text
+            except (ValueError, AttributeError):
+                continue
+            if text:
+                accumulated += text
                 yield accumulated, False, {"model_used": model_name, "needs_tools": False}
     except Exception as e:
         if not accumulated:
