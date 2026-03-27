@@ -1286,6 +1286,18 @@ async def ask_cmd(
         guardrail_note = ""
 
     try:
+        # ── Contextual recall: inject relevant memories before LLM call ───
+        try:
+            import vector_store
+            context_hits = await vector_store.recall(question, top_k=3)
+            if context_hits:
+                conv.history.append({
+                    "role": "model",
+                    "parts": [f"[Relevant context from memory]\n{context_hits}"],
+                })
+        except Exception as e:
+            log.debug("Contextual recall skipped: %s", e)
+
         # ── Streaming response with progressive Discord edits ────────────
         last_edit = 0.0
         display_question = question if len(question) < 200 else question[:197] + "..."
@@ -2181,6 +2193,73 @@ async def research_cmd(interaction: discord.Interaction, query: str):
                 await interaction.followup.send(embed=embed)
 
     audit_log(interaction.user, "research", detail=query[:200])
+
+
+@bot.tree.command(name="research-search", description="Search across all your past research reports by topic")
+@app_commands.describe(query="What to search for in past research")
+@require_auth
+async def research_search_cmd(interaction: discord.Interaction, query: str):
+    await interaction.response.defer(ephemeral=True)
+
+    lines = [f"🔍 **Research search: *{query}***\n"]
+
+    try:
+        import vector_store
+        results = await vector_store.search(
+            vector_store.RESEARCH_COLLECTION, query, top_k=5
+        )
+        if results:
+            for r in results:
+                meta = r.get("metadata", {})
+                original_query = meta.get("query", "unknown topic")
+                sim = r.get("similarity", 0)
+                preview = r["text"][:200].replace("\n", " ")
+                lines.append(f"📄 **{original_query}** ({sim:.0%} match)")
+                lines.append(f"  _{preview}_\n")
+        else:
+            lines.append("No matching research found. Use `/research <query>` to start new research.")
+    except Exception as e:
+        lines.append(f"⚠️ Search unavailable: {e}")
+
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+    audit_log(interaction.user, "research_search", detail=query)
+
+
+@bot.tree.command(name="memory-stats", description="Show memory and vector store statistics")
+@require_auth
+async def memory_stats_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+
+    lines = ["📊 **Memory Statistics**\n"]
+
+    # QMD stats
+    try:
+        from qmd import qmd_store
+        qmd_count = len(qmd_store._memory)
+        lines.append(f"**QMD Facts:** {qmd_count:,} entries")
+    except Exception:
+        lines.append("**QMD Facts:** unavailable")
+
+    # Vector store stats
+    try:
+        import vector_store
+        stats = await vector_store.get_stats()
+        for name, info in stats.items():
+            label = name.replace("_", " ").title()
+            lines.append(f"**{label} vectors:** {info['count']:,}")
+    except Exception:
+        lines.append("**Vector store:** unavailable")
+
+    # Thread store stats
+    try:
+        from thread_store import get_stats as thread_stats
+        ts = await thread_stats()
+        lines.append(f"\n**Threads:** {ts['total_threads']} total ({ts['active_threads']} active, {ts['archived_threads']} archived)")
+        lines.append(f"**Messages stored:** {ts['total_messages']:,}")
+    except Exception:
+        lines.append("**Thread store:** unavailable")
+
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
 
 
 @bot.tree.command(name="weather", description="Get current weather and forecast for a location")
