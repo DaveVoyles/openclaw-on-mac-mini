@@ -47,6 +47,13 @@ class MediaCog(commands.Cog, name="Media"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        msg = f"❌ Command failed: {error}"
+        if interaction.response.is_done():
+            await interaction.followup.send(msg, ephemeral=True)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+
     @app_commands.command(name="search", description="Search for TV shows or movies")
     @app_commands.describe(
         query="Search term (e.g. 'Breaking Bad')",
@@ -132,6 +139,13 @@ class MediaCog(commands.Cog, name="Media"):
         watch_id: str = "",
     ):
         from scheduler import scheduler
+
+        action = action.lower()
+        if action not in ("list", "add", "remove"):
+            await interaction.response.send_message(
+                "❌ Invalid action. Use `add`, `list`, or `remove`.", ephemeral=True
+            )
+            return
 
         if action == "list":
             tasks = [t for t in scheduler.list_tasks() if t.created_by.startswith("watch:")]

@@ -112,7 +112,9 @@ class SpendingTracker:
         day["cost_usd"] += cost
         day["calls"] += 1
 
-        self._save()
+        # Run blocking file I/O in executor to avoid stalling the event loop
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._save)
 
         log.info(
             "Spending: +%d in / +%d out ($%.6f) — total $%.4f / $%.2f budget",

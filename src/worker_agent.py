@@ -112,7 +112,7 @@ async def spawn_worker(
 
     try:
         chat_session = worker_model.start_chat(history=[])
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         _rate_limiter.record()
         response = await loop.run_in_executor(

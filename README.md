@@ -4,29 +4,31 @@ Autonomous AI agent for home automation and system management, accessible via Di
 
 Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alongside a Synology NAS.
 
-| | |
-|---|---|
-| **Host** | Mac Mini M4 Pro (192.168.1.93) |
-| **Tailscale IP** | `100.116.47.67` (`daves-mac-mini`) |
-| **Health** | `http://192.168.1.93:8765/health` |
-| **Dashboard** | `http://192.168.1.93:8765/dashboard` |
-| **Metrics** | `http://192.168.1.93:8765/metrics` (Prometheus) |
-| **External URL** | `openclaw.davevoyles.synology.me` (via Traefik) |
-| **Remote SSH** | `ssh davevoyles@daves-mac-mini` (Tailscale) |
-| **Interface** | 38 Discord slash commands |
-| **LLM** | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries) |
-| **Local LLM** | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
-| **Status** | **Phase 9 — Mission Control (Kanban)** ✅ |
+|                  |                                                                        |
+| ---------------- | ---------------------------------------------------------------------- |
+| **Host**         | Mac Mini M4 Pro (192.168.1.93)                                         |
+| **Tailscale IP** | `100.116.47.67` (`daves-mac-mini`)                                     |
+| **Health**       | `http://192.168.1.93:8765/health`                                      |
+| **Dashboard**    | `http://192.168.1.93:8765/dashboard`                                   |
+| **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
+| **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
+| **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
+| **Interface**    | 38 Discord slash commands                                              |
+| **LLM**          | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries)       |
+| **Local LLM**    | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
+| **Status**       | **Phase 9 — Mission Control (Kanban)** ✅                              |
 
 ## Features
 
 **Phase 1 — Foundation** ✅
+
 - Discord bot with `/ping`, `/about`, `/whoami`, `/help`
 - Health check HTTP endpoint (`/health`)
 - Audit logging (JSONL)
 - Security-hardened Docker container
 
 **Phase 2 — Core Skills** ✅
+
 - `/containers` — list all running Docker containers
 - `/status <service>` — detailed container status
 - `/logs <service>` — tail recent container logs
@@ -34,6 +36,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/restart <service>` — restart a container (approval required)
 
 **Phase 3 — LLM Integration** ✅
+
 - `/ask <question>` — AI-powered natural language queries
 - **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
@@ -45,6 +48,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Rate limiting — 60 RPM / 500 RPH (Gemini only; Ollama is unlimited)
 
 **Phase 4 — Security & Approvals** ✅
+
 - `/restart` now requires button-click approval before executing
 - Discord button UI — ✅ Approve / ❌ Deny with 5-minute timeout
 - `/pending` — view pending approval requests
@@ -55,21 +59,23 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Emergency stop blocks `/ask` and `/restart` when active
 
 **Phase 5 — Advanced Skills** ✅
+
 - `/search` — search TV shows/movies across Sonarr & Radarr
 - `/queue` — view active downloads from SABnzbd + qBittorrent
 - `/recent` — recently added media from Plex (via Tautulli)
-- `/health` — check *arr service + download client health
+- `/health` — check \*arr service + download client health
 - `/ports` — verify all services are listening on expected ports
 - `/report` — comprehensive system status report
 - `/analyze` — AI-powered container log analysis (LLM or pattern-matching fallback)
 - `/schedule` — manage recurring scheduled tasks (daily or interval-based)
-- `/skills` — list all 25 available skills
+- `/skills` — list all available skills
 - `/remember` / `/recall` — long-term QMD memory (persists to `qmd.json`)
 - `/mail` — send email via AgentMail.to
 - 25 Gemini function-calling tools for natural language queries
 - Persistent scheduled task system with JSON storage
 
 **Phase 6 — Remote Access & Monitoring** ✅
+
 - `/network` — LAN + internet + DNS + Tailscale + OpenClaw health summary
 - `/tailscale` — Tailscale VPN status and device IP
 - `/speedtest` — Cloudflare download speed + DNS latency
@@ -77,7 +83,8 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Traefik reverse proxy route: `openclaw.davevoyles.synology.me`
 - Uptime Kuma monitor: polls `/health` every 60s with alerting
 
-**Phase 7 — Local LLM & Production Hardening** 🔄
+**Phase 7 — Local LLM & Production Hardening** ✅
+
 - Ollama integration — `gemma3:12b` running natively on Mac Mini M4 Pro (8.1 GB, ~15–20 tok/s on M4 Neural Engine)
 - Hybrid routing in `llm.py` — keyword heuristic routes simple queries to Ollama, tool-calling queries to Gemini
 - Silent fallback — Ollama unavailable → seamlessly falls back to Gemini
@@ -87,6 +94,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `skills/` reorganized as a Python package (`skills/__init__.py` + `skills/advanced_skills.py`)
 
 **Phase 8 — Web, Browsing & Vision** ✅
+
 - `/websearch` — live web search via Tavily (falls back to DuckDuckGo)
 - `/browse <url>` — fetch and read a web page; optional Q&A
 - `/analyze-image` — analyze an uploaded image with Gemini vision
@@ -94,6 +102,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - ClawHub `free-web-search` and `openclaw-tavily-search` skill bundles installed
 
 **Phase 9 — Mission Control (Kanban Task Board)** ✅
+
 - `/tasks [status]` — view Kanban tasks; filter by backlog / in_progress / done
 - `/ask` natural-language task management — create, move, complete, and comment on tasks
 - ClawHub `mission-control` skill installed (`skills/mission-control/`)
@@ -101,10 +110,39 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Dashboard published at https://davevoyles.github.io/openclaw-dashboard/ (GitHub Pages)
 - 5 Gemini tool declarations for LLM-driven task management
 - LLM routing keywords: _task_, _kanban_, _backlog_, _in progress_, _todo_, _ticket_
-- 51 total registered skills
+- 50+ registered skills
+
+**Phase 10 — Ontology & Long-Term Memory** ✅
+
+- Graph-based structured memory via `ontology` ClawHub skill
+- Entity CRUD, typed relationships, graph queries, schema validation
+- Stored in `data/memory/ontology/graph.jsonl`
+
+**Phase 11 — Self-Management & Enhanced Browsing** ✅
+
+- `/diff` — show uncommitted git changes
+- `/bookmark` — save URLs/notes to Obsidian vault
+- `webfetch-md` and `git-essentials` ClawHub skills
+- Git status, log, diff, commit via LLM function calling
+
+**Phase 12 — Autonomous Agent Operations** ✅
+
+- `/research` — autonomous multi-step research with synthesis
+- `/weather` — weather forecasts via wttr.in
+- `/briefing` — on-demand morning briefing (weather, health, downloads, calendar)
+- `planning-with-files` and `autonomous-loop` ClawHub skills
+- Background worker agent for delegated tasks
+
+**v0.6.0 — Channel Architecture & Automation** ✅
+
+- Per-channel prompt overrides — `#research`, `#analytics`, `#bookmarks` each get tailored bot behavior
+- Obsidian vault integration — `/bookmark` and research reports saved as Markdown with YAML frontmatter
+- Parallel worker sub-agents — `spawn_worker()` delegates focused subtasks to independent Gemini sessions
+- 4:00 AM automated maintenance — skill updates (git pull), session cleanup, config backup to NAS via rsync
 
 **Planned**
-- Grafana dashboards, backup/restore, comprehensive test suite
+
+- Grafana dashboards
 
 ---
 
@@ -129,6 +167,7 @@ cp .env.example .env
 ```
 
 Edit `.env` and fill in:
+
 - `DISCORD_BOT_TOKEN` — from step 1
 - `DISCORD_GUILD_ID` — right-click your Discord server → Copy Server ID
 - `ALLOWED_USER_IDS` — right-click your profile → Copy User ID
@@ -192,44 +231,44 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 # Result of 16 or less = blank value; more = key is set
 ```
 
-| Command | Description | Phase |
-|---------|-------------|-------|
-| `/ping` | Check if OpenClaw is alive (latency + uptime) | 1 |
-| `/about` | Show version and system info | 1 |
-| `/whoami` | Show your identity and permissions | 1 |
-| `/help` | List available commands | 1 |
-| `/containers` | List all running Docker containers | 2 |
-| `/status <service>` | Detailed status for a specific container | 2 |
-| `/logs <service>` | Tail last 30 lines of container logs | 2 |
-| `/dockerstats` | Per-container resource usage snapshot | 2 |
-| `/system` | System resource usage (CPU, RAM, disk) | 2 |
-| `/restart <service>` | Restart a container (requires approval) | 2 |
-| `/ask <question>` | AI-powered natural language query (Gemini 2.5 Flash or Ollama) | 3 |
-| `/clear` | Clear your active conversation history | 3 |
-| `/save <name>` | Save current conversation as a named thread (persisted to disk) | 7 |
-| `/resume <name>` | Resume a previously saved conversation thread | 7 |
-| `/threads` | List all your saved conversation threads | 7 |
-| `/forget <name>` | Delete a saved conversation thread | 7 |
-| `/pending` | List pending approval requests | 4 |
-| `/auditlog [lines]` | View recent audit log entries | 4 |
-| `/estop` | Emergency stop — halt all write actions | 4 |
-| `/estop resume` | Resume bot after emergency stop | 4 |
-| `/search <query>` | Search Sonarr/Radarr for TV shows or movies | 5 |
-| `/queue` | Show active downloads (SABnzbd + qBittorrent) | 5 |
-| `/recent [count]` | Recently added media from Plex | 5 |
-| `/health` | Check *arr services and download client health | 5 |
-| `/ports` | Check service port connectivity | 5 |
-| `/report` | Generate comprehensive system status report | 5 |
-| `/analyze <service>` | AI-powered container log analysis | 5 |
-| `/schedule` | Manage scheduled tasks (add/list/remove/toggle) | 5 |
-| `/skills` | List all 25 available skills | 5 |
-| `/remember <content>` | Store a fact in long-term QMD memory | 5 |
-| `/recall <query>` | Search long-term QMD memory | 5 |
-| `/mail <to> <subject> <body>` | Send email via AgentMail.to | 5 |
-| `/spending [breakdown]` | View Gemini API spending and budget | 6 |
-| `/network` | LAN + internet + DNS + Tailscale + health summary | 6 |
-| `/tailscale` | Tailscale VPN status and device IP | 6 |
-| `/speedtest` | Cloudflare download speed + DNS latency | 6 |
+| Command                       | Description                                                     | Phase |
+| ----------------------------- | --------------------------------------------------------------- | ----- |
+| `/ping`                       | Check if OpenClaw is alive (latency + uptime)                   | 1     |
+| `/about`                      | Show version and system info                                    | 1     |
+| `/whoami`                     | Show your identity and permissions                              | 1     |
+| `/help`                       | List available commands                                         | 1     |
+| `/containers`                 | List all running Docker containers                              | 2     |
+| `/status <service>`           | Detailed status for a specific container                        | 2     |
+| `/logs <service>`             | Tail last 30 lines of container logs                            | 2     |
+| `/dockerstats`                | Per-container resource usage snapshot                           | 2     |
+| `/system`                     | System resource usage (CPU, RAM, disk)                          | 2     |
+| `/restart <service>`          | Restart a container (requires approval)                         | 2     |
+| `/ask <question>`             | AI-powered natural language query (Gemini 2.5 Flash or Ollama)  | 3     |
+| `/clear`                      | Clear your active conversation history                          | 3     |
+| `/save <name>`                | Save current conversation as a named thread (persisted to disk) | 7     |
+| `/resume <name>`              | Resume a previously saved conversation thread                   | 7     |
+| `/threads`                    | List all your saved conversation threads                        | 7     |
+| `/forget <name>`              | Delete a saved conversation thread                              | 7     |
+| `/pending`                    | List pending approval requests                                  | 4     |
+| `/auditlog [lines]`           | View recent audit log entries                                   | 4     |
+| `/estop`                      | Emergency stop — halt all write actions                         | 4     |
+| `/estop resume`               | Resume bot after emergency stop                                 | 4     |
+| `/search <query>`             | Search Sonarr/Radarr for TV shows or movies                     | 5     |
+| `/queue`                      | Show active downloads (SABnzbd + qBittorrent)                   | 5     |
+| `/recent [count]`             | Recently added media from Plex                                  | 5     |
+| `/health`                     | Check \*arr services and download client health                 | 5     |
+| `/ports`                      | Check service port connectivity                                 | 5     |
+| `/report`                     | Generate comprehensive system status report                     | 5     |
+| `/analyze <service>`          | AI-powered container log analysis                               | 5     |
+| `/schedule`                   | Manage scheduled tasks (add/list/remove/toggle)                 | 5     |
+| `/skills`                     | List all available skills                                    | 5     |
+| `/remember <content>`         | Store a fact in long-term QMD memory                            | 5     |
+| `/recall <query>`             | Search long-term QMD memory                                     | 5     |
+| `/mail <to> <subject> <body>` | Send email via AgentMail.to                                     | 5     |
+| `/spending [breakdown]`       | View Gemini API spending and budget                             | 6     |
+| `/network`                    | LAN + internet + DNS + Tailscale + health summary               | 6     |
+| `/tailscale`                  | Tailscale VPN status and device IP                              | 6     |
+| `/speedtest`                  | Cloudflare download speed + DNS latency                         | 6     |
 
 ## Architecture
 
@@ -263,7 +302,7 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 │         │    hybrid routing │         │ function calling          │
 │         ▼                   ▼         ▼                           │
 │  ┌─────────────────────────────────────────────────────────┐    │
-│  │                   Skill Registry (27 skills)            │    │
+│  │                   Skill Registry (50+ skills)            │    │
 │  │  Docker · System · Media(*arr) · Plex · Network ·       │    │
 │  │  AI Analysis · Scheduling · QMD Memory · AgentMail      │    │
 │  └───────────────────────────┬─────────────────────────────┘    │
@@ -387,7 +426,7 @@ Uptime Kuma (:3001)              Grafana dashboard
 ├── .env.example           # Template
 ├── config/
 │   ├── config.yaml        # Main configuration
-│   ├── permissions.yaml   # Risk levels and access control (27 skills)
+│   ├── permissions.yaml   # Risk levels and access control
 │   ├── skills/
 │   │   └── enabled.yaml   # Which skills are active
 │   └── prompts/
@@ -483,7 +522,7 @@ Every command is logged to `data/audit/YYYY-MM-DD.jsonl`. Good for spotting repe
 /report
 ```
 
-Generates a comprehensive snapshot: container counts, download queue, *arr health, Plex status, and system stats — all in one embed.
+Generates a comprehensive snapshot: container counts, download queue, \*arr health, Plex status, and system stats — all in one embed.
 
 ### Common AI Query Examples
 
@@ -536,7 +575,7 @@ Generates a comprehensive snapshot: container counts, download queue, *arr healt
 - [x] **Phase 4**: Security & Approvals — Button-based approval UI, emergency stop, audit viewer
 - [x] **Phase 5**: Advanced Skills — Media search, downloads, Plex, health checks, scheduling, AI log analysis, QMD memory, AgentMail
 - [x] **Phase 6**: Remote Access & Monitoring — Traefik routing, Uptime Kuma, Prometheus metrics
-- [x] **Phase 7**: Local LLM — Ollama hybrid routing (llama3.2:3b + Gemini 2.5 Flash)
+- [x] **Phase 7**: Local LLM — Ollama hybrid routing (gemma3:12b + Gemini 2.5 Flash)
 - [ ] **Phase 8**: Production Hardening — Comprehensive testing, backup/restore, Grafana dashboards
 
 See [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) for the detailed plan.
@@ -572,6 +611,7 @@ open http://192.168.1.93:8765/dashboard
 ```
 
 Or in Discord:
+
 ```
 /report                  # Full system snapshot
 /health                  # *arr + download health
@@ -595,6 +635,7 @@ cat ~/openclaw/data/memory/spending.json | python3 -m json.tool
 ```
 
 Or in Discord:
+
 ```
 /ask "why is sonarr throwing errors?"
 /analyze sonarr 100      # AI-powered log analysis
@@ -660,9 +701,9 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
   - `ALLOWED_USER_IDS` — right-click your Discord profile → Copy User ID
   - `GOOGLE_API_KEY` — from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (paid Gemini tier)
   - `OLLAMA_URL=http://host.docker.internal:11434` — Ollama endpoint (host machine)
-  - `OLLAMA_MODEL=llama3.2:3b` — local model name
+  - `OLLAMA_MODEL=gemma3:12b` — local model name
   - `LOCAL_LLM_ENABLED=true` — set false to route all queries to Gemini
-- [ ] **Install Ollama** (local LLM): `brew install ollama && brew services start ollama && ollama pull llama3.2:3b`
+- [ ] **Install Ollama** (local LLM): `brew install ollama && brew services start ollama && ollama pull gemma3:12b`
 - [ ] **Fill in service API keys in `~/openclaw/.env`** (Phase 5):
   - `SONARR_API_KEY` — from `docker-stack/sonarr/config/config.xml`
   - `RADARR_API_KEY` — from `docker-stack/radarr/config/config.xml`
@@ -674,7 +715,7 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
 - [ ] **First deploy**: `cd ~/openclaw && docker compose up -d --build`
 - [ ] **Verify**: type `/ping` in Discord, check `curl http://localhost:8765/health`
 - [ ] **Test `/ask`**: try `/ask "hello"` (→ Ollama, free) then `/ask "how's sonarr doing?"` (→ Gemini + function calling)
-- [ ] **Ollama**: runs on host via `brew services start ollama`; model is `llama3.2:3b` (auto-pulled). Set `LOCAL_LLM_ENABLED=false` in `.env` to disable.
+- [ ] **Ollama**: runs on host via `brew services start ollama`; model is `gemma3:12b` (auto-pulled). Set `LOCAL_LLM_ENABLED=false` in `.env` to disable.
 - [ ] **Add to Uptime Kuma**: run `scripts/add-uptime-kuma-monitor.py` to add the monitor
 - [ ] **Traefik route** (optional): `openclaw.davevoyles.synology.me` → configured in NAS `mac-mini.yml`
 - [ ] **AgentMail** (optional): set `AGENTMAIL_API_KEY` in `.env` for `/mail` and email-via-AI

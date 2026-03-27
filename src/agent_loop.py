@@ -263,7 +263,7 @@ def save_plan(plan: Plan, _retries: int = 3, _backoff: float = 0.5) -> None:
             tmp.unlink(missing_ok=True)
             if attempt < _retries - 1:
                 import time
-                time.sleep(_backoff * (2 ** attempt))
+                time.sleep(min(_backoff * (2 ** attempt), 1.0))  # short sync sleep; only on write failure
                 log.warning("save_plan retry %d/%d for %s: %s", attempt + 1, _retries, plan.plan_id, exc)
     log.error("save_plan failed after %d attempts for %s: %s", _retries, plan.plan_id, last_exc)
     raise last_exc  # type: ignore[misc]

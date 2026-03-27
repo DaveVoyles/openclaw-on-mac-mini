@@ -40,6 +40,7 @@ _http_session: aiohttp.ClientSession | None = None
 
 # Cached access token with TTL (Google tokens last ~3600s)
 _access_token_cache: str | None = None
+_access_token_expiry: float = 0.0
 from http_session import SessionManager
 
 _sessions = SessionManager(timeout=10, name="calendar")
@@ -47,10 +48,7 @@ _get_session = _sessions.get
 close_session = _sessions.close
 
 
-def _truncate(text: str, limit: int = 1900) -> str:
-    if len(text) <= limit:
-        return text
-    return text[: limit - 20] + "\n… (truncated)"
+from utils import truncate as _truncate
 
 
 def _not_configured() -> str:

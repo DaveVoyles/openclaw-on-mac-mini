@@ -26,6 +26,14 @@ def _missing_skill_message() -> str:
     )
 
 
+def _safe_json_loads(text: str, context: str = "ontology"):
+    """Parse JSON from subprocess output, returning (parsed, None) or (None, error_str)."""
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError:
+        return None, f"❌ Unexpected output from {context}: {text[:200]}"
+
+
 def _normalize_json(value: str | None, *, default: str = "{}") -> str:
     raw = value if value and value.strip() else default
     parsed = json.loads(raw)
@@ -100,7 +108,9 @@ async def ontology_create_entity(entity_type: str, properties_json: str, entity_
     if rc != 0:
         return f"❌ Failed to create ontology entity: {err.strip() or out.strip()}"
 
-    entity = json.loads(out)
+    entity, err_msg = _safe_json_loads(out)
+    if err_msg:
+        return err_msg
     return f"✅ Created ontology entity:\n{_format_entity(entity)}"
 
 
@@ -115,7 +125,10 @@ async def ontology_get_entity(entity_id: str) -> str:
         return f"❌ Failed to get ontology entity: {err.strip() or out.strip()}"
     if out.strip().startswith("Entity not found"):
         return out.strip()
-    return _format_entity(json.loads(out))
+    entity, err_msg = _safe_json_loads(out)
+    if err_msg:
+        return err_msg
+    return _format_entity(entity)
 
 
 async def ontology_query(entity_type: str = "", where_json: str = "{}") -> str:
@@ -134,7 +147,9 @@ async def ontology_query(entity_type: str = "", where_json: str = "{}") -> str:
     if rc != 0:
         return f"❌ Failed to query ontology: {err.strip() or out.strip()}"
 
-    results = json.loads(out)
+    results, err_msg = _safe_json_loads(out)
+    if err_msg:
+        return err_msg
     return _format_entity_list(results)
 
 
@@ -155,7 +170,10 @@ async def ontology_update_entity(entity_id: str, properties_json: str) -> str:
         return f"❌ Failed to update ontology entity: {err.strip() or out.strip()}"
     if out.strip().startswith("Entity not found"):
         return out.strip()
-    return f"✅ Updated ontology entity:\n{_format_entity(json.loads(out))}"
+    entity, err_msg = _safe_json_loads(out)
+    if err_msg:
+        return err_msg
+    return f"✅ Updated ontology entity:\n{_format_entity(entity)}"
 
 
 async def ontology_relate(from_id: str, relation: str, to_id: str, properties_json: str = "{}") -> str:
@@ -175,7 +193,9 @@ async def ontology_relate(from_id: str, relation: str, to_id: str, properties_js
     ])
     if rc != 0:
         return f"❌ Failed to create ontology relation: {err.strip() or out.strip()}"
-    data = json.loads(out)
+    data, err_msg = _safe_json_loads(out)
+    if err_msg:
+        return err_msg
     return (
         f"✅ Created relation: {data.get('from')} -[{data.get('rel')}]-> {data.get('to')}"
     )
@@ -196,7 +216,9 @@ async def ontology_get_related(entity_id: str, relation: str = "", direction: st
     if rc != 0:
         return f"❌ Failed to get related ontology entities: {err.strip() or out.strip()}"
 
-    results = json.loads(out)
+    results, err_msg = _safe_json_loads(out)
+    if err_msg:
+        return err_msg
     return _format_related(results)
 
 

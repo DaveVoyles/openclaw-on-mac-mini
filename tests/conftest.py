@@ -75,5 +75,6 @@ def _clear_module_caches():
                             getattr(mod, attr).clear()
                         else:
                             setattr(mod, attr, None)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        import warnings
+                        warnings.warn(f"Failed to clear cache {attr} on {mod_name}: {e}")

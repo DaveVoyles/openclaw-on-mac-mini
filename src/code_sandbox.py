@@ -13,6 +13,7 @@ Returns (stdout, stderr, exit_code).
 import asyncio
 import logging
 import os
+import secrets
 import shlex
 import tempfile
 
@@ -46,6 +47,7 @@ async def run_code(
     ) as f:
         f.write(code)
         code_path = f.name
+    os.chmod(code_path, 0o600)
 
     try:
         cmd = [
@@ -58,7 +60,7 @@ async def run_code(
             "--cap-drop", "ALL",
             "--security-opt", "no-new-privileges:true",
             "--tmpfs", "/tmp:rw,noexec,nosuid,size=50m",
-            "--name", f"openclaw-sandbox-{os.getpid()}-{id(code) % 100000}",
+            "--name", f"openclaw-sandbox-{secrets.token_hex(8)}",
             "-v", f"{code_path}:/sandbox/code.py:ro",
             SANDBOX_IMAGE,
             "python", "/sandbox/code.py",

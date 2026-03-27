@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import platform
+import re
 import sys
 import time
 from pathlib import Path
@@ -115,6 +116,7 @@ LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 # Channel for proactive push notifications (morning briefing, alerts)
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
 # ---------------------------------------------------------------------------
 # Channel role architecture — prevents context bleed between workflows
@@ -158,7 +160,7 @@ def _load_channel_config() -> None:
         log.info("No channel role IDs configured (DISCORD_CHANNEL_<ROLE>_ID not set)")
 
 
-VERSION = "0.6.0"
+VERSION = cfg.version
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -237,6 +239,11 @@ def require_auth(func):
 
     @functools.wraps(func)
     async def wrapper(interaction: discord.Interaction, *args, **kwargs):
+        if not is_allowed(interaction):
+            await interaction.response.send_message(
+                "🔒 You are not authorized to use this command.", ephemeral=True
+            )
+            return
         return await func(interaction, *args, **kwargs)
 
     return wrapper
@@ -545,7 +552,7 @@ class OpenClawBot(commands.Bot):
         "sonarr", "radarr", "lidarr", "prowlarr",
         "sabnzbd", "qbittorrent", "tautulli", "overseerr",
     })
-    _error_re = __import__("re").compile(r"error|warn|exception|critical|failed", __import__("re").IGNORECASE)
+    _error_re = re.compile(r"error|warn|exception|critical|failed", re.IGNORECASE)
 
     async def _gather_system_signals(self) -> tuple[str, dict[str, str]] | None:
         """Collect health checks and log snippets. Returns None if all clean."""
@@ -710,7 +717,7 @@ class OpenClawBot(commands.Bot):
             except Exception as exc:
                 log.warning("Failed to flush audit buffer on shutdown: %s", exc)
 
-        # Close all async sessions — log errors instead of silently swallowing
+        # Close all async sessions — lazy imports to avoid errors if modules weren't loaded
         _close_fns = [
             ("llm", lambda: __import__("llm").close_sessions()),
             ("agentmail", lambda: __import__("agentmail").close_session()),
@@ -801,6 +808,11 @@ class OpenClawBot(commands.Bot):
         The handler formats a human-readable Discord notification and posts it
         to ALERT_CHANNEL_ID (if configured), then returns 200 OK.
         """
+        if WEBHOOK_SECRET:
+            auth = request.headers.get("Authorization", "")
+            if auth != f"Bearer {WEBHOOK_SECRET}":
+                return web.json_response({"error": "unauthorized"}, status=401)
+
         from webhook_formatter import FORMATTERS, format_generic
 
         source = request.match_info.get("source", "unknown").lower()
@@ -975,15 +987,14 @@ _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 #   - Markdown images: ![alt](url)
 #   - Photo links the prompt produces: [📸 ...](url)  or  [Photo](url)
 #   - Bare image URLs on their own line
-import re as _re
 
-_IMAGE_LINK_RE = _re.compile(
+_IMAGE_LINK_RE = re.compile(
     r"!?\[(?:[^\]]*(?:photo|image|📸|🖼️|property|listing)[^\]]*)\]\((https?://[^)]+)\)",
-    _re.IGNORECASE,
+    re.IGNORECASE,
 )
-_BARE_IMAGE_RE = _re.compile(
+_BARE_IMAGE_RE = re.compile(
     r"(https?://\S+\.(?:jpg|jpeg|png|webp|gif)(?:\?\S*)?)",
-    _re.IGNORECASE,
+    re.IGNORECASE,
 )
 
 

@@ -5,6 +5,7 @@ Core Docker & System Monitoring + Advanced Media/Network/Analysis skills.
 
 import asyncio
 import logging
+import os
 import shlex
 from typing import Optional
 
@@ -17,11 +18,7 @@ log = logging.getLogger("openclaw.skills")
 # ---------------------------------------------------------------------------
 
 
-def _truncate(text: str, limit: int = 1900) -> str:
-    """Truncate text to fit Discord's 2000-char embed field limit."""
-    if len(text) <= limit:
-        return text
-    return text[: limit - 20] + "\n… (truncated)"
+from utils import truncate as _truncate
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +146,9 @@ async def get_docker_stats() -> str:
 # 6.2  System Monitoring
 # ---------------------------------------------------------------------------
 
-GLANCES_URL = "http://192.168.1.93:61208"
+from config import cfg as _cfg
+
+GLANCES_URL = os.getenv("GLANCES_URL", f"http://{_cfg.docker_host_ip}:61208")
 
 
 async def get_system_stats() -> str:
@@ -476,3 +475,7 @@ SKILLS.update(OBSIDIAN_SKILLS)
 # Maintenance — 4AM cron: skill updates, gateway restart, NAS backup
 from maintenance_skills import MAINTENANCE_SKILLS
 SKILLS.update(MAINTENANCE_SKILLS)
+
+# Agent Loop — persistent plan management for autonomous goals
+from agent_loop import AGENT_LOOP_SKILLS
+SKILLS.update(AGENT_LOOP_SKILLS)

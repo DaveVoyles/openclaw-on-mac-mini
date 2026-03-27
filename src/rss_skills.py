@@ -19,6 +19,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -28,6 +29,11 @@ from xml.etree import ElementTree as ET
 import aiohttp
 
 log = logging.getLogger("openclaw.rss")
+
+_SSRF_PRIVATE = re.compile(
+    r"^(https?://)?(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.).*",
+    re.IGNORECASE,
+)
 
 MEMORY_DIR = Path(os.getenv("MEMORY_DIR", "/memory"))
 _FEEDS_FILE = MEMORY_DIR / "rss_feeds.json"
@@ -106,8 +112,8 @@ def _parse_feed(xml_text: str, limit: int = 10) -> tuple[str, list[dict]]:
             date_raw = _text(item, "pubDate", "dc:date")
             summary = _text(item, "description", "content:encoded")
             # Strip HTML tags from summary (crude but avoids deps)
-            import re as _re
-            summary = _re.sub(r"<[^>]+>", "", summary)[:250]
+
+            summary = re.sub(r"<[^>]+>", "", summary)[:250]
             date_fmt = ""
             if date_raw:
                 try:
@@ -131,9 +137,9 @@ def _parse_feed(xml_text: str, limit: int = 10) -> tuple[str, list[dict]]:
             updated_el = entry.find(f"{ns}updated") or entry.find(f"{ns}published")
             date_fmt = updated_el.text[:10] if (updated_el is not None and updated_el.text) else ""
             summary_el = entry.find(f"{ns}summary") or entry.find(f"{ns}content")
-            import re as _re
+
             summary_raw = (summary_el.text or "") if summary_el is not None else ""
-            summary = _re.sub(r"<[^>]+>", "", summary_raw)[:250].strip()
+            summary = re.sub(r"<[^>]+>", "", summary_raw)[:250].strip()
             items.append({"title": title, "url": url, "date": date_fmt, "summary": summary})
 
     return feed_title, items
@@ -154,9 +160,10 @@ async def fetch_rss_feed(url: str, limit: int = 10) -> str:
     Returns a formatted list of articles with titles, dates, and links.
     """
     # Basic SSRF guard — block non-HTTP and private IP ranges
-    import re as _re
-    if not _re.match(r"^https?://", url, _re.IGNORECASE):
+    if not re.match(r"^https?://", url, re.IGNORECASE):
         return "❌ Only http/https URLs are supported."
+    if _SSRF_PRIVATE.match(url):
+        return "❌ Fetching private/localhost URLs is not allowed."
 
     limit = max(1, min(limit, _MAX_ITEMS))
 

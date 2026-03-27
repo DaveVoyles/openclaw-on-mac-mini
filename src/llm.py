@@ -307,6 +307,7 @@ class RateLimiter:
         self._per_hour = per_hour
         self._timestamps: deque[float] = deque()
         self._lock = asyncio.Lock()
+        self._sync_lock = __import__("threading").Lock()
 
     def _evict(self) -> None:
         """Drop timestamps older than 1 hour from the front of the deque."""
@@ -315,16 +316,18 @@ class RateLimiter:
             self._timestamps.popleft()
 
     def check(self) -> bool:
-        """Return True if a call is allowed right now."""
-        self._evict()
-        now = time.monotonic()
-        minute_count = sum(1 for t in self._timestamps if now - t < 60)
-        hour_count = len(self._timestamps)
-        return minute_count < self._per_minute and hour_count < self._per_hour
+        """Return True if a call is allowed right now (thread-safe)."""
+        with self._sync_lock:
+            self._evict()
+            now = time.monotonic()
+            minute_count = sum(1 for t in self._timestamps if now - t < 60)
+            hour_count = len(self._timestamps)
+            return minute_count < self._per_minute and hour_count < self._per_hour
 
     def record(self):
-        """Record a call."""
-        self._timestamps.append(time.monotonic())
+        """Record a call (thread-safe)."""
+        with self._sync_lock:
+            self._timestamps.append(time.monotonic())
 
     async def wait_for_capacity(self, max_wait: float = 30.0) -> bool:
         """Wait with jittered exponential backoff until capacity is available.
@@ -531,7 +534,7 @@ async def _run_tool_loop(
     round — matching the sequential research pattern that's easier to
     follow in Discord progress updates.
     """
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     rounds = 0
 
     while rounds < max_rounds:
@@ -731,7 +734,7 @@ async def _gemini_chat(
     chat_session = model.start_chat(history=gemini_history)
 
     # Send user message (runs in executor to not block the event loop)
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     _rate_limiter.record()
     response = await loop.run_in_executor(
         None, lambda: chat_session.send_message(user_message)
@@ -819,7 +822,7 @@ async def chat_stream(
     ]
     chat_session = model.start_chat(history=gemini_history)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     _rate_limiter.record()
 
     try:
@@ -1058,7 +1061,7 @@ async def summarize_conversation(history: list[dict]) -> str:
                 temperature=0.2,
             ),
         )
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(
             None, lambda: summary_model.generate_content(prompt)
         )

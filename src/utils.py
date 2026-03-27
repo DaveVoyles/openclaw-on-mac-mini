@@ -4,6 +4,7 @@ OpenClaw Shared Utilities
 Reusable helpers extracted from repeated patterns across the codebase:
 - atomic_write: crash-safe file writes via temp-file + fsync + rename
 - safe_call: async timeout wrapper with fallback message
+- truncate: truncate text to a max length for Discord messages
 """
 
 import asyncio
@@ -12,6 +13,13 @@ import os
 from pathlib import Path
 
 log = logging.getLogger("openclaw.utils")
+
+
+def truncate(text: str, limit: int = 1900) -> str:
+    """Truncate *text* to *limit* characters, appending an ellipsis if cut."""
+    if len(text) <= limit:
+        return text
+    return text[: limit - 20] + "\n… (truncated)"
 
 
 def atomic_write(path: Path, data: str) -> None:

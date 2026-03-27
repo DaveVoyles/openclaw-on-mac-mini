@@ -26,6 +26,13 @@ class AnalyticsCog(commands.Cog, name="Analytics"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        msg = f"❌ Command failed: {error}"
+        if interaction.response.is_done():
+            await interaction.followup.send(msg, ephemeral=True)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+
     @app_commands.command(name="spending", description="View Gemini API spending and budget status")
     @app_commands.describe(breakdown="Show daily breakdown (default: summary)")
     async def spending_cmd(self, interaction: discord.Interaction, breakdown: bool = False):
@@ -118,9 +125,9 @@ class AnalyticsCog(commands.Cog, name="Analytics"):
             title=f"📊 Audit Summary — {today}",
             color=discord.Color.blurple(),
         )
-        embed.add_field(name=f"Total actions ({len(entries)})", value=top_actions or "—", inline=False)
-        embed.add_field(name="Most active hours", value=top_hours or "—", inline=False)
-        embed.add_field(name=f"Non-success results ({len(error_entries)})", value=errors_text, inline=False)
+        embed.add_field(name=f"Total actions ({len(entries)})", value=(top_actions or "—")[:1024], inline=False)
+        embed.add_field(name="Most active hours", value=(top_hours or "—")[:1024], inline=False)
+        embed.add_field(name=f"Non-success results ({len(error_entries)})", value=(errors_text)[:1024], inline=False)
         await interaction.response.send_message(embed=embed)
         audit_log(interaction.user, "audit-summary")
 

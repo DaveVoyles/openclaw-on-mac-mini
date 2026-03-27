@@ -25,6 +25,7 @@ import email.header
 import imaplib
 import logging
 import os
+import re
 import smtplib
 import ssl
 from email.mime.text import MIMEText
@@ -63,10 +64,7 @@ def _decode_header(raw: str) -> str:
     return "".join(decoded)
 
 
-def _truncate(text: str, limit: int = 1900) -> str:
-    if len(text) <= limit:
-        return text
-    return text[: limit - 20] + "\n… (truncated)"
+from utils import truncate as _truncate
 
 
 def _provider_creds(provider: str) -> tuple[str, str, str, str, int] | None:
@@ -264,8 +262,7 @@ async def send_email(
         return _config_hint(provider)
 
     # Validate recipient email address
-    import re as _re
-    if not _re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', to.strip()):
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', to.strip()):
         return "❌ Invalid recipient email address."
 
     user, password, _, smtp_host, smtp_port = creds

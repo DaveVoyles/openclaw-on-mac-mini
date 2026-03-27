@@ -138,13 +138,12 @@ class ConversationStore:
                 user_id, channel_id = k
                 import asyncio
                 try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(
-                            _summarize_and_store(user_id, conv.user_name, conv.history)
-                        )
-                except Exception as exc:
-                    log.debug("Summarization task skipped: %s", exc)
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(
+                        _summarize_and_store(user_id, conv.user_name, conv.history)
+                    )
+                except RuntimeError:
+                    log.debug("No running loop for summarization")
         if expired:
             log.info("Cleaned up %d expired conversations (summarized those with %d+ msgs)",
                      len(expired), MIN_MESSAGES_TO_SUMMARIZE)

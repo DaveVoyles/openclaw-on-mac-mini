@@ -32,6 +32,13 @@ class DockerCog(commands.Cog, name="Docker"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        msg = f"❌ Command failed: {error}"
+        if interaction.response.is_done():
+            await interaction.followup.send(msg, ephemeral=True)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+
     @app_commands.command(name="containers", description="List all running Docker containers")
     async def containers_cmd(self, interaction: discord.Interaction):
         await interaction.response.defer()

@@ -18,6 +18,7 @@ On bot shutdown, call ``close_all()`` to tear down every managed session.
 from __future__ import annotations
 
 import logging
+import weakref
 from typing import Any
 
 import aiohttp
@@ -25,13 +26,13 @@ import aiohttp
 log = logging.getLogger("openclaw.http")
 
 # Registry of all SessionManager instances for bulk shutdown
-_registry: list[SessionManager] = []
+_registry: weakref.WeakSet[SessionManager] = weakref.WeakSet()
 
 
 class SessionManager:
     """Lazy aiohttp.ClientSession with automatic registry for bulk shutdown."""
 
-    __slots__ = ("_session", "_timeout", "_connector_kwargs", "_name")
+    __slots__ = ("_session", "_timeout", "_connector_kwargs", "_name", "__weakref__")
 
     def __init__(
         self,
@@ -52,7 +53,7 @@ class SessionManager:
             self._connector_kwargs["limit_per_host"] = connector_limit_per_host
         if ttl_dns_cache is not None:
             self._connector_kwargs["ttl_dns_cache"] = ttl_dns_cache
-        _registry.append(self)
+        _registry.add(self)
 
     async def get(self) -> aiohttp.ClientSession:
         """Return the shared session, creating it lazily if needed."""

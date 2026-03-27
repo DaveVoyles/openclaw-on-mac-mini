@@ -12,6 +12,7 @@ Requires in .env:
 
 import asyncio
 import datetime
+import json as _json
 import logging
 import os
 import ssl
@@ -99,8 +100,8 @@ async def _raw_login(session: aiohttp.ClientSession) -> str | None:
         "format": "sid",
     }
     try:
-        async with session.get(
-            f"{NAS_URL}/webapi/auth.cgi", params=params, ssl=_SSL_CTX
+        async with session.post(
+            f"{NAS_URL}/webapi/auth.cgi", data=params, ssl=_SSL_CTX
         ) as resp:
             data = await resp.json(content_type=None)
             if data.get("success"):
@@ -450,8 +451,8 @@ async def nas_create_folder(path: str) -> str:
         2,
         "create",
         {
-            "folder_path": '["' + path.rsplit("/", 1)[0] + '"]',
-            "name": '["' + path.rsplit("/", 1)[-1] + '"]',
+            "folder_path": _json.dumps([path.rsplit("/", 1)[0]]),
+            "name": _json.dumps([path.rsplit("/", 1)[-1]]),
             "force_parent": "true",
         },
     )

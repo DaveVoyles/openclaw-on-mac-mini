@@ -14,6 +14,8 @@ import os
 import re
 from pathlib import Path
 
+from utils import atomic_write
+
 log = logging.getLogger("openclaw.obsidian")
 
 VAULT_DIR = Path(os.getenv("VAULT_DIR", "/vault"))
@@ -130,10 +132,8 @@ async def save_to_vault(
             body = f"# {title}\n\n{content}"
             full_doc = frontmatter + "\n\n" + body
 
-            # Atomic write
-            tmp = filepath.with_suffix(".tmp")
-            tmp.write_text(full_doc, encoding="utf-8")
-            tmp.replace(filepath)
+            # Atomic write with fsync
+            atomic_write(filepath, full_doc)
 
             log.info("Vault: saved %s (%d chars)", filepath.name, len(full_doc))
             return f"✅ Saved to vault: `{subfolder}/{filename}`"

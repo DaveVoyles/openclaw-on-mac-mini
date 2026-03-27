@@ -21,6 +21,7 @@ log = logging.getLogger("openclaw.qmd")
 # ---------------------------------------------------------------------------
 
 MEMORY_FILE = Path(os.getenv("QMD_MEMORY_FILE", "/memory/qmd.json"))
+MAX_MEMORY_ENTRIES = 5000
 
 
 class QMDMemory:
@@ -46,13 +47,19 @@ class QMDMemory:
             log.error("Failed to save QMD memory: %s", e)
 
     async def add(self, content: str, tags: List[str] = None):
-        """Add a new fact to memory."""
+        """Add a new fact to memory (deduplicates recent entries, caps at MAX_MEMORY_ENTRIES)."""
         async with self._lock:
+            # Dedup: skip if identical content exists in last 100 entries
+            if any(m["content"] == content for m in self._memory[-100:]):
+                return
             self._memory.append({
                 "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "content": content,
                 "tags": tags or [],
             })
+            # Evict oldest entries if over limit
+            if len(self._memory) > MAX_MEMORY_ENTRIES:
+                self._memory = self._memory[-MAX_MEMORY_ENTRIES:]
             self._save()
 
     async def search(self, query: str) -> str:

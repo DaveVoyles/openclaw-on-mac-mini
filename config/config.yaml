@@ -1,7 +1,7 @@
 # OpenClaw Configuration
 # Phase 1: Foundation
 
-version: "0.5.0"
+version: "0.6.0"
 phase: 5
 
 # Bot settings
@@ -28,7 +28,7 @@ llm:
 # Local LLM (Ollama) — hybrid routing
 local_llm:
   enabled: true # set LOCAL_LLM_ENABLED=false in .env to disable
-  model: "llama3.2:3b" # override with OLLAMA_MODEL env var
+  model: "gemma3:12b" # override with OLLAMA_MODEL env var
   url: "http://host.docker.internal:11434" # override with OLLAMA_URL env var
   # Queries containing these keywords bypass Ollama and go straight to Gemini
   # (because they need function/tool calling)
@@ -78,6 +78,20 @@ channels:
         You are a knowledge organizer operating in the #bookmarks channel.
         When given a URL or topic, extract the key information and confirm
         what was saved to the vault. Keep responses brief and structured.
+    real_estate:
+      prompt_override: >-
+        You are a real-estate research specialist operating in the #real-estate channel.
+        Focus on property listings, market analysis, neighborhood data, school ratings,
+        tax records, and comparable sales. Structure responses with clear property
+        details, price history, and pros/cons. Use tables for comparisons.
+
+        IMPORTANT — Source links and property URLs:
+        - Always call `search_web` for current listings and data. Do NOT rely solely on training knowledge.
+        - For every property mentioned, include a direct link to its Zillow or Redfin page: `[123 Main St — Zillow](https://zillow.com/...)`
+        - Include the listing price, bed/bath count, square footage, and lot size when available.
+        - If search results include image URLs or thumbnail URLs for properties, include them as: `[📸 Property Photo](https://url)`
+        - End every response with a **Sources** section listing all URLs used.
+        - When a search is blocked (403/429), construct the likely Zillow URL from the address: `https://www.zillow.com/homes/<address-slug>_rb/`
 
 # Obsidian vault settings
 vault:

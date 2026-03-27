@@ -103,8 +103,11 @@ class TaskScheduler:
                 for item in data:
                     task = ScheduledTask(**item)
                     self._tasks[task.task_id] = task
-                    num = int(task.task_id.replace("sched-", ""))
-                    self._counter = max(self._counter, num)
+                    try:
+                        num = int(task.task_id.replace("sched-", ""))
+                        self._counter = max(self._counter, num)
+                    except ValueError:
+                        log.warning("Non-standard task_id: %s", task.task_id)
                 log.info("Loaded %d scheduled tasks", len(self._tasks))
             except Exception as e:
                 log.error(

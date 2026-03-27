@@ -19,23 +19,9 @@ _sessions = SessionManager(timeout=5, name="network")
 close_session = _sessions.close
 
 
-def _get_session() -> aiohttp.ClientSession:
-    """Sync wrapper — session created lazily on first await in caller."""
-    import asyncio
-    loop = asyncio.get_event_loop()
-    if not loop.is_running():
-        return loop.run_until_complete(_sessions.get())
-    # Called from async context — return a coro result via __await__ won't work,
-    # so just do the lazy init inline (matches original behaviour).
-    global _http_session
-    if _http_session is None or _http_session.closed:
-        _http_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=5)
-        )
-    return _http_session
-
-
-_http_session: aiohttp.ClientSession | None = None
+async def _get_session() -> aiohttp.ClientSession:
+    """Return the shared HTTP session via the SessionManager."""
+    return await _sessions.get()
 
 from config import cfg as _cfg
 HOST = os.getenv("DOCKER_HOST_IP", _cfg.docker_host_ip)
@@ -144,7 +130,7 @@ async def get_network_status() -> str:
 
     async def _check_health() -> str:
         try:
-            session = _get_session()
+            session = await _get_session()
             async with session.get(f"http://{HOST}:8765/health") as resp:
                 return f"{'✅' if resp.status == 200 else '❌'} OpenClaw health endpoint (:{8765})"
         except Exception as exc:
