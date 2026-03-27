@@ -1172,9 +1172,16 @@ async def analyze_image(
     image_bytes: bytes,
     mime_type: str,
     prompt: str = "Describe this image in detail. Note any text, errors, or important information.",
+    history: list[dict] | None = None,
+    on_tool_call: Any | None = None,
 ) -> str:
     """
     Analyze an image using Gemini's multimodal vision capabilities.
+
+    If the prompt suggests tool usage is needed (e.g. "restart the broken service"),
+    delegates to analyze_image_with_tools() which uses the full tool-calling model.
+    Otherwise uses a lightweight model without tools for faster simple descriptions.
+
     Returns a descriptive text response.
     """
     if not GOOGLE_API_KEY:
@@ -1182,7 +1189,15 @@ async def analyze_image(
     if mime_type not in SUPPORTED_IMAGE_MIMES:
         return f"❌ Unsupported image type: {mime_type}"
 
-    # Use a fresh model without tools for vision tasks
+    # If the prompt suggests tool usage, use the full tool-enabled model
+    if _needs_tools(prompt):
+        text, _ = await analyze_image_with_tools(
+            image_bytes, mime_type, prompt,
+            history=history, on_tool_call=on_tool_call,
+        )
+        return text
+
+    # Simple vision: use a lightweight model without tools (faster)
     vision_model = genai.GenerativeModel(
         model_name=MODEL_NAME,
         generation_config=genai.GenerationConfig(
@@ -1204,6 +1219,82 @@ async def analyze_image(
     except Exception as e:
         log.error("Image analysis failed: %s", e)
         return f"❌ Image analysis failed: {e}"
+
+
+async def analyze_image_with_tools(
+    image_bytes: bytes,
+    mime_type: str,
+    prompt: str = "Describe this image in detail. Note any text, errors, or important information.",
+    history: list[dict] | None = None,
+    on_tool_call: Any | None = None,
+) -> tuple[str, list[dict]]:
+    """Analyze an image using the main tool-enabled model.
+
+    Unlike analyze_image(), this uses the full tool-calling model so the LLM
+    can see the image AND call tools in the same turn — e.g. "analyze this
+    dashboard screenshot and restart the unhealthy service."
+
+    Returns (response_text, updated_history).
+    """
+    if not GOOGLE_API_KEY:
+        return "❌ GOOGLE_API_KEY not configured.", history or []
+    if mime_type not in SUPPORTED_IMAGE_MIMES:
+        return f"❌ Unsupported image type: {mime_type}", history or []
+
+    history = _trim_history(history or [])
+
+    # Rate-limit check
+    if not await _rate_limiter.wait_for_capacity(max_wait=30.0):
+        return (
+            "⚠️ Rate limit reached. Please wait a moment.",
+            history,
+        )
+
+    model = await _get_model()
+
+    # Build Gemini history
+    gemini_history = [
+        genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
+        for msg in history
+    ]
+
+    chat_session = model.start_chat(history=gemini_history)
+
+    # Create multimodal content with image + text
+    image_part = genai.protos.Part(
+        inline_data=genai.protos.Blob(mime_type=mime_type, data=image_bytes)
+    )
+    text_part = genai.protos.Part(text=prompt)
+    content = genai.protos.Content(
+        role="user",
+        parts=[image_part, text_part],
+    )
+
+    loop = asyncio.get_running_loop()
+    _rate_limiter.record()
+
+    try:
+        response = await loop.run_in_executor(
+            None, lambda: chat_session.send_message(content)
+        )
+        await _record_usage(response)
+    except Exception as e:
+        log.error("Image analysis with tools failed: %s", e)
+        return f"❌ Image analysis failed: {e}", history
+
+    # Run tool loop if the model wants to call tools based on what it saw
+    response, rounds = await _run_tool_loop(
+        chat_session, response,
+        max_rounds=MAX_TOOL_ROUNDS,
+        on_tool_call=on_tool_call,
+        parallel=True,
+        label="Vision+Tools",
+    )
+
+    text = _extract_final_text(response, rounds, chat_session)
+    updated_history = _extract_history(chat_session)
+
+    return text, updated_history
 
 
 async def analyze_document(text: str, prompt: str) -> str:
