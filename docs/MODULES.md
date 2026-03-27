@@ -2,7 +2,7 @@
 
 Quick reference for all source files. Consult this before exploring the codebase.
 
-## Core Modules (src/\*.py) — 33 files
+## Core Modules (src/\*.py) — 35 files
 
 | File                    | Purpose                                                                  | Key Exports                                                          |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
@@ -30,14 +30,16 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `obsidian_writer.py`    | Markdown + YAML frontmatter writer to Obsidian vault                     | `save_to_vault()`, `build_frontmatter()`                             |
 | `ontology_skills.py`    | Graph memory via ontology ClawHub script                                 | `add_fact()`, `query_graph()`, `list_entities()`                     |
 | `overseerr.py`          | Overseerr media request management API                                   | `get_overseerr_requests()`, `update_request_status()`                |
-| `qmd.py`                | Quick Memory Discovery — persistent fact storage                         | `QMDMemory` class with `remember()`, `recall()`, `search()`          |
+| `qmd.py`                | Quick Memory Discovery — persistent fact storage + knowledge routing   | `QMDMemory` class with `remember()`, `recall()`, `search()`          |
 | `research_agent.py`     | Autonomous multi-step research with synthesis                            | `ResearchAgent` class                                                |
 | `rss_skills.py`         | RSS/Atom feed fetching & LLM summarization                               | `fetch_rss_feed()`, `get_rss_digest()`                               |
+| `rules_engine.py`       | Correction learning — extracts rules from user corrections               | `detect_correction()`, `extract_rule()`, `add_rule()`, `get_relevant_rules()` |
 | `scheduler.py`          | In-memory task scheduler with JSON persistence                           | `Scheduler` class                                                    |
 | `spending.py`           | Gemini API cost tracker (input/output tokens vs budget)                  | `SpendingTracker` class with `summary()`, `daily_breakdown()`        |
 | `subprocess_utils.py`   | Async subprocess runner with timeout                                     | `run()` — returns (returncode, stdout, stderr)                       |
 | `webhook_formatter.py`  | Webhook payload formatters (Sonarr, Radarr, Plex, qBittorrent)           | `FORMATTERS` dict, `format_arr()`, `format_plex()`                   |
 | `thread_store.py`       | SQLite-backed persistent thread/message storage (WAL mode)               | `ThreadStore` class with `create_thread()`, `search_threads()`       |
+| `user_profile.py`       | Structured user profile — preferences, interests, working style          | `load_profile()`, `learn_from_message()`, `get_profile_prompt()`     |
 | `vector_store.py`       | ChromaDB semantic memory — memories, conversations, research collections | `VectorStore` class with `search()`, `add_memory()`, `recall()`      |
 | `worker_agent.py`       | Sub-agent spawning for task delegation                                   | `spawn_worker()`                                                     |
 

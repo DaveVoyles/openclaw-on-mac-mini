@@ -17,7 +17,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **LLM**          | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries)       |
 | **Local LLM**    | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
 | **Model Control** | `/ask model:auto\|local\|gemini` per-message + `/model set` sticky pref |
-| **Status**       | **Phase 13 — Deep Memory & Semantic Search** ✅                        |
+| **Status**       | **Phase 14 — Genesis-Inspired Intelligence** ✅                        |
 
 ## Features
 
@@ -152,6 +152,16 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Research memory — all `/research` reports indexed; follow-up research builds on prior findings
 - Source library — all browsed URLs cataloged with excerpts; searchable via `/sources`
 - New commands: `/memory-stats`, `/threads-search`, `/research-search`, `/sources`
+
+**Phase 14 — Genesis-Inspired Intelligence** ✅
+
+- Correction learning — when user says "no, that's wrong", bot extracts a rule and never repeats the mistake
+- Memory decay & reinforcement — frequently-accessed memories rank higher; unused ones fade after 30 days
+- Weekly memory consolidation — session summaries distilled into weekly digest memories
+- User profile — structured preferences, interests, tools, and working style learned from conversations
+- Session handover — proactive persistence of decisions, pending items, and next steps when sessions expire
+- Knowledge router — `/remember` auto-classifies: preferences → profile, rules → rules engine, facts → QMD
+- New commands: `/rules`, `/profile`, `/profile-edit`, `/memory-refresh`
 
 **Planned**
 

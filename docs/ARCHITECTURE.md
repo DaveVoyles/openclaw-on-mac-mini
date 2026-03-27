@@ -288,6 +288,11 @@ graph TB
 | **Semantic memory embed**       | `qmd.py` `remember_fact()` or `memory.py` summary → `vector_store.py` `add_memory()` / `add_conversation_summary()` → ChromaDB `data/chromadb/` |
 | **Contextual recall injection** | `bot.py` pre-LLM hook → `vector_store.py` `recall(query, top_k=3)` → top 3 results injected as `[Relevant context]` block before each `/ask`    |
 | **Research indexing**           | `research_agent.py` post-synthesis → `vector_store.py` `add_research_report()` → ChromaDB `research` collection; URLs → `sources` metadata       |
+| **Correction learning**        | `bot.py` post-response → `rules_engine.py` `detect_correction()` → `extract_rule()` → JSON + ChromaDB; rules injected before each `/ask`         |
+| **User profile learning**      | `bot.py` post-response → `user_profile.py` `learn_from_message()` → JSON + ChromaDB; profile injected before each `/ask`                         |
+| **Memory decay**               | `maintenance_skills.py` `run_memory_decay()` (daily 4AM) → `vector_store.py` `get_decayed_documents()` → `mark_decayed()` → 10% similarity penalty |
+| **Session handover**           | `memory.py` `cleanup_expired()` → `create_session_handover()` → JSON + ChromaDB; injected at start of next conversation                          |
+| **Knowledge routing**          | `qmd.py` `remember_fact()` → `_classify_fact()` → routes to `user_profile` / `rules_engine` / QMD+ChromaDB based on content                     |
 
 ---
 
