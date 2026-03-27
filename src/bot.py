@@ -1038,7 +1038,7 @@ _STREAM_EDIT_INTERVAL = 1.5
 # File attachment extraction — detect code blocks and offer as files
 # ---------------------------------------------------------------------------
 
-_CODE_BLOCK_RE = _re.compile(
+_CODE_BLOCK_RE = re.compile(
     r"```(\w+)?\n([\s\S]+?)```",
 )
 
