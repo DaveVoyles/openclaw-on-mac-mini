@@ -954,6 +954,45 @@ async def chat_stream(
     else:
         model_message = user_message
 
+    # ── Multi-model routing (Phase 8) ───────────────────────────────────
+    if model_preference == "auto":
+        try:
+            from model_router import classify_query, chat_openai, chat_anthropic
+            import os
+            route = classify_query(
+                user_message,
+                has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
+                has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
+                needs_tools=_needs_tools(user_message),
+            )
+            log.debug("Model router (stream): %s", route)
+
+            if route.model_type == "openai":
+                system_prompt = _load_system_prompt()
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                if reply:
+                    updated = history + [
+                        {"role": "user", "parts": [user_message]},
+                        {"role": "model", "parts": [reply]},
+                    ]
+                    yield reply, True, {"model_used": f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}", "updated_history": updated, "needs_tools": False}
+                    return
+
+            elif route.model_type == "anthropic":
+                system_prompt = _load_system_prompt()
+                reply = await chat_anthropic(model_message, history, system_prompt,
+                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                if reply:
+                    updated = history + [
+                        {"role": "user", "parts": [user_message]},
+                        {"role": "model", "parts": [reply]},
+                    ]
+                    yield reply, True, {"model_used": f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')}", "updated_history": updated, "needs_tools": False}
+                    return
+        except Exception as e:
+            log.debug("Multi-model routing failed (non-fatal, stream): %s", e)
+
     # ── Forced local mode ────────────────────────────────────────────────
     if model_preference == "local":
         if not LOCAL_LLM_ENABLED:
@@ -1108,6 +1147,45 @@ async def chat(
         model_message = f"{recalled_context}\n\n---\nUser's question: {user_message}"
     else:
         model_message = user_message
+
+    # -- Multi-model routing (Phase 8) ────────────────────────────────────
+    if model_preference == "auto":
+        try:
+            from model_router import classify_query, chat_openai, chat_anthropic, ModelRoute
+            import os
+            route = classify_query(
+                user_message,
+                has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
+                has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
+                needs_tools=_needs_tools(user_message),
+            )
+            log.debug("Model router: %s", route)
+
+            if route.model_type == "openai":
+                system_prompt = _load_system_prompt()
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                if reply:
+                    updated = history + [
+                        {"role": "user", "parts": [user_message]},
+                        {"role": "model", "parts": [reply]},
+                    ]
+                    return reply, updated, f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o-mini')}"
+                log.info("OpenAI call failed, falling through to default routing")
+
+            elif route.model_type == "anthropic":
+                system_prompt = _load_system_prompt()
+                reply = await chat_anthropic(model_message, history, system_prompt,
+                                             temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                if reply:
+                    updated = history + [
+                        {"role": "user", "parts": [user_message]},
+                        {"role": "model", "parts": [reply]},
+                    ]
+                    return reply, updated, f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514')}"
+                log.info("Anthropic call failed, falling through to default routing")
+        except Exception as e:
+            log.debug("Multi-model routing failed (non-fatal): %s", e)
 
     # -- Forced local mode ────────────────────────────────────────────────────
     if model_preference == "local":
