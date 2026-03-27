@@ -76,6 +76,9 @@ services:
       # ChromaDB vector store — semantic memory (Phase 13A)
       - ./data/chromadb:/memory/chromadb:rw
 
+      # SQLite thread store (Phase 13B) — lives in /memory alongside other data
+      # (openclaw.db is created automatically by thread_store.py)
+
     # Health check
     healthcheck:
       test:
