@@ -22,34 +22,34 @@ import google.generativeai as genai
 
 from skills import SKILLS
 from spending import tracker as spending_tracker
+from config import cfg
 
 log = logging.getLogger("openclaw.llm")
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration (sourced from centralized config)
 # ---------------------------------------------------------------------------
 
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+GOOGLE_API_KEY = cfg.google_api_key
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
-MODEL_NAME = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
-TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
-CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
+MODEL_NAME = cfg.llm_model
+MAX_TOKENS = cfg.llm_max_tokens
+TEMPERATURE = cfg.llm_temperature
+CONFIG_DIR = cfg.config_dir
 
 # Local LLM (Ollama) settings
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:12b")
-LOCAL_LLM_ENABLED = os.getenv("LOCAL_LLM_ENABLED", "true").lower() == "true"
+OLLAMA_URL = cfg.ollama_url
+OLLAMA_MODEL = cfg.ollama_model
+LOCAL_LLM_ENABLED = cfg.local_llm_enabled
 
 # Deep / thinking mode — used for /research and multi-step synthesis
-# Set to a thinking-capable model (e.g. gemini-2.5-flash or gemini-2.0-flash-thinking-exp)
-THINKING_MODEL = os.getenv("THINKING_MODEL", "gemini-2.5-flash")
-THINKING_BUDGET = int(os.getenv("THINKING_BUDGET", "8000"))  # tokens for reasoning
+THINKING_MODEL = cfg.thinking_model
+THINKING_BUDGET = cfg.thinking_budget
 
 # Rate limits (paid tier: 1000 RPM Flash, 50 RPM Pro)
-MAX_CALLS_PER_MINUTE = int(os.getenv("LLM_RPM_LIMIT", "60"))
-MAX_CALLS_PER_HOUR = int(os.getenv("LLM_RPH_LIMIT", "500"))
+MAX_CALLS_PER_MINUTE = cfg.llm_rpm_limit
+MAX_CALLS_PER_HOUR = cfg.llm_rph_limit
 
 # Function-call loop limit (prevent infinite tool invocations)
 MAX_TOOL_ROUNDS = 12

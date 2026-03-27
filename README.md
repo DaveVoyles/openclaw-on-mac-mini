@@ -13,10 +13,10 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 38 Discord slash commands                                              |
+| **Interface**    | 54 Discord slash commands                                              |
 | **LLM**          | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries)       |
 | **Local LLM**    | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
-| **Status**       | **Phase 9 — Mission Control (Kanban)** ✅                              |
+| **Status**       | **Phase 12 — Proactive Monitoring** ✅                                 |
 
 ## Features
 
@@ -112,26 +112,25 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - LLM routing keywords: _task_, _kanban_, _backlog_, _in progress_, _todo_, _ticket_
 - 50+ registered skills
 
-**Phase 10 — Ontology & Long-Term Memory** ✅
+**Phase 10 — Persistent Agent Plans** ✅
 
-- Graph-based structured memory via `ontology` ClawHub skill
-- Entity CRUD, typed relationships, graph queries, schema validation
-- Stored in `data/memory/ontology/graph.jsonl`
+- `/plans`, `/plan-detail`, `/resume-plan`, `/cancel-plan` — full plan lifecycle management
+- Multi-step plan creation via `/ask` — the LLM calls `create_plan()` for complex tasks, tracking each step
+- Plans persisted as Markdown in `data/plans/`, survive restarts; interrupted plans auto-detected on startup
+- Graph-based structured memory via `ontology` ClawHub skill (entity CRUD, relations, schema validation)
 
-**Phase 11 — Self-Management & Enhanced Browsing** ✅
+**Phase 11 — Worker Agents** ✅
 
-- `/diff` — show uncommitted git changes
-- `/bookmark` — save URLs/notes to Obsidian vault
-- `webfetch-md` and `git-essentials` ClawHub skills
-- Git status, log, diff, commit via LLM function calling
+- `spawn_worker()` delegates focused sub-tasks to independent Gemini sessions with their own tool loops
+- Autonomous parallel execution — the bot can research one topic while formatting another
+- `/diff` — show uncommitted git changes; `webfetch-md` and `git-essentials` ClawHub skills for self-management
 
-**Phase 12 — Autonomous Agent Operations** ✅
+**Phase 12 — Proactive Monitoring** ✅
 
-- `/research` — autonomous multi-step research with synthesis
-- `/weather` — weather forecasts via wttr.in
-- `/briefing` — on-demand morning briefing (weather, health, downloads, calendar)
-- `planning-with-files` and `autonomous-loop` ClawHub skills
-- Background worker agent for delegated tasks
+- RSS/Atom feed monitoring — `fetch_rss_feed`, `search_rss`, `get_rss_digest` with LLM-powered summaries
+- URL change detection — `snapshot_url` + `check_url_for_changes` with SHA-256 diff-based alerting
+- `/research` — autonomous multi-step research with Tavily/DuckDuckGo search and synthesis
+- `/weather`, `/briefing` — on-demand weather forecasts and morning briefings
 
 **v0.6.0 — Channel Architecture & Automation** ✅
 

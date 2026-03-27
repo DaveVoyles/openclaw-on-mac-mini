@@ -33,3 +33,15 @@ PROACTIVE_LOG_LINES = 25        # Lines fetched per container in proactive scan
 DEFAULT_ANALYZE_LINES = 50      # Default line count for /analyze command
 PDF_MAX_PAGES = 50              # Max pages to extract from a PDF
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB max upload size
+
+# ---------------------------------------------------------------------------
+# Truncation limits
+# ---------------------------------------------------------------------------
+OUTPUT_MAX_CHARS = 3000         # Max chars for tool/command output in agent steps
+GIT_DIFF_MAX_CHARS = 8000       # Max chars for git diff output
+
+# ---------------------------------------------------------------------------
+# Default ports
+# ---------------------------------------------------------------------------
+HEALTH_PORT_DEFAULT = 8765      # Default health-check HTTP port
+OLLAMA_PORT_DEFAULT = 11434     # Default Ollama LLM server port

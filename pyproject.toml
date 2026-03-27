@@ -1,3 +1,21 @@
+[project]
+name = "openclaw"
+version = "0.6.0"
+description = "Autonomous AI Discord bot for home automation, media management, and system monitoring"
+license = "MIT"
+authors = [
+    { name = "Dave Voyles" },
+]
+keywords = ["discord", "bot", "ai", "home-automation", "media-server"]
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: AsyncIO",
+    "Topic :: Communications :: Chat",
+    "Topic :: Home Automation",
+]
+
 [tool.pytest.ini_options]
 # Discover tests in the tests/ directory
 testpaths = ["tests"]

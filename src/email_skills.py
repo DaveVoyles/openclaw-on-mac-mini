@@ -24,24 +24,25 @@ import email
 import email.header
 import imaplib
 import logging
-import os
 import re
 import smtplib
 import ssl
 from email.mime.text import MIMEText
 
+from config import cfg as _cfg
+
 log = logging.getLogger("openclaw.email_skills")
 
 # --- Gmail ---
-GMAIL_USER = os.getenv("GMAIL_USER", "")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+GMAIL_USER = _cfg.gmail_user
+GMAIL_APP_PASSWORD = _cfg.gmail_app_password
 GMAIL_IMAP_HOST = "imap.gmail.com"
 GMAIL_SMTP_HOST = "smtp.gmail.com"
 GMAIL_SMTP_PORT = 587
 
 # --- Outlook / Microsoft 365 ---
-OUTLOOK_USER = os.getenv("OUTLOOK_USER", "")
-OUTLOOK_APP_PASSWORD = os.getenv("OUTLOOK_APP_PASSWORD", "")
+OUTLOOK_USER = _cfg.outlook_user
+OUTLOOK_APP_PASSWORD = _cfg.outlook_app_password
 OUTLOOK_IMAP_HOST = "outlook.office365.com"
 OUTLOOK_SMTP_HOST = "smtp.office365.com"
 OUTLOOK_SMTP_PORT = 587

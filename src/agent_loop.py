@@ -20,6 +20,8 @@ from typing import Any
 
 log = logging.getLogger("openclaw.agent_loop")
 
+from constants import OUTPUT_MAX_CHARS
+
 PLANS_DIR = Path(os.getenv("PLANS_DIR", "data/plans"))
 MAX_ACTIVE_PLANS = int(os.getenv("MAX_ACTIVE_PLANS", "20"))
 MAX_WORKERS_PER_PLAN = int(os.getenv("MAX_WORKERS_PER_PLAN", "3"))
@@ -230,7 +232,7 @@ def plan_from_markdown(text: str, plan_id: str = "") -> Plan:
 # ---------------------------------------------------------------------------
 
 
-def _ensure_dir():
+def _ensure_dir() -> None:
     PLANS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -367,7 +369,7 @@ async def update_plan_step(plan_id: str, step_num: int, status: str, output: str
 
     step.status = status
     if output:
-        step.output = output[:3000]
+        step.output = output[:OUTPUT_MAX_CHARS]
 
     # Auto-complete plan if all steps are done
     if all(s.is_complete for s in plan.steps):
@@ -592,7 +594,7 @@ async def execute_plan(
             )
 
             step.status = "done"
-            step.output = result_text[:3000]
+            step.output = result_text[:OUTPUT_MAX_CHARS]
             # Store result in plan context for subsequent steps
             plan.context[f"step_{step.num}_output"] = result_text[:2000]
             save_plan(plan)

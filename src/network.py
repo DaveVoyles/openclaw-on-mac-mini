@@ -24,7 +24,7 @@ async def _get_session() -> aiohttp.ClientSession:
     return await _sessions.get()
 
 from config import cfg as _cfg
-HOST = os.getenv("DOCKER_HOST_IP", _cfg.docker_host_ip)
+HOST = _cfg.docker_host_ip
 DNS_TEST_HOST = os.getenv("DNS_TEST_HOST", "8.8.8.8")
 PING_TEST_HOST = os.getenv("PING_TEST_HOST", "1.1.1.1")
 
@@ -114,7 +114,7 @@ async def get_tailscale_status() -> str:
 async def get_network_status() -> str:
     """Summarize external internet + LAN connectivity and Tailscale status (parallel checks)."""
 
-    nas_ip = os.getenv("NAS_IP", _cfg.nas_ip)
+    nas_ip = _cfg.nas_ip
     ts = _get_tailscale()
 
     async def _check_dns() -> str:

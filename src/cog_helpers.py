@@ -1,10 +1,6 @@
 """Shared utilities for cog modules — avoids duplicating helpers in every cog."""
 
-
-def audit_log(user, action, detail="", result="success"):
-    """Forward to bot.py's audit_log — imported lazily to avoid circular imports."""
-    from bot import audit_log as _audit_log
-    _audit_log(user, action, detail=detail, result=result)
+from audit import audit_log  # noqa: F401 — re-exported for cog convenience
 
 
 def is_service_allowed(skill: str, service: str) -> bool:

@@ -105,6 +105,26 @@ class _Config:
     # -- Docker host -----------------------------------------------------------
     docker_host_ip: str = os.getenv("DOCKER_HOST_IP", "192.168.1.93")
 
+    # -- Network defaults (single source for all hardcoded IPs) ----------------
+    nas_host: str = os.getenv("NAS_HOST", "192.168.1.8")
+    nas_ip: str = os.getenv("NAS_IP", "192.168.1.8")  # alias for LAN checks
+
+    # -- Overseerr -------------------------------------------------------------
+    overseerr_url: str = os.getenv(
+        "OVERSEERR_URL",
+        f"http://{os.getenv('DOCKER_HOST_IP', '192.168.1.93')}:5055",
+    )
+    overseerr_api_key: str = os.getenv("OVERSEERR_API_KEY", "")
+
+    # -- Email -----------------------------------------------------------------
+    gmail_user: str = os.getenv("GMAIL_USER", "")
+    gmail_app_password: str = os.getenv("GMAIL_APP_PASSWORD", "")
+    outlook_user: str = os.getenv("OUTLOOK_USER", "")
+    outlook_app_password: str = os.getenv("OUTLOOK_APP_PASSWORD", "")
+
+    # -- Webhook security ------------------------------------------------------
+    webhook_secret: str = os.getenv("WEBHOOK_SECRET", "")
+
     # -- Response limits -------------------------------------------------------
     response_max_length: int = 4000
     response_truncate_at: int = 3980
@@ -115,5 +135,30 @@ class _Config:
     browse_timeout: int = 20
     research_timeout: int = 120
 
+    # -- Validation ------------------------------------------------------------
+
+    def validate(self) -> list[str]:
+        """Check config sanity; return list of warning messages."""
+        warnings: list[str] = []
+        if not self.discord_token:
+            warnings.append("discord_token is empty — bot will not connect to Discord")
+        if not (1 <= self.health_port <= 65535):
+            warnings.append(f"health_port={self.health_port} out of range 1-65535")
+        if not (0.0 <= self.llm_temperature <= 2.0):
+            warnings.append(f"llm_temperature={self.llm_temperature} out of range 0.0-2.0")
+        if self.llm_rpm_limit <= 0:
+            warnings.append(f"llm_rpm_limit={self.llm_rpm_limit} must be > 0")
+        return warnings
+
 
 cfg = _Config()
+
+# Run validation at import time — warn but don't crash
+try:
+    import logging as _logging
+
+    _log = _logging.getLogger("openclaw.config")
+    for _w in cfg.validate():
+        _log.warning("Config: %s", _w)
+except Exception:
+    pass

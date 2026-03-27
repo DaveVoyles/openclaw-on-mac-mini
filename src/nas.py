@@ -20,14 +20,16 @@ import time
 
 import aiohttp
 
+from config import cfg
+
 log = logging.getLogger("openclaw.nas")
 
-NAS_URL = os.getenv("NAS_URL", "http://host.docker.internal:19501")
-NAS_USER = os.getenv("NAS_USER", "")
-NAS_PASSWORD = os.getenv("NAS_PASSWORD", "")
+NAS_URL = cfg.nas_url
+NAS_USER = cfg.nas_user
+NAS_PASSWORD = cfg.nas_password
 
 # DSM typically uses a self-signed cert; NAS_VERIFY_SSL=true if you have a valid cert
-_VERIFY_SSL = os.getenv("NAS_VERIFY_SSL", "false").lower() == "true"
+_VERIFY_SSL = cfg.nas_verify_ssl
 _SSL_CTX: ssl.SSLContext | bool = ssl.create_default_context() if _VERIFY_SSL else False
 
 

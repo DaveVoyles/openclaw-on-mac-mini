@@ -76,6 +76,7 @@ from approvals import (
     set_emergency_stop,
 )
 from agent_loop import scan_interrupted as scan_interrupted_plans, list_plans as al_list_plans, resume_plan as al_resume_plan, read_plan as al_read_plan, cancel_plan as al_cancel_plan
+from config import cfg
 from constants import (
     EMBED_DESC_LIMIT,
     EMBED_SPLIT_LIMIT,
@@ -95,6 +96,7 @@ from constants import (
     DEFAULT_ANALYZE_LINES,
     PDF_MAX_PAGES,
     MAX_FILE_SIZE,
+    OUTPUT_MAX_CHARS,
 )
 
 # ---------------------------------------------------------------------------
@@ -190,25 +192,12 @@ def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Audit logger — buffered write to avoid per-command file open
+# Audit logger — uses shared audit module; buffer lives in audit.py
 # ---------------------------------------------------------------------------
 
 AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 
-_audit_buffer: collections.deque = collections.deque(maxlen=10_000)
-
-
-def audit_log(user: discord.User | discord.Member | None, action: str, detail: str = "", result: str = "success"):
-    """Buffer an audit entry (flushed to disk every 30 seconds by _audit_writer)."""
-    entry = {
-        "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "user": str(user) if user else "system",
-        "user_id": str(user.id) if user else "0",
-        "action": action,
-        "detail": detail,
-        "result": result,
-    }
-    _audit_buffer.append(entry)
+from audit import audit_log, _audit_buffer  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -2316,7 +2305,7 @@ async def run_code_cmd(interaction: discord.Interaction, code: str):
     # Format output
     parts = []
     if stdout:
-        parts.append(f"**stdout:**\n```\n{stdout[:3000]}\n```")
+        parts.append(f"**stdout:**\n```\n{stdout[:OUTPUT_MAX_CHARS]}\n```")
     if stderr:
         parts.append(f"**stderr:**\n```\n{stderr[:1500]}\n```")
     if not stdout and not stderr:
@@ -2334,7 +2323,7 @@ async def run_code_cmd(interaction: discord.Interaction, code: str):
 
     # If output is very long, also attach as a file
     file = None
-    if len(stdout) > 3000:
+    if len(stdout) > OUTPUT_MAX_CHARS:
         file = discord.File(io.BytesIO(stdout.encode()), filename="output.txt")
 
     kwargs: dict[str, Any] = {"content": None, "embed": embed}

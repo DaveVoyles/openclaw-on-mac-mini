@@ -8,15 +8,14 @@ Requires: OVERSEERR_URL, OVERSEERR_API_KEY in .env
 
 import asyncio
 import logging
-import os
 
 import aiohttp
 
 log = logging.getLogger("openclaw.overseerr")
 
 from config import cfg as _cfg
-OVERSEERR_URL = os.getenv("OVERSEERR_URL", f"http://{_cfg.docker_host_ip}:5055")
-OVERSEERR_API_KEY = os.getenv("OVERSEERR_API_KEY", "")
+OVERSEERR_URL = _cfg.overseerr_url
+OVERSEERR_API_KEY = _cfg.overseerr_api_key
 
 from http_session import SessionManager
 

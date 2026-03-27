@@ -1,175 +1,172 @@
 # OpenClaw — Discord Slash Commands Reference
 
-All 37 slash commands, organized by phase. Agents adding new commands should check this list first to avoid duplication.
+All 56 slash commands across `bot.py` and 4 cogs, organized by category.
 
 > **Risk levels:** LOW (auto-execute) | MEDIUM (logged) | HIGH (requires button approval) | CRITICAL (requires approval + preview)
+>
+> **Auth Required** = uses `@require_auth` decorator or explicit `is_allowed()` check.
 
 ---
 
-## Phase 1 — Foundation
+## Core
 
-| Command | Description | Parameters | Risk |
-|---------|-------------|-----------|------|
-| `/ping` | Check if OpenClaw is alive | — | LOW |
-| `/about` | Show version and system info | — | LOW |
-| `/whoami` | Show your Discord identity and permission status | — | LOW |
-| `/help` | List all available commands | — | LOW |
+General-purpose commands for identity, help, and conversation management.
 
----
+| Command          | Description                                               | Parameters                                     | Auth | Risk   | File     |
+| ---------------- | --------------------------------------------------------- | ---------------------------------------------- | ---- | ------ | -------- |
+| `/ping`          | Check if OpenClaw is alive (latency + uptime)             | —                                              | ✅   | LOW    | `bot.py` |
+| `/about`         | Show OpenClaw version and system info                     | —                                              | ✅   | LOW    | `bot.py` |
+| `/whoami`        | Show your Discord identity and permission level           | —                                              | ✅   | LOW    | `bot.py` |
+| `/help`          | List available OpenClaw commands                          | —                                              | ✅   | LOW    | `bot.py` |
+| `/ask`           | AI-powered natural language query (Gemini or Ollama)      | `question: str`, `attachment: file (optional)` | —    | MEDIUM | `bot.py` |
+| `/clear`         | Clear your conversation history                           | —                                              | ✅   | LOW    | `bot.py` |
+| `/save`          | Save current conversation as a named thread               | `name: str`                                    | ✅   | LOW    | `bot.py` |
+| `/resume`        | Resume a previously saved conversation thread             | `name: str`                                    | ✅   | LOW    | `bot.py` |
+| `/threads`       | List all your saved conversation threads                  | —                                              | ✅   | LOW    | `bot.py` |
+| `/forget`        | Delete a saved conversation thread                        | `name: str`                                    | ✅   | LOW    | `bot.py` |
+| `/skills`        | List all available skill functions                        | —                                              | ✅   | LOW    | `bot.py` |
+| `/remember`      | Store a fact in long-term QMD memory                      | `content: str`, `tags: str (optional)`         | ✅   | LOW    | `bot.py` |
+| `/recall`        | Search long-term QMD memory                               | `query: str`                                   | ✅   | LOW    | `bot.py` |
 
-## Phase 2 — Core Skills
-
-| Command | Description | Parameters | Risk | Approval? |
-|---------|-------------|-----------|------|-----------|
-| `/containers` | List all running Docker containers (name, status, ports) | — | LOW | — |
-| `/status <service>` | Detailed status for one container | `service: str` | LOW | — |
-| `/logs <service> [lines]` | Tail recent container logs (default 30 lines) | `service: str`, `lines: int = 30` | LOW | — |
-| `/system` | CPU, memory, disk usage via Glances | — | LOW | — |
-| `/dockerstats` | Per-container resource usage | — | LOW | — |
-| `/restart <service>` | Restart a Docker container | `service: str` | **HIGH** | ✅ Yes |
-
-**`/restart` policy** — Allowed services are declared in `config/permissions.yaml`. Services like `traefik`, `socket-proxy`, `homepage`, and `watchtower` are explicitly denied and cannot be restarted via the bot regardless of approval.
+**`/ask` routing** — Simple/conversational queries go to local Ollama (`gemma3:12b`, free). Tool-requiring queries go to Gemini 2.5 Flash. The response footer shows which model handled the request.
 
 ---
 
-## Phase 3 — LLM Integration
+## Docker & System
 
-| Command | Description | Parameters | Risk |
-|---------|-------------|-----------|------|
-| `/ask <question>` | Natural language AI query — routed to Ollama (simple) or Gemini (tool-requiring) | `question: str` | MEDIUM |
-| `/clear` | Clear your conversation history for this channel | — | LOW |
-| `/save <name>` | Save current conversation thread to disk | `name: str` | LOW |
-| `/resume <name>` | Resume a previously saved thread | `name: str` | LOW |
-| `/threads` | List all your saved conversation threads | — | LOW |
-| `/forget <name>` | Delete a saved thread | `name: str` | LOW |
+Container management, system monitoring, and infrastructure diagnostics.
 
-**Routing note** — `/ask` uses hybrid LLM routing. Simple/conversational queries go to local Ollama (`llama3.2:3b`, free, unlimited). Queries that mention containers, logs, services, media, or other tool-requiring topics go to Gemini 2.5 Flash. The response footer shows which model handled the request.
+| Command        | Description                                      | Parameters                         | Auth | Risk     | File             |
+| -------------- | ------------------------------------------------ | ---------------------------------- | ---- | -------- | ---------------- |
+| `/containers`  | List all running Docker containers               | —                                  | —    | LOW      | `docker_cog.py`  |
+| `/status`      | Detailed status for a container                  | `service: str`                     | —    | LOW      | `docker_cog.py`  |
+| `/logs`        | View recent logs from a container                | `service: str`, `lines: int = 30`  | —    | LOW      | `docker_cog.py`  |
+| `/system`      | Show system resource usage (CPU, RAM, disk)      | —                                  | —    | LOW      | `docker_cog.py`  |
+| `/dockerstats` | Show resource usage per container                | —                                  | —    | LOW      | `docker_cog.py`  |
+| `/restart`     | Restart a Docker container (requires approval)   | `service: str`                     | —    | **HIGH** | `docker_cog.py`  |
+| `/ports`       | Verify all services are listening                | —                                  | ✅   | LOW      | `bot.py`         |
+| `/report`      | Comprehensive system status report               | —                                  | ✅   | LOW      | `bot.py`         |
+| `/analyze`     | AI-powered container log analysis                | `service: str`, `lines: int = 50`  | ✅   | LOW      | `bot.py`         |
+| `/schedule`    | Manage recurring scheduled tasks                 | `action`, `skill`, `hour`, `minute`, `interval`, `task_id` | — | LOW | `bot.py` |
 
----
+**`/restart` policy** — Allowed services are declared in `config/permissions.yaml`. Critical services (`traefik`, `socket-proxy`, `homepage`, `watchtower`) are always denied regardless of approval.
 
-## Phase 4 — Security & Approvals
-
-| Command | Description | Parameters | Risk |
-|---------|-------------|-----------|------|
-| `/pending` | View all pending approval requests | — | LOW |
-| `/auditlog [lines]` | View recent audit log entries (default 10, max 25) | `lines: int = 10` | LOW |
-| `/estop [action]` | Activate or deactivate emergency stop | `action: str = "stop"` | **CRITICAL** |
-
-**`/estop`** — `action` can be `stop` (default), `resume`, `start`, or `off`. When active, all write operations (`/restart`, `/ask` tool calls) are blocked. Shows a warning in every blocked response.
+**`/schedule` actions:** `list` (default), `add` (requires `skill` + `hour`/`minute` or `interval`), `remove` / `toggle` (requires `task_id`).
 
 ---
 
-## Phase 5 — Advanced Skills
+## Media & Downloads
 
-| Command | Description | Parameters | Risk |
-|---------|-------------|-----------|------|
-| `/search <query> [type]` | Search Sonarr + Radarr for TV shows or movies | `query: str`, `media_type: str = "all"` | LOW |
-| `/queue` | Show active downloads — SABnzbd + qBittorrent | — | LOW |
-| `/recent [count]` | Recently added media from Plex (via Tautulli) | `count: int = 10` | LOW |
-| `/health` | Check *arr services and download client health | — | LOW |
-| `/ports` | Verify all services are listening on expected ports | — | LOW |
-| `/report` | Comprehensive system status report | — | LOW |
-| `/analyze <service> [lines]` | AI-powered container log analysis | `service: str`, `lines: int = 50` | LOW |
-| `/schedule [action] [skill] [hour] [minute] [interval] [task_id]` | Manage recurring scheduled tasks | see below | LOW |
-| `/skills` | List all available skill functions | — | LOW |
-| `/remember <content> [tags]` | Store a fact in long-term QMD memory | `content: str`, `tags: str = ""` | LOW |
-| `/recall <query>` | Search long-term QMD memory | `query: str` | LOW |
-| `/mail <to> <subject> <body>` | Send email via AgentMail.to | `to: str`, `subject: str`, `body: str` | MEDIUM |
+Plex, *arr stack, and download client management.
 
-**`/schedule` actions:** `list` (default), `add` (requires `skill` + either `hour`/`minute` for daily or `interval` in minutes), `remove` (requires `task_id`). Persisted to `data/memory/`.
+| Command       | Description                                         | Parameters                                              | Auth | Risk | File           |
+| ------------- | --------------------------------------------------- | ------------------------------------------------------- | ---- | ---- | -------------- |
+| `/search`     | Search Sonarr + Radarr for TV shows or movies       | `query: str`, `media_type: str = "all"`                 | —    | LOW  | `media_cog.py` |
+| `/queue`      | Show active downloads (SABnzbd + qBittorrent)       | —                                                       | —    | LOW  | `media_cog.py` |
+| `/recent`     | Recently added media from Plex (via Tautulli)       | `count: int = 10`                                       | —    | LOW  | `media_cog.py` |
+| `/health`     | Check *arr services and download client health      | —                                                       | —    | LOW  | `media_cog.py` |
+| `/nowplaying` | Show what's currently playing on Plex               | —                                                       | —    | LOW  | `media_cog.py` |
+| `/watch`      | Create a persistent scheduled alert                 | `condition: str`, `action: str = "list"`, `watch_id: str` | —  | LOW  | `media_cog.py` |
 
 ---
 
-## Phase 6 — Remote Access & Monitoring
+## Network
 
-| Command | Description | Parameters | Risk |
-|---------|-------------|-----------|------|
-| `/network` | Full network report: LAN, internet, DNS, Tailscale, OpenClaw health | — | LOW |
-| `/tailscale` | Tailscale VPN status and device IP | — | LOW |
-| `/speedtest` | Cloudflare download speed + DNS latency measurement | — | LOW |
-| `/spending [breakdown]` | View Gemini API spend against budget | `breakdown: bool = false` | LOW |
+Network diagnostics, VPN status, and connectivity.
 
----
-
-## Phase 8 — Web, Browsing & Vision
-
-| Command | Description | Parameters | Risk |
-|---------|-------------|-----------|------|
-| `/websearch <query> [results]` | Live web search via Tavily (falls back to DuckDuckGo) | `query: str`, `results: int = 5` | LOW |
-| `/browse <url> [question]` | Fetch and read a web page; optional Q&A | `url: str`, `question: str = ""` | LOW |
-| `/analyze-image <image> [question]` | Analyze an uploaded image with Gemini vision | `image: attachment`, `question: str = ""` | LOW |
-| `/analyze-file <file> [question]` | Analyze a document/file (PDF, TXT, JSON…) with Gemini | `file: attachment`, `question: str = ""` | LOW |
+| Command      | Description                                           | Parameters | Auth | Risk | File             |
+| ------------ | ----------------------------------------------------- | ---------- | ---- | ---- | ---------------- |
+| `/network`   | LAN + internet + DNS + Tailscale + health summary     | —          | —    | LOW  | `network_cog.py` |
+| `/tailscale` | Tailscale VPN status and device IP                    | —          | —    | LOW  | `network_cog.py` |
+| `/speedtest` | Cloudflare download speed + DNS latency               | —          | —    | LOW  | `network_cog.py` |
 
 ---
 
-## Phase 9 — Mission Control (Kanban Task Board)
+## AI & Research
 
-| Command | Description | Parameters | Risk |
-|---------|-------------|-----------|------|
-| `/tasks [status]` | View tasks from the Kanban board; filter by status | `status: str = ""` (all\|backlog\|in_progress\|done) | LOW |
+Web search, browsing, file analysis, image generation, code execution, and autonomous research.
 
-**Mission Control** uses the ClawHub `mission-control` skill. Tasks are stored locally in `data/tasks.json` and synced to the public GitHub Pages dashboard at https://davevoyles.github.io/openclaw-dashboard/. The `/ask` command can also create, update, and complete tasks via natural language (LLM routes keywords like _task_, _kanban_, _backlog_, _in progress_, _todo_ to these skills).
-
-**Skill functions available via `/ask`:**
-- `get_mission_tasks(status)` — list tasks, optionally filtered by status
-- `get_task_detail(task_id)` — show full detail for one task
-- `update_task_status(task_id, new_status)` — move a task between columns
-- `complete_task(task_id, summary)` — mark done and record a completion note
-- `add_task_comment(task_id, comment)` — add a comment to a task
-
----
-
-## Phase 10 — Ontology & Long-Term Memory (Graph-Based)
-
-OpenClaw uses a structured graph-based memory system to track entities (people, projects, tools) and their relations. This is powered by the `ontology` skill and is primarily accessed via natural language in `/ask`.
-
-**Skill functions available via `/ask`:**
-- `ontology_create_entity(type, name, properties)` — add a new typed node to the graph
-- `ontology_get_entity(name)` — retrieve full JSON details and relations for an entity
-- `ontology_update_entity(name, properties)` — update or add metadata to an existing entity
-- `ontology_query(query, type)` — search for entities by name or type
-- `ontology_relate(source, relation, target)` — create a typed link (e.g., "Project A" *blocks* "Task B")
-- `ontology_get_related(name, relation, direction)` — traverse the graph to find linked entities
-- `ontology_validate()` — check the graph against the `schema.yaml` constraints
-
-**Usage tip:** You can ask Gemini things like *"Link the 'API Gateway' project to the 'Slack Integration' task"* or *"Tell me everything you know about Dave"* and it will use these tools to consult the structured memory.
+| Command          | Description                                              | Parameters                                                            | Auth | Risk | File     |
+| ---------------- | -------------------------------------------------------- | --------------------------------------------------------------------- | ---- | ---- | -------- |
+| `/websearch`     | Live web search via Tavily (DuckDuckGo fallback)         | `query: str`, `results: int = 5`                                      | ✅   | LOW  | `bot.py` |
+| `/browse`        | Fetch and read a web page; optional Q&A                  | `url: str`, `question: str (optional)`                                | ✅   | LOW  | `bot.py` |
+| `/analyze-image` | Analyze an uploaded image with Gemini vision             | `image: attachment`, `question: str (optional)`                       | —    | LOW  | `bot.py` |
+| `/analyze-file`  | Analyze a document (PDF, TXT, JSON…) with Gemini        | `file: attachment`, `question: str (optional)`                        | —    | LOW  | `bot.py` |
+| `/research`      | Autonomous multi-step research with synthesis            | `query: str`                                                          | ✅   | LOW  | `bot.py` |
+| `/bookmark`      | Save a URL or note to the Obsidian vault                 | `url: str (optional)`, `note: str (optional)`, `tags: str (optional)` | ✅   | LOW  | `bot.py` |
+| `/imagine`       | Generate an image using local Stable Diffusion           | `prompt: str`, `negative`, `width`, `height`, `steps`                 | ✅   | LOW  | `bot.py` |
+| `/run-code`      | Execute Python code in a sandboxed container             | `code: str` (max 10,000 chars)                                        | ✅   | LOW  | `bot.py` |
+| `/weather`       | Get current weather and forecast                         | `location: str (optional)`, `units: str (optional)`                   | ✅   | LOW  | `bot.py` |
+| `/briefing`      | On-demand morning briefing (weather, health, downloads)  | —                                                                     | ✅   | LOW  | `bot.py` |
 
 ---
 
-## Phase 11 — Self-Management & Enhanced Browsing (Git + Scrapers)
+## Security & Approvals
 
-OpenClaw can now manage its own project structure and perform more robust web scraping using the `webfetch-md` and `git-essentials` skills.
+Audit trail, emergency controls, and approval workflows.
 
-**Skill functions available via `/ask`:**
-| Tool | Description |
-|------|-------------|
-| `webfetch_md` | Smartly scrape any URL and convert main content to clean Markdown (strips navbars/ads). |
-| `git_status` | Check project repository status for local code changes. |
-| `git_log` | View recent code change history (commit log). |
-| `git_diff` | Compare code changes or view uncommitted changes. |
-| `git_commit` | Commit all current changes with a brief summary message. |
-| `init_planning_files` | Initialize task_plan.md, findings.md, progress.md for complex tasks. |
-| `update_plan_status` | Log progress or update status of a phase in planning files. |
+| Command          | Description                                        | Parameters             | Auth | Risk         | File               |
+| ---------------- | -------------------------------------------------- | ---------------------- | ---- | ------------ | ------------------ |
+| `/pending`       | View all pending approval requests                 | —                      | ✅   | LOW          | `bot.py`           |
+| `/estop`         | Emergency stop — halt all write actions            | `action: str = "stop"` | ✅   | **CRITICAL** | `bot.py`           |
+| `/auditlog`      | View recent audit log entries (max 25)             | `lines: int = 10`      | —    | LOW          | `analytics_cog.py` |
+| `/audit-summary` | Analytics summary of today's audit log             | —                      | —    | LOW          | `analytics_cog.py` |
+| `/spending`      | View Gemini API spending and budget status         | `breakdown: bool = false` | —  | LOW          | `analytics_cog.py` |
+| `/diff`          | Show uncommitted git changes in the OpenClaw repo  | —                      | ✅   | LOW          | `bot.py`           |
+| `/mail`          | Send email via AgentMail.to                        | `to`, `subject`, `body` | ✅  | MEDIUM       | `bot.py`           |
+
+**`/estop`** — `action` can be `stop` (default), `resume`, `start`, or `off`. When active, all write operations are blocked.
 
 ---
 
-## Phase 12 — Autonomous Agent Operations
+## Planning & Tasks
 
-Enhanced self-driving capabilities using the `planning-with-files` and `autonomous-loop` skills.
+Kanban task management and persistent multi-step agent plans.
 
-**Planning With Files:**
-This pattern allows the agent to maintain "working memory on disk." Use `init_planning_files` at the start of any complex task.
+| Command        | Description                                                         | Parameters                                               | Auth | Risk   | File     |
+| -------------- | ------------------------------------------------------------------- | -------------------------------------------------------- | ---- | ------ | -------- |
+| `/tasks`       | View Mission Control task board                                     | `status: str` (all\|backlog\|in_progress\|review\|done)  | ✅   | LOW    | `bot.py` |
+| `/plans`       | List active/recent agent plans                                      | `status`: all \| in-progress \| completed \| interrupted | ✅   | LOW    | `bot.py` |
+| `/plan-detail` | Show full details of a specific plan (steps, status, outputs)       | `plan_id: str`                                           | ✅   | LOW    | `bot.py` |
+| `/resume-plan` | Resume an interrupted plan from where it left off                   | `plan_id: str`                                           | ✅   | LOW    | `bot.py` |
+| `/cancel-plan` | Cancel an active plan (marks interrupted, resets in-progress steps) | `plan_id: str`                                           | ✅   | MEDIUM | `bot.py` |
 
-**Autonomous Loop:**
-When configured, the agent can work continuously in the background. Stop/Resume is handled via control files:
-- `touch autonomous-loop.stop` — Pause current loops
-- `rm autonomous-loop.stop` — Resume loops
+### Mission Control
+
+Tasks stored in `data/tasks.json`, synced to [GitHub Pages dashboard](https://davevoyles.github.io/openclaw-dashboard/). LLM-callable tools: `get_mission_tasks`, `get_task_detail`, `update_task_status`, `complete_task`, `add_task_comment`.
+
+### Agent Plans
+
+Plans stored as Markdown in `data/plans/` and survive restarts. On startup, interrupted plans are detected and reported to `ALERT_CHANNEL_ID`.
+
+LLM-callable tools: `create_plan`, `update_plan_step`, `read_plan`, `list_plans`, `adjust_plan`, `cancel_plan`, `resume_plan`.
+
+### Ontology (Graph Memory)
+
+Structured graph memory via `/ask` — entities, relations, queries, validation. Stored in `data/memory/ontology/graph.jsonl`.
+
+LLM-callable tools: `ontology_create_entity`, `ontology_get_entity`, `ontology_update_entity`, `ontology_query`, `ontology_relate`, `ontology_get_related`, `ontology_validate`.
+
+---
+
+## Summary
+
+| Category             | Commands | Source Files                                |
+| -------------------- | -------- | ------------------------------------------- |
+| Core                 | 13       | `bot.py`                                    |
+| Docker & System      | 10       | `bot.py`, `docker_cog.py`                   |
+| Media & Downloads    | 6        | `media_cog.py`                              |
+| Network              | 3        | `network_cog.py`                            |
+| AI & Research        | 10       | `bot.py`                                    |
+| Security & Approvals | 7        | `bot.py`, `analytics_cog.py`                |
+| Planning & Tasks     | 5        | `bot.py`                                    |
+| **Total**            | **54**   | + 60 LLM-callable skill functions via `/ask` |
 
 ---
 
 ## Adding a New Command
 
-1. Declare the function in [bot.py](../bot.py) with `@bot.tree.command(name=..., description=...)`
+1. Declare the function in [bot.py](../src/bot.py) with `@bot.tree.command(name=..., description=...)` or in a cog file under `src/cogs/` with `@app_commands.command(name=..., description=...)`
 2. Call `is_allowed(interaction)` at the top of every command handler — no exceptions
 3. Check `is_emergency_stopped()` for any write/mutating command
 4. If the command is HIGH/CRITICAL risk, use `approval_store.create()` + `ApprovalView` (see `/restart` as the template)

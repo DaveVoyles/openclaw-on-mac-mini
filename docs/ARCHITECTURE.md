@@ -2,6 +2,13 @@
 
 This diagram shows how all services, APIs, and components interconnect. Use it to understand data flow before adding new integrations.
 
+Key architectural patterns:
+- **Cogs** (`src/cogs/`) register as Discord command groups and feed into `bot.py`
+- **Worker agents** are spawned from LLM tool calls via `spawn_worker()` and run their own tool loop
+- **Agent plans** are persisted as Markdown in `data/plans/` via `agent_loop.py`
+- **Proactive loops** (`monitor_skills.py`, `rss_skills.py`) run on the scheduler and alert on changes
+- **Mission Control** (`mission_control.py`) acts as a Kanban store backed by `data/tasks.json`
+
 ```mermaid
 graph TB
     %% ── User Interface ──────────────────────────────────────────
@@ -12,7 +19,7 @@ graph TB
 
     %% ── Core Bot ────────────────────────────────────────────────
     subgraph OpenClaw ["🐾 OpenClaw (Docker Container)"]
-        Bot["bot.py\nCommand Router"]
+        Bot["bot.py\nCommand Router\n(54 commands)"]
         LLM["llm.py\nLLM Dispatcher"]
         ResearchAgent["research_agent.py\nReAct Research Loop"]
         Skills["skills/\nadvanced_skills.py"]
@@ -21,7 +28,23 @@ graph TB
         Scheduler["scheduler.py\nCron Jobs"]
         Memory["memory.py\nContext Store + Session Summaries"]
         Spending["spending.py\nCost Tracker"]
+        Dashboard["dashboard.py\nHTML Dashboard + JSON API\n:8765/dashboard"]
+        WebhookFmt["webhook_formatter.py\nIncoming Webhook Parser"]
+        WorkerAgent["worker_agent.py\nBackground Sub-Agent"]
+        Maintenance["maintenance_skills.py\n4 AM Cron Maintenance"]
+        ObsidianWriter["obsidian_writer.py\nVault Writer"]
+        AgentLoop["agent_loop.py\nPlan Management\n8 skills"]
+        MonitorSkills["monitor_skills.py\nURL Change Detection"]
+        RSSSkills["rss_skills.py\nFeed Monitoring"]
+        MissionControl["mission_control.py\nKanban Task Store"]
         Metrics["/metrics\nPrometheus Endpoint\n:8765"]
+
+        subgraph Cogs ["📦 Discord Cogs (src/cogs/)"]
+            DockerCog["docker_cog.py\n6 commands"]
+            MediaCog["media_cog.py\n6 commands"]
+            NetworkCog["network_cog.py\n3 commands"]
+            AnalyticsCog["analytics_cog.py\n3 commands"]
+        end
     end
 
     Discord -->|"events & interactions"| Bot
@@ -29,13 +52,54 @@ graph TB
     Bot --> ResearchAgent
     Bot --> Approvals
     Bot --> Scheduler
+    Bot --> WebhookFmt
+
+    %% ── Cogs feed into bot ────────────────────────────────────
+    DockerCog --> Bot
+    MediaCog --> Bot
+    NetworkCog --> Bot
+    AnalyticsCog --> Bot
+    DockerCog --> Skills
+    MediaCog --> Skills
+    NetworkCog --> Skills
+    AnalyticsCog --> Spending
+
     LLM --> Skills
     LLM --> Gateway
     LLM --> Memory
+
+    %% ── Worker agent delegation from LLM tool calls ──────────
+    LLM -->|"spawn_worker() tool call"| WorkerAgent
+    WorkerAgent -->|"own tool loop"| LLM
+    Bot -->|"spawn_worker()"| WorkerAgent
+
     ResearchAgent -->|"plan + synthesize"| LLM
     ResearchAgent -->|"search + browse"| Skills
     Memory --> LLM
     Scheduler -->|"cron jobs"| Skills
+    Scheduler -->|"4 AM daily"| Maintenance
+    Maintenance -->|"rsync backup"| NAS
+    Bot -->|"/bookmark"| ObsidianWriter
+    ObsidianWriter -->|"write .md"| VaultStore["data/vault/\nResearch · Bookmarks\nNotes · Analytics"]
+
+    %% ── Agent Loop plan persistence ──────────────────────────
+    Bot -->|"plan CRUD"| AgentLoop
+    LLM -->|"create/update/read plan"| AgentLoop
+    AgentLoop -->|"persist .md"| PlansStore["data/plans/\nPersistent .md plans"]
+
+    %% ── Proactive monitoring loops ───────────────────────────
+    Scheduler -->|"periodic check"| MonitorSkills
+    Scheduler -->|"periodic fetch"| RSSSkills
+    MonitorSkills -->|"snapshots"| SnapshotStore["data/memory/\nurl_snapshots.json"]
+    RSSSkills -->|"feeds"| RSSStore["data/memory/\nrss_feeds.json"]
+    RSSSkills -->|"digest summary"| LLM
+    LLM --> MonitorSkills
+    LLM --> RSSSkills
+
+    %% ── Mission Control kanban ───────────────────────────────
+    LLM --> MissionControl
+    Bot -->|"/tasks"| MissionControl
+    MissionControl -->|"persist"| TasksJSON["data/tasks.json\n(volume mount)"]
 
     %% ── LLM Backends ────────────────────────────────────────────
     subgraph AI ["🤖 AI / LLM Backends"]
@@ -72,14 +136,7 @@ graph TB
     Skills -->|"get_weather"| WttrIn["wttr.in\nWeather API (free)"]
 
     %% ── Mission Control ─────────────────────────────────────────
-    subgraph MissionControl ["📋 Mission Control (ClawHub)"]
-        MC["mission_control.py\n5 task skills"]
-        TasksJSON["data/tasks.json\n(volume mount)"]
-    end
-
-    Skills --> MC
-    MC --> TasksJSON
-    MC -->|"gh CLI sync"| GHPages["GitHub Pages\ndavevoyles.github.io/openclaw-dashboard"]
+    MissionControl -->|"gh CLI sync"| GHPages["GitHub Pages\ndavevoyles.github.io/openclaw-dashboard"]
 
     %% ── Autonomy Skills ────────────────────────────────────────
     subgraph AutonomySkills ["🧠 Autonomy Skills (ClawHub)"]
@@ -184,7 +241,8 @@ graph TB
     classDef infra fill:#3a2d1e,stroke:#c08040,color:#fff
     classDef actor fill:#1e1e3a,stroke:#6060d9,color:#fff
 
-    class Discord,Bot,LLM,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics service
+    class Discord,Bot,LLM,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
+    class DockerCog,MediaCog,NetworkCog,AnalyticsCog service
     class Gemini,Ollama,OpenAI,Anthropic,TavilyAPI,DDGNet,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
     class DockerEngine,Glances,Tailscale,Cloudflare,Prometheus,UptimeKuma,NAS,Traefik,SynDDNS infra
@@ -195,21 +253,32 @@ graph TB
 
 ## Data Flow Summary
 
-| Flow | Path |
-|------|------|
-| **User command → response** | User → Discord → `bot.py` → `llm.py` (Gemini) → `skills/` → target service → Discord |
-| **Media request approval** | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit → Plex |
-| **Web search (3-tier cascade)** | `search_web()` → Tavily API (primary) → DuckDuckGo Lite (fallback) → Bing HTML scrape (last resort) |
-| **Weather** | `/weather` or `/ask weather…` → `llm.py` → `get_weather()` → `wttr.in` JSON API |
-| **Deep research** | `/research` → `research_agent.py` → Gemini (plan) → `search_web()` × N → `browse_url()` → Gemini (synthesize) → Discord thread |
-| **Session recall** | Session expires → `memory.py` → `summarize_conversation()` → saved to disk + QMD; next session → recall note injected |
-| **Task management** | User → Discord `/tasks` or `/ask "show tasks"` → `mission_control.py` → `data/tasks.json` → GitHub Pages dashboard |
-| **Structured memory** | `llm.py` → `ontology_skills.py` → `skills/ontology/scripts/ontology.py` → `data/memory/ontology/graph.jsonl` |
-| **Third-party API call** | `llm.py` → `gateway.py` → Maton OAuth proxy → target SaaS API |
-| **Email / calendar** | `llm.py` → `skills/` → `email_skills.py` / `calendar_skills.py` → Gmail / Outlook / Google Cal |
-| **Observability** | Bot `/metrics` → Prometheus scrape + Uptime Kuma poll |
-| **Cost tracking** | Every Gemini call → `spending.py` → `data/memory/spending.json` |
-| **Scheduled tasks** | `scheduler.py` cron → any skill function |
+| Flow                            | Path                                                                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| **User command → response**     | User → Discord → `bot.py` → `llm.py` (Gemini) → `skills/` → target service → Discord                                                            |
+| **Media request approval**      | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit → Plex                                                               |
+| **Web search (3-tier cascade)** | `search_web()` → Tavily API (primary) → DuckDuckGo Lite (fallback) → Bing HTML scrape (last resort)                                             |
+| **Weather**                     | `/weather` or `/ask weather…` → `llm.py` → `get_weather()` → `wttr.in` JSON API                                                                 |
+| **Deep research**               | `/research` → `research_agent.py` → Gemini (plan) → `search_web()` × N → `browse_url()` → Gemini (synthesize) → Discord thread                  |
+| **Session recall**              | Session expires → `memory.py` → `summarize_conversation()` → saved to disk + QMD; next session → recall note injected                           |
+| **Task management**             | User → Discord `/tasks` or `/ask "show tasks"` → `mission_control.py` → `data/tasks.json` → GitHub Pages dashboard                              |
+| **Structured memory**           | `llm.py` → `ontology_skills.py` → `skills/ontology/scripts/ontology.py` → `data/memory/ontology/graph.jsonl`                                    |
+| **Third-party API call**        | `llm.py` → `gateway.py` → Maton OAuth proxy → target SaaS API                                                                                   |
+| **Email / calendar**            | `llm.py` → `skills/` → `email_skills.py` / `calendar_skills.py` → Gmail / Outlook / Google Cal                                                  |
+| **Observability**               | Bot `/metrics` → Prometheus scrape + Uptime Kuma poll                                                                                           |
+| **Cost tracking**               | Every Gemini call → `spending.py` → `data/memory/spending.json`                                                                                 |
+| **Scheduled tasks**             | `scheduler.py` cron → any skill function                                                                                                        |
+| **Incoming webhook**            | Sonarr/Radarr/Plex/qBittorrent → `webhook_formatter.py` → `bot.py` → Discord notification                                                       |
+| **Dashboard**                   | Browser → `:8765/dashboard` → `dashboard.py` → HTML page + `/api/dashboard` JSON                                                                |
+| **Background autonomy**         | `worker_agent.py` → spawns fresh Gemini session → `llm.py` → skills                                                                             |
+| **RSS feeds**                   | `scheduler.py` (periodic) → `rss_skills.py` → external feeds → `data/memory/rss_feeds.json` → LLM summarization → Discord notification                     |
+| **URL change detection**        | `scheduler.py` (periodic) → `monitor_skills.py` → `_fetch_text()` → SHA-256 compare → `data/memory/url_snapshots.json` → alert on diff                     |
+| **Obsidian bookmark**           | `/bookmark` → `obsidian_writer.py` → Markdown + YAML frontmatter → `data/vault/{Research,Bookmarks,Notes,Analytics}/`                           |
+| **4 AM maintenance**            | `scheduler.py` (4:00 AM) → `maintenance_skills.py` → git pull skills, restart sessions, rsync config+tasks → NAS                                |
+| **Channel-role routing**        | Discord message → `bot.py` checks channel ID → injects per-channel prompt override from `config.yaml` `channels.roles`                          |
+| **Parallel sub-agent**          | `bot.py` or LLM → `worker_agent.py` `spawn_worker(goal)` → fresh Gemini session with own tool loop → result returned to caller                  |
+| **Agent plan lifecycle**        | `/ask` or LLM → `agent_loop.py` `create_plan()` → `.md` persisted to `data/plans/` → steps tracked via `update_plan_step()` → survives restarts |
+| **Plan resumption on startup**  | `bot.py` `on_ready` → `agent_loop.scan_interrupted()` → notifies `ALERT_CHANNEL_ID` of interrupted plans → user can `/resume-plan`              |
 
 ---
 
