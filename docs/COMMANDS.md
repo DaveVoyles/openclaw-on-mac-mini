@@ -18,8 +18,10 @@ General-purpose commands for identity, help, and conversation management.
 | `/about`         | Show OpenClaw version and system info                     | —                                              | ✅   | LOW    | `bot.py` |
 | `/whoami`        | Show your Discord identity and permission level           | —                                              | ✅   | LOW    | `bot.py` |
 | `/help`          | List available OpenClaw commands                          | —                                              | ✅   | LOW    | `bot.py` |
-| `/ask`           | AI-powered natural language query (Gemini or Ollama)      | `question: str`, `attachment: file (optional)` | —    | MEDIUM | `bot.py` |
+| `/ask`           | AI-powered natural language query (Gemini or Ollama)      | `question: str`, `attachment: file (optional)`, `model: auto\|local\|gemini (optional)` | —    | MEDIUM | `bot.py` |
 | `/clear`         | Clear your conversation history                           | —                                              | ✅   | LOW    | `bot.py` |
+| `/model show`    | Show your current model routing preference                | —                                              | —    | LOW    | `bot.py` |
+| `/model set`     | Set your default model routing preference                 | `preference: auto\|local\|gemini`              | —    | LOW    | `bot.py` |
 | `/save`          | Save current conversation as a named thread               | `name: str`                                    | ✅   | LOW    | `bot.py` |
 | `/resume`        | Resume a previously saved conversation thread             | `name: str`                                    | ✅   | LOW    | `bot.py` |
 | `/threads`       | List all your saved conversation threads                  | —                                              | ✅   | LOW    | `bot.py` |
@@ -28,7 +30,13 @@ General-purpose commands for identity, help, and conversation management.
 | `/remember`      | Store a fact in long-term QMD memory                      | `content: str`, `tags: str (optional)`         | ✅   | LOW    | `bot.py` |
 | `/recall`        | Search long-term QMD memory                               | `query: str`                                   | ✅   | LOW    | `bot.py` |
 
-**`/ask` routing** — Simple/conversational queries go to local Ollama (`gemma3:12b`, free). Tool-requiring queries go to Gemini 2.5 Flash. The response footer shows which model handled the request.
+**`/ask` routing** — By default, simple queries go to local Ollama (`gemma3:12b`, free) and tool-requiring queries go to Gemini 2.5 Flash. You can override this per-message with the `model:` parameter, or set a sticky default with `/model set`. The response footer shows which model handled the request.
+
+| Model choice | Icon | Behavior |
+|---|---|---|
+| `auto` | 🔄 | Smart routing — tries local first, falls back to Gemini |
+| `local` | 🏠 | Always use Gemma/Ollama (auto-upgrades to Gemini if tools are needed) |
+| `gemini` | ☁️ | Always use Gemini cloud (best quality, uses API quota) |
 
 ---
 
@@ -160,7 +168,7 @@ LLM-callable tools: `ontology_create_entity`, `ontology_get_entity`, `ontology_u
 | AI & Research        | 10       | `bot.py`                                    |
 | Security & Approvals | 7        | `bot.py`, `analytics_cog.py`                |
 | Planning & Tasks     | 5        | `bot.py`                                    |
-| **Total**            | **54**   | + 60 LLM-callable skill functions via `/ask` |
+| **Total**            | **56**   | + 60 LLM-callable skill functions via `/ask` |
 
 ---
 

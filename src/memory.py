@@ -325,6 +325,51 @@ store = ConversationStore()
 
 
 # ---------------------------------------------------------------------------
+# Per-user model preference (persisted to disk)
+# ---------------------------------------------------------------------------
+
+_PREFS_DIR = MEMORY_DIR / "preferences"
+_VALID_MODEL_PREFS = {"auto", "local", "gemini"}
+
+
+def _prefs_path(user_id: int) -> Path:
+    _PREFS_DIR.mkdir(parents=True, exist_ok=True)
+    return _PREFS_DIR / f"{user_id}.json"
+
+
+def _load_prefs(user_id: int) -> dict:
+    path = _prefs_path(user_id)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return {}
+
+
+def _save_prefs(user_id: int, prefs: dict) -> None:
+    _atomic_write(_prefs_path(user_id), json.dumps(prefs, indent=2))
+
+
+def get_model_preference(user_id: int) -> str:
+    """Return the user's sticky model preference (default from config: 'auto')."""
+    from config import cfg
+    return _load_prefs(user_id).get("model_preference", cfg.default_model_preference)
+
+
+def set_model_preference(user_id: int, pref: str) -> str:
+    """Set the user's sticky model preference. Returns status message."""
+    pref = pref.lower().strip()
+    if pref not in _VALID_MODEL_PREFS:
+        return f"❌ Invalid preference `{pref}`. Choose: `auto`, `local`, or `gemini`."
+    prefs = _load_prefs(user_id)
+    prefs["model_preference"] = pref
+    _save_prefs(user_id, prefs)
+    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)"}
+    return f"✅ Model preference set to **{labels[pref]}**."
+
+
+# ---------------------------------------------------------------------------
 # Session summary helpers  (Phase A)
 # ---------------------------------------------------------------------------
 

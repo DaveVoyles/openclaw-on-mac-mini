@@ -64,6 +64,7 @@ from llm import chat_stream as llm_chat_stream
 from llm import analyze_image as llm_analyze_image, analyze_document as llm_analyze_document
 from llm import SUPPORTED_IMAGE_MIMES
 from memory import store as conversation_store
+from memory import get_model_preference, set_model_preference
 from dashboard import api_dashboard_handler, dashboard_handler, guide_handler
 from image_gen import generate_image, is_available as sd_is_available
 from code_sandbox import run_code as sandbox_run_code
@@ -1197,11 +1198,18 @@ async def _handle_doc_attachment(
 @app_commands.describe(
     question="Your question or request",
     attachment="Optional image or document to include in your question",
+    model="LLM routing: auto (smart), local (Gemma), or gemini (cloud)",
 )
+@app_commands.choices(model=[
+    app_commands.Choice(name="🔄 Auto (smart routing)", value="auto"),
+    app_commands.Choice(name="🏠 Local (Gemma/Ollama)", value="local"),
+    app_commands.Choice(name="☁️ Gemini (cloud)", value="gemini"),
+])
 async def ask_cmd(
     interaction: discord.Interaction,
     question: str,
     attachment: discord.Attachment | None = None,
+    model: app_commands.Choice[str] | None = None,
 ):
     """Main user query handler — routes to Gemini (tool-capable) or Ollama (conversational).
 
@@ -1266,6 +1274,16 @@ async def ask_cmd(
 
     response_text = ""
     model_used = "unknown"
+    # Resolve model preference: per-message override > sticky user pref > auto
+    model_pref = model.value if model else get_model_preference(interaction.user.id)
+
+    # Guardrail: if user picks "local" but query clearly needs tools, auto-upgrade
+    from llm import _needs_tools as llm_needs_tools
+    if model_pref == "local" and llm_needs_tools(question):
+        model_pref = "gemini"
+        guardrail_note = "\n\n> ⚡ *Auto-upgraded to Gemini (your query requires tool access)*"
+    else:
+        guardrail_note = ""
 
     try:
         # ── Streaming response with progressive Discord edits ────────────
@@ -1277,6 +1295,7 @@ async def ask_cmd(
             history=conv.history,
             user_name=str(interaction.user.display_name),
             on_tool_call=_on_tool_call,
+            model_preference=model_pref,
         ):
             model_used = meta.get("model_used", "unknown")
 
@@ -1316,6 +1335,8 @@ async def ask_cmd(
         model_used = "error"
 
     # ── Final response with embeds, file attachments, and action buttons ──
+    if guardrail_note:
+        response_text += guardrail_note
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
     file_attachment = _extract_file_attachment(response_text)
@@ -1345,7 +1366,8 @@ async def ask_cmd(
                 rate_str = "local · unlimited"
             else:
                 rate_str = get_rate_info()
-            embed.set_footer(text=f"💬 {conv.message_count} msgs | {rate_str} | via {model_used}")
+            mode_label = {"auto": "🔄", "local": "🏠", "gemini": "☁️"}.get(model_pref, "🔄")
+            embed.set_footer(text=f"💬 {conv.message_count} msgs | {rate_str} | {mode_label} {model_used}")
 
         if i == 0:
             kwargs: dict[str, Any] = {"content": None, "embed": embed}
@@ -1372,6 +1394,53 @@ async def clear_cmd(interaction: discord.Interaction):
     conversation_store.clear_user(interaction.user.id, interaction.channel_id)
     await interaction.response.send_message("🧹 Conversation cleared. Starting fresh!", ephemeral=True)
     audit_log(interaction.user, "clear")
+
+
+# ---------------------------------------------------------------------------
+# /model — View or change LLM routing preference
+# ---------------------------------------------------------------------------
+
+model_group = app_commands.Group(name="model", description="View or change your LLM model preference")
+
+
+@model_group.command(name="show", description="Show your current model routing preference")
+async def model_show_cmd(interaction: discord.Interaction):
+    pref = get_model_preference(interaction.user.id)
+    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)"}
+    embed = discord.Embed(
+        title="🤖 Model Preference",
+        description=f"**Current:** {labels.get(pref, pref)}\n\n"
+        "Use `/model set` to change.\n"
+        "Use `/ask model:` to override per-message.",
+        color=discord.Color.blue(),
+    )
+    # Show Ollama status
+    try:
+        from llm import _ollama_available, LOCAL_LLM_ENABLED, OLLAMA_MODEL
+        ollama_up = await _ollama_available() if LOCAL_LLM_ENABLED else False
+        status = f"{'🟢' if ollama_up else '🔴'} Ollama ({OLLAMA_MODEL}): {'online' if ollama_up else 'offline'}"
+        if not LOCAL_LLM_ENABLED:
+            status = "⚪ Local LLM disabled"
+        embed.add_field(name="Local LLM", value=status, inline=False)
+    except Exception:
+        pass
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
+@model_group.command(name="set", description="Set your default LLM routing preference")
+@app_commands.describe(preference="Which model to use by default")
+@app_commands.choices(preference=[
+    app_commands.Choice(name="🔄 Auto — smart routing (default)", value="auto"),
+    app_commands.Choice(name="🏠 Local — Gemma/Ollama (free, fast)", value="local"),
+    app_commands.Choice(name="☁️ Gemini — cloud (tools, best quality)", value="gemini"),
+])
+async def model_set_cmd(interaction: discord.Interaction, preference: app_commands.Choice[str]):
+    result = set_model_preference(interaction.user.id, preference.value)
+    await interaction.response.send_message(result, ephemeral=True)
+    audit_log(interaction.user, "model_set", detail=preference.value)
+
+
+bot.tree.add_command(model_group)
 
 
 @bot.tree.command(name="save", description="Save the current conversation as a named thread (persists across restarts)")

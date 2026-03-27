@@ -642,10 +642,16 @@ def _trim_history(history: list[dict]) -> list[dict]:
 
 
 async def _try_local_model(
-    user_message: str, history: list[dict]
+    user_message: str, history: list[dict], *, force: bool = False,
 ) -> str | None:
-    """Attempt to serve via Gemma/Ollama. Returns reply text or None to fall through."""
-    if not LOCAL_LLM_ENABLED or _needs_tools(user_message):
+    """Attempt to serve via Gemma/Ollama. Returns reply text or None to fall through.
+
+    When *force* is True (user explicitly chose "local"), skip the
+    ``_needs_tools()`` check but still verify Ollama is reachable.
+    """
+    if not LOCAL_LLM_ENABLED:
+        return None
+    if not force and _needs_tools(user_message):
         return None
     if not await _ollama_available():
         log.debug("Gemma/Ollama not reachable, using Gemini")
@@ -766,11 +772,14 @@ async def chat_stream(
     history: list[dict] | None = None,
     user_name: str = "User",
     on_tool_call: Any | None = None,
+    model_preference: str = "auto",
 ):
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples.
 
     ``metadata`` is a dict with ``model_used``, ``updated_history`` (only on
     the final chunk), and ``needs_tools`` (bool).
+
+    *model_preference* controls routing (see :func:`chat` docstring).
 
     For tool-requiring queries, the tool loop runs non-streaming (emitting
     tool-call progress via *on_tool_call*), then the **final text** is
@@ -781,15 +790,41 @@ async def chat_stream(
     """
     history = _trim_history(history or [])
 
-    # ── Local Ollama path (non-streaming, single yield) ──────────────────
-    gemma_reply = await _try_local_model(user_message, history)
-    if gemma_reply is not None:
-        updated = history + [
-            {"role": "user", "parts": [user_message]},
-            {"role": "model", "parts": [gemma_reply]},
-        ]
-        yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
+    # ── Forced local mode ────────────────────────────────────────────────
+    if model_preference == "local":
+        if not LOCAL_LLM_ENABLED:
+            yield "⚠️ Local LLM is disabled (`LOCAL_LLM_ENABLED=false`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
+            return
+        if not await _ollama_available():
+            yield "⚠️ Ollama is not reachable. Check that the service is running.", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
+            return
+        gemma_reply = await _try_local_model(user_message, history, force=True)
+        if gemma_reply is not None:
+            updated = history + [
+                {"role": "user", "parts": [user_message]},
+                {"role": "model", "parts": [gemma_reply]},
+            ]
+            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
+            return
+        yield "⚠️ Local model returned an empty response. Try rephrasing or switch to Gemini.", True, {"model_used": OLLAMA_MODEL, "updated_history": history, "needs_tools": False}
         return
+
+    # ── Forced Gemini mode ───────────────────────────────────────────────
+    if model_preference == "gemini":
+        if not GOOGLE_API_KEY:
+            yield "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
+            return
+        # Fall through to the Gemini paths below (skip local attempt)
+    else:
+        # ── Auto mode: try local Ollama first ────────────────────────────
+        gemma_reply = await _try_local_model(user_message, history)
+        if gemma_reply is not None:
+            updated = history + [
+                {"role": "user", "parts": [user_message]},
+                {"role": "model", "parts": [gemma_reply]},
+            ]
+            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
+            return
 
     # Rate-limit pre-check
     if not _rate_limiter.check():
@@ -859,6 +894,7 @@ async def chat(
     history: list[dict] | None = None,
     user_name: str = "User",
     on_tool_call: Any | None = None,
+    model_preference: str = "auto",
 ) -> tuple[str, list[dict], str]:
     """
     Send a message and return (response_text, updated_history, model_used).
@@ -866,7 +902,12 @@ async def chat(
     ``on_tool_call(tool_name, round_num)`` is an optional async callback invoked
     before each tool execution — used for progressive Discord status updates.
 
-    Routing decision tree:
+    *model_preference* controls routing:
+      - ``"auto"``  — existing smart routing (try Gemma first, fall back to Gemini)
+      - ``"local"`` — force Ollama/Gemma; error if unavailable
+      - ``"gemini"`` — skip Ollama, go straight to Gemini
+
+    Routing decision tree (when auto):
       1. Does the query need live tool execution? (_needs_tools)
             YES → Gemini directly (function-calling capable)
       2. Is Gemma available and LOCAL_LLM_ENABLED?
@@ -877,7 +918,39 @@ async def chat(
     """
     history = _trim_history(history or [])
 
-    # -- Local model (Gemma) path ─────────────────────────────────────────────
+    # -- Forced local mode ────────────────────────────────────────────────────
+    if model_preference == "local":
+        if not LOCAL_LLM_ENABLED:
+            return "⚠️ Local LLM is disabled (`LOCAL_LLM_ENABLED=false`).", history, "none"
+        if not await _ollama_available():
+            return "⚠️ Ollama is not reachable. Check that the service is running.", history, "none"
+        gemma_reply = await _try_local_model(user_message, history, force=True)
+        if gemma_reply is not None:
+            updated = history + [
+                {"role": "user", "parts": [user_message]},
+                {"role": "model", "parts": [gemma_reply]},
+            ]
+            return gemma_reply, updated, OLLAMA_MODEL
+        return "⚠️ Local model returned an empty response. Try rephrasing or switch to Gemini.", history, OLLAMA_MODEL
+
+    # -- Forced Gemini mode ───────────────────────────────────────────────────
+    if model_preference == "gemini":
+        if not GOOGLE_API_KEY:
+            return "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", history, "none"
+        if not _rate_limiter.check():
+            return (
+                "⚠️ Rate limit reached. Please wait a moment before asking again. "
+                f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
+                history,
+                MODEL_NAME,
+            )
+        model = await _get_model()
+        return await _gemini_chat(
+            user_message, history, model,
+            on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
+        )
+
+    # -- Auto mode (default) — Local model (Gemma) path ──────────────────────
     gemma_reply = await _try_local_model(user_message, history)
     if gemma_reply is not None:
         updated = history + [
