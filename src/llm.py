@@ -746,6 +746,71 @@ def _extract_final_text(response, rounds: int, chat_session) -> str:
     return text
 
 
+async def _reflect_on_response(
+    text: str,
+    user_message: str,
+    rounds: int,
+) -> str:
+    """Self-evaluate a response and refine if issues are found.
+
+    Only runs for complex responses (tool calls involved). Uses a lightweight
+    Gemini call to check for errors, contradictions, or missing information.
+    Returns the original or improved text.
+    """
+    if not cfg.reflection_enabled:
+        return text
+    # Only reflect on complex responses (tool calls happened)
+    if rounds < 1:
+        return text
+    # Don't reflect on very short or error responses
+    if len(text) < 50 or text.startswith("❌") or text.startswith("⚠️"):
+        return text
+
+    try:
+        reflection_model = genai.GenerativeModel(
+            model_name=MODEL_NAME,
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=MAX_TOKENS,
+                temperature=0.2,  # Low temperature for careful evaluation
+            ),
+        )
+
+        reflection_prompt = (
+            "You are a quality reviewer. Examine this AI response to a user query.\n\n"
+            f"USER QUERY: {user_message}\n\n"
+            f"AI RESPONSE:\n{text}\n\n"
+            "Check for:\n"
+            "1. Factual errors or contradictions\n"
+            "2. Missing important information the user asked for\n"
+            "3. Misinterpreted data or tool results\n"
+            "4. Confusing or unclear explanations\n\n"
+            "If the response is good, reply with EXACTLY: LGTM\n"
+            "If you find issues, reply with a corrected version of the response "
+            "(just the improved response, no meta-commentary)."
+        )
+
+        loop = asyncio.get_running_loop()
+        _rate_limiter.record()
+        response = await loop.run_in_executor(
+            None, lambda: reflection_model.generate_content(reflection_prompt)
+        )
+        await _record_usage(response)
+
+        reflection = response.text.strip()
+        if reflection.upper() == "LGTM" or reflection.upper().startswith("LGTM"):
+            log.debug("Reflection: response passed self-evaluation")
+            return text
+
+        # The reflection produced an improved version
+        log.info("Reflection: response was refined (original %d chars → refined %d chars)",
+                 len(text), len(reflection))
+        return reflection
+
+    except Exception as e:
+        log.debug("Reflection failed (non-fatal): %s", e)
+        return text
+
+
 async def _gemini_chat(
     user_message: str,
     history: list[dict],
@@ -795,6 +860,10 @@ async def _gemini_chat(
     )
 
     text = _extract_final_text(response, rounds, chat_session)
+
+    # Self-evaluate complex responses (Phase 7: Reflection)
+    text = await _reflect_on_response(text, user_message, rounds)
+
     updated_history = _extract_history(chat_session)
     model_name = model.model_name if hasattr(model, "model_name") else "unknown"
 
