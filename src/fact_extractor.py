@@ -171,6 +171,6 @@ async def _store_fact(fact: str, user_id: int) -> None:
     # Also store in QMD (best-effort)
     try:
         from qmd import remember_fact
-        await remember_fact(fact, tags="auto-extracted")
+        await remember_fact(fact, tags="auto-extracted", source="auto-extracted")
     except Exception:
         pass

@@ -201,6 +201,14 @@ async def search(
         # Deprioritize decayed documents (10% penalty)
         if meta.get("decayed"):
             similarity *= 0.9
+        # Boost high-confidence facts (source tracking)
+        confidence = meta.get("confidence")
+        if confidence is not None:
+            try:
+                # Scale: 0.5 confidence → 0.95x, 0.7 → 0.97x, 1.0 → 1.0x (no change)
+                similarity *= 0.9 + (float(confidence) * 0.1)
+            except (ValueError, TypeError):
+                pass
         if similarity < threshold:
             continue
         output.append({
@@ -392,14 +400,64 @@ async def get_stats() -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def add_memory(fact_id: str, content: str, tags: Optional[list[str]] = None) -> None:
+async def add_memory(
+    fact_id: str,
+    content: str,
+    tags: Optional[list[str]] = None,
+    source: str = "user-explicit",
+    confidence: float = 1.0,
+) -> None:
     """Store a fact/memory in the memories collection."""
     await add_document(
         MEMORIES_COLLECTION,
         doc_id=f"mem_{fact_id}",
         text=content,
-        metadata={"type": "fact", "tags": ",".join(tags or [])},
+        metadata={
+            "type": "fact",
+            "tags": ",".join(tags or []),
+            "source": source,
+            "confidence": confidence,
+        },
     )
+
+
+async def add_memory_deduped(
+    fact_id: str,
+    content: str,
+    tags: Optional[list[str]] = None,
+    metadata: Optional[dict] = None,
+    dedup_threshold: float = 0.9,
+) -> bool:
+    """Store a fact with deduplication — returns True if stored, False if duplicate found."""
+    # Check for near-duplicates
+    try:
+        existing = await search(
+            MEMORIES_COLLECTION,
+            content,
+            top_k=1,
+            threshold=dedup_threshold,
+            track_access=False,
+        )
+        if existing:
+            log.debug("Dedup: skipped near-duplicate (%.0f%% similar to '%s')",
+                      existing[0]["similarity"] * 100, existing[0]["id"])
+            # Reinforce the existing memory instead
+            await bump_access(MEMORIES_COLLECTION, [existing[0]["id"]])
+            return False
+    except Exception:
+        pass  # Dedup check failed, store anyway
+
+    meta = metadata or {}
+    meta["type"] = meta.get("type", "fact")
+    meta["tags"] = meta.get("tags", ",".join(tags or []))
+
+    await add_document(
+        MEMORIES_COLLECTION,
+        doc_id=f"mem_{fact_id}",
+        text=content,
+        metadata=meta,
+    )
+    return True
 
 
 async def add_conversation_summary(

@@ -91,7 +91,7 @@ qmd_store = QMDMemory()
 # ---------------------------------------------------------------------------
 
 
-async def remember_fact(content: str, tags: Optional[str] = "") -> str:
+async def remember_fact(content: str, tags: Optional[str] = "", source: str = "user-explicit") -> str:
     """Store a fact in long-term memory with intelligent routing (Phase 14D).
 
     Routes facts to the most appropriate store based on content:
@@ -138,7 +138,7 @@ async def remember_fact(content: str, tags: Optional[str] = "") -> str:
     try:
         import vector_store
         fact_id = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000))
-        await vector_store.add_memory(fact_id, content, tag_list)
+        await vector_store.add_memory(fact_id, content, tag_list, source=source)
     except Exception as e:
         log.debug("Vector embed failed (non-critical): %s", e)
 
