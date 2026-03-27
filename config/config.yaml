@@ -23,7 +23,7 @@ llm:
     per_hour: 500
   conversation:
     ttl_minutes: 30
-    max_history: 20
+    max_history: 50
 
 # Local LLM (Ollama) — hybrid routing
 local_llm:
@@ -31,6 +31,7 @@ local_llm:
   model: "gemma3:12b" # override with OLLAMA_MODEL env var
   url: "http://host.docker.internal:11434" # override with OLLAMA_URL env var
   default_preference: "auto" # auto | local | gemini — override with DEFAULT_MODEL_PREFERENCE env var
+  tools_enabled: false  # experimental: enable native tool calling via Ollama /api/chat
   # Queries containing these keywords bypass Ollama and go straight to Gemini
   # (because they need function/tool calling)
   tool_routed_to_gemini:

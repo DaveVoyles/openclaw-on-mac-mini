@@ -668,6 +668,27 @@ async def _try_local_model(
     """
     if not LOCAL_LLM_ENABLED:
         return None
+
+    # Try Ollama with native tool calling for tool-requiring queries
+    if not force and _needs_tools(user_message) and cfg.ollama_tools_enabled:
+        if await _ollama_available():
+            try:
+                from ollama_tools import chat_ollama_with_tools
+                system_prompt = _load_system_prompt()
+                reply, tools_used = await chat_ollama_with_tools(
+                    user_message, history, system_prompt, _TOOL_DECLARATIONS,
+                    _execute_function_call,
+                    ollama_url=OLLAMA_URL, ollama_model=OLLAMA_MODEL,
+                    temperature=TEMPERATURE, max_tokens=MAX_TOKENS,
+                )
+                if reply and tools_used:
+                    log.info("Served by Ollama with tools (%d calls): %.60s…",
+                             len(tools_used), user_message)
+                    return reply
+            except Exception as e:
+                log.info("Ollama tool calling failed, falling back: %s", e)
+        # Fall through to None → Gemini handles it
+
     if not force and _needs_tools(user_message):
         return None
     if not await _ollama_available():

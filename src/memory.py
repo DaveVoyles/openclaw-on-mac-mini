@@ -22,7 +22,7 @@ log = logging.getLogger("openclaw.memory")
 # How long to keep a conversation context alive (seconds)
 CONTEXT_TTL = 30 * 60  # 30 minutes of inactivity
 # Maximum messages per conversation (to limit token usage)
-MAX_HISTORY_LENGTH = 20
+MAX_HISTORY_LENGTH = 50  # Expanded for larger context windows (Phase 6)
 # Directory for persistence
 MEMORY_DIR = Path("/memory")
 # Sub-directory for saved (named) threads

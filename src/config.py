@@ -76,7 +76,7 @@ class _Config:
     llm_rpm_limit: int = int(os.getenv("LLM_RPM_LIMIT", str(_rate_limits.get("per_minute", 60))))
     llm_rph_limit: int = int(os.getenv("LLM_RPH_LIMIT", str(_rate_limits.get("per_hour", 500))))
     llm_max_tool_rounds: int = int(os.getenv("LLM_MAX_TOOL_ROUNDS", str(_llm.get("max_tool_rounds", 12))))
-    llm_max_history_turns: int = int(os.getenv("LLM_MAX_HISTORY_TURNS", str(_conversation.get("max_history", 20))))
+    llm_max_history_turns: int = int(os.getenv("LLM_MAX_HISTORY_TURNS", str(_conversation.get("max_history", 50))))
 
     # -- Deep / Thinking -------------------------------------------------------
     thinking_model: str = os.getenv("THINKING_MODEL", "gemini-2.5-flash")
@@ -87,6 +87,7 @@ class _Config:
     ollama_model: str = os.getenv("OLLAMA_MODEL", _local_llm.get("model", "gemma3:12b"))
     local_llm_enabled: bool = os.getenv("LOCAL_LLM_ENABLED", str(_local_llm.get("enabled", True))).lower() == "true"
     default_model_preference: str = os.getenv("DEFAULT_MODEL_PREFERENCE", _local_llm.get("default_preference", "auto"))
+    ollama_tools_enabled: bool = os.getenv("OLLAMA_TOOLS_ENABLED", str(_local_llm.get("tools_enabled", False))).lower() == "true"
 
     # -- Spending / Budget -----------------------------------------------------
     spending_file: Path = Path(os.getenv("SPENDING_FILE", "/memory/spending.json"))
