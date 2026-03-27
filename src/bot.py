@@ -741,13 +741,129 @@ class OpenClawBot(commands.Bot):
         app.router.add_get("/dashboard", dashboard_handler)
         app.router.add_get("/api/dashboard", api_dashboard_handler)
         app.router.add_get("/guide", guide_handler)
+        app.router.add_get("/smoke", self._smoke_handler)
         app.router.add_post("/webhook/{source}", self._webhook_handler)
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
         await site.start()
         self._health_runner = runner
-        log.info("Health endpoint listening on :%d/health (and /metrics, /dashboard, /guide, /webhook/<source>)", HEALTH_PORT)
+        log.info("Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>)", HEALTH_PORT)
+
+    async def _smoke_handler(self, _request: web.Request) -> web.Response:
+        """Run lightweight subsystem smoke tests and return JSON results."""
+        from datetime import datetime, timezone
+
+        checks: dict[str, dict] = {}
+        overall = "pass"
+
+        # 1. gemini_api
+        try:
+            t0 = time.monotonic()
+            from llm import _get_model
+            model = await asyncio.wait_for(_get_model(), timeout=10)
+            resp = await asyncio.wait_for(
+                asyncio.to_thread(model.generate_content, "Say hello"),
+                timeout=10,
+            )
+            latency = round((time.monotonic() - t0) * 1000)
+            if resp and resp.text:
+                checks["gemini_api"] = {"status": "pass", "latency_ms": latency}
+            else:
+                checks["gemini_api"] = {"status": "fail", "error": "empty response"}
+                overall = "fail"
+        except Exception as exc:
+            checks["gemini_api"] = {"status": "fail", "error": str(exc)[:200]}
+            overall = "fail"
+
+        # 2. ollama
+        try:
+            from llm import _ollama_available, LOCAL_LLM_ENABLED
+            if not LOCAL_LLM_ENABLED:
+                checks["ollama"] = {"status": "skipped", "reason": "LOCAL_LLM_ENABLED=false"}
+            else:
+                t0 = time.monotonic()
+                up = await asyncio.wait_for(_ollama_available(), timeout=10)
+                latency = round((time.monotonic() - t0) * 1000)
+                if up:
+                    checks["ollama"] = {"status": "pass", "latency_ms": latency}
+                else:
+                    checks["ollama"] = {"status": "fail", "error": "ollama not reachable"}
+                    overall = "fail"
+        except Exception as exc:
+            checks["ollama"] = {"status": "fail", "error": str(exc)[:200]}
+            overall = "fail"
+
+        # 3. chromadb
+        try:
+            t0 = time.monotonic()
+            from vector_store import _get_client
+            client = _get_client()
+            client.heartbeat()
+            latency = round((time.monotonic() - t0) * 1000)
+            checks["chromadb"] = {"status": "pass", "latency_ms": latency}
+        except Exception as exc:
+            checks["chromadb"] = {"status": "fail", "error": str(exc)[:200]}
+            overall = "fail"
+
+        # 4. memory_sqlite
+        try:
+            import sqlite3 as _sqlite3
+            from thread_store import DB_PATH as _threads_db_path
+            t0 = time.monotonic()
+            conn = _sqlite3.connect(str(_threads_db_path), timeout=5)
+            try:
+                row = conn.execute("SELECT count(*) FROM threads").fetchone()
+                thread_count = row[0] if row else 0
+            finally:
+                conn.close()
+            latency = round((time.monotonic() - t0) * 1000)
+            checks["memory_sqlite"] = {"status": "pass", "threads": thread_count}
+        except Exception as exc:
+            checks["memory_sqlite"] = {"status": "fail", "error": str(exc)[:200]}
+            overall = "fail"
+
+        # 5. config
+        try:
+            from config import cfg as _cfg
+            if _cfg.discord_bot_token and _cfg.google_api_key:
+                checks["config"] = {"status": "pass"}
+            else:
+                missing = []
+                if not _cfg.discord_bot_token:
+                    missing.append("discord_bot_token")
+                if not _cfg.google_api_key:
+                    missing.append("google_api_key")
+                checks["config"] = {"status": "fail", "error": f"missing: {', '.join(missing)}"}
+                overall = "fail"
+        except Exception as exc:
+            checks["config"] = {"status": "fail", "error": str(exc)[:200]}
+            overall = "fail"
+
+        # 6. skill_registry
+        try:
+            from skills import SKILLS as _skills
+            count = len(_skills)
+            has_search = "search_web" in _skills
+            if count > 0 and has_search:
+                checks["skill_registry"] = {"status": "pass", "skill_count": count}
+            else:
+                checks["skill_registry"] = {
+                    "status": "fail",
+                    "error": f"count={count}, search_web={'found' if has_search else 'missing'}",
+                }
+                overall = "fail"
+        except Exception as exc:
+            checks["skill_registry"] = {"status": "fail", "error": str(exc)[:200]}
+            overall = "fail"
+
+        payload = {
+            "status": overall,
+            "checks": checks,
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        status_code = 200 if overall == "pass" else 503
+        return web.json_response(payload, status=status_code)
 
     async def _health_handler(self, _request: web.Request) -> web.Response:
         uptime_s = time.monotonic() - self.start_time
