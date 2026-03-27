@@ -1260,6 +1260,26 @@ async def ask_cmd(
         user_name=str(interaction.user.display_name),
     )
 
+    # Thread continuation suggestion — on new conversations, check for related threads
+    thread_hint = ""
+    if not conv.history:
+        try:
+            import vector_store
+            hits = await vector_store.search(
+                vector_store.CONVERSATIONS_COLLECTION, question, top_k=1, threshold=0.75
+            )
+            if hits:
+                meta = hits[0].get("metadata", {})
+                thread_name = meta.get("thread_name", "")
+                sim = hits[0].get("similarity", 0)
+                if thread_name and sim >= 0.75:
+                    thread_hint = (
+                        f"\n\n> 💡 *This looks related to your thread "
+                        f"**{thread_name}**. Use `/resume {thread_name}` to continue it.*"
+                    )
+        except Exception:
+            pass  # non-critical
+
     # Channel role injection — inject prompt once at session start to prevent context bleed
     if not conv.history:
         channel_role = _CHANNEL_ROLES.get(interaction.channel_id)
@@ -1349,6 +1369,8 @@ async def ask_cmd(
     # ── Final response with embeds, file attachments, and action buttons ──
     if guardrail_note:
         response_text += guardrail_note
+    if thread_hint:
+        response_text += thread_hint
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
     file_attachment = _extract_file_attachment(response_text)
@@ -2223,6 +2245,38 @@ async def research_search_cmd(interaction: discord.Interaction, query: str):
 
     await interaction.followup.send("\n".join(lines), ephemeral=True)
     audit_log(interaction.user, "research_search", detail=query)
+
+
+@bot.tree.command(name="sources", description="Search your library of previously browsed web sources")
+@app_commands.describe(query="Topic or keyword to find in past browsed sources")
+@require_auth
+async def sources_cmd(interaction: discord.Interaction, query: str):
+    await interaction.response.defer(ephemeral=True)
+
+    lines = [f"📚 **Source library search: *{query}***\n"]
+
+    try:
+        import vector_store
+        results = await vector_store.search(
+            vector_store.RESEARCH_COLLECTION, query, top_k=10,
+            where={"type": "source"},
+        )
+        if results:
+            for r in results:
+                meta = r.get("metadata", {})
+                url = meta.get("url", "unknown")
+                domain = meta.get("domain", "")
+                sim = r.get("similarity", 0)
+                excerpt = r["text"][:150].replace("\n", " ")
+                lines.append(f"🔗 [{domain}]({url}) ({sim:.0%} match)")
+                lines.append(f"  _{excerpt}_\n")
+        else:
+            lines.append("No matching sources found. Sources are automatically cataloged during `/research`.")
+    except Exception as e:
+        lines.append(f"⚠️ Source search unavailable: {e}")
+
+    await interaction.followup.send("\n".join(lines), ephemeral=True)
+    audit_log(interaction.user, "sources_search", detail=query)
 
 
 @bot.tree.command(name="memory-stats", description="Show memory and vector store statistics")

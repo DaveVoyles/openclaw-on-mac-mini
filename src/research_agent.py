@@ -140,6 +140,24 @@ class ResearchAgent:
     ) -> str:
         await post("plan", f"Planning research strategy for: *{query[:80]}*")
 
+        # ── Step 0: Check for prior research on this topic ────────────────────
+        prior_context = ""
+        try:
+            import vector_store
+            prior = await vector_store.search(
+                vector_store.RESEARCH_COLLECTION, query, top_k=2, threshold=0.6
+            )
+            if prior:
+                snippets = []
+                for r in prior:
+                    meta = r.get("metadata", {})
+                    old_query = meta.get("query", "prior research")
+                    snippets.append(f"[Prior: {old_query}] {r['text'][:500]}")
+                prior_context = "\n\n".join(snippets)
+                await post("plan", f"Found {len(prior)} related prior research reports — will build on them")
+        except Exception as e:
+            log.debug("Prior research lookup failed (non-critical): %s", e)
+
         # ── Step 1: Decompose query into sub-searches ─────────────────────────
         sub_queries = await self._plan_searches(query)
         if not sub_queries:
@@ -168,6 +186,11 @@ class ResearchAgent:
             data_sections.append(f"### Page: {p['url']}\n{p['content']}")
 
         combined_data = "\n\n".join(data_sections)
+
+        # Inject prior research context if found
+        if prior_context:
+            combined_data = f"### Prior Research (for context — build on this, don't repeat)\n{prior_context}\n\n{combined_data}"
+
         if len(combined_data) > 40_000:
             combined_data = combined_data[:40_000] + "\n\n[...truncated for length...]"
 
@@ -245,6 +268,22 @@ class ResearchAgent:
                     content = await asyncio.wait_for(browse_url(url), timeout=20)
                     if content and not content.startswith("❌"):
                         browsed_pages.append({"url": url, "content": content[:3000]})
+                        # Index source in vector store for future /sources lookup
+                        try:
+                            import vector_store
+                            domain = url.split("/")[2] if url.count("/") >= 2 else url
+                            await vector_store.add_document(
+                                vector_store.RESEARCH_COLLECTION,
+                                doc_id=f"source_{hash(url) % 100000}",
+                                text=content[:2000],
+                                metadata={
+                                    "type": "source",
+                                    "url": url,
+                                    "domain": domain,
+                                },
+                            )
+                        except Exception:
+                            pass  # non-critical
                 except asyncio.TimeoutError:
                     log.warning("Browse timed out: %s", url)
                 except Exception as e:

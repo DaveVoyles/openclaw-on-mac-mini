@@ -111,6 +111,20 @@ async def ontology_create_entity(entity_type: str, properties_json: str, entity_
     entity, err_msg = _safe_json_loads(out)
     if err_msg:
         return err_msg
+
+    # Embed entity into vector store for semantic recall
+    try:
+        import vector_store
+        label = _entity_label(entity)
+        entity_vid = entity.get("id", entity_type)
+        await vector_store.add_memory(
+            f"ontology_{entity_vid}",
+            f"[Ontology: {entity_type}] {label}",
+            tags=[entity_type, "ontology"],
+        )
+    except Exception:
+        pass  # non-critical
+
     return f"✅ Created ontology entity:\n{_format_entity(entity)}"
 
 
