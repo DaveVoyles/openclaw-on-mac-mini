@@ -878,26 +878,60 @@ async def _gemini_chat(
 async def _auto_recall_context(user_message: str) -> str:
     """Fetch recalled context from the vector store for Auto-RAG injection.
 
-    Returns a formatted context string or empty string if disabled, nothing
-    relevant was found, or the vector store is unavailable.
+    Combines:
+    1. Semantic recall from ChromaDB (facts, conversations, research)
+    2. User profile summary (preferences, interests, working style)
+    3. Relevant learned rules
+
+    Returns a formatted context string or empty string if disabled/unavailable.
     """
     if not cfg.auto_recall_enabled:
         return ""
+
+    parts = []
+
+    # 1. Vector store recall
     try:
-        import vector_store  # lazy import to avoid circular deps
+        import vector_store
 
         context = await vector_store.recall_for_context(user_message)
         if context:
-            count = context.count("\n")  # header line doesn't count as an item
-            log.info(
-                "Auto-RAG: injected %d context items for: %.60s…",
-                count,
-                user_message,
-            )
-        return context
+            parts.append(context)
     except Exception as e:
-        log.debug("Auto-RAG recall failed (non-fatal): %s", e)
-        return ""
+        log.debug("Auto-RAG vector recall failed (non-fatal): %s", e)
+
+    # 2. User profile (always inject if available)
+    try:
+        from user_profile import get_profile_prompt
+
+        profile = get_profile_prompt()
+        if profile and profile.strip():
+            parts.append(profile)
+    except Exception as e:
+        log.debug("Auto-RAG profile injection failed (non-fatal): %s", e)
+
+    # 3. Relevant rules
+    try:
+        from rules_engine import get_relevant_rules
+
+        rules = await get_relevant_rules(user_message, top_k=3)
+        if rules:
+            rules_block = "[Active Rules]\n" + "\n".join(f"- {r}" for r in rules)
+            parts.append(rules_block)
+    except Exception as e:
+        log.debug("Auto-RAG rules injection failed (non-fatal): %s", e)
+
+    if parts:
+        combined = "\n\n".join(parts)
+        count = combined.count("\n- ")
+        log.info(
+            "Auto-RAG: injected %d context items for: %.60s…",
+            count,
+            user_message,
+        )
+        return combined
+
+    return ""
 
 
 def _strip_recalled_prefix(history: list[dict], original: str, augmented: str) -> list[dict]:

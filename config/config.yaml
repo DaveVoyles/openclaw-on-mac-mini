@@ -15,6 +15,7 @@ bot:
 llm:
   primary_model: "gemini-2.5-flash"
   fallback_model: "gpt-4o-mini"
+  # copilot_proxy_url: ""  # Set COPILOT_PROXY_URL env var to route through Copilot proxy
   max_tokens: 2000
   temperature: 0.7
   max_tool_rounds: 5
@@ -107,5 +108,5 @@ vector_store:
   dir: "/memory/chromadb"
   similarity_threshold: 0.7  # minimum cosine similarity to return a result
   contextual_recall: true     # inject relevant memories before each LLM call
-  contextual_top_k: 3         # max context items to inject per query
+  contextual_top_k: 5         # max context items to inject per query
   embedding_model: ""          # Ollama model name (e.g. "embeddinggemma", "nomic-embed-text"). Empty = built-in MiniLM

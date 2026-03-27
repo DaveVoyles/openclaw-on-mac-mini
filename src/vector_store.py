@@ -466,7 +466,7 @@ async def recall_for_context(query: str, top_k: int | None = None) -> str:
     if not results:
         return ""
 
-    lines = ["[Recalled Context]"]
+    lines = ["[Your Memory]"]
     for r in results:
         source = r["collection"].replace("_", " ").title()
         sim = r.get("similarity", 0)
