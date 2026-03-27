@@ -438,6 +438,8 @@ async def _execute_function_call(name: str, args: dict) -> str:
     log.info("LLM invoking skill: %s(%s)", name, args)
     try:
         result = await skill_fn(**args)
+        if not isinstance(result, str):
+            result = str(result)
         if name in _CACHEABLE_TOOLS:
             _tool_cache[_cache_key(name, args)] = (result, time.monotonic())
             _evict_tool_cache()
@@ -609,8 +611,18 @@ async def _run_tool_loop(
 # chat() helper decomposition
 # ---------------------------------------------------------------------------
 
-_MAX_HISTORY_TURNS = 20
-_MAX_HISTORY_CHARS = 80_000  # ~20K tokens at ~4 chars/token — leave room for tools + response
+# Per-model context limits — leave ~20% headroom for tools + response
+_CONTEXT_LIMITS = {
+    "gemini": {"max_turns": 50, "max_chars": 500_000},   # Gemini supports 1M+ tokens
+    "ollama": {"max_turns": 40, "max_chars": 400_000},    # Gemma3 supports 128K tokens
+    "default": {"max_turns": 20, "max_chars": 80_000},    # Conservative fallback
+}
+
+
+def _get_context_limits(model_hint: str = "default") -> tuple[int, int]:
+    """Return (max_turns, max_chars) for the given model."""
+    limits = _CONTEXT_LIMITS.get(model_hint, _CONTEXT_LIMITS["default"])
+    return limits["max_turns"], limits["max_chars"]
 
 
 def _estimate_chars(history: list[dict]) -> int:
@@ -623,17 +635,22 @@ def _estimate_chars(history: list[dict]) -> int:
     return total
 
 
-def _trim_history(history: list[dict]) -> list[dict]:
+def _trim_history(history: list[dict], model_hint: str = "default") -> list[dict]:
     """Keep first 2 turns (persona context) + last N to avoid context overflow.
 
-    If the history still exceeds _MAX_HISTORY_CHARS after turn trimming,
+    *model_hint* controls the context limits: 'gemini' for generous limits,
+    'ollama' for Gemma3's 128K window, or 'default' for conservative fallback.
+
+    If the history still exceeds the character limit after turn trimming,
     progressively drop older turns until it fits.
     """
-    if len(history) > _MAX_HISTORY_TURNS:
-        history = history[:2] + history[-(_MAX_HISTORY_TURNS - 2):]
+    max_turns, max_chars = _get_context_limits(model_hint)
+
+    if len(history) > max_turns:
+        history = history[:2] + history[-(max_turns - 2):]
 
     # Character-based overflow protection
-    while len(history) > 4 and _estimate_chars(history) > _MAX_HISTORY_CHARS:
+    while len(history) > 4 and _estimate_chars(history) > max_chars:
         # Remove the 3rd message (preserve first 2 for context, keep recent messages)
         history = history[:2] + history[3:]
         log.debug("Trimmed history to %d turns (%d chars)", len(history), _estimate_chars(history))
@@ -831,7 +848,14 @@ async def chat_stream(
     For simple queries (no tools), text is yielded progressively as
     Gemini streams tokens.
     """
-    history = _trim_history(history or [])
+    # Determine model hint for context limits
+    if model_preference == "local":
+        _model_hint = "ollama"
+    elif model_preference == "gemini":
+        _model_hint = "gemini"
+    else:
+        _model_hint = "gemini"  # auto mode may use either, use generous default
+    history = _trim_history(history or [], model_hint=_model_hint)
 
     # ── Auto-RAG: recall relevant context ────────────────────────────────
     recalled_context = await _auto_recall_context(user_message)
@@ -979,7 +1003,14 @@ async def chat(
             YES → Return Gemma response (fast, free, private)
             NO  → Silently retry with Gemini
     """
-    history = _trim_history(history or [])
+    # Determine model hint for context limits
+    if model_preference == "local":
+        _model_hint = "ollama"
+    elif model_preference == "gemini":
+        _model_hint = "gemini"
+    else:
+        _model_hint = "gemini"  # auto mode may use either, use generous default
+    history = _trim_history(history or [], model_hint=_model_hint)
 
     # -- Auto-RAG: recall relevant context ────────────────────────────────────
     recalled_context = await _auto_recall_context(user_message)
@@ -1304,7 +1335,7 @@ async def analyze_image_with_tools(
     if mime_type not in SUPPORTED_IMAGE_MIMES:
         return f"❌ Unsupported image type: {mime_type}", history or []
 
-    history = _trim_history(history or [])
+    history = _trim_history(history or [], model_hint="gemini")
 
     # Rate-limit check
     if not await _rate_limiter.wait_for_capacity(max_wait=30.0):
