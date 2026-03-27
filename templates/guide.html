@@ -249,6 +249,9 @@
             <a href="#channels">24. Channel Architecture &amp; Role Routing</a>
           </li>
           <li><a href="#maintenance">25. Automated Maintenance</a></li>
+          <li>
+            <a href="#agent-loop">26. Agent Loop &amp; Plan Management</a>
+          </li>
         </ul>
       </div>
 
@@ -313,8 +316,15 @@ You get a Discord embed with your active downloads</code></pre>
         <p>
           Gemini can chain up to <strong>5 tool calls</strong> per question.
           Simple chat goes to Ollama at zero cost. The response footer shows
-          which model answered.
+          which model answered (🔄 auto, 🏠 local, ☁️ gemini).
         </p>
+      </div>
+
+      <div class="tip">
+        <strong>&#128161; You can override routing:</strong>
+        Use <code>/ask model:local "your question"</code> to force the local model, or
+        <code>/ask model:gemini "your question"</code> to force Gemini.
+        Set a sticky default with <code>/model set</code>.
       </div>
 
       <!-- 2. Getting Started -->
@@ -361,6 +371,7 @@ You get a Discord embed with your active downloads</code></pre>
         The most powerful command. Uses <strong>hybrid routing</strong>:
         conversational queries go to local Ollama (free, fast), tool-requiring
         queries go to Gemini 2.5 Flash with function calling.
+        You can override routing per-message or set a sticky default.
       </p>
 
       <h3>Example Queries</h3>
@@ -378,6 +389,44 @@ You get a Discord embed with your active downloads</code></pre>
 /ask What do you remember about the NAS?</code></pre>
       </div>
 
+      <h3>Model Selection</h3>
+      <p>
+        By default, routing is automatic. You can override per-message or set a
+        sticky preference:
+      </p>
+      <table>
+        <tr>
+          <th>Method</th>
+          <th>Example</th>
+          <th>Effect</th>
+        </tr>
+        <tr>
+          <td>Per-message</td>
+          <td><code>/ask model:local "tell me a joke"</code></td>
+          <td>Forces this one query to use Gemma (local)</td>
+        </tr>
+        <tr>
+          <td>Per-message</td>
+          <td><code>/ask model:gemini "complex research query"</code></td>
+          <td>Forces this one query to use Gemini (cloud)</td>
+        </tr>
+        <tr>
+          <td>Sticky default</td>
+          <td><code>/model set</code> &rarr; choose preference</td>
+          <td>All future <code>/ask</code> calls use your choice</td>
+        </tr>
+        <tr>
+          <td>View current</td>
+          <td><code>/model show</code></td>
+          <td>Shows your preference + Ollama status</td>
+        </tr>
+      </table>
+      <p>
+        <strong>Guardrail:</strong> If you pick "local" but your query requires
+        tool access (e.g., container management), OpenClaw auto-upgrades to
+        Gemini and notes it in the response.
+      </p>
+
       <div class="tip">
         <strong>&#128161; Context is per-channel:</strong>
         <code>/ask</code> automatically remembers the last 20 messages in a
@@ -392,7 +441,7 @@ You get a Discord embed with your active downloads</code></pre>
         &mdash; no truncation.
       </div>
 
-      <h3>How Hybrid Routing Works</h3>
+      <h3>How Hybrid Routing Works (Auto Mode)</h3>
       <table>
         <tr>
           <th>Query type</th>
@@ -406,7 +455,7 @@ You get a Discord embed with your active downloads</code></pre>
           </td>
           <td>Ollama gemma3:12b (local)</td>
           <td>Free</td>
-          <td><code>local &middot; unlimited</code></td>
+          <td>🏠 <code>local &middot; unlimited</code></td>
         </tr>
         <tr>
           <td>
@@ -414,7 +463,7 @@ You get a Discord embed with your active downloads</code></pre>
           </td>
           <td>Gemini 2.5 Flash</td>
           <td>~$0.0005/query</td>
-          <td>Rate counters</td>
+          <td>🔄 Rate counters</td>
         </tr>
         <tr>
           <td>
@@ -422,13 +471,25 @@ You get a Discord embed with your active downloads</code></pre>
           </td>
           <td>Gemini 2.5 Flash + <code>get_weather</code> tool</td>
           <td>~$0.0005/query</td>
-          <td>Rate counters</td>
+          <td>🔄 Rate counters</td>
         </tr>
         <tr>
           <td>Hallucination detected in Ollama response</td>
           <td>Gemini 2.5 Flash (re-routed automatically)</td>
           <td>~$0.0005/query</td>
-          <td>Rate counters</td>
+          <td>🔄 Rate counters</td>
+        </tr>
+        <tr>
+          <td>User forced <code>model:gemini</code></td>
+          <td>Gemini 2.5 Flash (skips local attempt)</td>
+          <td>~$0.0005/query</td>
+          <td>☁️ model name</td>
+        </tr>
+        <tr>
+          <td>User forced <code>model:local</code></td>
+          <td>Ollama gemma3:12b (auto-upgrades if tools needed)</td>
+          <td>Free</td>
+          <td>🏠 model name</td>
         </tr>
       </table>
 
@@ -1963,6 +2024,263 @@ NAS_BACKUP_PATH=/volume1/backups/openclaw</code></pre>
         <code>sched-2</code> entries before registering new ones &mdash; no
         duplicates.
       </div>
+
+      <!-- 26. Agent Loop & Plan Management -->
+      <h2 id="agent-loop">26. Agent Loop &amp; Plan Management</h2>
+      <p>
+        The Agent Loop is OpenClaw's persistent autonomy engine. When the AI
+        tackles a multi-step task, it creates a <strong>plan file</strong> (a
+        Markdown .md document) that tracks every step, survives restarts, and
+        lets you monitor progress in real time.
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Why Plans?</h3>
+        <p>
+          Without plans, the AI is <em>stateless</em> &mdash; if it loses its
+          connection mid-task, all progress is lost. Plans solve this by writing
+          each step to disk as it happens. Think of it as a
+          <strong>TODO list the AI manages for itself</strong>.
+        </p>
+        <ul>
+          <li>
+            <strong>Persistent:</strong> Plans live as <code>.md</code> files in
+            <code>data/plans/</code>. They survive restarts, crashes, and
+            redeployments.
+          </li>
+          <li>
+            <strong>Transparent:</strong> You can read any plan file directly
+            (via NAS or <code>/plan-detail</code>) to see exactly what the agent
+            is doing.
+          </li>
+          <li>
+            <strong>Resumable:</strong> On startup, the bot scans for
+            interrupted plans and notifies you. Use <code>/resume-plan</code> to
+            continue.
+          </li>
+          <li>
+            <strong>Human-readable:</strong> Plans use standard Markdown with
+            <code>- [x]</code> / <code>- [ ]</code> checkboxes &mdash; same as
+            GitHub Issues.
+          </li>
+        </ul>
+      </div>
+
+      <h3>Slash Commands</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Command</th>
+            <th>What It Does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>/plans [status]</code></td>
+            <td>
+              List all plans. Filter by: <code>all</code>,
+              <code>in-progress</code>, <code>completed</code>,
+              <code>interrupted</code>. Shows plan ID, goal, and progress (e.g.,
+              3/5).
+            </td>
+          </tr>
+          <tr>
+            <td><code>/plan-detail &lt;plan_id&gt;</code></td>
+            <td>
+              Show full details of a plan: every step with status icons (&#9989;
+              &#10060; &#11036;), output summaries, and timestamps.
+            </td>
+          </tr>
+          <tr>
+            <td><code>/resume-plan &lt;plan_id&gt;</code></td>
+            <td>
+              Resume an interrupted plan from where it left off. Shows the next
+              step to work on.
+            </td>
+          </tr>
+          <tr>
+            <td><code>/cancel-plan &lt;plan_id&gt;</code></td>
+            <td>
+              Cancel an active plan. Marks it as <em>interrupted</em> and resets
+              any in-progress steps to <em>pending</em> (safe for future
+              resume).
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>LLM-Callable Tools (via <code>/ask</code>)</h3>
+      <p>
+        The AI can manage plans autonomously during any
+        <code>/ask</code> session. You don't need to call these manually &mdash;
+        the system prompt instructs the AI to create plans for multi-step tasks
+        automatically.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Tool</th>
+            <th>What It Does</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>create_plan</code></td>
+            <td>
+              Create a new plan with a goal and list of steps. Returns a
+              <code>plan_id</code>.
+            </td>
+          </tr>
+          <tr>
+            <td><code>update_plan_step</code></td>
+            <td>Mark a step as done/failed/skipped with an output summary.</td>
+          </tr>
+          <tr>
+            <td><code>read_plan</code></td>
+            <td>Read the current state of a plan (all steps + statuses).</td>
+          </tr>
+          <tr>
+            <td><code>list_plans</code></td>
+            <td>List plans filtered by status.</td>
+          </tr>
+          <tr>
+            <td><code>adjust_plan</code></td>
+            <td>Add, remove, or reorder steps in a live plan.</td>
+          </tr>
+          <tr>
+            <td><code>cancel_plan</code></td>
+            <td>Cancel a plan (marks interrupted).</td>
+          </tr>
+          <tr>
+            <td><code>resume_plan</code></td>
+            <td>Resume an interrupted plan.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>How It Works &mdash; Step by Step</h3>
+      <ol>
+        <li>
+          <strong>You ask something complex:</strong>
+          <pre><code>/ask Compare property taxes across Marple, Newtown, and Springfield townships</code></pre>
+        </li>
+        <li>
+          <strong>The AI creates a plan:</strong> It calls
+          <code>create_plan()</code> with 5 steps (search each township,
+          compare, synthesize).
+        </li>
+        <li>
+          <strong>Steps execute with tracking:</strong> After each step, the AI
+          calls <code>update_plan_step()</code> to record the result.
+        </li>
+        <li>
+          <strong>If interrupted:</strong> The plan file persists on disk. On
+          next startup, the bot posts:
+          <pre><code>&#128260; Found 1 interrupted plan(s): `2026-03-26_compare-property-taxes_a1b2c3`
+Use /resume-plan to continue, or /plans to review.</code></pre>
+        </li>
+        <li>
+          <strong>You resume:</strong>
+          <pre><code>/resume-plan 2026-03-26_compare-property-taxes_a1b2c3</code></pre>
+        </li>
+      </ol>
+
+      <h3>Example Prompts That Trigger Plans</h3>
+      <pre><code>/ask Compare 3 neighborhoods in Delaware County for home buying
+/ask Research the best Docker monitoring tools and recommend one
+/ask Set up RSS feeds for 5 tech news sources and summarize daily
+/ask Analyze our media stack health and create a maintenance checklist</code></pre>
+      <p>
+        <strong>Simple queries do NOT create plans:</strong> The AI is
+        instructed to skip planning for single-tool questions like
+        &ldquo;What&rsquo;s the weather?&rdquo; or &ldquo;Show container
+        status.&rdquo;
+      </p>
+
+      <h3>Plan File Format</h3>
+      <p>Plans are stored as Markdown in <code>data/plans/</code>:</p>
+      <pre><code># Plan: Compare property taxes in 3 townships
+
+- **Plan ID:** 2026-03-26_compare-property-taxes_a1b2c3
+- **Status:** in-progress
+- **Created:** 2026-03-26T14:30:00Z
+- **Progress:** 2/5
+
+## Steps
+
+- [x] Step 1: Search Marple Township tax rates
+  &gt; Marple: 25.46 mills, median home $350K
+- [x] Step 2: Search Newtown Township tax rates
+  &gt; Newtown: 23.12 mills, median home $420K
+- [ ] Step 3: Search Springfield Township tax rates
+- [ ] Step 4: Compare all three
+- [ ] Step 5: Synthesize final report
+
+## Context
+
+**step_1_output:**
+Marple Township millage rate is 25.46...
+
+## Lessons
+
+*(none yet)*</code></pre>
+
+      <div class="tip">
+        <strong>&#128161; Power tip:</strong> You can browse plan files directly
+        on the NAS at <code>/volume1/docker/openclaw/data/plans/</code> or via
+        the Obsidian vault. They&rsquo;re plain Markdown &mdash; readable by any
+        text editor.
+      </div>
+
+      <h3>Dependency Tracking</h3>
+      <p>
+        Steps can declare dependencies. For example, &ldquo;Compare all
+        three&rdquo; depends on steps 1&ndash;3 completing first. The agent
+        won&rsquo;t start a step until its dependencies are satisfied. This
+        enables future <strong>parallel worker execution</strong>
+        where independent steps run concurrently.
+      </p>
+
+      <h3>Startup Behavior</h3>
+      <p>On every bot startup (<code>on_ready</code>), the Agent Loop:</p>
+      <ol>
+        <li>
+          Scans <code>data/plans/</code> for any plans with status
+          <code>interrupted</code>.
+        </li>
+        <li>
+          If found, posts a notification to the alert channel with the plan IDs.
+        </li>
+        <li>
+          You can then decide: <code>/resume-plan</code> to continue,
+          <code>/cancel-plan</code> to discard, or just leave it.
+        </li>
+      </ol>
+
+      <h3>Safety &amp; Limits</h3>
+      <ul>
+        <li>
+          <strong>Max active plans:</strong> 20 (configurable via
+          <code>MAX_ACTIVE_PLANS</code> env var). Prevents runaway plan
+          creation.
+        </li>
+        <li>
+          <strong>Max workers per plan:</strong> 3 (configurable via
+          <code>MAX_WORKERS_PER_PLAN</code>).
+        </li>
+        <li>
+          <strong>Plan timeout:</strong> 600 seconds / 10 minutes (configurable
+          via <code>PLAN_TIMEOUT</code>).
+        </li>
+        <li>
+          <strong>File locking:</strong> All plan reads/writes use
+          <code>fcntl.flock()</code> to prevent corruption from parallel access.
+        </li>
+        <li>
+          <strong>Atomic writes:</strong> Plans are written to a temp file
+          first, then atomically renamed &mdash; no partial writes.
+        </li>
+      </ul>
 
       <div
         style="

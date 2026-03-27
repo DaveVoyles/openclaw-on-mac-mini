@@ -178,7 +178,9 @@ def _command_list() -> list[dict]:
             {"name": "/restart <service>", "desc": "Restart a container (requires approval)"},
         ]},
         {"category": "🤖 AI & LLM", "commands": [
-            {"name": "/ask <question>", "desc": "AI-powered query — Gemini (tools) or Ollama (chat). Weather/live-data queries auto-route to Gemini."},
+            {"name": "/ask <question> [model]", "desc": "AI-powered query — auto-routes to Gemini (tools) or Ollama (chat). Optional model: auto/local/gemini."},
+            {"name": "/model show", "desc": "Show your current LLM routing preference and Ollama status."},
+            {"name": "/model set <preference>", "desc": "Set your default LLM routing: auto (smart), local (Gemma), or gemini (cloud)."},
             {"name": "/research <query>", "desc": "Deep multi-step research — Discord thread, planned sub-queries, 3-tier search (Tavily → DDG → Bing), source browsing, synthesized report"},
             {"name": "/weather [location]", "desc": "Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var)"},
             {"name": "/clear", "desc": "Clear active conversation history"},
@@ -240,6 +242,19 @@ def _command_list() -> list[dict]:
             {"name": "git_commit", "desc": "Commit all current changes with a brief summary message."},
             {"name": "init_planning_files", "desc": "Initialize task_plan.md, findings.md, progress.md for complex tasks."},
             {"name": "update_plan_status", "desc": "Log progress or update status of a phase in planning files."},
+        ]},
+        {"category": "📋 Agent Loop & Plans", "commands": [
+            {"name": "/plans [status]", "desc": "List active/recent agent plans. Filter: all, in-progress, completed, interrupted."},
+            {"name": "/plan-detail <plan_id>", "desc": "Show full details of a specific plan (steps, status, outputs)."},
+            {"name": "/resume-plan <plan_id>", "desc": "Resume an interrupted plan from where it left off."},
+            {"name": "/cancel-plan <plan_id>", "desc": "Cancel an active plan (marks interrupted, resets in-progress steps)."},
+            {"name": "create_plan", "desc": "(via /ask) Create a new task plan with a goal and ordered steps. Returns plan_id."},
+            {"name": "update_plan_step", "desc": "(via /ask) Update a step's status (done/failed/skipped) with output summary."},
+            {"name": "read_plan", "desc": "(via /ask) Read the current state of a plan including all step statuses."},
+            {"name": "list_plans", "desc": "(via /ask) List plans filtered by status."},
+            {"name": "adjust_plan", "desc": "(via /ask) Add, remove, or reorder steps in an active plan."},
+            {"name": "cancel_plan", "desc": "(via /ask) Cancel an active plan and mark it interrupted."},
+            {"name": "resume_plan", "desc": "(via /ask) Resume an interrupted plan from where it left off."},
         ]},
     ]
 

@@ -13,9 +13,10 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 54 Discord slash commands                                              |
+| **Interface**    | 56 Discord slash commands                                              |
 | **LLM**          | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries)       |
 | **Local LLM**    | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
+| **Model Control** | `/ask model:auto\|local\|gemini` per-message + `/model set` sticky pref |
 | **Status**       | **Phase 12 — Proactive Monitoring** ✅                                 |
 
 ## Features
@@ -39,9 +40,11 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 - `/ask <question>` — AI-powered natural language queries
 - **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
+- **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
 - Conversation memory — multi-turn context per user/channel (30 min TTL)
 - `/clear` — reset conversation history
+- `/model show` / `/model set` — view or change your default LLM routing preference
 - `/save <name>` / `/resume <name>` — persist conversations to disk; resume later
 - `/threads` — list saved threads; `/forget <name>` — delete one
 - Long responses auto-split across multiple embeds (no truncation)
