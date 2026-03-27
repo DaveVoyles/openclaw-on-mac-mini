@@ -1595,6 +1595,14 @@ async def ask_cmd(
         except Exception as e:
             log.debug("Profile learning failed (non-critical): %s", e)
 
+        try:
+            # Automatic fact extraction from conversation
+            from fact_extractor import should_extract, extract_and_store_facts
+            if should_extract(interaction.user.id, question):
+                await extract_and_store_facts(question, response_text, interaction.user.id)
+        except Exception as e:
+            log.debug("Fact extraction failed (non-critical): %s", e)
+
     asyncio.get_running_loop().create_task(_post_response_learning())
 
 
