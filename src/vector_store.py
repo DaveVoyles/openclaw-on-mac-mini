@@ -1,9 +1,9 @@
 """
-OpenClaw Vector Store — Phase 13A
+OpenClaw Vector Store — Phase 13A + Phase 14B (Access Tracking)
 Unified semantic memory layer backed by ChromaDB.
 
 Provides three collections:
-  - memories:       QMD facts, ontology entities, user preferences
+  - memories:       QMD facts, ontology entities, user preferences, learned rules
   - conversations:  Thread messages and session summaries
   - research:       Research reports and browsed sources
 
@@ -88,6 +88,8 @@ async def add_document(
 
     meta = metadata or {}
     meta["added_at"] = time.time()
+    meta.setdefault("access_count", 0)
+    meta.setdefault("last_accessed", 0.0)
 
     def _upsert():
         col = _get_collection(collection_name)
@@ -108,16 +110,21 @@ async def search(
     top_k: int = DEFAULT_TOP_K,
     where: Optional[dict] = None,
     threshold: Optional[float] = None,
+    track_access: bool = True,
 ) -> list[dict]:
     """Semantic search across a collection.
 
     Returns a list of dicts: [{"id", "text", "metadata", "distance"}, ...]
     sorted by relevance (lowest distance = most similar).
+    Decayed documents are deprioritized (penalty applied to similarity).
+    When track_access=True, bumps access_count on returned documents.
     """
     if not query or not query.strip():
         return []
 
     threshold = threshold or SIMILARITY_THRESHOLD
+    # Fetch extra results so we can still fill top_k after filtering decayed
+    fetch_k = top_k + 5
 
     def _query():
         col = _get_collection(collection_name)
@@ -125,7 +132,7 @@ async def search(
             return []
         kwargs = {
             "query_texts": [query],
-            "n_results": min(top_k, col.count()),
+            "n_results": min(fetch_k, col.count()),
         }
         if where:
             kwargs["where"] = where
@@ -144,15 +151,30 @@ async def search(
         # ChromaDB cosine distance: 0 = identical, 2 = opposite
         # Convert to similarity: 1 - (distance / 2)
         similarity = 1 - (distance / 2)
+        meta = results["metadatas"][0][i] if results.get("metadatas") else {}
+        # Deprioritize decayed documents (10% penalty)
+        if meta.get("decayed"):
+            similarity *= 0.9
         if similarity < threshold:
             continue
         output.append({
             "id": doc_id,
             "text": results["documents"][0][i] if results.get("documents") else "",
-            "metadata": results["metadatas"][0][i] if results.get("metadatas") else {},
+            "metadata": meta,
             "distance": distance,
             "similarity": round(similarity, 3),
         })
+
+    output = output[:top_k]
+
+    # Fire-and-forget access tracking
+    if track_access and output:
+        try:
+            asyncio.get_running_loop().create_task(
+                bump_access(collection_name, [r["id"] for r in output])
+            )
+        except Exception:
+            pass
 
     return output
 
@@ -197,6 +219,106 @@ async def delete_document(collection_name: str, doc_id: str) -> None:
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _delete)
     log.debug("Deleted doc '%s' from '%s'", doc_id, collection_name)
+
+
+async def bump_access(collection_name: str, doc_ids: list[str]) -> None:
+    """Increment access_count and update last_accessed for retrieved documents.
+
+    Called after search results are returned so frequently-accessed memories
+    rank higher over time (reinforcement) while unused ones decay.
+    """
+    if not doc_ids:
+        return
+
+    def _bump():
+        col = _get_collection(collection_name)
+        for doc_id in doc_ids:
+            try:
+                existing = col.get(ids=[doc_id], include=["metadatas"])
+                if not existing["ids"]:
+                    continue
+                meta = existing["metadatas"][0] or {}
+                meta["access_count"] = meta.get("access_count", 0) + 1
+                meta["last_accessed"] = time.time()
+                col.update(ids=[doc_id], metadatas=[meta])
+            except Exception:
+                pass  # best-effort; don't crash on tracking failures
+
+    try:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, _bump)
+    except Exception as e:
+        log.debug("Access bump failed: %s", e)
+
+
+async def get_decayed_documents(
+    collection_name: str,
+    max_age_days: int = 30,
+    min_access_count: int = 1,
+) -> list[dict]:
+    """Find documents that haven't been accessed recently (candidates for decay).
+
+    Returns documents where last_accessed is older than max_age_days
+    AND access_count is below min_access_count.
+    """
+    cutoff = time.time() - (max_age_days * 86400)
+
+    def _scan():
+        col = _get_collection(collection_name)
+        if col.count() == 0:
+            return []
+        # ChromaDB where filters on metadata
+        try:
+            results = col.get(
+                where={"$and": [
+                    {"last_accessed": {"$lt": cutoff}},
+                    {"access_count": {"$lt": min_access_count}},
+                ]},
+                include=["metadatas", "documents"],
+            )
+        except Exception:
+            # Fallback: get all and filter in Python (older ChromaDB versions)
+            results = col.get(include=["metadatas", "documents"])
+        docs = []
+        for i, doc_id in enumerate(results.get("ids", [])):
+            meta = results["metadatas"][i] if results.get("metadatas") else {}
+            last_acc = meta.get("last_accessed", 0)
+            acc_count = meta.get("access_count", 0)
+            if last_acc < cutoff and acc_count < min_access_count:
+                docs.append({
+                    "id": doc_id,
+                    "metadata": meta,
+                    "text": results["documents"][i] if results.get("documents") else "",
+                })
+        return docs
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _scan)
+
+
+async def mark_decayed(collection_name: str, doc_ids: list[str]) -> int:
+    """Flag documents as decayed (they rank lower but aren't deleted)."""
+    if not doc_ids:
+        return 0
+
+    def _mark():
+        col = _get_collection(collection_name)
+        count = 0
+        for doc_id in doc_ids:
+            try:
+                existing = col.get(ids=[doc_id], include=["metadatas"])
+                if not existing["ids"]:
+                    continue
+                meta = existing["metadatas"][0] or {}
+                meta["decayed"] = True
+                col.update(ids=[doc_id], metadatas=[meta])
+                count += 1
+            except Exception:
+                pass
+        return count
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _mark)
 
 
 # ---------------------------------------------------------------------------

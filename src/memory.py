@@ -116,6 +116,13 @@ class ConversationStore:
                     "role": "model",
                     "parts": [f"[Recall from last session] {recall}"],
                 })
+            # Inject handover context if available (Phase 14C)
+            handover = load_last_handover(user_id)
+            if handover:
+                conv.history.append({
+                    "role": "model",
+                    "parts": [f"[Session handover — pending items & next steps]\n{handover}"],
+                })
         return conv
 
     def clear_user(self, user_id: int, channel_id: int):
@@ -141,6 +148,10 @@ class ConversationStore:
                     loop = asyncio.get_running_loop()
                     loop.create_task(
                         _summarize_and_store(user_id, conv.user_name, conv.history)
+                    )
+                    # Also generate a proactive handover (Phase 14C)
+                    loop.create_task(
+                        create_session_handover(user_id, conv.user_name, conv.history)
                     )
                 except RuntimeError:
                     log.debug("No running loop for summarization")
@@ -434,3 +445,98 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
             log.debug("Vector embed for summary failed (non-critical): %s", e)
     except Exception as e:
         log.warning("Session summarization failed: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Session handover  (Phase 14C — proactive context persistence)
+# ---------------------------------------------------------------------------
+
+HANDOVER_DIR = MEMORY_DIR / "handovers"
+
+
+async def create_session_handover(
+    user_id: int, user_name: str, history: list[dict]
+) -> str | None:
+    """Generate a proactive handover when a conversation goes idle.
+
+    Unlike the summary (a brief recap), the handover captures:
+      - Key decisions made during the session
+      - Pending items / unanswered questions
+      - Suggested next steps
+
+    Stored on disk and embedded in ChromaDB so that when the user returns
+    to a similar topic, the handover context is injected automatically.
+    """
+    if len(history) < MIN_MESSAGES_TO_SUMMARIZE:
+        return None
+
+    try:
+        from llm import chat
+        # Build a condensed transcript for the LLM
+        transcript_lines = []
+        for msg in history[-20:]:
+            role = "User" if msg.get("role") == "user" else "Bot"
+            parts = msg.get("parts", [])
+            text = " ".join(p for p in parts if isinstance(p, str))[:300]
+            if text:
+                transcript_lines.append(f"{role}: {text}")
+        transcript = "\n".join(transcript_lines)
+
+        prompt = (
+            "Analyze this conversation and create a structured handover note. "
+            "Include:\n"
+            "1. **Decisions Made** — what was decided or agreed on\n"
+            "2. **Pending Items** — unanswered questions or unresolved topics\n"
+            "3. **Next Steps** — what the user should do next or what the bot should follow up on\n\n"
+            "Be concise (3-5 bullet points total). If nothing significant, return 'No handover needed.'\n\n"
+            f"Conversation:\n{transcript}"
+        )
+
+        response, _, _ = await chat(prompt, model_preference="gemini")
+        if not response or "no handover needed" in response.lower():
+            return None
+
+        # Persist to disk
+        HANDOVER_DIR.mkdir(parents=True, exist_ok=True)
+        handover_path = HANDOVER_DIR / f"{user_id}_last_handover.json"
+        payload = {
+            "user_id": user_id,
+            "user_name": user_name,
+            "created_at": time.time(),
+            "handover": response,
+        }
+        _atomic_write(handover_path, json.dumps(payload, indent=2))
+        log.info("Session handover saved for user %d (%d chars)", user_id, len(response))
+
+        # Embed in ChromaDB for semantic retrieval
+        try:
+            import vector_store
+            await vector_store.add_document(
+                vector_store.CONVERSATIONS_COLLECTION,
+                doc_id=f"handover_{user_id}_{int(time.time())}",
+                text=f"[Session handover for {user_name}] {response}",
+                metadata={
+                    "type": "handover",
+                    "user_id": str(user_id),
+                    "user_name": user_name,
+                },
+            )
+        except Exception as e:
+            log.debug("Vector embed for handover failed (non-critical): %s", e)
+
+        return response
+    except Exception as e:
+        log.warning("Session handover generation failed: %s", e)
+        return None
+
+
+def load_last_handover(user_id: int) -> str:
+    """Load the most recent session handover for a user, or '' if none."""
+    path = HANDOVER_DIR / f"{user_id}_last_handover.json"
+    if not path.exists():
+        return ""
+    try:
+        data = json.loads(path.read_text())
+        return data.get("handover", "")
+    except Exception:
+        return ""

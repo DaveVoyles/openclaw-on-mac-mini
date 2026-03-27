@@ -1318,6 +1318,31 @@ async def ask_cmd(
         except Exception as e:
             log.debug("Contextual recall skipped: %s", e)
 
+        # ── Inject learned rules relevant to this query (Phase 14A) ───
+        try:
+            from rules_engine import get_relevant_rules
+            rules = await get_relevant_rules(question, top_k=3)
+            if rules:
+                rules_block = "\n".join(f"• {r}" for r in rules)
+                conv.history.append({
+                    "role": "model",
+                    "parts": [f"[Learned rules — follow these]\n{rules_block}"],
+                })
+        except Exception as e:
+            log.debug("Rules injection skipped: %s", e)
+
+        # ── Inject user profile context (Phase 14C) ───
+        try:
+            from user_profile import get_profile_prompt
+            profile_ctx = get_profile_prompt()
+            if profile_ctx:
+                conv.history.append({
+                    "role": "model",
+                    "parts": [profile_ctx],
+                })
+        except Exception as e:
+            log.debug("Profile injection skipped: %s", e)
+
         # ── Streaming response with progressive Discord edits ────────────
         last_edit = 0.0
         display_question = question if len(question) < 200 else question[:197] + "..."
@@ -1420,6 +1445,41 @@ async def ask_cmd(
 
     audit_log(interaction.user, "ask", detail=question[:200])
     conversation_store.cleanup_expired()
+
+    # ── Fire-and-forget: correction detection & profile learning (Phase 14) ──
+    async def _post_response_learning():
+        try:
+            # Correction detection → rule learning
+            from rules_engine import detect_correction, extract_rule, add_rule
+            if detect_correction(question):
+                # Get the bot's previous response (second-to-last model message)
+                prev_bot_msg = ""
+                for msg in reversed(conv.history[:-1]):
+                    if msg.get("role") == "model":
+                        parts = msg.get("parts", [])
+                        prev_bot_msg = " ".join(p for p in parts if isinstance(p, str))[:500]
+                        break
+                if prev_bot_msg:
+                    rule = await extract_rule(question, prev_bot_msg)
+                    if rule:
+                        await add_rule(rule, question[:300])
+                        try:
+                            await interaction.followup.send(
+                                f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
+                            )
+                        except Exception:
+                            pass
+        except Exception as e:
+            log.debug("Correction detection failed (non-critical): %s", e)
+
+        try:
+            # Profile auto-learning
+            from user_profile import learn_from_message
+            await learn_from_message(question, response_text)
+        except Exception as e:
+            log.debug("Profile learning failed (non-critical): %s", e)
+
+    asyncio.get_running_loop().create_task(_post_response_learning())
 
 
 @bot.tree.command(name="clear", description="Clear your conversation history with OpenClaw")
@@ -2314,6 +2374,148 @@ async def memory_stats_cmd(interaction: discord.Interaction):
         lines.append("**Thread store:** unavailable")
 
     await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+
+@bot.tree.command(name="memory-refresh", description="Reinforce a memory so it doesn't decay (bump its access score)")
+@app_commands.describe(query="Search query to find the memory to reinforce")
+@require_auth
+async def memory_refresh_cmd(interaction: discord.Interaction, query: str):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        import vector_store
+        results = await vector_store.search_all(query, top_k=3)
+        if not results:
+            await interaction.followup.send("No matching memories found.", ephemeral=True)
+            return
+        # Bump access count for all matching results
+        for r in results:
+            col = r.get("collection", "memories")
+            await vector_store.bump_access(col, [r["id"]])
+        lines = [f"🔄 **Reinforced {len(results)} memories:**\n"]
+        for r in results:
+            sim = r.get("similarity", 0)
+            text = r["text"][:120].replace("\n", " ")
+            lines.append(f"• ({sim:.0%}) {text}")
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Refresh failed: {e}", ephemeral=True)
+    audit_log(interaction.user, "memory_refresh", detail=query)
+
+
+@bot.tree.command(name="rules", description="View or manage learned behavioral rules")
+@app_commands.describe(action="list (default), search, or delete", query="Search query or rule ID to delete")
+@require_auth
+async def rules_cmd(interaction: discord.Interaction, action: str = "list", query: str = ""):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        from rules_engine import get_all_rules, get_relevant_rules, delete_rule
+
+        if action == "delete" and query:
+            success = await delete_rule(query)
+            if success:
+                await interaction.followup.send(f"✅ Rule `{query}` deleted.", ephemeral=True)
+            else:
+                await interaction.followup.send(f"❌ Rule `{query}` not found.", ephemeral=True)
+            return
+
+        if action == "search" and query:
+            rules = await get_relevant_rules(query, top_k=10)
+            if rules:
+                lines = [f"🔍 **Rules matching *{query}*:**\n"]
+                for i, r in enumerate(rules, 1):
+                    lines.append(f"{i}. {r}")
+                await interaction.followup.send("\n".join(lines), ephemeral=True)
+            else:
+                await interaction.followup.send("No matching rules found.", ephemeral=True)
+            return
+
+        # Default: list all
+        all_rules = await get_all_rules()
+        if not all_rules:
+            await interaction.followup.send("📝 No learned rules yet. I'll learn them when you correct me!", ephemeral=True)
+            return
+        lines = [f"📝 **Learned Rules ({len(all_rules)} total):**\n"]
+        for r in all_rules[-20:]:  # show last 20
+            lines.append(f"• {r['rule']}  `{r['id']}`")
+        if len(all_rules) > 20:
+            lines.append(f"\n_...and {len(all_rules) - 20} more (use `/rules action:search` to find specific rules)_")
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Rules unavailable: {e}", ephemeral=True)
+    audit_log(interaction.user, "rules", detail=f"{action} {query}")
+
+
+@bot.tree.command(name="profile", description="View your user profile (preferences, interests, tools)")
+@require_auth
+async def profile_cmd(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        from user_profile import load_profile
+        profile = load_profile()
+
+        lines = ["👤 **Your Profile**\n"]
+        if profile.get("preferences"):
+            pairs = ", ".join(f"`{k}`: {v}" for k, v in profile["preferences"].items())
+            lines.append(f"**Preferences:** {pairs}")
+        if profile.get("interests"):
+            lines.append(f"**Interests:** {', '.join(profile['interests'])}")
+        if profile.get("tools"):
+            lines.append(f"**Tools:** {', '.join(profile['tools'])}")
+        if profile.get("working_style"):
+            lines.append(f"**Working style:** {profile['working_style']}")
+        if profile.get("communication_style"):
+            lines.append(f"**Communication style:** {profile['communication_style']}")
+        if profile.get("context_notes"):
+            lines.append(f"\n**Context notes:** {len(profile['context_notes'])} entries")
+            for note in profile["context_notes"][-5:]:
+                lines.append(f"  • {note}")
+
+        if len(lines) == 1:
+            lines.append("_Empty — I'll learn about you as we chat! You can also tell me things like 'I prefer concise answers' or 'my timezone is US/Eastern'._")
+
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Profile unavailable: {e}", ephemeral=True)
+    audit_log(interaction.user, "profile")
+
+
+@bot.tree.command(name="profile-edit", description="Manually update your user profile")
+@app_commands.describe(
+    field="Field to update: preference, interest, note, working_style, communication_style",
+    value="Value to set (for preference, use 'key=value' format)",
+)
+@require_auth
+async def profile_edit_cmd(interaction: discord.Interaction, field: str, value: str):
+    await interaction.response.defer(ephemeral=True)
+    try:
+        from user_profile import update_preference, add_interest, add_context_note, update_field, sync_profile_to_vectors
+
+        if field == "preference" and "=" in value:
+            k, v = value.split("=", 1)
+            update_preference(k.strip(), v.strip())
+            msg = f"✅ Preference set: `{k.strip()}` = {v.strip()}"
+        elif field == "interest":
+            add_interest(value)
+            msg = f"✅ Interest added: {value}"
+        elif field == "note":
+            add_context_note(value)
+            msg = f"✅ Context note added"
+        elif field in ("working_style", "communication_style"):
+            update_field(field, value)
+            msg = f"✅ {field.replace('_', ' ').title()} updated"
+        else:
+            msg = "❌ Unknown field. Use: preference, interest, note, working_style, or communication_style"
+
+        # Sync to vectors
+        try:
+            await sync_profile_to_vectors()
+        except Exception:
+            pass
+
+        await interaction.followup.send(msg, ephemeral=True)
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Update failed: {e}", ephemeral=True)
+    audit_log(interaction.user, "profile_edit", detail=f"{field}={value[:100]}")
 
 
 @bot.tree.command(name="weather", description="Get current weather and forecast for a location")

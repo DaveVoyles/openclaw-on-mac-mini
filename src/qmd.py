@@ -92,8 +92,47 @@ qmd_store = QMDMemory()
 
 
 async def remember_fact(content: str, tags: Optional[str] = "") -> str:
-    """Store a fact in long-term memory (QMD + vector store)."""
+    """Store a fact in long-term memory with intelligent routing (Phase 14D).
+
+    Routes facts to the most appropriate store based on content:
+      - Personal preferences → user_profile
+      - Operational corrections → rules_engine
+      - General facts → QMD + ChromaDB
+      - Contacts → QMD with 'contact' tag + ChromaDB
+    """
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+
+    # ── Knowledge routing: classify and route (Phase 14D) ──
+    routed = False
+    try:
+        route = _classify_fact(content)
+        if route == "preference":
+            from user_profile import update_preference, sync_profile_to_vectors
+            # Try to parse "key = value" or "key: value" patterns
+            for sep in ("=", ":"):
+                if sep in content:
+                    k, v = content.split(sep, 1)
+                    update_preference(k.strip(), v.strip())
+                    try:
+                        await sync_profile_to_vectors()
+                    except Exception:
+                        pass
+                    routed = True
+                    break
+            if not routed:
+                from user_profile import add_context_note
+                add_context_note(content)
+                routed = True
+            log.info("Routed to user_profile: %s", content[:80])
+        elif route == "rule":
+            from rules_engine import add_rule
+            await add_rule(content)
+            routed = True
+            log.info("Routed to rules_engine: %s", content[:80])
+    except Exception as e:
+        log.debug("Knowledge routing failed (falling back to QMD): %s", e)
+
+    # Always store in QMD (primary store) regardless of routing
     await qmd_store.add(content, tag_list)
     # Also embed into ChromaDB for semantic search
     try:
@@ -102,7 +141,31 @@ async def remember_fact(content: str, tags: Optional[str] = "") -> str:
         await vector_store.add_memory(fact_id, content, tag_list)
     except Exception as e:
         log.debug("Vector embed failed (non-critical): %s", e)
-    return f"✅ Remembered: {content}"
+
+    suffix = ""
+    if routed:
+        suffix = " (also routed to specialized store)"
+    return f"✅ Remembered: {content}{suffix}"
+
+
+def _classify_fact(content: str) -> str:
+    """Lightweight classification of a fact for routing.
+
+    Returns: 'preference', 'rule', or 'general' (default).
+    Uses keyword heuristics — no LLM call for speed.
+    """
+    lower = content.lower()
+    # Preference indicators
+    pref_signals = ["i prefer", "i like", "i want", "my timezone", "my favorite",
+                    "i use", "i always", "i never", "default to", "set my"]
+    if any(s in lower for s in pref_signals):
+        return "preference"
+    # Rule indicators
+    rule_signals = ["don't", "do not", "always ", "never ", "you should",
+                    "you must", "stop ", "remember to", "make sure"]
+    if any(s in lower for s in rule_signals):
+        return "rule"
+    return "general"
 
 
 async def recall_fact(query: str) -> str:

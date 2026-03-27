@@ -205,6 +205,7 @@ async def run_maintenance() -> str:
       1. update_skills   — git pull latest skill code
       2. restart_gateway — clear LLM/HTTP sessions
       3. backup_config_to_nas — rsync config to NAS
+      4. memory_decay    — flag stale unused memories (Phase 14B)
 
     Registered by bot.py at startup for 4:00 AM daily execution.
     """
@@ -213,6 +214,7 @@ async def run_maintenance() -> str:
         ("skills-update", update_skills),
         ("gateway-restart", restart_gateway),
         ("nas-backup", backup_config_to_nas),
+        ("memory-decay", run_memory_decay),
     ]
     lines: list[str] = []
     for label, fn in steps:
@@ -228,6 +230,83 @@ async def run_maintenance() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Memory decay & consolidation  (Phase 14B)
+# ---------------------------------------------------------------------------
+
+
+async def run_memory_decay() -> str:
+    """Flag memories not accessed in 30+ days as decayed.
+
+    Decayed memories still appear in search but rank lower (10% penalty).
+    This prevents stale noise from drowning out relevant context.
+    """
+    try:
+        import vector_store
+        total_decayed = 0
+        for collection in ["memories", "conversations", "research"]:
+            stale = await vector_store.get_decayed_documents(
+                collection, max_age_days=30, min_access_count=1
+            )
+            if stale:
+                ids = [d["id"] for d in stale]
+                count = await vector_store.mark_decayed(collection, ids)
+                total_decayed += count
+                log.info("Decayed %d documents in %s", count, collection)
+        return f"Flagged {total_decayed} stale memories as decayed"
+    except Exception as e:
+        log.warning("Memory decay failed: %s", e)
+        return f"Decay skipped: {e}"
+
+
+async def run_memory_consolidation() -> str:
+    """Weekly: summarize the week's session summaries into a digest.
+
+    Called manually or by a weekly cron job (Sunday 4 AM).
+    Distills multiple session summaries into a single weekly insight memory.
+    """
+    try:
+        import vector_store
+        from llm import chat
+
+        # Fetch recent conversation summaries from the last 7 days
+        import time
+        week_ago = time.time() - (7 * 86400)
+        results = await vector_store.search(
+            vector_store.CONVERSATIONS_COLLECTION,
+            "session summary weekly digest",
+            top_k=20,
+            where={"type": "summary"},
+            threshold=0.3,
+            track_access=False,
+        )
+
+        # Filter to only recent summaries
+        recent = [r for r in results if r.get("metadata", {}).get("added_at", 0) > week_ago]
+        if len(recent) < 2:
+            return "Not enough recent sessions to consolidate"
+
+        summaries_text = "\n---\n".join(r["text"][:500] for r in recent)
+        prompt = (
+            "Consolidate these session summaries into a single weekly digest (3-5 bullet points). "
+            "Focus on: key topics discussed, decisions made, research done, and recurring themes.\n\n"
+            f"Session summaries:\n{summaries_text}"
+        )
+        digest, _, _ = await chat(prompt, model_preference="gemini")
+        if digest:
+            await vector_store.add_document(
+                vector_store.CONVERSATIONS_COLLECTION,
+                doc_id=f"weekly_digest_{int(time.time())}",
+                text=f"[Weekly digest] {digest}",
+                metadata={"type": "weekly_digest", "period": "weekly"},
+            )
+            return f"Weekly digest created ({len(digest)} chars) from {len(recent)} sessions"
+        return "Consolidation produced no output"
+    except Exception as e:
+        log.warning("Memory consolidation failed: %s", e)
+        return f"Consolidation skipped: {e}"
+
+
+# ---------------------------------------------------------------------------
 # Skill exports
 # ---------------------------------------------------------------------------
 
@@ -236,4 +315,6 @@ MAINTENANCE_SKILLS = {
     "restart_gateway": restart_gateway,
     "backup_config_to_nas": backup_config_to_nas,
     "run_maintenance": run_maintenance,
+    "run_memory_decay": run_memory_decay,
+    "run_memory_consolidation": run_memory_consolidation,
 }
