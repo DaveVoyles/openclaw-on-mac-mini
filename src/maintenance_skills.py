@@ -7,7 +7,6 @@ Handles:
   - Full backup to NAS: config, .env, memory, vault, audit, tasks
 """
 
-import asyncio
 import datetime
 import logging
 import os

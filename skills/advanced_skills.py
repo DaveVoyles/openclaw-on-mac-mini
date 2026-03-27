@@ -40,7 +40,9 @@ close_session = _sessions.close
 # Configuration — loaded from environment
 # ---------------------------------------------------------------------------
 
-HOST = os.getenv("DOCKER_HOST_IP", "192.168.1.93")
+from config import cfg as _cfg
+
+HOST = os.getenv("DOCKER_HOST_IP", _cfg.docker_host_ip)
 
 # *arr services
 SONARR_URL = os.getenv("SONARR_URL", f"http://{HOST}:8989")

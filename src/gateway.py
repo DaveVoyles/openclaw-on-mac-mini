@@ -138,6 +138,16 @@ async def gateway_request(
     if not MATON_API_KEY:
         return _api_key_hint()
 
+    # Guard: reject oversized request bodies (1 MB max)
+    _MAX_BODY_SIZE = 1_048_576
+    if body:
+        try:
+            encoded = json.dumps(body)
+            if len(encoded) > _MAX_BODY_SIZE:
+                return f"❌ Request body too large ({len(encoded):,} bytes, max {_MAX_BODY_SIZE:,})."
+        except (TypeError, ValueError) as e:
+            return f"❌ Request body is not JSON-serializable: {e}"
+
     # Validate app name: only lowercase alphanumeric and hyphens, max 100 chars
     if len(app) > 100:
         return "❌ App name too long (max 100 characters)."
@@ -149,12 +159,6 @@ async def gateway_request(
     clean_path = path.lstrip("/")
     url = f"{GATEWAY_BASE}/{app}/{clean_path}"
     method = method.upper()
-
-    if body:
-        try:
-            json.dumps(body)
-        except (TypeError, ValueError) as e:
-            return f"❌ Request body is not JSON-serializable: {e}"
 
     try:
         extra: dict[str, str] = {}

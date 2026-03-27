@@ -1983,28 +1983,863 @@ Bot: ✅ Sonarr restarted successfully (took 3.2s)
 
 ## Next Steps — Documentation & Architecture Wave 4
 
-**Status**: Not started — queued after Wave 3 completion
-**Scope**: Docs-only changes. No source code modifications. Fixes 8 discrepancies found by auditing all 6 docs (3,043 lines) against the actual codebase (35 source modules, 4 cogs, 41 commands).
+**Status**: All 8 items completed March 25, 2026
+**Scope**: Docs-only changes. No source code modifications. Fixes 8 discrepancies found by auditing all 6 docs (3,043 lines) against the actual codebase (31 source modules, 4 cogs, 48 commands).
 
-### Priority 1 — Factual Corrections (fix things that are wrong)
+### Priority 1 — Factual Corrections (✅ DONE)
 
-| #   | Item                                    | Where                                                 | What                                                                                                                                                                                                          | Status |
-| --- | --------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 1   | **Fix stale Ollama model references**   | `config/config.yaml`, `README.md`, `docs/COMMANDS.md` | Model was upgraded from `llama3.2:3b` to `gemma3:12b` but 3 files still say the old value. Code (`llm.py`, `.env.example`, `SERVICES.md`) already correct. Update all 3 stale references                      | ☐      |
-| 2   | **Add missing commands to COMMANDS.md** | `docs/COMMANDS.md`                                    | Header says "37 commands" but actual count is **41**. Missing: `/audit-summary` (analytics_cog), `/diff` (bot.py), `/briefing` (bot.py), `/weather` (bot.py), `/research` (bot.py). Update count and add rows | ☐      |
-| 3   | **Add Location column to COMMANDS.md**  | `docs/COMMANDS.md`                                    | Commands say "bot.py" implicitly but 12 are in cog files now. Add a "File" column: `docker_cog.py` (6), `media_cog.py` (4), `network_cog.py` (3), `analytics_cog.py` (2), `bot.py` (29)                       | ☐      |
+| #   | Item                                    | Where                                                 | What                                                                                                                                                                | Status |
+| --- | --------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | **Fix stale Ollama model references**   | `config/config.yaml`, `README.md`, `docs/COMMANDS.md` | Updated 6 `llama3.2:3b` → `gemma3:12b` references across 3 files                                                                                                    | ✅     |
+| 2   | **Add missing commands to COMMANDS.md** | `docs/COMMANDS.md`                                    | Updated count from 37 → **48**. Added 8 missing commands: `/audit-summary`, `/diff`, `/briefing`, `/weather`, `/research`, `/bookmark`, `/nowplaying`, `/watch`     | ✅     |
+| 3   | **Add Location column to COMMANDS.md**  | `docs/COMMANDS.md`                                    | Added "File" column to all command tables showing source file: `docker_cog.py` (6), `media_cog.py` (6), `network_cog.py` (3), `analytics_cog.py` (3), `bot.py` (30) | ✅     |
 
-### Priority 2 — Missing Content (add things that should exist)
+### Priority 2 — Missing Content (✅ DONE)
 
-| #   | Item                                               | Where                       | What                                                                                                                                                                                                                                                                                                                                                          | Status |
-| --- | -------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 4   | **Create `docs/MODULES.md` source file inventory** | New file: `docs/MODULES.md` | Table of all 35 `src/*.py` modules + 4 `src/cogs/*.py` files with one-line descriptions, key exports, and dependencies. Biggest time-saver for agents — eliminates redundant codebase exploration                                                                                                                                                             | ☐      |
-| 5   | **Add 7 missing ClawHub skills to SERVICES.md**    | `docs/SERVICES.md`          | Skills table lists 6 but `skills/` has 13 dirs. Missing: `autonomous-loop`, `git-essentials`, `multi-search-engine`, `planning-with-files`, `proactive-agent`, `weather`, `webfetch-md`                                                                                                                                                                       | ☐      |
-| 6   | **Update ARCHITECTURE.md diagram + data flows**    | `docs/ARCHITECTURE.md`      | Add to Mermaid graph: (a) `Cogs` sub-subgraph with 4 cog files, (b) `dashboard.py`, `webhook_formatter.py`, `worker_agent.py` nodes, (c) incoming webhook flow (media stack → webhook_formatter → bot → Discord), (d) dashboard flow (browser → `:8765/dashboard`), (e) RSS flow, (f) background autonomy flow. Add 4 missing rows to Data Flow Summary table | ☐      |
+| #   | Item                                               | Where                       | What                                                                                                                                                                                                                                                             | Status |
+| --- | -------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 4   | **Create `docs/MODULES.md` source file inventory** | New file: `docs/MODULES.md` | Created table of all 31 `src/*.py` modules + 4 `src/cogs/*.py` files + config files + test files with one-line descriptions and key exports                                                                                                                      | ✅     |
+| 5   | **Add 7 missing ClawHub skills to SERVICES.md**    | `docs/SERVICES.md`          | Skills table expanded from 6 → **13** entries. Added: `autonomous-loop`, `git-essentials`, `multi-search-engine`, `planning-with-files`, `proactive-agent`, `weather`, `webfetch-md`. Updated `mission-control` version to 2.3.1. Sorted alphabetically          | ✅     |
+| 6   | **Update ARCHITECTURE.md diagram + data flows**    | `docs/ARCHITECTURE.md`      | Added `Cogs` sub-subgraph (4 cog files), `dashboard.py`, `webhook_formatter.py`, `worker_agent.py` nodes to Mermaid graph. Added 5 new data flow rows (incoming webhook, dashboard, background autonomy, RSS feeds, Obsidian bookmark). Updated connection edges | ✅     |
 
-### Priority 3 — Staleness & Completeness
+### Priority 3 — Staleness & Completeness (✅ DONE)
 
-| #   | Item                                            | Where                 | What                                                                                                                                                                                                                             | Status |
-| --- | ----------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 7   | **Update README.md phases + planned section**   | `README.md`           | Status says "Phase 9" but Phases 10–12 are implemented. "Planned" section says "Grafana, backup/restore, comprehensive test suite" but CI with coverage is already done. Update phase status and remove completed planned items  | ☐      |
-| 8   | **Update MAINTENANCE.md data persistence + CI** | `docs/MAINTENANCE.md` | Missing from Data Persistence section: `data/memory/spending.json`, `data/memory/ontology/` (graph store). No mention of CI pipeline (`.github/workflows/tests.yml` with ruff + pytest-cov). No mention of `/dashboard` endpoint | ☐      |
+| #   | Item                                            | Where                 | What                                                                                                                                                                                | Status |
+| --- | ----------------------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 7   | **Update README.md phases + planned section**   | `README.md`           | Updated command count 38→48, status Phase 9→Phase 12, Phase 7 🔄→✅. Phases 10-12 and updated Planned section were already present (edited externally)                              | ✅     |
+| 8   | **Update MAINTENANCE.md data persistence + CI** | `docs/MAINTENANCE.md` | Added `spending.json`, `ontology/` to data persistence. Added Dashboard & API Endpoints table. Added CI/CD Pipeline section (GitHub Actions, ruff lint, pytest-cov, pytest-timeout) | ✅     |
+
+---
+
+## Next Steps — Documentation Wave 5 (v0.6.0 Feature Docs)
+
+**Status**: All 9 items completed March 25, 2026
+**Trigger**: Commit `ef54ff4` ("channel architecture, Obsidian vault, parallel agents, 4AM cron") and `7822460` ("Update guide and dashboard to document v0.6.0 features") introduced 4 new subsystems that were only partially documented.
+
+### What changed
+
+Commit `ef54ff4` added:
+
+1. **Channel-role architecture** — Discord channels can have per-channel prompt overrides (research, analytics, bookmarks). Config in `config.yaml` `channels.roles` section + 3 new env vars (`DISCORD_CHANNEL_RESEARCH_ID`, `DISCORD_CHANNEL_ANALYTICS_ID`, `DISCORD_CHANNEL_BOOKMARKS_ID`).
+2. **Obsidian vault integration** — `obsidian_writer.py` (265 lines) saves research reports, bookmarks, and notes as Markdown + YAML frontmatter to `/vault/`. Docker volume mount added. New env var: `VAULT_DIR`. Config section: `vault.dir`, `vault.index_hour`, `vault.index_minute`.
+3. **Worker sub-agent** — `worker_agent.py` enables parallel task delegation. Main Gemini agent calls `spawn_worker(goal, context)` to run independent sub-agents with their own tool loops.
+4. **4:00 AM maintenance cron** — `maintenance_skills.py` (178 lines) runs git pull for skill updates, restarts gateway/LLM sessions, backs up config+tasks to NAS via rsync. New env vars: `NAS_HOST`, `NAS_SSH_PORT`, `NAS_SSH_USER`, `NAS_BACKUP_PATH`, `CONFIG_DIR`.
+5. **Dashboard + Guide overhaul** — `templates/dashboard.html` (1,410 lines) and `templates/guide.html` (1,987 lines) rewritten with v0.6.0 feature documentation.
+
+### Gap analysis
+
+| Feature                |     ARCHITECTURE.md      | SERVICES.md |  COMMANDS.md   |         MODULES.md         | MAINTENANCE.md | README.md |
+| ---------------------- | :----------------------: | :---------: | :------------: | :------------------------: | :------------: | :-------: |
+| Channel roles          |            ❌            |     ❌      |       ❌       |             ❌             |       ❌       |    ❌     |
+| Obsidian vault         | partial (data flow only) |     ❌      | ✅ `/bookmark` |  ✅ `obsidian_writer.py`   |       ❌       |    ❌     |
+| Worker sub-agent       | partial (data flow only) |     ❌      |       ❌       |    ✅ `worker_agent.py`    |       ❌       |    ❌     |
+| 4AM maintenance        |            ❌            |     ❌      |       ❌       | ✅ `maintenance_skills.py` |       ❌       |    ❌     |
+| New env vars (8)       |            ❌            |     ❌      |       —        |             —              |       ❌       |    ❌     |
+| Docker volume `/vault` |            ❌            |     ❌      |       —        |             —              |       ❌       |    ❌     |
+
+### Priority 1 — Critical gaps (✅ DONE)
+
+| #   | Item                                    | Where                                    | What                                                                                                                                                                                | Status |
+| --- | --------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 1   | **Document channel-role architecture**  | `docs/ARCHITECTURE.md`, `MAINTENANCE.md` | Added channel-role data flow row to ARCHITECTURE.md. Added Channel-Role Architecture section to MAINTENANCE.md with table, config snippet, and env var instructions                 | ✅     |
+| 2   | **Add 8 new env vars to SERVICES.md**   | `docs/SERVICES.md`                       | Added `DISCORD_CHANNEL_*_ID` (3), `VAULT_DIR`, `NAS_HOST`, `NAS_SSH_PORT`, `NAS_SSH_USER`, `NAS_BACKUP_PATH` to Quick Reference env vars section                                    | ✅     |
+| 3   | **Document 4AM maintenance cron**       | `docs/MAINTENANCE.md`                    | Added "Automated 4:00 AM Maintenance" section with 3-step cycle (git pull, session restart, NAS backup), env var table, and disable instructions                                    | ✅     |
+| 4   | **Document Obsidian vault integration** | `docs/SERVICES.md`, `MAINTENANCE.md`     | Added Obsidian Vault service entry to SERVICES.md (purpose, module, subfolder layout, nightly index). Added `data/vault/` to MAINTENANCE.md data persistence + Docker volumes table | ✅     |
+
+### Priority 2 — Diagram and cross-reference updates (✅ DONE)
+
+| #   | Item                                                   | Where                  | What                                                                                                                                                                                      | Status |
+| --- | ------------------------------------------------------ | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 5   | **Add maintenance + vault to ARCHITECTURE.md diagram** | `docs/ARCHITECTURE.md` | Added `maintenance_skills.py` and `obsidian_writer.py` nodes to Mermaid graph. Added edges: Scheduler→Maintenance→NAS, Bot→ObsidianWriter→VaultStore. Added 4AM maintenance data flow row | ✅     |
+| 6   | **Add worker agent to ARCHITECTURE.md diagram**        | `docs/ARCHITECTURE.md` | Added `Bot→WorkerAgent` edge and parallel sub-agent data flow row to Data Flow Summary table                                                                                              | ✅     |
+| 7   | **Update docker-compose.yml documentation**            | `docs/MAINTENANCE.md`  | Added complete Docker Volume Mounts table (8 mounts: config, logs, memory, audit, tasks, vault, tmp, docker.sock) with host paths, container paths, modes, and purposes                   | ✅     |
+
+### Priority 3 — README and minor polish (✅ DONE)
+
+| #   | Item                                         | Where             | What                                                                                                                                               | Status |
+| --- | -------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 8   | **Update README.md feature list for v0.6.0** | `README.md`       | Added "v0.6.0 — Channel Architecture & Automation" section with 4 bullet points. Removed "Automated backup/restore to NAS" from Planned (now done) | ✅     |
+| 9   | **Update config.yaml docs in MODULES.md**    | `docs/MODULES.md` | Updated config.yaml description to include "channel roles, vault settings"                                                                         | ✅     |
+
+---
+
+## Wave 6 — ChatGPT-Parity Features (✅ DONE — Implemented March 26, 2026)
+
+Five features to close the gap between OpenClaw and ChatGPT/Gemini browser experiences.
+
+### 6.1 Streaming Responses ✅
+
+**Files changed:** `src/llm.py`, `src/bot.py`
+
+- Added `chat_stream()` async generator to `llm.py` that yields `(chunk_text, is_final, metadata)` tuples
+- For tool-requiring queries: runs the full tool loop non-streaming, then yields final text
+- For simple queries: streams Gemini tokens progressively
+- `bot.py` `/ask` handler edits the Discord message every ~1.5 seconds with accumulated text
+- During streaming, shows "⏳ streaming…" indicator
+- On completion, resolves to final embed with full formatting
+
+### 6.2 File Attachments ✅
+
+**Files changed:** `src/bot.py`
+
+- Added `_extract_file_attachment()` that detects code blocks > 500 chars in LLM responses
+- Automatically extracts code into a `discord.File` with correct extension (.py, .js, .json, .csv, etc.)
+- Attached alongside the final embed — users can download directly
+
+### 6.3 Image Generation (Local Stable Diffusion) ✅
+
+**Files created:** `src/image_gen.py`, `scripts/sd_server.py`
+**Files changed:** `src/bot.py`
+
+- New `/imagine` command with prompt, negative prompt, width, height, steps parameters
+- `image_gen.py` calls a local SD HTTP service at `SD_URL` (default: `http://host.docker.internal:7861`)
+- `scripts/sd_server.py` is a Flask server wrapping the `diffusers` pipeline with Apple Silicon MPS backend
+- Uses SDXL Turbo model by default — fast generation on M4 Pro
+- Returns PNG as `discord.File` displayed inline via embed image
+- Graceful error when SD service isn't running
+
+### 6.4 Code Execution Sandbox ✅
+
+**Files created:** `src/code_sandbox.py`
+**Files changed:** `src/bot.py`
+
+- New `/run-code` command that accepts Python code (with or without code fences)
+- Executes in a throwaway `python:3.12-slim` container with:
+  - `--network none` (no internet access)
+  - `--read-only` filesystem
+  - `--memory 256m` limit
+  - `--cap-drop ALL` + `--security-opt no-new-privileges`
+  - 30-second timeout
+- Returns stdout/stderr in an embed with exit code
+- Long output (>3000 chars) also attached as a `.txt` file
+
+### 6.5 Reaction-Based Action Buttons ✅
+
+**Files changed:** `src/bot.py`
+
+- New `ResponseActions` view with 3 buttons on every `/ask` response:
+  - **📌 Save** — stores response to QMD long-term memory
+  - **🔄 Regenerate** — clears last exchange and re-asks the question
+  - **📧 Email** — sends response via AgentMail
+- Buttons visible for 5 minutes, only usable by the original requester
+- Uses `discord.ui.View` with `interaction_check` for access control
+
+---
+
+## Wave 7 — Agent Planning & Multi-Agent Orchestration (PROPOSED)
+
+Two architectural features to make OpenClaw more autonomous and resilient.
+
+### 7.1 Agent TODO / Activity Planning System
+
+**Goal:** On every non-trivial activity (research, multi-step tasks, complex queries), the agent creates a `.md` TODO document that tracks its plan, progress, and remaining work. If the agent is interrupted, it can resume from the document.
+
+#### Architecture
+
+```
+data/plans/
+  2026-03-26_research_real-estate.md
+  2026-03-26_task_docker-cleanup.md
+  ...
+```
+
+Each plan document follows a standard template:
+
+```markdown
+# Plan: <task description>
+
+- **Created:** 2026-03-26 08:30 UTC
+- **Status:** in-progress | completed | interrupted
+- **Initiated by:** user <name> via /ask | /research | scheduler
+- **Channel:** #real-estate (1486358540246319135)
+
+## Objective
+
+<Clear description of what the agent is trying to accomplish>
+
+## Steps
+
+- [x] Step 1: Search for properties in Newtown Township
+- [x] Step 2: Browse top 3 Zillow results
+- [ ] Step 3: Extract price/tax data from each listing
+- [ ] Step 4: Compare and synthesize report
+- [ ] Step 5: Post final report to Discord
+
+## Context
+
+<Any intermediate results, variables, URLs, data needed to resume>
+
+## Result
+
+<Final output once complete>
+```
+
+#### Implementation Tasks
+
+| #   | Task                                   | File(s)                               | Details                                                                                                                                                        | Priority |
+| --- | -------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | **Create `src/agent_planner.py`**      | New file                              | `AgentPlanner` class with `create_plan()`, `update_step()`, `complete_plan()`, `resume_plan()`, `list_plans()`. Plans stored as `.md` files in `data/plans/`.  | P1       |
+| 2   | **Add plan volume mount**              | `docker-compose.yml`                  | Mount `./data/plans:/plans:rw`. Set `PLANS_DIR=/plans` env var.                                                                                                | P1       |
+| 3   | **Integrate planner into `/ask`**      | `src/bot.py`                          | For tool-requiring queries (detected by `_needs_tools`), auto-create a plan before starting tool loop. Update steps as tools execute. Mark complete when done. | P1       |
+| 4   | **Integrate planner into `/research`** | `src/bot.py`, `src/research_agent.py` | Research already has phases — map them to plan steps. On interruption, save partial results to the plan's Context section.                                     | P1       |
+| 5   | **Add `/plans` command**               | `src/bot.py`                          | List active/recent plans. Show status, last update, step progress.                                                                                             | P2       |
+| 6   | **Add `/resume` command**              | `src/bot.py`                          | Resume an interrupted plan. Load the `.md` document, find the last incomplete step, and continue execution.                                                    | P2       |
+| 7   | **Scheduler integration**              | `src/scheduler.py`                    | Scheduler-triggered tasks also create plans. On failure or timeout, the plan captures where it stopped.                                                        | P2       |
+| 8   | **Auto-cleanup**                       | `src/agent_planner.py`                | Completed plans older than 30 days auto-archive. Plans kept in `data/plans/archive/`.                                                                          | P3       |
+| 9   | **Plan visibility in dashboard**       | `src/dashboard.py`                    | Add a "Plans" tab to the web dashboard showing recent plans, their status, and step counts.                                                                    | P3       |
+
+#### Key Design Decisions
+
+- **Markdown format** (not JSON) — human-readable, easy for any agent to parse, trivially inspectable via NAS
+- **File-per-plan** — no database, no ORM, simple glob to list plans
+- **Checkbox format** (`- [x]` / `- [ ]`) — universally understood, same as GitHub Issues
+- **Context section** — critical for resumability; stores intermediate data the agent would lose on restart
+- **Plan ID** — date + type + slug: `2026-03-26_research_real-estate.md`
+
+### 7.2 Multi-Agent Orchestration
+
+**Goal:** Enable the primary agent to spin off sub-agents that work in parallel on different subtasks, all coordinated through a shared plan document.
+
+#### Architecture
+
+```
+┌──────────────────────────────────┐
+│          Primary Agent           │
+│  (Discord bot, handles /ask)     │
+│                                  │
+│  Creates plan.md with N steps    │
+│  Spawns sub-agents for parallel  │
+│  steps. Monitors their progress. │
+└───────────┬──────────────────────┘
+            │ spawns
+    ┌───────┼───────┐
+    ▼       ▼       ▼
+┌───────┐┌───────┐┌───────┐
+│Agent A││Agent B││Agent C│
+│search ││search ││browse │
+│topic 1││topic 2││URLs   │
+└───┬───┘└───┬───┘└───┬───┘
+    │        │        │
+    ▼        ▼        ▼
+┌──────────────────────────────────┐
+│         Shared plan.md           │
+│  Each agent updates its step(s)  │
+│  Uses file locking for safety    │
+└──────────────────────────────────┘
+```
+
+#### Implementation Tasks
+
+| #   | Task                                     | File(s)                | Details                                                                                                                                                                                                             | Priority |
+| --- | ---------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | **Create `src/agent_worker.py`**         | New file               | `AgentWorker` class — a lightweight async worker that receives a single step from a plan, executes it (tool calls, LLM queries), and updates the plan.md. Uses its own Gemini session (separate rate limit bucket). | P1       |
+| 2   | **File-based coordination protocol**     | `src/agent_planner.py` | Add `claim_step(plan_id, step_num, worker_id)` and `release_step()`. Uses `fcntl.flock()` for file-level locking. Step status: `unclaimed → in-progress:<worker_id> → done`.                                        | P1       |
+| 3   | **Parallel dispatch from primary agent** | `src/bot.py`           | When a plan has independent steps (e.g., 3 parallel searches), the primary agent spawns `asyncio.Task` workers that each claim and execute steps concurrently.                                                      | P1       |
+| 4   | **Worker Gemini sessions**               | `src/llm.py`           | Add `create_worker_session()` that returns a dedicated `GenerativeModel` instance with its own rate limiter. Workers don't share the main bot's rate limit.                                                         | P2       |
+| 5   | **Worker progress to Discord**           | `src/bot.py`           | Workers post progress updates to a Discord thread (same pattern as `/research`). Main agent monitors and posts a summary when all workers complete.                                                                 | P2       |
+| 6   | **Resource limits**                      | `src/agent_worker.py`  | Max 3 concurrent workers per plan. Max 10 workers system-wide. Workers inherit the plan's timeout. Failed workers mark their step as `failed` with error context.                                                   | P2       |
+| 7   | **Worker-to-worker handoff**             | `src/agent_planner.py` | When a step produces output that a later step needs (e.g., URLs from search → content from browse), it writes to the plan's Context section. The downstream worker reads it.                                        | P2       |
+| 8   | **Dashboard: worker monitor**            | `src/dashboard.py`     | Show active workers, their assigned steps, and live status. Include worker count in `/health` endpoint.                                                                                                             | P3       |
+| 9   | **Worker audit trail**                   | `src/agent_worker.py`  | Each worker logs its actions to the audit system with `worker_id` tag for traceability.                                                                                                                             | P3       |
+| 10  | **Graceful shutdown**                    | `src/bot.py`           | On SIGTERM/bot shutdown, all workers are cancelled, their steps marked as `interrupted` in the plan, and partial results saved to Context.                                                                          | P3       |
+
+#### Key Design Decisions
+
+- **File-based coordination** (not a message queue) — matches the plan.md paradigm, zero new dependencies, inspectable
+- **`asyncio.Task`** workers (not separate processes) — share the bot's event loop, simpler resource management, access to the same aiohttp sessions
+- **Separate rate limit buckets** — workers shouldn't starve the interactive `/ask` path. Primary agent gets priority.
+- **Claim-before-execute** — prevents two workers from duplicating work on the same step
+- **Markdown checkpoint format** — any agent (or human!) can read the plan, see what's done, and resume
+
+#### Example Flow: Parallel Research
+
+```
+User: /research "Compare 3 neighborhoods in Delaware County"
+
+Primary Agent:
+  1. Creates plan: 2026-03-26_research_delco-neighborhoods.md
+  2. Decomposes into 5 steps:
+     - [ ] Search Marple Township listings
+     - [ ] Search Newtown Township listings
+     - [ ] Search Springfield Township listings
+     - [ ] Compare tax rates across all 3
+     - [ ] Synthesize final report
+  3. Spawns 3 workers for steps 1-3 (parallel)
+  4. Workers update plan.md as they complete
+  5. When steps 1-3 done, primary runs step 4 (needs all data)
+  6. Primary synthesizes step 5 and posts to Discord
+
+Elapsed: ~20s (vs ~60s sequential)
+```
+
+#### Env Vars
+
+| Variable             | Default  | Description                     |
+| -------------------- | -------- | ------------------------------- |
+| `PLANS_DIR`          | `/plans` | Directory for plan `.md` files  |
+| `MAX_WORKERS`        | `3`      | Max concurrent workers per plan |
+| `MAX_WORKERS_GLOBAL` | `10`     | Max workers system-wide         |
+| `WORKER_TIMEOUT`     | `120`    | Max seconds per worker step     |
+
+---
+
+## Wave 8 — Full Autonomy Architecture (PROPOSED)
+
+> Based on Gemini's 4-layer autonomy framework, mapped to existing OpenClaw modules.
+> This wave transforms OpenClaw from a **reactive chatbot** (waits for input) into an
+> **autonomous agent** (observes, thinks, acts, repeats until goals are reached).
+
+### What We Have vs What We Need
+
+| Gemini Layer            | Existing Module                                               | Current State                                                            | Gap                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| **1. System Prompt**    | `config/prompts/system.txt` (500 lines)                       | Has autonomy directives, error recovery, tool strategy                   | Missing: explicit TODO rules, self-initiated goal pursuit, reflexive learning instructions                             |
+| **2. Agentic Loop**     | `_run_tool_loop()` in `llm.py` (12 rounds, parallel)          | Handles tool-calling within a single request                             | Stateless — loop dies when the request ends. No persistent observe→think→act cycle. No goal resumption after restart.  |
+| **3. Tool Definitions** | `_execute_function_call()` + `advanced_skills.py` (~20 tools) | Search, browse, NAS, Docker, weather, memory, scheduler                  | Missing: `update_todo()`, `read_todo()`, `claim_step()`, `spawn_worker()` as LLM-callable tools                        |
+| **4. Multi-Agent**      | `worker_agent.py` (`spawn_worker()`) + `research_agent.py`    | Worker runs a fresh Gemini session with tool loop; Research has 4 phases | No coordination protocol, no shared state, no claim-based dispatch, no result aggregation, no manager-worker hierarchy |
+
+### 8.1 Layer 1 — System Prompt Upgrade
+
+**Goal:** Add autonomy operating rules to `system.txt` so the LLM knows _how_ to behave
+as an autonomous agent, not just a chatbot.
+
+**File:** `config/prompts/system.txt`
+
+Add a new `## Autonomous Operation` section with these directives:
+
+```markdown
+## Autonomous Operation
+
+### TODO Discipline
+
+- Before starting any multi-step task, call `create_plan(goal, steps)` to create a plan.md.
+- After completing each step, call `update_plan_step(plan_id, step_num, status, output)`.
+- If you are interrupted or error out, the plan persists for resumption.
+- On startup, check for interrupted plans via `list_plans(status="interrupted")` and offer to resume.
+
+### Observe → Think → Act → Repeat
+
+- When assigned a goal, decompose it into steps BEFORE acting.
+- After each action, evaluate: did it succeed? Do I need to adjust the plan?
+- Continue until all steps are marked complete OR you hit a blocker requiring human input.
+
+### Self-Initiated Goals
+
+- During proactive scans, if you detect an actionable issue (degraded service, disk space,
+  stale data), create a plan and begin fixing it autonomously.
+- Severity thresholds: CRITICAL = act immediately, WARNING = create plan + notify, INFO = log only.
+- Never perform destructive actions (delete, kill, drop) without human approval.
+
+### Reflexive Learning
+
+- After completing a plan, evaluate: what went well, what was slow, what failed?
+- Call `remember_fact(category="lessons", fact="...")` to store the insight.
+- Before starting similar future tasks, recall relevant lessons.
+
+### Worker Delegation
+
+- If a plan has 2+ independent steps, consider spawning workers for parallelism.
+- Call `spawn_worker(goal, context)` for each independent step.
+- Workers inherit your tools but not your conversation history.
+- Monitor worker results and synthesize them into the plan.
+```
+
+| #   | Task                                             | Details                                        | Priority |
+| --- | ------------------------------------------------ | ---------------------------------------------- | -------- |
+| 1   | Add `## Autonomous Operation` to `system.txt`    | ~40 lines of new directives (above)            | P1       |
+| 2   | Add `### Startup Resume Check` directive         | On bot `on_ready`, scan for interrupted plans  | P1       |
+| 3   | Add severity thresholds to proactive scan prompt | So agent knows when to auto-fix vs. just alert | P2       |
+
+### 8.2 Layer 2 — The Persistent Agentic Loop
+
+**Goal:** Replace the stateless request-response pattern with a persistent loop that can
+survive restarts and pursue multi-step goals over time.
+
+**Current flow (reactive):**
+
+```
+User sends /ask → LLM tool loop (max 12 rounds) → Response → DONE (state lost)
+```
+
+**Target flow (autonomous):**
+
+```
+Goal arrives (user, scheduler, or self-initiated)
+  → Create plan.md (persisted to disk)
+  → LOOP:
+      → Observe: Read plan.md, find next uncompleted step
+      → Think: Decide approach (which tools, parallel or sequential)
+      → Act: Execute step, write results to plan.md
+      → Reflect: Did it work? Adjust plan if needed.
+      → If all steps done → Mark plan complete → Notify user → EXIT
+      → If interrupted → Plan persists → Resumes on next startup
+```
+
+#### New File: `src/agent_loop.py`
+
+This is the core engine. It wraps the existing `_run_tool_loop()` with persistence.
+
+```python
+class AgentLoop:
+    """Persistent observe-think-act loop backed by plan.md files."""
+
+    def __init__(self, plans_dir: Path, llm_chat, llm_chat_deep, spawn_worker):
+        self.plans_dir = plans_dir
+        self._chat = llm_chat
+        self._chat_deep = llm_chat_deep
+        self._spawn_worker = spawn_worker
+        self._active_plans: dict[str, asyncio.Task] = {}
+
+    # ── Plan lifecycle ─────────────────────────────────────────
+    async def create_plan(self, goal: str, initiator: str, channel_id: int) -> Plan:
+        """Decompose goal into steps, write plan.md, return Plan object."""
+
+    async def resume_plan(self, plan_id: str) -> None:
+        """Load interrupted plan, find first incomplete step, continue loop."""
+
+    async def cancel_plan(self, plan_id: str) -> None:
+        """Cancel a running plan, mark as interrupted, save context."""
+
+    # ── The loop ───────────────────────────────────────────────
+    async def _run_plan(self, plan: Plan) -> None:
+        """Core observe→think→act→repeat loop for a single plan."""
+        while (step := plan.next_incomplete_step()):
+            plan.mark_step(step.num, "in-progress")
+            self._persist(plan)
+
+            if step.parallelizable and plan.has_parallel_siblings(step):
+                results = await self._run_parallel(plan, step)
+            else:
+                result = await self._run_step(plan, step)
+
+            plan.mark_step(step.num, "done", output=result)
+            self._persist(plan)
+
+            # Reflect: ask LLM if plan needs adjustment
+            if step.is_last_in_phase:
+                adjustment = await self._reflect(plan)
+                if adjustment:
+                    plan.insert_steps(adjustment)
+                    self._persist(plan)
+
+        plan.status = "completed"
+        self._persist(plan)
+
+    # ── Step execution ─────────────────────────────────────────
+    async def _run_step(self, plan: Plan, step: Step) -> str:
+        """Execute a single step via the LLM tool loop."""
+
+    async def _run_parallel(self, plan: Plan, steps: list[Step]) -> list[str]:
+        """Spawn workers for independent steps, aggregate results."""
+
+    async def _reflect(self, plan: Plan) -> list[Step] | None:
+        """Ask LLM: did that phase work? Any new steps needed?"""
+
+    # ── Persistence ────────────────────────────────────────────
+    def _persist(self, plan: Plan) -> None:
+        """Atomic write plan to data/plans/{plan_id}.md"""
+
+    def _load(self, plan_id: str) -> Plan:
+        """Parse plan.md back into Plan object."""
+
+    async def scan_interrupted(self) -> list[Plan]:
+        """Find plans with status=interrupted. Called on startup."""
+```
+
+#### Data Model: `Plan` and `Step`
+
+```python
+@dataclass
+class Step:
+    num: int
+    description: str
+    status: str              # "pending" | "in-progress" | "done" | "failed" | "skipped"
+    output: str = ""         # Result text from execution
+    worker_id: str = ""      # If delegated to a worker
+    parallelizable: bool = False  # Can run concurrently with siblings
+    depends_on: list[int] = field(default_factory=list)  # Step nums this depends on
+
+@dataclass
+class Plan:
+    plan_id: str             # "2026-03-26_research_delco"
+    goal: str
+    status: str              # "in-progress" | "completed" | "interrupted" | "failed"
+    initiator: str           # "user:Dave", "scheduler:sched-3", "self:proactive"
+    channel_id: int
+    steps: list[Step]
+    context: dict[str, str]  # Intermediate data for cross-step sharing
+    created_at: datetime
+    updated_at: datetime
+    lessons: list[str]       # Post-completion reflections
+```
+
+#### Implementation Tasks
+
+| #   | Task                                   | File(s)                           | Details                                                                                                                                      | Priority |
+| --- | -------------------------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | **Create `src/agent_loop.py`**         | New file (~300 lines)             | `AgentLoop` class with create/resume/cancel/run methods. Core observe→think→act loop.                                                        | P1       |
+| 2   | **Create `Plan` / `Step` dataclasses** | `src/agent_loop.py`               | Dataclasses with `to_markdown()` / `from_markdown()` serialization. Must round-trip cleanly.                                                 | P1       |
+| 3   | **Markdown parser for plan files**     | `src/agent_loop.py`               | Parse `- [x] Step 1: ...` checkboxes + YAML frontmatter into `Plan` objects. Use regex, not a YAML lib.                                      | P1       |
+| 4   | **Wire `AgentLoop` into `bot.py`**     | `src/bot.py`                      | Initialize in `on_ready`. Hook into `/ask` for tool-requiring queries, `/research` for all queries.                                          | P1       |
+| 5   | **Startup resume scan**                | `src/bot.py`, `src/agent_loop.py` | On `on_ready`, call `agent_loop.scan_interrupted()`. If found, post to `ALERT_CHANNEL_ID`: "Found N interrupted plans. Resuming..."          | P1       |
+| 6   | **Plan persistence volume**            | `docker-compose.yml`              | Add `./data/plans:/app/data/plans:rw` volume mount. Create `data/plans/` directory.                                                          | P1       |
+| 7   | **Reflection after each phase**        | `src/agent_loop.py`               | After completing a group of steps, ask LLM: "Review progress so far. Are the remaining steps still correct, or should the plan be adjusted?" | P2       |
+| 8   | **Interrupt handling (SIGTERM)**       | `src/bot.py`, `src/agent_loop.py` | On shutdown, all active plans marked "interrupted" with context saved. Steps in-progress marked "pending" (not "done").                      | P2       |
+| 9   | **Plan timeout**                       | `src/agent_loop.py`               | Plans have a max duration (default 10 minutes). If exceeded, mark interrupted + notify.                                                      | P2       |
+
+### 8.3 Layer 3 — Self-Management Tools (LLM-Callable)
+
+**Goal:** Give the LLM tools to manage its own plans and workers, so Gemini can call
+`update_todo()` just like it calls `search_web()`.
+
+**Current tool registration pattern** (from `llm.py`):
+Tools are declared in `_TOOL_DECLARATIONS` and executed by `_execute_function_call()`.
+New tools follow the same pattern.
+
+#### New Tool Declarations
+
+```yaml
+# Additions to config/tools.yaml (or _TOOL_DECLARATIONS in llm.py)
+
+- name: create_plan
+  description: "Create a new task plan with a goal and steps. Returns plan_id."
+  parameters:
+    goal: { type: string, description: "What needs to be accomplished" }
+    steps:
+      {
+        type: array,
+        items: { type: string },
+        description: "Ordered list of steps",
+      }
+
+- name: update_plan_step
+  description: "Update a step's status in an active plan."
+  parameters:
+    plan_id: { type: string }
+    step_num: { type: integer }
+    status: { type: string, enum: ["done", "failed", "skipped"] }
+    output: { type: string, description: "Result or error message" }
+
+- name: read_plan
+  description: "Read the current state of a plan, including all step statuses."
+  parameters:
+    plan_id: { type: string }
+
+- name: list_plans
+  description: "List plans filtered by status."
+  parameters:
+    status:
+      { type: string, enum: ["in-progress", "completed", "interrupted", "all"] }
+
+- name: spawn_worker
+  description: "Delegate a focused subtask to a worker agent. Returns the worker's result."
+  parameters:
+    goal: { type: string, description: "Specific task for the worker" }
+    context: { type: string, description: "Background info the worker needs" }
+
+- name: adjust_plan
+  description: "Add, remove, or reorder steps in an active plan."
+  parameters:
+    plan_id: { type: string }
+    action: { type: string, enum: ["add_step", "remove_step", "insert_after"] }
+    step_description: { type: string }
+    position:
+      {
+        type: integer,
+        description: "Step number to insert after (for insert_after)",
+      }
+```
+
+#### Tool Execution Wiring
+
+```python
+# In llm.py _execute_function_call():
+
+elif name == "create_plan":
+    return await agent_loop.create_plan(args["goal"], ...)
+
+elif name == "update_plan_step":
+    return await agent_loop.update_step(args["plan_id"], args["step_num"], ...)
+
+elif name == "read_plan":
+    return await agent_loop.read_plan(args["plan_id"])
+
+elif name == "list_plans":
+    return await agent_loop.list_plans(args.get("status", "all"))
+
+elif name == "spawn_worker":
+    return await worker_agent.spawn_worker(args["goal"], args.get("context", ""))
+
+elif name == "adjust_plan":
+    return await agent_loop.adjust_plan(args["plan_id"], args["action"], ...)
+```
+
+#### Implementation Tasks
+
+| #   | Task                                       | File(s)             | Details                                                                                                                            | Priority |
+| --- | ------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| 1   | **Add 6 new tool declarations**            | `src/llm.py`        | `create_plan`, `update_plan_step`, `read_plan`, `list_plans`, `spawn_worker`, `adjust_plan`                                        | P1       |
+| 2   | **Wire tool execution**                    | `src/llm.py`        | Add 6 new `elif` branches in `_execute_function_call()`                                                                            | P1       |
+| 3   | **Register `spawn_worker` as Gemini tool** | `src/llm.py`        | Currently `spawn_worker()` exists in `worker_agent.py` but isn't LLM-callable. Register it.                                        | P1       |
+| 4   | **Tool result formatting**                 | `src/agent_loop.py` | Each tool returns a clean string (not raw JSON). E.g., `create_plan` → "✅ Created plan `2026-03-26_research_delco` with 5 steps." | P2       |
+| 5   | **Tool guards**                            | `src/agent_loop.py` | `create_plan` checks: max 20 active plans (prevent runaway). `spawn_worker` checks: max 10 concurrent workers.                     | P2       |
+
+### 8.4 Layer 4 — Hierarchical Multi-Agent System
+
+**Goal:** Upgrade `worker_agent.py` from a simple "fire-and-forget" sub-agent into a
+managed worker that coordinates via shared plan files and reports back to a manager.
+
+**Current `spawn_worker()`** (180 lines):
+
+- Creates fresh Gemini session with `_WORKER_SYSTEM_PROMPT`
+- Runs its own tool loop (up to 8 rounds)
+- Returns final text to caller
+- ❌ No shared state, no progress reporting, no coordination
+
+**Target Architecture:**
+
+```
+┌─────────────────────────────────────────────────┐
+│                 Manager Agent                    │
+│           (AgentLoop._run_plan)                  │
+│                                                  │
+│  Holds the Plan. Decides which steps to          │
+│  parallelize. Spawns workers. Monitors them.     │
+│  Synthesizes results. Posts to Discord.          │
+└────────────┬───────────┬───────────┬────────────┘
+             │           │           │
+        ┌────▼────┐ ┌────▼────┐ ┌────▼────┐
+        │Worker A │ │Worker B │ │Worker C │
+        │step 1   │ │step 2   │ │step 3   │
+        │(search) │ │(search) │ │(browse) │
+        └────┬────┘ └────┬────┘ └────┬────┘
+             │           │           │
+             ▼           ▼           ▼
+        ┌─────────────────────────────────────┐
+        │           plan.md (shared)          │
+        │  Workers update their step status   │
+        │  + write output to Context section  │
+        │  File locking via fcntl.flock()     │
+        └─────────────────────────────────────┘
+```
+
+#### Upgraded Worker Agent
+
+```python
+# src/worker_agent.py (upgraded)
+
+class ManagedWorker:
+    """A worker that operates within a Plan's coordination protocol."""
+
+    def __init__(self, worker_id: str, plan: Plan, step: Step, agent_loop: AgentLoop):
+        self.worker_id = worker_id    # "worker-1", "worker-2", ...
+        self.plan = plan
+        self.step = step
+        self._loop = agent_loop
+
+    async def run(self) -> str:
+        """Execute the assigned step with progress tracking."""
+        self._loop.claim_step(self.plan, self.step.num, self.worker_id)
+
+        try:
+            result = await spawn_worker(
+                goal=self.step.description,
+                context=self._build_context(),
+            )
+            self._loop.complete_step(self.plan, self.step.num, result)
+            return result
+
+        except Exception as e:
+            self._loop.fail_step(self.plan, self.step.num, str(e))
+            raise
+
+    def _build_context(self) -> str:
+        """Build context string from plan's Context section + completed step outputs."""
+        parts = [f"You are working on: {self.plan.goal}"]
+        parts.append(f"Your specific task: {self.step.description}")
+
+        # Include outputs from dependency steps
+        for dep_num in self.step.depends_on:
+            dep_step = self.plan.steps[dep_num - 1]
+            if dep_step.output:
+                parts.append(f"Result from step {dep_num}: {dep_step.output[:2000]}")
+
+        # Include shared context
+        for key, val in self.plan.context.items():
+            parts.append(f"{key}: {val[:1000]}")
+
+        return "\n\n".join(parts)
+```
+
+#### Worker Rate Limiting
+
+Workers should not starve the interactive `/ask` path:
+
+```python
+# In llm.py — two-tier rate limiting
+
+class TieredRateLimiter:
+    """Primary agent gets 70% of budget, workers share 30%."""
+
+    def __init__(self, per_minute: int = 60):
+        self.primary_limit = int(per_minute * 0.7)    # 42/min
+        self.worker_limit = int(per_minute * 0.3)      # 18/min
+        self._primary = RateLimiter(self.primary_limit, per_minute * 10)
+        self._worker = RateLimiter(self.worker_limit, per_minute * 10)
+
+    async def acquire_primary(self): ...
+    async def acquire_worker(self): ...
+```
+
+#### Implementation Tasks
+
+| #   | Task                                 | File(s)               | Details                                                                                           | Priority |
+| --- | ------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------- | -------- |
+| 1   | **Upgrade `worker_agent.py`**        | `src/worker_agent.py` | Add `ManagedWorker` class. Keep existing `spawn_worker()` for backward compat.                    | P1       |
+| 2   | **File locking for plan.md**         | `src/agent_loop.py`   | `fcntl.flock()` around all plan reads/writes. Prevents corruption from parallel workers.          | P1       |
+| 3   | **Dependency tracking in Steps**     | `src/agent_loop.py`   | `depends_on` field. Workers for step 4 wait until steps 1-3 are done. Manager handles sequencing. | P1       |
+| 4   | **Parallel dispatch in `_run_plan`** | `src/agent_loop.py`   | Detect independent steps (no unmet dependencies), spawn `ManagedWorker`s via `asyncio.gather()`.  | P1       |
+| 5   | **Context passing between workers**  | `src/agent_loop.py`   | Completed step output written to `plan.context[f"step_{n}_output"]`. Downstream workers read it.  | P2       |
+| 6   | **Tiered rate limiting**             | `src/llm.py`          | `TieredRateLimiter` with 70/30 split. Workers use worker bucket.                                  | P2       |
+| 7   | **Worker progress to Discord**       | `src/bot.py`          | Create a Discord thread for multi-worker plans. Each worker posts "✅ Step N complete" to thread. | P2       |
+| 8   | **Worker timeout + cancellation**    | `src/worker_agent.py` | `asyncio.wait_for(worker.run(), timeout=WORKER_TIMEOUT)`. On timeout, mark step "failed".         | P2       |
+| 9   | **Max worker limits**                | `src/agent_loop.py`   | `_active_workers` counter. Max 3 per plan, max 10 global. Queue excess workers.                   | P2       |
+| 10  | **Graceful shutdown**                | `src/bot.py`          | SIGTERM handler cancels all worker tasks, marks their steps "pending", saves plan.                | P3       |
+
+### 8.5 Integration: How It All Connects
+
+#### Flow 1: User asks a complex question via `/ask`
+
+```
+1. User: /ask "Compare property taxes in 3 Delaware County townships"
+2. bot.py: Calls llm.chat_stream(question)
+3. llm.py: Gemini decides this needs tools → enters tool loop
+4. llm.py: Gemini calls create_plan(goal="Compare taxes...",
+             steps=["Search Marple", "Search Newtown", "Search Springfield",
+                    "Compare data", "Synthesize report"])
+5. agent_loop: Creates plan.md, returns plan_id
+6. llm.py: Gemini calls spawn_worker(goal="Search Marple tax data")
+           + spawn_worker(goal="Search Newtown tax data")
+           + spawn_worker(goal="Search Springfield tax data")
+7. agent_loop: Dispatches 3 ManagedWorkers in parallel
+8. Workers: Each runs own tool loop (search_web → browse_url → extract data)
+9. Workers: Each updates plan.md with results
+10. llm.py: Gemini sees all 3 workers complete, calls update_plan_step for each
+11. llm.py: Gemini runs step 4 itself (compare), then step 5 (synthesize)
+12. llm.py: Returns final report to bot.py
+13. bot.py: Streams report to Discord with embeds
+```
+
+#### Flow 2: Proactive self-initiated goal
+
+```
+1. _proactive_insight_loop() detects: "Disk usage at 92% on NAS volume1"
+2. Severity = WARNING → agent decides to investigate + notify
+3. agent_loop.create_plan(goal="Investigate high disk usage on NAS",
+     initiator="self:proactive",
+     steps=["Get disk usage breakdown", "Identify large files",
+            "Check if any are pruneable", "Report findings"])
+4. Loop runs steps 1-3 autonomously (tools: get_system_stats, nas_list_files)
+5. Step 4: Posts report to ALERT_CHANNEL_ID
+6. Plan marked "completed"
+7. Agent: remember_fact("lessons", "NAS volume1 fills up from /downloads — set up auto-prune")
+```
+
+#### Flow 3: Resume after restart
+
+```
+1. Bot crashes or gets redeployed
+2. on_ready() → agent_loop.scan_interrupted()
+3. Finds: "2026-03-26_research_delco.md" — status: interrupted, step 3/5 in-progress
+4. Posts to ALERT_CHANNEL_ID: "🔄 Found 1 interrupted plan. Resuming: Compare townships..."
+5. agent_loop.resume_plan("2026-03-26_research_delco")
+6. Reads plan.md, finds step 3 (status: pending after safe interrupt)
+7. Continues from step 3 through step 5
+8. Posts completed report to original channel
+```
+
+### 8.6 Phased Rollout
+
+Do NOT implement all 4 layers at once. Roll out in 3 phases:
+
+#### Phase A — Foundation (Week 1)
+
+> Get the core loop working for `/research` only. No parallelism yet.
+
+| #   | Task                                                         | Files                       | Status |
+| --- | ------------------------------------------------------------ | --------------------------- | ------ |
+| A1  | Create `Plan`/`Step` dataclasses with markdown serialization | `src/agent_loop.py`         |        |
+| A2  | Create `AgentLoop` with sequential `_run_plan()`             | `src/agent_loop.py`         |        |
+| A3  | Add `data/plans` volume mount                                | `docker-compose.yml`        |        |
+| A4  | Wire into `/research` (replace direct `ResearchAgent` call)  | `src/bot.py`                |        |
+| A5  | Add system prompt autonomy directives                        | `config/prompts/system.txt` |        |
+| A6  | Add `/plans` and `/resume` commands                          | `src/bot.py`                |        |
+| A7  | Startup interrupted-plan scan                                | `src/bot.py`                |        |
+
+**Validation:** Run `/research "test query"` → verify plan.md is created, steps are
+tracked, results are posted. Kill bot mid-research → restart → verify it resumes.
+
+#### Phase B — LLM-Callable Tools (Week 2)
+
+> Let Gemini create and manage plans autonomously via tool calls.
+
+| #   | Task                                                      | Files               | Status |
+| --- | --------------------------------------------------------- | ------------------- | ------ |
+| B1  | Add 6 plan management tool declarations                   | `src/llm.py`        |        |
+| B2  | Wire tool execution in `_execute_function_call()`         | `src/llm.py`        |        |
+| B3  | Wire `/ask` to use `AgentLoop` for tool-requiring queries | `src/bot.py`        |        |
+| B4  | Add tool guards (max 20 plans, max 10 workers)            | `src/agent_loop.py` |        |
+| B5  | Add reflexive learning (post-plan `remember_fact()` call) | `src/agent_loop.py` |        |
+
+**Validation:** `/ask "Compare 3 neighborhoods"` → Gemini autonomously calls `create_plan`,
+executes steps via tool loop, calls `update_plan_step` as it progresses.
+
+#### Phase C — Multi-Agent Parallelism (Week 3)
+
+> Add parallel worker dispatch and coordination.
+
+| #   | Task                                        | Files                 | Status |
+| --- | ------------------------------------------- | --------------------- | ------ |
+| C1  | Create `ManagedWorker` class                | `src/worker_agent.py` |        |
+| C2  | Add file locking to plan persistence        | `src/agent_loop.py`   |        |
+| C3  | Add dependency tracking + parallel dispatch | `src/agent_loop.py`   |        |
+| C4  | Add tiered rate limiting (70/30 split)      | `src/llm.py`          |        |
+| C5  | Add Discord thread for worker progress      | `src/bot.py`          |        |
+| C6  | Add worker timeout + cancellation           | `src/worker_agent.py` |        |
+| C7  | Add graceful shutdown handler               | `src/bot.py`          |        |
+| C8  | Add plan visibility to dashboard            | `src/dashboard.py`    |        |
+
+**Validation:** `/research "Compare 3 neighborhoods"` → 3 workers spawn in parallel →
+each posts to thread → manager synthesizes → total time ~20s vs ~60s sequential.
+
+### 8.7 Env Vars (New)
+
+| Variable                 | Default      | Description                                                  |
+| ------------------------ | ------------ | ------------------------------------------------------------ |
+| `PLANS_DIR`              | `data/plans` | Directory for plan `.md` files                               |
+| `MAX_ACTIVE_PLANS`       | `20`         | Max concurrent plans (prevent runaway)                       |
+| `MAX_WORKERS_PER_PLAN`   | `3`          | Max parallel workers per plan                                |
+| `MAX_WORKERS_GLOBAL`     | `10`         | Max workers system-wide                                      |
+| `WORKER_TIMEOUT`         | `120`        | Max seconds per worker step                                  |
+| `PLAN_TIMEOUT`           | `600`        | Max seconds per plan (10 min default)                        |
+| `WORKER_RATE_RATIO`      | `0.3`        | Fraction of rate limit budget for workers (rest for primary) |
+| `AUTO_RESUME_ON_STARTUP` | `true`       | Whether to auto-resume interrupted plans on bot start        |
+
+### 8.8 Framework Decision: Build vs. Use CrewAI/LangChain
+
+Gemini suggested CrewAI or LangChain. Here's why we're **building from scratch** instead:
+
+| Factor               | CrewAI / LangChain                                                             | Custom (our approach)                                                                      |
+| -------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| **LLM backend**      | Expects OpenAI-compatible API                                                  | We use `google-generativeai` SDK directly — CrewAI's Gemini adapter is a leaky abstraction |
+| **Tool integration** | Must re-wrap all 20+ tools in their format                                     | Our tools already work with Gemini function calling natively                               |
+| **Docker context**   | No awareness of our Docker-in-Docker setup                                     | Our `spawn_worker` already uses our container environment                                  |
+| **Dependencies**     | CrewAI pulls 50+ transitive deps (pydantic v2, langchain-core, tiktoken, etc.) | Zero new dependencies — just Python stdlib + our existing stack                            |
+| **Rate limiting**    | Generic token-based limiting                                                   | Our tiered limiter is tuned to Gemini's exact rate windows                                 |
+| **Plan format**      | JSON/YAML internal state                                                       | Markdown — human-readable, inspectable on NAS, resumable                                   |
+| **Complexity**       | ~5000 lines of framework code to understand                                    | ~500 lines of purpose-built code we fully control                                          |
+| **Debugging**        | Framework stack traces, opaque agent loops                                     | Direct `asyncio.Task` + our audit log — trivial to debug                                   |
+
+**Verdict:** The framework tax isn't worth it. We already have 80% of the pieces
+(`_run_tool_loop`, `spawn_worker`, `ResearchAgent`, `scheduler`, `mission_control`).
+The remaining 20% is the `AgentLoop` glue code — 300 lines of Python, not a framework.

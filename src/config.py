@@ -87,7 +87,7 @@ class _Config:
     ollama_model: str = os.getenv("OLLAMA_MODEL", _local_llm.get("model", "gemma3:12b"))
     local_llm_enabled: bool = os.getenv("LOCAL_LLM_ENABLED", str(_local_llm.get("enabled", True))).lower() == "true"
     default_model_preference: str = os.getenv("DEFAULT_MODEL_PREFERENCE", _local_llm.get("default_preference", "auto"))
-    ollama_tools_enabled: bool = os.getenv("OLLAMA_TOOLS_ENABLED", str(_local_llm.get("tools_enabled", False))).lower() == "true"
+    ollama_tools_enabled: bool = os.getenv("OLLAMA_TOOLS_ENABLED", str(_local_llm.get("tools_enabled", True))).lower() == "true"
 
     # -- Spending / Budget -----------------------------------------------------
     spending_file: Path = Path(os.getenv("SPENDING_FILE", "/memory/spending.json"))
@@ -133,7 +133,7 @@ class _Config:
     max_file_size: int = 20 * 1024 * 1024  # 20 MB
 
     # -- Reflection (Phase 7: Self-evaluation) ---------------------------------
-    reflection_enabled: bool = os.getenv("REFLECTION_ENABLED", "false").lower() == "true"
+    reflection_enabled: bool = os.getenv("REFLECTION_ENABLED", "true").lower() == "true"
 
     # -- Auto-recall (Phase 1: Auto-RAG) --------------------------------------
     auto_recall_enabled: bool = os.getenv("AUTO_RECALL_ENABLED", str(_yaml.get("vector_store", {}).get("contextual_recall", True))).lower() == "true"
