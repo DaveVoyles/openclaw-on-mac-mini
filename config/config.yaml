@@ -99,3 +99,11 @@ vault:
   dir: "/vault" # Docker volume mount point — matches VAULT_DIR env var
   index_hour: 3 # Hour for nightly vault-to-QMD indexing (3:50 AM)
   index_minute: 50
+
+# Vector store settings (Phase 13A — semantic memory)
+vector_store:
+  enabled: true
+  dir: "/memory/chromadb"
+  similarity_threshold: 0.7  # minimum cosine similarity to return a result
+  contextual_recall: true     # inject relevant memories before each LLM call
+  contextual_top_k: 3         # max context items to inject per query

@@ -73,6 +73,9 @@ services:
       # Obsidian vault — stores all research reports, bookmarks, and notes as .md files
       - ./data/vault:/vault:rw
 
+      # ChromaDB vector store — semantic memory (Phase 13A)
+      - ./data/chromadb:/memory/chromadb:rw
+
     # Health check
     healthcheck:
       test:
