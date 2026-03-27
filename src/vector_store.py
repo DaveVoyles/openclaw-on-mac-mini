@@ -7,8 +7,9 @@ Provides three collections:
   - conversations:  Thread messages and session summaries
   - research:       Research reports and browsed sources
 
-Uses ChromaDB's built-in all-MiniLM-L6-v2 sentence-transformer model
-for local, free embeddings (384 dimensions, runs on CPU).
+Embedding model is configurable via the EMBEDDING_MODEL env var:
+  - Default (empty): ChromaDB's built-in all-MiniLM-L6-v2 (384 dims, CPU)
+  - Custom: Any Ollama-hosted model (e.g. embeddinggemma, nomic-embed-text)
 """
 
 import asyncio
@@ -32,6 +33,48 @@ DEFAULT_TOP_K = 5
 MEMORIES_COLLECTION = "memories"
 CONVERSATIONS_COLLECTION = "conversations"
 RESEARCH_COLLECTION = "research"
+
+# Embedding model configuration
+# Default: ChromaDB's built-in all-MiniLM-L6-v2 (384 dims, free, CPU)
+# Optional: Ollama-hosted models like embeddinggemma, nomic-embed-text, etc.
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")  # empty = ChromaDB default
+OLLAMA_EMBED_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
+
+
+def _get_embedding_function():
+    """Return the embedding function for ChromaDB collections.
+
+    If EMBEDDING_MODEL is set, uses Ollama's embedding API.
+    Otherwise returns None (ChromaDB uses its built-in default).
+
+    WARNING: Changing embedding models requires re-indexing. Existing
+    collections with MiniLM embeddings are incompatible with new model
+    dimensions. Delete /memory/chromadb and let it rebuild.
+    """
+    if not EMBEDDING_MODEL:
+        return None  # ChromaDB default (all-MiniLM-L6-v2)
+
+    try:
+        from chromadb.utils.embedding_functions import OllamaEmbeddingFunction
+        log.info("Using Ollama embedding model: %s at %s", EMBEDDING_MODEL, OLLAMA_EMBED_URL)
+        log.warning(
+            "Custom embedding model active (%s). If you switched models, "
+            "existing collections must be re-indexed (delete %s and restart).",
+            EMBEDDING_MODEL, CHROMA_DIR,
+        )
+        return OllamaEmbeddingFunction(
+            url=f"{OLLAMA_EMBED_URL}/api/embeddings",
+            model_name=EMBEDDING_MODEL,
+        )
+    except ImportError:
+        log.warning("OllamaEmbeddingFunction not available in this ChromaDB version, using default")
+        return None
+    except Exception as e:
+        log.warning("Failed to initialize Ollama embeddings (%s), using default: %s", EMBEDDING_MODEL, e)
+        return None
+
+
+_embedding_fn = _get_embedding_function()
 
 # ---------------------------------------------------------------------------
 # Lazy singleton — ChromaDB is heavy; only load when first accessed
@@ -58,10 +101,13 @@ def _get_collection(name: str):
     """Get or create a ChromaDB collection by name."""
     if name not in _collections:
         client = _get_client()
-        _collections[name] = client.get_or_create_collection(
-            name=name,
-            metadata={"hnsw:space": "cosine"},
-        )
+        kwargs = {
+            "name": name,
+            "metadata": {"hnsw:space": "cosine"},
+        }
+        if _embedding_fn is not None:
+            kwargs["embedding_function"] = _embedding_fn
+        _collections[name] = client.get_or_create_collection(**kwargs)
         count = _collections[name].count()
         log.info("Collection '%s' ready (%d documents)", name, count)
     return _collections[name]

@@ -108,3 +108,4 @@ vector_store:
   similarity_threshold: 0.7  # minimum cosine similarity to return a result
   contextual_recall: true     # inject relevant memories before each LLM call
   contextual_top_k: 3         # max context items to inject per query
+  embedding_model: ""          # Ollama model name (e.g. "embeddinggemma", "nomic-embed-text"). Empty = built-in MiniLM
