@@ -92,10 +92,12 @@ class ResearchAgent:
     def __init__(self,
                  max_searches: int = 4,
                  browse_top_n: int = 2,
-                 timeout_seconds: int = 120):
+                 timeout_seconds: int = 120,
+                 max_concurrent: int = 3):
         self.max_searches = max_searches
         self.browse_top_n = browse_top_n
         self.timeout_seconds = timeout_seconds
+        self._semaphore = asyncio.Semaphore(max_concurrent)
 
     async def run(
         self,
@@ -176,6 +178,14 @@ class ResearchAgent:
         # ── Step 5: Auto-save report to NAS (if configured) ──────────────────
         await self._auto_save(query, report, post)
 
+        # ── Step 6: Index report in vector store for future recall ────────────
+        try:
+            import vector_store
+            source_urls = [u for r in raw_results for u in r["urls"]]
+            await vector_store.add_research_report(query, report, source_urls)
+        except Exception as e:
+            log.debug("Vector index for research failed (non-critical): %s", e)
+
         return report
 
     async def _perform_searches(
@@ -191,12 +201,13 @@ class ResearchAgent:
         await post("search", f"Launching {total} parallel search workers\u2026")
 
         async def _one_search(i: int, sq: str) -> dict:
-            try:
-                results_text = await search_web(sq, num_results=5)
-                await post("search", f"Worker {i}/{total} done: *{sq[:50]}*")
-                return {"query": sq, "results": results_text, "urls": _extract_urls(results_text)}
-            except Exception as e:
-                return {"query": sq, "results": f"Search failed: {e}", "urls": []}
+            async with self._semaphore:
+                try:
+                    results_text = await search_web(sq, num_results=5)
+                    await post("search", f"Worker {i}/{total} done: *{sq[:50]}*")
+                    return {"query": sq, "results": results_text, "urls": _extract_urls(results_text)}
+                except Exception as e:
+                    return {"query": sq, "results": f"Search failed: {e}", "urls": []}
 
         results = await asyncio.gather(*(_one_search(i + 1, sq) for i, sq in enumerate(queries)))
         return list(results)
@@ -229,14 +240,15 @@ class ResearchAgent:
         browsed_pages: list[dict] = []
         for i, url in enumerate(urls, 1):
             await post("browse", f"Reading source {i}/{len(urls)}: `{url[:60]}`")
-            try:
-                content = await asyncio.wait_for(browse_url(url), timeout=20)
-                if content and not content.startswith("❌"):
-                    browsed_pages.append({"url": url, "content": content[:3000]})
-            except asyncio.TimeoutError:
-                log.warning("Browse timed out: %s", url)
-            except Exception as e:
-                log.warning("Browse error %s: %s", url, e)
+            async with self._semaphore:
+                try:
+                    content = await asyncio.wait_for(browse_url(url), timeout=20)
+                    if content and not content.startswith("❌"):
+                        browsed_pages.append({"url": url, "content": content[:3000]})
+                except asyncio.TimeoutError:
+                    log.warning("Browse timed out: %s", url)
+                except Exception as e:
+                    log.warning("Browse error %s: %s", url, e)
         return browsed_pages
 
     async def _auto_save(self, query: str, report: str, post) -> None:

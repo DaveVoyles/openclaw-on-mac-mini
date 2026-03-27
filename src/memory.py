@@ -423,5 +423,14 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
             )
         except Exception as e:
             log.debug("QMD session save failed (non-critical): %s", e)
+
+        # Embed summary into ChromaDB conversations collection
+        try:
+            import vector_store
+            await vector_store.add_conversation_summary(
+                user_id, f"session_{user_name}", summary
+            )
+        except Exception as e:
+            log.debug("Vector embed for summary failed (non-critical): %s", e)
     except Exception as e:
         log.warning("Session summarization failed: %s", e)

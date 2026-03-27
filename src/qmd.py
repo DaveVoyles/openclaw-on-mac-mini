@@ -92,15 +92,54 @@ qmd_store = QMDMemory()
 
 
 async def remember_fact(content: str, tags: Optional[str] = "") -> str:
-    """Store a fact in long-term memory (QMD)."""
+    """Store a fact in long-term memory (QMD + vector store)."""
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
     await qmd_store.add(content, tag_list)
+    # Also embed into ChromaDB for semantic search
+    try:
+        import vector_store
+        fact_id = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000))
+        await vector_store.add_memory(fact_id, content, tag_list)
+    except Exception as e:
+        log.debug("Vector embed failed (non-critical): %s", e)
     return f"✅ Remembered: {content}"
 
 
 async def recall_fact(query: str) -> str:
-    """Search long-term memory (QMD) for a specific fact or topic."""
-    return await qmd_store.search(query)
+    """Search long-term memory using keyword match (QMD) + semantic search (ChromaDB).
+
+    Results from both sources are merged and deduplicated.
+    """
+    # Keyword search (existing QMD)
+    keyword_result = await qmd_store.search(query)
+    keyword_hits = []
+    if keyword_result and keyword_result != "No matching memories found.":
+        keyword_hits = [line.lstrip("• ") for line in keyword_result.split("\n") if line.strip()]
+
+    # Semantic search (ChromaDB)
+    semantic_hits = []
+    try:
+        import vector_store
+        results = await vector_store.search(
+            vector_store.MEMORIES_COLLECTION, query, top_k=10
+        )
+        semantic_hits = [r["text"] for r in results]
+    except Exception as e:
+        log.debug("Vector search failed (non-critical): %s", e)
+
+    # Merge and deduplicate (keyword matches first, then semantic-only)
+    seen = set()
+    merged = []
+    for hit in keyword_hits + semantic_hits:
+        normalized = hit.strip()[:200]
+        if normalized not in seen:
+            seen.add(normalized)
+            merged.append(hit)
+
+    if not merged:
+        return "No matching memories found."
+
+    return "\n".join([f"• {r}" for r in merged[:10]])
 
 
 async def list_memories() -> str:
