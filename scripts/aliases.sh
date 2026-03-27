@@ -1,7 +1,7 @@
 # OpenClaw Helper Aliases
 # Add this to your ~/.zshrc: source ~/openclaw/scripts/aliases.sh
 
-alias oc-up="docker compose up -d --build"
+alias oc-up="docker compose up -d --build && docker image prune -f"
 alias oc-down="docker compose down"
 alias oc-logs="docker compose logs -f openclaw"
 alias oc-restart="docker compose restart openclaw"
