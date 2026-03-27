@@ -479,3 +479,24 @@ SKILLS.update(MAINTENANCE_SKILLS)
 # Agent Loop — persistent plan management for autonomous goals
 from agent_loop import AGENT_LOOP_SKILLS
 SKILLS.update(AGENT_LOOP_SKILLS)
+
+# Code sandbox — LLM-driven Python execution (Phase 3: Code Interpreter)
+from code_sandbox import run_code as _run_sandbox_code
+
+
+async def execute_python_code(code: str, stdin_data: str = "") -> str:
+    """Execute Python code in a sandboxed Docker container and return results."""
+    stdout, stderr, exit_code = await _run_sandbox_code(code, language="python", stdin_data=stdin_data)
+    parts = []
+    if stdout:
+        parts.append(f"Output:\n{stdout}")
+    if stderr:
+        parts.append(f"Errors:\n{stderr}")
+    if exit_code != 0:
+        parts.append(f"Exit code: {exit_code}")
+    if not parts:
+        parts.append("(no output)")
+    return "\n".join(parts)
+
+
+SKILLS["execute_python_code"] = execute_python_code

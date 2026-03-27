@@ -12,7 +12,7 @@
         type: string
         description: Container name (e.g. sonarr, radarr, plex, sabnzbd)
     required:
-    - service
+      - service
 - name: get_container_logs
   description: Retrieve the last N lines of logs from a Docker container.
   parameters:
@@ -25,7 +25,7 @@
         type: integer
         description: Number of log lines to retrieve (5-100, default 30)
     required:
-    - service
+      - service
 - name: get_docker_stats
   description: Get CPU, memory, and network usage for all running containers.
   parameters:
@@ -42,7 +42,8 @@
     type: object
     properties: {}
 - name: get_compose_config
-  description: Read the Docker Compose configuration file and return port mappings, volume mounts, and environment variable
+  description:
+    Read the Docker Compose configuration file and return port mappings, volume mounts, and environment variable
     names for all services (or a specific one). Use this when troubleshooting permission errors, port conflicts, or when you
     need to know exactly how a container is configured.
   parameters:
@@ -67,9 +68,10 @@
     type: object
     properties: {}
 - name: get_plex_activity
-  description: 'Get real-time Plex activity: who is currently watching, what they''re watching, playback progress, video quality,
-    and whether the stream is direct play or transcode. Use this when the user asks ''what''s playing on Plex'', ''is anyone
-    watching?'', ''who''s using Plex right now'', or similar.'
+  description:
+    "Get real-time Plex activity: who is currently watching, what they're watching, playback progress, video quality,
+    and whether the stream is direct play or transcode. Use this when the user asks 'what's playing on Plex', 'is anyone
+    watching?', 'who's using Plex right now', or similar."
   parameters:
     type: object
     properties: {}
@@ -83,9 +85,9 @@
         description: Search term (e.g. 'Breaking Bad', 'The Matrix')
       media_type:
         type: string
-        description: 'Type filter: ''tv'', ''movie'', or ''all'' (default: all)'
+        description: "Type filter: 'tv', 'movie', or 'all' (default: all)"
     required:
-    - query
+      - query
 - name: get_download_queue
   description: Get active downloads from SABnzbd (Usenet) and qBittorrent (torrents).
   parameters:
@@ -108,7 +110,7 @@
         type: string
         description: Hostname or IP address to ping
     required:
-    - host
+      - host
 - name: check_service_ports
   description: Check if all key services are listening on their expected ports.
   parameters:
@@ -131,7 +133,7 @@
         type: integer
         description: Number of log lines to analyze (10-200, default 50)
     required:
-    - service
+      - service
 - name: remember_fact
   description: Store a fact or piece of information in the long-term memory (QMD).
   parameters:
@@ -144,7 +146,7 @@
         type: string
         description: Optional comma-separated list of tags to associate with this memory
     required:
-    - content
+      - content
 - name: recall_fact
   description: Search long-term memory (QMD) for a specific fact or information.
   parameters:
@@ -154,7 +156,7 @@
         type: string
         description: Keywords or topic to search for
     required:
-    - query
+      - query
 - name: list_memories
   description: List all facts stored in the long-term memory (QMD).
   parameters:
@@ -175,9 +177,9 @@
         type: string
         description: The message body (plain text)
     required:
-    - to
-    - subject
-    - body
+      - to
+      - subject
+      - body
 - name: get_network_status
   description: Check LAN, internet, DNS, and Tailscale VPN connectivity and return a full status summary.
   parameters:
@@ -220,7 +222,7 @@
         type: integer
         description: The numeric ID of the request to approve (from get_pending_requests)
     required:
-    - request_id
+      - request_id
 - name: deny_request
   description: Decline a pending Overseerr media request by its numeric ID.
   parameters:
@@ -230,7 +232,7 @@
         type: integer
         description: The numeric ID of the request to decline (from get_pending_requests)
     required:
-    - request_id
+      - request_id
 - name: get_request_stats
   description: Get a summary count of all Overseerr media requests by status (pending, approved, available, etc.).
   parameters:
@@ -263,7 +265,7 @@
     properties:
       provider:
         type: string
-        description: 'Email provider: ''gmail'' or ''outlook'' (default: gmail)'
+        description: "Email provider: 'gmail' or 'outlook' (default: gmail)"
       count:
         type: integer
         description: Number of recent messages to return (1-25, default 10)
@@ -277,9 +279,9 @@
         description: Keyword or phrase to search for in email subjects and bodies
       provider:
         type: string
-        description: 'Email provider: ''gmail'' or ''outlook'' (default: gmail)'
+        description: "Email provider: 'gmail' or 'outlook' (default: gmail)"
     required:
-    - query
+      - query
 - name: send_email
   description: Send an email via Gmail or Outlook.
   parameters:
@@ -296,11 +298,11 @@
         description: Email body (plain text)
       provider:
         type: string
-        description: 'Email provider: ''gmail'' or ''outlook'' (default: gmail)'
+        description: "Email provider: 'gmail' or 'outlook' (default: gmail)"
     required:
-    - to
-    - subject
-    - body
+      - to
+      - subject
+      - body
 - name: get_upcoming_events
   description: Get Google Calendar events scheduled in the next N days.
   parameters:
@@ -327,16 +329,17 @@
         type: string
         description: Optional event notes or description
     required:
-    - summary
-    - start_time
-    - end_time
+      - summary
+      - start_time
+      - end_time
 - name: get_todays_events
   description: Get all Google Calendar events scheduled for today.
   parameters:
     type: object
     properties: {}
 - name: search_web
-  description: Search the live web for current information using Tavily AI Search (with DuckDuckGo and Bing fallbacks). Use
+  description:
+    Search the live web for current information using Tavily AI Search (with DuckDuckGo and Bing fallbacks). Use
     when the user asks about news, current events, facts, documentation, real estate listings, weather, or anything that requires
     up-to-date information from the internet.
   parameters:
@@ -349,22 +352,25 @@
         type: integer
         description: Number of results to return (1-10, default 5)
     required:
-    - query
+      - query
 - name: get_weather
-  description: Get current weather conditions and a 3-day forecast for any location (city, airport code, or landmark). No
+  description:
+    Get current weather conditions and a 3-day forecast for any location (city, airport code, or landmark). No
     API key required.
   parameters:
     type: object
     properties:
       location:
         type: string
-        description: City name, airport code, or landmark (e.g. 'Philadelphia PA', 'JFK', 'Narberth PA'). Leave empty to use
+        description:
+          City name, airport code, or landmark (e.g. 'Philadelphia PA', 'JFK', 'Narberth PA'). Leave empty to use
           the default configured location.
       units:
         type: string
-        description: 'Unit system: ''uscs'' for Fahrenheit/mph (default) or ''metric'' for Celsius/kmh'
+        description: "Unit system: 'uscs' for Fahrenheit/mph (default) or 'metric' for Celsius/kmh"
 - name: browse_url
-  description: Fetch and read the content of a specific web page or URL. Use when the user provides a URL to read, or after
+  description:
+    Fetch and read the content of a specific web page or URL. Use when the user provides a URL to read, or after
     a web search when you want to get the full content of a result.
   parameters:
     type: object
@@ -373,9 +379,10 @@
         type: string
         description: The full URL to fetch (must start with http:// or https://)
     required:
-    - url
+      - url
 - name: webfetch_md
-  description: Smartly scrape and fetch any URL, converting it into clean Markdown (optimized for AI reading). Use this as
+  description:
+    Smartly scrape and fetch any URL, converting it into clean Markdown (optimized for AI reading). Use this as
     a more robust alternative to browse_url.
   parameters:
     type: object
@@ -384,7 +391,7 @@
         type: string
         description: The full URL to fetch
     required:
-    - url
+      - url
 - name: git_status
   description: Check the project's Git status, showing which files are staged, unstaged, or untracked.
   parameters:
@@ -415,9 +422,10 @@
         type: string
         description: The commit message summarizing the work done
     required:
-    - message
+      - message
 - name: init_planning_files
-  description: Initialize Manus-style file-based planning (task_plan.md, findings.md, progress.md) in the project workspace.
+  description:
+    Initialize Manus-style file-based planning (task_plan.md, findings.md, progress.md) in the project workspace.
     Use this for ANY multi-step or complex task to ensure the agent maintains state and context.
   parameters:
     type: object
@@ -426,9 +434,10 @@
         type: string
         description: A clear, one-sentence description of the end goal of the task.
     required:
-    - goal
+      - goal
 - name: update_plan_status
-  description: Log progress or update status of a phase in the current planning files (progress.md). Use this after completing
+  description:
+    Log progress or update status of a phase in the current planning files (progress.md). Use this after completing
     significant steps or hitting errors to record findings.
   parameters:
     type: object
@@ -443,10 +452,11 @@
         type: string
         description: Optional detailed progress note or error report.
     required:
-    - phase
-    - status
+      - phase
+      - status
 - name: gateway_request
-  description: Call any third-party API (Slack, GitHub, Google Sheets, Notion, HubSpot, Stripe, Airtable, and 100+ more) through
+  description:
+    Call any third-party API (Slack, GitHub, Google Sheets, Notion, HubSpot, Stripe, Airtable, and 100+ more) through
     the Maton managed OAuth gateway. Requires an active Maton connection for the target app.
   parameters:
     type: object
@@ -456,11 +466,12 @@
         description: Service slug, e.g. 'slack', 'github', 'google-sheets', 'notion', 'hubspot', 'stripe', 'airtable'.
       path:
         type: string
-        description: Native API path without the app prefix, e.g. 'api/chat.postMessage' for Slack, 'repos/owner/repo/issues'
+        description:
+          Native API path without the app prefix, e.g. 'api/chat.postMessage' for Slack, 'repos/owner/repo/issues'
           for GitHub.
       method:
         type: string
-        description: 'HTTP method: GET, POST, PUT, PATCH, or DELETE (default: GET).'
+        description: "HTTP method: GET, POST, PUT, PATCH, or DELETE (default: GET)."
       body:
         type: string
         description: Optional JSON-encoded request body as a string.
@@ -468,8 +479,8 @@
         type: string
         description: Optional connection UUID if you have multiple connections for the same app.
     required:
-    - app
-    - path
+      - app
+      - path
 - name: gateway_list_connections
   description: List all active Maton OAuth connections, optionally filtered by app name.
   parameters:
@@ -479,7 +490,8 @@
         type: string
         description: Optional service name to filter (e.g. 'slack'). Leave empty for all.
 - name: gateway_create_connection
-  description: Create a new Maton OAuth connection for a third-party app. Returns a URL for the user to open in a browser
+  description:
+    Create a new Maton OAuth connection for a third-party app. Returns a URL for the user to open in a browser
     to complete OAuth.
   parameters:
     type: object
@@ -488,7 +500,7 @@
         type: string
         description: Service to connect, e.g. 'slack', 'github', 'google-calendar', 'notion'.
     required:
-    - app
+      - app
 - name: nas_create_folder
   description: Create a new folder on the Synology NAS FileStation.
   parameters:
@@ -498,9 +510,10 @@
         type: string
         description: Full folder path to create, e.g. '/volume1/documents/reports'.
     required:
-    - path
+      - path
 - name: nas_write_file
-  description: Write a text or markdown file directly to the Synology NAS. Use this to save research reports, notes, or any
+  description:
+    Write a text or markdown file directly to the Synology NAS. Use this to save research reports, notes, or any
     generated content to network storage.
   parameters:
     type: object
@@ -510,14 +523,15 @@
         description: Full text content to write to the file.
       remote_folder:
         type: string
-        description: 'Destination folder on the NAS, e.g. ''/volume1/documents''. Default: ''/volume1/documents''.'
+        description: "Destination folder on the NAS, e.g. '/volume1/documents'. Default: '/volume1/documents'."
       filename:
         type: string
-        description: 'File name including extension, e.g. ''research_report.md''. Default: ''openclaw_output.md''.'
+        description: "File name including extension, e.g. 'research_report.md'. Default: 'openclaw_output.md'."
     required:
-    - content
+      - content
 - name: create_google_doc
-  description: Create a Google Doc with a title and text content. Requires a 'google-docs' connection via Maton. Returns the
+  description:
+    Create a Google Doc with a title and text content. Requires a 'google-docs' connection via Maton. Returns the
     document URL.
   parameters:
     type: object
@@ -529,10 +543,11 @@
         type: string
         description: Full text content to insert into the document.
     required:
-    - title
-    - content
+      - title
+      - content
 - name: create_onedrive_file
-  description: Save a text or markdown file to OneDrive. Requires a 'microsoft-onedrive' connection via Maton. Returns the
+  description:
+    Save a text or markdown file to OneDrive. Requires a 'microsoft-onedrive' connection via Maton. Returns the
     file URL.
   parameters:
     type: object
@@ -545,12 +560,13 @@
         description: Text content to write to the file.
       folder_path:
         type: string
-        description: 'OneDrive folder path (default: ''OpenClaw''). Use ''/'' for root.'
+        description: "OneDrive folder path (default: 'OpenClaw'). Use '/' for root."
     required:
-    - filename
-    - content
+      - filename
+      - content
 - name: ontology_create_entity
-  description: Create a structured ontology entity in the local graph memory. Use for people, projects, tasks, events, documents,
+  description:
+    Create a structured ontology entity in the local graph memory. Use for people, projects, tasks, events, documents,
     devices, and durable facts that should be linked and queried later.
   parameters:
     type: object
@@ -565,8 +581,8 @@
         type: string
         description: Optional explicit entity ID. Leave empty to auto-generate.
     required:
-    - entity_type
-    - properties_json
+      - entity_type
+      - properties_json
 - name: ontology_get_entity
   description: Fetch a single ontology entity by ID.
   parameters:
@@ -576,9 +592,10 @@
         type: string
         description: Entity ID to fetch.
     required:
-    - entity_id
+      - entity_id
 - name: ontology_query
-  description: Query ontology entities by type and property filters. Use to answer 'what do we know about X', list project
+  description:
+    Query ontology entities by type and property filters. Use to answer 'what do we know about X', list project
     tasks, or find structured records.
   parameters:
     type: object
@@ -602,8 +619,8 @@
         type: string
         description: Properties to merge into the entity as a JSON object string.
     required:
-    - entity_id
-    - properties_json
+      - entity_id
+      - properties_json
 - name: ontology_relate
   description: Create a typed relation between two ontology entities, such as project->has_task->task or task->blocks->task.
   parameters:
@@ -622,11 +639,12 @@
         type: string
         description: Optional relation properties as a JSON object string.
     required:
-    - from_id
-    - relation
-    - to_id
+      - from_id
+      - relation
+      - to_id
 - name: ontology_get_related
-  description: Get entities related to a given ontology entity. Use for dependency tracing, project membership, ownership,
+  description:
+    Get entities related to a given ontology entity. Use for dependency tracing, project membership, ownership,
     and graph traversal.
   parameters:
     type: object
@@ -639,22 +657,22 @@
         description: Optional relation filter.
       direction:
         type: string
-        description: 'Traversal direction: outgoing, incoming, or both. Default both.'
+        description: "Traversal direction: outgoing, incoming, or both. Default both."
     required:
-    - entity_id
+      - entity_id
 - name: ontology_validate
   description: Validate the ontology graph against the local schema and report any structural errors.
   parameters:
     type: object
     properties: {}
 - name: get_mission_tasks
-  description: 'List Mission Control Kanban tasks. Optionally filter by status: backlog, in_progress, review, done, permanent.'
+  description: "List Mission Control Kanban tasks. Optionally filter by status: backlog, in_progress, review, done, permanent."
   parameters:
     type: object
     properties:
       status:
         type: string
-        description: 'Filter by status: backlog, in_progress, review, done, permanent. Omit for all tasks.'
+        description: "Filter by status: backlog, in_progress, review, done, permanent. Omit for all tasks."
     required: []
 - name: get_task_detail
   description: Get full details for a specific Mission Control task including subtasks and comments.
@@ -665,7 +683,7 @@
         type: string
         description: The task ID, e.g. 'task_001'.
     required:
-    - task_id
+      - task_id
 - name: update_task_status
   description: Update a Mission Control task's status.
   parameters:
@@ -676,10 +694,10 @@
         description: The task ID.
       new_status:
         type: string
-        description: 'New status: backlog, in_progress, review, done.'
+        description: "New status: backlog, in_progress, review, done."
     required:
-    - task_id
-    - new_status
+      - task_id
+      - new_status
 - name: complete_task
   description: Mark a Mission Control task as complete (moves to review) with a summary of what was done.
   parameters:
@@ -692,8 +710,8 @@
         type: string
         description: Summary of what was accomplished.
     required:
-    - task_id
-    - summary
+      - task_id
+      - summary
 - name: add_task_comment
   description: Add a comment or progress update to a Mission Control task.
   parameters:
@@ -706,14 +724,15 @@
         type: string
         description: The comment text.
     required:
-    - task_id
-    - comment
+      - task_id
+      - comment
 - name: spawn_worker
-  description: 'Spawn a focused AI sub-agent to accomplish a specific goal autonomously. The worker runs its own tool loop
+  description:
+    "Spawn a focused AI sub-agent to accomplish a specific goal autonomously. The worker runs its own tool loop
     and returns a clean result. Use this to delegate complex subtasks that require multiple independent tool calls, such as
     gathering data from several sources, doing research and summarizing it, or performing a multi-step diagnostic while you
-    handle the rest of the response. Examples: ''check Sonarr health AND search web for that error'', ''look up my calendar
-    AND get the weather for tomorrow''.'
+    handle the rest of the response. Examples: 'check Sonarr health AND search web for that error', 'look up my calendar
+    AND get the weather for tomorrow'."
   parameters:
     type: object
     properties:
@@ -727,11 +746,12 @@
         type: integer
         description: Maximum tool call rounds for the worker (1-8, default 6).
     required:
-    - goal
+      - goal
 - name: create_scheduled_task
-  description: 'Create a recurring scheduled task that runs a skill automatically. Use interval_minutes for ''every N minutes''
+  description:
+    "Create a recurring scheduled task that runs a skill automatically. Use interval_minutes for 'every N minutes'
     tasks, or hour+minute for a daily cron. Examples: schedule a daily health check at 07:00, run speed test every 60 min,
-    check Overseerr requests every 30 min.'
+    check Overseerr requests every 30 min."
   parameters:
     type: object
     properties:
@@ -754,7 +774,7 @@
         type: string
         description: Optional human-readable label describing the task purpose.
     required:
-    - skill_name
+      - skill_name
 - name: cancel_scheduled_task
   description: Cancel (remove) a scheduled task by its task ID. Use list_scheduled_tasks to find IDs.
   parameters:
@@ -764,14 +784,15 @@
         type: string
         description: The task ID to cancel, e.g. 'sched-3'.
     required:
-    - task_id
+      - task_id
 - name: list_scheduled_tasks
   description: List all active scheduled tasks with their IDs, actions, schedules, and run counts.
   parameters:
     type: object
     properties: {}
 - name: fetch_rss_feed
-  description: Fetch recent items from any RSS or Atom feed URL. Use this to read news sources, tech blogs, GitHub release
+  description:
+    Fetch recent items from any RSS or Atom feed URL. Use this to read news sources, tech blogs, GitHub release
     notes, Reddit feeds, podcast listings, or any site that publishes an RSS/Atom feed. Returns titles, dates, and summaries.
   parameters:
     type: object
@@ -783,7 +804,7 @@
         type: integer
         description: Number of items to return (1-20, default 10).
     required:
-    - url
+      - url
 - name: search_rss
   description: Fetch a feed and filter items matching a keyword or phrase.
   parameters:
@@ -796,10 +817,11 @@
         type: string
         description: Keyword or phrase to search for in titles and summaries.
     required:
-    - url
-    - query
+      - url
+      - query
 - name: get_rss_digest
-  description: Fetch multiple RSS/Atom feeds in parallel and synthesize a combined digest. Use this for a quick news summary
+  description:
+    Fetch multiple RSS/Atom feeds in parallel and synthesize a combined digest. Use this for a quick news summary
     across several sources, or to monitor multiple topics at once. The LLM summarizes the most notable items.
   parameters:
     type: object
@@ -811,14 +833,15 @@
         type: string
         description: Optional focus topic — only surface articles related to this subject.
     required:
-    - urls_json
+      - urls_json
 - name: list_rss_feeds
   description: List all RSS/Atom feed URLs that have been fetched or saved.
   parameters:
     type: object
     properties: {}
 - name: snapshot_url
-  description: Take a baseline snapshot of a URL for change monitoring. Call this once to record the current content, then
+  description:
+    Take a baseline snapshot of a URL for change monitoring. Call this once to record the current content, then
     schedule check_url_for_changes to run periodically and alert on differences. Use for competitor pricing pages, job boards,
     status pages, listings, etc.
   parameters:
@@ -831,9 +854,10 @@
         type: string
         description: Human-readable name for this monitor (e.g. 'Amazon GPU Pricing').
     required:
-    - url
+      - url
 - name: check_url_for_changes
-  description: Compare the current content of a URL against its stored snapshot. Returns a change alert with before/after
+  description:
+    Compare the current content of a URL against its stored snapshot. Returns a change alert with before/after
     diff if content changed, or a clean status if unchanged. Designed to be called by the scheduler.
   parameters:
     type: object
@@ -842,7 +866,7 @@
         type: string
         description: The URL to check (must have been snapshotted with snapshot_url first).
     required:
-    - url
+      - url
 - name: list_monitored_urls
   description: List all URLs currently being monitored for content changes, with their last-checked and last-changed timestamps.
   parameters:
@@ -857,9 +881,10 @@
         type: string
         description: The URL to stop monitoring.
     required:
-    - url
+      - url
 - name: compare_sources
-  description: Browse multiple URLs in parallel and synthesize a comparison answer. Use this for competitive analysis, comparing
+  description:
+    Browse multiple URLs in parallel and synthesize a comparison answer. Use this for competitive analysis, comparing
     documentation pages, fact-checking across multiple sources, or getting a balanced view of a topic from several sites at
     once.
   parameters:
@@ -872,10 +897,11 @@
         type: string
         description: The question to answer or aspect to compare across the sources.
     required:
-    - urls_json
-    - question
+      - urls_json
+      - question
 - name: decompose_goal
-  description: Break a complex goal into concrete Mission Control tasks using AI planning. The agent analyzes the goal, produces
+  description:
+    Break a complex goal into concrete Mission Control tasks using AI planning. The agent analyzes the goal, produces
     an ordered task list, and creates each task in the Mission Control kanban board for tracking. Use when the user says 'plan
     X', 'set up a project for Y', or gives a multi-step goal.
   parameters:
@@ -888,4 +914,139 @@
         type: string
         description: Optional short prefix for task titles (e.g. 'HomeReno', 'Q2Launch').
     required:
-    - goal
+      - goal
+
+# ── Agent Loop — Plan Management ───────────────────────────────────────────
+- name: create_plan
+  description:
+    Create a new task plan with a goal and ordered steps. Use this before starting any multi-step task (research,
+    comparison, analysis). Returns the plan_id for tracking. Skip for simple single-tool questions.
+  parameters:
+    type: object
+    properties:
+      goal:
+        type: string
+        description: What needs to be accomplished.
+      steps_text:
+        type: string
+        description: Ordered list of steps, one per line. If empty, a single step matching the goal is created.
+    required:
+      - goal
+- name: update_plan_step
+  description: Update a step's status in an active plan. Call after completing or failing a step.
+  parameters:
+    type: object
+    properties:
+      plan_id:
+        type: string
+        description: The plan identifier returned by create_plan.
+      step_num:
+        type: integer
+        description: Step number (1-based).
+      status:
+        type: string
+        description: New status — one of done, failed, skipped, in-progress.
+      output:
+        type: string
+        description: Brief result text or error message (max 3000 chars).
+    required:
+      - plan_id
+      - step_num
+      - status
+- name: read_plan
+  description: Read the current state of a plan including all step statuses and outputs.
+  parameters:
+    type: object
+    properties:
+      plan_id:
+        type: string
+        description: The plan identifier.
+    required:
+      - plan_id
+- name: list_plans
+  description: List plans filtered by status. Use to check for active or interrupted plans.
+  parameters:
+    type: object
+    properties:
+      status:
+        type: string
+        description: Filter — one of in-progress, completed, interrupted, or all (default all).
+    required: []
+- name: adjust_plan
+  description: Add, remove, or reorder steps in an active plan. Plans are living documents.
+  parameters:
+    type: object
+    properties:
+      plan_id:
+        type: string
+        description: The plan identifier.
+      action:
+        type: string
+        description: One of add_step, remove_step, insert_after.
+      step_description:
+        type: string
+        description: Description for the new step (for add_step / insert_after).
+      position:
+        type: integer
+        description: Step number to insert after (insert_after) or remove (remove_step).
+    required:
+      - plan_id
+      - action
+- name: cancel_plan
+  description: Cancel an active plan, marking it as interrupted. Steps in-progress are reset to pending for safe resume later.
+  parameters:
+    type: object
+    properties:
+      plan_id:
+        type: string
+        description: The plan identifier.
+    required:
+      - plan_id
+- name: resume_plan
+  description: Resume an interrupted plan from where it left off. Returns the next step to work on.
+  parameters:
+    type: object
+    properties:
+      plan_id:
+        type: string
+        description: The plan identifier.
+    required:
+      - plan_id
+
+- name: execute_plan
+  description: Execute all pending steps of a plan autonomously. The agent loops through each step, runs appropriate tools, and records results. Stops on failure.
+  parameters:
+    type: object
+    properties:
+      plan_id:
+        type: string
+        description: The plan identifier to execute.
+    required:
+      - plan_id
+
+- name: execute_python_code
+  description: >-
+    Execute Python code in a sandboxed environment for calculations, data analysis,
+    text processing, or generating outputs. Use this when you need to compute something,
+    analyze data, perform math, format text, or any task better handled by running code
+    than by reasoning alone. The sandbox has no network access and a 30-second timeout.
+    Common uses: math calculations, date/time operations, data formatting, CSV/JSON processing,
+    string manipulation, list sorting/filtering, unit conversions.
+    Available libraries: Python 3.12 standard library (math, json, csv, datetime, statistics,
+    collections, itertools, re, etc). No external packages (no pandas, numpy, requests).
+  parameters:
+    type: object
+    properties:
+      code:
+        type: string
+        description: >-
+          Python code to execute. Must be a complete, runnable script.
+          Use print() to produce output — only stdout is returned to the user.
+          Example: 'import math\nprint(f"Pi to 10 digits: {math.pi:.10f}")'
+      stdin_data:
+        type: string
+        description: >-
+          Optional input data to pass to the script via stdin.
+          Useful for processing user-provided data (CSV rows, JSON, etc).
+    required:
+      - code
