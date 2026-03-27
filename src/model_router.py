@@ -12,10 +12,16 @@ Routing strategy:
 """
 
 import logging
+import os
 import re
 from typing import Optional
 
 log = logging.getLogger("openclaw.model_router")
+
+# Copilot proxy configuration
+# When COPILOT_PROXY_URL is set, OpenAI and Anthropic calls route through it
+COPILOT_PROXY_URL = os.getenv("COPILOT_PROXY_URL", "")
+COPILOT_PROXY_ENABLED = COPILOT_PROXY_URL != ""
 
 # Query type classifications
 _CODE_PATTERN = re.compile(
@@ -134,7 +140,7 @@ async def chat_openai(
     import os
 
     api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
+    if not api_key and not COPILOT_PROXY_ENABLED:
         return None
 
     model = model or os.getenv("OPENAI_MODEL", "gpt-4o-mini")
@@ -150,13 +156,24 @@ async def chat_openai(
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": message})
 
+        # Use Copilot proxy if available, otherwise direct OpenAI
+        if COPILOT_PROXY_ENABLED:
+            base_url = COPILOT_PROXY_URL.rstrip("/")
+            headers = {"Content-Type": "application/json"}
+            # Copilot proxy handles auth internally
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+        else:
+            base_url = "https://api.openai.com/v1"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
+                f"{base_url}/chat/completions",
+                headers=headers,
                 json={
                     "model": model,
                     "messages": messages,
@@ -186,6 +203,16 @@ async def chat_anthropic(
 ) -> Optional[str]:
     """Send a message via Anthropic's API. Returns response text or None."""
     import os
+
+    # When Copilot proxy is available, route Claude calls through it
+    # (the proxy serves Claude models in OpenAI-compatible format)
+    if COPILOT_PROXY_ENABLED:
+        return await chat_openai(
+            message, history, system_prompt,
+            model=model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
     api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:

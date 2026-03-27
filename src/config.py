@@ -89,6 +89,10 @@ class _Config:
     default_model_preference: str = os.getenv("DEFAULT_MODEL_PREFERENCE", _local_llm.get("default_preference", "auto"))
     ollama_tools_enabled: bool = os.getenv("OLLAMA_TOOLS_ENABLED", str(_local_llm.get("tools_enabled", True))).lower() == "true"
 
+    # -- Copilot Proxy (Phase 8 enhancement) -----------------------------------
+    copilot_proxy_url: str = os.getenv("COPILOT_PROXY_URL", "")
+    copilot_proxy_enabled: bool = bool(os.getenv("COPILOT_PROXY_URL", ""))
+
     # -- Spending / Budget -----------------------------------------------------
     spending_file: Path = Path(os.getenv("SPENDING_FILE", "/memory/spending.json"))
     gemini_price_input_per_m: float = float(os.getenv("GEMINI_PRICE_INPUT_PER_M", "0.10"))
