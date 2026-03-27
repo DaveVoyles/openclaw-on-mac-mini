@@ -14,7 +14,8 @@ import aiohttp
 
 log = logging.getLogger("openclaw.overseerr")
 
-OVERSEERR_URL = os.getenv("OVERSEERR_URL", "http://192.168.1.93:5055")
+from config import cfg as _cfg
+OVERSEERR_URL = os.getenv("OVERSEERR_URL", f"http://{_cfg.docker_host_ip}:5055")
 OVERSEERR_API_KEY = os.getenv("OVERSEERR_API_KEY", "")
 
 from http_session import SessionManager
@@ -43,7 +44,8 @@ async def _get(path: str) -> dict | list | str:
                 return await resp.json()
             try:
                 text = await resp.text()
-            except Exception:
+            except Exception as exc:
+                log.debug("Overseerr GET response body read failed: %s", exc)
                 text = "[could not read response body]"
             return f"HTTP {resp.status}: {text[:200]}"
     except asyncio.TimeoutError:
@@ -65,7 +67,8 @@ async def _post(path: str) -> dict | str:
                 return {} if resp.status == 204 else await resp.json()
             try:
                 text = await resp.text()
-            except Exception:
+            except Exception as exc:
+                log.debug("Overseerr POST response body read failed: %s", exc)
                 text = "[could not read response body]"
             return f"HTTP {resp.status}: {text[:200]}"
     except asyncio.TimeoutError:

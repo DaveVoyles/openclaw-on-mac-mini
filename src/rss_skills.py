@@ -113,7 +113,8 @@ def _parse_feed(xml_text: str, limit: int = 10) -> tuple[str, list[dict]]:
                 try:
                     dt = parsedate_to_datetime(date_raw)
                     date_fmt = dt.strftime("%Y-%m-%d")
-                except Exception:
+                except Exception as exc:
+                    log.debug("RSS date parse failed for %r: %s", date_raw, exc)
                     date_fmt = date_raw[:10]
             items.append({"title": title, "url": url, "date": date_fmt, "summary": summary.strip()})
 

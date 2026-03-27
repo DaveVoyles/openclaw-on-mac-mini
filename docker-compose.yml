@@ -41,16 +41,19 @@ services:
       - DISCORD_CHANNEL_RESEARCH_ID=${DISCORD_CHANNEL_RESEARCH_ID:-0}
       - DISCORD_CHANNEL_ANALYTICS_ID=${DISCORD_CHANNEL_ANALYTICS_ID:-0}
       - DISCORD_CHANNEL_BOOKMARKS_ID=${DISCORD_CHANNEL_BOOKMARKS_ID:-0}
+      - DISCORD_CHANNEL_REAL_ESTATE_ID=${DISCORD_CHANNEL_REAL_ESTATE_ID:-0}
+      - ALERT_CHANNEL_ID=${ALERT_CHANNEL_ID:-0}
       # NAS maintenance backup settings
-      - NAS_HOST=192.168.1.8
-      - NAS_SSH_PORT=24
-      - NAS_SSH_USER=dave
-      - NAS_BACKUP_PATH=/volume1/docker/openclaw/backups
+      - NAS_HOST=${NAS_HOST:-192.168.1.8}
+      - NAS_SSH_PORT=${NAS_SSH_PORT:-24}
+      - NAS_SSH_USER=${NAS_SSH_USER:-dave}
+      - NAS_BACKUP_PATH=${NAS_BACKUP_PATH:-/volume1/docker/openclaw/backups}
+      - PLANS_DIR=/plans
 
     # Volume mounts
     volumes:
-      # Docker socket access
-      - /Users/davevoyles/.docker/run/docker.sock:/var/run/docker.sock:rw
+      # Docker socket access (OrbStack — symlinked from /var/run/docker.sock)
+      - /var/run/docker.sock:/var/run/docker.sock:rw
 
       # Configuration (read-only)
       - ./config:/config:ro
@@ -63,6 +66,9 @@ services:
 
       # Temp directories (required for read_only: true)
       - /tmp/openclaw:/tmp:rw
+
+      # Agent plans — persistent TODO/plan files for autonomous goal tracking
+      - ./data/plans:/plans:rw
 
       # Obsidian vault — stores all research reports, bookmarks, and notes as .md files
       - ./data/vault:/vault:rw

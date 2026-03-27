@@ -7,6 +7,7 @@ import asyncio
 import collections
 import datetime
 import functools
+import io
 import json
 import logging
 import os
@@ -14,6 +15,7 @@ import platform
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import aiohttp
 import discord
@@ -57,10 +59,13 @@ from qmd import remember_fact, recall_fact
 from research_agent import ResearchAgent
 
 from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
+from llm import chat_stream as llm_chat_stream
 from llm import analyze_image as llm_analyze_image, analyze_document as llm_analyze_document
 from llm import SUPPORTED_IMAGE_MIMES
 from memory import store as conversation_store
 from dashboard import api_dashboard_handler, dashboard_handler, guide_handler
+from image_gen import generate_image, is_available as sd_is_available
+from code_sandbox import run_code as sandbox_run_code
 from approvals import (
     ApprovalView,
     RiskLevel,
@@ -69,6 +74,7 @@ from approvals import (
     is_emergency_stopped,
     set_emergency_stop,
 )
+from agent_loop import scan_interrupted as scan_interrupted_plans, list_plans as al_list_plans, resume_plan as al_resume_plan, read_plan as al_read_plan, cancel_plan as al_cancel_plan
 from constants import (
     EMBED_DESC_LIMIT,
     EMBED_SPLIT_LIMIT,
@@ -136,7 +142,7 @@ def _load_channel_config() -> None:
         except Exception as e:
             log.warning("Failed to load channel config: %s", e)
 
-    for role in ("research", "analytics", "bookmarks"):
+    for role in ("research", "analytics", "bookmarks", "real_estate"):
         raw = os.getenv(f"DISCORD_CHANNEL_{role.upper()}_ID", "0")
         try:
             cid = int(raw)
@@ -257,7 +263,8 @@ def _load_permissions() -> dict:
         try:
             with open(perms_file) as f:
                 _permissions_cache = yaml.safe_load(f) or {}
-        except Exception:
+        except Exception as exc:
+            log.warning("Failed to parse permissions YAML: %s", exc)
             _permissions_cache = _permissions_cache or {}
     else:
         _permissions_cache = {}
@@ -397,6 +404,21 @@ class OpenClawBot(commands.Bot):
             asyncio.create_task(self._morning_briefing_loop())
             asyncio.create_task(self._proactive_insight_loop())
             log.info("Proactive tasks started (alert channel: %d)", ALERT_CHANNEL_ID)
+
+            # Scan for interrupted plans from previous runs
+            interrupted = scan_interrupted_plans()
+            if interrupted:
+                channel = self.get_channel(ALERT_CHANNEL_ID)
+                if channel:
+                    names = ", ".join(f"`{p.plan_id}`" for p in interrupted[:5])
+                    try:
+                        await channel.send(
+                            f"🔄 Found **{len(interrupted)}** interrupted plan(s) from a previous session: {names}\n"
+                            f"Use `/resume <plan_id>` to continue, or `/plans` to review."
+                        )
+                    except Exception as e:
+                        log.warning("Failed to post interrupted plan notice: %s", e)
+                log.info("Found %d interrupted plan(s) on startup", len(interrupted))
         else:
             log.info("ALERT_CHANNEL_ID not set — proactive push notifications disabled")
 
@@ -479,7 +501,8 @@ class OpenClawBot(commands.Bot):
 
             try:
                 calendar = await asyncio.wait_for(get_upcoming_events(days=1), timeout=8)
-            except Exception:
+            except Exception as exc:
+                log.debug("Calendar fetch failed for briefing: %s", exc)
                 calendar = "Calendar not available."
 
             today = datetime.date.today().strftime("%A, %B %d, %Y")
@@ -518,11 +541,14 @@ class OpenClawBot(commands.Bot):
                 log.warning("Proactive scan error: %s", e)
             await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)
 
-    async def _run_proactive_scan(self):
-        """Gather system signals + log snippets, ask Gemini for assessment, post if actionable."""
-        if not ALERT_CHANNEL_ID:
-            return
+    _SAFE_RESTART_TARGETS = frozenset({
+        "sonarr", "radarr", "lidarr", "prowlarr",
+        "sabnzbd", "qbittorrent", "tautulli", "overseerr",
+    })
+    _error_re = __import__("re").compile(r"error|warn|exception|critical|failed", __import__("re").IGNORECASE)
 
+    async def _gather_system_signals(self) -> tuple[str, dict[str, str]] | None:
+        """Collect health checks and log snippets. Returns None if all clean."""
         health, dl_clients, plex = await asyncio.gather(
             check_arr_health(),
             check_download_clients(),
@@ -530,27 +556,23 @@ class OpenClawBot(commands.Bot):
             return_exceptions=True,
         )
 
-        # Collect recent error-bearing log snippets from key containers
         key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
         log_snippets: dict[str, str] = {}
-        _error_re = __import__("re").compile(r"error|warn|exception|critical|failed", __import__("re").IGNORECASE)
         for svc in key_containers:
             try:
                 logs = await asyncio.wait_for(get_container_logs(svc, lines=PROACTIVE_LOG_LINES), timeout=6)
-                if logs and _error_re.search(logs):
+                if logs and self._error_re.search(logs):
                     log_snippets[svc] = logs[:LOG_SNIPPET_MAX_CHARS]
             except Exception as exc:
                 log.debug("Container log fetch for %s failed: %s", svc, exc)
 
-        # If all health checks look clean AND no logs have anomalies, skip LLM call
         all_clean = all(
-            isinstance(r, str) and not _error_re.search(r)
+            isinstance(r, str) and not self._error_re.search(r)
             for r in [health, dl_clients, plex]
             if isinstance(r, str)
         )
         if all_clean and not log_snippets:
-            log.debug("Proactive scan: all clear")
-            return
+            return None
 
         summary_parts = [
             f"Health checks:\n  *arr: {health}\n  Download clients: {dl_clients}\n  Plex: {plex}"
@@ -560,7 +582,47 @@ class OpenClawBot(commands.Bot):
             for svc, snippet in log_snippets.items():
                 summary_parts.append(f"  {svc}:\n{snippet}")
 
-        summary = "\n\n".join(summary_parts)
+        return "\n\n".join(summary_parts), log_snippets
+
+    async def _execute_self_healing(self, analysis: str) -> tuple[str, list[str]]:
+        """Parse SELF_HEAL directives and execute safe restarts.
+
+        Returns (cleaned_analysis, heal_results).
+        """
+        heal_actions: list[str] = []
+        display_analysis = analysis
+        for line in analysis.split("\n"):
+            if line.strip().startswith("SELF_HEAL:"):
+                parts = line.strip().split()
+                if len(parts) >= 3 and parts[1] == "restart_container":
+                    target = parts[2].lower().strip()
+                    if target in self._SAFE_RESTART_TARGETS:
+                        heal_actions.append(target)
+                display_analysis = display_analysis.replace(line, "").strip()
+
+        heal_results: list[str] = []
+        for target in heal_actions:
+            try:
+                result = await asyncio.wait_for(restart_container(target), timeout=60)
+                heal_results.append(f"🔧 `{target}`: {result}")
+                audit_log(None, "self_heal", detail=f"restart {target}: {result}")
+                log.info("Self-heal: restarted %s → %s", target, result[:80])
+            except Exception as exc:
+                heal_results.append(f"❌ `{target}`: {exc}")
+                log.warning("Self-heal restart failed for %s: %s", target, exc)
+
+        return display_analysis, heal_results
+
+    async def _run_proactive_scan(self):
+        """Gather system signals + log snippets, ask Gemini for assessment, post if actionable."""
+        if not ALERT_CHANNEL_ID:
+            return
+
+        result = await self._gather_system_signals()
+        if result is None:
+            log.debug("Proactive scan: all clear")
+            return
+        summary, _ = result
 
         prompt = (
             "You are OpenClaw's autonomous monitoring system running a background scan.\n"
@@ -568,6 +630,11 @@ class OpenClawBot(commands.Bot):
             "aware of — errors, service failures, degraded performance, or unusual activity.\n"
             "ONLY respond if there is something genuinely actionable. "
             "If everything is within normal operation, respond with exactly: NO_ALERT\n\n"
+            "If you find an issue, also include a SELF_HEAL section at the end with the format:\n"
+            "SELF_HEAL: restart_container <container_name>\n"
+            "Only suggest restart_container for non-critical services (sonarr, radarr, lidarr, "
+            "prowlarr, sabnzbd, tautulli, overseerr). Do NOT suggest restarting plex, postgres, "
+            "or openclaw itself. If no safe fix exists, omit the SELF_HEAL line.\n\n"
             f"{summary[:EMBED_PROMPT_LIMIT]}"
         )
 
@@ -577,19 +644,28 @@ class OpenClawBot(commands.Bot):
                 log.debug("Proactive scan: LLM found nothing notable")
                 return
 
+            display_analysis, heal_results = await self._execute_self_healing(analysis)
+
             channel = self.get_channel(ALERT_CHANNEL_ID)
             if not channel:
                 return
 
             embed = discord.Embed(
                 title="🔭 Proactive Insight",
-                description=analysis[:EMBED_SPLIT_LIMIT],
+                description=display_analysis[:EMBED_SPLIT_LIMIT],
                 color=discord.Color.gold(),
             )
+            if heal_results:
+                embed.add_field(
+                    name="🔧 Auto-Repair Actions",
+                    value="\n".join(heal_results)[:1000],
+                    inline=False,
+                )
+
             embed.set_footer(text="Autonomous monitoring scan • every 2h")
             await channel.send(embed=embed)
             audit_log(None, "proactive_scan", detail="insight posted")
-            log.info("Proactive scan posted an insight")
+            log.info("Proactive scan posted an insight (healed: %d)", len(heal_results))
         except asyncio.TimeoutError:
             log.warning("Proactive scan LLM call timed out")
         except Exception as e:
@@ -730,7 +806,8 @@ class OpenClawBot(commands.Bot):
         source = request.match_info.get("source", "unknown").lower()
         try:
             payload = await request.json()
-        except Exception:
+        except Exception as exc:
+            log.debug("Webhook JSON parse failed: %s", exc)
             payload = {}
 
         if not isinstance(payload, dict):
@@ -894,6 +971,32 @@ async def help_cmd(interaction: discord.Interaction):
 # Discord embed description limit is 4096 chars; stay safely under it
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 
+# Regex to find image URLs in LLM responses:
+#   - Markdown images: ![alt](url)
+#   - Photo links the prompt produces: [📸 ...](url)  or  [Photo](url)
+#   - Bare image URLs on their own line
+import re as _re
+
+_IMAGE_LINK_RE = _re.compile(
+    r"!?\[(?:[^\]]*(?:photo|image|📸|🖼️|property|listing)[^\]]*)\]\((https?://[^)]+)\)",
+    _re.IGNORECASE,
+)
+_BARE_IMAGE_RE = _re.compile(
+    r"(https?://\S+\.(?:jpg|jpeg|png|webp|gif)(?:\?\S*)?)",
+    _re.IGNORECASE,
+)
+
+
+def _extract_image_url(text: str) -> str | None:
+    """Return the first image URL found in the response text, or None."""
+    m = _IMAGE_LINK_RE.search(text)
+    if m:
+        return m.group(1)
+    m = _BARE_IMAGE_RE.search(text)
+    if m:
+        return m.group(1)
+    return None
+
 
 def _split_response(text: str) -> list[str]:
     """
@@ -920,6 +1023,124 @@ def _split_response(text: str) -> list[str]:
             chunks.append(text[:split_at])
             text = text[split_at:].lstrip("\n")
     return chunks
+
+
+# ---------------------------------------------------------------------------
+# Streaming: progressive Discord message edits
+# ---------------------------------------------------------------------------
+
+# Minimum interval (seconds) between Discord message edits to stay under rate limits
+_STREAM_EDIT_INTERVAL = 1.5
+
+
+# ---------------------------------------------------------------------------
+# File attachment extraction — detect code blocks and offer as files
+# ---------------------------------------------------------------------------
+
+_CODE_BLOCK_RE = _re.compile(
+    r"```(\w+)?\n([\s\S]+?)```",
+)
+
+
+def _extract_file_attachment(text: str) -> tuple[discord.File, str] | None:
+    """If the response contains a large code block (>500 chars), extract it as a discord.File.
+
+    Returns ``(discord.File, language)`` or ``None``.
+    """
+    matches = list(_CODE_BLOCK_RE.finditer(text))
+    if not matches:
+        return None
+
+    # Find the largest code block
+    best = max(matches, key=lambda m: len(m.group(2)))
+    code = best.group(2).strip()
+    lang = (best.group(1) or "txt").lower()
+
+    if len(code) < 500:
+        return None
+
+    ext_map = {
+        "python": "py", "py": "py", "javascript": "js", "js": "js",
+        "typescript": "ts", "ts": "ts", "json": "json", "yaml": "yaml",
+        "yml": "yaml", "html": "html", "css": "css", "sql": "sql",
+        "bash": "sh", "sh": "sh", "csv": "csv", "markdown": "md", "md": "md",
+    }
+    ext = ext_map.get(lang, "txt")
+
+    buffer = io.BytesIO(code.encode("utf-8"))
+    return discord.File(buffer, filename=f"openclaw_output.{ext}"), lang
+
+
+# ---------------------------------------------------------------------------
+# Reaction-based action buttons on responses
+# ---------------------------------------------------------------------------
+
+class ResponseActions(discord.ui.View):
+    """Buttons attached to /ask responses: Save, Regenerate, Email."""
+
+    def __init__(
+        self, *, response_text: str, question: str, user_id: int, channel_id: int, timeout: float = 300
+    ):
+        super().__init__(timeout=timeout)
+        self._response_text = response_text
+        self._question = question
+        self._user_id = user_id
+        self._channel_id = channel_id
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Only the original requester can use these buttons."""
+        if interaction.user.id != self._user_id:
+            await interaction.response.send_message("Only the original requester can use these buttons.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="📌 Save", style=discord.ButtonStyle.secondary)
+    async def save_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            fact = self._response_text[:500]
+            result = await remember_fact(
+                f"Saved from /ask: {self._question[:100]}", fact
+            )
+            await interaction.followup.send(f"📌 Saved to memory.\n{result}", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
+
+    @discord.ui.button(label="🔄 Regenerate", style=discord.ButtonStyle.secondary)
+    async def regen_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer()
+        conv = conversation_store.get(
+            user_id=self._user_id,
+            channel_id=self._channel_id,
+            user_name=str(interaction.user.display_name),
+        )
+        # Remove the last exchange so the model regenerates
+        if len(conv.history) >= 2:
+            conv.history = conv.history[:-2]
+        try:
+            response_text, updated_history, model_used = await llm_chat(
+                user_message=self._question,
+                history=conv.history,
+                user_name=str(interaction.user.display_name),
+            )
+            conv.update_from_llm(updated_history)
+            embed = discord.Embed(description=response_text[:_EMBED_LIMIT], color=discord.Color.purple())
+            embed.set_footer(text=f"🔄 Regenerated | via {model_used}")
+            await interaction.followup.send(embed=embed)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Regeneration failed: {e}")
+
+    @discord.ui.button(label="📧 Email", style=discord.ButtonStyle.secondary)
+    async def email_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            result = await send_agent_mail(
+                subject=f"OpenClaw: {self._question[:80]}",
+                body=self._response_text,
+            )
+            await interaction.followup.send(f"📧 Emailed!\n{result}", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Email failed: {e}", ephemeral=True)
 
 
 async def _handle_image_attachment(
@@ -962,7 +1183,8 @@ async def _handle_doc_attachment(
                     doc_text = raw.decode("utf-8", errors="replace")[
                         :ATTACHMENT_TEXT_MAX_CHARS
                     ]
-                except Exception:
+                except Exception as exc:
+                    log.debug("Attachment text decode failed: %s", exc)
                     doc_text = ""
                 if doc_text:
                     return f"{question}\n\n[Attached file `{attachment.filename}`]:\n{doc_text}"
@@ -981,6 +1203,12 @@ async def ask_cmd(
     question: str,
     attachment: discord.Attachment | None = None,
 ):
+    """Main user query handler — routes to Gemini (tool-capable) or Ollama (conversational).
+
+    Handles: emergency-stop gating, attachment analysis (images/PDFs/text),
+    memory context injection, streaming responses to Discord, and post-response
+    action buttons (save, regenerate, email).
+    """
 
     if is_emergency_stopped():
         await interaction.response.send_message(
@@ -1036,21 +1264,49 @@ async def ask_cmd(
                 })
                 log.debug("Injected %s channel role prompt for channel %d", channel_role, interaction.channel_id)
 
+    response_text = ""
+    model_used = "unknown"
+
     try:
-        response_text, updated_history, model_used = await llm_chat(
+        # ── Streaming response with progressive Discord edits ────────────
+        last_edit = 0.0
+        display_question = question if len(question) < 200 else question[:197] + "..."
+
+        async for chunk_text, is_final, meta in llm_chat_stream(
             user_message=question,
             history=conv.history,
             user_name=str(interaction.user.display_name),
             on_tool_call=_on_tool_call,
-        )
-        conv.update_from_llm(updated_history)
-        # Auto-save after every exchange so conversations survive restarts
-        conversation_store.auto_save_thread(
-            interaction.user.id, interaction.channel_id, str(interaction.user.display_name)
-        )
+        ):
+            model_used = meta.get("model_used", "unknown")
+
+            if is_final:
+                response_text = chunk_text
+                if "updated_history" in meta:
+                    conv.update_from_llm(meta["updated_history"])
+                    conversation_store.auto_save_thread(
+                        interaction.user.id, interaction.channel_id, str(interaction.user.display_name)
+                    )
+                break
+
+            # Progressive edit: update every _STREAM_EDIT_INTERVAL seconds
+            now = time.monotonic()
+            if now - last_edit >= _STREAM_EDIT_INTERVAL and chunk_text:
+                try:
+                    # Show streaming text in an embed (truncated to embed limit)
+                    preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
+                    embed = discord.Embed(description=preview, color=discord.Color.purple())
+                    embed.set_author(
+                        name=f"Replying to: {display_question}",
+                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                    )
+                    await interaction.edit_original_response(content=None, embed=embed)
+                    last_edit = now
+                except Exception as exc:
+                    log.debug("Stream edit failed: %s", exc)
+
     except Exception as e:
         log.error("LLM error: %s", e)
-        # Wrap the original message in a code block for easy copy-pasting
         safe_question = discord.utils.escape_markdown(question)
         response_text = (
             f"❌ **LLM Error:** {str(e)}\n\n"
@@ -1059,39 +1315,54 @@ async def ask_cmd(
         )
         model_used = "error"
 
-    # Split into multiple messages if response exceeds Discord's embed limit
+    # ── Final response with embeds, file attachments, and action buttons ──
     chunks = _split_response(response_text)
+    image_url = _extract_image_url(response_text)
+    file_attachment = _extract_file_attachment(response_text)
+
+    # Build the action buttons view
+    action_view = ResponseActions(
+        response_text=response_text,
+        question=question,
+        user_id=interaction.user.id,
+        channel_id=interaction.channel_id,
+    )
 
     for i, chunk in enumerate(chunks):
-        embed = discord.Embed(
-            description=chunk,
-            color=discord.Color.purple(),
-        )
+        embed = discord.Embed(description=chunk, color=discord.Color.purple())
         if i == 0:
-            # Add the user's question in a collapsed-style field on the first embed
-            # Discord limits author.name to 256 chars. We use 200 for safety + "..."
             display_question = question if len(question) < 200 else question[:197] + "..."
             embed.set_author(
                 name=f"Replying to: {display_question}",
-                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None
+                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             )
+            if image_url:
+                embed.set_image(url=image_url)
 
-        if i == len(chunks) - 1:
-            # Footer only on the last embed
+        is_last = i == len(chunks) - 1
+        if is_last:
             if model_used and "gemini" not in model_used.lower():
                 rate_str = "local · unlimited"
             else:
                 rate_str = get_rate_info()
             embed.set_footer(text=f"💬 {conv.message_count} msgs | {rate_str} | via {model_used}")
+
         if i == 0:
-            # Replace the deferred progress placeholder with the actual response
-            await interaction.edit_original_response(content=None, embed=embed)
+            kwargs: dict[str, Any] = {"content": None, "embed": embed}
+            if is_last:
+                kwargs["view"] = action_view
+            if file_attachment and is_last:
+                kwargs["attachments"] = [file_attachment[0]]
+            await interaction.edit_original_response(**kwargs)
         else:
-            await interaction.followup.send(embed=embed)
+            kwargs = {"embed": embed}
+            if is_last:
+                kwargs["view"] = action_view
+            if file_attachment and is_last:
+                kwargs["file"] = file_attachment[0]
+            await interaction.followup.send(**kwargs)
 
     audit_log(interaction.user, "ask", detail=question[:200])
-
-    # Periodic cleanup
     conversation_store.cleanup_expired()
 
 
@@ -1809,6 +2080,86 @@ async def weather_cmd(interaction: discord.Interaction, location: str = "", unit
 
 
 # ---------------------------------------------------------------------------
+# /plans — list active plans
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="plans", description="List active and recent agent plans")
+@app_commands.describe(status="Filter: all, in-progress, completed, interrupted (default: all)")
+@require_auth
+async def plans_cmd(interaction: discord.Interaction, status: str = "all"):
+    await interaction.response.defer()
+    result = await al_list_plans(status)
+    embed = discord.Embed(
+        title="📋 Agent Plans",
+        description=result[:EMBED_DESC_LIMIT],
+        color=discord.Color.teal(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "plans", detail=f"filter={status}")
+
+
+# ---------------------------------------------------------------------------
+# /plan-detail — show a specific plan
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="plan-detail", description="Show details of a specific agent plan")
+@app_commands.describe(plan_id="The plan identifier (from /plans)")
+@require_auth
+async def plan_detail_cmd(interaction: discord.Interaction, plan_id: str):
+    await interaction.response.defer()
+    result = await al_read_plan(plan_id)
+    embed = discord.Embed(
+        title=f"📋 Plan: {plan_id[:60]}",
+        description=result[:EMBED_DESC_LIMIT],
+        color=discord.Color.teal(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "plan_detail", detail=plan_id[:100])
+
+
+# ---------------------------------------------------------------------------
+# /resume-plan — resume an interrupted plan
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="resume-plan", description="Resume an interrupted agent plan")
+@app_commands.describe(plan_id="The plan identifier to resume (from /plans)")
+@require_auth
+async def resume_plan_cmd(interaction: discord.Interaction, plan_id: str):
+    await interaction.response.defer()
+    result = await al_resume_plan(plan_id)
+    embed = discord.Embed(
+        title="🔄 Plan Resumed",
+        description=result[:EMBED_DESC_LIMIT],
+        color=discord.Color.green(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "resume_plan", detail=plan_id[:100])
+
+
+# ---------------------------------------------------------------------------
+# /cancel-plan — cancel an active plan
+# ---------------------------------------------------------------------------
+
+
+@bot.tree.command(name="cancel-plan", description="Cancel an active agent plan")
+@app_commands.describe(plan_id="The plan identifier to cancel")
+@require_auth
+async def cancel_plan_cmd(interaction: discord.Interaction, plan_id: str):
+    await interaction.response.defer()
+    result = await al_cancel_plan(plan_id)
+    embed = discord.Embed(
+        title="⚠️ Plan Cancelled",
+        description=result[:EMBED_DESC_LIMIT],
+        color=discord.Color.orange(),
+    )
+    await interaction.followup.send(embed=embed)
+    audit_log(interaction.user, "cancel_plan", detail=plan_id[:100])
+
+
+# ---------------------------------------------------------------------------
 # /diff — git status + diff summary
 # ---------------------------------------------------------------------------
 
@@ -1850,6 +2201,136 @@ async def briefing_cmd(interaction: discord.Interaction):
     except Exception as exc:
         log.debug("Briefing edit_original_response failed: %s", exc)
     audit_log(interaction.user, "briefing")
+
+
+# ---------------------------------------------------------------------------
+# Slash commands — Image generation (local Stable Diffusion)
+# ---------------------------------------------------------------------------
+
+@bot.tree.command(name="imagine", description="Generate an image using local Stable Diffusion (free, on-device)")
+@app_commands.describe(
+    prompt="Describe the image you want to generate",
+    negative="Things to avoid in the image (optional)",
+    width="Image width in pixels (default: 1024, max: 1536)",
+    height="Image height in pixels (default: 1024, max: 1536)",
+    steps="Inference steps — higher = better quality, slower (default: 20)",
+)
+@require_auth
+async def imagine_cmd(
+    interaction: discord.Interaction,
+    prompt: str,
+    negative: str = "",
+    width: int = 1024,
+    height: int = 1024,
+    steps: int = 20,
+):
+    await interaction.response.defer()
+
+    # Check if SD service is reachable
+    if not await sd_is_available():
+        await interaction.edit_original_response(
+            content=(
+                "⚠️ **Stable Diffusion service is not running.**\n"
+                "Start it on the host with: `python scripts/sd_server.py`\n"
+                "Or set `SD_URL` env var to point to your SD API."
+            )
+        )
+        return
+
+    await interaction.edit_original_response(
+        content=f"🎨 *Generating image…* ({width}×{height}, {steps} steps)\nPrompt: `{prompt[:100]}`"
+    )
+
+    image_bytes, status = await generate_image(
+        prompt,
+        negative_prompt=negative,
+        width=width,
+        height=height,
+        steps=steps,
+    )
+
+    if image_bytes is None:
+        await interaction.edit_original_response(content=f"❌ Image generation failed: {status}")
+        return
+
+    embed = discord.Embed(
+        title="🎨 Generated Image",
+        description=f"**Prompt:** {prompt[:200]}",
+        color=discord.Color.blue(),
+    )
+    embed.set_footer(text=f"{width}×{height} · {steps} steps · local Stable Diffusion")
+    file = discord.File(io.BytesIO(image_bytes), filename="openclaw_generated.png")
+    embed.set_image(url="attachment://openclaw_generated.png")
+
+    await interaction.edit_original_response(content=None, embed=embed, attachments=[file])
+    audit_log(interaction.user, "imagine", detail=prompt[:200])
+
+
+# ---------------------------------------------------------------------------
+# Slash commands — Code execution sandbox
+# ---------------------------------------------------------------------------
+
+@bot.tree.command(name="run-code", description="Execute Python code in a sandboxed container (safe, isolated)")
+@app_commands.describe(
+    code="Python code to run (or wrap in a code block ```python ... ```)",
+)
+@require_auth
+async def run_code_cmd(interaction: discord.Interaction, code: str):
+    await interaction.response.defer()
+
+    # Strip markdown code fence if present
+    if code.startswith("```"):
+        lines = code.split("\n")
+        # Remove first line (```python) and last line (```)
+        if lines[-1].strip() == "```":
+            lines = lines[1:-1]
+        elif lines[0].strip().startswith("```"):
+            lines[0] = ""
+        code = "\n".join(lines).strip()
+
+    if not code:
+        await interaction.edit_original_response(content="❌ No code provided.")
+        return
+
+    # Safety: basic sanity check — no disk wiping, no network, etc.
+    # (the sandbox itself enforces this, but let's give a clear error)
+    if len(code) > 10_000:
+        await interaction.edit_original_response(content="❌ Code too long (max 10,000 chars).")
+        return
+
+    await interaction.edit_original_response(content="⚙️ *Running code in sandboxed container…*")
+
+    stdout, stderr, exit_code = await sandbox_run_code(code)
+
+    # Format output
+    parts = []
+    if stdout:
+        parts.append(f"**stdout:**\n```\n{stdout[:3000]}\n```")
+    if stderr:
+        parts.append(f"**stderr:**\n```\n{stderr[:1500]}\n```")
+    if not stdout and not stderr:
+        parts.append("*(no output)*")
+
+    status = "✅" if exit_code == 0 else "❌"
+    header = f"{status} Exit code: {exit_code}"
+
+    embed = discord.Embed(
+        title="⚙️ Code Execution Result",
+        description=f"{header}\n\n" + "\n".join(parts),
+        color=discord.Color.green() if exit_code == 0 else discord.Color.red(),
+    )
+    embed.set_footer(text="Sandboxed · python:3.12-slim · no network · 256MB RAM · 30s timeout")
+
+    # If output is very long, also attach as a file
+    file = None
+    if len(stdout) > 3000:
+        file = discord.File(io.BytesIO(stdout.encode()), filename="output.txt")
+
+    kwargs: dict[str, Any] = {"content": None, "embed": embed}
+    if file:
+        kwargs["attachments"] = [file]
+    await interaction.edit_original_response(**kwargs)
+    audit_log(interaction.user, "run_code", detail=code[:200])
 
 
 # ---------------------------------------------------------------------------

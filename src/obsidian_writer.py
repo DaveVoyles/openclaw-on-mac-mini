@@ -26,7 +26,15 @@ _SUBFOLDERS = {
     "analytics": "Analytics",
 }
 
-_lock = asyncio.Lock()
+_lock: asyncio.Lock | None = None
+
+
+def _get_lock() -> asyncio.Lock:
+    """Lazy-init the vault write lock inside the running event loop."""
+    global _lock
+    if _lock is None:
+        _lock = asyncio.Lock()
+    return _lock
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +108,7 @@ async def save_to_vault(
     Returns:
         Success/error message string.
     """
-    async with _lock:
+    async with _get_lock():
         try:
             subfolder = _SUBFOLDERS.get(content_type, "Notes")
             dest_dir = VAULT_DIR / subfolder

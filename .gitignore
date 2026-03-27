@@ -1,5 +1,11 @@
 # Secrets — never commit
 .env
+.env.local
+
+# Private keys / certs
+*.key
+*.pem
+*.p12
 
 # Python
 __pycache__/
@@ -12,6 +18,9 @@ data/logs/
 data/audit/
 data/memory/
 
+# ClawHub local state
+.clawhub/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -19,5 +28,12 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Editor temp files
+*~
+*.swp
+*.swo
+
+# Legacy test files
 test_phase4.py
 test_phase5.py

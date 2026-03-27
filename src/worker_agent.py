@@ -35,6 +35,7 @@ async def spawn_worker(
     goal: str,
     context: str = "",
     max_rounds: int = 8,
+    conversation_history: list[dict] | None = None,
 ) -> str:
     """
     Spawn a focused sub-agent to accomplish a specific goal autonomously.
@@ -46,6 +47,7 @@ async def spawn_worker(
         goal:       Clear description of what the worker should accomplish.
         context:    Optional background information or constraints.
         max_rounds: Maximum tool call rounds (default 8, capped at MAX_TOOL_ROUNDS).
+        conversation_history: Optional recent conversation turns for context inheritance.
 
     Returns:
         The worker's synthesized result as a string.
@@ -89,6 +91,22 @@ async def spawn_worker(
     initial_message = goal
     if context:
         initial_message = f"Context: {context}\n\nTask: {goal}"
+
+    # Inject recent conversation history for context inheritance
+    if conversation_history:
+        recent = conversation_history[-5:]  # last 5 turns
+        history_lines = []
+        for msg in recent:
+            role = msg.get("role", "user")
+            parts = msg.get("parts", [])
+            text = " ".join(p for p in parts if isinstance(p, str))
+            if text:
+                history_lines.append(f"  {role}: {text[:200]}")
+        if history_lines:
+            history_summary = "\n".join(history_lines)
+            initial_message = (
+                f"Recent conversation context:\n{history_summary}\n\n{initial_message}"
+            )
 
     log.info("Worker spawned for goal: %.80s…", goal)
 
@@ -158,8 +176,8 @@ async def spawn_worker(
             try:
                 parts = response.candidates[0].content.parts
                 result_text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Worker response text extraction fallback failed: %s", exc)
 
         if not result_text:
             result_text = "Worker completed but returned no output."

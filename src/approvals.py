@@ -6,6 +6,7 @@ Manages pending action requests with Discord button UI, timeouts, and audit trai
 import asyncio
 import datetime
 import logging
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -145,15 +146,20 @@ approval_store = ApprovalStore()
 # ---------------------------------------------------------------------------
 
 _emergency_stop = False
+_stop_lock = threading.Lock()
 
 
 def is_emergency_stopped() -> bool:
-    return _emergency_stop
+    """Check if the emergency stop is active (thread-safe)."""
+    with _stop_lock:
+        return _emergency_stop
 
 
-def set_emergency_stop(active: bool):
+def set_emergency_stop(active: bool) -> None:
+    """Toggle the emergency stop flag (thread-safe)."""
     global _emergency_stop
-    _emergency_stop = active
+    with _stop_lock:
+        _emergency_stop = active
     log.warning("Emergency stop %s", "ACTIVATED" if active else "deactivated")
 
 

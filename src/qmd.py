@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
+from utils import atomic_write
+
 log = logging.getLogger("openclaw.qmd")
 
 # ---------------------------------------------------------------------------
@@ -39,9 +41,7 @@ class QMDMemory:
     def _save(self):
         MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
         try:
-            tmp = MEMORY_FILE.with_suffix(".tmp")
-            tmp.write_text(json.dumps(self._memory, indent=2), encoding="utf-8")
-            tmp.replace(MEMORY_FILE)
+            atomic_write(MEMORY_FILE, json.dumps(self._memory, indent=2))
         except Exception as e:
             log.error("Failed to save QMD memory: %s", e)
 

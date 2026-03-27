@@ -13,6 +13,8 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Callable, Awaitable, Optional
 
+from utils import atomic_write
+
 log = logging.getLogger("openclaw.scheduler")
 
 SCHEDULE_FILE = Path(os.getenv("MEMORY_DIR", "/memory")) / "schedules.json"
@@ -113,18 +115,12 @@ class TaskScheduler:
 
     def _save(self):
         """Persist tasks to disk atomically."""
-        SCHEDULE_FILE.parent.mkdir(parents=True, exist_ok=True)
         data = [asdict(t) for t in self._tasks.values()]
-        tmp = SCHEDULE_FILE.with_suffix(".tmp")
-        with open(tmp, "w") as f:
-            f.write(json.dumps(data, indent=2))
-            f.flush()
-            os.fsync(f.fileno())
-        tmp.replace(SCHEDULE_FILE)
+        atomic_write(SCHEDULE_FILE, json.dumps(data, indent=2))
 
     # -- CRUD --
 
-    def register_skills(self, skills: dict[str, Callable[..., Awaitable[str]]]):
+    def register_skills(self, skills: dict[str, Callable[..., Awaitable[str]]]) -> None:
         """Register callable skills for the scheduler to invoke."""
         self._skill_registry.update(skills)
 
@@ -200,7 +196,7 @@ class TaskScheduler:
                 log.error("Scheduler loop error: %s", e)
             await asyncio.sleep(60)
 
-    async def _check_and_run(self):
+    async def _check_and_run(self) -> None:
         """Execute any due tasks."""
         now = datetime.datetime.now()
         for task in self._tasks.values():

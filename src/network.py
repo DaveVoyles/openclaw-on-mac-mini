@@ -37,7 +37,8 @@ def _get_session() -> aiohttp.ClientSession:
 
 _http_session: aiohttp.ClientSession | None = None
 
-HOST = os.getenv("DOCKER_HOST_IP", "192.168.1.93")
+from config import cfg as _cfg
+HOST = os.getenv("DOCKER_HOST_IP", _cfg.docker_host_ip)
 DNS_TEST_HOST = os.getenv("DNS_TEST_HOST", "8.8.8.8")
 PING_TEST_HOST = os.getenv("PING_TEST_HOST", "1.1.1.1")
 
@@ -127,7 +128,7 @@ async def get_tailscale_status() -> str:
 async def get_network_status() -> str:
     """Summarize external internet + LAN connectivity and Tailscale status (parallel checks)."""
 
-    nas_ip = os.getenv("NAS_IP", "192.168.1.8")
+    nas_ip = os.getenv("NAS_IP", _cfg.nas_ip)
     ts = _get_tailscale()
 
     async def _check_dns() -> str:
@@ -137,7 +138,8 @@ async def get_network_status() -> str:
                 timeout=3,
             )
             return "✅ DNS Resolution"
-        except Exception:
+        except Exception as exc:
+            log.debug("DNS resolution check failed: %s", exc)
             return "❌ DNS Resolution failed"
 
     async def _check_health() -> str:
@@ -145,7 +147,8 @@ async def get_network_status() -> str:
             session = _get_session()
             async with session.get(f"http://{HOST}:8765/health") as resp:
                 return f"{'✅' if resp.status == 200 else '❌'} OpenClaw health endpoint (:{8765})"
-        except Exception:
+        except Exception as exc:
+            log.debug("Health endpoint check failed: %s", exc)
             return f"❌ OpenClaw health endpoint (:{8765})"
 
     async def _check_tailscale() -> str:
@@ -212,7 +215,8 @@ async def run_speed_test() -> str:
         )
         dns_ms = (time.monotonic() - start) * 1000
         results.append(f"**DNS Latency**: {dns_ms:.0f} ms")
-    except Exception:
+    except Exception as exc:
+        log.debug("DNS lookup failed: %s", exc)
         results.append("❌ DNS lookup failed")
 
     return "\n".join(results) if results else "❌ Speed test unavailable"

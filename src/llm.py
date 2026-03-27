@@ -33,7 +33,7 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
 MODEL_NAME = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2000"))
+MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "4096"))
 TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 
@@ -114,12 +114,14 @@ _TOOL_DECLARATIONS: list[dict[str, Any]] = _load_tool_declarations()
 
 # Shared aiohttp session for all Ollama requests (avoids per-request TCP handshakes)
 _ollama_session: aiohttp.ClientSession | None = None
-_ollama_session_lock = asyncio.Lock()
+_ollama_session_lock: asyncio.Lock | None = None
 
 
 async def _get_ollama_session() -> aiohttp.ClientSession:
     """Return the shared Ollama aiohttp session, (re)creating if closed."""
-    global _ollama_session
+    global _ollama_session, _ollama_session_lock
+    if _ollama_session_lock is None:
+        _ollama_session_lock = asyncio.Lock()
     async with _ollama_session_lock:
         if _ollama_session is None or _ollama_session.closed:
             connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
@@ -206,10 +208,9 @@ async def _ollama_available() -> bool:
             data = await resp.json()
             models = [m["name"] for m in data.get("models", [])]
             return any(OLLAMA_MODEL.split(":")[0] in m for m in models)
-    except Exception:
+    except Exception as exc:
+        log.debug("Ollama availability check failed: %s", exc)
         return False
-
-
 async def _chat_ollama(
     user_message: str,
     history: list[dict],
@@ -299,12 +300,13 @@ def _convert_schema(schema: dict) -> dict:
 
 
 class RateLimiter:
-    """Simple sliding-window rate limiter using a deque for O(1) amortized eviction."""
+    """Sliding-window rate limiter with jittered backoff for concurrent callers."""
 
     def __init__(self, per_minute: int = MAX_CALLS_PER_MINUTE, per_hour: int = MAX_CALLS_PER_HOUR):
         self._per_minute = per_minute
         self._per_hour = per_hour
         self._timestamps: deque[float] = deque()
+        self._lock = asyncio.Lock()
 
     def _evict(self) -> None:
         """Drop timestamps older than 1 hour from the front of the deque."""
@@ -323,6 +325,27 @@ class RateLimiter:
     def record(self):
         """Record a call."""
         self._timestamps.append(time.monotonic())
+
+    async def wait_for_capacity(self, max_wait: float = 30.0) -> bool:
+        """Wait with jittered exponential backoff until capacity is available.
+
+        Returns True if capacity was acquired, False if max_wait exceeded.
+        Uses a lock to prevent thundering-herd: only one caller backs off at a time.
+        """
+        import random
+        backoff = 1.0
+        waited = 0.0
+        async with self._lock:
+            while not self.check():
+                if waited >= max_wait:
+                    return False
+                jitter = random.uniform(0.8, 1.2)
+                sleep_time = min(backoff * jitter, max_wait - waited)
+                log.info("Rate limiter: backing off %.1fs (waited %.1fs)", sleep_time, waited)
+                await asyncio.sleep(sleep_time)
+                waited += sleep_time
+                backoff = min(backoff * 2, 15.0)  # cap at 15s
+        return True
 
     @property
     def remaining_minute(self) -> int:
@@ -390,9 +413,15 @@ def _evict_tool_cache() -> None:
 
 async def _execute_function_call(name: str, args: dict) -> str:
     """Look up and execute a skill by name, returning the string result."""
+    from tool_health import circuit_breaker, tool_health
+
     skill_fn = SKILLS.get(name)
     if skill_fn is None:
         return f"Unknown function: {name}"
+
+    # Circuit breaker: fast-fail on repeatedly broken tools
+    if circuit_breaker.is_open(name):
+        return f"⚠️ {name} is temporarily unavailable (circuit open — recent failures). Try an alternative approach."
 
     # Return cached result for read-only snapshot tools if still fresh
     if name in _CACHEABLE_TOOLS:
@@ -409,9 +438,13 @@ async def _execute_function_call(name: str, args: dict) -> str:
         if name in _CACHEABLE_TOOLS:
             _tool_cache[_cache_key(name, args)] = (result, time.monotonic())
             _evict_tool_cache()
+        circuit_breaker.record_success(name)
+        tool_health.record(name, success=True)
         return result
     except Exception as e:
         log.error("Skill %s failed: %s", name, e)
+        circuit_breaker.record_failure(name)
+        tool_health.record(name, success=False)
         return f"Error executing {name}: {e}"
 
 
@@ -423,7 +456,7 @@ _model: genai.GenerativeModel | None = None
 
 
 _model_system_prompt: str | None = None
-_model_lock = asyncio.Lock()
+_model_lock: asyncio.Lock | None = None
 
 
 def _init_gemini_model(
@@ -461,7 +494,9 @@ def _init_gemini_model(
 
 async def _get_model() -> genai.GenerativeModel:
     """Lazy-init the Gemini model; reloads when system prompt changes."""
-    global _model, _model_system_prompt
+    global _model, _model_system_prompt, _model_lock
+    if _model_lock is None:
+        _model_lock = asyncio.Lock()
     async with _model_lock:
         system_prompt = _load_system_prompt()
         if _model is not None and _model_system_prompt == system_prompt:
@@ -572,12 +607,34 @@ async def _run_tool_loop(
 # ---------------------------------------------------------------------------
 
 _MAX_HISTORY_TURNS = 20
+_MAX_HISTORY_CHARS = 80_000  # ~20K tokens at ~4 chars/token — leave room for tools + response
+
+
+def _estimate_chars(history: list[dict]) -> int:
+    """Rough character count of conversation history."""
+    total = 0
+    for msg in history:
+        for p in msg.get("parts", []):
+            if isinstance(p, str):
+                total += len(p)
+    return total
 
 
 def _trim_history(history: list[dict]) -> list[dict]:
-    """Keep first 2 turns (persona context) + last N to avoid context overflow."""
+    """Keep first 2 turns (persona context) + last N to avoid context overflow.
+
+    If the history still exceeds _MAX_HISTORY_CHARS after turn trimming,
+    progressively drop older turns until it fits.
+    """
     if len(history) > _MAX_HISTORY_TURNS:
-        return history[:2] + history[-(_MAX_HISTORY_TURNS - 2):]
+        history = history[:2] + history[-(_MAX_HISTORY_TURNS - 2):]
+
+    # Character-based overflow protection
+    while len(history) > 4 and _estimate_chars(history) > _MAX_HISTORY_CHARS:
+        # Remove the 3rd message (preserve first 2 for context, keep recent messages)
+        history = history[:2] + history[3:]
+        log.debug("Trimmed history to %d turns (%d chars)", len(history), _estimate_chars(history))
+
     return list(history)
 
 
@@ -613,7 +670,8 @@ def _extract_final_text(response, rounds: int, chat_session) -> str:
         try:
             parts = response.candidates[0].content.parts
             text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
-        except Exception:
+        except Exception as exc:
+            log.debug("Response text extraction fallback failed: %s", exc)
             text = ""
 
         if not text and rounds >= MAX_TOOL_ROUNDS:
@@ -655,22 +713,14 @@ async def _gemini_chat(
 
     Returns (response_text, updated_history, model_name).
     """
-    # Rate-limit check with exponential backoff
-    _MAX_RETRIES = 3
-    _backoff = 2.0
-    for _attempt in range(_MAX_RETRIES):
-        if _rate_limiter.check():
-            break
-        if _attempt == _MAX_RETRIES - 1:
-            return (
-                "⚠️ Rate limit reached. Please wait a moment before asking again. "
-                f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
-                history,
-                model.model_name if hasattr(model, "model_name") else "unknown",
-            )
-        log.info("Rate limit hit, backing off %.1fs (attempt %d/%d)", _backoff, _attempt + 1, _MAX_RETRIES)
-        await asyncio.sleep(_backoff)
-        _backoff *= 2
+    # Rate-limit check with jittered exponential backoff
+    if not await _rate_limiter.wait_for_capacity(max_wait=30.0):
+        return (
+            "⚠️ Rate limit reached. Please wait a moment before asking again. "
+            f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)",
+            history,
+            model.model_name if hasattr(model, "model_name") else "unknown",
+        )
 
     # Build Gemini-compatible history
     gemini_history = [
@@ -702,6 +752,103 @@ async def _gemini_chat(
     model_name = model.model_name if hasattr(model, "model_name") else "unknown"
 
     return text, updated_history, model_name
+
+
+# ---------------------------------------------------------------------------
+# Streaming chat — yields text chunks for progressive Discord updates
+# ---------------------------------------------------------------------------
+
+async def chat_stream(
+    user_message: str,
+    history: list[dict] | None = None,
+    user_name: str = "User",
+    on_tool_call: Any | None = None,
+):
+    """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples.
+
+    ``metadata`` is a dict with ``model_used``, ``updated_history`` (only on
+    the final chunk), and ``needs_tools`` (bool).
+
+    For tool-requiring queries, the tool loop runs non-streaming (emitting
+    tool-call progress via *on_tool_call*), then the **final text** is
+    yielded in one chunk with ``is_final=True``.
+
+    For simple queries (no tools), text is yielded progressively as
+    Gemini streams tokens.
+    """
+    history = _trim_history(history or [])
+
+    # ── Local Ollama path (non-streaming, single yield) ──────────────────
+    gemma_reply = await _try_local_model(user_message, history)
+    if gemma_reply is not None:
+        updated = history + [
+            {"role": "user", "parts": [user_message]},
+            {"role": "model", "parts": [gemma_reply]},
+        ]
+        yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
+        return
+
+    # Rate-limit pre-check
+    if not _rate_limiter.check():
+        msg = (
+            "⚠️ Rate limit reached. Please wait a moment before asking again. "
+            f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)"
+        )
+        yield msg, True, {"model_used": MODEL_NAME, "updated_history": history, "needs_tools": False}
+        return
+
+    model = await _get_model()
+    model_name = model.model_name if hasattr(model, "model_name") else "unknown"
+    needs_tools = _needs_tools(user_message)
+
+    if needs_tools:
+        # Tool queries: run the full tool loop (non-streaming), then yield result
+        text, updated_history, model_name = await _gemini_chat(
+            user_message, history, model,
+            on_tool_call=on_tool_call,
+            parallel_tools=True,
+            label="LLM",
+        )
+        yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True}
+        return
+
+    # ── No-tool Gemini streaming path ────────────────────────────────────
+    gemini_history = [
+        genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
+        for msg in history
+    ]
+    chat_session = model.start_chat(history=gemini_history)
+
+    loop = asyncio.get_event_loop()
+    _rate_limiter.record()
+
+    try:
+        response = await loop.run_in_executor(
+            None, lambda: chat_session.send_message(user_message, stream=True)
+        )
+    except Exception as e:
+        yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False}
+        return
+
+    accumulated = ""
+    try:
+        for chunk in response:
+            if hasattr(chunk, "text") and chunk.text:
+                accumulated += chunk.text
+                yield accumulated, False, {"model_used": model_name, "needs_tools": False}
+    except Exception as e:
+        if not accumulated:
+            accumulated = f"❌ Streaming error: {e}"
+
+    # Resolve the response to record usage
+    try:
+        response.resolve()
+        await _record_usage(response)
+    except Exception as exc:
+        log.debug("Stream response resolve/usage recording failed: %s", exc)
+
+    updated_history = _extract_history(chat_session)
+    yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False}
 
 
 async def chat(
@@ -857,9 +1004,9 @@ async def chat_deep(
 
     try:
         model = _get_thinking_model()
-    except Exception:
+    except Exception as exc:
         # Fall back to normal model if thinking config is unsupported
-        log.warning("Thinking model unavailable, falling back to standard model")
+        log.warning("Thinking model unavailable, falling back to standard model: %s", exc)
         model = await _get_model()
 
     text, updated_history, _ = await _gemini_chat(

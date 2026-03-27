@@ -12,6 +12,8 @@ import re
 import time
 from pathlib import Path
 
+from utils import atomic_write
+
 log = logging.getLogger("openclaw.memory")
 
 # ---------------------------------------------------------------------------
@@ -36,14 +38,8 @@ _THREAD_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 
 
 def _atomic_write(path: Path, data: str) -> None:
-    """Write data to *path* atomically via temp-file + fsync + rename."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    with open(tmp, "w") as f:
-        f.write(data)
-        f.flush()
-        os.fsync(f.fileno())
-    tmp.replace(path)
+    """Write data to *path* atomically. Delegates to shared utility."""
+    atomic_write(path, data)
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +143,8 @@ class ConversationStore:
                         loop.create_task(
                             _summarize_and_store(user_id, conv.user_name, conv.history)
                         )
-                except Exception:
-                    pass
+                except Exception as exc:
+                    log.debug("Summarization task skipped: %s", exc)
         if expired:
             log.info("Cleaned up %d expired conversations (summarized those with %d+ msgs)",
                      len(expired), MIN_MESSAGES_TO_SUMMARIZE)
@@ -297,8 +293,9 @@ class ConversationStore:
                     f"{icon} **{name}**{tag} — {msgs} msgs · {size_kb:.1f} KB"
                     f" (~{est_tokens:,} tokens) · {saved_str}"
                 )
-            except Exception:
+            except Exception as exc:
                 lines.append(f"• `{f.stem}` (unreadable)")
+                log.debug("Thread file unreadable %s: %s", f.name, exc)
 
         lines.append(f"\n📊 **{len(files)} threads · {total_kb:.1f} KB total on disk**")
         lines.append("🗑️ `/forget <name>` to delete · `/resume <name>` to continue")
@@ -346,7 +343,8 @@ def _load_last_summary(user_id: int) -> str:
     try:
         data = json.loads(path.read_text())
         return data.get("summary", "")
-    except Exception:
+    except Exception as exc:
+        log.debug("Failed to load summary for user %d: %s", user_id, exc)
         return ""
 
 
