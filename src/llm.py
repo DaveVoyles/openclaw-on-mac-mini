@@ -764,6 +764,49 @@ async def _gemini_chat(
 
 
 # ---------------------------------------------------------------------------
+# Auto-RAG — recall relevant context before each LLM call (Phase 1)
+# ---------------------------------------------------------------------------
+
+
+async def _auto_recall_context(user_message: str) -> str:
+    """Fetch recalled context from the vector store for Auto-RAG injection.
+
+    Returns a formatted context string or empty string if disabled, nothing
+    relevant was found, or the vector store is unavailable.
+    """
+    if not cfg.auto_recall_enabled:
+        return ""
+    try:
+        import vector_store  # lazy import to avoid circular deps
+
+        context = await vector_store.recall_for_context(user_message)
+        if context:
+            count = context.count("\n")  # header line doesn't count as an item
+            log.info(
+                "Auto-RAG: injected %d context items for: %.60s…",
+                count,
+                user_message,
+            )
+        return context
+    except Exception as e:
+        log.debug("Auto-RAG recall failed (non-fatal): %s", e)
+        return ""
+
+
+def _strip_recalled_prefix(history: list[dict], original: str, augmented: str) -> list[dict]:
+    """Remove the Auto-RAG context prefix from the last user turn in history."""
+    if original == augmented:
+        return history
+    for entry in reversed(history):
+        if entry.get("role") == "user":
+            entry["parts"] = [
+                original if p == augmented else p for p in entry["parts"]
+            ]
+            break
+    return history
+
+
+# ---------------------------------------------------------------------------
 # Streaming chat — yields text chunks for progressive Discord updates
 # ---------------------------------------------------------------------------
 
@@ -790,6 +833,13 @@ async def chat_stream(
     """
     history = _trim_history(history or [])
 
+    # ── Auto-RAG: recall relevant context ────────────────────────────────
+    recalled_context = await _auto_recall_context(user_message)
+    if recalled_context:
+        model_message = f"{recalled_context}\n\n---\nUser's question: {user_message}"
+    else:
+        model_message = user_message
+
     # ── Forced local mode ────────────────────────────────────────────────
     if model_preference == "local":
         if not LOCAL_LLM_ENABLED:
@@ -798,7 +848,7 @@ async def chat_stream(
         if not await _ollama_available():
             yield "⚠️ Ollama is not reachable. Check that the service is running.", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
             return
-        gemma_reply = await _try_local_model(user_message, history, force=True)
+        gemma_reply = await _try_local_model(model_message, history, force=True)
         if gemma_reply is not None:
             updated = history + [
                 {"role": "user", "parts": [user_message]},
@@ -819,7 +869,7 @@ async def chat_stream(
         # Fall through to the Gemini paths below (skip local attempt)
     else:
         # ── Auto mode: try local Ollama first ────────────────────────────
-        gemma_reply = await _try_local_model(user_message, history)
+        gemma_reply = await _try_local_model(model_message, history)
         if gemma_reply is not None:
             updated = history + [
                 {"role": "user", "parts": [user_message]},
@@ -844,11 +894,12 @@ async def chat_stream(
     if needs_tools:
         # Tool queries: run the full tool loop (non-streaming), then yield result
         text, updated_history, model_name = await _gemini_chat(
-            user_message, history, model,
+            model_message, history, model,
             on_tool_call=on_tool_call,
             parallel_tools=True,
             label="LLM",
         )
+        updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
         yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True}
         return
 
@@ -864,7 +915,7 @@ async def chat_stream(
 
     try:
         response = await loop.run_in_executor(
-            None, lambda: chat_session.send_message(user_message, stream=True)
+            None, lambda: chat_session.send_message(model_message, stream=True)
         )
     except Exception as e:
         yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False}
@@ -897,6 +948,7 @@ async def chat_stream(
         log.debug("Stream response resolve/usage recording failed: %s", exc)
 
     updated_history = _extract_history(chat_session)
+    updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
     yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False}
 
 
@@ -929,13 +981,20 @@ async def chat(
     """
     history = _trim_history(history or [])
 
+    # -- Auto-RAG: recall relevant context ────────────────────────────────────
+    recalled_context = await _auto_recall_context(user_message)
+    if recalled_context:
+        model_message = f"{recalled_context}\n\n---\nUser's question: {user_message}"
+    else:
+        model_message = user_message
+
     # -- Forced local mode ────────────────────────────────────────────────────
     if model_preference == "local":
         if not LOCAL_LLM_ENABLED:
             return "⚠️ Local LLM is disabled (`LOCAL_LLM_ENABLED=false`).", history, "none"
         if not await _ollama_available():
             return "⚠️ Ollama is not reachable. Check that the service is running.", history, "none"
-        gemma_reply = await _try_local_model(user_message, history, force=True)
+        gemma_reply = await _try_local_model(model_message, history, force=True)
         if gemma_reply is not None:
             updated = history + [
                 {"role": "user", "parts": [user_message]},
@@ -958,13 +1017,15 @@ async def chat(
                 MODEL_NAME,
             )
         model = await _get_model()
-        return await _gemini_chat(
-            user_message, history, model,
+        text, updated_history, model_name = await _gemini_chat(
+            model_message, history, model,
             on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
         )
+        updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
+        return text, updated_history, model_name
 
     # -- Auto mode (default) — Local model (Gemma) path ──────────────────────
-    gemma_reply = await _try_local_model(user_message, history)
+    gemma_reply = await _try_local_model(model_message, history)
     if gemma_reply is not None:
         updated = history + [
             {"role": "user", "parts": [user_message]},
@@ -985,14 +1046,16 @@ async def chat(
         )
 
     model = await _get_model()
-    return await _gemini_chat(
-        user_message,
+    text, updated_history, model_name = await _gemini_chat(
+        model_message,
         history,
         model,
         on_tool_call=on_tool_call,
         parallel_tools=True,
         label="LLM",
     )
+    updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
+    return text, updated_history, model_name
 
 
 def _extract_history(chat_session) -> list[dict]:

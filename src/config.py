@@ -131,6 +131,10 @@ class _Config:
     response_truncate_at: int = 3980
     max_file_size: int = 20 * 1024 * 1024  # 20 MB
 
+    # -- Auto-recall (Phase 1: Auto-RAG) --------------------------------------
+    auto_recall_enabled: bool = os.getenv("AUTO_RECALL_ENABLED", str(_yaml.get("vector_store", {}).get("contextual_recall", True))).lower() == "true"
+    auto_recall_top_k: int = int(os.getenv("AUTO_RECALL_TOP_K", str(_yaml.get("vector_store", {}).get("contextual_top_k", 3))))
+
     # -- Timeouts (seconds) ----------------------------------------------------
     default_timeout: int = 20
     browse_timeout: int = 20

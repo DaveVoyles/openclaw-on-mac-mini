@@ -403,3 +403,28 @@ async def recall(query: str, top_k: int = 5) -> str:
         lines.append(f"[{source} · {sim:.0%}] {text}")
 
     return "\n".join(lines)
+
+
+async def recall_for_context(query: str, top_k: int | None = None) -> str:
+    """Recall relevant context for Auto-RAG injection.
+
+    Searches all collections and formats results as a concise context block
+    suitable for prepending to a user message before sending to the LLM.
+    Returns empty string if nothing relevant is found.
+    """
+    from config import cfg
+
+    top_k = top_k or cfg.auto_recall_top_k
+
+    results = await search_all(query, top_k=top_k)
+    if not results:
+        return ""
+
+    lines = ["[Recalled Context]"]
+    for r in results:
+        source = r["collection"].replace("_", " ").title()
+        sim = r.get("similarity", 0)
+        text = r["text"][:200].replace("\n", " ").strip()
+        lines.append(f"- [{source} · {sim:.0%}] {text}")
+
+    return "\n".join(lines)
