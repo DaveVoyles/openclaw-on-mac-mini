@@ -252,6 +252,12 @@
           <li>
             <a href="#agent-loop">26. Agent Loop &amp; Plan Management</a>
           </li>
+          <li>
+            <a href="#vector-memory">27. Semantic Memory &amp; Vector Store</a>
+          </li>
+          <li>
+            <a href="#deep-threads">28. Persistent Threads &amp; Research Memory</a>
+          </li>
         </ul>
       </div>
 
@@ -2282,6 +2288,171 @@ Marple Township millage rate is 25.46...
         </li>
       </ul>
 
+      <!-- 27. Semantic Memory & Vector Store -->
+      <h2 id="vector-memory">27. Semantic Memory &amp; Vector Store</h2>
+      <p>
+        Phase 13 adds a local <strong>ChromaDB vector database</strong> that
+        embeds all memories, conversations, and research into semantic vectors.
+        This means <code>/recall</code> now finds facts even when you phrase
+        things differently from how they were stored.
+      </p>
+
+      <h3>How It Works</h3>
+      <ul>
+        <li>
+          Every <code>/remember</code> fact, session summary, and research
+          report is automatically embedded using the
+          <strong>all-MiniLM-L6-v2</strong> model (runs locally, free, no
+          external API).
+        </li>
+        <li>
+          Three collections: <code>memories</code>,
+          <code>conversations</code>, and <code>research</code>.
+        </li>
+        <li>
+          <code>/recall</code> now merges keyword matches (existing QMD) with
+          semantic vector search &mdash; results are deduplicated and ranked.
+        </li>
+        <li>
+          Before each <code>/ask</code>, the bot automatically queries the
+          vector store for relevant context and injects the top 3 results. This
+          is called <strong>contextual recall</strong>.
+        </li>
+      </ul>
+
+      <h3>Commands</h3>
+      <table>
+        <tr>
+          <td><code>/remember &lt;fact&gt;</code></td>
+          <td>
+            Store a fact in both QMD (keyword) and ChromaDB (semantic). Tags
+            are optional.
+          </td>
+        </tr>
+        <tr>
+          <td><code>/recall &lt;query&gt;</code></td>
+          <td>
+            Search memory using both keyword and semantic matching. Finds facts
+            even when phrased differently.
+          </td>
+        </tr>
+        <tr>
+          <td><code>/memory-stats</code></td>
+          <td>
+            Show statistics for QMD facts, vector store collections, and thread
+            store.
+          </td>
+        </tr>
+      </table>
+
+      <div class="tip">
+        <strong>&#128161; Contextual recall is automatic.</strong> You don't need to
+        do anything &mdash; relevant memories are silently injected before every
+        <code>/ask</code>. The bot will naturally reference past conversations
+        and research without being told.
+      </div>
+
+      <!-- 28. Persistent Threads & Research Memory -->
+      <h2 id="deep-threads">
+        28. Persistent Threads &amp; Research Memory
+      </h2>
+      <p>
+        Phase 13 upgrades threads with a <strong>SQLite database</strong> (no
+        message cap) and makes research results searchable so past research
+        informs future queries.
+      </p>
+
+      <h3>Thread Improvements</h3>
+      <ul>
+        <li>
+          Named threads (<code>/save</code>) no longer have a 20-message cap
+          &mdash; full conversation history is preserved.
+        </li>
+        <li>
+          <code>/threads-search &lt;query&gt;</code> searches across all saved
+          threads using both keyword and semantic matching.
+        </li>
+        <li>
+          <strong>Thread suggestions:</strong> When you start a new conversation
+          related to an existing thread, the bot suggests resuming it
+          (&#8805;75% similarity).
+        </li>
+        <li>
+          Threads are auto-titled by the LLM after 3+ exchanges.
+        </li>
+        <li>
+          Threads inactive for 7+ days are auto-archived (still searchable).
+        </li>
+      </ul>
+
+      <h3>Research Memory</h3>
+      <ul>
+        <li>
+          All <code>/research</code> reports are automatically indexed in the
+          vector store.
+        </li>
+        <li>
+          Follow-up research on the same topic builds on prior findings instead
+          of starting from scratch.
+        </li>
+        <li>
+          All browsed URLs are cataloged with excerpts in a
+          <strong>source library</strong>.
+        </li>
+      </ul>
+
+      <h3>Commands</h3>
+      <table>
+        <tr>
+          <td><code>/threads-search &lt;query&gt;</code></td>
+          <td>
+            Search across all saved threads by keyword or topic (hybrid
+            keyword + semantic).
+          </td>
+        </tr>
+        <tr>
+          <td><code>/research-search &lt;query&gt;</code></td>
+          <td>
+            Semantic search across all past research reports.
+          </td>
+        </tr>
+        <tr>
+          <td><code>/sources &lt;query&gt;</code></td>
+          <td>
+            Search your library of previously browsed web sources by topic.
+          </td>
+        </tr>
+        <tr>
+          <td><code>/memory-stats</code></td>
+          <td>
+            Show QMD, vector store, and thread store statistics.
+          </td>
+        </tr>
+      </table>
+
+      <div class="card">
+        <h3 style="margin-top: 0">&#9881;&#65039; Data Storage</h3>
+        <ul>
+          <li>
+            <strong>Vector store:</strong>
+            <code>data/chromadb/</code> (ChromaDB persistent directory)
+          </li>
+          <li>
+            <strong>Thread database:</strong>
+            <code>data/memory/openclaw.db</code> (SQLite with WAL)
+          </li>
+          <li>
+            <strong>QMD facts:</strong>
+            <code>data/memory/qmd.json</code> (JSON, unchanged)
+          </li>
+        </ul>
+        <p>
+          All three are included in the 4 AM backup to NAS. To migrate existing
+          data into the vector store after first deploy, run:
+          <code>docker exec openclaw python scripts/backfill_vectors.py</code>
+        </p>
+      </div>
+
       <div
         style="
           text-align: center;
@@ -2292,7 +2463,7 @@ Marple Township millage rate is 25.46...
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.6.0 &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.7.0 &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"

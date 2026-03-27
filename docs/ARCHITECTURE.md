@@ -37,6 +37,8 @@ graph TB
         MonitorSkills["monitor_skills.py\nURL Change Detection"]
         RSSSkills["rss_skills.py\nFeed Monitoring"]
         MissionControl["mission_control.py\nKanban Task Store"]
+        VectorStore["vector_store.py\nChromaDB Semantic Memory\n3 collections"]
+        ThreadStore["thread_store.py\nSQLite Thread Persistence\nWAL mode"]
         Metrics["/metrics\nPrometheus Endpoint\n:8765"]
 
         subgraph Cogs ["📦 Discord Cogs (src/cogs/)"]
@@ -49,7 +51,11 @@ graph TB
 
     Discord -->|"events & interactions"| Bot
     Bot --> LLM
+    Bot -->|"contextual recall"| VectorStore
+    Bot --> ThreadStore
     Bot --> ResearchAgent
+    ResearchAgent -->|"index reports"| VectorStore
+    Memory -->|"embed summaries"| VectorStore
     Bot --> Approvals
     Bot --> Scheduler
     Bot --> WebhookFmt
@@ -279,6 +285,9 @@ graph TB
 | **Parallel sub-agent**          | `bot.py` or LLM → `worker_agent.py` `spawn_worker(goal)` → fresh Gemini session with own tool loop → result returned to caller                  |
 | **Agent plan lifecycle**        | `/ask` or LLM → `agent_loop.py` `create_plan()` → `.md` persisted to `data/plans/` → steps tracked via `update_plan_step()` → survives restarts |
 | **Plan resumption on startup**  | `bot.py` `on_ready` → `agent_loop.scan_interrupted()` → notifies `ALERT_CHANNEL_ID` of interrupted plans → user can `/resume-plan`              |
+| **Semantic memory embed**       | `qmd.py` `remember_fact()` or `memory.py` summary → `vector_store.py` `add_memory()` / `add_conversation_summary()` → ChromaDB `data/chromadb/` |
+| **Contextual recall injection** | `bot.py` pre-LLM hook → `vector_store.py` `recall(query, top_k=3)` → top 3 results injected as `[Relevant context]` block before each `/ask`    |
+| **Research indexing**           | `research_agent.py` post-synthesis → `vector_store.py` `add_research_report()` → ChromaDB `research` collection; URLs → `sources` metadata       |
 
 ---
 

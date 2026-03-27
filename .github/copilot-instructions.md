@@ -195,6 +195,53 @@ When adding a new ClawHub skill, update **all** of the following in order:
 12. Update the "Currently installed skills" table in this file
 ```
 
+## Post-Update Documentation Rule
+
+**After every feature change, bug fix, or new command**, update **all** relevant documentation:
+
+```
+1. templates/guide.html
+   → Add/update section for the feature (TOC + body)
+   → Include commands, usage examples, and tips
+
+2. templates/dashboard.html
+   → Update the "What's New" card if it's a significant feature
+   → New commands appear automatically via /api/dashboard
+
+3. docs/ARCHITECTURE.md
+   → Add new modules to the Mermaid diagram
+   → Add new data flows to the Data Flow Summary table
+
+4. docs/MODULES.md
+   → Add new src/*.py files to the module table
+   → Update the file count in the header
+
+5. README.md
+   → Update the Status line if a new phase begins
+   → Add a feature block for the new phase
+   → Update "Planned" section as items are completed
+
+6. .github/copilot-instructions.md (this file)
+   → Add new skills to the "Currently installed skills" table
+   → Update any architecture references that changed
+
+7. config/config.yaml
+   → Add config blocks for new features with sensible defaults
+```
+
+> **This rule exists so users can always discover features through the guide and dashboard.**
+> Every feature must be documented — undocumented features don't exist to users.
+
+### Key modules for memory & search features
+
+| Module | Purpose | Storage |
+|--------|---------|---------|
+| `src/vector_store.py` | ChromaDB semantic memory (3 collections: memories, conversations, research) | `data/chromadb/` |
+| `src/thread_store.py` | SQLite persistent threads with WAL mode, auto-titling, search | `data/memory/openclaw.db` |
+| `src/qmd.py` | Quick Memory Discovery — keyword facts (also embeds to ChromaDB) | `data/memory/qmd.json` |
+| `src/memory.py` | Session context + summaries (also embeds to ChromaDB) | `data/memory/sessions/` |
+| `src/research_agent.py` | Research with auto-indexing into vector store | ChromaDB `research` collection |
+
 > **Shortcut for LLM-only skills:** If the skill just needs to be callable via `/ask`
 > (not a dedicated command), you only need steps 1–6, 9, 10, and 11.
 

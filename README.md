@@ -17,7 +17,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **LLM**          | Gemini 2.5 Flash (tool use) + Gemma 3 12B local (simple queries)       |
 | **Local LLM**    | Ollama (`gemma3:12b`) — free, zero API cost for conversational queries |
 | **Model Control** | `/ask model:auto\|local\|gemini` per-message + `/model set` sticky pref |
-| **Status**       | **Phase 12 — Proactive Monitoring** ✅                                 |
+| **Status**       | **Phase 13 — Deep Memory & Semantic Search** ✅                        |
 
 ## Features
 
@@ -142,9 +142,21 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Parallel worker sub-agents — `spawn_worker()` delegates focused subtasks to independent Gemini sessions
 - 4:00 AM automated maintenance — skill updates, session cleanup, full backup to NAS (config, .env, memory, vault, audit)
 
+**Phase 13 — Deep Memory & Semantic Search** ✅
+
+- ChromaDB vector store — `all-MiniLM-L6-v2` embeds memories, conversations, and research locally (free, no API)
+- Semantic `/recall` — merges keyword + vector search so facts are found even when phrased differently
+- Contextual recall — top 3 relevant memories silently injected before every `/ask`
+- SQLite persistent threads — unlimited message history, auto-titling, keyword + semantic search via `/threads-search`
+- Thread continuation suggestions — bot detects when a new topic matches a past thread (≥75% similarity)
+- Research memory — all `/research` reports indexed; follow-up research builds on prior findings
+- Source library — all browsed URLs cataloged with excerpts; searchable via `/sources`
+- New commands: `/memory-stats`, `/threads-search`, `/research-search`, `/sources`
+
 **Planned**
 
 - Grafana dashboards
+- Research digest — weekly automated summaries of research activity
 
 ---
 
