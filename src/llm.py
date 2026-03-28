@@ -147,6 +147,8 @@ _LIVE_ACTION_PATTERN = _re.compile(
     # "Search <domain>" or "search for <topic>" — any search verb + domain or broad topic
     r"|\b(search|find|look\s+up)\b.{0,40}\w+\.(com|org|net|io|edu)\b"
     r"|\b(search|find|look\s+up)\b.{0,20}\b(for|about)\b"
+    # "check other sites", "try other sources" — contextual web requests
+    r"|\b(check|try)\b.{0,20}\b(other|more|different)\b.{0,20}\b(site|source|page|place|link)\b"
     # Weather: any standalone weather request routes through Gemini (needs get_weather tool)
     r"|\b(weather|forecast|temperature|rain|snow|sunny|humidity|wind\s+speed)\b"
     # Live-data questions: "is plex up?", "what's the current…"

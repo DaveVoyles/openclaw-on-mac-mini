@@ -1674,6 +1674,24 @@ async def ask_cmd(
         )
         model_used = "error"
 
+    # ── Empty/useless response detection ─────────────────────────────────
+    if response_text and model_used != "error":
+        stripped = response_text.strip()
+        # Detect: empty, just whitespace, or essentially echoed the user's question back
+        is_empty = len(stripped) < 10
+        is_echo = stripped.lower().replace("'", "").replace('"', "") == question.lower().replace("'", "").replace('"', "")[:len(stripped)]
+        if is_empty or is_echo:
+            log.warning("Empty/echo response detected for: %.80s (response: %.80s)", question, stripped)
+            response_text = (
+                f"⚠️ I wasn't able to generate a useful response for this query.\n\n"
+                f"**What happened:** The model returned {'an empty response' if is_empty else 'your question echoed back'}.\n"
+                f"**Suggestion:** Try rephrasing, or use `/ask model:gemini` to force Gemini with tools.\n\n"
+                f"```\n{question[:300]}\n```"
+            )
+            _routing_notes.append("Empty/echo response detected")
+            # Record as failure for error tracking
+            model_used = "error"
+
     # ── Final response with embeds, file attachments, and action buttons ──
     if guardrail_note:
         response_text += guardrail_note
