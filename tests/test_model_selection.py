@@ -207,13 +207,13 @@ class TestChatModelPreference:
             assert model == "none"
 
     @pytest.mark.asyncio
-    async def test_chat_auto_preference_tries_local_first(self):
-        """model_preference='auto' should try Ollama then fall through to Gemini."""
+    async def test_chat_auto_preference_tries_copilot_first(self):
+        """model_preference='auto' should try Copilot proxy then fall through to Gemini."""
         import llm
 
         mock_model = MagicMock()
         with (
-            patch.object(llm, "_try_local_model", new_callable=AsyncMock, return_value=None),
+            patch("model_router.COPILOT_PROXY_ENABLED", False),
             patch.object(llm, "_rate_limiter") as mock_rl,
             patch.object(llm, "_get_model", new_callable=AsyncMock, return_value=mock_model),
             patch.object(llm, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
@@ -221,8 +221,8 @@ class TestChatModelPreference:
             mock_rl.check.return_value = True
             text, hist, model = await llm.chat("hello", model_preference="auto")
             assert text == "Gemini response"
-            # _try_local_model SHOULD have been called (without force)
-            llm._try_local_model.assert_called_once_with("hello", [])
+            # Ollama should NOT be called in auto mode
+            assert not hasattr(llm._try_local_model, "assert_called")
 
 
 # ---------------------------------------------------------------------------

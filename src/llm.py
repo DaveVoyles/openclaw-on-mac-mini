@@ -2,10 +2,10 @@
 OpenClaw LLM Integration — Phase 5: Gemini + Function Calling
 Manages the Gemini API connection, tool declarations, and chat sessions.
 
-Hybrid routing:
-  - Simple / conversational queries → Ollama (local, free, fast)
-  - Anything requiring tool/function calls  → Gemini 2.0 Flash
-  - Ollama unavailable or LOCAL_LLM_ENABLED=false → Gemini for everything
+Hybrid routing (auto mode):
+  - Copilot proxy (GPT-4o via local proxy)  → FREE, tried first
+  - Gemini 2.0 Flash                        → cheap backup, full tool support
+  - Ollama                                   → only when explicitly requested via /ask model:local
 """
 
 import asyncio
@@ -1095,17 +1095,26 @@ async def chat_stream(
             return
         # Fall through to the Gemini paths below (skip local attempt)
     else:
-        # ── Auto mode: try local Ollama first ────────────────────────────
-        gemma_reply = await _try_local_model(model_message, history)
-        if gemma_reply is not None:
-            updated = history + [
-                {"role": "user", "parts": [user_message]},
-                {"role": "model", "parts": [gemma_reply]},
-            ]
-            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
-            return
-        if LOCAL_LLM_ENABLED:
-            _routing_notes.append("Ollama unavailable or timed out → fell back to Gemini")
+        # ── Auto mode: Copilot proxy first, then Gemini ──────────────────
+        try:
+            from model_router import chat_openai, COPILOT_PROXY_ENABLED
+            if COPILOT_PROXY_ENABLED:
+                system_prompt = _load_system_prompt()
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                if reply:
+                    import os
+                    updated = history + [
+                        {"role": "user", "parts": [user_message]},
+                        {"role": "model", "parts": [reply]},
+                    ]
+                    yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
+                    return
+                _routing_notes.append("Copilot proxy failed → trying Gemini")
+        except Exception as e:
+            log.debug("Copilot proxy failed: %s", e)
+            _routing_notes.append("Copilot proxy unavailable → trying Gemini")
+        # (Ollama only used when model_preference == "local", not auto)
 
     # Rate-limit pre-check
     if not _rate_limiter.check():
@@ -1195,18 +1204,14 @@ async def chat(
     before each tool execution — used for progressive Discord status updates.
 
     *model_preference* controls routing:
-      - ``"auto"``  — existing smart routing (try Gemma first, fall back to Gemini)
+      - ``"auto"``  — Copilot proxy first (free), then Gemini with tools
       - ``"local"`` — force Ollama/Gemma; error if unavailable
-      - ``"gemini"`` — skip Ollama, go straight to Gemini
+      - ``"gemini"`` — skip everything, go straight to Gemini
 
     Routing decision tree (when auto):
-      1. Does the query need live tool execution? (_needs_tools)
-            YES → Gemini directly (function-calling capable)
-      2. Is Gemma available and LOCAL_LLM_ENABLED?
-            NO  → Gemini
-      3. Does Gemma's response pass the hallucination / quality check?
-            YES → Return Gemma response (fast, free, private)
-            NO  → Silently retry with Gemini
+      1. Multi-model router (Phase 8) checks for openai/anthropic routing
+      2. Try Copilot proxy (GPT-4o via local proxy, free)
+      3. Fall through to Gemini with full tool support
     """
     # Determine model hint for context limits
     if model_preference == "local":
@@ -1323,14 +1328,24 @@ async def chat(
         updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
         return text, updated_history, model_name
 
-    # -- Auto mode (default) — Local model (Gemma) path ──────────────────────
-    gemma_reply = await _try_local_model(model_message, history)
-    if gemma_reply is not None:
-        updated = history + [
-            {"role": "user", "parts": [user_message]},
-            {"role": "model", "parts": [gemma_reply]},
-        ]
-        return gemma_reply, updated, OLLAMA_MODEL
+    # -- Auto mode: Copilot proxy first, then Gemini ────────────────────────
+    try:
+        from model_router import chat_openai, COPILOT_PROXY_ENABLED
+        if COPILOT_PROXY_ENABLED:
+            system_prompt = _load_system_prompt()
+            reply = await chat_openai(model_message, history, system_prompt,
+                                      temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+            if reply:
+                import os
+                updated = history + [
+                    {"role": "user", "parts": [user_message]},
+                    {"role": "model", "parts": [reply]},
+                ]
+                return reply, updated, f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
+            log.info("Copilot proxy failed, falling through to Gemini")
+    except Exception as e:
+        log.debug("Copilot proxy failed: %s", e)
+    # (Ollama only used when model_preference == "local", not auto)
 
     # -- Gemini path (shared helper) ──────────────────────────────────────────
     # Quick rate-limit pre-check before expensive model init — the full
