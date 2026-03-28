@@ -1375,6 +1375,14 @@ async def ask_cmd(
 
     await interaction.response.defer()
 
+    # Progressive thinking status — shows what the bot is doing at each step
+    async def _think(status: str) -> None:
+        """Update the deferred response with a thinking status message."""
+        try:
+            await interaction.edit_original_response(content=f"💭 *{status}*")
+        except Exception:
+            pass
+
     # Progressive status: edit the deferred "thinking" placeholder as each tool fires
     async def _on_tool_call(tool_name: str, round_num: int) -> None:
         try:
@@ -1448,6 +1456,7 @@ async def ask_cmd(
 
     try:
         # ── Contextual recall: inject relevant memories before LLM call ───
+        await _think("Recalling relevant memories…")
         try:
             import vector_store
             context_hits = await vector_store.recall(question, top_k=3)
@@ -1460,6 +1469,7 @@ async def ask_cmd(
             log.debug("Contextual recall skipped: %s", e)
 
         # ── Inject learned rules relevant to this query (Phase 14A) ───
+        await _think("Checking learned rules…")
         try:
             from rules_engine import get_relevant_rules
             rules = await get_relevant_rules(question, top_k=3)
@@ -1486,6 +1496,9 @@ async def ask_cmd(
 
         # ── Streaming response with progressive Discord edits ────────────
         _routing_notes: list[str] = []  # Collect routing events to show user
+        # Show which model we're routing to
+        _model_labels = {"auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini", "openai": "GPT-4o", "anthropic": "Claude"}
+        await _think(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
         last_edit = 0.0
         display_question = question if len(question) < 200 else question[:197] + "..."
 
