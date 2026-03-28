@@ -2402,6 +2402,21 @@ async def research_cmd(interaction: discord.Interaction, query: str):
             else:
                 await interaction.followup.send(embed=embed)
 
+    # Generate and post follow-up suggestions
+    try:
+        follow_ups = await agent.generate_follow_ups(query, report)
+        if follow_ups:
+            follow_up_text = "**💡 Suggested follow-ups:**\n" + "\n".join(
+                f"{i}. {fq}" for i, fq in enumerate(follow_ups, 1)
+            )
+            target = thread or interaction
+            if thread:
+                await thread.send(follow_up_text)
+            else:
+                await interaction.followup.send(follow_up_text)
+    except Exception as e:
+        log.debug("Follow-up generation skipped: %s", e)
+
     audit_log(interaction.user, "research", detail=query[:200])
 
 

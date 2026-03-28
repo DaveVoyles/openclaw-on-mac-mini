@@ -375,6 +375,30 @@ class ResearchAgent:
             return f"❌ Synthesis failed: {e}\n\nRaw data preview:\n{data[:500]}"
 
 
+    async def generate_follow_ups(self, query: str, report: str) -> list[str]:
+        """Generate 2-3 follow-up research questions based on the completed report."""
+        prompt = (
+            "Based on this research query and report, suggest exactly 3 concise follow-up "
+            "research questions that would deepen understanding. Each should be a single "
+            "line, actionable, and explore a different angle.\n\n"
+            f"Original query: {query}\n\n"
+            f"Report excerpt: {report[:2000]}\n\n"
+            "Follow-up questions (one per line, no numbering or bullets):"
+        )
+        try:
+            from llm import chat_deep
+            text, _ = await chat_deep(prompt)
+            lines = [
+                l.strip().lstrip("0123456789.-) ")
+                for l in text.strip().split("\n")
+                if l.strip()
+            ]
+            return lines[:3]
+        except Exception as e:
+            log.warning("Failed to generate follow-ups: %s", e)
+            return []
+
+
 def _extract_urls(text: str) -> list[str]:
     """Extract http(s) URLs from search result text."""
     import re

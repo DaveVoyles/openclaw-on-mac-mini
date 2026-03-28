@@ -82,6 +82,31 @@ async def test_url_deduplication():
 
 
 @pytest.mark.asyncio
+async def test_generate_follow_ups(agent):
+    """generate_follow_ups returns up to 3 follow-up questions."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = (
+            "How does X compare to Y in cost?\n"
+            "What are the long-term risks of Z?\n"
+            "Which vendors offer the best support?\n",
+            [],
+        )
+        result = await agent.generate_follow_ups("test query", "some report text")
+        assert isinstance(result, list)
+        assert len(result) == 3
+        assert "cost" in result[0].lower()
+
+
+@pytest.mark.asyncio
+async def test_generate_follow_ups_error(agent):
+    """generate_follow_ups returns empty list on failure."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.side_effect = RuntimeError("LLM down")
+        result = await agent.generate_follow_ups("test query", "report")
+        assert result == []
+
+
+@pytest.mark.asyncio
 async def test_data_truncation(agent):
     """Combined research data is truncated to prevent context overflow."""
     with patch.object(agent, "_plan_searches", new_callable=AsyncMock) as mock_plan, \
