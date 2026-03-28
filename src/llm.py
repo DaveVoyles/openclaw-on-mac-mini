@@ -154,10 +154,11 @@ _LIVE_ACTION_PATTERN = _re.compile(
     # Live-data questions: "is plex up?", "what's the current…"
     r"|\bis\s+(the\s+)?(server|plex|sonarr|radarr|nas|docker)\s+(up|running|online|working|down)\b"
     r"|\bwhat'?s?\s+(?:the\s+)?(?:current|latest|running)\b.{0,50}\b(status|usage|queue|activity)\b"
-    # Approvals, sends, creates
+    # Approvals, sends, creates, schedules
     r"|\b(approve|deny)\b.{0,20}\b(request|id)\b"
     r"|\bsend\b.{0,20}\b(email|mail)\b"
     r"|\bcreate\b.{0,30}\b(task|event|entity|connection|calendar)\b"
+    r"|\bschedule\b.{0,30}\b(task|report|research|job|recurring|weekly|daily|monthly)\b"
     # Diagnostics / jobs
     r"|\brun\b.{0,20}\b(speed\s+test|status\s+report|ping|backup|diagnostic)\b"
     r"|\bping\s+[\w.]+"
