@@ -1264,16 +1264,67 @@ def _extract_image_url(text: str) -> str | None:
 
 
 def _format_tables_for_discord(text: str) -> str:
-    """Convert markdown tables to code blocks for clean Discord display.
+    """Convert markdown tables to clean, padded ANSI code blocks for Discord.
 
-    Discord doesn't render markdown tables — pipes just appear as raw text.
-    This wraps any detected table blocks in ``` so they display monospaced
-    and aligned.
+    Discord doesn't render markdown tables — pipes appear as raw text.
+    This detects table blocks, pads columns for alignment, adds ANSI
+    color to headers, and wraps in ```ansi code fences.
     """
     lines = text.split("\n")
     result: list[str] = []
     table_lines: list[str] = []
     in_table = False
+
+    def _flush_table(tlines: list[str]) -> None:
+        """Convert collected table lines into a padded, colored code block."""
+        # Parse cells from each row
+        rows: list[list[str]] = []
+        separator_indices: list[int] = []
+        for i, tl in enumerate(tlines):
+            cells = [c.strip() for c in tl.strip().strip("|").split("|")]
+            stripped = tl.strip()
+            is_sep = stripped.startswith("|") and all(c in "|-: " for c in stripped.replace("|", ""))
+            if is_sep:
+                separator_indices.append(i)
+            else:
+                rows.append(cells)
+
+        if not rows:
+            result.extend(tlines)
+            return
+
+        # Calculate column widths
+        num_cols = max(len(r) for r in rows)
+        col_widths = [0] * num_cols
+        for row in rows:
+            for j, cell in enumerate(row):
+                if j < num_cols:
+                    col_widths[j] = max(col_widths[j], len(cell))
+
+        # Build formatted output
+        result.append("```ansi")
+
+        row_idx = 0
+        for i, tl in enumerate(tlines):
+            if i in separator_indices:
+                # Separator line: ─── dividers
+                sep = "┼".join("─" * (w + 2) for w in col_widths)
+                result.append(f"┼{sep}┼")
+            else:
+                if row_idx < len(rows):
+                    cells = rows[row_idx]
+                    padded = []
+                    for j in range(num_cols):
+                        cell = cells[j] if j < len(cells) else ""
+                        padded.append(f" {cell:<{col_widths[j]}} ")
+                    line_text = "│" + "│".join(padded) + "│"
+                    # ANSI bold for header row (first data row)
+                    if row_idx == 0:
+                        line_text = f"\u001b[1;37m{line_text}\u001b[0m"
+                    result.append(line_text)
+                    row_idx += 1
+
+        result.append("```")
 
     for line in lines:
         stripped = line.strip()
@@ -1287,19 +1338,13 @@ def _format_tables_for_discord(text: str) -> str:
             table_lines.append(line)
         else:
             if in_table:
-                # Flush the table as a code block
-                result.append("```")
-                result.extend(table_lines)
-                result.append("```")
+                _flush_table(table_lines)
                 in_table = False
                 table_lines = []
             result.append(line)
 
-    # Flush any trailing table
     if in_table and table_lines:
-        result.append("```")
-        result.extend(table_lines)
-        result.append("```")
+        _flush_table(table_lines)
 
     return "\n".join(result)
 
