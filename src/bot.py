@@ -1465,7 +1465,7 @@ async def _handle_doc_attachment(
     model="LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude)",
 )
 @app_commands.choices(model=[
-    app_commands.Choice(name="🔄 Auto (smart routing)", value="auto"),
+    app_commands.Choice(name="🔄 Auto (Copilot → Gemini)", value="auto"),
     app_commands.Choice(name="🏠 Local (Gemma/Ollama)", value="local"),
     app_commands.Choice(name="☁️ Gemini (cloud)", value="gemini"),
     app_commands.Choice(name="🟢 OpenAI (GPT-4o)", value="openai"),
@@ -1865,15 +1865,22 @@ model_group = app_commands.Group(name="model", description="View or change your 
 @model_group.command(name="show", description="Show your current model routing preference")
 async def model_show_cmd(interaction: discord.Interaction):
     pref = get_model_preference(interaction.user.id)
-    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)", "openai": "🟢 OpenAI (GPT-4o)", "anthropic": "🟣 Anthropic (Claude)"}
+    labels = {"auto": "🔄 Auto (Copilot → Gemini)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)", "openai": "🟢 OpenAI (GPT-4o)", "anthropic": "🟣 Anthropic (Claude)"}
     embed = discord.Embed(
         title="🤖 Model Preference",
         description=f"**Current:** {labels.get(pref, pref)}\n\n"
+        "**Auto routing order:** Copilot proxy (free) → Gemini (tools) → Ollama (last resort)\n\n"
         "Use `/model set` to change.\n"
         "Use `/ask model:` to override per-message.",
         color=discord.Color.blue(),
     )
-    # Show Ollama status
+    # Show backend status
+    try:
+        from model_router import COPILOT_PROXY_ENABLED
+        proxy_status = "🟢 Copilot proxy: online" if COPILOT_PROXY_ENABLED else "⚪ Copilot proxy: not configured"
+        embed.add_field(name="Copilot Proxy", value=proxy_status, inline=False)
+    except Exception:
+        pass
     try:
         from llm import _ollama_available, LOCAL_LLM_ENABLED, OLLAMA_MODEL
         ollama_up = await _ollama_available() if LOCAL_LLM_ENABLED else False
@@ -1889,8 +1896,8 @@ async def model_show_cmd(interaction: discord.Interaction):
 @model_group.command(name="set", description="Set your default LLM routing preference")
 @app_commands.describe(preference="Which model to use by default")
 @app_commands.choices(preference=[
-    app_commands.Choice(name="🔄 Auto — smart routing (default)", value="auto"),
-    app_commands.Choice(name="🏠 Local — Gemma/Ollama (free, fast)", value="local"),
+    app_commands.Choice(name="🔄 Auto — Copilot first, then Gemini (default)", value="auto"),
+    app_commands.Choice(name="🏠 Local — Gemma/Ollama (free, no tools)", value="local"),
     app_commands.Choice(name="☁️ Gemini — cloud (tools, best quality)", value="gemini"),
     app_commands.Choice(name="🟢 OpenAI — GPT-4o via Copilot", value="openai"),
     app_commands.Choice(name="🟣 Anthropic — Claude via Copilot", value="anthropic"),

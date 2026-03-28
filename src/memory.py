@@ -375,7 +375,7 @@ def set_model_preference(user_id: int, pref: str) -> str:
     prefs = _load_prefs(user_id)
     prefs["model_preference"] = pref
     _save_prefs(user_id, prefs)
-    labels = {"auto": "🔄 Auto (smart routing)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)", "openai": "🟢 OpenAI (GPT-4o)", "anthropic": "🟣 Anthropic (Claude)"}
+    labels = {"auto": "🔄 Auto (Copilot → Gemini)", "local": "🏠 Local (Gemma/Ollama)", "gemini": "☁️ Gemini (cloud)", "openai": "🟢 OpenAI (GPT-4o)", "anthropic": "🟣 Anthropic (Claude)"}
     return f"✅ Model preference set to **{labels.get(pref, pref)}**."
 
 
