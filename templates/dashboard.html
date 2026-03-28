@@ -914,6 +914,21 @@
           <div id="goals-list"></div>
         </div>
 
+        <!-- Error Monitor (E7) -->
+        <div class="card">
+          <h2>🩺 Error Monitor (24h)</h2>
+          <div id="error-stats" style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem">
+            <div><span id="err-total" style="font-size:1.5rem;font-weight:bold;color:var(--spirit-blue)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Total Queries</span></div>
+            <div><span id="err-rate" style="font-size:1.5rem;font-weight:bold;color:#4caf50">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Success Rate</span></div>
+            <div><span id="err-failures" style="font-size:1.5rem;font-weight:bold;color:#f44336">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Failures</span></div>
+            <div><span id="err-latency" style="font-size:1.5rem;font-weight:bold;color:var(--muted)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Avg Latency</span></div>
+          </div>
+          <details>
+            <summary style="cursor:pointer;color:var(--muted);font-size:0.82rem">Recent Errors</summary>
+            <div id="recent-errors" class="scrollable-list" style="max-height:200px"></div>
+          </details>
+        </div>
+
         <!-- Container Health Matrix -->
         <div class="card">
           <h2>&#128373; Container Health Status</h2>
@@ -1956,6 +1971,7 @@
           loadGoals();
           loadResearch();
           loadSchedules();
+          loadErrors();
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -1964,7 +1980,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -1977,6 +1993,30 @@
                       el.textContent = icon + (val.containers ? ` (${val.containers})` : '');
                       el.className = 'status-dot ' + cls;
                   }
+              }
+          }).catch(() => {});
+      }
+
+      // E7: Error Monitor
+      function loadErrors() {
+          fetch('/api/errors').then(r => r.json()).then(data => {
+              document.getElementById('err-total').textContent = data.total || 0;
+              const rate = ((data.success_rate || 1) * 100).toFixed(1);
+              const rateEl = document.getElementById('err-rate');
+              rateEl.textContent = rate + '%';
+              rateEl.style.color = rate >= 95 ? '#4caf50' : rate >= 80 ? '#ff9800' : '#f44336';
+              document.getElementById('err-failures').textContent = data.failures || 0;
+              document.getElementById('err-latency').textContent = (data.avg_latency_ms || 0) + 'ms';
+
+              const errList = document.getElementById('recent-errors');
+              if (data.recent_errors && data.recent_errors.length > 0) {
+                  errList.innerHTML = data.recent_errors.map(e => {
+                      const time = new Date(e.ts * 1000).toLocaleString();
+                      return '<div class="memory-item"><strong style="color:#f44336">' + esc(e.error).substring(0, 60) + '</strong>' +
+                          '<div style="color:var(--muted);font-size:0.75rem">' + esc(time) + ' · ' + esc(e.model) + ' · ' + esc(e.question) + '</div></div>';
+                  }).join('');
+              } else {
+                  errList.innerHTML = '<p class="muted-text">No errors in the last 24 hours 🎉</p>';
               }
           }).catch(() => {});
       }

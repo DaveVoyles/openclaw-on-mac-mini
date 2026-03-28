@@ -571,6 +571,21 @@ async def guide_handler(request: web.Request) -> web.Response:
     return web.Response(text=GUIDE_HTML, content_type="text/html")
 
 
+# ---------------------------------------------------------------------------
+# E7  Error Dashboard endpoint
+# ---------------------------------------------------------------------------
+
+
+async def api_errors_handler(request):
+    """Return error stats for the dashboard."""
+    try:
+        from error_tracker import get_error_stats
+        stats = get_error_stats(hours=24)
+        return web.json_response(stats)
+    except Exception:
+        return web.json_response({"total": 0, "success_rate": 1.0, "recent_errors": []})
+
+
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()
 

@@ -65,7 +65,7 @@ from llm import analyze_image as llm_analyze_image, analyze_document as llm_anal
 from llm import SUPPORTED_IMAGE_MIMES
 from memory import store as conversation_store
 from memory import get_model_preference, set_model_preference
-from dashboard import api_dashboard_handler, api_goals_handler, api_memories_handler, api_research_handler, api_schedules_handler, api_status_handler, api_threads_handler, dashboard_handler, guide_handler
+from dashboard import api_dashboard_handler, api_errors_handler, api_goals_handler, api_memories_handler, api_research_handler, api_schedules_handler, api_status_handler, api_threads_handler, dashboard_handler, guide_handler
 from image_gen import generate_image, is_available as sd_is_available
 from code_sandbox import run_code as sandbox_run_code
 from approvals import (
@@ -763,6 +763,7 @@ class OpenClawBot(commands.Bot):
         app.router.add_get("/api/research", api_research_handler)
         app.router.add_get("/api/schedules", api_schedules_handler)
         app.router.add_get("/api/status", api_status_handler)
+        app.router.add_get("/api/errors", api_errors_handler)
         app.router.add_get("/guide", guide_handler)
         app.router.add_get("/smoke", self._smoke_handler)
         app.router.add_post("/webhook/{source}", self._webhook_handler)
@@ -1374,6 +1375,7 @@ async def ask_cmd(
         return
 
     await interaction.response.defer()
+    _ask_start = time.monotonic()
 
     # Progressive thinking status — shows what the bot is doing at each step
     async def _think(status: str) -> None:
@@ -1605,6 +1607,22 @@ async def ask_cmd(
             await interaction.followup.send(**kwargs)
 
     audit_log(interaction.user, "ask", detail=question[:200])
+
+    # ── Error tracking: record /ask outcome (self-healing) ────────────────
+    try:
+        from error_tracker import record_outcome
+        record_outcome(
+            user_id=interaction.user.id,
+            question=question,
+            model_used=model_used,
+            success=(model_used != "error"),
+            error_msg=response_text if model_used == "error" else "",
+            latency_ms=int((time.monotonic() - _ask_start) * 1000),
+            routing_notes=_routing_notes,
+        )
+    except Exception:
+        pass
+
     conversation_store.cleanup_expired()
 
     # ── Fire-and-forget: correction detection & profile learning (Phase 14) ──
