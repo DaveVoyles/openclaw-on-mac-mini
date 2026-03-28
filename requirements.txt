@@ -28,3 +28,4 @@ pypdf==6.9.2
 
 # Local vector database for semantic memory (Phase 13A)
 chromadb==1.0.7
+Pillow>=10.0

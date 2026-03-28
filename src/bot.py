@@ -1790,6 +1790,19 @@ async def ask_cmd(
         response_text += guardrail_note
     if thread_hint:
         response_text += thread_hint
+
+    # Render markdown tables as images for clean Discord display
+    table_image_file = None
+    try:
+        from table_renderer import extract_table_text, render_table_image
+        table_text = extract_table_text(response_text)
+        if table_text:
+            img_bytes = render_table_image(table_text)
+            if img_bytes:
+                table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
+    except Exception as e:
+        log.debug("Table image rendering failed: %s", e)
+
     response_text = _format_tables_for_discord(response_text)
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
@@ -1863,6 +1876,13 @@ async def ask_cmd(
             if file_attachment and is_last:
                 kwargs["file"] = file_attachment[0]
             await interaction.followup.send(**kwargs)
+
+    # Send table image if one was rendered
+    if table_image_file:
+        try:
+            await interaction.followup.send(file=table_image_file)
+        except Exception as e:
+            log.debug("Failed to send table image: %s", e)
 
     audit_log(interaction.user, "ask", detail=question[:200])
 
