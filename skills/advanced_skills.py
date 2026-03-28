@@ -150,27 +150,35 @@ async def check_arr_health() -> str:
 
 async def check_download_clients() -> str:
     """Check connectivity to SABnzbd and qBittorrent (parallel requests)."""
-    tasks: list = [_api_get(f"{QBIT_URL}/api/v2/app/version")]
+    tasks: list = []
+    task_labels: list[str] = []
+
     if SABNZBD_API_KEY:
-        tasks.insert(0, _api_get(f"{SABNZBD_URL}/api?mode=version&output=json&apikey={SABNZBD_API_KEY}"))
+        tasks.append(_api_get(f"{SABNZBD_URL}/api?mode=version&output=json&apikey={SABNZBD_API_KEY}"))
+        task_labels.append("sabnzbd")
+
+    qbit_configured = bool(os.getenv("QBIT_URL", ""))
+    if qbit_configured:
+        tasks.append(_api_get(f"{QBIT_URL}/api/v2/app/version"))
+        task_labels.append("qbit")
+
+    if not tasks:
+        return "⚠️ No download clients configured (set SABNZBD_API_KEY and/or QBIT_URL in .env)"
 
     gathered = await asyncio.gather(*tasks, return_exceptions=True)
     lines = []
 
-    if SABNZBD_API_KEY:
-        sab_data, qbit_data = gathered[0], gathered[1]
-        if isinstance(sab_data, dict) and "version" in sab_data:
-            lines.append(f"✅ **SABnzbd**: v{sab_data['version']}")
-        else:
-            lines.append(f"❌ **SABnzbd**: {sab_data}")
-    else:
-        qbit_data = gathered[0]
-        lines.append("⚠️ **SABnzbd**: API key not configured")
-
-    if isinstance(qbit_data, str) and qbit_data.startswith("v"):
-        lines.append(f"✅ **qBittorrent**: {qbit_data.strip()}")
-    else:
-        lines.append(f"⚠️ **qBittorrent**: {qbit_data}")
+    for label, data in zip(task_labels, gathered):
+        if label == "sabnzbd":
+            if isinstance(data, dict) and "version" in data:
+                lines.append(f"✅ **SABnzbd**: v{data['version']}")
+            else:
+                lines.append(f"❌ **SABnzbd**: {data}")
+        elif label == "qbit":
+            if isinstance(data, str) and data.startswith("v"):
+                lines.append(f"✅ **qBittorrent**: {data.strip()}")
+            else:
+                lines.append(f"⚠️ **qBittorrent**: {data}")
 
     return "\n".join(lines)
 
@@ -295,45 +303,50 @@ async def get_download_queue() -> str:
     """Get combined download queue from SABnzbd and qBittorrent (parallel requests)."""
     lines = []
 
-    # Fire both requests in parallel
-    tasks: list = [_api_get(f"{QBIT_URL}/api/v2/torrents/info?filter=active")]
+    # Fire configured client requests in parallel
+    tasks: list = []
+    task_labels: list[str] = []
     if SABNZBD_API_KEY:
-        tasks.insert(0, _api_get(f"{SABNZBD_URL}/api?mode=queue&output=json&apikey={SABNZBD_API_KEY}"))
+        tasks.append(_api_get(f"{SABNZBD_URL}/api?mode=queue&output=json&apikey={SABNZBD_API_KEY}"))
+        task_labels.append("sabnzbd")
+    qbit_configured = bool(os.getenv("QBIT_URL", ""))
+    if qbit_configured:
+        tasks.append(_api_get(f"{QBIT_URL}/api/v2/torrents/info?filter=active"))
+        task_labels.append("qbit")
+
+    if not tasks:
+        return "No download clients configured."
 
     gathered = await asyncio.gather(*tasks, return_exceptions=True)
-    sab_data = gathered[0] if SABNZBD_API_KEY else None
-    qbit_data = gathered[1] if SABNZBD_API_KEY else gathered[0]
 
-    # SABnzbd queue
-    if SABNZBD_API_KEY:
-        if isinstance(sab_data, dict):
-            queue = sab_data.get("queue", {})
-            slots = queue.get("slots", [])
-            speed = queue.get("speed", "0 B/s")
-            remaining = queue.get("timeleft", "N/A")
-            if slots:
-                lines.append(f"**SABnzbd** ({len(slots)} items, {speed}, ETA: {remaining}):")
-                for s in slots[:5]:
-                    name = s.get("filename", "?")[:50]
-                    pct = s.get("percentage", "?")
-                    size = s.get("sizeleft", "?")
-                    lines.append(f"  • `{name}` — {pct}% ({size} left)")
-            else:
-                lines.append("**SABnzbd**: Queue empty ✅")
-
-    # qBittorrent active torrents
-    data = qbit_data
-    if isinstance(data, list):
-        if data:
-            lines.append(f"\n**qBittorrent** ({len(data)} active):")
-            for t in data[:5]:
-                name = t.get("name", "?")[:50]
-                progress = round(t.get("progress", 0) * 100, 1)
-                dlspeed = t.get("dlspeed", 0)
-                speed_str = f"{dlspeed / 1024 / 1024:.1f} MB/s" if dlspeed else "0"
-                lines.append(f"  • `{name}` — {progress}% ({speed_str})")
-        else:
-            lines.append("**qBittorrent**: No active torrents ✅")
+    for label, data in zip(task_labels, gathered):
+        if label == "sabnzbd":
+            if isinstance(data, dict):
+                queue = data.get("queue", {})
+                slots = queue.get("slots", [])
+                speed = queue.get("speed", "0 B/s")
+                remaining = queue.get("timeleft", "N/A")
+                if slots:
+                    lines.append(f"**SABnzbd** ({len(slots)} items, {speed}, ETA: {remaining}):")
+                    for s in slots[:5]:
+                        name = s.get("filename", "?")[:50]
+                        pct = s.get("percentage", "?")
+                        size = s.get("sizeleft", "?")
+                        lines.append(f"  • `{name}` — {pct}% ({size} left)")
+                else:
+                    lines.append("**SABnzbd**: Queue empty ✅")
+        elif label == "qbit":
+            if isinstance(data, list):
+                if data:
+                    lines.append(f"\n**qBittorrent** ({len(data)} active):")
+                    for t in data[:5]:
+                        name = t.get("name", "?")[:50]
+                        progress = round(t.get("progress", 0) * 100, 1)
+                        dlspeed = t.get("dlspeed", 0)
+                        speed_str = f"{dlspeed / 1024 / 1024:.1f} MB/s" if dlspeed else "0"
+                        lines.append(f"  • `{name}` — {progress}% ({speed_str})")
+                else:
+                    lines.append("**qBittorrent**: No active torrents ✅")
 
     return "\n".join(lines) or "No download clients configured."
 
@@ -418,13 +431,17 @@ async def check_service_ports() -> str:
         ("Radarr", HOST, 7878),
         ("Lidarr", HOST, 8686),
         ("Prowlarr", HOST, 9696),
-        ("SABnzbd", HOST, 8775),
-        ("qBittorrent", HOST, 8080),
         ("Tautulli", HOST, 8181),
         ("Overseerr", HOST, 5055),
         ("Glances", HOST, 61208),
         ("OpenClaw", HOST, 8765),
     ]
+    # Only check download clients if configured
+    if SABNZBD_API_KEY:
+        services.append(("SABnzbd", HOST, 8775))
+    qbit_url = os.getenv("QBIT_URL", "")
+    if qbit_url:
+        services.append(("qBittorrent", HOST, 8080))
 
     async def _check_port(host: str, port: int) -> bool:
         try:
