@@ -1095,26 +1095,28 @@ async def chat_stream(
             return
         # Fall through to the Gemini paths below (skip local attempt)
     else:
-        # ── Auto mode: Copilot proxy first, then Gemini ──────────────────
-        try:
-            from model_router import chat_openai, COPILOT_PROXY_ENABLED
-            if COPILOT_PROXY_ENABLED:
-                system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                if reply:
-                    import os
-                    updated = history + [
-                        {"role": "user", "parts": [user_message]},
-                        {"role": "model", "parts": [reply]},
-                    ]
-                    yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
-                    return
-                _routing_notes.append("Copilot proxy failed → trying Gemini")
-        except Exception as e:
-            log.debug("Copilot proxy failed: %s", e)
-            _routing_notes.append("Copilot proxy unavailable → trying Gemini")
-        # (Ollama only used when model_preference == "local", not auto)
+        # ── Auto mode: Copilot proxy for simple queries, Gemini for tool queries ──
+        needs_tools = _needs_tools(user_message)
+        if not needs_tools:
+            try:
+                from model_router import chat_openai, COPILOT_PROXY_ENABLED
+                if COPILOT_PROXY_ENABLED:
+                    system_prompt = _load_system_prompt()
+                    reply = await chat_openai(model_message, history, system_prompt,
+                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                    if reply:
+                        import os
+                        updated = history + [
+                            {"role": "user", "parts": [user_message]},
+                            {"role": "model", "parts": [reply]},
+                        ]
+                        yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
+                        return
+                    _routing_notes.append("Copilot proxy failed → trying Gemini")
+            except Exception as e:
+                log.debug("Copilot proxy failed: %s", e)
+                _routing_notes.append("Copilot proxy unavailable → trying Gemini")
+        # Tool-requiring queries go straight to Gemini (has 105 tools registered)
 
     # Rate-limit pre-check
     if not _rate_limiter.check():
@@ -1328,24 +1330,25 @@ async def chat(
         updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
         return text, updated_history, model_name
 
-    # -- Auto mode: Copilot proxy first, then Gemini ────────────────────────
-    try:
-        from model_router import chat_openai, COPILOT_PROXY_ENABLED
-        if COPILOT_PROXY_ENABLED:
-            system_prompt = _load_system_prompt()
-            reply = await chat_openai(model_message, history, system_prompt,
-                                      temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-            if reply:
-                import os
-                updated = history + [
-                    {"role": "user", "parts": [user_message]},
-                    {"role": "model", "parts": [reply]},
-                ]
-                return reply, updated, f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
-            log.info("Copilot proxy failed, falling through to Gemini")
-    except Exception as e:
-        log.debug("Copilot proxy failed: %s", e)
-    # (Ollama only used when model_preference == "local", not auto)
+    # -- Auto mode: Copilot for simple queries, Gemini for tool queries ─────
+    if not _needs_tools(user_message):
+        try:
+            from model_router import chat_openai, COPILOT_PROXY_ENABLED
+            if COPILOT_PROXY_ENABLED:
+                system_prompt = _load_system_prompt()
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                if reply:
+                    import os
+                    updated = history + [
+                        {"role": "user", "parts": [user_message]},
+                        {"role": "model", "parts": [reply]},
+                    ]
+                    return reply, updated, f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
+                log.info("Copilot proxy failed, falling through to Gemini")
+        except Exception as e:
+            log.debug("Copilot proxy failed: %s", e)
+    # Tool-requiring queries go straight to Gemini (has 105 tools registered)
 
     # -- Gemini path (shared helper) ──────────────────────────────────────────
     # Quick rate-limit pre-check before expensive model init — the full
