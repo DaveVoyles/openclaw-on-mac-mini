@@ -264,6 +264,27 @@
           <li>
             <a href="#profile-lifecycle">30. User Profile &amp; Memory Lifecycle</a>
           </li>
+          <li>
+            <a href="#multi-model">31. Multi-Model Routing</a>
+          </li>
+          <li>
+            <a href="#memory-system">32. Enhanced Memory System</a>
+          </li>
+          <li>
+            <a href="#code-interpreter">33. Code Interpreter</a>
+          </li>
+          <li>
+            <a href="#vision-tools">34. Vision + Tools</a>
+          </li>
+          <li>
+            <a href="#research-enhanced">35. Enhanced Research</a>
+          </li>
+          <li>
+            <a href="#dashboard-enhanced">36. Enhanced Dashboard</a>
+          </li>
+          <li>
+            <a href="#collapsible-skills">37. Collapsible Skills</a>
+          </li>
         </ul>
       </div>
 
@@ -2606,6 +2627,363 @@ Marple Township millage rate is 25.46...
           </td>
         </tr>
       </table>
+
+      <!-- 31. Multi-Model Routing -->
+      <h2 id="multi-model">31. Multi-Model Routing</h2>
+      <p>
+        Phase 15 introduces intelligent model routing &mdash; the bot
+        automatically picks the best LLM for each message, or you can override
+        manually.
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Auto Mode (Default)</h3>
+        <p>
+          In auto mode the router classifies your message and dispatches it to
+          the strongest model for that category:
+        </p>
+        <table>
+          <tr>
+            <th>Category</th>
+            <th>Model</th>
+            <th>Why</th>
+          </tr>
+          <tr>
+            <td>Code &amp; debugging</td>
+            <td>Claude Sonnet</td>
+            <td>Best at precise code generation and diffs</td>
+          </tr>
+          <tr>
+            <td>Creative writing</td>
+            <td>GPT-4o</td>
+            <td>Strongest at tone, style, and long-form prose</td>
+          </tr>
+          <tr>
+            <td>Tool use &amp; research</td>
+            <td>Gemini</td>
+            <td>Fast function-calling and multi-step tasks</td>
+          </tr>
+          <tr>
+            <td>General chat</td>
+            <td>Gemma</td>
+            <td>Lightweight, low-cost, low-latency</td>
+          </tr>
+        </table>
+      </div>
+
+      <h3>Per-Message Override</h3>
+      <p>Force a specific provider for a single message:</p>
+      <pre><code>/ask model:openai "write a bash script to rotate Docker logs"
+/ask model:claude "review this Python function for bugs"
+/ask model:gemini "search the web for Sonarr v4 migration guide"</code></pre>
+
+      <h3>Sticky Default (<code>/model set</code>)</h3>
+      <p>
+        Set a default model for all future <code>/ask</code> messages until
+        changed:
+      </p>
+      <pre><code>/model set          # opens a picker with 5 options
+/model set openai   # set GPT-4o as default
+/model set auto     # return to auto-routing</code></pre>
+
+      <h3>Copilot Proxy</h3>
+      <p>
+        If you have a GitHub Copilot subscription, OpenClaw can proxy through it
+        for <strong>free GPT-4o and Claude</strong> access &mdash; no separate
+        API key needed. Set <code>COPILOT_TOKEN</code> in <code>.env</code>.
+      </p>
+
+      <div class="tip">
+        <strong>&#128161; Cost tip:</strong> Auto mode routes casual chat to
+        Gemma (&lt;$0.001/msg) while reserving expensive models for tasks that
+        need them. Check <code>/spending</code> to see per-model cost breakdown.
+      </div>
+
+      <!-- 32. Enhanced Memory System -->
+      <h2 id="memory-system">32. Enhanced Memory System</h2>
+      <p>
+        Phase 15 upgrades memory from simple key-value storage to a layered
+        system with automatic extraction, confidence scoring, and decay.
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Auto-RAG</h3>
+        <p>
+          Before every <code>/ask</code> response the bot automatically queries
+          long-term memory for relevant context and injects it into the prompt.
+          No commands needed &mdash; the bot just <em>knows</em> what you told
+          it before.
+        </p>
+      </div>
+
+      <h3>Automatic Fact Extraction</h3>
+      <p>
+        Every 3rd message, the bot silently extracts memorable facts from the
+        conversation and stores them. These auto-extracted facts have a lower
+        confidence score than explicit <code>/remember</code> entries.
+      </p>
+
+      <h3>Explicit Commands</h3>
+      <table>
+        <tr>
+          <td><code>/remember &lt;fact&gt;</code></td>
+          <td>
+            Store a fact with high confidence. E.g.
+            <code>/remember My NAS IP is 192.168.1.8</code>
+          </td>
+        </tr>
+        <tr>
+          <td><code>/recall &lt;query&gt;</code></td>
+          <td>
+            Search memory. Returns ranked results with confidence scores.
+          </td>
+        </tr>
+        <tr>
+          <td><code>/goals</code></td>
+          <td>
+            View auto-tracked goals extracted from your conversations
+            (projects, tasks, aspirations).
+          </td>
+        </tr>
+      </table>
+
+      <h3>Confidence &amp; Decay</h3>
+      <ul>
+        <li>
+          <strong>Explicit facts</strong> (<code>/remember</code>) start at
+          confidence 1.0 and rank highest in search.
+        </li>
+        <li>
+          <strong>Auto-extracted facts</strong> start at 0.6&ndash;0.8
+          depending on extraction quality.
+        </li>
+        <li>
+          <strong>Memory decay:</strong> Memories not accessed in 30+ days
+          receive a similarity penalty (still searchable, just ranked lower).
+          Use <code>/memory-refresh &lt;query&gt;</code> to prevent decay.
+        </li>
+      </ul>
+
+      <div class="tip">
+        <strong>&#128161; Goal tracking:</strong> The bot automatically
+        identifies goals from phrases like &ldquo;I want to&hellip;&rdquo;,
+        &ldquo;my plan is&hellip;&rdquo;, or &ldquo;I need to finish&hellip;&rdquo;.
+        Use <code>/goals</code> to review and prune.
+      </div>
+
+      <!-- 33. Code Interpreter -->
+      <h2 id="code-interpreter">33. Code Interpreter</h2>
+      <p>
+        The bot can write and execute Python code in a sandboxed Docker
+        container. This is triggered automatically by the LLM when a task
+        benefits from computation.
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Sandbox Limits</h3>
+        <table>
+          <tr>
+            <th>Constraint</th>
+            <th>Value</th>
+          </tr>
+          <tr>
+            <td>Runtime</td>
+            <td>Python 3.12 (standard library only)</td>
+          </tr>
+          <tr>
+            <td>Timeout</td>
+            <td>30 seconds</td>
+          </tr>
+          <tr>
+            <td>Memory</td>
+            <td>256 MB</td>
+          </tr>
+          <tr>
+            <td>Network</td>
+            <td>Disabled (no outbound connections)</td>
+          </tr>
+          <tr>
+            <td>Filesystem</td>
+            <td>Ephemeral (wiped after each run)</td>
+          </tr>
+        </table>
+      </div>
+
+      <h3>Good For</h3>
+      <ul>
+        <li>Math and unit conversions</li>
+        <li>Data formatting (CSV &rarr; table, JSON transforms)</li>
+        <li>Text processing (regex, parsing, encoding/decoding)</li>
+        <li>Quick algorithm prototyping</li>
+        <li>Date/time calculations</li>
+      </ul>
+
+      <h3>Examples</h3>
+      <pre><code>/ask Convert 2.5 million seconds to days, hours, and minutes
+/ask Parse this CSV and show the top 5 rows sorted by revenue
+/ask What's the SHA-256 hash of "hello world"?
+/ask Generate a UUID v4</code></pre>
+
+      <div class="tip">
+        <strong>&#128161; Automatic trigger:</strong> You don&rsquo;t need a
+        special command &mdash; just ask naturally. The LLM decides when code
+        execution would give a more accurate answer than text generation alone.
+      </div>
+
+      <!-- 34. Vision + Tools -->
+      <h2 id="vision-tools">34. Vision + Tools</h2>
+      <p>
+        Upload an image alongside your <code>/ask</code> message and the bot
+        can <strong>analyze the image AND take action</strong> based on what it
+        sees.
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0">How It Works</h3>
+        <ol>
+          <li>Attach an image to your Discord message</li>
+          <li>
+            Include an <code>/ask</code> prompt describing what you want
+          </li>
+          <li>
+            The vision model analyzes the image, then the bot can invoke tools
+            (Docker, search, memory, etc.) based on the analysis
+          </li>
+        </ol>
+      </div>
+
+      <h3>Examples</h3>
+      <pre><code>/ask [attach screenshot] "What errors are in this log output?"
+/ask [attach dashboard image] "Analyze this Grafana dashboard and restart any unhealthy services"
+/ask [attach photo] "What plant is this? Search for care instructions"
+/ask [attach receipt] "Extract the total and store it in memory"</code></pre>
+
+      <div class="tip">
+        <strong>&#128161; Vision + action:</strong> Unlike simple image
+        description, OpenClaw combines vision with its full tool suite. It can
+        see a problem in a screenshot and immediately act on it &mdash; restart
+        a container, search for a fix, or store findings in memory.
+      </div>
+
+      <!-- 35. Enhanced Research -->
+      <h2 id="research-enhanced">35. Enhanced Research</h2>
+      <p>
+        Phase 16 adds follow-up suggestions, scheduled research, and
+        searchable research history on top of the existing
+        <a href="#research"><code>/research</code></a> workflow.
+      </p>
+
+      <h3>Follow-Up Suggestions</h3>
+      <p>
+        After every research report, the bot suggests 2&ndash;3 follow-up
+        questions based on the findings. Click one to launch a new research
+        thread instantly.
+      </p>
+
+      <h3>Scheduled Research</h3>
+      <p>
+        Set a research query to run on a recurring schedule. Only
+        <strong>new or changed</strong> results are reported (diff-only), so
+        you don&rsquo;t get duplicate information.
+      </p>
+      <pre><code>/research schedule:daily "Kubernetes security advisories this week"
+/research schedule:weekly "Philadelphia housing market trends"</code></pre>
+
+      <h3>Research History</h3>
+      <p>
+        All past research reports are indexed and searchable:
+      </p>
+      <pre><code>/research-search Docker networking
+/research-search Philadelphia real estate</code></pre>
+
+      <div class="tip">
+        <strong>&#128161; Combine with memory:</strong> Hit
+        <strong>&#128204; Save to Memory</strong> on any research report to
+        make its findings available to <code>/ask</code> via Auto-RAG. The bot
+        will reference that research automatically in future conversations.
+      </div>
+
+      <!-- 36. Enhanced Dashboard -->
+      <h2 id="dashboard-enhanced">36. Enhanced Dashboard</h2>
+      <p>
+        Phase 16 adds four new panels to the
+        <a href="/dashboard">dashboard</a>:
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0">New Dashboard Panels</h3>
+        <table>
+          <tr>
+            <th>Panel</th>
+            <th>Description</th>
+          </tr>
+          <tr>
+            <td>Collapsible Skills</td>
+            <td>
+              Skills grouped by category (Docker, Media, Research, etc.) with
+              expand/collapse and a search filter.
+            </td>
+          </tr>
+          <tr>
+            <td>Recent Activity</td>
+            <td>
+              Live feed of the latest actions from the audit log &mdash;
+              commands run, tools invoked, errors encountered.
+            </td>
+          </tr>
+          <tr>
+            <td>Memory Browser</td>
+            <td>
+              Search and browse stored facts with confidence scores,
+              access counts, and last-accessed dates.
+            </td>
+          </tr>
+          <tr>
+            <td>Saved Conversations</td>
+            <td>
+              View and resume saved conversation threads directly from the
+              dashboard without using Discord commands.
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="tip">
+        <strong>&#128161; Quick access:</strong> The dashboard is at
+        <code>http://&lt;host&gt;:8765/dashboard</code>. All panels auto-refresh
+        every 30 seconds.
+      </div>
+
+      <!-- 37. Collapsible Skills -->
+      <h2 id="collapsible-skills">37. Collapsible Skills</h2>
+      <p>
+        Skills are now organized into categories instead of one flat list.
+        The <code>/skills</code> command shows a compact overview; drill into
+        any category to see its commands.
+      </p>
+
+      <h3>Overview</h3>
+      <pre><code>/skills
+# Output:
+# 📂 Docker (12 skills)
+# 📂 Media (8 skills)
+# 📂 Research (5 skills)
+# 📂 Memory (7 skills)
+# 📂 Monitoring (6 skills)
+# 📂 Utilities (9 skills)</code></pre>
+
+      <h3>Drill Into a Category</h3>
+      <pre><code>/skills category:Docker
+# Shows all 12 Docker skills with descriptions
+
+/skills category:Media
+# Shows all 8 Media skills with descriptions</code></pre>
+
+      <div class="tip">
+        <strong>&#128161; Dashboard integration:</strong> The dashboard skills
+        panel mirrors this grouping with collapsible sections and a search
+        box. Type a keyword to filter skills across all categories instantly.
+      </div>
 
       <div
         style="
