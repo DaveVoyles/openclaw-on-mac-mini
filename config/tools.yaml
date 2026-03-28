@@ -748,33 +748,48 @@
     required:
       - goal
 - name: create_scheduled_task
-  description:
-    "Create a recurring scheduled task that runs a skill automatically. Use interval_minutes for 'every N minutes'
-    tasks, or hour+minute for a daily cron. Examples: schedule a daily health check at 07:00, run speed test every 60 min,
-    check Overseerr requests every 30 min."
+  description: >-
+    Create a recurring scheduled task. Can be either a skill call (specify skill_name)
+    or a prompt job (specify prompt). For prompt jobs, the AI runs with full tool access
+    and posts results to the specified channel.
+    Schedule: use cron_expression for precise timing (e.g. "0 7 * * 1,5" = Mon+Fri 7AM,
+    "0 9 * * 1-5" = weekdays 9AM, "*/30 * * * *" = every 30 min),
+    or hour+minute for simple daily, or interval_minutes for polling.
   parameters:
     type: object
     properties:
+      prompt:
+        type: string
+        description: >-
+          What the AI should do each run (natural language). The AI runs with full tool
+          access and can search the web, browse pages, analyze data, etc.
+          Example: "Search ESPN for Division 1 men's lacrosse games this week. Create a table."
       skill_name:
         type: string
-        description: The skill name to schedule (e.g. check_arr_health, run_speed_test).
-      interval_minutes:
-        type: integer
-        description: Run every N minutes (e.g. 30 for every 30 min). Use 0 for daily cron.
+        description: Specific skill function to call (alternative to prompt). e.g. check_arr_health
+      cron_expression:
+        type: string
+        description: >-
+          Cron schedule expression. Examples: "0 7 * * 1,5" (Mon+Fri 7AM),
+          "0 9 * * 1-5" (weekdays 9AM), "*/10 * * * *" (every 10 min)
       hour:
-        type: integer
-        description: Hour (0-23) for a daily cron schedule. Use -1 if using interval_minutes.
+        type: number
+        description: Hour (0-23) for simple daily schedule. Use cron_expression for complex schedules.
       minute:
-        type: integer
-        description: Minute (0-59) for a daily cron schedule (default 0).
+        type: number
+        description: Minute (0-59) for daily schedule (default 0).
+      interval_minutes:
+        type: number
+        description: Run every N minutes (alternative to cron/hour).
       args_json:
         type: string
-        description: 'Optional JSON object of arguments for the skill, e.g. ''{"days": 7}''.'
+        description: 'Optional JSON arguments for skill_name calls, e.g. ''{"days": 7}''.'
       label:
         type: string
-        description: Optional human-readable label describing the task purpose.
-    required:
-      - skill_name
+        description: Human-readable name for this task.
+      channel_id:
+        type: string
+        description: Discord channel ID to post results to.
 - name: cancel_scheduled_task
   description: Cancel (remove) a scheduled task by its task ID. Use list_scheduled_tasks to find IDs.
   parameters:
