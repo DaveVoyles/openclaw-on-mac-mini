@@ -11,6 +11,9 @@ from typing import Optional
 
 from subprocess_utils import run as _run, COMMAND_TIMEOUT
 
+# Unified memory manager (Phase 16)
+from memory_manager import store as memory_store, recall as memory_recall, stats as memory_stats  # noqa: F401
+
 log = logging.getLogger("openclaw.skills")
 
 # ---------------------------------------------------------------------------
