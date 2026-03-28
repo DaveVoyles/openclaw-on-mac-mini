@@ -122,6 +122,43 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "description": decl_map.get(name, getattr(SKILLS[name], "__doc__", "") or ""),
         })
 
+    # Recent activity from audit log
+    activity: list[dict] = []
+    try:
+        from config import cfg as app_cfg
+        audit_dir = app_cfg.audit_dir
+        if audit_dir.exists():
+            import json
+            # Read most recent JSONL files (named YYYY-MM-DD.jsonl)
+            log_files = sorted(audit_dir.glob("*.jsonl"), reverse=True)
+            raw_entries: list[dict] = []
+            for lf in log_files:
+                if len(raw_entries) >= 50:
+                    break
+                try:
+                    lines = lf.read_text().strip().split("\n")
+                    for line in reversed(lines):
+                        if not line.strip():
+                            continue
+                        try:
+                            raw_entries.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+                        if len(raw_entries) >= 50:
+                            break
+                except OSError:
+                    continue
+            for entry in raw_entries[:20]:
+                activity.append({
+                    "timestamp": entry.get("ts", ""),
+                    "user": entry.get("user", "unknown"),
+                    "action": entry.get("action", ""),
+                    "detail": entry.get("detail", "")[:100],
+                    "result": entry.get("result", ""),
+                })
+    except Exception:
+        pass
+
     payload = {
         "version": VERSION,
         "uptime_seconds": round(uptime_s, 1),
@@ -156,6 +193,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "skills": skills_list,
         "skill_count": len(skills_list),
         "commands": _command_list(),
+        "activity": activity,
     }
     return web.json_response(payload)
 

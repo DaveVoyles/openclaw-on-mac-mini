@@ -1122,6 +1122,26 @@
           <div id="config-rows"></div>
         </div>
 
+        <!-- Recent Activity -->
+        <div class="card">
+          <h2>&#128203; Recent Activity</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Detail</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody id="activity-body"></tbody>
+            </table>
+          </div>
+          <p id="activity-empty" style="color:var(--muted);text-align:center;padding:1rem;display:none">No recent activity</p>
+        </div>
+
         <div class="footer">
           OpenClaw &mdash; built with Heritage Blue &#128153; &mdash;
           <span id="refresh-ts"></span>
@@ -1387,6 +1407,34 @@
 
         document.getElementById("refresh-ts").textContent =
           "Updated " + new Date().toLocaleTimeString();
+
+        // Activity
+        renderActivity(d.activity || []);
+      }
+
+      function renderActivity(activity) {
+        const tbody = document.getElementById("activity-body");
+        const empty = document.getElementById("activity-empty");
+        tbody.innerHTML = "";
+        if (!activity.length) {
+          empty.style.display = "block";
+          return;
+        }
+        empty.style.display = "none";
+        activity.forEach((a) => {
+          const tr = document.createElement("tr");
+          const time = a.timestamp
+            ? new Date(a.timestamp).toLocaleString()
+            : "";
+          const resultColor =
+            a.result === "success"
+              ? "var(--mint-green)"
+              : a.result === "denied"
+                ? "var(--danger)"
+                : "var(--muted)";
+          tr.innerHTML = `<td style="white-space:nowrap;color:var(--muted)">${esc(time)}</td><td>${esc(a.user)}</td><td><code>${esc(a.action)}</code></td><td style="color:var(--muted);max-width:20rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.detail)}</td><td style="color:${resultColor}">${esc(a.result)}</td>`;
+          tbody.appendChild(tr);
+        });
       }
 
       function renderSkills(skills) {
