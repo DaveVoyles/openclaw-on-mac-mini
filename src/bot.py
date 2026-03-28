@@ -1704,12 +1704,24 @@ async def ask_cmd(
 
         is_last = i == len(chunks) - 1
         if is_last:
-            if model_used and "gemini" not in model_used.lower():
+            # Clean up model name (remove "models/" prefix)
+            display_model = model_used.replace("models/", "") if model_used else "unknown"
+            if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
                 rate_str = "local · unlimited"
             else:
                 rate_str = get_rate_info()
-            mode_label = {"auto": "🔄", "local": "🏠", "gemini": "☁️", "openai": "🟢", "anthropic": "🟣"}.get(model_pref, "🔄")
-            footer_text = f"💬 {conv.message_count} msgs | {rate_str} | {mode_label} {model_used}"
+            # Icon reflects the ACTUAL model used, not the preference
+            if "gemma" in display_model.lower() or "ollama" in display_model.lower():
+                actual_icon = "🏠"
+            elif "gemini" in display_model.lower():
+                actual_icon = "☁️"
+            elif "gpt" in display_model.lower() or "openai" in display_model.lower():
+                actual_icon = "🟢"
+            elif "claude" in display_model.lower() or "anthropic" in display_model.lower():
+                actual_icon = "🟣"
+            else:
+                actual_icon = "🔄"
+            footer_text = f"💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model}"
             # Show routing notes if any issues occurred
             if _routing_notes:
                 footer_text += " | ⚠️ " + " → ".join(_routing_notes)

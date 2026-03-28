@@ -802,6 +802,11 @@ async def _reflect_on_response(
             return text
 
         # The reflection produced an improved version
+        # Safeguard: if reflection is much shorter, it over-summarized — keep original
+        if len(reflection) < len(text) * 0.5 and len(text) > 100:
+            log.info("Reflection: discarded (%.0f%% shorter than original — likely over-summarized)",
+                     (1 - len(reflection) / len(text)) * 100)
+            return text
         log.info("Reflection: response was refined (original %d chars → refined %d chars)",
                  len(text), len(reflection))
         return reflection
