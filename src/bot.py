@@ -65,7 +65,7 @@ from llm import analyze_image as llm_analyze_image, analyze_document as llm_anal
 from llm import SUPPORTED_IMAGE_MIMES
 from memory import store as conversation_store
 from memory import get_model_preference, set_model_preference
-from dashboard import api_dashboard_handler, dashboard_handler, guide_handler
+from dashboard import api_dashboard_handler, api_memories_handler, api_threads_handler, dashboard_handler, guide_handler
 from image_gen import generate_image, is_available as sd_is_available
 from code_sandbox import run_code as sandbox_run_code
 from approvals import (
@@ -502,6 +502,14 @@ class OpenClawBot(commands.Bot):
                 log.debug("Calendar fetch failed for briefing: %s", exc)
                 calendar = "Calendar not available."
 
+            # Add active goals to briefing
+            goals_section = ""
+            try:
+                from goal_tracker import format_goals_for_briefing
+                goals_section = format_goals_for_briefing()
+            except Exception:
+                pass
+
             today = datetime.date.today().strftime("%A, %B %d, %Y")
             prompt = (
                 f"Good morning! Generate a concise morning briefing for {today}. "
@@ -511,8 +519,10 @@ class OpenClawBot(commands.Bot):
                 f"**Downloads**: {queue}\n"
                 f"**Today's calendar**: {calendar}\n"
                 f"**System**: {sysstat}\n"
-                "Format with clear sections, use emojis, be friendly but brief."
             )
+            if goals_section:
+                prompt += f"**Active Goals**: {goals_section}\n"
+            prompt += "Format with clear sections, use emojis, be friendly but brief."
 
             response_text, _, _ = await llm_chat(prompt)
 
@@ -740,6 +750,8 @@ class OpenClawBot(commands.Bot):
         app.router.add_get("/metrics", self._metrics_handler)
         app.router.add_get("/dashboard", dashboard_handler)
         app.router.add_get("/api/dashboard", api_dashboard_handler)
+        app.router.add_get("/api/memories", api_memories_handler)
+        app.router.add_get("/api/threads", api_threads_handler)
         app.router.add_get("/guide", guide_handler)
         app.router.add_get("/smoke", self._smoke_handler)
         app.router.add_post("/webhook/{source}", self._webhook_handler)
@@ -1605,6 +1617,20 @@ async def ask_cmd(
         except Exception as e:
             log.debug("Fact extraction failed (non-critical): %s", e)
 
+        try:
+            from goal_tracker import detect_goal, extract_and_store_goal
+            if detect_goal(question):
+                goal = await extract_and_store_goal(question, interaction.user.id)
+                if goal:
+                    try:
+                        await interaction.followup.send(
+                            f"🎯 Tracking goal: *{goal}*", ephemeral=True
+                        )
+                    except Exception:
+                        pass
+        except Exception as e:
+            log.debug("Goal tracking failed (non-critical): %s", e)
+
     asyncio.get_running_loop().create_task(_post_response_learning())
 
 
@@ -2015,6 +2041,35 @@ async def recall_cmd(interaction: discord.Interaction, query: str):
     embed = discord.Embed(title=f"🧠 Recall: {query}", description=result, color=discord.Color.blue())
     await interaction.response.send_message(embed=embed)
     audit_log(interaction.user, "recall", detail=query)
+
+
+@bot.tree.command(name="goals", description="View your active goals and intentions")
+@require_auth
+async def goals_cmd(interaction: discord.Interaction):
+    from goal_tracker import get_active_goals
+
+    goals = get_active_goals(interaction.user.id)
+    if not goals:
+        await interaction.response.send_message(
+            "No active goals tracked yet. I'll detect them from your conversations automatically!",
+            ephemeral=True,
+        )
+        return
+
+    embed = discord.Embed(
+        title=f"🎯 Active Goals ({len(goals)})",
+        color=discord.Color.green(),
+    )
+    for g in goals[:10]:
+        mentions = g.get("mention_count", 1)
+        created = time.strftime("%b %d", time.localtime(g.get("created_at", 0)))
+        embed.add_field(
+            name=g["goal"],
+            value=f"Since {created} · mentioned {mentions}x",
+            inline=False,
+        )
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
 @bot.tree.command(name="mail", description="Send an automated e-mail message via AgentMail")
