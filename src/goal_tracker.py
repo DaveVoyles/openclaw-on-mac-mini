@@ -63,17 +63,18 @@ async def extract_and_store_goal(
         return None
 
     prompt = (
-        "Extract the user's goal or intention from this message as a single concise statement. "
+        "Extract the user's goal or intention from this message as a single concise statement "
+        "(10-30 words). Include the key details (what, about what topic, how often). "
         "If there is no clear goal, reply with exactly: NONE\n\n"
         f"Message: {user_message}\n\n"
-        "Goal (one line):"
+        "Goal:"
     )
 
     try:
         model = genai.GenerativeModel(
             model_name=cfg.llm_model,
             generation_config=genai.GenerationConfig(
-                max_output_tokens=100,
+                max_output_tokens=150,
                 temperature=0.1,
             ),
         )
@@ -82,8 +83,8 @@ async def extract_and_store_goal(
             None, lambda: model.generate_content(prompt)
         )
 
-        goal_text = response.text.strip()
-        if not goal_text or goal_text.upper() == "NONE":
+        goal_text = response.text.strip().split("\n")[0].strip()  # Take first line only
+        if not goal_text or goal_text.upper() == "NONE" or len(goal_text) < 10:
             return None
 
         # Check for duplicate goals

@@ -240,7 +240,7 @@ async def _chat_ollama(
         async with session.post(
             f"{OLLAMA_URL}/api/chat",
             json=payload,
-            timeout=aiohttp.ClientTimeout(total=30),
+            timeout=aiohttp.ClientTimeout(total=10),
         ) as resp:
             if resp.status != 200:
                 log.warning("Ollama returned HTTP %d", resp.status)

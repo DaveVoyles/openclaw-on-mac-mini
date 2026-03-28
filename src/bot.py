@@ -1721,7 +1721,17 @@ async def ask_cmd(
                 kwargs["view"] = action_view
             if file_attachment and is_last:
                 kwargs["attachments"] = [file_attachment[0]]
-            await interaction.edit_original_response(**kwargs)
+            try:
+                await interaction.edit_original_response(**kwargs)
+            except discord.NotFound:
+                # Interaction expired — fall back to followup
+                log.warning("Interaction expired, using followup for response")
+                fb_kwargs = {"embed": embed}
+                if is_last:
+                    fb_kwargs["view"] = action_view
+                if file_attachment and is_last:
+                    fb_kwargs["file"] = file_attachment[0]
+                await interaction.followup.send(**fb_kwargs)
         else:
             kwargs = {"embed": embed}
             if is_last:
