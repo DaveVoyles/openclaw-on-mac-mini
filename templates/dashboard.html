@@ -499,6 +499,83 @@
         margin-top: 1rem;
       }
 
+      /* Memory Browser & Conversations */
+      .scrollable-list {
+        max-height: 400px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border) transparent;
+      }
+      .scrollable-list::-webkit-scrollbar { width: 6px; }
+      .scrollable-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+      .memory-item {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.45rem 0.5rem;
+        border-bottom: 1px solid rgba(104,172,229,0.06);
+        font-size: 0.82rem;
+        transition: background 0.15s;
+      }
+      .memory-item:hover { background: rgba(0,119,216,0.06); }
+      .memory-item:last-child { border-bottom: none; }
+      .memory-text { flex: 1; color: var(--text); word-break: break-word; }
+      .memory-tag {
+        display: inline-block;
+        background: rgba(241,196,0,0.12);
+        color: var(--gold);
+        font-size: 0.7rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 0.25rem;
+        white-space: nowrap;
+      }
+      .memory-date { color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+      .memory-stats-bar {
+        display: flex;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+        padding: 0.5rem 0;
+        margin-bottom: 0.5rem;
+        font-size: 0.82rem;
+      }
+      .memory-stats-bar .stat-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        background: rgba(104,172,229,0.08);
+        border: 1px solid rgba(104,172,229,0.15);
+        padding: 0.3rem 0.65rem;
+        border-radius: 1rem;
+        font-weight: 600;
+      }
+      .memory-stats-bar .stat-chip .stat-chip-label { color: var(--muted); font-weight: 400; }
+      .thread-item {
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid rgba(104,172,229,0.08);
+        transition: background 0.15s;
+      }
+      .thread-item:hover { background: rgba(0,119,216,0.06); }
+      .thread-item:last-child { border-bottom: none; }
+      .thread-item strong { color: var(--spirit-blue); font-size: 0.85rem; }
+      .thread-item .thread-meta { color: var(--muted); font-size: 0.73rem; margin-top: 0.15rem; }
+      .thread-preview {
+        color: var(--muted);
+        font-size: 0.78rem;
+        margin-top: 0.25rem;
+        font-style: italic;
+        opacity: 0.8;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .section-subheading {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: var(--spirit-blue);
+        margin: 0.75rem 0 0.35rem;
+      }
+      .muted-text { color: var(--muted); font-style: italic; text-align: center; padding: 1rem; font-size: 0.85rem; }
+
       @media (max-width: 600px) {
         .grid {
           grid-template-columns: 1fr;
@@ -1143,6 +1220,33 @@
           <p id="activity-empty" style="color:var(--muted);text-align:center;padding:1rem;display:none">No recent activity</p>
         </div>
 
+        <!-- Memory Browser -->
+        <div class="card" id="memory-browser-card">
+          <h2>&#129504; Memory Browser</h2>
+          <div class="memory-stats-bar" id="memory-stats">
+            <span class="stat-chip"><span class="stat-chip-label">Loading stats&hellip;</span></span>
+          </div>
+
+          <div class="section-subheading">&#128221; Facts (<span id="fact-count">0</span>)</div>
+          <input type="text" id="fact-search" placeholder="Search facts&hellip;" class="search-box" />
+          <div id="facts-list" class="scrollable-list"></div>
+
+          <details style="margin-top:0.75rem">
+            <summary style="cursor:pointer;font-weight:600;color:var(--spirit-blue);padding:0.4rem 0;user-select:none">
+              &#128207; Learned Rules (<span id="rule-count">0</span>)
+            </summary>
+            <div id="rules-list" class="scrollable-list" style="margin-top:0.35rem"></div>
+          </details>
+        </div>
+
+        <!-- Saved Conversations -->
+        <div class="card" id="conversations-card">
+          <h2>&#128172; Saved Conversations</h2>
+          <div id="threads-list" class="scrollable-list">
+            <p class="muted-text">Loading&hellip;</p>
+          </div>
+        </div>
+
         <div class="footer">
           OpenClaw &mdash; built with Heritage Blue &#128153; &mdash;
           <span id="refresh-ts"></span>
@@ -1605,6 +1709,87 @@
         }
       }
 
+      // =========================================================================
+      // Memory Browser
+      // =========================================================================
+      function loadMemories() {
+        fetch('/api/memories')
+          .then(r => r.json())
+          .then(data => {
+            // Stats chips
+            const statsEl = document.getElementById('memory-stats');
+            if (data.stats && Object.keys(data.stats).length) {
+              statsEl.innerHTML = Object.entries(data.stats).map(([k, v]) =>
+                `<span class="stat-chip"><span class="stat-chip-label">${esc(k)}:</span> ${v.count || 0}</span>`
+              ).join('');
+            } else {
+              statsEl.innerHTML = '<span class="stat-chip"><span class="stat-chip-label">Vector store unavailable</span></span>';
+            }
+
+            // Facts
+            document.getElementById('fact-count').textContent = data.facts.length;
+            const factsEl = document.getElementById('facts-list');
+            if (data.facts.length === 0) {
+              factsEl.innerHTML = '<p class="muted-text">No facts stored yet. Try /remember.</p>';
+            } else {
+              factsEl.innerHTML = data.facts.map(f => {
+                const tags = (f.tags && f.tags.length)
+                  ? f.tags.map(t => `<span class="memory-tag">${esc(t)}</span>`).join(' ')
+                  : '';
+                const dateStr = f.ts ? new Date(f.ts).toLocaleDateString() : '';
+                return `<div class="memory-item"><span class="memory-text">${esc(f.content || '')}</span>${tags}<span class="memory-date">${dateStr}</span></div>`;
+              }).join('');
+            }
+
+            // Rules
+            document.getElementById('rule-count').textContent = data.rules.length;
+            const rulesEl = document.getElementById('rules-list');
+            if (data.rules.length === 0) {
+              rulesEl.innerHTML = '<p class="muted-text">No rules learned yet.</p>';
+            } else {
+              rulesEl.innerHTML = data.rules.map(r => {
+                const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString() : '';
+                return `<div class="memory-item"><span class="memory-text">${esc(r.rule || String(r))}</span><span class="memory-date">${dateStr}</span></div>`;
+              }).join('');
+            }
+
+            // Fact search filter
+            document.getElementById('fact-search').addEventListener('input', e => {
+              const q = e.target.value.toLowerCase();
+              factsEl.querySelectorAll('.memory-item').forEach(item => {
+                item.style.display = item.textContent.toLowerCase().includes(q) ? '' : 'none';
+              });
+            });
+          })
+          .catch(() => {
+            document.getElementById('memory-stats').innerHTML =
+              '<span class="stat-chip"><span class="stat-chip-label">Failed to load</span></span>';
+          });
+      }
+
+      // =========================================================================
+      // Conversations
+      // =========================================================================
+      function loadThreads() {
+        fetch('/api/threads')
+          .then(r => r.json())
+          .then(data => {
+            const list = document.getElementById('threads-list');
+            if (!data.threads || data.threads.length === 0) {
+              list.innerHTML = '<p class="muted-text">No saved conversations yet. Use /save to create one.</p>';
+              return;
+            }
+            list.innerHTML = data.threads.map(t => {
+              const date = new Date(t.modified * 1000).toLocaleDateString();
+              return `<div class="thread-item"><strong>${esc(t.name)}</strong><div class="thread-meta">${t.messages} messages &middot; ${t.size_kb} KB &middot; ${date}</div><div class="thread-preview">${esc(t.preview || 'No preview')}</div></div>`;
+            }).join('');
+          })
+          .catch(() => {
+            document.getElementById('threads-list').innerHTML =
+              '<p class="muted-text">Failed to load conversations.</p>';
+          });
+      }
+
       // Init
       (async () => {
         try {
@@ -1612,6 +1797,8 @@
           render(d);
           document.getElementById("loading").style.display = "none";
           document.getElementById("app").style.display = "block";
+          loadMemories();
+          loadThreads();
         } catch (e) {
           document.getElementById("loading").innerHTML =
             `<span style="color:var(--danger)">Failed to connect: ${esc(e.message)}</span>`;
@@ -1619,7 +1806,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => refreshData(null), 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); }, 60000);
 
       function formatUptime(s) {
         const d = Math.floor(s / 86400),

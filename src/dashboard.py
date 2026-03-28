@@ -1,8 +1,10 @@
 """
 OpenClaw Dashboard — lightweight HTML dashboard served on the health endpoint.
-Routes: GET /dashboard (HTML), GET /api/dashboard (JSON)
+Routes: GET /dashboard (HTML), GET /api/dashboard (JSON),
+        GET /api/memories (JSON), GET /api/threads (JSON)
 """
 
+import json
 import platform
 import time
 
@@ -208,6 +210,75 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "activity": activity,
     }
     return web.json_response(payload)
+
+
+async def api_memories_handler(request: web.Request) -> web.Response:
+    """Return QMD facts, learned rules, and vector store stats."""
+    data: dict = {"facts": [], "rules": [], "stats": {}}
+
+    # QMD facts (last 50, newest first)
+    try:
+        from qmd import qmd_store
+        data["facts"] = list(qmd_store._memory[-50:])
+        data["facts"].reverse()
+    except Exception:
+        pass
+
+    # Learned rules (last 20, newest first)
+    try:
+        from rules_engine import _load_rules
+        rules = await _load_rules()
+        data["rules"] = rules[-20:]
+        data["rules"].reverse()
+    except Exception:
+        pass
+
+    # Vector store collection stats
+    try:
+        import vector_store
+        data["stats"] = await vector_store.get_stats()
+    except Exception:
+        pass
+
+    return web.json_response(data)
+
+
+async def api_threads_handler(request: web.Request) -> web.Response:
+    """Return saved conversation threads for the dashboard."""
+    from memory import THREADS_DIR
+
+    threads: list[dict] = []
+    if THREADS_DIR.exists():
+        for f in sorted(
+            THREADS_DIR.glob("*.json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        ):
+            try:
+                raw = json.loads(f.read_text())
+                history = raw if isinstance(raw, list) else raw.get("history", [])
+
+                # Extract preview from first user message
+                preview = ""
+                for msg in history[:5]:
+                    if msg.get("role") == "user":
+                        parts = msg.get("parts", [])
+                        preview = " ".join(
+                            p for p in parts if isinstance(p, str)
+                        )[:100]
+                        break
+
+                threads.append({
+                    "name": f.stem,
+                    "messages": len(history),
+                    "preview": preview,
+                    "modified": f.stat().st_mtime,
+                    "size_kb": round(f.stat().st_size / 1024, 1),
+                })
+            except Exception:
+                continue
+
+    return web.json_response({"threads": threads[:30]})
 
 
 def _command_list() -> list[dict]:
