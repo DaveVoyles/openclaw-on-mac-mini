@@ -144,6 +144,9 @@ _LIVE_ACTION_PATTERN = _re.compile(
     r"|\b(show|list|get|check|pull|view)\b.{0,40}\b(log|stats?|status|health|container|queue|request|download|backup|alert|metric)\b"
     # Explicit web-search actions
     r"|\b(search|find|look\s+up)\b.{0,40}\b(web|online|house|home|listing|property|zillow|redfin|real[\s-]?estate|news|current\s+price|weather)\b"
+    # "Search <domain>" or "search for <topic>" — any search verb + domain or broad topic
+    r"|\b(search|find|look\s+up)\b.{0,40}\w+\.(com|org|net|io|edu)\b"
+    r"|\b(search|find|look\s+up)\b.{0,20}\b(for|about)\b"
     # Weather: any standalone weather request routes through Gemini (needs get_weather tool)
     r"|\b(weather|forecast|temperature|rain|snow|sunny|humidity|wind\s+speed)\b"
     # Live-data questions: "is plex up?", "what's the current…"
@@ -156,8 +159,9 @@ _LIVE_ACTION_PATTERN = _re.compile(
     # Diagnostics / jobs
     r"|\brun\b.{0,20}\b(speed\s+test|status\s+report|ping|backup|diagnostic)\b"
     r"|\bping\s+[\w.]+"
-    # URLs always need browse_url
-    r"|https?://",
+    # URLs always need browse_url (full URLs or bare domain names)
+    r"|https?://"
+    r"|\b\w+\.(com|org|net|io|edu)\b",
     _re.IGNORECASE,
 )
 
