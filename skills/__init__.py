@@ -501,6 +501,88 @@ async def execute_python_code(code: str, stdin_data: str = "") -> str:
 
 SKILLS["execute_python_code"] = execute_python_code
 
+# ---------------------------------------------------------------------------
+# Skill categories for organized display (Phase 16)
+# ---------------------------------------------------------------------------
+
+SKILL_CATEGORIES = {
+    "🐳 Docker & System": [
+        "list_containers", "get_container_status", "get_container_logs",
+        "restart_container", "get_docker_stats", "get_system_stats",
+        "get_uptime", "get_compose_config",
+    ],
+    "🎬 Media & Downloads": [
+        "search_media", "get_download_queue", "get_plex_activity",
+        "check_arr_health", "check_download_clients", "check_plex_status",
+        "get_recent_additions", "get_pending_requests", "approve_request",
+        "deny_request", "get_request_stats",
+    ],
+    "🌐 Network & Monitoring": [
+        "ping_host", "check_service_ports", "get_network_status",
+        "get_tailscale_status", "run_speed_test",
+    ],
+    "🔍 Web & Research": [
+        "search_web", "browse_url", "webfetch_md", "get_weather",
+        "compare_sources",
+    ],
+    "🧠 Memory & Knowledge": [
+        "remember_fact", "recall_fact", "list_memories",
+        "ontology_create_entity", "ontology_get_entity", "ontology_query",
+        "ontology_update_entity", "ontology_relate", "ontology_get_related",
+        "ontology_validate", "run_memory_consolidation", "run_memory_decay",
+    ],
+    "📋 Planning & Tasks": [
+        "create_plan", "update_plan_step", "update_plan_status", "read_plan",
+        "list_plans", "adjust_plan", "execute_plan", "resume_plan",
+        "cancel_plan", "init_planning_files", "decompose_goal",
+        "get_mission_tasks", "update_task_status", "get_task_detail",
+        "add_task_comment", "complete_task",
+    ],
+    "📡 RSS & URL Monitoring": [
+        "fetch_rss_feed", "search_rss", "get_rss_digest", "list_rss_feeds",
+        "snapshot_url", "check_url_for_changes", "list_monitored_urls",
+        "remove_url_monitor",
+    ],
+    "📧 Communication": [
+        "send_email", "search_emails", "read_inbox",
+        "create_calendar_event", "get_todays_events", "get_upcoming_events",
+        "send_agent_mail",
+    ],
+    "🗄️ NAS & Storage": [
+        "backup_config_to_nas", "get_backup_status", "get_disk_smart_status",
+        "get_nas_alerts", "get_nas_storage_health", "nas_create_folder",
+        "nas_write_file",
+    ],
+    "⚙️ Automation & Scheduling": [
+        "create_scheduled_task", "cancel_scheduled_task", "list_scheduled_tasks",
+        "gateway_request", "gateway_create_connection", "gateway_list_connections",
+        "spawn_worker", "create_google_doc", "create_onedrive_file",
+    ],
+    "🔧 Development & Git": [
+        "execute_python_code", "git_status", "git_diff", "git_log", "git_commit",
+    ],
+    "📝 Obsidian Vault": [
+        "save_to_vault", "list_vault", "index_vault_to_qmd",
+    ],
+    "🔬 Analysis & Reports": [
+        "analyze_logs", "suggest_fixes", "create_status_report",
+    ],
+    "💰 Spending & Budget": [
+        "get_spending", "get_daily_spending",
+    ],
+    "🛠️ Maintenance": [
+        "run_maintenance", "update_skills", "restart_gateway",
+    ],
+}
+
+# Auto-populate: any skill NOT in a category goes to "📦 Other"
+_categorized = set()
+for _skills_list in SKILL_CATEGORIES.values():
+    _categorized.update(_skills_list)
+_uncategorized = [name for name in SKILLS if name not in _categorized]
+if _uncategorized:
+    SKILL_CATEGORIES["📦 Other"] = sorted(_uncategorized)
+
 # Scheduled research — recurring research queries
 from research_agent import run_scheduled_research
 SKILLS["run_scheduled_research"] = run_scheduled_research

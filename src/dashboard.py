@@ -122,6 +122,17 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "description": decl_map.get(name, getattr(SKILLS[name], "__doc__", "") or ""),
         })
 
+    # Build categorized skill data for collapsible dashboard display
+    from skills import SKILL_CATEGORIES
+    skill_categories = {}
+    for cat_name, cat_skills in SKILL_CATEGORIES.items():
+        valid = [n for n in sorted(cat_skills) if n in SKILLS]
+        if valid:
+            skill_categories[cat_name] = [
+                {"name": n, "description": decl_map.get(n, getattr(SKILLS[n], "__doc__", "") or "")}
+                for n in valid
+            ]
+
     # Recent activity from audit log
     activity: list[dict] = []
     try:
@@ -192,6 +203,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         },
         "skills": skills_list,
         "skill_count": len(skills_list),
+        "skill_categories": skill_categories,
         "commands": _command_list(),
         "activity": activity,
     }

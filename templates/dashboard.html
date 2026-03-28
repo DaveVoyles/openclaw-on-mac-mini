@@ -1104,7 +1104,8 @@
             placeholder="&#128269; Search skills..."
             oninput="filterSkills()"
           />
-          <table>
+          <div id="skills-categories"></div>
+          <table style="display:none">
             <thead>
               <tr>
                 <th style="width: 2rem">#</th>
@@ -1274,7 +1275,8 @@
       // Data fetch & render
       // =========================================================================
       let _allSkills = [],
-        _allCmds = [];
+        _allCmds = [],
+        _skillCategories = {};
 
       async function loadData() {
         const r = await fetch("/api/dashboard");
@@ -1371,8 +1373,9 @@
 
         // Skills
         _allSkills = d.skills;
+        _skillCategories = d.skill_categories || {};
         document.getElementById("skill-count").textContent = d.skill_count;
-        renderSkills(d.skills);
+        renderSkillCategories(_skillCategories);
 
         // Commands
         _allCmds = d.commands;
@@ -1447,6 +1450,34 @@
         });
       }
 
+      function renderSkillCategories(categories) {
+        const container = document.getElementById("skills-categories");
+        container.innerHTML = "";
+        for (const [catName, skills] of Object.entries(categories)) {
+          const details = document.createElement("details");
+          details.className = "skill-category";
+          details.style.marginBottom = "0.5rem";
+          const summary = document.createElement("summary");
+          summary.style.cssText = "cursor:pointer;font-weight:600;padding:0.5rem 0;user-select:none;";
+          summary.textContent = `${catName} (${skills.length})`;
+          details.appendChild(summary);
+          const table = document.createElement("table");
+          table.style.marginTop = "0.25rem";
+          table.innerHTML = `<thead><tr><th style="width:2rem">#</th><th style="width:12rem">Skill</th><th>Description</th></tr></thead>`;
+          const tbody = document.createElement("tbody");
+          skills.forEach((s, i) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td style="color:var(--muted)">${i + 1}</td><td><code>${esc(s.name)}</code></td><td style="color:var(--muted)">${esc(s.description).slice(0, 130)}</td>`;
+            tr.dataset.name = s.name.toLowerCase();
+            tr.dataset.desc = (s.description || "").toLowerCase();
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          details.appendChild(table);
+          container.appendChild(details);
+        }
+      }
+
       function renderContainers(containers) {
         const cg = document.getElementById("container-grid");
         if (!containers || containers.length === 0) {
@@ -1519,13 +1550,24 @@
 
       function filterSkills() {
         const q = document.getElementById("skill-search").value.toLowerCase();
-        const filtered = q
-          ? _allSkills.filter(
-              (s) =>
-                s.name.includes(q) || s.description.toLowerCase().includes(q),
-            )
-          : _allSkills;
-        renderSkills(filtered);
+        if (!q) {
+          renderSkillCategories(_skillCategories || {});
+          return;
+        }
+        // Filter: show only matching skills, auto-open matching categories
+        const container = document.getElementById("skills-categories");
+        const allDetails = container.querySelectorAll("details.skill-category");
+        allDetails.forEach((det) => {
+          const rows = det.querySelectorAll("tbody tr");
+          let anyVisible = false;
+          rows.forEach((tr) => {
+            const match = tr.dataset.name.includes(q) || tr.dataset.desc.includes(q);
+            tr.style.display = match ? "" : "none";
+            if (match) anyVisible = true;
+          });
+          det.style.display = anyVisible ? "" : "none";
+          det.open = anyVisible;
+        });
       }
 
       function filterCmds() {
