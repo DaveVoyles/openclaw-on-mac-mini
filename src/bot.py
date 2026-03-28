@@ -407,6 +407,7 @@ class OpenClawBot(commands.Bot):
         if ALERT_CHANNEL_ID:
             asyncio.create_task(self._morning_briefing_loop())
             asyncio.create_task(self._proactive_insight_loop())
+            asyncio.create_task(self._error_monitor_loop())
             log.info("Proactive tasks started (alert channel: %d)", ALERT_CHANNEL_ID)
 
             # Scan for interrupted plans from previous runs
@@ -517,6 +518,26 @@ class OpenClawBot(commands.Bot):
             except Exception:
                 pass
 
+            # Error stats for briefing
+            error_stats_section = ""
+            try:
+                from error_tracker import get_error_stats
+                stats = get_error_stats(hours=24)
+                if stats["total"] > 0:
+                    error_stats_section = (
+                        f"{stats['total']} queries, "
+                        f"{stats['successes']} successful ({int(stats['success_rate'] * 100)}%), "
+                        f"{stats['failures']} failures, avg latency {stats['avg_latency_ms']}ms"
+                    )
+                    if stats["failures"] > 0:
+                        error_stats_section += (
+                            " | Recent errors: " + "; ".join(
+                                e["error"][:50] for e in stats["recent_errors"][:3]
+                            )
+                        )
+            except Exception:
+                pass
+
             today = datetime.date.today().strftime("%A, %B %d, %Y")
             prompt = (
                 f"Good morning! Generate a concise morning briefing for {today}. "
@@ -529,6 +550,8 @@ class OpenClawBot(commands.Bot):
             )
             if goals_section:
                 prompt += f"**Active Goals**: {goals_section}\n"
+            if error_stats_section:
+                prompt += f"**Yesterday's /ask Stats**: {error_stats_section}\n"
             prompt += "Format with clear sections, use emojis, be friendly but brief."
 
             response_text, _, _ = await llm_chat(prompt)
@@ -554,6 +577,52 @@ class OpenClawBot(commands.Bot):
             except Exception as e:
                 log.warning("Proactive scan error: %s", e)
             await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)
+
+    async def _error_monitor_loop(self):
+        """Fast error pattern check — runs every 5 minutes."""
+        await asyncio.sleep(300)  # Wait 5 min after startup
+        while True:
+            try:
+                from error_tracker import check_error_patterns
+
+                patterns = check_error_patterns(window_minutes=30)
+                if patterns:
+                    critical = [p for p in patterns if p["severity"] == "critical"]
+                    if critical:
+                        await self._post_error_alert(patterns)
+                    else:
+                        log.info("Error monitor: %d warning patterns detected", len(patterns))
+            except Exception as e:
+                log.debug("Error monitor check failed: %s", e)
+
+            await asyncio.sleep(300)  # Check every 5 minutes
+
+    async def _post_error_alert(self, patterns: list[dict]):
+        """Post an error pattern alert to the alert channel."""
+        if not ALERT_CHANNEL_ID:
+            return
+        channel = self.get_channel(ALERT_CHANNEL_ID)
+        if not channel:
+            return
+
+        embed = discord.Embed(
+            title="⚠️ Error Pattern Detected",
+            color=discord.Color.red() if any(p["severity"] == "critical" for p in patterns) else discord.Color.orange(),
+        )
+        for p in patterns[:5]:
+            icon = "🔴" if p["severity"] == "critical" else "🟡"
+            embed.add_field(
+                name=f"{icon} {p['type'].replace('_', ' ').title()}",
+                value=p["detail"],
+                inline=False,
+            )
+        embed.set_footer(text="Error Monitor • checks every 5 min")
+
+        try:
+            await channel.send(embed=embed)
+            audit_log(None, "error_monitor", detail=f"{len(patterns)} patterns: {', '.join(p['type'] for p in patterns)}")
+        except Exception as e:
+            log.warning("Failed to post error alert: %s", e)
 
     _SAFE_RESTART_TARGETS = frozenset({
         "sonarr", "radarr", "lidarr", "prowlarr",

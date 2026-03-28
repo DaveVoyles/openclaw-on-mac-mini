@@ -120,3 +120,81 @@ def get_error_stats(hours: int = 24) -> dict:
         "recent_errors": recent_errors,
         "model_breakdown": model_counts,
     }
+
+
+def check_error_patterns(window_minutes: int = 30) -> list[dict]:
+    """Detect failure patterns in recent /ask outcomes.
+
+    Returns list of detected patterns:
+    [{"type": "...", "severity": "warning|critical", "detail": "...", "count": N}, ...]
+    """
+    entries = get_recent_outcomes(hours=window_minutes / 60, limit=200)
+    if not entries:
+        return []
+
+    patterns: list[dict] = []
+
+    # Pattern 1: High failure rate (>30% in window)
+    total = len(entries)
+    failures = sum(1 for e in entries if not e.get("success"))
+    if total >= 3 and failures / total > 0.3:
+        patterns.append({
+            "type": "high_failure_rate",
+            "severity": "critical" if failures / total > 0.5 else "warning",
+            "detail": f"{failures}/{total} failures ({int(failures / total * 100)}%) in last {window_minutes} min",
+            "count": failures,
+        })
+
+    # Pattern 2: Same error repeated 3+ times
+    error_counts: dict[str, int] = {}
+    for e in entries:
+        if not e.get("success") and e.get("error"):
+            key = e["error"][:80].strip()
+            error_counts[key] = error_counts.get(key, 0) + 1
+    for error_msg, count in error_counts.items():
+        if count >= 3:
+            patterns.append({
+                "type": "repeated_error",
+                "severity": "warning",
+                "detail": f"'{error_msg[:60]}' occurred {count} times",
+                "count": count,
+            })
+
+    # Pattern 3: Ollama timeout streak
+    recent = entries[-10:]
+    ollama_timeouts = sum(
+        1 for e in recent
+        if any("Ollama" in n or "timed out" in n for n in e.get("routing_notes", []))
+    )
+    if ollama_timeouts >= 3:
+        patterns.append({
+            "type": "ollama_timeout_streak",
+            "severity": "warning",
+            "detail": f"Ollama timed out {ollama_timeouts} of last {len(recent)} queries",
+            "count": ollama_timeouts,
+        })
+
+    # Pattern 4: Specific model failures
+    for model, counts in get_error_stats(hours=1).get("model_breakdown", {}).items():
+        if counts.get("failures", 0) >= 3 and counts.get("total", 0) > 0:
+            rate = counts["failures"] / counts["total"]
+            if rate > 0.5:
+                patterns.append({
+                    "type": "model_failures",
+                    "severity": "critical" if rate > 0.8 else "warning",
+                    "detail": f"Model '{model}' failing {int(rate * 100)}% ({counts['failures']}/{counts['total']})",
+                    "count": counts["failures"],
+                })
+
+    # Pattern 5: High latency streak (avg > 15s for last 5 queries)
+    recent_latencies = [e.get("latency_ms", 0) for e in entries[-5:] if e.get("latency_ms")]
+    if recent_latencies and sum(recent_latencies) / len(recent_latencies) > 15000:
+        avg = int(sum(recent_latencies) / len(recent_latencies))
+        patterns.append({
+            "type": "high_latency",
+            "severity": "warning",
+            "detail": f"Average latency {avg}ms over last {len(recent_latencies)} queries",
+            "count": len(recent_latencies),
+        })
+
+    return patterns
