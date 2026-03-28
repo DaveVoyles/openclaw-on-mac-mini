@@ -312,9 +312,9 @@ async def create_scheduled_task(
     task = scheduler.create(
         action=skill_name,
         args=args,
-        hour=hour,
-        minute=minute,
-        interval_minutes=interval_minutes,
+        hour=int(hour),
+        minute=int(minute),
+        interval_minutes=int(interval_minutes),
         created_by="llm",
     )
 
