@@ -319,9 +319,9 @@ async def create_scheduled_task(
     )
 
     if interval_minutes > 0:
-        schedule_desc = f"every {interval_minutes} minutes"
+        schedule_desc = f"every {int(interval_minutes)} minutes"
     elif hour >= 0:
-        schedule_desc = f"daily at {hour:02d}:{minute:02d}"
+        schedule_desc = f"daily at {int(hour):02d}:{int(minute):02d}"
     else:
         schedule_desc = "on demand"
 
