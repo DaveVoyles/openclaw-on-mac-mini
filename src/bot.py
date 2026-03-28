@@ -588,10 +588,65 @@ class OpenClawBot(commands.Bot):
                 patterns = check_error_patterns(window_minutes=30)
                 if patterns:
                     critical = [p for p in patterns if p["severity"] == "critical"]
-                    if critical:
+                    if critical or len(patterns) >= 2:
                         await self._post_error_alert(patterns)
+
+                        # E3+E4+E5: Auto-diagnosis → fix → learn pipeline
+                        try:
+                            from error_tracker import (
+                                diagnose_error_pattern, execute_fix,
+                                record_incident, get_recent_outcomes,
+                            )
+                            recent = get_recent_outcomes(hours=1)
+                            recent_errors = [e for e in recent if not e.get("success")]
+
+                            diagnosis = await diagnose_error_pattern(patterns, recent_errors)
+                            log.info(
+                                "Auto-diagnosis: %s (confidence: %.0f%%)",
+                                diagnosis.get("cause", "?"),
+                                diagnosis.get("confidence", 0) * 100,
+                            )
+
+                            fix_result = await execute_fix(diagnosis)
+                            log.info(
+                                "Auto-fix result: %s (success: %s)",
+                                fix_result.get("action_taken", "none"),
+                                fix_result.get("success"),
+                            )
+
+                            await record_incident(patterns, diagnosis, fix_result)
+
+                            if fix_result.get("success"):
+                                embed = discord.Embed(
+                                    title="🔧 Auto-Fix Applied",
+                                    color=discord.Color.green(),
+                                )
+                                embed.add_field(
+                                    name="Diagnosis",
+                                    value=diagnosis.get("explanation", "")[:200],
+                                    inline=False,
+                                )
+                                embed.add_field(
+                                    name="Action",
+                                    value=fix_result.get("action_taken", ""),
+                                    inline=True,
+                                )
+                                embed.add_field(
+                                    name="Result",
+                                    value=fix_result.get("detail", "")[:200],
+                                    inline=True,
+                                )
+                                embed.set_footer(text="Self-Healing System • auto-diagnosed and fixed")
+                                channel = self.get_channel(ALERT_CHANNEL_ID)
+                                if channel:
+                                    await channel.send(embed=embed)
+                        except Exception as e:
+                            log.warning("Auto-diagnosis/fix pipeline failed: %s", e)
                     else:
-                        log.info("Error monitor: %d warning patterns detected", len(patterns))
+                        log.info(
+                            "Error monitor: %d warning patterns (below critical threshold)",
+                            len(patterns),
+                        )
             except Exception as e:
                 log.debug("Error monitor check failed: %s", e)
 

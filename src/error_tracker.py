@@ -198,3 +198,245 @@ def check_error_patterns(window_minutes: int = 30) -> list[dict]:
         })
 
     return patterns
+
+
+# ---------------------------------------------------------------------------
+# E3: Auto-Diagnosis
+# ---------------------------------------------------------------------------
+
+async def diagnose_error_pattern(
+    patterns: list[dict],
+    recent_errors: list[dict] | None = None,
+) -> dict:
+    """Use LLM to diagnose the root cause of detected error patterns.
+
+    Returns: {
+        "cause": str,           # Root cause description
+        "severity": str,        # "low", "medium", "high", "critical"
+        "fix_type": str,        # "restart_service", "switch_model", "increase_timeout",
+                                # "clear_circuit_breaker", "manual_required", "none"
+        "fix_target": str,      # Service name, model name, etc.
+        "confidence": float,    # 0.0-1.0
+        "explanation": str,     # Human-readable explanation
+    }
+    """
+    import google.generativeai as genai
+    from config import cfg
+
+    _default = {"cause": "unknown", "severity": "low", "fix_type": "manual_required",
+                "fix_target": "", "confidence": 0.0}
+
+    if not cfg.google_api_key:
+        return {**_default, "explanation": "No API key for diagnosis"}
+
+    pattern_desc = "\n".join(
+        f"- [{p['severity'].upper()}] {p['type']}: {p['detail']}"
+        for p in patterns
+    )
+
+    error_samples = ""
+    if recent_errors:
+        error_samples = "\nRecent error samples:\n" + "\n".join(
+            f"- [{e.get('model_used', '?')}] {e.get('error', 'no error msg')[:150]}"
+            for e in recent_errors[:5]
+        )
+
+    container_context = ""
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["docker", "ps", "--format", "{{.Names}}\t{{.Status}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            container_context = f"\nContainer status:\n{result.stdout[:500]}"
+    except Exception:
+        pass
+
+    prompt = (
+        "You are an error diagnosis system for OpenClaw, a Discord bot running on a Mac Mini.\n"
+        "Analyze these error patterns and determine the root cause.\n\n"
+        f"Detected patterns:\n{pattern_desc}\n{error_samples}\n{container_context}\n\n"
+        "Respond in this EXACT JSON format (nothing else):\n"
+        "{\n"
+        '  "cause": "brief root cause description",\n'
+        '  "severity": "low|medium|high|critical",\n'
+        '  "fix_type": "restart_service|switch_model|increase_timeout|clear_circuit_breaker|manual_required|none",\n'
+        '  "fix_target": "service or model name if applicable",\n'
+        '  "confidence": 0.0-1.0,\n'
+        '  "explanation": "human-readable explanation of what happened and why"\n'
+        "}"
+    )
+
+    try:
+        model = genai.GenerativeModel(
+            model_name=cfg.llm_model,
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=500,
+                temperature=0.1,
+            ),
+        )
+        import asyncio
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(
+            None, lambda: model.generate_content(prompt)
+        )
+
+        text = response.text.strip()
+        from json_utils import repair_json
+        result = repair_json(text)
+        if isinstance(result, dict) and "cause" in result:
+            valid_fixes = {"restart_service", "switch_model", "increase_timeout",
+                           "clear_circuit_breaker", "manual_required", "none"}
+            if result.get("fix_type") not in valid_fixes:
+                result["fix_type"] = "manual_required"
+            return result
+
+        return {**_default, "severity": "medium", "confidence": 0.3,
+                "cause": text[:200], "explanation": text[:300]}
+    except Exception as e:
+        log.warning("Error diagnosis failed: %s", e)
+        return {**_default, "cause": str(e),
+                "explanation": f"Diagnosis failed: {e}"}
+
+
+# ---------------------------------------------------------------------------
+# E4: Auto-Fix
+# ---------------------------------------------------------------------------
+
+_SAFE_RESTART_TARGETS = frozenset({
+    "sonarr", "radarr", "lidarr", "prowlarr",
+    "sabnzbd", "qbittorrent", "tautulli", "overseerr",
+})
+
+
+async def execute_fix(diagnosis: dict) -> dict:
+    """Execute a safe auto-fix based on the diagnosis.
+
+    Returns: {"action_taken": str, "success": bool, "detail": str}
+    """
+    fix_type = diagnosis.get("fix_type", "none")
+    fix_target = diagnosis.get("fix_target", "")
+    confidence = diagnosis.get("confidence", 0.0)
+
+    if confidence < 0.6:
+        return {"action_taken": "skipped", "success": False,
+                "detail": f"Confidence too low ({confidence:.0%}) for auto-fix"}
+
+    if fix_type == "restart_service":
+        target = fix_target.lower().strip()
+        if target not in _SAFE_RESTART_TARGETS:
+            return {"action_taken": "skipped", "success": False,
+                    "detail": f"'{target}' not in safe restart list"}
+        try:
+            from skills import restart_container
+            result = await restart_container(target)
+            log.info("Auto-fix: restarted %s → %s", target, result[:80])
+            return {"action_taken": f"restart_service:{target}", "success": True, "detail": result}
+        except Exception as e:
+            return {"action_taken": f"restart_service:{target}", "success": False, "detail": str(e)}
+
+    elif fix_type == "switch_model":
+        log.info("Auto-fix: recommending model switch to '%s'", fix_target or "gemini")
+        return {"action_taken": f"switch_model:{fix_target or 'gemini'}",
+                "success": True,
+                "detail": f"Recommended switching to {fix_target or 'gemini'}. "
+                          "Users can override with /model set."}
+
+    elif fix_type == "clear_circuit_breaker":
+        try:
+            from tool_health import circuit_breaker
+            target = fix_target.lower().strip()
+            if target and target in circuit_breaker._tools:
+                circuit_breaker._tools[target].failures = 0
+                circuit_breaker._tools[target].last_failure = 0
+                log.info("Auto-fix: cleared circuit breaker for %s", target)
+                return {"action_taken": f"clear_circuit_breaker:{target}",
+                        "success": True, "detail": f"Circuit breaker reset for {target}"}
+            return {"action_taken": "clear_circuit_breaker", "success": False,
+                    "detail": f"Tool '{target}' not found in circuit breaker"}
+        except Exception as e:
+            return {"action_taken": "clear_circuit_breaker", "success": False, "detail": str(e)}
+
+    elif fix_type == "increase_timeout":
+        return {"action_taken": "increase_timeout", "success": True,
+                "detail": f"Recommendation: increase timeout for {fix_target}. "
+                          "Adjust OLLAMA_TIMEOUT or LLM timeout in .env."}
+
+    else:
+        return {"action_taken": "manual_required", "success": False,
+                "detail": diagnosis.get("explanation", "Manual intervention needed")}
+
+
+# ---------------------------------------------------------------------------
+# E5: Error Learning
+# ---------------------------------------------------------------------------
+
+INCIDENTS_FILE = Path(os.getenv("INCIDENTS_FILE", "/memory/incidents.json"))
+
+
+async def record_incident(
+    patterns: list[dict],
+    diagnosis: dict,
+    fix_result: dict,
+) -> None:
+    """Record a complete incident for learning."""
+    incident = {
+        "ts": time.time(),
+        "patterns": patterns,
+        "diagnosis": {
+            "cause": diagnosis.get("cause", ""),
+            "fix_type": diagnosis.get("fix_type", ""),
+            "fix_target": diagnosis.get("fix_target", ""),
+            "confidence": diagnosis.get("confidence", 0),
+        },
+        "fix": {
+            "action": fix_result.get("action_taken", ""),
+            "success": fix_result.get("success", False),
+            "detail": fix_result.get("detail", ""),
+        },
+    }
+
+    try:
+        incidents: list = []
+        if INCIDENTS_FILE.exists():
+            incidents = json.loads(INCIDENTS_FILE.read_text())
+        incidents.append(incident)
+        incidents = incidents[-100:]
+        INCIDENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        INCIDENTS_FILE.write_text(json.dumps(incidents, indent=2, default=str))
+    except Exception as e:
+        log.debug("Failed to save incident: %s", e)
+
+    if fix_result.get("success"):
+        try:
+            from rules_engine import add_rule
+            pattern_types = ", ".join(p["type"] for p in patterns)
+            rule_text = (
+                f"When error pattern '{pattern_types}' is detected: "
+                f"{diagnosis.get('explanation', diagnosis.get('cause', 'unknown cause'))}. "
+                f"Auto-fix: {fix_result['action_taken']}."
+            )
+            await add_rule(
+                rule_text,
+                source_message=f"auto-heal incident @ {time.strftime('%Y-%m-%d %H:%M')}",
+            )
+            log.info("Error learning: created rule from incident: %s", rule_text[:100])
+        except Exception as e:
+            log.debug("Failed to create rule from incident: %s", e)
+
+
+def get_past_incidents(pattern_type: str = "", limit: int = 5) -> list[dict]:
+    """Look up past incidents for similar patterns."""
+    if not INCIDENTS_FILE.exists():
+        return []
+    try:
+        incidents = json.loads(INCIDENTS_FILE.read_text())
+        if pattern_type:
+            incidents = [
+                i for i in incidents
+                if any(p.get("type") == pattern_type for p in i.get("patterns", []))
+            ]
+        return incidents[-limit:]
+    except Exception:
+        return []
