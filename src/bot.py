@@ -1282,8 +1282,13 @@ def _format_tables_for_discord(text: str) -> str:
         separator_indices: list[int] = []
         for i, tl in enumerate(tlines):
             cells = [c.strip() for c in tl.strip().strip("|").split("|")]
-            # Strip markdown bold (**text**) — doesn't render inside code blocks
-            cells = [c.strip("*") for c in cells]
+            # Strip markdown that doesn't render inside code blocks
+            cleaned = []
+            for c in cells:
+                c = c.strip("*")  # **bold**
+                c = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', c)  # [text](url) → text
+                cleaned.append(c)
+            cells = cleaned
             stripped = tl.strip()
             is_sep = stripped.startswith("|") and all(c in "|-: " for c in stripped.replace("|", ""))
             if is_sep:
