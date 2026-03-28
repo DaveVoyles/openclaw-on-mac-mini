@@ -500,3 +500,7 @@ async def execute_python_code(code: str, stdin_data: str = "") -> str:
 
 
 SKILLS["execute_python_code"] = execute_python_code
+
+# Scheduled research — recurring research queries
+from research_agent import run_scheduled_research
+SKILLS["run_scheduled_research"] = run_scheduled_research

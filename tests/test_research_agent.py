@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from research_agent import ResearchAgent
+from research_agent import ResearchAgent, run_scheduled_research
 
 
 @pytest.fixture
@@ -125,3 +125,69 @@ async def test_data_truncation(agent):
         synth_args = mock_synth.call_args
         data = synth_args[0][1]  # second positional arg (data)
         assert len(data) <= 41000  # 40K + "[...truncated...]" suffix
+
+
+# ---------------------------------------------------------------------------
+# run_scheduled_research (schedulable wrapper)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_scheduled_research_basic():
+    """run_scheduled_research calls ResearchAgent.run and returns report."""
+    mock_vs = AsyncMock()
+    mock_vs.search = AsyncMock(return_value=[])
+    mock_vs.RESEARCH_COLLECTION = "research"
+
+    with patch.object(ResearchAgent, "run", new_callable=AsyncMock) as mock_run, \
+         patch.dict("sys.modules", {"vector_store": mock_vs}):
+        mock_run.return_value = "Test report"
+
+        result = await run_scheduled_research("test query")
+        assert result == "Test report"
+        mock_run.assert_awaited_once_with("test query", on_progress=None)
+
+
+@pytest.mark.asyncio
+async def test_run_scheduled_research_with_prior():
+    """run_scheduled_research appends diff note when prior research exists."""
+    mock_vs = AsyncMock()
+    mock_vs.RESEARCH_COLLECTION = "research"
+    mock_vs.search = AsyncMock(return_value=[
+        {"text": "old report", "metadata": {"added_at": "2025-01-01"}}
+    ])
+
+    with patch.object(ResearchAgent, "run", new_callable=AsyncMock) as mock_run, \
+         patch.dict("sys.modules", {"vector_store": mock_vs}):
+        mock_run.return_value = "New report"
+
+        result = await run_scheduled_research("test query")
+        assert "New report" in result
+        assert "recurring research update" in result
+        assert "2025-01-01" in result
+
+
+@pytest.mark.asyncio
+async def test_run_scheduled_research_vector_store_error():
+    """run_scheduled_research returns report even if vector store fails."""
+    with patch.object(ResearchAgent, "run", new_callable=AsyncMock) as mock_run, \
+         patch.dict("sys.modules", {"vector_store": None}):
+        mock_run.return_value = "Fallback report"
+
+        result = await run_scheduled_research("test query")
+        assert result == "Fallback report"
+
+
+@pytest.mark.asyncio
+async def test_run_scheduled_research_channel_id_accepted():
+    """run_scheduled_research accepts channel_id without error."""
+    mock_vs = AsyncMock()
+    mock_vs.search = AsyncMock(return_value=[])
+    mock_vs.RESEARCH_COLLECTION = "research"
+
+    with patch.object(ResearchAgent, "run", new_callable=AsyncMock) as mock_run, \
+         patch.dict("sys.modules", {"vector_store": mock_vs}):
+        mock_run.return_value = "Report"
+
+        result = await run_scheduled_research("query", channel_id="123456")
+        assert result == "Report"

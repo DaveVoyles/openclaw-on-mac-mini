@@ -1050,3 +1050,18 @@
           Useful for processing user-provided data (CSV rows, JSON, etc).
     required:
       - code
+- name: run_scheduled_research
+  description: >-
+    Run a research query autonomously. Use this for scheduled/recurring research.
+    Returns a synthesized report with sources and citations.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: The research question or topic to investigate
+      channel_id:
+        type: string
+        description: Optional Discord channel ID to post results to
+    required:
+      - query

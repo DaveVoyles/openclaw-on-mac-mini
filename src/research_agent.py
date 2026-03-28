@@ -399,6 +399,38 @@ class ResearchAgent:
             return []
 
 
+async def run_scheduled_research(query: str, channel_id: str = "") -> str:
+    """Run a research query autonomously. Schedulable skill.
+
+    Called by the scheduler for recurring research tasks (e.g. weekly
+    house-listing checks, monthly security-update sweeps).  Works without
+    Discord — ``channel_id`` is accepted for metadata only.
+    """
+    agent = ResearchAgent()
+    result = await agent.run(query, on_progress=None)
+
+    # Annotate with prior-research diff note when a previous report exists
+    try:
+        import vector_store
+
+        previous = await vector_store.search(
+            vector_store.RESEARCH_COLLECTION,
+            query,
+            top_k=1,
+            threshold=0.85,
+        )
+        if previous:
+            added_at = previous[0].get("metadata", {}).get("added_at", "unknown")
+            result += (
+                f"\n\n---\n📊 *This is a recurring research update. "
+                f"Previous report was {added_at}.*"
+            )
+    except Exception as exc:
+        log.debug("Prior-research annotation skipped: %s", exc)
+
+    return result
+
+
 def _extract_urls(text: str) -> list[str]:
     """Extract http(s) URLs from search result text."""
     import re
