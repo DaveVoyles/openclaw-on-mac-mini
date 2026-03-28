@@ -1485,6 +1485,7 @@ async def ask_cmd(
             log.debug("Profile injection skipped: %s", e)
 
         # ── Streaming response with progressive Discord edits ────────────
+        _routing_notes: list[str] = []  # Collect routing events to show user
         last_edit = 0.0
         display_question = question if len(question) < 200 else question[:197] + "..."
 
@@ -1499,6 +1500,8 @@ async def ask_cmd(
 
             if is_final:
                 response_text = chunk_text
+                # Capture routing notes for footer display
+                _routing_notes.extend(meta.get("routing_notes", []))
                 if "updated_history" in meta:
                     conv.update_from_llm(meta["updated_history"])
                     conversation_store.auto_save_thread(
@@ -1567,7 +1570,11 @@ async def ask_cmd(
             else:
                 rate_str = get_rate_info()
             mode_label = {"auto": "🔄", "local": "🏠", "gemini": "☁️", "openai": "🟢", "anthropic": "🟣"}.get(model_pref, "🔄")
-            embed.set_footer(text=f"💬 {conv.message_count} msgs | {rate_str} | {mode_label} {model_used}")
+            footer_text = f"💬 {conv.message_count} msgs | {rate_str} | {mode_label} {model_used}"
+            # Show routing notes if any issues occurred
+            if _routing_notes:
+                footer_text += " | ⚠️ " + " → ".join(_routing_notes)
+            embed.set_footer(text=footer_text)
 
         if i == 0:
             kwargs: dict[str, Any] = {"content": None, "embed": embed}

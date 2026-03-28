@@ -981,6 +981,9 @@ async def chat_stream(
         _model_hint = "gemini"  # auto mode may use either, use generous default
     history = _trim_history(history or [], model_hint=_model_hint)
 
+    # Track routing decisions to surface to user
+    _routing_notes: list[str] = []
+
     # ── Auto-RAG: recall relevant context ────────────────────────────────
     recalled_context = await _auto_recall_context(user_message)
     if recalled_context:
@@ -1088,8 +1091,10 @@ async def chat_stream(
                 {"role": "user", "parts": [user_message]},
                 {"role": "model", "parts": [gemma_reply]},
             ]
-            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
+            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
             return
+        if LOCAL_LLM_ENABLED:
+            _routing_notes.append("Ollama unavailable or timed out → fell back to Gemini")
 
     # Rate-limit pre-check
     if not _rate_limiter.check():
@@ -1113,7 +1118,7 @@ async def chat_stream(
             label="LLM",
         )
         updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
-        yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True}
+        yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes}
         return
 
     # ── No-tool Gemini streaming path ────────────────────────────────────
@@ -1131,7 +1136,7 @@ async def chat_stream(
             None, lambda: chat_session.send_message(model_message, stream=True)
         )
     except Exception as e:
-        yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False}
+        yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False, "routing_notes": _routing_notes}
         return
 
     accumulated = ""
@@ -1162,7 +1167,7 @@ async def chat_stream(
 
     updated_history = _extract_history(chat_session)
     updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
-    yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False}
+    yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False, "routing_notes": _routing_notes}
 
 
 async def chat(
