@@ -4,7 +4,9 @@ Routes: GET /dashboard (HTML), GET /api/dashboard (JSON),
         GET /api/memories (JSON), GET /api/threads (JSON)
 """
 
+import asyncio
 import json
+import os
 import platform
 import time
 
@@ -35,6 +37,57 @@ def _load_config() -> dict:
     _config_cache = yaml.safe_load(cfg_file.read_text()) if cfg_file.exists() else {}
     _config_mtime = current_mtime
     return _config_cache or {}
+
+
+# ---------------------------------------------------------------------------
+# D-5  Live Status Banner endpoint
+# ---------------------------------------------------------------------------
+
+
+async def api_status_handler(request):
+    """Return connectivity status for all backends."""
+    import aiohttp
+    from config import cfg
+
+    checks = {}
+
+    # Docker
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "docker", "info", "--format", "{{.ContainersRunning}}",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        checks["docker"] = {"status": "ok", "containers": stdout.decode().strip()}
+    except Exception:
+        checks["docker"] = {"status": "down"}
+
+    # Ollama
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{cfg.ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=3)) as resp:
+                checks["ollama"] = {"status": "ok" if resp.status == 200 else "down"}
+    except Exception:
+        checks["ollama"] = {"status": "down"}
+
+    # Gemini
+    checks["gemini"] = {"status": "ok" if cfg.google_api_key else "no_key"}
+
+    # Copilot proxy
+    proxy_url = cfg.copilot_proxy_url
+    if proxy_url:
+        try:
+            async with aiohttp.ClientSession() as session:
+                token = os.getenv("COPILOT_PROXY_TOKEN", "")
+                headers = {"Authorization": f"Bearer {token}"} if token else {}
+                async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=3)) as resp:
+                    checks["copilot_proxy"] = {"status": "ok" if resp.status == 200 else "down"}
+        except Exception:
+            checks["copilot_proxy"] = {"status": "down"}
+    else:
+        checks["copilot_proxy"] = {"status": "not_configured"}
+
+    return web.json_response(checks)
 
 
 async def api_dashboard_handler(request: web.Request) -> web.Response:
@@ -172,6 +225,54 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     except Exception:
         pass
 
+    # Model usage stats from audit log
+    model_usage = {}
+    try:
+        import json
+        from config import cfg as model_cfg
+        audit_file = model_cfg.audit_dir / "audit.jsonl"
+        if audit_file.exists():
+            week_ago = time.time() - 7 * 86400
+            for line in audit_file.read_text().strip().split("\n"):
+                try:
+                    entry = json.loads(line)
+                    # Check if this entry has model info and is recent
+                    ts = entry.get("ts", 0)
+                    if isinstance(ts, str):
+                        from datetime import datetime
+                        ts = datetime.fromisoformat(ts).timestamp()
+                    if ts < week_ago:
+                        continue
+                    detail = entry.get("detail", "")
+                    if "via " in detail:
+                        model = detail.split("via ")[-1].strip()
+                        model_usage[model] = model_usage.get(model, 0) + 1
+                    # Also check for model_used in the entry
+                    model_used = entry.get("model_used", "")
+                    if model_used:
+                        model_usage[model_used] = model_usage.get(model_used, 0) + 1
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    # D-6: 7-day token usage for sparkline
+    daily_tokens: list[dict] = []
+    try:
+        from datetime import datetime, timedelta
+        daily_data = sp._data.get("daily", {})
+        for i in range(6, -1, -1):
+            day = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+            tokens = daily_data.get(day, {})
+            daily_tokens.append({
+                "date": day,
+                "input": tokens.get("input_tokens", 0),
+                "output": tokens.get("output_tokens", 0),
+                "total": tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0),
+            })
+    except Exception:
+        pass
+
     payload = {
         "version": VERSION,
         "uptime_seconds": round(uptime_s, 1),
@@ -203,11 +304,13 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "calls": sp.calls,
             "daily": sp.daily,
         },
+        "daily_tokens": daily_tokens,
         "skills": skills_list,
         "skill_count": len(skills_list),
         "skill_categories": skill_categories,
         "commands": _command_list(),
         "activity": activity,
+        "model_usage": model_usage,
     }
     return web.json_response(payload)
 
@@ -241,6 +344,49 @@ async def api_memories_handler(request: web.Request) -> web.Response:
         pass
 
     return web.json_response(data)
+
+
+async def api_goals_handler(request):
+    """Return active goals for the dashboard."""
+    try:
+        from goal_tracker import get_active_goals
+        goals = get_active_goals()
+        return web.json_response({"goals": goals})
+    except Exception:
+        return web.json_response({"goals": []})
+
+
+async def api_research_handler(request):
+    """Return past research reports for the dashboard."""
+    try:
+        import vector_store
+        # Get recent research from ChromaDB
+        col = vector_store._get_collection(vector_store.RESEARCH_COLLECTION)
+        if col.count() == 0:
+            return web.json_response({"reports": []})
+
+        results = col.get(
+            include=["metadatas", "documents"],
+            limit=20,
+        )
+
+        reports = []
+        for i, doc_id in enumerate(results.get("ids", [])):
+            meta = results["metadatas"][i] if results.get("metadatas") else {}
+            text = results["documents"][i][:200] if results.get("documents") else ""
+            reports.append({
+                "id": doc_id,
+                "query": meta.get("query", "Unknown query"),
+                "date": meta.get("added_at", 0),
+                "excerpt": text,
+                "sources": meta.get("sources", ""),
+            })
+
+        # Sort by date descending
+        reports.sort(key=lambda r: r.get("date", 0), reverse=True)
+        return web.json_response({"reports": reports[:20]})
+    except Exception as e:
+        return web.json_response({"reports": [], "error": str(e)})
 
 
 async def api_threads_handler(request: web.Request) -> web.Response:
@@ -279,6 +425,36 @@ async def api_threads_handler(request: web.Request) -> web.Response:
                 continue
 
     return web.json_response({"threads": threads[:30]})
+
+
+# ---------------------------------------------------------------------------
+# D-4  Scheduled Tasks endpoint
+# ---------------------------------------------------------------------------
+
+
+async def api_schedules_handler(request):
+    """Return scheduled tasks for the dashboard."""
+    try:
+        import json
+        from pathlib import Path
+        schedules_file = Path("/memory/schedules.json")
+        if not schedules_file.exists():
+            return web.json_response({"tasks": []})
+        tasks = json.loads(schedules_file.read_text())
+        # Keep only essential fields
+        clean = []
+        for t in tasks:
+            clean.append({
+                "name": t.get("skill_name", t.get("name", "unknown")),
+                "interval": t.get("interval_minutes", t.get("interval", 0)),
+                "last_run": t.get("last_run", 0),
+                "next_run": t.get("next_run", 0),
+                "enabled": t.get("enabled", True),
+                "args": str(t.get("args", t.get("args_json", {})))[:80],
+            })
+        return web.json_response({"tasks": clean})
+    except Exception:
+        return web.json_response({"tasks": []})
 
 
 def _command_list() -> list[dict]:

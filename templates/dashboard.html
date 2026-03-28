@@ -585,6 +585,12 @@
           padding: 0.75rem;
         }
       }
+
+      /* D-5: Status banner dots */
+      .status-dot { font-weight: bold; }
+      .status-ok { color: #4caf50; }
+      .status-down { color: #f44336; }
+      .status-warn { color: #ff9800; }
     </style>
   </head>
   <body>
@@ -634,6 +640,14 @@
           <button class="btn btn-refresh" onclick="refreshData(this)">
             <span class="btn-icon">&#8635;</span> Refresh
           </button>
+        </div>
+
+        <!-- D-5: Live Status Banner -->
+        <div id="status-banner" style="display:flex;gap:1.2rem;justify-content:center;padding:0.6rem 1rem;margin-bottom:1rem;background:var(--card, var(--surface));border-radius:8px;font-size:0.82rem;flex-wrap:wrap">
+          <span>🐳 Docker: <span id="st-docker" class="status-dot">…</span></span>
+          <span>🏠 Ollama: <span id="st-ollama" class="status-dot">…</span></span>
+          <span>☁️ Gemini: <span id="st-gemini" class="status-dot">…</span></span>
+          <span>🔗 Copilot: <span id="st-copilot" class="status-dot">…</span></span>
         </div>
 
         <!-- Container Health Matrix -->
@@ -894,6 +908,12 @@
           </p>
         </div>
 
+        <!-- Active Goals -->
+        <div class="card">
+          <h2>🎯 Active Goals</h2>
+          <div id="goals-list"></div>
+        </div>
+
         <!-- Container Health Matrix -->
         <div class="card">
           <h2>&#128373; Container Health Status</h2>
@@ -1129,6 +1149,12 @@
           </div>
         </div>
 
+        <!-- Model Usage Chart -->
+        <div class="card">
+          <h2>🤖 Model Usage (7 days)</h2>
+          <div id="model-usage"></div>
+        </div>
+
         <!-- Commands -->
         <div class="card">
           <h2>&#128172; Discord Commands</h2>
@@ -1197,6 +1223,12 @@
           </details>
         </div>
 
+        <!-- D-4: Scheduled Tasks -->
+        <div class="card">
+          <h2>⏰ Scheduled Tasks</h2>
+          <div id="schedules-list"></div>
+        </div>
+
         <!-- Config -->
         <div class="card">
           <h2>&#128272; Security &amp; Config</h2>
@@ -1240,6 +1272,13 @@
             </summary>
             <div id="rules-list" class="scrollable-list" style="margin-top:0.35rem"></div>
           </details>
+        </div>
+
+        <!-- Research History -->
+        <div class="card">
+          <h2>📊 Research History</h2>
+          <input type="text" class="search-box" id="research-search" placeholder="🔍 Search reports..." oninput="filterResearch()" />
+          <div id="research-list" class="scrollable-list"></div>
         </div>
 
         <!-- Saved Conversations -->
@@ -1514,6 +1553,32 @@
             : v;
           cr.innerHTML += `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-value">${val}</span></div>`;
         });
+
+        // Model Usage Chart
+        if (d.model_usage) {
+            const el = document.getElementById('model-usage');
+            const entries = Object.entries(d.model_usage).sort((a, b) => b[1] - a[1]);
+            if (entries.length === 0) {
+                el.innerHTML = '<p class="muted-text">No model usage data yet.</p>';
+            } else {
+                const max = entries[0][1];
+                el.innerHTML = entries.map(([model, count]) => {
+                    const pct = Math.round(count / max * 100);
+                    const color = model.includes('gemma') || model.includes('ollama') ? '#4caf50' :
+                                  model.includes('gemini') ? '#2196f3' :
+                                  model.includes('openai') || model.includes('gpt') ? '#ff9800' :
+                                  model.includes('claude') || model.includes('anthropic') ? '#9c27b0' : '#607d8b';
+                    return `<div style="margin-bottom:0.5rem">
+                        <div style="display:flex;justify-content:space-between;font-size:0.82rem;margin-bottom:0.15rem">
+                            <span>${model}</span><span style="color:var(--muted)">${count} calls</span>
+                        </div>
+                        <div style="background:var(--border);border-radius:4px;height:8px;overflow:hidden">
+                            <div style="width:${pct}%;height:100%;background:${color};border-radius:4px"></div>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
 
         document.getElementById("refresh-ts").textContent =
           "Updated " + new Date().toLocaleTimeString();
@@ -1793,6 +1858,63 @@
           });
       }
 
+      // =========================================================================
+      // Active Goals
+      // =========================================================================
+      function loadGoals() {
+        fetch('/api/goals').then(r => r.json()).then(data => {
+            const el = document.getElementById('goals-list');
+            if (!data.goals || data.goals.length === 0) {
+                el.innerHTML = '<p class="muted-text">No active goals. They\'re detected automatically from your conversations.</p>';
+                return;
+            }
+            el.innerHTML = data.goals.map(g => {
+                const date = new Date(g.created_at * 1000).toLocaleDateString();
+                const mentions = g.mention_count || 1;
+                return `<div class="memory-item">
+                    <span class="memory-text">${g.goal}</span>
+                    <span class="memory-date">Since ${date} · ${mentions}x mentioned</span>
+                </div>`;
+            }).join('');
+        }).catch(() => {
+            document.getElementById('goals-list').innerHTML =
+              '<p class="muted-text">Failed to load goals.</p>';
+        });
+      }
+
+      // =========================================================================
+      // Research History
+      // =========================================================================
+      let _allReports = [];
+      function loadResearch() {
+        fetch('/api/research').then(r => r.json()).then(data => {
+            _allReports = data.reports || [];
+            renderResearch(_allReports);
+        }).catch(() => {
+            document.getElementById('research-list').innerHTML =
+              '<p class="muted-text">Failed to load research.</p>';
+        });
+      }
+      function renderResearch(reports) {
+          const el = document.getElementById('research-list');
+          if (reports.length === 0) {
+              el.innerHTML = '<p class="muted-text">No research reports yet. Use /research in Discord.</p>';
+              return;
+          }
+          el.innerHTML = reports.map(r => {
+              const date = r.date ? new Date(r.date * 1000).toLocaleDateString() : '';
+              return `<div class="memory-item">
+                  <strong style="color:var(--spirit-blue)">${r.query}</strong>
+                  <div style="color:var(--muted);font-size:0.78rem;margin-top:0.2rem">${date}</div>
+                  <div style="font-size:0.82rem;margin-top:0.3rem">${r.excerpt}</div>
+              </div>`;
+          }).join('');
+      }
+      function filterResearch() {
+          const q = document.getElementById('research-search').value.toLowerCase();
+          renderResearch(_allReports.filter(r => (r.query + r.excerpt).toLowerCase().includes(q)));
+      }
+
       // Init
       (async () => {
         try {
@@ -1802,6 +1924,8 @@
           document.getElementById("app").style.display = "block";
           loadMemories();
           loadThreads();
+          loadGoals();
+          loadResearch();
         } catch (e) {
           document.getElementById("loading").innerHTML =
             `<span style="color:var(--danger)">Failed to connect: ${esc(e.message)}</span>`;
@@ -1809,7 +1933,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); }, 60000);
 
       function formatUptime(s) {
         const d = Math.floor(s / 86400),
