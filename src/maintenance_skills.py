@@ -234,27 +234,34 @@ async def run_maintenance() -> str:
 
 
 async def run_memory_decay() -> str:
-    """Flag memories not accessed in 30+ days as decayed.
+    """Mark old, infrequently-accessed memories as decayed.
 
-    Decayed memories still appear in search but rank lower (10% penalty).
-    This prevents stale noise from drowning out relevant context.
+    Memories that haven't been accessed in 30 days AND have access_count < 2
+    get flagged as decayed. They still appear in search results but with a
+    10% similarity penalty (handled by vector_store.search).
     """
     try:
         import vector_store
+
         total_decayed = 0
-        for collection in ["memories", "conversations", "research"]:
-            stale = await vector_store.get_decayed_documents(
-                collection, max_age_days=30, min_access_count=1
+        for collection in [vector_store.MEMORIES_COLLECTION,
+                           vector_store.CONVERSATIONS_COLLECTION,
+                           vector_store.RESEARCH_COLLECTION]:
+            candidates = await vector_store.get_decayed_documents(
+                collection, max_age_days=30, min_access_count=2
             )
-            if stale:
-                ids = [d["id"] for d in stale]
+            if candidates:
+                ids = [c["id"] for c in candidates]
                 count = await vector_store.mark_decayed(collection, ids)
                 total_decayed += count
                 log.info("Decayed %d documents in %s", count, collection)
-        return f"Flagged {total_decayed} stale memories as decayed"
+
+        if total_decayed > 0:
+            return f"🧹 Memory decay: marked {total_decayed} old memories as decayed"
+        return "🧹 Memory decay: no candidates found"
     except Exception as e:
         log.warning("Memory decay failed: %s", e)
-        return f"Decay skipped: {e}"
+        return f"⚠️ Memory decay failed: {e}"
 
 
 async def run_memory_consolidation() -> str:
