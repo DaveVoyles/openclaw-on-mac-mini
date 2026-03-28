@@ -1,0 +1,277 @@
+"""Research & web browsing commands — extracted from bot.py.
+
+Handles: /research, /research-search, /sources, /websearch, /browse
+"""
+
+import logging
+
+import discord
+from discord import app_commands
+from discord.ext import commands
+
+from cog_helpers import audit_log, require_auth, truncate_for_embed, split_response
+from constants import MEMORY_SNIPPET_MAX_CHARS
+
+log = logging.getLogger("openclaw")
+
+
+class _ResearchView(discord.ui.View):
+    """Action buttons attached to a completed research report."""
+
+    def __init__(self, query: str, report: str):
+        super().__init__(timeout=300)
+        self._query = query
+        self._report = report
+
+    @discord.ui.button(label="📌 Save to Memory", style=discord.ButtonStyle.secondary)
+    async def save_to_memory(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        from qmd import remember_fact
+
+        snippet = self._report[:MEMORY_SNIPPET_MAX_CHARS].strip()
+        result = await remember_fact(
+            content=f"[Research] {self._query}: {snippet}",
+            tags="research",
+        )
+        await interaction.response.send_message(result, ephemeral=True)
+        audit_log(interaction.user, "research_save_memory", detail=self._query[:80])
+
+    @discord.ui.button(label="🔄 Re-run in 24h", style=discord.ButtonStyle.secondary)
+    async def schedule_rerun(self, interaction: discord.Interaction, _button: discord.ui.Button):
+        from scheduler import scheduler
+
+        task = scheduler.create(
+            action="search_web",
+            args={"query": self._query, "num_results": 5},
+            hour=-1,
+            minute=0,
+            interval_minutes=1440,  # 24 hours
+            created_by=str(interaction.user),
+        )
+        await interaction.response.send_message(
+            f"✅ Scheduled daily re-search for **{self._query[:60]}** (task `{task.task_id}`).",
+            ephemeral=True,
+        )
+        audit_log(interaction.user, "research_schedule_rerun", detail=self._query[:80])
+
+
+class ResearchCog(commands.Cog, name="Research"):
+    """Research, web search, and browsing commands."""
+
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
+
+    async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.CheckFailure):
+            msg = str(error)
+        else:
+            msg = f"❌ Command failed: {error}"
+        if interaction.response.is_done():
+            await interaction.followup.send(msg, ephemeral=True)
+        else:
+            await interaction.response.send_message(msg, ephemeral=True)
+
+    # ── /websearch ────────────────────────────────────────────────────
+    @app_commands.command(name="websearch", description="Search the live web for current information")
+    @app_commands.describe(query="What to search for", results="Number of results (1-10, default 5)")
+    @require_auth()
+    async def websearch_cmd(self, interaction: discord.Interaction, query: str, results: int = 5):
+        from skills.advanced_skills import search_web
+
+        await interaction.response.defer()
+        result = await search_web(query, num_results=results)
+        result = truncate_for_embed(result)
+        embed = discord.Embed(
+            title=f"🔍 Web Search: {query[:80]}",
+            description=result,
+            color=discord.Color.blue(),
+        )
+        embed.set_footer(text="via Tavily AI Search (with DuckDuckGo fallback)")
+        await interaction.followup.send(embed=embed)
+        audit_log(interaction.user, "websearch", detail=query)
+
+    # ── /browse ───────────────────────────────────────────────────────
+    @app_commands.command(name="browse", description="Fetch and read the content of a web page")
+    @app_commands.describe(url="URL to fetch (must start with http:// or https://)", question="Optional: what to focus on")
+    @require_auth()
+    async def browse_cmd(self, interaction: discord.Interaction, url: str, question: str = ""):
+        from skills.advanced_skills import browse_url
+        from llm import analyze_document as llm_analyze_document
+
+        if not url.startswith(("http://", "https://")):
+            await interaction.response.send_message(
+                "❌ URL must start with `http://` or `https://`", ephemeral=True
+            )
+            return
+        await interaction.response.defer()
+        page_text = await browse_url(url)
+        if question and not page_text.startswith("❌") and not page_text.startswith("⚠️"):
+            answer = await llm_analyze_document(
+                page_text,
+                f"Based on the page content above, answer this question: {question}",
+            )
+            result = f"**Question**: {question}\n\n**Answer**: {answer}"
+        else:
+            result = page_text
+        result = truncate_for_embed(result)
+        embed = discord.Embed(
+            title=f"🌐 Browse: {url[:80]}",
+            description=result,
+            color=discord.Color.teal(),
+        )
+        await interaction.followup.send(embed=embed)
+        audit_log(interaction.user, "browse", detail=url)
+
+    # ── /research ─────────────────────────────────────────────────────
+    @app_commands.command(name="research", description="Autonomous multi-step research — searches, reads sources, synthesizes a report")
+    @app_commands.describe(query="What you want researched (be specific for best results)")
+    @require_auth()
+    async def research_cmd(self, interaction: discord.Interaction, query: str):
+        from approvals import is_emergency_stopped
+        from llm import is_configured as llm_is_configured
+        from research_agent import ResearchAgent
+
+        if is_emergency_stopped():
+            await interaction.response.send_message(
+                "🛑 **Emergency stop active.** Use `/estop resume` to resume.", ephemeral=True
+            )
+            return
+
+        if not llm_is_configured():
+            await interaction.response.send_message(
+                "⚠️ LLM not configured. Set `GOOGLE_API_KEY`.", ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            f"🔍 **Research started** — I'll post updates and a final report here.\n> {query[:120]}"
+        )
+        original = await interaction.original_response()
+
+        # Create a Discord thread for streaming progress
+        try:
+            thread = await original.create_thread(
+                name=f"Research: {query[:80]}",
+                auto_archive_duration=1440,
+            )
+            await thread.send("🗺️ Planning research strategy…")
+        except discord.HTTPException as e:
+            log.warning("Could not create research thread: %s", e)
+            thread = None
+
+        async def on_progress(msg: str):
+            if thread:
+                try:
+                    await thread.send(msg)
+                except Exception as exc:
+                    log.debug("Research progress send failed: %s", exc)
+
+        agent = ResearchAgent(max_searches=4, browse_top_n=2, timeout_seconds=180)
+
+        try:
+            report = await agent.run(query, on_progress=on_progress)
+        except Exception as e:
+            log.error("Research command failed: %s", e)
+            report = f"❌ Research failed: {e}"
+
+        view = _ResearchView(query=query, report=report)
+        chunks = split_response(report)
+        for i, chunk in enumerate(chunks):
+            embed = discord.Embed(
+                description=chunk,
+                color=discord.Color.from_rgb(0, 150, 200),
+            )
+            if i == 0:
+                embed.set_author(name=f"Research: {query[:100]}")
+            if i == len(chunks) - 1:
+                embed.set_footer(text="✅ Research complete — Gemini 2.5 Flash with extended thinking")
+                if thread:
+                    await thread.send(embed=embed, view=view)
+                else:
+                    await interaction.followup.send(embed=embed, view=view)
+            else:
+                if thread:
+                    await thread.send(embed=embed)
+                else:
+                    await interaction.followup.send(embed=embed)
+
+        try:
+            follow_ups = await agent.generate_follow_ups(query, report)
+            if follow_ups:
+                follow_up_text = "**💡 Suggested follow-ups:**\n" + "\n".join(
+                    f"{i}. {fq}" for i, fq in enumerate(follow_ups, 1)
+                )
+                if thread:
+                    await thread.send(follow_up_text)
+                else:
+                    await interaction.followup.send(follow_up_text)
+        except Exception as e:
+            log.debug("Follow-up generation skipped: %s", e)
+
+        audit_log(interaction.user, "research", detail=query[:200])
+
+    # ── /research-search ──────────────────────────────────────────────
+    @app_commands.command(name="research-search", description="Search across all your past research reports by topic")
+    @app_commands.describe(query="What to search for in past research")
+    @require_auth()
+    async def research_search_cmd(self, interaction: discord.Interaction, query: str):
+        await interaction.response.defer(ephemeral=True)
+
+        lines = [f"🔍 **Research search: *{query}***\n"]
+
+        try:
+            import vector_store
+            results = await vector_store.search(
+                vector_store.RESEARCH_COLLECTION, query, top_k=5
+            )
+            if results:
+                for r in results:
+                    meta = r.get("metadata", {})
+                    original_query = meta.get("query", "unknown topic")
+                    sim = r.get("similarity", 0)
+                    preview = r["text"][:200].replace("\n", " ")
+                    lines.append(f"📄 **{original_query}** ({sim:.0%} match)")
+                    lines.append(f"  _{preview}_\n")
+            else:
+                lines.append("No matching research found. Use `/research <query>` to start new research.")
+        except Exception as e:
+            lines.append(f"⚠️ Search unavailable: {e}")
+
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+        audit_log(interaction.user, "research_search", detail=query)
+
+    # ── /sources ──────────────────────────────────────────────────────
+    @app_commands.command(name="sources", description="Search your library of previously browsed web sources")
+    @app_commands.describe(query="Topic or keyword to find in past browsed sources")
+    @require_auth()
+    async def sources_cmd(self, interaction: discord.Interaction, query: str):
+        await interaction.response.defer(ephemeral=True)
+
+        lines = [f"📚 **Source library search: *{query}***\n"]
+
+        try:
+            import vector_store
+            results = await vector_store.search(
+                vector_store.RESEARCH_COLLECTION, query, top_k=10,
+                where={"type": "source"},
+            )
+            if results:
+                for r in results:
+                    meta = r.get("metadata", {})
+                    url = meta.get("url", "unknown")
+                    domain = meta.get("domain", "")
+                    sim = r.get("similarity", 0)
+                    excerpt = r["text"][:150].replace("\n", " ")
+                    lines.append(f"🔗 [{domain}]({url}) ({sim:.0%} match)")
+                    lines.append(f"  _{excerpt}_\n")
+            else:
+                lines.append("No matching sources found. Sources are automatically cataloged during `/research`.")
+        except Exception as e:
+            lines.append(f"⚠️ Source search unavailable: {e}")
+
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+        audit_log(interaction.user, "sources_search", detail=query)
+
+
+async def setup(bot: commands.Bot):
+    """Called automatically by bot.load_extension()."""
+    await bot.add_cog(ResearchCog(bot))
