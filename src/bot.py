@@ -1263,6 +1263,47 @@ def _extract_image_url(text: str) -> str | None:
     return None
 
 
+def _format_tables_for_discord(text: str) -> str:
+    """Convert markdown tables to code blocks for clean Discord display.
+
+    Discord doesn't render markdown tables — pipes just appear as raw text.
+    This wraps any detected table blocks in ``` so they display monospaced
+    and aligned.
+    """
+    lines = text.split("\n")
+    result: list[str] = []
+    table_lines: list[str] = []
+    in_table = False
+
+    for line in lines:
+        stripped = line.strip()
+        is_table_row = stripped.startswith("|") and stripped.endswith("|")
+        is_separator = is_table_row and all(c in "|-: " for c in stripped.replace("|", ""))
+
+        if is_table_row or is_separator:
+            if not in_table:
+                in_table = True
+                table_lines = []
+            table_lines.append(line)
+        else:
+            if in_table:
+                # Flush the table as a code block
+                result.append("```")
+                result.extend(table_lines)
+                result.append("```")
+                in_table = False
+                table_lines = []
+            result.append(line)
+
+    # Flush any trailing table
+    if in_table and table_lines:
+        result.append("```")
+        result.extend(table_lines)
+        result.append("```")
+
+    return "\n".join(result)
+
+
 def _split_response(text: str) -> list[str]:
     """
     Split a long response into chunks that fit within Discord's embed limit.
@@ -1697,6 +1738,7 @@ async def ask_cmd(
         response_text += guardrail_note
     if thread_hint:
         response_text += thread_hint
+    response_text = _format_tables_for_discord(response_text)
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
     file_attachment = _extract_file_attachment(response_text)
