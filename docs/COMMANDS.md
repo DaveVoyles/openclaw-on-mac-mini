@@ -57,11 +57,24 @@ Container management, system monitoring, and infrastructure diagnostics.
 | `/ports`       | Verify all services are listening                | —                                  | ✅   | LOW      | `bot.py`         |
 | `/report`      | Comprehensive system status report               | —                                  | ✅   | LOW      | `bot.py`         |
 | `/analyze`     | AI-powered container log analysis                | `service: str`, `lines: int = 50`  | ✅   | LOW      | `bot.py`         |
-| `/schedule`    | Manage recurring scheduled tasks                 | `action`, `skill`, `hour`, `minute`, `interval`, `task_id` | — | LOW | `bot.py` |
+| `/schedule`    | Manage recurring scheduled tasks                 | `action`, `skill`, `cron`, `prompt`, `hour`, `minute`, `interval`, `task_id` | — | LOW | `bot.py` |
 
 **`/restart` policy** — Allowed services are declared in `config/permissions.yaml`. Critical services (`traefik`, `socket-proxy`, `homepage`, `watchtower`) are always denied regardless of approval.
 
-**`/schedule` actions:** `list` (default), `add` (requires `skill` + `hour`/`minute` or `interval`), `remove` / `toggle` (requires `task_id`).
+**`/schedule` actions:** `list` (default), `add` (requires `skill` + `cron`/`hour`/`minute`/`interval`, or `prompt` + `cron` for prompt jobs), `remove` / `toggle` (requires `task_id`).
+
+**Cron Expressions** (new):
+- `"0 7 * * 1,5"` — Monday and Friday at 7 AM
+- `"0 9 * * 1-5"` — Weekdays at 9 AM
+- `"*/30 * * * *"` — Every 30 minutes
+- Format: `minute hour day-of-month month day-of-week`
+
+**Prompt Jobs** (new):
+Instead of calling a specific skill, prompt jobs send a natural language instruction to the LLM with full tool access. The LLM can search the web, browse pages, execute code, and post results.
+
+Example: "Search ESPN for D1 lacrosse games this week and create a table"
+
+**Natural Language Creation**: Tell the bot via `/ask` — e.g., "schedule a prompt job every Monday at 7 AM to check lacrosse scores" — and it creates the cron job automatically.
 
 ---
 

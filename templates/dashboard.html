@@ -2029,16 +2029,20 @@
                   el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Discord.</p>';
                   return;
               }
-              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Interval</th><th>Status</th><th>Args</th></tr></thead><tbody>' +
+              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th>Type</th><th>Status</th><th>Details</th></tr></thead><tbody>' +
                   data.tasks.map(t => {
-                      const interval = t.interval >= 1440 ? `${Math.round(t.interval/1440)}d` :
+                      const schedule = t.cron_expression ? `<code>${esc(t.cron_expression)}</code>` :
+                                      t.interval >= 1440 ? `${Math.round(t.interval/1440)}d` :
                                       t.interval >= 60 ? `${Math.round(t.interval/60)}h` : `${t.interval}m`;
+                      const type = t.prompt ? '💬 Prompt' : '⚙️ Skill';
                       const status = t.enabled ? '🟢' : '⏸️';
+                      const details = t.prompt ? esc(t.prompt).substring(0, 60) + (t.prompt.length > 60 ? '…' : '') : esc(t.args);
                       return `<tr>
                           <td><code>${esc(t.name)}</code></td>
-                          <td>${interval}</td>
+                          <td>${schedule}</td>
+                          <td>${type}</td>
                           <td>${status}</td>
-                          <td style="font-size:0.75rem;color:var(--muted)">${esc(t.args)}</td>
+                          <td style="font-size:0.75rem;color:var(--muted)">${details}</td>
                       </tr>`;
                   }).join('') + '</tbody></table>';
           }).catch(() => {});

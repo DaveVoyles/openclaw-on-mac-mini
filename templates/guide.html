@@ -801,28 +801,50 @@ You get a Discord embed with your active downloads</code></pre>
       <!-- 8. Scheduler -->
       <h2 id="scheduler">9. Scheduled Tasks</h2>
       <p>
-        Automate recurring operations. The scheduler runs any registered skill
-        on a daily or interval basis.
+        Automate recurring operations. The scheduler supports cron expressions,
+        prompt jobs, skill calls, and natural language creation.
       </p>
 
       <h3><code>/schedule list</code></h3>
       <p>
-        View all scheduled tasks with their status, last run time, and run
-        count.
+        View all scheduled tasks with their status, cron expression, last run
+        time, and run count.
       </p>
 
       <h3><code>/schedule add</code></h3>
-      <p>Create a new scheduled task. Two modes:</p>
+      <p>Create a new scheduled task. Three schedule types:</p>
 
       <div class="card">
-        <h3 style="margin-top: 0">Daily Schedule (specific time)</h3>
-        <pre><code>/schedule action:add skill:check_arr_health hour:6 minute:0
-  &rarr; Runs check_arr_health every day at 6:00 AM
+        <h3 style="margin-top: 0">Cron Expression (recommended)</h3>
+        <pre><code>/schedule action:add skill:check_arr_health cron:"0 7 * * 1,5"
+  &rarr; Runs check_arr_health every Monday and Friday at 7:00 AM
 
-/schedule action:add skill:create_status_report hour:8 minute:30
-  &rarr; Daily status report at 8:30 AM</code></pre>
+/schedule action:add skill:create_status_report cron:"0 9 * * 1-5"
+  &rarr; Daily status report at 9:00 AM, weekdays only
 
-        <h3>Interval Schedule (every N minutes)</h3>
+/schedule action:add skill:check_download_clients cron:"*/30 * * * *"
+  &rarr; Every 30 minutes</code></pre>
+        <p style="margin-top:0.5rem;font-size:0.9rem;color:var(--muted)">
+          Format: <code>minute hour day-of-month month day-of-week</code>
+        </p>
+
+        <h3>Prompt Jobs (new)</h3>
+        <p>
+          Instead of calling a specific skill, prompt jobs send a natural
+          language instruction to the LLM with full tool access (web search,
+          page browsing, code execution, etc.).
+        </p>
+        <pre><code>/ask Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for 
+Division 1 men's lacrosse games this week and post a table.</code></pre>
+
+        <h3>Natural Language Creation (new)</h3>
+        <p>
+          Just tell OpenClaw what you want. It creates the cron job for you:
+        </p>
+        <pre><code>/ask Schedule a health check every Monday and Friday at 7 AM
+/ask Run a status report every weekday at 9 AM</code></pre>
+
+        <h3>Interval Schedule (legacy)</h3>
         <pre><code>/schedule action:add skill:check_download_clients interval:30
   &rarr; Checks download clients every 30 minutes
 
@@ -841,16 +863,16 @@ You get a Discord embed with your active downloads</code></pre>
         <strong>&#128161; Tip:</strong> Good scheduled tasks to set up:
         <ul>
           <li>
-            <code>check_arr_health</code> every 30 min &mdash; catch service
-            issues early
+            <code>check_arr_health</code> cron <code>"*/30 * * * *"</code>
+            &mdash; catch service issues early
           </li>
           <li>
-            <code>create_status_report</code> daily at 8 AM &mdash; morning
-            briefing
+            <code>create_status_report</code> cron <code>"0 8 * * *"</code>
+            &mdash; morning briefing
           </li>
           <li>
-            <code>get_docker_stats</code> every 60 min &mdash; resource usage
-            baseline
+            Prompt job: <em>"Search ESPN for lacrosse scores"</em> cron
+            <code>"0 7 * * 1,5"</code> &mdash; Mon+Fri sports updates
           </li>
         </ul>
       </div>
@@ -2882,12 +2904,19 @@ Marple Township millage rate is 25.46...
 
       <h3>Scheduled Research</h3>
       <p>
-        Set a research query to run on a recurring schedule. Only
-        <strong>new or changed</strong> results are reported (diff-only), so
-        you don&rsquo;t get duplicate information.
+        Set a research query to run on a recurring schedule using cron
+        expressions. Only <strong>new or changed</strong> results are reported
+        (diff-only), so you don&rsquo;t get duplicate information.
       </p>
-      <pre><code>/research schedule:daily "Kubernetes security advisories this week"
-/research schedule:weekly "Philadelphia housing market trends"</code></pre>
+      <p>
+        <strong>Prompt jobs</strong> can also run research with full tool access
+        (web search, page browsing, code execution):
+      </p>
+      <pre><code>/ask Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for
+Division 1 men's lacrosse games this week and post a table.
+
+/schedule add skill:run_scheduled_research cron:"0 9 * * 1-5" args:{"query": "Kubernetes security advisories"}
+/ask Schedule weekly research on Philadelphia housing market trends</code></pre>
 
       <h3>Research History</h3>
       <p>

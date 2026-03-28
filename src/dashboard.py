@@ -447,6 +447,8 @@ async def api_schedules_handler(request):
             clean.append({
                 "name": t.get("skill_name", t.get("name", "unknown")),
                 "interval": t.get("interval_minutes", t.get("interval", 0)),
+                "cron_expression": t.get("cron_expression", t.get("cron", "")),
+                "prompt": t.get("prompt", ""),
                 "last_run": t.get("last_run", 0),
                 "next_run": t.get("next_run", 0),
                 "enabled": t.get("enabled", True),
@@ -529,9 +531,9 @@ def _command_list() -> list[dict]:
         ]},
         {"category": "Self-Management & Autonomy (via /ask)", "commands": [
             {"name": "spawn_worker", "desc": "Spawn a focused AI sub-agent to accomplish a specific goal autonomously using its own tool loop."},
-            {"name": "create_scheduled_task", "desc": "Create a recurring scheduled task (LLM-controlled). Supports interval or daily cron."},
+            {"name": "create_scheduled_task", "desc": "Create a recurring scheduled task (LLM-controlled). Supports cron expressions, prompt jobs, or interval-based."},
             {"name": "cancel_scheduled_task", "desc": "Cancel a scheduled task by ID."},
-            {"name": "list_scheduled_tasks", "desc": "List all active scheduled tasks with their run counts and next run times."},
+            {"name": "list_scheduled_tasks", "desc": "List all active scheduled tasks with cron expressions, run counts, and next run times."},
             {"name": "webfetch_md", "desc": "Smartly scrape any URL and convert main content to clean Markdown."},
             {"name": "git_status", "desc": "Check project repository status for code changes."},
             {"name": "git_log", "desc": "View recent code change history (commit log)."},

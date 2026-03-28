@@ -34,7 +34,7 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `research_agent.py`     | Autonomous multi-step research with synthesis                            | `ResearchAgent` class                                                |
 | `rss_skills.py`         | RSS/Atom feed fetching & LLM summarization                               | `fetch_rss_feed()`, `get_rss_digest()`                               |
 | `rules_engine.py`       | Correction learning — extracts rules from user corrections               | `detect_correction()`, `extract_rule()`, `add_rule()`, `get_relevant_rules()` |
-| `scheduler.py`          | In-memory task scheduler with JSON persistence                           | `Scheduler` class                                                    |
+| `scheduler.py`          | Cron-based task scheduler with prompt jobs and JSON persistence (`croniter`) | `Scheduler` class, cron expressions, prompt jobs                     |
 | `spending.py`           | Gemini API cost tracker (input/output tokens vs budget)                  | `SpendingTracker` class with `summary()`, `daily_breakdown()`        |
 | `subprocess_utils.py`   | Async subprocess runner with timeout                                     | `run()` — returns (returncode, stdout, stderr)                       |
 | `webhook_formatter.py`  | Webhook payload formatters (Sonarr, Radarr, Plex, qBittorrent)           | `FORMATTERS` dict, `format_arr()`, `format_plex()`                   |

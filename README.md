@@ -70,12 +70,12 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/ports` — verify all services are listening on expected ports
 - `/report` — comprehensive system status report
 - `/analyze` — AI-powered container log analysis (LLM or pattern-matching fallback)
-- `/schedule` — manage recurring scheduled tasks (daily or interval-based)
+- `/schedule` — manage recurring scheduled tasks with cron expressions, prompt jobs, and natural language creation
 - `/skills` — list all available skills
 - `/remember` / `/recall` — long-term QMD memory (persists to `qmd.json`)
 - `/mail` — send email via AgentMail.to
 - 25 Gemini function-calling tools for natural language queries
-- Persistent scheduled task system with JSON storage
+- Persistent scheduled task system with JSON storage and `croniter`-based cron scheduling
 
 **Phase 6 — Remote Access & Monitoring** ✅
 
@@ -305,7 +305,7 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 | `/ports`                      | Check service port connectivity                                 | 5     |
 | `/report`                     | Generate comprehensive system status report                     | 5     |
 | `/analyze <service>`          | AI-powered container log analysis                               | 5     |
-| `/schedule`                   | Manage scheduled tasks (add/list/remove/toggle)                 | 5     |
+| `/schedule [action]`          | Manage scheduled tasks — cron expressions, prompt jobs, skill calls  | 5/16  |
 | `/skills`                     | List all available skills                                    | 5     |
 | `/remember <content>`         | Store a fact in long-term QMD memory                            | 5     |
 | `/recall <query>`             | Search long-term QMD memory                                     | 5     |
@@ -534,9 +534,12 @@ The LLM will call the right skills, chain multiple tool calls if needed, and giv
 Have OpenClaw proactively alert you instead of waiting for problems:
 
 ```
-/schedule add  skill:check_arr_health  hour:8  minute:0
-/schedule add  skill:create_status_report  interval:360
+/schedule add  skill:check_arr_health  cron:"0 8 * * *"
+/schedule add  skill:create_status_report  cron:"0 */6 * * *"
 /schedule add  skill:check_download_clients  interval:60
+
+# Prompt jobs — send a prompt to the LLM with full tool access
+/ask Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for lacrosse games
 ```
 
 OpenClaw runs these automatically and posts results to your Discord channel.

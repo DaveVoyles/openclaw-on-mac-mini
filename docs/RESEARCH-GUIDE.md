@@ -50,12 +50,22 @@ Returns matching reports from the `research` collection with similarity scores.
 
 ---
 
-### 📅 Scheduled Research
+### 📅 Scheduled Research (Updated)
 
-Set up recurring research via the scheduler:
+You can now schedule research with precise timing using cron expressions:
 
 ```
-/schedule add run_scheduled_research interval_minutes:10080 args:{"query": "Docker security updates"}
+/ask Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for Division 1 
+men's lacrosse games this week. Post a table to the lacrosse channel.
+```
+
+This creates a prompt job that runs every Monday and Friday at 7 AM with full 
+tool access (web search, page browsing, etc.).
+
+You can also schedule skill-based research with cron expressions:
+
+```
+/schedule add skill:run_scheduled_research cron:"0 9 * * 1-5" args:{"query": "Docker security updates"}
 ```
 
 Or ask the bot naturally:
@@ -75,8 +85,10 @@ Schedule weekly research on house listings in Philadelphia
 
 | Field | Description |
 |-------|-------------|
-| `interval_minutes` | Run every N minutes (e.g., 10080 = weekly) |
-| `hour` + `minute` | Daily cron (e.g., `hour:8 minute:0` = daily at 8 AM) |
+| `cron` | Cron expression for precise scheduling (e.g., `"0 7 * * 1,5"` = Mon+Fri at 7 AM). Uses `croniter`. |
+| `prompt` | Natural language instruction for prompt jobs (LLM executes with full tool access) |
+| `interval_minutes` | Run every N minutes (e.g., 10080 = weekly). Legacy; prefer `cron`. |
+| `hour` + `minute` | Daily cron (e.g., `hour:8 minute:0` = daily at 8 AM). Legacy; prefer `cron`. |
 | `alert_only` | Only post to Discord if result contains alert keywords |
 | `notify_channel_id` | Discord channel for result notifications |
 
