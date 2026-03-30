@@ -146,7 +146,10 @@ _LIVE_ACTION_PATTERN = _re.compile(
     r"|\b(search|find|look\s+up)\b.{0,40}\b(web|online|house|home|listing|property|zillow|redfin|real[\s-]?estate|news|current\s+price|weather)\b"
     # "Search <domain>" or "search for <topic>" — any search verb + domain or broad topic
     r"|\b(search|find|look\s+up)\b.{0,40}\w+\.(com|org|net|io|edu)\b"
-    r"|\b(search|find|look\s+up)\b.{0,20}\b(for|about)\b"
+    r"|\b(search|find|look\s+up|locate)\b.{0,20}\b(for|about|in|on)\b"
+    # NAS / folder / file browsing — requires tool to list folders
+    r"|\b(browse|list|show|find|locate|look)\b.{0,40}\b(folders?|director(?:y|ies)|audiobooks?|ebooks?|files?|nas|shares?)\b"
+    r"|\b(what|which|do\s+we\s+have)\b.{0,30}\b(folders?|audiobooks?|books?|files?)\b"
     # "check other sites", "try other sources" — contextual web requests
     r"|\b(check|try)\b.{0,20}\b(other|more|different)\b.{0,20}\b(site|source|page|place|link)\b"
     # Weather: any standalone weather request routes through Gemini (needs get_weather tool)
@@ -172,7 +175,8 @@ _LIVE_ACTION_PATTERN = _re.compile(
 # These are proper nouns tied to live services or specialised data sources.
 _GEMMA_WEAK_DOMAINS = _re.compile(
     r"\b(zillow|redfin|trulia|narberth|upper\s+darby|maton|tailscale|tautulli"
-    r"|overseerr|prowlarr|sabnzbd|synology|hyper\s+backup|ontology)\b",
+    r"|overseerr|prowlarr|sabnzbd|synology|hyper\s+backup|ontology"
+    r"|audiobooks?|ebooks?|nas\b.{0,20}(folder|share|storage)|filestation)\b",
     _re.IGNORECASE,
 )
 
