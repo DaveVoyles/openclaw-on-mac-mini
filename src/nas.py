@@ -439,7 +439,8 @@ async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> 
         path: Folder path to list. Use share-relative paths like '/Misc/audiobooks',
               '/PlexMediaServer/Movies', etc. Do NOT prefix with /volume1.
         pattern: Optional search filter — only return items whose name contains
-                 this string (case-insensitive). Leave empty to list all.
+                 this string (case-insensitive). Multi-word patterns match if ANY
+                 word is found in the name. Leave empty to list all.
     """
     if not NAS_USER or not NAS_PASSWORD:
         return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
@@ -455,8 +456,6 @@ async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> 
         "sort_direction": "asc",
         "additional": '["size","type"]',
     }
-    if pattern:
-        extra["pattern"] = pattern
 
     result = await _dsm("SYNO.FileStation.List", 2, "list", extra)
     if not result.get("success"):
@@ -465,14 +464,22 @@ async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> 
 
     files = result.get("data", {}).get("files", [])
     if not files:
-        return f"📂 `{path}` is empty" + (f" (filter: '{pattern}')" if pattern else "")
+        msg = f"✅ Successfully searched `{path}` — the folder is empty."
+        if pattern:
+            msg += f" No items matching '{pattern}' were found."
+        return msg
 
-    # Filter client-side if pattern provided (FileStation pattern support is limited)
+    # Fuzzy filter: split pattern into words, match if ANY word appears in name
     if pattern:
-        pat_lower = pattern.lower()
-        files = [f for f in files if pat_lower in f.get("name", "").lower()]
+        words = [w.lower() for w in pattern.split() if len(w) >= 3]
+        if words:
+            files = [f for f in files if any(w in f.get("name", "").lower() for w in words)]
         if not files:
-            return f"📂 No items matching '{pattern}' in `{path}`"
+            return (
+                f"✅ Successfully searched `{path}` — no items matching '{pattern}' were found. "
+                f"The folder exists and is accessible but does not contain a matching item. "
+                f"Try a broader search term or list the full folder without a filter."
+            )
 
     total = len(files)
     lines = [f"📂 **{path}** — {total} item{'s' if total != 1 else ''}"]
