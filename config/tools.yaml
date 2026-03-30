@@ -501,6 +501,22 @@
         description: Service to connect, e.g. 'slack', 'github', 'google-calendar', 'notion'.
     required:
       - app
+- name: nas_list_folder
+  description:
+    List the contents of a folder on the Synology NAS. Use this to browse audiobooks, movies, TV shows,
+    music, ebooks, or any other files on the NAS. Supports search filtering by name.
+    Common paths — '/Misc/audiobooks', '/PlexMediaServer/Movies', '/PlexMediaServer/Television',
+    '/PlexMediaServer/Music', '/Misc/Ebooks'. Do NOT prefix paths with /volume1.
+  parameters:
+    type: object
+    properties:
+      path:
+        type: string
+        description: "Folder path to list, e.g. '/Misc/audiobooks'. Default: '/Misc/audiobooks'."
+      pattern:
+        type: string
+        description: "Optional search filter — only return items whose name contains this string (case-insensitive). Leave empty to list everything."
+    required: []
 - name: nas_create_folder
   description: Create a new folder on the Synology NAS FileStation.
   parameters:

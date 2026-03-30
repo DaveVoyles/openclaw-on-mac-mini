@@ -428,6 +428,76 @@ async def get_disk_smart_status() -> str:
 
 
 # ---------------------------------------------------------------------------
+# FileStation — read operations
+# ---------------------------------------------------------------------------
+
+async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> str:
+    """
+    List contents of a folder on the Synology NAS via FileStation.
+
+    Args:
+        path: Folder path to list. Use share-relative paths like '/Misc/audiobooks',
+              '/PlexMediaServer/Movies', etc. Do NOT prefix with /volume1.
+        pattern: Optional search filter — only return items whose name contains
+                 this string (case-insensitive). Leave empty to list all.
+    """
+    if not NAS_USER or not NAS_PASSWORD:
+        return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
+
+    import posixpath
+    normed = posixpath.normpath(path)
+    if normed.startswith("..") or "/../" in path or path.endswith("/.."):
+        return "❌ Invalid path: directory traversal is not allowed."
+
+    extra: dict = {
+        "folder_path": path,
+        "sort_by": "name",
+        "sort_direction": "asc",
+        "additional": '["size","type"]',
+    }
+    if pattern:
+        extra["pattern"] = pattern
+
+    result = await _dsm("SYNO.FileStation.List", 2, "list", extra)
+    if not result.get("success"):
+        err = result.get("_err") or result.get("error", {}).get("code", "unknown")
+        return f"❌ Could not list `{path}`: {err}"
+
+    files = result.get("data", {}).get("files", [])
+    if not files:
+        return f"📂 `{path}` is empty" + (f" (filter: '{pattern}')" if pattern else "")
+
+    # Filter client-side if pattern provided (FileStation pattern support is limited)
+    if pattern:
+        pat_lower = pattern.lower()
+        files = [f for f in files if pat_lower in f.get("name", "").lower()]
+        if not files:
+            return f"📂 No items matching '{pattern}' in `{path}`"
+
+    total = len(files)
+    lines = [f"📂 **{path}** — {total} item{'s' if total != 1 else ''}"]
+    if pattern:
+        lines[0] += f" matching '{pattern}'"
+
+    # Show up to 50 items to avoid Discord message limits
+    for f in files[:50]:
+        name = f.get("name", "?")
+        is_dir = f.get("isdir", False)
+        icon = "📁" if is_dir else "📄"
+        size = f.get("additional", {}).get("size", 0)
+        if is_dir:
+            lines.append(f"  {icon} {name}/")
+        else:
+            size_mb = size / (1024 * 1024)
+            lines.append(f"  {icon} {name} ({size_mb:.1f} MB)")
+
+    if total > 50:
+        lines.append(f"  … and {total - 50} more items")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # FileStation — write operations
 # ---------------------------------------------------------------------------
 
@@ -538,6 +608,7 @@ NAS_SKILLS = {
     "get_backup_status": get_backup_status,
     "get_nas_alerts": get_nas_alerts,
     "get_disk_smart_status": get_disk_smart_status,
+    "nas_list_folder": nas_list_folder,
     "nas_create_folder": nas_create_folder,
     "nas_write_file": nas_write_file,
 }
