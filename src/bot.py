@@ -1742,7 +1742,12 @@ async def ask_cmd(
         last_edit = 0.0
         display_question = question if len(question) < 200 else question[:197] + "..."
 
-        async for chunk_text, is_final, meta in llm_chat_stream(
+        # Discord interactions expire after 15 minutes. Wrap in timeout
+        # to ensure we always deliver a response (even partial) before expiry.
+        _DISCORD_TIMEOUT = 840  # 14 minutes (1 min buffer before 15 min expiry)
+
+        try:
+          async for chunk_text, is_final, meta in llm_chat_stream(
             user_message=question,
             history=conv.history,
             user_name=str(interaction.user.display_name),
@@ -1777,6 +1782,17 @@ async def ask_cmd(
                     last_edit = now
                 except Exception as exc:
                     log.debug("Stream edit failed: %s", exc)
+
+        except asyncio.TimeoutError:
+            elapsed = time.monotonic() - _progress_start
+            log.warning("LLM response timed out after %.0fs for: %.80s", elapsed, question)
+            progress_so_far = "\n".join(_progress_lines) if _progress_lines else "No progress recorded"
+            response_text = (
+                f"⏰ **Timed out** after {elapsed:.0f}s.\n\n"
+                f"**Steps completed:**\n{progress_so_far}\n\n"
+                f"Try a simpler query, or use `/ask model:gemini` to retry."
+            )
+            model_used = "timeout"
 
     except Exception as e:
         log.error("LLM error: %s", e)

@@ -44,6 +44,7 @@ def _truncate(text: str, limit: int = 1900) -> str:
 # ---------------------------------------------------------------------------
 
 _nas_session: aiohttp.ClientSession | None = None
+_session_lock: asyncio.Lock | None = None  # protects session creation
 
 # Cached SID with TTL — avoids login/logout on every API call.
 # DSM sessions last ~20 min by default; we refresh at 10 min to be safe.
@@ -60,21 +61,30 @@ def _get_sid_lock() -> asyncio.Lock:
     return _sid_lock
 
 
+def _get_session_lock() -> asyncio.Lock:
+    global _session_lock
+    if _session_lock is None:
+        _session_lock = asyncio.Lock()
+    return _session_lock
+
+
 async def _get_nas_session() -> aiohttp.ClientSession:
     global _nas_session
-    if _nas_session is None or _nas_session.closed:
-        connector = aiohttp.TCPConnector(
-            limit=10,
-            limit_per_host=5,
-            ssl=_SSL_CTX,
-            keepalive_timeout=60,
-            enable_cleanup_closed=True,
-        )
-        _nas_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=20),
-            connector=connector,
-        )
-    return _nas_session
+    lock = _get_session_lock()
+    async with lock:
+        if _nas_session is None or _nas_session.closed:
+            connector = aiohttp.TCPConnector(
+                limit=10,
+                limit_per_host=5,
+                ssl=_SSL_CTX,
+                keepalive_timeout=60,
+                enable_cleanup_closed=True,
+            )
+            _nas_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=20),
+                connector=connector,
+            )
+        return _nas_session
 
 
 async def close_session() -> None:
