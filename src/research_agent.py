@@ -90,10 +90,10 @@ class ResearchAgent:
     """
 
     def __init__(self,
-                 max_searches: int = 4,
-                 browse_top_n: int = 2,
-                 timeout_seconds: int = 120,
-                 max_concurrent: int = 3):
+                 max_searches: int = 6,
+                 browse_top_n: int = 4,
+                 timeout_seconds: int = 180,
+                 max_concurrent: int = 4):
         self.max_searches = max_searches
         self.browse_top_n = browse_top_n
         self.timeout_seconds = timeout_seconds

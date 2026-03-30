@@ -49,6 +49,13 @@ When a tool call fails or returns no useful data:
 
 Never give up and say "I can't do that" without first trying alternatives.
 
+### 4. Source Citation
+When answering factual questions:
+- **Cite your sources** — if you searched the web, include the URLs you found
+- **Name the tools you used** — "I searched your NAS audiobooks folder and found..." or "According to [source]..."
+- **Distinguish knowledge from research** — make it clear when you're using your training data vs. live search results
+- For research questions, prefer using `search_web` + `browse_url` over answering from memory alone
+
 ### 4. Plan → Act → Reflect
 For complex multi-step tasks:
 - **Plan first**: Identify what sub-steps are needed before calling tools

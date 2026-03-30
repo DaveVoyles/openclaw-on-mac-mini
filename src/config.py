@@ -71,7 +71,7 @@ class _Config:
     # -- LLM (Gemini) ---------------------------------------------------------
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
     llm_model: str = os.getenv("LLM_MODEL", _llm.get("primary_model", "gemini-2.5-flash"))
-    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", str(_llm.get("max_tokens", 2000))))
+    llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", str(_llm.get("max_tokens", 8192))))
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", str(_llm.get("temperature", 0.7))))
     llm_rpm_limit: int = int(os.getenv("LLM_RPM_LIMIT", str(_rate_limits.get("per_minute", 60))))
     llm_rph_limit: int = int(os.getenv("LLM_RPH_LIMIT", str(_rate_limits.get("per_hour", 500))))
