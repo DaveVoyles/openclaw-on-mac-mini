@@ -609,7 +609,7 @@ async def _run_tool_loop(
         function_calls = [
             (part.function_call.name, dict(part.function_call.args) if part.function_call.args else {})
             for part in all_parts
-            if hasattr(part, "function_call") and part.function_call.name
+            if hasattr(part, "function_call") and part.function_call and part.function_call.name
         ]
 
         if not function_calls:
@@ -1575,9 +1575,9 @@ def _extract_history(chat_session) -> list[dict]:
         for part in content.parts:
             if hasattr(part, "text") and part.text:
                 parts.append(part.text)
-            elif hasattr(part, "function_call") and part.function_call.name:
+            elif hasattr(part, "function_call") and part.function_call and part.function_call.name:
                 parts.append(f"[Called {part.function_call.name}]")
-            elif hasattr(part, "function_response") and part.function_response.name:
+            elif hasattr(part, "function_response") and part.function_response and part.function_response.name:
                 parts.append(f"[Result from {part.function_response.name}]")
         if parts:
             history.append({"role": content.role, "parts": parts})
