@@ -67,6 +67,12 @@ services:
       # Temp directories (required for read_only: true)
       - /tmp/openclaw:/tmp:rw
 
+      # Cache directory (ChromaDB, onnxruntime, user profiles need writable cache)
+      - /tmp/openclaw-cache:/home/openclaw/.cache:rw
+
+      # Audiobook library on NAS (read-only browse access for search queries)
+      - /Users/davevoyles/mnt/Misc/audiobooks:/audiobooks:ro
+
       # Agent plans — persistent TODO/plan files for autonomous goal tracking
       - ./data/plans:/plans:rw
 

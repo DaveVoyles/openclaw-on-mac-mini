@@ -106,9 +106,9 @@ class MediaCog(commands.Cog, name="Media"):
             title="🏥 Service Health",
             color=discord.Color.green(),
         )
-        embed.add_field(name="*arr Services", value=arr_health, inline=False)
-        embed.add_field(name="Download Clients", value=dl_health, inline=False)
-        embed.add_field(name="Plex", value=plex_health, inline=False)
+        embed.add_field(name="*arr Services", value=arr_health[:1024], inline=False)
+        embed.add_field(name="Download Clients", value=dl_health[:1024], inline=False)
+        embed.add_field(name="Plex", value=plex_health[:1024], inline=False)
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "health")
 
