@@ -774,8 +774,10 @@ async def _reflect_on_response(
     """
     if not cfg.reflection_enabled:
         return text
-    # Only reflect on complex responses (tool calls happened)
-    if rounds < 1:
+    # Skip reflection for tool-based responses — tool results are factual.
+    # Reflection was rewriting correct "no results found" responses into
+    # hallucinated "I can't access the NAS" responses.
+    if rounds >= 1:
         return text
     # Don't reflect on very short or error responses
     if len(text) < 50 or text.startswith("❌") or text.startswith("⚠️"):
@@ -1109,31 +1111,32 @@ async def chat_stream(
             return
         # Fall through to the Gemini paths below (skip local attempt)
     else:
-        # ── Auto mode: Copilot proxy for simple queries, Gemini for tool queries ──
-        needs_tools = _needs_tools(user_message)
-        if not needs_tools:
-            try:
-                from model_router import chat_openai, COPILOT_PROXY_ENABLED
-                if COPILOT_PROXY_ENABLED:
-                    system_prompt = _load_system_prompt()
-                    reply = await chat_openai(model_message, history, system_prompt,
-                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                    if reply and _gemma_response_seems_valid(reply):
-                        import os
-                        updated = history + [
-                            {"role": "user", "parts": [user_message]},
-                            {"role": "model", "parts": [reply]},
-                        ]
-                        yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
-                        return
-                    _routing_notes.append("Copilot proxy response promised actions it can't perform → falling back to Gemini with tools")
-            except Exception as e:
-                log.debug("Copilot proxy failed: %s", e)
-                _routing_notes.append("Copilot proxy unavailable → trying Gemini")
-        # Tool-requiring queries go straight to Gemini (has 105 tools registered)
+        # ── Auto mode: Always use Gemini (has 106 tools). ──
+        # Copilot proxy is only used as a fallback when Gemini is rate-limited.
+        # Previously tried Copilot first for "simple" queries, but it lacks
+        # tool access and would say "I'll search..." without actually searching.
+        pass
+        # Copilot fallback happens below only if Gemini rate-limit check fails
 
-    # Rate-limit pre-check
+    # Rate-limit pre-check — if Gemini is rate-limited, try Copilot proxy as fallback
     if not _rate_limiter.check():
+        try:
+            from model_router import chat_openai, COPILOT_PROXY_ENABLED
+            if COPILOT_PROXY_ENABLED:
+                system_prompt = _load_system_prompt()
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                if reply and _gemma_response_seems_valid(reply):
+                    import os
+                    updated = history + [
+                        {"role": "user", "parts": [user_message]},
+                        {"role": "model", "parts": [reply]},
+                    ]
+                    _routing_notes.append("Gemini rate-limited → used Copilot proxy")
+                    yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
+                    return
+        except Exception:
+            pass
         msg = (
             "⚠️ Rate limit reached. Please wait a moment before asking again. "
             f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)"
@@ -1143,19 +1146,39 @@ async def chat_stream(
 
     model = await _get_model()
     model_name = model.model_name if hasattr(model, "model_name") else "unknown"
-    needs_tools = _needs_tools(user_message)
 
-    if needs_tools:
-        # Tool queries: run the full tool loop (non-streaming), then yield result
+    # All queries go through Gemini with tools available.
+    # Gemini will only call tools if the query requires them —
+    # simple questions get direct text responses, complex ones get tool calls.
+    # This eliminates the fragile _needs_tools() regex classification.
+    text, updated_history, model_name = await _gemini_chat(
+        model_message, history, model,
+        on_tool_call=on_tool_call,
+        parallel_tools=True,
+        label="LLM",
+    )
+    updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
+
+    # Post-response hallucination guard: if the model promises actions
+    # without having executed tools, the response is invalid
+    if not _gemma_response_seems_valid(text):
+        log.warning("Post-response hallucination detected, retrying with explicit tool instruction")
+        retry_msg = (
+            f"{model_message}\n\n"
+            "IMPORTANT: You have tool access. Do NOT say 'let me search' or 'one moment'. "
+            "USE the available tools (e.g. nas_list_folder, search_web, browse_url) to "
+            "find the answer, then respond with the actual results."
+        )
         text, updated_history, model_name = await _gemini_chat(
-            model_message, history, model,
+            retry_msg, history, model,
             on_tool_call=on_tool_call,
             parallel_tools=True,
-            label="LLM",
+            label="LLM-retry",
         )
-        updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
-        yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes}
-        return
+        updated_history = _strip_recalled_prefix(updated_history, user_message, retry_msg)
+
+    yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes}
+    return
 
     # ── No-tool Gemini streaming path ────────────────────────────────────
     gemini_history = [

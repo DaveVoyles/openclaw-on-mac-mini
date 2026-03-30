@@ -26,6 +26,16 @@
         description: Number of log lines to retrieve (5-100, default 30)
     required:
       - service
+- name: restart_container
+  description: Restart a Docker container. Use when a service is unhealthy or needs a fresh start.
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Container name to restart (e.g. sonarr, radarr, lidarr, prowlarr)
+    required:
+      - service
 - name: get_docker_stats
   description: Get CPU, memory, and network usage for all running containers.
   parameters:
