@@ -32,3 +32,6 @@ Pillow>=10.0
 
 # Cron expression parsing (scheduler S1)
 croniter>=2.0
+
+# Headless browser for JS-rendered page scraping (browse_url fallback)
+playwright>=1.40

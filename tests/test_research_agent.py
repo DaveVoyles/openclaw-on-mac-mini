@@ -64,8 +64,8 @@ async def test_url_prioritization(agent):
         "https://news.example.org/report",
     ]
     result = agent._prioritize_urls(urls)
-    # Should prioritize non-social-media URLs
-    assert result[0] == "https://example.com/article"
+    # Should rank by source quality (.org > generic > social media)
+    assert result[0] == "https://news.example.org/report"
 
 
 @pytest.mark.asyncio

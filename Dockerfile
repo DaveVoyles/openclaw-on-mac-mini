@@ -25,6 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Install Playwright Chromium browser for JS-rendered page scraping
+RUN playwright install chromium --with-deps
+
 # Copy application code (separate layer — fast rebuilds on code changes)
 COPY src/ ./
 COPY skills/ ./skills/

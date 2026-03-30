@@ -67,6 +67,9 @@ TAUTULLI_API_KEY = os.getenv("TAUTULLI_API_KEY", "")
 OVERSEERR_URL = os.getenv("OVERSEERR_URL", f"http://{HOST}:5055")
 OVERSEERR_API_KEY = os.getenv("OVERSEERR_API_KEY", "")
 
+# Perplexity AI search (primary)
+PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
+
 # Tavily web search
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 TAVILY_API_URL = "https://api.tavily.com/search"
@@ -617,13 +620,25 @@ async def create_status_report() -> str:
 
 
 async def search_web(query: str, num_results: int = 5) -> str:
-    """Search the web via Tavily (if API key set) or DuckDuckGo (free fallback).
+    """Search the web using the best available provider.
 
-    Uses installed ClawHub skill scripts:
+    Search priority: Perplexity (AI-powered) → Tavily (structured) → DuckDuckGo (free) → Bing Lite (fallback)
+
+    Uses installed ClawHub skill scripts for Tavily and DDG:
       - skills/openclaw-tavily-search/scripts/tavily_search.py  (Tavily API)
       - skills/free-web-search/scripts/web_search.py            (DDG, no key)
     """
     num_results = min(max(num_results, 1), 10)
+
+    # ── Perplexity path (AI-synthesized answers with citations) ────────────
+    if PERPLEXITY_API_KEY:
+        try:
+            log.info("Using Perplexity for search: %s", query[:80])
+            result = await _perplexity_search(query, num_results)
+            if result:
+                return result
+        except Exception as e:
+            log.debug("Perplexity search failed: %s", e)
 
     # ── Tavily path (higher quality, needs API key) ────────────────────────
     if TAVILY_API_KEY and _TAVILY_SCRIPT.exists():
@@ -728,14 +743,55 @@ async def search_web(query: str, num_results: int = 5) -> str:
         log.warning("Bing fallback failed: %s", e)
 
     # ── Nothing worked ────────────────────────────────────────────────────
-    if not TAVILY_API_KEY:
+    if not TAVILY_API_KEY and not PERPLEXITY_API_KEY:
         return (
             "⚠️ Web search not configured. Either:\n"
+            "• Set `PERPLEXITY_API_KEY` in .env for Perplexity AI Search, or\n"
             "• Set `TAVILY_API_KEY` in .env for Tavily AI Search, or\n"
             "• Ensure `skills/free-web-search/` is installed (run: "
             "`npx clawhub@latest install free-web-search`)"
         )
     return "❌ All web search methods exhausted. Check logs for details."
+
+
+async def _perplexity_search(query: str, num_results: int = 5) -> str:
+    """Search via Perplexity API — returns AI-synthesized answer with citations."""
+    url = "https://api.perplexity.ai/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "sonar",
+        "messages": [
+            {"role": "system", "content": "Be precise and concise. Cite sources."},
+            {"role": "user", "content": query},
+        ],
+        "max_tokens": 1024,
+        "return_citations": True,
+        "search_recency_filter": "month",
+    }
+
+    session = await _get_session()
+    async with session.post(
+        url, json=payload, headers=headers,
+        timeout=aiohttp.ClientTimeout(total=30),
+    ) as resp:
+        if resp.status != 200:
+            log.debug("Perplexity returned HTTP %d", resp.status)
+            return ""
+        data = await resp.json()
+
+    answer = data["choices"][0]["message"]["content"]
+    citations = data.get("citations", [])
+
+    lines = [f"**Perplexity AI Answer:**\n{answer}"]
+    if citations:
+        lines.append("\n**Sources:**")
+        for i, cite in enumerate(citations[:num_results], 1):
+            lines.append(f"{i}. {cite}")
+
+    return "\n".join(lines)
 
 
 def _format_tavily_results(data: dict, num_results: int) -> str:
@@ -916,6 +972,14 @@ async def browse_url(url: str) -> str:
     )
 
     if not text:
+        # Fallback: try Playwright for JS-rendered content
+        try:
+            log.info("Trying Playwright fallback for: %s", url)
+            text = await _playwright_fetch(url)
+        except Exception as e:
+            log.debug("Playwright fallback failed: %s", e)
+
+    if not text:
         return (
             f"⚠️ Could not extract readable content from `{url}`. "
             "The page may be JavaScript-rendered or paywalled."
@@ -926,6 +990,39 @@ async def browse_url(url: str) -> str:
         text = text[:6000] + "\n… (truncated)"
 
     return f"**Source**: {url}\n\n{text}"
+
+
+async def _playwright_fetch(url_or_html: str) -> str:
+    """Fetch page content using headless browser for JS-rendered sites.
+
+    Accepts a URL (http/https) or raw HTML string. When given already-fetched
+    HTML it renders it in Chromium so JS executes, then extracts text via
+    trafilatura.
+    """
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        return ""
+
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
+            if url_or_html.startswith(("http://", "https://")):
+                await page.goto(url_or_html, timeout=20000, wait_until="networkidle")
+            else:
+                await page.set_content(url_or_html, wait_until="networkidle")
+            rendered = await page.content()
+            await browser.close()
+
+        import trafilatura
+        text = trafilatura.extract(
+            rendered, include_tables=True, include_comments=False,
+        )
+        return text or ""
+    except Exception as e:
+        log.debug("Playwright render failed: %s", e)
+        return ""
 
 
 # ---------------------------------------------------------------------------

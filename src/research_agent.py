@@ -11,6 +11,7 @@ import asyncio
 import logging
 import time
 from typing import Awaitable, Callable
+from urllib.parse import urlparse
 
 log = logging.getLogger("openclaw.research")
 
@@ -21,9 +22,15 @@ log = logging.getLogger("openclaw.research")
 
 _PLAN_PROMPT = """\
 You are a meticulous research coordinator. Break the following research request \
-into 3-5 specific search queries that together will provide a comprehensive answer. \
-Each query should be precise and distinct (no overlap). \
-Reply with ONLY a JSON array of strings, e.g. ["query 1", "query 2", "query 3"].
+into 3-5 specific sub-questions that together will provide a comprehensive answer.
+
+For each sub-question, generate 2-3 keyword variations using different terms and \
+phrasing. This helps find diverse sources. For example, instead of just \
+"AI in healthcare", also try "artificial intelligence clinical outcomes" and \
+"machine learning medical diagnosis trends".
+
+Reply with ONLY a flat JSON array of all query strings (including variations), \
+e.g. ["query 1a", "query 1b", "query 2a", "query 2b", "query 3a", "query 3b"].
 
 Research request: {query}
 """
@@ -31,22 +38,38 @@ Research request: {query}
 _SYNTHESIS_PROMPT = """\
 You are an expert research analyst. Based on the following search results and \
 browsed page content, write a structured research report answering the original \
-question. Use markdown formatting. Include:
+question. Use markdown formatting with the following template:
 
-## Summary
-(2-3 sentence executive summary)
+# {{Topic}}: Research Report
+*Generated: {{today's date}} | Sources: {{N}} analyzed | Search depth: {{number of searches}} queries*
+
+## Executive Summary
+(3-5 sentence overview of the most important findings)
 
 ## Key Findings
-(bullet points with the most important facts)
+(bullet points with inline citations [1], [2] and confidence levels:
+ - [High confidence] = 3+ sources agree on this claim
+ - [Medium confidence] = 2 sources support this
+ - [Low confidence] / [Single source] = only 1 source supports this)
 
 ## Detailed Analysis
-(longer explanation with context)
+(longer explanation with context, organized by theme)
 
 ## Sources
 (numbered list of URLs with one-line descriptions)
 
-Be factual, cite sources inline (e.g. [1], [2]), and note any conflicting \
-information or gaps.
+## Methodology
+- Queries executed: {{N}}
+- Pages analyzed: {{M}}
+- Source quality breakdown: (how many academic, news, blog, etc.)
+- Date range of sources: (earliest to most recent source date observed)
+
+Additional instructions:
+- Cross-reference claims: if only ONE source supports a claim, prefix with \
+"[Single source]"
+- Prefer recent sources (last 12 months) over older ones when information conflicts
+- If information conflicts between sources, present both perspectives clearly
+- Be factual, cite sources inline (e.g. [1], [2])
 
 Original question: {query}
 
@@ -122,7 +145,7 @@ class ResearchAgent:
     """
 
     def __init__(self,
-                 max_searches: int = 6,
+                 max_searches: int = 10,
                  browse_top_n: int = 4,
                  timeout_seconds: int = 180,
                  max_concurrent: int = 4):
@@ -201,7 +224,7 @@ class ResearchAgent:
             sub_queries = [query]  # fallback: search the raw query
             await post("plan", "Using direct query (planning unavailable)")
         else:
-            await post("plan", f"Decomposed into {len(sub_queries)} sub-searches")
+            await post("plan", f"Decomposed into {len(sub_queries)} sub-searches (with keyword variations)")
 
         # ── Step 2: Execute searches ──────────────────────────────────────────
         raw_results = await self._perform_searches(sub_queries, post)
@@ -278,22 +301,36 @@ class ResearchAgent:
         results = await asyncio.gather(*(_one_search(i + 1, sq) for i, sq in enumerate(queries)))
         return list(results)
 
+    @staticmethod
+    def _rank_source_quality(url: str) -> int:
+        """Rank URL by source quality. Higher = better."""
+        domain = urlparse(url).netloc.lower()
+        if any(d in domain for d in ['.gov', '.edu', 'nature.com', 'science.org', 'arxiv.org', 'pubmed']):
+            return 4  # Academic/official
+        if any(d in domain for d in [
+            '.org', 'reuters.com', 'bbc.com', 'nytimes.com', 'washingtonpost.com',
+            'wsj.com', 'bloomberg.com', 'techcrunch.com', 'arstechnica.com',
+        ]):
+            return 3  # Reputable news/org
+        if any(d in domain for d in ['medium.com', 'substack.com', 'dev.to', 'hackernews', 'wikipedia.org']):
+            return 2  # Quality blogs/wikis
+        if any(d in domain for d in [
+            'reddit.com', 'twitter.com', 'x.com', 'facebook.com', 'youtube.com',
+            'instagram.com', 'tiktok.com', 'pinterest.com',
+        ]):
+            return 0  # Social media (deprioritize)
+        return 1  # Default
+
     def _prioritize_urls(self, all_urls: list[str]) -> list[str]:
-        """Deduplicate and prioritize URLs, deprioritizing social media."""
+        """Deduplicate and rank URLs by source quality."""
         seen: set[str] = set()
-        priority_urls: list[str] = []
-        fallback_urls: list[str] = []
-        skip_domains = {"twitter.com", "x.com", "facebook.com", "instagram.com", "reddit.com", "youtube.com"}
+        unique: list[str] = []
         for url in all_urls:
-            if url in seen:
-                continue
-            seen.add(url)
-            domain = url.split("/")[2] if url.count("/") >= 2 else ""
-            if any(skip in domain for skip in skip_domains):
-                fallback_urls.append(url)
-            else:
-                priority_urls.append(url)
-        return (priority_urls + fallback_urls)[:self.browse_top_n]
+            if url not in seen:
+                seen.add(url)
+                unique.append(url)
+        unique.sort(key=self._rank_source_quality, reverse=True)
+        return unique[:self.browse_top_n]
 
     async def _fetch_pages(
         self,
@@ -514,7 +551,7 @@ class ResearchAgent:
                     text = text[4:]
             queries = json.loads(text.strip())
             if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
-                return queries[:5]
+                return queries[:10]
         except Exception as e:
             log.warning("Query planning failed: %s", e)
         return []
