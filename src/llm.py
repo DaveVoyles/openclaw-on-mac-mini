@@ -195,7 +195,11 @@ _GEMMA_HALLUCINATION_RE = _re.compile(
     r"|\b(i\s+)?(don'?t|cannot|can'?t)\s+(access|browse|check|reach)\s+(the\s+)?(internet|web|real[\s-]?time|live|current)\b"
     r"|\b(as\s+an?\s+ai|as\s+a\s+language\s+model)\b.{0,80}\b(cannot|don'?t|no\s+access)\b"
     r"|\bi\s+don'?t\s+have\s+(real[\s-]?time|access\s+to|live)\b"
-    r"|(would\s+need\s+to\s+|i\s+could\s+)?(search|check|query)\s+(this|that|it)\s+for\s+you\b",
+    r"|(would\s+need\s+to\s+|i\s+could\s+)?(search|check|query)\s+(this|that|it)\s+for\s+you\b"
+    # Promises to do something without actually doing it
+    r"|\b(let\s+me\s+)(start|begin|check|search|look|find|locate)\b"
+    r"|\bone\s+moment\b"
+    r"|\bi'?ll\s+(search|check|look|find|locate|browse|start)\b",
     _re.IGNORECASE,
 )
 
@@ -1114,7 +1118,7 @@ async def chat_stream(
                     system_prompt = _load_system_prompt()
                     reply = await chat_openai(model_message, history, system_prompt,
                                               temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                    if reply:
+                    if reply and _gemma_response_seems_valid(reply):
                         import os
                         updated = history + [
                             {"role": "user", "parts": [user_message]},
@@ -1122,7 +1126,7 @@ async def chat_stream(
                         ]
                         yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
                         return
-                    _routing_notes.append("Copilot proxy failed → trying Gemini")
+                    _routing_notes.append("Copilot proxy response promised actions it can't perform → falling back to Gemini with tools")
             except Exception as e:
                 log.debug("Copilot proxy failed: %s", e)
                 _routing_notes.append("Copilot proxy unavailable → trying Gemini")
