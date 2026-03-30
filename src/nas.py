@@ -438,6 +438,104 @@ async def get_disk_smart_status() -> str:
 
 
 # ---------------------------------------------------------------------------
+# FileStation — fuzzy matching helpers
+# ---------------------------------------------------------------------------
+
+# Number-word equivalents for matching "6" ↔ "six", etc.
+_NUM_WORDS: dict[str, str] = {
+    "0": "zero", "1": "one", "2": "two", "3": "three", "4": "four",
+    "5": "five", "6": "six", "7": "seven", "8": "eight", "9": "nine",
+    "10": "ten", "11": "eleven", "12": "twelve", "13": "thirteen",
+}
+_WORD_NUMS: dict[str, str] = {v: k for k, v in _NUM_WORDS.items()}
+
+# Common author-style prefixes to strip: "Tom Clancy - ", "J.K. Rowling - "
+import re as _re
+_AUTHOR_PREFIX_RE = _re.compile(
+    r"^[A-Z][A-Za-z.']+(?:\s+[A-Z][A-Za-z.']+)*\s*[-–—]\s*", flags=_re.UNICODE
+)
+
+_RELEVANCE_EXACT = 3
+_RELEVANCE_WORD = 2
+_RELEVANCE_SUBSTRING = 1
+
+
+def _expand_words(words: list[str]) -> list[str]:
+    """Expand search words with number-word equivalents."""
+    expanded: list[str] = []
+    for w in words:
+        expanded.append(w)
+        if w in _NUM_WORDS:
+            expanded.append(_NUM_WORDS[w])
+        elif w in _WORD_NUMS:
+            expanded.append(_WORD_NUMS[w])
+    return expanded
+
+
+def _fuzzy_score(name: str, words: list[str]) -> int:
+    """
+    Score a filename against search words. Higher = better match.
+
+    Scoring tiers (per word, summed):
+      3 — exact full-pattern match in name (returned immediately)
+      2 — word appears as a standalone token in name
+      1 — word appears as a substring in name
+      0 — no match
+
+    Words should already be expanded via _expand_words().
+    """
+    lower = name.lower()
+    # Also try with common author prefixes stripped
+    stripped = _AUTHOR_PREFIX_RE.sub("", name).lower()
+
+    # Split name into individual tokens for word-boundary matching
+    name_tokens = lower.split()
+    stripped_tokens = stripped.split()
+
+    # Exact full-name match is top priority
+    for w in words:
+        if w == lower or w == stripped:
+            return 100
+
+    total = 0
+    for w in words:
+        best_w = 0
+        for target, tokens in ((lower, name_tokens), (stripped, stripped_tokens)):
+            if w in tokens:
+                best_w = max(best_w, _RELEVANCE_WORD)
+            elif w in target:
+                best_w = max(best_w, _RELEVANCE_SUBSTRING)
+        total += best_w
+    return total
+
+
+def _fuzzy_filter(files: list[dict], pattern: str) -> list[dict]:
+    """
+    Filter and sort files by fuzzy relevance to *pattern*.
+
+    Matching strategy:
+      1. Split pattern into words (≥1 char for digits, ≥3 chars for alpha)
+      2. Expand number-word equivalents ("6" → "six", etc.)
+      3. Score each file: exact > word-boundary > substring
+      4. Return matched files sorted by descending relevance
+    """
+    words_raw = pattern.lower().split()
+    words = [w for w in words_raw if len(w) >= 3 or w.isdigit()]
+    if not words:
+        words = [pattern.lower().strip()]
+    words = _expand_words(words)
+
+    scored: list[tuple[int, dict]] = []
+    for f in files:
+        score = _fuzzy_score(f.get("name", ""), words)
+        if score > 0:
+            scored.append((score, f))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return [f for _, f in scored]
+
+
+# ---------------------------------------------------------------------------
 # FileStation — read operations
 # ---------------------------------------------------------------------------
 
@@ -479,11 +577,9 @@ async def nas_list_folder(path: str = "/Misc/audiobooks", pattern: str = "") -> 
             msg += f" No items matching '{pattern}' were found."
         return msg
 
-    # Fuzzy filter: split pattern into words, match if ANY word appears in name
+    # Fuzzy filter: match words with relevance scoring
     if pattern:
-        words = [w.lower() for w in pattern.split() if len(w) >= 3]
-        if words:
-            files = [f for f in files if any(w in f.get("name", "").lower() for w in words)]
+        files = _fuzzy_filter(files, pattern)
         if not files:
             return (
                 f"✅ Successfully searched `{path}` — no items matching '{pattern}' were found. "
@@ -617,6 +713,109 @@ async def nas_write_file(
 
 
 # ---------------------------------------------------------------------------
+# FileStation — search across shares
+# ---------------------------------------------------------------------------
+
+async def nas_search_files(query: str, path: str = "") -> str:
+    """
+    Search recursively across NAS shares using the Synology FileStation Search API.
+
+    Args:
+        query: Search pattern (e.g. 'rainbow six', 'lord of the rings').
+        path: Folder path to search within. Defaults to all common shares.
+              Use share-relative paths like '/Misc/audiobooks'.
+    """
+    if not NAS_USER or not NAS_PASSWORD:
+        return "❌ NAS credentials not configured (NAS_USER / NAS_PASSWORD)."
+
+    # Default: search the main content shares
+    search_paths = (
+        [path] if path
+        else ["/Misc", "/PlexMediaServer"]
+    )
+
+    all_results: list[dict] = []
+    for folder in search_paths:
+        results = await _search_one_folder(query, folder)
+        all_results.extend(results)
+
+    if not all_results:
+        searched = ", ".join(f"`{p}`" for p in search_paths)
+        return (
+            f"✅ Search complete — no files matching '{query}' found.\n"
+            f"Searched: {searched}"
+        )
+
+    lines = [f"🔍 **Search results for '{query}'** — {len(all_results)} item{'s' if len(all_results) != 1 else ''}"]
+    for item in all_results[:50]:
+        name = item.get("name", "?")
+        item_path = item.get("path", "")
+        is_dir = item.get("isdir", False)
+        icon = "📁" if is_dir else "📄"
+        # Show parent folder for context
+        parent = item_path.rsplit("/", 1)[0] if "/" in item_path else ""
+        size = item.get("additional", {}).get("size", 0)
+        if is_dir:
+            lines.append(f"  {icon} {name}/  _(in {parent})_")
+        else:
+            size_mb = size / (1024 * 1024)
+            lines.append(f"  {icon} {name} ({size_mb:.1f} MB)  _(in {parent})_")
+
+    if len(all_results) > 50:
+        lines.append(f"  … and {len(all_results) - 50} more results")
+
+    return _truncate("\n".join(lines))
+
+
+async def _search_one_folder(query: str, folder_path: str) -> list[dict]:
+    """Run a FileStation search in a single folder and return matched items."""
+    # Start the search task
+    start_result = await _dsm(
+        "SYNO.FileStation.Search", 2, "start",
+        {"folder_path": folder_path, "pattern": query},
+    )
+    if not start_result.get("success"):
+        log.warning("Search start failed for %s: %s", folder_path, start_result)
+        return []
+
+    taskid = start_result.get("data", {}).get("taskid")
+    if not taskid:
+        log.warning("No taskid returned for search in %s", folder_path)
+        return []
+
+    # Poll for results (max 10 seconds)
+    results: list[dict] = []
+    try:
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            await asyncio.sleep(0.5)
+            list_result = await _dsm(
+                "SYNO.FileStation.Search", 2, "list",
+                {
+                    "taskid": taskid,
+                    "limit": "50",
+                    "additional": '["size","type"]',
+                },
+            )
+            if not list_result.get("success"):
+                break
+
+            data = list_result.get("data", {})
+            files = data.get("files", [])
+            finished = data.get("finished", False)
+
+            if files:
+                results = files
+            if finished:
+                break
+    finally:
+        # Always clean up the search task
+        await _dsm("SYNO.FileStation.Search", 2, "stop", {"taskid": taskid})
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -628,4 +827,5 @@ NAS_SKILLS = {
     "nas_list_folder": nas_list_folder,
     "nas_create_folder": nas_create_folder,
     "nas_write_file": nas_write_file,
+    "nas_search_files": nas_search_files,
 }

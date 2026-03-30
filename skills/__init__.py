@@ -134,6 +134,48 @@ async def restart_container(service: str) -> str:
     return f"✅ Container '{service}' restarted successfully."
 
 
+async def stop_container(service: str) -> str:
+    """Stop a Docker container by name. Returns result message."""
+    safe_name = shlex.quote(service).strip("'")
+
+    rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
+    if rc != 0:
+        return f"❌ Container '{service}' not found."
+
+    rc, out, err = await _run(["docker", "stop", safe_name], timeout=60)
+    if rc != 0:
+        return f"❌ Failed to stop '{service}': {err.strip()}"
+    return f"✅ Container '{service}' stopped successfully."
+
+
+async def pause_container(service: str) -> str:
+    """Pause a running Docker container by name. Returns result message."""
+    safe_name = shlex.quote(service).strip("'")
+
+    rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
+    if rc != 0:
+        return f"❌ Container '{service}' not found."
+
+    rc, out, err = await _run(["docker", "pause", safe_name], timeout=10)
+    if rc != 0:
+        return f"❌ Failed to pause '{service}': {err.strip()}"
+    return f"✅ Container '{service}' paused successfully."
+
+
+async def unpause_container(service: str) -> str:
+    """Unpause a paused Docker container by name. Returns result message."""
+    safe_name = shlex.quote(service).strip("'")
+
+    rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
+    if rc != 0:
+        return f"❌ Container '{service}' not found."
+
+    rc, out, err = await _run(["docker", "unpause", safe_name], timeout=10)
+    if rc != 0:
+        return f"❌ Failed to unpause '{service}': {err.strip()}"
+    return f"✅ Container '{service}' unpaused successfully."
+
+
 async def get_docker_stats() -> str:
     """Get resource usage for all running containers."""
     rc, out, err = await _run([
@@ -378,6 +420,9 @@ SKILLS = {
     "get_container_status": get_container_status,
     "get_container_logs": get_container_logs,
     "restart_container": restart_container,
+    "stop_container": stop_container,
+    "pause_container": pause_container,
+    "unpause_container": unpause_container,
     "get_docker_stats": get_docker_stats,
     "get_system_stats": get_system_stats,
     "get_uptime": get_uptime,
@@ -511,7 +556,8 @@ SKILLS["execute_python_code"] = execute_python_code
 SKILL_CATEGORIES = {
     "🐳 Docker & System": [
         "list_containers", "get_container_status", "get_container_logs",
-        "restart_container", "get_docker_stats", "get_system_stats",
+        "restart_container", "stop_container", "pause_container",
+        "unpause_container", "get_docker_stats", "get_system_stats",
         "get_uptime", "get_compose_config",
     ],
     "🎬 Media & Downloads": [

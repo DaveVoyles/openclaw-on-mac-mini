@@ -36,6 +36,36 @@
         description: Container name to restart (e.g. sonarr, radarr, lidarr, prowlarr)
     required:
       - service
+- name: stop_container
+  description: Stop a running Docker container gracefully.
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Container name to stop (e.g. sonarr, radarr, lidarr, prowlarr)
+    required:
+      - service
+- name: pause_container
+  description: Pause a running Docker container (freezes processes without stopping).
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Container name to pause (e.g. sonarr, radarr, lidarr, prowlarr)
+    required:
+      - service
+- name: unpause_container
+  description: Unpause a paused Docker container (resumes frozen processes).
+  parameters:
+    type: object
+    properties:
+      service:
+        type: string
+        description: Container name to unpause (e.g. sonarr, radarr, lidarr, prowlarr)
+    required:
+      - service
 - name: get_docker_stats
   description: Get CPU, memory, and network usage for all running containers.
   parameters:
@@ -555,6 +585,22 @@
         description: "File name including extension, e.g. 'research_report.md'. Default: 'openclaw_output.md'."
     required:
       - content
+- name: nas_search_files
+  description:
+    Search recursively across Synology NAS shares for files and folders matching a query.
+    Uses the FileStation Search API for deep recursive search. Searches /Misc and /PlexMediaServer by default,
+    or specify a path to narrow the search. Good for finding specific audiobooks, movies, TV shows, or any file.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: "Search pattern, e.g. 'rainbow six', 'lord of the rings', 'batman'."
+      path:
+        type: string
+        description: "Optional folder path to search within, e.g. '/Misc/audiobooks'. Leave empty to search all common shares."
+    required:
+      - query
 - name: create_google_doc
   description:
     Create a Google Doc with a title and text content. Requires a 'google-docs' connection via Maton. Returns the
