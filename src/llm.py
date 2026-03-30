@@ -26,6 +26,23 @@ from config import cfg
 
 log = logging.getLogger("openclaw.llm")
 
+
+def _to_content(msg: dict) -> dict:
+    """Convert internal history message to genai-compatible ContentDict.
+
+    Internal history stores parts as plain strings, but the google-genai SDK
+    requires Part objects (dicts with 'text' key).
+    """
+    parts = []
+    for p in msg.get("parts", []):
+        if isinstance(p, str):
+            parts.append({"text": p})
+        elif isinstance(p, dict):
+            parts.append(p)
+        else:
+            parts.append({"text": str(p)})
+    return {"role": msg["role"], "parts": parts}
+
 # ---------------------------------------------------------------------------
 # Configuration (sourced from centralized config)
 # ---------------------------------------------------------------------------
@@ -976,10 +993,7 @@ async def _gemini_chat(
         )
 
     # Build Gemini-compatible history
-    gemini_history = [
-        genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
-        for msg in history
-    ]
+    gemini_history = [_to_content(msg) for msg in history]
 
     chat_session = _client.chats.create(
         model=model.model_name, config=model.config, history=gemini_history,
@@ -1326,10 +1340,7 @@ async def chat_stream(
     return
 
     # ── No-tool Gemini streaming path ────────────────────────────────────
-    gemini_history = [
-        genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
-        for msg in history
-    ]
+    gemini_history = [_to_content(msg) for msg in history]
     chat_session = _client.chats.create(
         model=model.model_name, config=model.config, history=gemini_history,
     )
@@ -1811,10 +1822,7 @@ async def analyze_image_with_tools(
     model = await _get_model()
 
     # Build Gemini history
-    gemini_history = [
-        genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
-        for msg in history
-    ]
+    gemini_history = [_to_content(msg) for msg in history]
 
     chat_session = _client.chats.create(
         model=model.model_name, config=model.config, history=gemini_history,
