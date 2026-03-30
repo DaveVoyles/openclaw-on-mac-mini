@@ -986,9 +986,9 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         and interact with Git repositories for code-related tasks.
       </p>
 
-      <h3>3-Tier Search Cascade</h3>
+      <h3>4-Tier Search Cascade</h3>
       <p>
-        Every <code>search_web</code> call tries three sources in order until
+        Every <code>search_web</code> call tries four sources in order until
         one succeeds:
       </p>
       <div class="card">
@@ -999,7 +999,15 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
             <th>Requires</th>
           </tr>
           <tr>
-            <td><strong>1 &mdash; Tavily</strong></td>
+            <td><strong>1 &mdash; Perplexity AI</strong></td>
+            <td>
+              AI-powered deep search; returns synthesized answers with
+              citations and source grounding
+            </td>
+            <td><code>PERPLEXITY_API_KEY</code></td>
+          </tr>
+          <tr>
+            <td><strong>2 &mdash; Tavily</strong></td>
             <td>
               AI-optimized semantic search; returns direct answers, not just
               links
@@ -1007,18 +1015,24 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
             <td><code>TAVILY_API_KEY</code></td>
           </tr>
           <tr>
-            <td><strong>2 &mdash; DuckDuckGo</strong></td>
+            <td><strong>3 &mdash; DuckDuckGo</strong></td>
             <td>
               Free DDG Lite via <code>free-web-search</code> ClawHub skill
             </td>
             <td>None</td>
           </tr>
           <tr>
-            <td><strong>3 &mdash; Bing HTML</strong></td>
+            <td><strong>4 &mdash; Bing Lite</strong></td>
             <td>Scraped with BeautifulSoup4 as last resort</td>
             <td>None</td>
           </tr>
         </table>
+      </div>
+      <div class="tip">
+        <strong>&#128161; Playwright fallback:</strong> When
+        <code>browse_url</code> encounters JS-rendered pages that
+        trafilatura can&rsquo;t parse, OpenClaw automatically falls back to
+        headless Chromium via Playwright to extract content.
       </div>
       <p>
         For deep multi-source topic research, use
@@ -1030,12 +1044,13 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
       <p>The AI can search the web and fetch content to answer questions:</p>
       <ul>
         <li>
-          <code>search_web</code>: 3-tier cascade search (Tavily &rarr;
-          DuckDuckGo &rarr; Bing).
+          <code>search_web</code>: 4-tier cascade search (Perplexity AI &rarr;
+          Tavily &rarr; DuckDuckGo &rarr; Bing Lite).
         </li>
         <li>
           <code>browse_url</code>: Extract clean text and markdown from a
-          specific URL.
+          specific URL. Falls back to Playwright headless Chromium for
+          JS-rendered sites.
         </li>
       </ul>
 
@@ -1103,27 +1118,43 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       <p>Multi-step autonomous research. Given a question or topic, the bot:</p>
       <ol>
         <li>
-          <strong>Plans</strong> a set of focused sub-queries using Gemini
+          <strong>Plans</strong> a set of focused sub-queries using Gemini,
+          generating 2&ndash;3 keyword variations per sub-query for broader coverage
         </li>
         <li>
-          <strong>Searches</strong> each sub-query in parallel (3-tier cascade:
-          Tavily &rarr; DuckDuckGo &rarr; Bing)
+          <strong>Searches</strong> each sub-query in parallel (4-tier cascade:
+          Perplexity AI &rarr; Tavily &rarr; DuckDuckGo &rarr; Bing Lite)
         </li>
         <li>
           <strong>Browses</strong> the top source URLs to extract full article
-          content
+          content (with Playwright fallback for JS-rendered sites)
+        </li>
+        <li>
+          <strong>Ranks sources</strong> by quality tier: academic/official &gt;
+          news &gt; blog &gt; social media
+        </li>
+        <li>
+          <strong>Cross-references</strong> claims across multiple sources for accuracy
         </li>
         <li>
           <strong>Synthesizes</strong> a structured report using low-temperature
-          Gemini in a new Discord thread
+          Gemini in a new Discord thread, including per-section confidence levels
+          (high/medium/low) and a methodology section
         </li>
       </ol>
 
-      <h3><code>/research &lt;query&gt;</code></h3>
+      <h3><code>/research &lt;query&gt; [deep:true]</code></h3>
       <pre><code>/research Best neighborhoods in Philadelphia under $400k with good schools
 /research Docker vs Podman tradeoffs for home lab usage
 /research How to set up Tailscale exit nodes on Synology NAS
-/research Current Sonarr v4 migration breaking changes</code></pre>
+/research deep:true Current Sonarr v4 migration breaking changes</code></pre>
+
+      <div class="tip">
+        <strong>&#128161; Deep mode:</strong> Add <code>deep:true</code> for
+        extended multi-pass research with exhaustive source coverage. The bot
+        runs additional keyword variation searches and cross-references more
+        sources for higher-confidence findings.
+      </div>
 
       <div class="tip">
         <strong>&#128161; Live progress:</strong> A Discord thread is created
@@ -2893,9 +2924,24 @@ Marple Township millage rate is 25.46...
       <!-- 35. Enhanced Research -->
       <h2 id="research-enhanced">35. Enhanced Research</h2>
       <p>
-        Phase 16 adds follow-up suggestions, scheduled research, and
-        searchable research history on top of the existing
+        Phase 16+ adds follow-up suggestions, scheduled research,
+        searchable research history, and Deep Research Pro methodology on top of the existing
         <a href="#research"><code>/research</code></a> workflow.
+      </p>
+
+      <h3>Deep Research Pro Methodology</h3>
+      <p>
+        The research engine uses a multi-pass methodology for thorough results:
+      </p>
+      <ul>
+        <li><strong>Keyword variations</strong> &mdash; 2&ndash;3 alternate phrasings per sub-query to avoid blind spots</li>
+        <li><strong>Source quality ranking</strong> &mdash; academic/official &gt; news &gt; blog &gt; social media; higher-tier sources weighted more heavily</li>
+        <li><strong>Cross-reference checking</strong> &mdash; claims verified across multiple independent sources before inclusion</li>
+        <li><strong>Confidence levels</strong> &mdash; each section of the report includes a confidence rating (high/medium/low) based on source agreement and quality</li>
+        <li><strong>Methodology section</strong> &mdash; every report ends with a summary of search queries used, sources consulted, and limitations</li>
+      </ul>
+      <p>
+        Use <code>/research deep:true &lt;query&gt;</code> for extended multi-pass research with exhaustive source coverage.
       </p>
 
       <h3>Follow-Up Suggestions</h3>

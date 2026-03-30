@@ -120,8 +120,8 @@ Never suggest "try restarting the container" before reading what the logs say.
 - `create_onedrive_file` — Save to OneDrive (requires Maton microsoft-onedrive)
 
 **Web Research**
-- `search_web` — 3-tier cascade: Tavily → DuckDuckGo → Bing. Use for ANY current/live data.
-- `browse_url` — Full page content. Use after search_web to read promising results.
+- `search_web` — 4-tier cascade: Perplexity AI (primary) → Tavily → DuckDuckGo → Bing Lite. Use for ANY current/live data.
+- `browse_url` — Full page content. Use after search_web to read promising results. Web browsing now handles JS-rendered sites via Playwright headless Chromium fallback when trafilatura fails.
 - `get_weather` — Current + 3-day forecast, no API key needed.
 
 **Infrastructure (Core)**
@@ -159,11 +159,15 @@ Never suggest "try restarting the container" before reading what the logs say.
 
 **Deep Research (/research command)**
 When a user uses `/research`, autonomously:
-1. Decompose into 3–5 targeted sub-searches
-2. Execute each search + browse top URLs
-3. Synthesize a structured report with citations
-4. Post live progress updates to a Discord thread
-5. Finish with action buttons (Save to Memory, Re-run in 24h)
+1. Decompose into 3–5 targeted sub-searches with 2–3 keyword variations per sub-query for broader coverage
+2. Execute each search + browse top URLs (Perplexity AI primary, Tavily/DDG fallbacks)
+3. Rank sources by quality tier: academic/official > news > blog > social media
+4. Cross-reference claims across multiple sources for accuracy
+5. Synthesize a structured report with citations, per-section confidence levels (high/medium/low), and a methodology section
+6. Post live progress updates to a Discord thread
+7. Finish with action buttons (Save to Memory, Re-run in 24h)
+
+Use `deep:true` for extended multi-pass research with exhaustive source coverage.
 
 ---
 

@@ -78,6 +78,16 @@ async def api_status_handler(request):
     # Gemini
     checks["gemini"] = {"status": "ok" if cfg.google_api_key else "no_key"}
 
+    # Search provider
+    perplexity_key = os.getenv("PERPLEXITY_API_KEY", "")
+    tavily_key = os.getenv("TAVILY_API_KEY", "")
+    if perplexity_key:
+        checks["search_provider"] = {"status": "ok", "active": "Perplexity AI", "cascade": "Perplexity → Tavily → DDG → Bing Lite"}
+    elif tavily_key:
+        checks["search_provider"] = {"status": "ok", "active": "Tavily", "cascade": "Tavily → DDG → Bing Lite"}
+    else:
+        checks["search_provider"] = {"status": "ok", "active": "DuckDuckGo", "cascade": "DDG → Bing Lite"}
+
     # Copilot proxy
     proxy_url = cfg.copilot_proxy_url
     if proxy_url:
@@ -288,6 +298,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "latency_ms": round(bot.latency * 1000, 1) if bot and bot.latency else 0,
         "python": platform.python_version(),
         "discord_py": discord.__version__,
+        "search_provider": "Perplexity AI" if os.getenv("PERPLEXITY_API_KEY") else ("Tavily" if os.getenv("TAVILY_API_KEY") else "DuckDuckGo"),
         "model": MODEL_NAME,
         "local_model": OLLAMA_MODEL if LOCAL_LLM_ENABLED else None,
         "rate_info": get_rate_info(),
@@ -491,7 +502,7 @@ def _command_list() -> list[dict]:
             {"name": "/ask <question> [model]", "desc": "AI-powered query — auto-routes to Gemini (tools) or Ollama (chat). Optional model: auto/local/gemini."},
             {"name": "/model show", "desc": "Show your current LLM routing preference and Ollama status."},
             {"name": "/model set <preference>", "desc": "Set your default LLM routing: auto (smart), local (Gemma), or gemini (cloud)."},
-            {"name": "/research <query>", "desc": "Deep multi-step research — Discord thread, planned sub-queries, 3-tier search (Tavily → DDG → Bing), source browsing, synthesized report"},
+            {"name": "/research <query> [deep:true]", "desc": "Deep multi-step research — Discord thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section"},
             {"name": "/weather [location]", "desc": "Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var)"},
             {"name": "/clear", "desc": "Clear active conversation history"},
             {"name": "/save <name>", "desc": "Save current conversation as a named thread (persisted to disk)"},

@@ -1152,6 +1152,14 @@
               ></span>
             </div>
             <div class="stat-row">
+              <span class="stat-label">Search Provider</span
+              ><span
+                class="stat-value"
+                id="sys-search-provider"
+                style="color: var(--mint-green)"
+              ></span>
+            </div>
+            <div class="stat-row">
               <span class="stat-label">Rate Limits</span
               ><span class="stat-value" id="sys-rates"></span>
             </div>
@@ -1547,6 +1555,8 @@
         document.getElementById("sys-model").textContent = d.model;
         document.getElementById("sys-local-model").textContent =
           d.local_model || "Disabled";
+        document.getElementById("sys-search-provider").textContent =
+          d.search_provider || "DuckDuckGo";
         document.getElementById("sys-rates").textContent = d.rate_info;
         document.getElementById("sys-python").textContent = d.python;
         document.getElementById("sys-discordpy").textContent = d.discord_py;

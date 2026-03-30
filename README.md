@@ -98,8 +98,8 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 **Phase 8 — Web, Browsing & Vision** ✅
 
-- `/websearch` — live web search via Tavily (falls back to DuckDuckGo)
-- `/browse <url>` — fetch and read a web page; optional Q&A
+- `/websearch` — live web search via Perplexity AI (primary), Tavily, DuckDuckGo, and Bing Lite fallbacks
+- `/browse <url>` — fetch and read a web page; optional Q&A; Playwright headless Chromium fallback for JS-rendered sites
 - `/analyze-image` — analyze an uploaded image with Gemini vision
 - `/analyze-file` — analyze a document (PDF, TXT, JSON…) with Gemini
 - ClawHub `free-web-search` and `openclaw-tavily-search` skill bundles installed
@@ -132,7 +132,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 - RSS/Atom feed monitoring — `fetch_rss_feed`, `search_rss`, `get_rss_digest` with LLM-powered summaries
 - URL change detection — `snapshot_url` + `check_url_for_changes` with SHA-256 diff-based alerting
-- `/research` — autonomous multi-step research with Tavily/DuckDuckGo search and synthesis
+- `/research` — autonomous multi-step research with Perplexity/Tavily/DuckDuckGo search, source ranking, cross-referencing, and confidence levels
 - `/weather`, `/briefing` — on-demand weather forecasts and morning briefings
 
 **v0.6.0 — Channel Architecture & Automation** ✅
@@ -196,6 +196,13 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - 4:00 AM automated dream cycle (integrated into existing maintenance schedule)
 - New commands: `/dream`, `/memory-health`, `/memory-export`
 - New skills: `dream_now`, `get_memory_health`
+
+**Phase 17 — Deep Research Pro & Search Upgrades** ✅
+
+- **Perplexity AI** as primary search provider — 4-tier cascade: Perplexity → Tavily → DuckDuckGo → Bing Lite (`PERPLEXITY_API_KEY` env var)
+- **Playwright browser fallback** — JS-rendered sites now handled via headless Chromium when trafilatura extraction fails (added to Dockerfile and requirements.txt)
+- **Deep Research Pro methodology** — keyword variations (2–3 per sub-query), source quality ranking (academic > news > blog > social), cross-reference checking, confidence levels in reports, methodology section
+- `/research deep:true` for extended multi-pass research with exhaustive source coverage
 
 **Planned**
 
