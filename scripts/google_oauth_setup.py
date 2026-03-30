@@ -20,10 +20,12 @@ Prerequisites:
 
 import json
 import sys
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
@@ -33,10 +35,42 @@ SCOPES = [
 
 AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
-REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob"
+REDIRECT_PORT = 8085
+REDIRECT_URI = f"http://localhost:{REDIRECT_PORT}"
+
+_auth_code: str | None = None
+_auth_error: str | None = None
+
+
+class _OAuthCallbackHandler(BaseHTTPRequestHandler):
+    """Handles the OAuth2 redirect callback on localhost."""
+
+    def do_GET(self):
+        global _auth_code, _auth_error
+        query = urllib.parse.urlparse(self.path).query
+        params = urllib.parse.parse_qs(query)
+
+        if "code" in params:
+            _auth_code = params["code"][0]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(b"<html><body><h2>Authorization successful!</h2>"
+                             b"<p>You can close this tab and return to the terminal.</p></body></html>")
+        else:
+            _auth_error = params.get("error", ["unknown"])[0]
+            self.send_response(400)
+            self.send_header("Content-Type", "text/html")
+            self.end_headers()
+            self.wfile.write(f"<html><body><h2>Authorization failed: {_auth_error}</h2></body></html>".encode())
+
+    def log_message(self, format, *args):
+        pass  # suppress HTTP logs
 
 
 def main() -> None:
+    global _auth_code, _auth_error
+
     print("=" * 50)
     print(" OpenClaw — Google OAuth2 Setup")
     print("=" * 50)
@@ -59,28 +93,40 @@ def main() -> None:
         "response_type": "code",
         "scope": " ".join(SCOPES),
         "access_type": "offline",
-        "prompt": "consent",  # force consent screen so refresh token is always issued
+        "prompt": "consent",
     }
     auth_url = AUTH_URL + "?" + urllib.parse.urlencode(params)
 
-    print("\nOpening the authorization URL in your browser...")
+    # Start a local HTTP server to receive the OAuth callback
+    server = HTTPServer(("localhost", REDIRECT_PORT), _OAuthCallbackHandler)
+    server_thread = threading.Thread(target=server.handle_request, daemon=True)
+    server_thread.start()
+
+    print(f"\nOpening the authorization URL in your browser...")
+    print(f"(Listening for callback on localhost:{REDIRECT_PORT})")
     print("If it does not open automatically, paste this URL manually:\n")
     print(auth_url)
     print()
     webbrowser.open(auth_url)
 
-    code = input(
-        "After authorizing, paste the authorization code shown by Google here:\n> "
-    ).strip()
+    print("Waiting for authorization...")
+    server_thread.join(timeout=120)
+    server.server_close()
 
-    if not code:
-        print("No code provided. Exiting.")
+    if _auth_error:
+        print(f"\nAuthorization failed: {_auth_error}")
         sys.exit(1)
+
+    if not _auth_code:
+        print("\nTimed out waiting for authorization (120s). Try again.")
+        sys.exit(1)
+
+    print("Authorization code received!")
 
     # Exchange the authorization code for tokens
     token_payload = urllib.parse.urlencode(
         {
-            "code": code,
+            "code": _auth_code,
             "client_id": client_id,
             "client_secret": client_secret,
             "redirect_uri": REDIRECT_URI,
