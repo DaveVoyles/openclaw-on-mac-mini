@@ -787,7 +787,12 @@ async def _reflect_on_response(
         )
 
         reflection_prompt = (
-            "You are a quality reviewer. Examine this AI response to a user query.\n\n"
+            "You are a quality reviewer. Examine this AI response to a user query.\n"
+            "IMPORTANT: This AI assistant HAS tool access and CAN execute actions like "
+            "searching folders, checking services, and browsing the web. If the response "
+            "reports results from a tool call (e.g. 'no items found', 'search completed'), "
+            "do NOT change it to say 'I cannot access' or 'I don't have the ability to'. "
+            "The tool was already executed and the result is accurate.\n\n"
             f"USER QUERY: {user_message}\n\n"
             f"AI RESPONSE:\n{text}\n\n"
             "Check for:\n"
