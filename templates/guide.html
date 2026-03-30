@@ -285,6 +285,9 @@
           <li>
             <a href="#collapsible-skills">37. Collapsible Skills</a>
           </li>
+          <li>
+            <a href="#auto-dream">38. Auto-Dream (Cognitive Memory)</a>
+          </li>
         </ul>
       </div>
 
@@ -3012,6 +3015,83 @@ Division 1 men's lacrosse games this week and post a table.
         <strong>&#128161; Dashboard integration:</strong> The dashboard skills
         panel mirrors this grouping with collapsible sections and a search
         box. Type a keyword to filter skills across all categories instantly.
+      </div>
+
+      <!-- 38. Auto-Dream -->
+      <h2 id="auto-dream">38. Auto-Dream (Cognitive Memory)</h2>
+      <p>
+        Auto-Dream is OpenClaw's cognitive memory consolidation engine. Like
+        biological sleep, it periodically processes raw memories into
+        structured, indexed, and scored long-term knowledge.
+      </p>
+
+      <h3>How It Works</h3>
+      <p>
+        The dream cycle runs in 3 phases:
+      </p>
+      <ol>
+        <li><strong>Collect</strong> — gathers raw material from all memory backends (ChromaDB, QMD facts, user profile, audit logs)</li>
+        <li><strong>Consolidate</strong> — deduplicates, indexes, and links memories with relation edges</li>
+        <li><strong>Evaluate</strong> — scores importance, archives stale entries, computes health metrics, and generates insights</li>
+      </ol>
+
+      <h3>5 Memory Layers</h3>
+      <table>
+        <thead><tr><th>Layer</th><th>Storage</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>Working</td><td>In-memory (30 min TTL)</td><td>Active conversation context</td></tr>
+          <tr><td>Episodic</td><td><code>data/dream/episodes/</code></td><td>Individual interaction snapshots</td></tr>
+          <tr><td>Long-term</td><td><code>data/dream/MEMORY.md</code></td><td>Consolidated facts &amp; knowledge</td></tr>
+          <tr><td>Procedural</td><td><code>data/dream/procedures.md</code></td><td>Learned procedures &amp; how-tos</td></tr>
+          <tr><td>Index</td><td><code>data/dream/index.json</code></td><td>Metadata, relations, health scores</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Health Metrics</h3>
+      <p>
+        Memory health is a composite score (0–100%) built from 5 metrics:
+      </p>
+      <ul>
+        <li><strong>Freshness</strong> — ratio of entries updated within 30 days</li>
+        <li><strong>Coverage</strong> — how many knowledge categories have recent entries</li>
+        <li><strong>Coherence</strong> — ratio of entries with relation links</li>
+        <li><strong>Efficiency</strong> — inversely proportional to MEMORY.md size</li>
+        <li><strong>Reachability</strong> — how well-connected the knowledge graph is</li>
+      </ul>
+
+      <h3>Schedule</h3>
+      <p>
+        Dream cycles run automatically at <strong>4:00 AM daily</strong> as
+        part of the maintenance schedule. You can also trigger one manually:
+      </p>
+
+      <h3>Commands</h3>
+      <table>
+        <thead><tr><th>Command</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>/dream</code></td>
+            <td>Run a cognitive dream cycle immediately. Shows progress in
+            real-time, then posts a dream report with entry counts, health
+            score, archived entries, and generated insights.</td>
+          </tr>
+          <tr>
+            <td><code>/memory-health</code></td>
+            <td>Show current memory health score (0–100%) plus all 5 metric
+            breakdowns, entry count, and average importance.</td>
+          </tr>
+          <tr>
+            <td><code>/memory-export</code></td>
+            <td>Export a full memory bundle — MEMORY.md, index.json, procedures,
+            episodes, and archive as a downloadable package.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="tip">
+        <strong>&#128161; Tip:</strong> You can also trigger a dream cycle via
+        <code>/ask "run a dream cycle"</code> — the LLM will call the
+        <code>dream_now</code> tool automatically.
       </div>
 
       <div

@@ -184,6 +184,19 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - New model options: `/ask model:openai` and `/ask model:anthropic` for per-message routing
 - Setup script: `bash scripts/setup-copilot-proxy.sh` for one-command Copilot proxy deployment
 
+**Phase 16 — Auto-Dream (Cognitive Memory)** ✅
+
+- Dream cycle engine (`src/dream_cycle.py`) — 3-phase memory consolidation: collect → consolidate → evaluate
+- 5 memory layers: working (conversation), episodic (episodes/), long-term (MEMORY.md), procedural (procedures.md), index (index.json)
+- Importance scoring with recency decay and reference boost — stale entries auto-archived after 90 days
+- Knowledge graph with relation links between memory entries
+- 5-metric health score: freshness, coverage, coherence, efficiency, reachability
+- Dream insights — pattern recognition across memories generates suggestions
+- Dream reports posted to Discord alert channel after each cycle
+- 4:00 AM automated dream cycle (integrated into existing maintenance schedule)
+- New commands: `/dream`, `/memory-health`, `/memory-export`
+- New skills: `dream_now`, `get_memory_health`
+
 **Planned**
 
 - Grafana dashboards
@@ -316,6 +329,9 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 | `/speedtest`                  | Cloudflare download speed + DNS latency                         | 6     |
 | `/model set <pref>`           | Set default model: auto/local/gemini/openai/anthropic           | 15    |
 | `/run <code>`                 | Execute Python code in sandboxed Docker container               | 15    |
+| `/dream`                      | Run a cognitive dream cycle (memory consolidation)              | 16    |
+| `/memory-health`              | Show memory health score and 5 metrics                          | 16    |
+| `/memory-export`              | Export memory bundle (MEMORY.md + index + episodes)             | 16    |
 
 ## Architecture
 
@@ -501,7 +517,14 @@ Uptime Kuma (:3001)              Grafana dashboard
 ├── data/
 │   ├── logs/              # Application logs
 │   ├── memory/            # qmd.json, schedules.json
-│   └── audit/             # Audit trail (YYYY-MM-DD.jsonl)
+│   ├── audit/             # Audit trail (YYYY-MM-DD.jsonl)
+│   └── dream/            # Auto-Dream memory consolidation
+│       ├── MEMORY.md      # Long-term consolidated knowledge
+│       ├── index.json     # Structured metadata, relations, health scores
+│       ├── procedures.md  # Learned procedures and how-tos
+│       ├── dream-log.md   # Dream cycle history
+│       ├── archive.md     # Archived low-importance entries
+│       └── episodes/      # Episodic memory snapshots
 ├── docs/
 │   └── IMPLEMENTATION-PLAN.md  # Full 7-phase plan
 ├── docker-stack/          # Full Docker infrastructure for the Mac Mini (see this folder

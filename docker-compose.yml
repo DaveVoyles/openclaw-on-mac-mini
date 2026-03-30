@@ -79,6 +79,9 @@ services:
       # Obsidian vault — stores all research reports, bookmarks, and notes as .md files
       - ./data/vault:/vault:rw
 
+      # Auto-Dream memory files (persistent cognitive memory)
+      - ./data/dream:/app/data/dream:rw
+
       # ChromaDB vector store — semantic memory (Phase 13A)
       - ./data/chromadb:/memory/chromadb:rw
 

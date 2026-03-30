@@ -524,6 +524,10 @@ SKILLS.update(OBSIDIAN_SKILLS)
 from maintenance_skills import MAINTENANCE_SKILLS
 SKILLS.update(MAINTENANCE_SKILLS)
 
+# Dream Cycle — Auto-Dream memory consolidation engine
+from dream_cycle import DREAM_SKILLS
+SKILLS.update(DREAM_SKILLS)
+
 # Agent Loop — persistent plan management for autonomous goals
 from agent_loop import AGENT_LOOP_SKILLS
 SKILLS.update(AGENT_LOOP_SKILLS)
@@ -619,6 +623,9 @@ SKILL_CATEGORIES = {
     ],
     "💰 Spending & Budget": [
         "get_spending", "get_daily_spending",
+    ],
+    "🌙 Auto-Dream": [
+        "dream_now", "get_memory_health",
     ],
     "🛠️ Maintenance": [
         "run_maintenance", "update_skills", "restart_gateway",

@@ -214,6 +214,7 @@ async def run_maintenance() -> str:
         ("gateway-restart", restart_gateway),
         ("nas-backup", backup_config_to_nas),
         ("memory-decay", run_memory_decay),
+        ("dream-cycle", _run_dream_cycle),
     ]
     lines: list[str] = []
     for label, fn in steps:
@@ -262,6 +263,22 @@ async def run_memory_decay() -> str:
     except Exception as e:
         log.warning("Memory decay failed: %s", e)
         return f"⚠️ Memory decay failed: {e}"
+
+
+async def _run_dream_cycle() -> str:
+    """Run a dream cycle as part of nightly maintenance."""
+    try:
+        from dream_cycle import DreamCycle
+
+        cycle = DreamCycle()
+        report = await cycle.run()
+        # Truncate for log-friendly summary
+        summary = report[:200].replace("\n", " ")
+        log.info("Dream cycle complete: %s", summary)
+        return f"🌙 Dream cycle complete ({len(report)} chars)"
+    except Exception as e:
+        log.warning("Dream cycle failed: %s", e)
+        return f"⚠️ Dream cycle failed: {e}"
 
 
 async def run_memory_consolidation() -> str:

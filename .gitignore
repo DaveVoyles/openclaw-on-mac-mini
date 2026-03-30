@@ -18,6 +18,15 @@ data/logs/
 data/audit/
 data/memory/
 
+# Auto-Dream runtime data (don't track)
+data/dream/index.json
+data/dream/dream-log.md
+data/dream/archive.md
+data/dream/episodes/
+# Keep templates tracked
+!data/dream/MEMORY.md
+!data/dream/procedures.md
+
 # ClawHub local state
 .clawhub/
 

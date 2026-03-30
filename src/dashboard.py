@@ -516,6 +516,9 @@ def _command_list() -> list[dict]:
             {"name": "/briefing", "desc": "On-demand morning briefing (weather + health + calendar)"},
             {"name": "/audit-summary", "desc": "Analytics on today's audit log"},
             {"name": "/nowplaying", "desc": "Live Plex active streams"},
+            {"name": "/dream", "desc": "Run cognitive dream cycle (memory consolidation)"},
+            {"name": "/memory-health", "desc": "Show memory health score and 5 metrics"},
+            {"name": "/memory-export", "desc": "Export memory bundle"},
         ]},
         {"category": "🌐 Network & Monitoring", "commands": [
             {"name": "/network", "desc": "LAN, internet, DNS connectivity"},
@@ -598,6 +601,31 @@ async def api_errors_handler(request):
     except Exception as exc:
         log.debug("Error stats API failed: %s", exc)
         return web.json_response({"total": 0, "success_rate": 1.0, "recent_errors": []})
+
+
+async def api_dream_health_handler(request):
+    """Return dream/memory health data for the dashboard."""
+    try:
+        from dream_cycle import DreamCycle, _load_index, _compute_health
+        cycle = DreamCycle()
+        index = _load_index(cycle.index_path)
+        health = _compute_health(index, cycle.memory_path)
+        entries = index.get("entries", [])
+        stats = index.get("stats", {})
+        return web.json_response({
+            "overall": round(health["overall"] * 100, 1),
+            "metrics": health["metrics"],
+            "entry_count": len(entries),
+            "avg_importance": round(stats.get("avgImportance", 0), 2),
+            "last_dream": stats.get("lastDream", None),
+            "health_history": stats.get("healthHistory", [])[-14:],
+        })
+    except Exception as exc:
+        log.debug("Dream health API failed: %s", exc)
+        return web.json_response({
+            "overall": 0, "metrics": {}, "entry_count": 0,
+            "avg_importance": 0, "last_dream": None, "health_history": [],
+        })
 
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"

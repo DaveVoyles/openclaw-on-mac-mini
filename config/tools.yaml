@@ -1186,3 +1186,26 @@
           Slower but produces more comprehensive reports. Default false.
     required:
       - query
+- name: dream_now
+  description: >-
+    Run a cognitive dream cycle to consolidate memories, score importance, and
+    generate insights. Use when the user says 'dream', 'consolidate memory',
+    or 'memory maintenance'. The cycle has 3 phases: collect (gather raw
+    material from all memory backends), consolidate (deduplicate, index, and
+    link), and evaluate (score importance, archive stale entries, compute
+    health). Returns a dream report with entry counts, health score, and
+    generated insights.
+  parameters:
+    type: object
+    properties: {}
+- name: get_memory_health
+  description: >-
+    Return current memory health score and metrics. Shows overall health as a
+    percentage (0-100%) plus 5 individual metrics: freshness, coverage,
+    coherence, efficiency, and reachability. Also shows entry count and average
+    importance. Use when user asks about memory health, memory status, or
+    memory diagnostics.
+  parameters:
+    type: object
+    properties: {}
+

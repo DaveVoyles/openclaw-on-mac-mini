@@ -65,7 +65,7 @@ from llm import analyze_image as llm_analyze_image, analyze_document as llm_anal
 from llm import SUPPORTED_IMAGE_MIMES
 from memory import store as conversation_store
 from memory import get_model_preference, set_model_preference
-from dashboard import api_dashboard_handler, api_errors_handler, api_goals_handler, api_memories_handler, api_research_handler, api_schedules_handler, api_status_handler, api_threads_handler, dashboard_handler, guide_handler
+from dashboard import api_dashboard_handler, api_dream_health_handler, api_errors_handler, api_goals_handler, api_memories_handler, api_research_handler, api_schedules_handler, api_status_handler, api_threads_handler, dashboard_handler, guide_handler
 from image_gen import generate_image, is_available as sd_is_available
 from code_sandbox import run_code as sandbox_run_code
 from approvals import (
@@ -323,9 +323,10 @@ class OpenClawBot(commands.Bot):
             "cogs.analytics_cog",
             "cogs.memory_cog",
             "cogs.research_cog",
+            "cogs.dream_cog",
         ):
             await self.load_extension(cog)
-        log.info("Loaded cogs: docker, media, network, analytics, memory, research")
+        log.info("Loaded cogs: docker, media, network, analytics, memory, research, dream")
 
         if DISCORD_GUILD_ID:
             guild = discord.Object(id=int(DISCORD_GUILD_ID))
@@ -888,6 +889,7 @@ class OpenClawBot(commands.Bot):
         app.router.add_get("/api/schedules", api_schedules_handler)
         app.router.add_get("/api/status", api_status_handler)
         app.router.add_get("/api/errors", api_errors_handler)
+        app.router.add_get("/api/dream-health", api_dream_health_handler)
         app.router.add_get("/guide", guide_handler)
         app.router.add_get("/smoke", self._smoke_handler)
         app.router.add_post("/webhook/{source}", self._webhook_handler)

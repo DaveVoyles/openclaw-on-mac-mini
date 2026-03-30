@@ -929,6 +929,18 @@
           </details>
         </div>
 
+        <!-- Memory Health (Auto-Dream) -->
+        <div class="card">
+          <h2>🧠 Memory Health</h2>
+          <div id="dream-stats" style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem">
+            <div><span id="dream-score" style="font-size:1.5rem;font-weight:bold;color:var(--spirit-blue)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Health Score</span></div>
+            <div><span id="dream-entries" style="font-size:1.5rem;font-weight:bold;color:var(--spirit-blue)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Entries</span></div>
+            <div><span id="dream-importance" style="font-size:1.5rem;font-weight:bold;color:var(--muted)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Avg Importance</span></div>
+            <div><span id="dream-last" style="font-size:1.1rem;font-weight:bold;color:var(--muted)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Last Dream</span></div>
+          </div>
+          <div id="dream-metrics" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+        </div>
+
         <!-- Container Health Matrix -->
         <div class="card">
           <h2>&#128373; Container Health Status</h2>
@@ -1959,6 +1971,41 @@
           renderResearch(_allReports.filter(r => (r.query + r.excerpt).toLowerCase().includes(q)));
       }
 
+      // =========================================================================
+      // Memory Health (Auto-Dream)
+      // =========================================================================
+      function loadDreamHealth() {
+          fetch('/api/dream-health').then(r => r.json()).then(data => {
+              document.getElementById('dream-score').textContent = (data.overall || 0) + '%';
+              const scoreEl = document.getElementById('dream-score');
+              scoreEl.style.color = data.overall >= 70 ? '#4caf50' : data.overall >= 40 ? '#ff9800' : '#f44336';
+              document.getElementById('dream-entries').textContent = data.entry_count || 0;
+              document.getElementById('dream-importance').textContent = data.avg_importance || '0.00';
+              document.getElementById('dream-last').textContent = data.last_dream || 'Never';
+
+              const metricsEl = document.getElementById('dream-metrics');
+              const names = {freshness: 'Freshness', coverage: 'Coverage', coherence: 'Coherence', efficiency: 'Efficiency', reachability: 'Reachability'};
+              if (data.metrics && Object.keys(data.metrics).length) {
+                  metricsEl.innerHTML = Object.entries(names).map(([key, label]) => {
+                      const val = (data.metrics[key] || 0);
+                      const pct = Math.round(val * 100);
+                      const color = pct >= 70 ? '#4caf50' : pct >= 40 ? '#ff9800' : '#f44336';
+                      return `<div style="display:flex;align-items:center;gap:0.5rem">
+                          <span style="width:90px;font-size:0.82rem;color:var(--muted)">${label}</span>
+                          <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+                              <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width 0.4s"></div>
+                          </div>
+                          <span style="width:35px;text-align:right;font-size:0.78rem;font-weight:600;color:${color}">${pct}%</span>
+                      </div>`;
+                  }).join('');
+              } else {
+                  metricsEl.innerHTML = '<p class="muted-text">No dream data yet. Run /dream in Discord.</p>';
+              }
+          }).catch(() => {
+              document.getElementById('dream-score').textContent = '—';
+          });
+      }
+
       // Init
       (async () => {
         try {
@@ -1972,6 +2019,7 @@
           loadResearch();
           loadSchedules();
           loadErrors();
+          loadDreamHealth();
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -1980,7 +2028,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); loadDreamHealth(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
