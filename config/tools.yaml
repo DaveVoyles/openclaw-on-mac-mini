@@ -128,6 +128,32 @@
         description: "Type filter: 'tv', 'movie', or 'all' (default: all)"
     required:
       - query
+- name: add_to_sonarr
+  description: Add a TV show to Sonarr for automatic downloading. Searches by title if no tvdb_id provided.
+  parameters:
+    type: object
+    properties:
+      title:
+        type: string
+        description: TV show title (e.g. 'Breaking Bad', 'The Office')
+      tvdb_id:
+        type: integer
+        description: "Optional TVDB ID for exact match (default: 0 — will search by title)"
+    required:
+      - title
+- name: add_to_radarr
+  description: Add a movie to Radarr for automatic downloading. Searches by title if no tmdb_id provided.
+  parameters:
+    type: object
+    properties:
+      title:
+        type: string
+        description: Movie title (e.g. 'The Matrix', 'Inception')
+      tmdb_id:
+        type: integer
+        description: "Optional TMDB ID for exact match (default: 0 — will search by title)"
+    required:
+      - title
 - name: get_download_queue
   description: Get active downloads from SABnzbd (Usenet) and qBittorrent (torrents).
   parameters:
@@ -1141,6 +1167,8 @@
   description: >-
     Run a research query autonomously. Use this for scheduled/recurring research.
     Returns a synthesized report with sources and citations.
+    Supports deep=true for iterative multi-pass research that identifies gaps
+    and runs 2-3 refinement passes for more comprehensive results.
   parameters:
     type: object
     properties:
@@ -1150,5 +1178,11 @@
       channel_id:
         type: string
         description: Optional Discord channel ID to post results to
+      deep:
+        type: boolean
+        description: >-
+          Enable deep research mode. When true, runs up to 3 iterative passes
+          that analyze gaps in findings and perform targeted follow-up searches.
+          Slower but produces more comprehensive reports. Default false.
     required:
       - query

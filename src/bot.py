@@ -515,8 +515,8 @@ class OpenClawBot(commands.Bot):
             try:
                 from goal_tracker import format_goals_for_briefing
                 goals_section = format_goals_for_briefing()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Goal tracker unavailable for briefing: %s", exc)
 
             # Error stats for briefing
             error_stats_section = ""
@@ -535,8 +535,8 @@ class OpenClawBot(commands.Bot):
                                 e["error"][:50] for e in stats["recent_errors"][:3]
                             )
                         )
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Error stats unavailable for briefing: %s", exc)
 
             today = datetime.date.today().strftime("%A, %B %d, %Y")
             prompt = (
@@ -1613,13 +1613,22 @@ async def ask_cmd(
                 icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             )
             await interaction.edit_original_response(content=None, embed=embed)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Progress edit failed: %s", exc)
 
     # Progressive status: build a running log of steps so the user sees activity
-    async def _on_tool_call(tool_name: str, round_num: int) -> None:
+    async def _on_tool_call(tool_name: str, round_num: int, *, args: dict | None = None, result_preview: str | None = None) -> None:
         elapsed = time.monotonic() - _progress_start
-        _progress_lines.append(f"🔄 Using `{tool_name}`… ({elapsed:.0f}s)")
+        if result_preview is not None:
+            # Post-execution: show abbreviated result
+            _progress_lines.append(f"✅ `{tool_name}` → {result_preview[:80]}")
+        elif args is not None:
+            # Pre-execution: show tool name with arguments
+            args_str = ", ".join(f"{k}={v!r}" for k, v in args.items()) if args else ""
+            _progress_lines.append(f"🔄 Using `{tool_name}({args_str})`… ({elapsed:.0f}s)")
+        else:
+            # Legacy / fallback
+            _progress_lines.append(f"🔄 Using `{tool_name}`… ({elapsed:.0f}s)")
         # Show all steps so far as a running log
         progress = "\n".join(_progress_lines) + "\n\n⏳ *working…*"
         try:
@@ -1652,6 +1661,29 @@ async def ask_cmd(
         user_name=str(interaction.user.display_name),
     )
 
+    # Research thread context injection — if we're in a Discord thread
+    # created by /research, inject the research report into conversation context
+    if isinstance(interaction.channel, discord.Thread) and not conv.history:
+        thread_name = interaction.channel.name or ""
+        if thread_name.startswith("Research:"):
+            try:
+                # Fetch the thread's message history to find the research report
+                report_text = ""
+                async for msg in interaction.channel.history(limit=20, oldest_first=True):
+                    if msg.embeds:
+                        for embed in msg.embeds:
+                            if embed.description:
+                                report_text += embed.description + "\n"
+                if report_text:
+                    conv.history.append({
+                        "role": "model",
+                        "parts": [f"[Previous Research Report]\n{report_text[:8000]}"],
+                    })
+                    log.info("Injected research context (%d chars) for thread: %s",
+                             len(report_text), thread_name)
+            except Exception as e:
+                log.debug("Research context injection failed: %s", e)
+
     # Thread continuation suggestion — on new conversations, check for related threads
     thread_hint = ""
     if not conv.history:
@@ -1669,8 +1701,8 @@ async def ask_cmd(
                         f"\n\n> 💡 *This looks related to your thread "
                         f"**{thread_name}**. Use `/resume {thread_name}` to continue it.*"
                     )
-        except Exception:
-            pass  # non-critical
+        except Exception as exc:
+            log.debug("Thread hint search failed: %s", exc)
 
     # Channel role injection — inject prompt once at session start to prevent context bleed
     if not conv.history:
@@ -1976,8 +2008,8 @@ async def ask_cmd(
             latency_ms=int((time.monotonic() - _ask_start) * 1000),
             routing_notes=_routing_notes,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Error tracking record failed: %s", exc)
 
     conversation_store.cleanup_expired()
 
@@ -2002,8 +2034,8 @@ async def ask_cmd(
                             await interaction.followup.send(
                                 f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
                             )
-                        except Exception:
-                            pass
+                        except Exception as exc:
+                            log.debug("Correction followup send failed: %s", exc)
         except Exception as e:
             log.debug("Correction detection failed (non-critical): %s", e)
 
@@ -2031,8 +2063,8 @@ async def ask_cmd(
                         await interaction.followup.send(
                             f"🎯 Tracking goal: *{goal}*", ephemeral=True
                         )
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.debug("Goal followup send failed: %s", exc)
         except Exception as e:
             log.debug("Goal tracking failed (non-critical): %s", e)
 
@@ -2071,8 +2103,8 @@ async def model_show_cmd(interaction: discord.Interaction):
         from model_router import COPILOT_PROXY_ENABLED
         proxy_status = "🟢 Copilot proxy: online" if COPILOT_PROXY_ENABLED else "⚪ Copilot proxy: not configured"
         embed.add_field(name="Copilot Proxy", value=proxy_status, inline=False)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Copilot proxy status check failed: %s", exc)
     try:
         from llm import _ollama_available, LOCAL_LLM_ENABLED, OLLAMA_MODEL
         ollama_up = await _ollama_available() if LOCAL_LLM_ENABLED else False
@@ -2080,8 +2112,8 @@ async def model_show_cmd(interaction: discord.Interaction):
         if not LOCAL_LLM_ENABLED:
             status = "⚪ Local LLM disabled"
         embed.add_field(name="Local LLM", value=status, inline=False)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Ollama status check failed: %s", exc)
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 

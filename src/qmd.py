@@ -115,8 +115,8 @@ async def remember_fact(content: str, tags: Optional[str] = "", source: str = "u
                     update_preference(k.strip(), v.strip())
                     try:
                         await sync_profile_to_vectors()
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.debug("Profile vector sync failed: %s", exc)
                     routed = True
                     break
             if not routed:

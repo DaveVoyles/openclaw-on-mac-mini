@@ -16,7 +16,7 @@ This enables genuine parallel / delegated work within a single interaction.
 import asyncio
 import logging
 
-import google.generativeai as genai
+from google import genai
 
 log = logging.getLogger("openclaw.worker")
 
@@ -76,16 +76,13 @@ async def spawn_worker(
 
     effective_rounds = min(max_rounds, MAX_TOOL_ROUNDS)
 
-    # Build a dedicated worker model with its own system prompt
-    genai.configure(api_key=GOOGLE_API_KEY)
-    worker_model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
+    # Build a dedicated worker chat session with its own system prompt
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+    worker_config = genai.types.GenerateContentConfig(
         system_instruction=_WORKER_SYSTEM_PROMPT,
         tools=_build_tools(),
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=MAX_TOKENS,
-            temperature=max(0.1, TEMPERATURE - 0.2),  # slightly more deterministic
-        ),
+        max_output_tokens=MAX_TOKENS,
+        temperature=max(0.1, TEMPERATURE - 0.2),  # slightly more deterministic
     )
 
     initial_message = goal
@@ -111,7 +108,9 @@ async def spawn_worker(
     log.info("Worker spawned for goal: %.80s…", goal)
 
     try:
-        chat_session = worker_model.start_chat(history=[])
+        chat_session = client.chats.create(
+            model=MODEL_NAME, config=worker_config, history=[],
+        )
         loop = asyncio.get_running_loop()
 
         _rate_limiter.record()
@@ -149,8 +148,8 @@ async def spawn_worker(
                 return "⚠️ Worker: rate limit hit mid-task. Partial results unavailable."
 
             response_parts = [
-                genai.protos.Part(
-                    function_response=genai.protos.FunctionResponse(
+                genai.types.Part(
+                    function_response=genai.types.FunctionResponse(
                         name=fn_name,
                         response={"result": result},
                     )
@@ -161,9 +160,7 @@ async def spawn_worker(
             _rate_limiter.record()
             response = await loop.run_in_executor(
                 None,
-                lambda parts=response_parts: chat_session.send_message(
-                    genai.protos.Content(parts=parts)
-                ),
+                lambda parts=response_parts: chat_session.send_message(parts),
             )
             await _record_usage(response)
             rounds += 1

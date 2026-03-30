@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import aiohttp
-import google.generativeai as genai
+from google import genai
 
 from skills import SKILLS
 from spending import tracker as spending_tracker
@@ -31,8 +31,9 @@ log = logging.getLogger("openclaw.llm")
 # ---------------------------------------------------------------------------
 
 GOOGLE_API_KEY = cfg.google_api_key
+_client: genai.Client | None = None
 if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
+    _client = genai.Client(api_key=GOOGLE_API_KEY)
 MODEL_NAME = cfg.llm_model
 MAX_TOKENS = cfg.llm_max_tokens
 TEMPERATURE = cfg.llm_temperature
@@ -188,6 +189,23 @@ def _needs_tools(message: str) -> bool:
 
 # Compiled patterns that signal Gemma is pretending to call tools it doesn't have.
 # Any match in Gemma's response triggers an automatic fallback to Gemini.
+_VAGUE_RESPONSE_RE = _re.compile(
+    r"i'?m\s+not\s+sure"
+    r"|\bi\s+don'?t\s+have\s+specific\b"
+    r"|\bi\s+couldn'?t\s+find\b"
+    r"|\bi\s+don'?t\s+have\s+access\s+to\s+real[\s-]?time\b"
+    r"|\bmy\s+training\s+data\b"
+    r"|\bmy\s+knowledge\s+cutoff\b"
+    r"|\bi\s+recommend\s+checking\b"
+    r"|\byou\s+might\s+want\s+to\s+search\b",
+    _re.IGNORECASE,
+)
+
+_FACTUAL_QUESTION_RE = _re.compile(
+    r"^(who|what|when|where|how|is|are|was|were|did|does|do|can|could|will|has|have)\b",
+    _re.IGNORECASE,
+)
+
 _GEMMA_HALLUCINATION_RE = _re.compile(
     r"(i'?m?\s+)?(now\s+)?(searching|browsing|checking|fetching|looking\s+up)\b"
     r"|\b(let\s+me\s+)?(search|check|look\s+that\s+up|fetch)\s+(that|the|for)\b"
@@ -272,11 +290,11 @@ async def _chat_ollama(
 
 def _build_tools() -> list:
     """Build the Gemini tools list from declarations."""
-    return [genai.protos.Tool(function_declarations=[
-        genai.protos.FunctionDeclaration(
+    return [genai.types.Tool(function_declarations=[
+        genai.types.FunctionDeclaration(
             name=d["name"],
             description=d["description"],
-            parameters=genai.protos.Schema(**_convert_schema(d["parameters"])),
+            parameters=genai.types.Schema(**_convert_schema(d["parameters"])),
         )
         for d in _TOOL_DECLARATIONS
     ])]
@@ -285,19 +303,19 @@ def _build_tools() -> list:
 def _convert_schema(schema: dict) -> dict:
     """Convert a JSON-Schema-style dict to Gemini Schema keyword args."""
     type_map = {
-        "object": genai.protos.Type.OBJECT,
-        "string": genai.protos.Type.STRING,
-        "integer": genai.protos.Type.INTEGER,
-        "number": genai.protos.Type.NUMBER,
-        "boolean": genai.protos.Type.BOOLEAN,
-        "array": genai.protos.Type.ARRAY,
+        "object": genai.types.Type.OBJECT,
+        "string": genai.types.Type.STRING,
+        "integer": genai.types.Type.INTEGER,
+        "number": genai.types.Type.NUMBER,
+        "boolean": genai.types.Type.BOOLEAN,
+        "array": genai.types.Type.ARRAY,
     }
-    result: dict[str, Any] = {"type_": type_map.get(schema.get("type", "object"), genai.protos.Type.OBJECT)}
+    result: dict[str, Any] = {"type": type_map.get(schema.get("type", "object"), genai.types.Type.OBJECT)}
 
     if "properties" in schema:
         result["properties"] = {
-            k: genai.protos.Schema(
-                type_=type_map.get(v.get("type", "string"), genai.protos.Type.STRING),
+            k: genai.types.Schema(
+                type=type_map.get(v.get("type", "string"), genai.types.Type.STRING),
                 description=v.get("description", ""),
             )
             for k, v in schema["properties"].items()
@@ -472,7 +490,17 @@ async def _execute_function_call(name: str, args: dict) -> str:
 # Main chat interface
 # ---------------------------------------------------------------------------
 
-_model: genai.GenerativeModel | None = None
+import dataclasses
+
+
+@dataclasses.dataclass
+class _ModelConfig:
+    """Holds model name + generation config (replaces old GenerativeModel)."""
+    model_name: str
+    config: genai.types.GenerateContentConfig
+
+
+_model: _ModelConfig | None = None
 
 
 _model_system_prompt: str | None = None
@@ -486,34 +514,34 @@ def _init_gemini_model(
     max_tokens: int = MAX_TOKENS,
     thinking_budget: int | None = None,
     with_tools: bool = True,
-) -> genai.GenerativeModel:
-    """Create a configured GenerativeModel instance (shared factory)."""
+) -> _ModelConfig:
+    """Create a _ModelConfig holding model name + generation config."""
     if not GOOGLE_API_KEY:
         raise RuntimeError("GOOGLE_API_KEY not set. Add it to your .env file.")
 
-    gen_config_kwargs: dict[str, Any] = {
+    config_kwargs: dict[str, Any] = {
+        "system_instruction": _load_system_prompt(),
         "max_output_tokens": max_tokens,
         "temperature": temperature,
     }
 
-    if thinking_budget is not None:
-        thinking_cfg = getattr(genai.types, "ThinkingConfig", None)
-        if thinking_cfg is not None:
-            gen_config_kwargs["thinking_config"] = thinking_cfg(thinking_budget=thinking_budget)
-            log.info("ThinkingConfig enabled (budget=%d tokens)", thinking_budget)
-        else:
-            log.info("ThinkingConfig not available in this SDK version — using low-temperature deep mode")
+    if with_tools:
+        config_kwargs["tools"] = _build_tools()
 
-    return genai.GenerativeModel(
+    if thinking_budget is not None:
+        config_kwargs["thinking_config"] = genai.types.ThinkingConfig(
+            thinking_budget=thinking_budget,
+        )
+        log.info("ThinkingConfig enabled (budget=%d tokens)", thinking_budget)
+
+    return _ModelConfig(
         model_name=model_name,
-        system_instruction=_load_system_prompt(),
-        tools=_build_tools() if with_tools else None,
-        generation_config=genai.GenerationConfig(**gen_config_kwargs),
+        config=genai.types.GenerateContentConfig(**config_kwargs),
     )
 
 
-async def _get_model() -> genai.GenerativeModel:
-    """Lazy-init the Gemini model; reloads when system prompt changes."""
+async def _get_model() -> _ModelConfig:
+    """Lazy-init the Gemini model config; reloads when system prompt changes."""
     global _model, _model_system_prompt, _model_lock
     if _model_lock is None:
         _model_lock = asyncio.Lock()
@@ -577,11 +605,11 @@ async def _run_tool_loop(
         log.info("%s function call(s) [round %d]: %s", label, rounds + 1,
                  ", ".join(f"{n}({a})" for n, a in function_calls))
 
-        # Fire progress callbacks
+        # Fire progress callbacks (before execution — with args)
         if on_tool_call:
-            for fn_name, _ in function_calls:
+            for fn_name, fn_args in function_calls:
                 try:
-                    await on_tool_call(fn_name, rounds + 1)
+                    await on_tool_call(fn_name, rounds + 1, args=fn_args)
                 except Exception as exc:
                     log.debug("on_tool_call callback failed: %s", exc)
 
@@ -590,6 +618,14 @@ async def _run_tool_loop(
             _execute_function_call(fn_name, fn_args)
             for fn_name, fn_args in function_calls
         ])
+
+        # Fire progress callbacks (after execution — with result preview)
+        if on_tool_call:
+            for (fn_name, _), result in zip(function_calls, results):
+                try:
+                    await on_tool_call(fn_name, rounds + 1, result_preview=result[:200])
+                except Exception as exc:
+                    log.debug("on_tool_call result callback failed: %s", exc)
 
         # Rate-limit check before sending results back
         _rate_limiter.record()
@@ -601,8 +637,8 @@ async def _run_tool_loop(
 
         # Send all function results back to the model
         response_parts = [
-            genai.protos.Part(
-                function_response=genai.protos.FunctionResponse(
+            genai.types.Part(
+                function_response=genai.types.FunctionResponse(
                     name=fn_name,
                     response={"result": result},
                 )
@@ -612,9 +648,7 @@ async def _run_tool_loop(
 
         response = await loop.run_in_executor(
             None,
-            lambda parts=response_parts: chat_session.send_message(
-                genai.protos.Content(parts=parts)
-            ),
+            lambda parts=response_parts: chat_session.send_message(parts),
         )
         await _record_usage(response)
         rounds += 1
@@ -738,16 +772,16 @@ async def _generate_context_summary(turns: list[dict]) -> str:
         f"Conversation:\n{transcript}"
     )
 
-    summary_model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=500,
-            temperature=0.1,
-        ),
+    summary_config = genai.types.GenerateContentConfig(
+        max_output_tokens=500,
+        temperature=0.1,
     )
     loop = asyncio.get_running_loop()
     response = await loop.run_in_executor(
-        None, lambda: summary_model.generate_content(prompt)
+        None,
+        lambda: _client.models.generate_content(
+            model=MODEL_NAME, contents=prompt, config=summary_config,
+        ),
     )
     return response.text.strip()
 
@@ -863,12 +897,9 @@ async def _reflect_on_response(
         return text
 
     try:
-        reflection_model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=MAX_TOKENS,
-                temperature=0.2,  # Low temperature for careful evaluation
-            ),
+        reflection_config = genai.types.GenerateContentConfig(
+            max_output_tokens=MAX_TOKENS,
+            temperature=0.2,  # Low temperature for careful evaluation
         )
 
         reflection_prompt = (
@@ -893,7 +924,11 @@ async def _reflect_on_response(
         loop = asyncio.get_running_loop()
         _rate_limiter.record()
         response = await loop.run_in_executor(
-            None, lambda: reflection_model.generate_content(reflection_prompt)
+            None,
+            lambda: _client.models.generate_content(
+                model=MODEL_NAME, contents=reflection_prompt,
+                config=reflection_config,
+            ),
         )
         await _record_usage(response)
 
@@ -920,7 +955,7 @@ async def _reflect_on_response(
 async def _gemini_chat(
     user_message: str,
     history: list[dict],
-    model: genai.GenerativeModel,
+    model: _ModelConfig,
     *,
     on_tool_call: Any | None = None,
     parallel_tools: bool = True,
@@ -946,7 +981,9 @@ async def _gemini_chat(
         for msg in history
     ]
 
-    chat_session = model.start_chat(history=gemini_history)
+    chat_session = _client.chats.create(
+        model=model.model_name, config=model.config, history=gemini_history,
+    )
 
     # Send user message (runs in executor to not block the event loop)
     loop = asyncio.get_running_loop()
@@ -1256,6 +1293,35 @@ async def chat_stream(
         )
         updated_history = _strip_recalled_prefix(updated_history, user_message, retry_msg)
 
+    # ── Auto-escalate vague responses to web search ──────────────────────
+    if (
+        _VAGUE_RESPONSE_RE.search(text)
+        and _FACTUAL_QUESTION_RE.search(user_message.strip())
+    ):
+        log.info("Auto-escalating to web search for: %s", user_message)
+        search_fn = SKILLS.get("search_web")
+        if search_fn is not None:
+            try:
+                search_results = await search_fn(user_message)
+                if search_results and search_results.strip():
+                    enhanced_msg = (
+                        f"{model_message}\n\n"
+                        "Here are fresh web search results to help answer the question:\n"
+                        f"{search_results}\n\n"
+                        "Use these results to give a thorough, factual answer."
+                    )
+                    text, updated_history, model_name = await _gemini_chat(
+                        enhanced_msg, history, model,
+                        on_tool_call=on_tool_call,
+                        parallel_tools=True,
+                        label="LLM-escalate",
+                    )
+                    updated_history = _strip_recalled_prefix(
+                        updated_history, user_message, enhanced_msg,
+                    )
+            except Exception as exc:
+                log.warning("Auto-escalation web search failed: %s", exc)
+
     yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes}
     return
 
@@ -1264,27 +1330,26 @@ async def chat_stream(
         genai.types.ContentDict(role=msg["role"], parts=msg["parts"])
         for msg in history
     ]
-    chat_session = model.start_chat(history=gemini_history)
+    chat_session = _client.chats.create(
+        model=model.model_name, config=model.config, history=gemini_history,
+    )
 
     loop = asyncio.get_running_loop()
     _rate_limiter.record()
 
     try:
         response = await loop.run_in_executor(
-            None, lambda: chat_session.send_message(model_message, stream=True)
+            None, lambda: chat_session.send_message_stream(model_message)
         )
     except Exception as e:
         yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False, "routing_notes": _routing_notes}
         return
 
     accumulated = ""
+    last_chunk = None
     try:
         for chunk in response:
-            # chunk.text is a property that raises ValueError when the
-            # chunk contains function_call parts instead of text.
-            # hasattr() only catches AttributeError, so we must catch
-            # ValueError explicitly to avoid "Could not convert
-            # part.function.call to text" errors.
+            last_chunk = chunk
             try:
                 text = chunk.text
             except (ValueError, AttributeError):
@@ -1296,12 +1361,12 @@ async def chat_stream(
         if not accumulated:
             accumulated = f"❌ Streaming error: {e}"
 
-    # Resolve the response to record usage
-    try:
-        response.resolve()
-        await _record_usage(response)
-    except Exception as exc:
-        log.debug("Stream response resolve/usage recording failed: %s", exc)
+    # Record usage from the last chunk (streaming doesn't need resolve())
+    if last_chunk is not None:
+        try:
+            await _record_usage(last_chunk)
+        except Exception as exc:
+            log.debug("Stream usage recording failed: %s", exc)
 
     updated_history = _extract_history(chat_session)
     updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
@@ -1494,7 +1559,7 @@ async def chat(
 def _extract_history(chat_session) -> list[dict]:
     """Convert a ChatSession's history to our serializable format."""
     history = []
-    for content in chat_session.history:
+    for content in chat_session.get_history():
         parts = []
         for part in content.parts:
             if hasattr(part, "text") and part.text:
@@ -1549,12 +1614,12 @@ def get_rate_info() -> str:
 # Deep research chat — Gemini with extended thinking (for /research)
 # ---------------------------------------------------------------------------
 
-_thinking_model: genai.GenerativeModel | None = None
+_thinking_model: _ModelConfig | None = None
 _thinking_model_prompt: str | None = None
 _thinking_model_lock = threading.Lock()
 
 
-def _get_thinking_model() -> genai.GenerativeModel:
+def _get_thinking_model() -> _ModelConfig:
     """Lazy-init the thinking/deep-research variant of the Gemini model."""
     global _thinking_model, _thinking_model_prompt
     system_prompt = _load_system_prompt()
@@ -1636,16 +1701,14 @@ async def summarize_conversation(history: list[dict]) -> str:
     )
 
     try:
-        summary_model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            generation_config=genai.GenerationConfig(
+        response = await asyncio.to_thread(
+            _client.models.generate_content,
+            model=MODEL_NAME,
+            contents=prompt,
+            config=genai.types.GenerateContentConfig(
                 max_output_tokens=300,
                 temperature=0.2,
             ),
-        )
-        loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None, lambda: summary_model.generate_content(prompt)
         )
         return response.text.strip()
     except Exception as e:
@@ -1694,22 +1757,21 @@ async def analyze_image(
         return text
 
     # Simple vision: use a lightweight model without tools (faster)
-    vision_model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-        ),
-    )
-
     try:
-        image_part = genai.protos.Part(
-            inline_data=genai.protos.Blob(mime_type=mime_type, data=image_bytes)
+        image_part = genai.types.Part(
+            inline_data=genai.types.Blob(mime_type=mime_type, data=image_bytes)
         )
-        text_part = genai.protos.Part(text=prompt)
-        content = genai.protos.Content(parts=[image_part, text_part])
+        text_part = genai.types.Part(text=prompt)
 
-        response = await asyncio.to_thread(vision_model.generate_content, content)
+        response = await asyncio.to_thread(
+            _client.models.generate_content,
+            model=MODEL_NAME,
+            contents=genai.types.Content(parts=[image_part, text_part]),
+            config=genai.types.GenerateContentConfig(
+                max_output_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+            ),
+        )
         await _record_usage(response)
         return response.text or "No response from model."
     except Exception as e:
@@ -1754,24 +1816,23 @@ async def analyze_image_with_tools(
         for msg in history
     ]
 
-    chat_session = model.start_chat(history=gemini_history)
+    chat_session = _client.chats.create(
+        model=model.model_name, config=model.config, history=gemini_history,
+    )
 
     # Create multimodal content with image + text
-    image_part = genai.protos.Part(
-        inline_data=genai.protos.Blob(mime_type=mime_type, data=image_bytes)
+    image_part = genai.types.Part(
+        inline_data=genai.types.Blob(mime_type=mime_type, data=image_bytes)
     )
-    text_part = genai.protos.Part(text=prompt)
-    content = genai.protos.Content(
-        role="user",
-        parts=[image_part, text_part],
-    )
+    text_part = genai.types.Part(text=prompt)
+    multimodal_parts = [image_part, text_part]
 
     loop = asyncio.get_running_loop()
     _rate_limiter.record()
 
     try:
         response = await loop.run_in_executor(
-            None, lambda: chat_session.send_message(content)
+            None, lambda: chat_session.send_message(multimodal_parts)
         )
         await _record_usage(response)
     except Exception as e:
@@ -1801,18 +1862,20 @@ async def analyze_document(text: str, prompt: str) -> str:
     if not GOOGLE_API_KEY:
         return "❌ GOOGLE_API_KEY not configured."
 
-    doc_model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        generation_config=genai.GenerationConfig(
-            max_output_tokens=MAX_TOKENS,
-            temperature=TEMPERATURE,
-        ),
+    doc_config = genai.types.GenerateContentConfig(
+        max_output_tokens=MAX_TOKENS,
+        temperature=TEMPERATURE,
     )
 
     full_prompt = f"{prompt}\n\n---\n\n{text}"
 
     try:
-        response = await asyncio.to_thread(doc_model.generate_content, full_prompt)
+        response = await asyncio.to_thread(
+            _client.models.generate_content,
+            model=MODEL_NAME,
+            contents=full_prompt,
+            config=doc_config,
+        )
         await _record_usage(response)
         return response.text or "No response from model."
     except Exception as e:

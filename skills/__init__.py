@@ -561,7 +561,8 @@ SKILL_CATEGORIES = {
         "get_uptime", "get_compose_config",
     ],
     "🎬 Media & Downloads": [
-        "search_media", "get_download_queue", "get_plex_activity",
+        "search_media", "add_to_sonarr", "add_to_radarr",
+        "get_download_queue", "get_plex_activity",
         "check_arr_health", "check_download_clients", "check_plex_status",
         "get_recent_additions", "get_pending_requests", "approve_request",
         "deny_request", "get_request_stats",

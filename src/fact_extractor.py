@@ -53,7 +53,7 @@ async def extract_and_store_facts(
 
     Returns list of extracted facts (for logging/debugging).
     """
-    import google.generativeai as genai
+    from google import genai
     from config import cfg
 
     if not cfg.google_api_key:
@@ -75,17 +75,18 @@ async def extract_and_store_facts(
     )
 
     try:
-        model = genai.GenerativeModel(
-            model_name=cfg.llm_model,
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=300,
-                temperature=0.1,  # Very low temp for factual extraction
-            ),
-        )
-
+        client = genai.Client(api_key=cfg.google_api_key)
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(
-            None, lambda: model.generate_content(extraction_prompt)
+            None,
+            lambda: client.models.generate_content(
+                model=cfg.llm_model,
+                contents=extraction_prompt,
+                config=genai.types.GenerateContentConfig(
+                    max_output_tokens=300,
+                    temperature=0.1,
+                ),
+            ),
         )
 
         text = response.text.strip()
@@ -146,8 +147,8 @@ async def _store_fact(fact: str, user_id: int) -> None:
                 [existing[0]["id"]],
             )
             return
-    except Exception:
-        pass  # Dedup check failed, store anyway
+    except Exception as exc:
+        log.debug("Dedup check failed, storing anyway: %s", exc)
 
     # Generate unique ID
     fact_id = hashlib.md5(
@@ -172,5 +173,5 @@ async def _store_fact(fact: str, user_id: int) -> None:
     try:
         from qmd import remember_fact
         await remember_fact(fact, tags="auto-extracted", source="auto-extracted")
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("QMD store for auto-extracted fact failed: %s", exc)

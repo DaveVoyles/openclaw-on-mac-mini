@@ -14,14 +14,23 @@ import time
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
-# Ensure google.generativeai is stubbed before importing llm
+# Ensure google.genai is stubbed before importing llm
 _genai_mock = MagicMock()
-_genai_mock.types.ThinkingConfig = None
+_genai_mock.types.ThinkingConfig = MagicMock()
 _genai_mock.types.ContentDict = dict
+_genai_mock.types.GenerateContentConfig = MagicMock()
+_genai_mock.types.Tool = MagicMock()
+_genai_mock.types.FunctionDeclaration = MagicMock()
+_genai_mock.types.Schema = MagicMock()
+_genai_mock.types.Type = MagicMock()
+_genai_mock.types.Part = MagicMock()
+_genai_mock.types.FunctionResponse = MagicMock()
+_genai_mock.types.Content = MagicMock()
+_genai_mock.types.Blob = MagicMock()
+_genai_mock.Client = MagicMock()
 sys.modules.setdefault("google", MagicMock())
-sys.modules.setdefault("google.generativeai", _genai_mock)
-sys.modules.setdefault("google.generativeai.protos", MagicMock())
-sys.modules.setdefault("google.generativeai.types", _genai_mock.types)
+sys.modules.setdefault("google.genai", _genai_mock)
+sys.modules.setdefault("google.genai.types", _genai_mock.types)
 
 import llm  # noqa: E402
 
@@ -115,7 +124,7 @@ class TestExtractHistory:
         content = MagicMock()
         content.role = "model"
         content.parts = [part]
-        mock_session.history = [content]
+        mock_session.get_history.return_value = [content]
 
         result = llm._extract_history(mock_session)
         assert len(result) == 1
@@ -134,7 +143,7 @@ class TestExtractHistory:
         content = MagicMock()
         content.role = "model"
         content.parts = [part]
-        mock_session.history = [content]
+        mock_session.get_history.return_value = [content]
 
         result = llm._extract_history(mock_session)
         assert any("[Called get_docker_stats]" in p for p in result[0]["parts"])

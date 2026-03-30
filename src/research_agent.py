@@ -54,6 +54,37 @@ Research data:
 {data}
 """
 
+_GAP_ANALYSIS_PROMPT = """\
+You are a research quality reviewer. Given the research report below, identify \
+important gaps, missing perspectives, or follow-up questions that would make \
+the report more comprehensive.
+
+Reply with ONLY a JSON array of 2-3 specific follow-up search queries that \
+would fill those gaps. Each query should be precise and actionable. \
+If the report is already comprehensive, reply with an empty array: []
+
+Original question: {query}
+
+Current report:
+{report}
+"""
+
+_MERGE_PROMPT = """\
+You are an expert research analyst. You have an existing research report and \
+new findings from follow-up research. Merge the new findings into the existing \
+report to create one comprehensive, unified report. Preserve the original \
+structure (Summary, Key Findings, Detailed Analysis, Sources) but enrich it \
+with the new data. Avoid duplication. Add new sources to the existing list.
+
+Original question: {query}
+
+Existing report:
+{existing_report}
+
+New findings:
+{new_data}
+"""
+
 
 # ---------------------------------------------------------------------------
 # Progress reporting
@@ -64,6 +95,7 @@ STEP_ICONS = {
     "search": "🔍",
     "browse": "🌐",
     "synthesize": "🧠",
+    "deep": "🔬",
     "done": "✅",
     "error": "❌",
 }
@@ -103,12 +135,16 @@ class ResearchAgent:
         self,
         query: str,
         on_progress: Callable[[str], Awaitable[None]] | None = None,
+        deep: bool = False,
     ) -> str:
         """
         Run a full research cycle. Returns the final markdown report.
         ``on_progress`` receives human-readable status strings and is awaited.
+        When ``deep=True``, performs up to 3 iterative passes, refining searches
+        based on gaps found in each pass (max 5 minutes total).
         """
         start = time.monotonic()
+        timeout = min(self.timeout_seconds, 300) if deep else self.timeout_seconds
 
         async def post(kind: str, text: str):
             msg = _step(kind, text)
@@ -121,8 +157,8 @@ class ResearchAgent:
 
         try:
             return await asyncio.wait_for(
-                self._research(query, post),
-                timeout=self.timeout_seconds,
+                self._research(query, post, deep=deep),
+                timeout=timeout,
             )
         except asyncio.TimeoutError:
             elapsed = round(time.monotonic() - start)
@@ -137,6 +173,7 @@ class ResearchAgent:
         self,
         query: str,
         post: Callable,
+        deep: bool = False,
     ) -> str:
         await post("plan", f"Planning research strategy for: *{query[:80]}*")
 
@@ -195,6 +232,12 @@ class ResearchAgent:
             combined_data = combined_data[:40_000] + "\n\n[...truncated for length...]"
 
         report = await self._synthesize(query, combined_data)
+
+        # ── Step 4b: Deep research — iterative multi-pass refinement ──────────
+        if deep:
+            report = await self._deep_research_passes(
+                query, report, raw_results, browsed_pages, post,
+            )
 
         await post("done", f"Research complete — {len(raw_results)} searches, {len(browsed_pages)} pages read")
 
@@ -343,6 +386,119 @@ class ResearchAgent:
         except Exception as e:
             log.debug("Research NAS save skipped: %s", e)
 
+    # ── Deep research helpers ────────────────────────────────────────────────
+
+    _MAX_DEEP_PASSES = 3  # including the initial pass
+
+    async def _deep_research_passes(
+        self,
+        query: str,
+        report: str,
+        all_raw_results: list[dict],
+        all_browsed_pages: list[dict],
+        post: Callable,
+    ) -> str:
+        """Run 1-2 additional research passes, refining based on gap analysis."""
+        total_searches = len(all_raw_results)
+        total_pages = len(all_browsed_pages)
+
+        for pass_num in range(2, self._MAX_DEEP_PASSES + 1):
+            pass_start = time.monotonic()
+            await post("deep", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: Analyzing gaps in current report…")
+
+            follow_ups = await self._identify_gaps(query, report)
+            if not follow_ups:
+                await post("deep", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: No significant gaps found — stopping early")
+                break
+
+            pass_raw: list[dict] = []
+            pass_pages: list[dict] = []
+
+            for i, fq in enumerate(follow_ups, 1):
+                await post("deep", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: Investigating ({i}/{len(follow_ups)}) *{fq[:60]}*…")
+
+                sub_queries = await self._plan_searches(fq)
+                if not sub_queries:
+                    sub_queries = [fq]
+
+                raw_results = await self._perform_searches(sub_queries, post)
+                pass_raw.extend(raw_results)
+
+                urls: list[str] = []
+                for r in raw_results:
+                    urls.extend(r["urls"])
+                browse_targets = self._prioritize_urls(urls)
+                pages = await self._fetch_pages(browse_targets, post)
+                pass_pages.extend(pages)
+
+            if not pass_raw and not pass_pages:
+                await post("deep", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: No new data found — stopping early")
+                break
+
+            # Merge new findings into existing report
+            new_data_sections = []
+            for r in pass_raw:
+                new_data_sections.append(f"### Search: {r['query']}\n{r['results']}")
+            for p in pass_pages:
+                new_data_sections.append(f"### Page: {p['url']}\n{p['content']}")
+            new_data = "\n\n".join(new_data_sections)
+
+            if len(new_data) > 20_000:
+                new_data = new_data[:20_000] + "\n\n[...truncated for length...]"
+
+            await post("synthesize", f"Pass {pass_num}/{self._MAX_DEEP_PASSES}: Merging new findings into report…")
+            report = await self._merge_findings(query, report, new_data)
+
+            total_searches += len(pass_raw)
+            total_pages += len(pass_pages)
+            elapsed = round(time.monotonic() - pass_start, 1)
+            log.info(
+                "Deep research pass %d/%d complete: %d searches, %d pages, %.1fs",
+                pass_num, self._MAX_DEEP_PASSES, len(pass_raw), len(pass_pages), elapsed,
+            )
+            all_raw_results.extend(pass_raw)
+            all_browsed_pages.extend(pass_pages)
+
+        await post("deep", f"Deep research complete — {total_searches} total searches, {total_pages} total pages across all passes")
+        return report
+
+    async def _identify_gaps(self, query: str, report: str) -> list[str]:
+        """Ask Gemini to identify gaps in the current report and return follow-up queries."""
+        import json
+        try:
+            from llm import chat_deep
+            prompt = _GAP_ANALYSIS_PROMPT.format(
+                query=query,
+                report=report[:8000],
+            )
+            text, _ = await chat_deep(prompt)
+            text = text.strip()
+            if "```" in text:
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            queries = json.loads(text.strip())
+            if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
+                return queries[:3]
+        except Exception as e:
+            log.warning("Gap analysis failed: %s", e)
+        return []
+
+    async def _merge_findings(self, query: str, existing_report: str, new_data: str) -> str:
+        """Ask Gemini to merge new research findings into the existing report."""
+        try:
+            from llm import chat_deep
+            prompt = _MERGE_PROMPT.format(
+                query=query,
+                existing_report=existing_report,
+                new_data=new_data,
+            )
+            text, _ = await chat_deep(prompt)
+            return text
+        except Exception as e:
+            log.error("Merge synthesis failed: %s", e)
+            return existing_report + f"\n\n---\n## Additional Findings\n\n{new_data[:2000]}"
+
     async def _plan_searches(self, query: str) -> list[str]:
         """Ask Gemini to decompose the query into sub-searches."""
         import json
@@ -399,15 +555,16 @@ class ResearchAgent:
             return []
 
 
-async def run_scheduled_research(query: str, channel_id: str = "") -> str:
+async def run_scheduled_research(query: str, channel_id: str = "", deep: bool = False) -> str:
     """Run a research query autonomously. Schedulable skill.
 
     Called by the scheduler for recurring research tasks (e.g. weekly
     house-listing checks, monthly security-update sweeps).  Works without
     Discord — ``channel_id`` is accepted for metadata only.
+    Set ``deep=True`` for iterative multi-pass research.
     """
     agent = ResearchAgent()
-    result = await agent.run(query, on_progress=None)
+    result = await agent.run(query, on_progress=None, deep=deep)
 
     # Annotate with prior-research diff note when a previous report exists
     try:

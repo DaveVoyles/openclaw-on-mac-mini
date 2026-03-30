@@ -355,7 +355,8 @@ def _load_prefs(user_id: int) -> dict:
         return {}
     try:
         return json.loads(path.read_text())
-    except Exception:
+    except Exception as exc:
+        log.debug("Failed to load preferences for user %d: %s", user_id, exc)
         return {}
 
 
@@ -539,5 +540,6 @@ def load_last_handover(user_id: int) -> str:
     try:
         data = json.loads(path.read_text())
         return data.get("handover", "")
-    except Exception:
+    except Exception as exc:
+        log.debug("Failed to load handover for user %d: %s", user_id, exc)
         return ""

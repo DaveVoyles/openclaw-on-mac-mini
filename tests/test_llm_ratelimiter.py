@@ -3,7 +3,7 @@ Tests for the RateLimiter class and helpers in llm.py.
 
 We only test the pure-Python logic (sliding-window rate limiting,
 is_configured, get_rate_info) — no real Gemini API calls are made.
-google-generativeai is imported normally; the model is only instantiated
+google-genai is imported normally; the model is only instantiated
 lazily inside chat(), which we do not call here.
 """
 
@@ -13,12 +13,11 @@ from collections import deque
 import pytest
 from unittest.mock import MagicMock, patch
 
-# If google-generativeai is not installed (e.g. CI without deps), stub it out
+# If google-genai is not installed (e.g. CI without deps), stub it out
 # before importing llm so the module loads cleanly.
-if "google.generativeai" not in sys.modules:
+if "google.genai" not in sys.modules:
     sys.modules.setdefault("google", MagicMock())
-    sys.modules.setdefault("google.generativeai", MagicMock())
-    sys.modules.setdefault("google.generativeai.protos", MagicMock())
+    sys.modules.setdefault("google.genai", MagicMock())
 
 from llm import RateLimiter, is_configured, get_rate_info  # noqa: E402
 

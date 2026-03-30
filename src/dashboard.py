@@ -6,6 +6,7 @@ Routes: GET /dashboard (HTML), GET /api/dashboard (JSON),
 
 import asyncio
 import json
+import logging
 import os
 import platform
 import time
@@ -16,6 +17,8 @@ from aiohttp import web
 from pathlib import Path
 
 from spending import tracker as spending_tracker
+
+log = logging.getLogger("openclaw.dashboard")
 
 CONFIG_DIR = Path("/config")
 GITHUB_REPO = "https://github.com/DaveVoyles/openclaw-on-mac-mini"
@@ -59,7 +62,8 @@ async def api_status_handler(request):
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
         checks["docker"] = {"status": "ok", "containers": stdout.decode().strip()}
-    except Exception:
+    except Exception as exc:
+        log.debug("Docker status check failed: %s", exc)
         checks["docker"] = {"status": "down"}
 
     # Ollama
@@ -67,7 +71,8 @@ async def api_status_handler(request):
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{cfg.ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=3)) as resp:
                 checks["ollama"] = {"status": "ok" if resp.status == 200 else "down"}
-    except Exception:
+    except Exception as exc:
+        log.debug("Ollama status check failed: %s", exc)
         checks["ollama"] = {"status": "down"}
 
     # Gemini
@@ -82,7 +87,8 @@ async def api_status_handler(request):
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
                 async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=3)) as resp:
                     checks["copilot_proxy"] = {"status": "ok" if resp.status == 200 else "down"}
-        except Exception:
+        except Exception as exc:
+            log.debug("Copilot proxy check failed: %s", exc)
             checks["copilot_proxy"] = {"status": "down"}
     else:
         checks["copilot_proxy"] = {"status": "not_configured"}
@@ -222,8 +228,8 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                     "detail": entry.get("detail", "")[:100],
                     "result": entry.get("result", ""),
                 })
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Failed to load recent activity: %s", exc)
 
     # Model usage stats from audit log
     model_usage = {}
@@ -251,10 +257,11 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                     model_used = entry.get("model_used", "")
                     if model_used:
                         model_usage[model_used] = model_usage.get(model_used, 0) + 1
-                except Exception:
+                except Exception as exc:
+                    log.debug("Model usage entry parse failed: %s", exc)
                     continue
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Model usage stats failed: %s", exc)
 
     # D-6: 7-day token usage for sparkline
     daily_tokens: list[dict] = []
@@ -270,8 +277,8 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                 "output": tokens.get("output_tokens", 0),
                 "total": tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0),
             })
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Daily token stats failed: %s", exc)
 
     payload = {
         "version": VERSION,
@@ -324,8 +331,8 @@ async def api_memories_handler(request: web.Request) -> web.Response:
         from qmd import qmd_store
         data["facts"] = list(qmd_store._memory[-50:])
         data["facts"].reverse()
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("QMD facts load failed: %s", exc)
 
     # Learned rules (last 20, newest first)
     try:
@@ -333,15 +340,15 @@ async def api_memories_handler(request: web.Request) -> web.Response:
         rules = await _load_rules()
         data["rules"] = rules[-20:]
         data["rules"].reverse()
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Rules load failed: %s", exc)
 
     # Vector store collection stats
     try:
         import vector_store
         data["stats"] = await vector_store.get_stats()
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Vector store stats failed: %s", exc)
 
     return web.json_response(data)
 
@@ -352,7 +359,8 @@ async def api_goals_handler(request):
         from goal_tracker import get_active_goals
         goals = get_active_goals()
         return web.json_response({"goals": goals})
-    except Exception:
+    except Exception as exc:
+        log.debug("Goals API failed: %s", exc)
         return web.json_response({"goals": []})
 
 
@@ -386,6 +394,7 @@ async def api_research_handler(request):
         reports.sort(key=lambda r: r.get("date", 0), reverse=True)
         return web.json_response({"reports": reports[:20]})
     except Exception as e:
+        log.debug("Research API failed: %s", e)
         return web.json_response({"reports": [], "error": str(e)})
 
 
@@ -421,7 +430,8 @@ async def api_threads_handler(request: web.Request) -> web.Response:
                     "modified": f.stat().st_mtime,
                     "size_kb": round(f.stat().st_size / 1024, 1),
                 })
-            except Exception:
+            except Exception as exc:
+                log.debug("Thread file parse failed %s: %s", f.name, exc)
                 continue
 
     return web.json_response({"threads": threads[:30]})
@@ -455,7 +465,8 @@ async def api_schedules_handler(request):
                 "args": str(t.get("args", t.get("args_json", {})))[:80],
             })
         return web.json_response({"tasks": clean})
-    except Exception:
+    except Exception as exc:
+        log.debug("Schedules API failed: %s", exc)
         return web.json_response({"tasks": []})
 
 
@@ -584,7 +595,8 @@ async def api_errors_handler(request):
         from error_tracker import get_error_stats
         stats = get_error_stats(hours=24)
         return web.json_response(stats)
-    except Exception:
+    except Exception as exc:
+        log.debug("Error stats API failed: %s", exc)
         return web.json_response({"total": 0, "success_rate": 1.0, "recent_errors": []})
 
 

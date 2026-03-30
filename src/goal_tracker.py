@@ -56,7 +56,7 @@ async def extract_and_store_goal(
     Uses LLM to extract a concise goal statement.
     Returns the goal text if one was extracted, None otherwise.
     """
-    import google.generativeai as genai
+    from google import genai
     from config import cfg
 
     if not cfg.google_api_key:
@@ -71,16 +71,18 @@ async def extract_and_store_goal(
     )
 
     try:
-        model = genai.GenerativeModel(
-            model_name=cfg.llm_model,
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=150,
-                temperature=0.1,
-            ),
-        )
+        client = genai.Client(api_key=cfg.google_api_key)
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(
-            None, lambda: model.generate_content(prompt)
+            None,
+            lambda: client.models.generate_content(
+                model=cfg.llm_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    max_output_tokens=150,
+                    temperature=0.1,
+                ),
+            ),
         )
 
         goal_text = response.text.strip().split("\n")[0].strip()  # Take first line only

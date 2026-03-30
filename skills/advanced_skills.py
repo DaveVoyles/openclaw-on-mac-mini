@@ -104,6 +104,33 @@ async def _api_get(url: str, headers: dict | None = None, timeout: int = 10) -> 
         return f"Request failed: {e}"
 
 
+async def _api_post(url: str, json_data: dict, headers: dict | None = None, timeout: int = 15) -> dict | list | str:
+    """Make an async HTTP POST request and return JSON or text."""
+    try:
+        session = await _get_session()
+        async with session.post(
+            url, json=json_data, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            body = await resp.text()
+            if resp.status >= 400:
+                try:
+                    err = json.loads(body)
+                    msg = err.get("message") or err.get("errorMessage") or str(err)
+                except (json.JSONDecodeError, AttributeError):
+                    msg = body[:300]
+                return f"HTTP {resp.status}: {msg}"
+            if resp.content_type and "json" in resp.content_type:
+                return json.loads(body)
+            return body
+    except asyncio.TimeoutError:
+        log.warning("POST %s timed out after %ds", url, timeout)
+        return f"Request timed out ({timeout}s)"
+    except Exception as e:
+        log.warning("POST %s failed (%s): %s", url, type(e).__name__, e)
+        return f"Request failed: {e}"
+
+
 def _truncate(text: str, limit: int = 1900) -> str:
     if len(text) <= limit:
         return text
@@ -297,6 +324,84 @@ async def search_media(query: str, media_type: str = "all") -> str:
     if not results:
         return f"No results found for '{query}'."
     return "\n".join(results[:10])
+
+
+async def add_to_sonarr(title: str, tvdb_id: int = 0) -> str:
+    """Add a TV show to Sonarr for monitoring and automatic downloading."""
+    if not SONARR_API_KEY:
+        return "❌ Sonarr API key not configured."
+
+    headers = {"X-Api-Key": SONARR_API_KEY}
+
+    # Resolve tvdbId via lookup if not provided
+    if tvdb_id:
+        series_data = {"title": title, "tvdbId": tvdb_id}
+    else:
+        lookup = await _api_get(
+            f"{SONARR_URL}/api/v3/series/lookup?term={title}",
+            headers=headers,
+        )
+        if not isinstance(lookup, list) or not lookup:
+            return f"❌ No TV show found matching '{title}' in Sonarr lookup."
+        series_data = lookup[0]
+
+    payload = {
+        "title": series_data.get("title", title),
+        "tvdbId": series_data.get("tvdbId", tvdb_id),
+        "qualityProfileId": 1,
+        "rootFolderPath": "/tv",
+        "monitored": True,
+        "addOptions": {"searchForMissingEpisodes": True},
+    }
+
+    result = await _api_post(
+        f"{SONARR_URL}/api/v3/series", payload, headers=headers
+    )
+    if isinstance(result, str) and result.startswith("HTTP"):
+        if "already" in result.lower() or "exist" in result.lower():
+            return f"ℹ️ **{payload['title']}** is already in Sonarr."
+        return f"❌ Failed to add to Sonarr: {result}"
+    added_title = result.get("title", title) if isinstance(result, dict) else title
+    return f"✅ Added **{added_title}** to Sonarr — searching for episodes."
+
+
+async def add_to_radarr(title: str, tmdb_id: int = 0) -> str:
+    """Add a movie to Radarr for monitoring and automatic downloading."""
+    if not RADARR_API_KEY:
+        return "❌ Radarr API key not configured."
+
+    headers = {"X-Api-Key": RADARR_API_KEY}
+
+    # Resolve tmdbId via lookup if not provided
+    if tmdb_id:
+        movie_data = {"title": title, "tmdbId": tmdb_id}
+    else:
+        lookup = await _api_get(
+            f"{RADARR_URL}/api/v3/movie/lookup?term={title}",
+            headers=headers,
+        )
+        if not isinstance(lookup, list) or not lookup:
+            return f"❌ No movie found matching '{title}' in Radarr lookup."
+        movie_data = lookup[0]
+
+    payload = {
+        "title": movie_data.get("title", title),
+        "tmdbId": movie_data.get("tmdbId", tmdb_id),
+        "qualityProfileId": 1,
+        "rootFolderPath": "/movies",
+        "monitored": True,
+        "addOptions": {"searchForMovie": True},
+    }
+
+    result = await _api_post(
+        f"{RADARR_URL}/api/v3/movie", payload, headers=headers
+    )
+    if isinstance(result, str) and result.startswith("HTTP"):
+        if "already" in result.lower() or "exist" in result.lower():
+            return f"ℹ️ **{payload['title']}** is already in Radarr."
+        return f"❌ Failed to add to Radarr: {result}"
+    added_title = result.get("title", title) if isinstance(result, dict) else title
+    return f"✅ Added **{added_title}** to Radarr — searching for download."
 
 
 async def get_download_queue() -> str:
@@ -898,6 +1003,8 @@ ADVANCED_SKILLS = {
     "check_plex_status": check_plex_status,
     "get_plex_activity": get_plex_activity,
     "search_media": search_media,
+    "add_to_sonarr": add_to_sonarr,
+    "add_to_radarr": add_to_radarr,
     "get_download_queue": get_download_queue,
     "get_recent_additions": get_recent_additions,
     "ping_host": ping_host,

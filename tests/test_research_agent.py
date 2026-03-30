@@ -145,7 +145,7 @@ async def test_run_scheduled_research_basic():
 
         result = await run_scheduled_research("test query")
         assert result == "Test report"
-        mock_run.assert_awaited_once_with("test query", on_progress=None)
+        mock_run.assert_awaited_once_with("test query", on_progress=None, deep=False)
 
 
 @pytest.mark.asyncio

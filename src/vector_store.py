@@ -227,8 +227,8 @@ async def search(
             asyncio.get_running_loop().create_task(
                 bump_access(collection_name, [r["id"] for r in output])
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            log.debug("Access tracking dispatch failed: %s", exc)
 
     return output
 
@@ -295,8 +295,8 @@ async def bump_access(collection_name: str, doc_ids: list[str]) -> None:
                 meta["access_count"] = meta.get("access_count", 0) + 1
                 meta["last_accessed"] = time.time()
                 col.update(ids=[doc_id], metadatas=[meta])
-            except Exception:
-                pass  # best-effort; don't crash on tracking failures
+            except Exception as exc:
+                log.debug("Access bump failed for %s: %s", doc_id, exc)
 
     try:
         loop = asyncio.get_running_loop()
@@ -330,7 +330,8 @@ async def get_decayed_documents(
                 ]},
                 include=["metadatas", "documents"],
             )
-        except Exception:
+        except Exception as exc:
+            log.debug("ChromaDB where-filter fallback triggered: %s", exc)
             # Fallback: get all and filter in Python (older ChromaDB versions)
             results = col.get(include=["metadatas", "documents"])
         docs = []
@@ -367,8 +368,8 @@ async def mark_decayed(collection_name: str, doc_ids: list[str]) -> int:
                 meta["decayed"] = True
                 col.update(ids=[doc_id], metadatas=[meta])
                 count += 1
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Mark decayed failed for %s: %s", doc_id, exc)
         return count
 
     loop = asyncio.get_running_loop()
@@ -444,8 +445,8 @@ async def add_memory_deduped(
             # Reinforce the existing memory instead
             await bump_access(MEMORIES_COLLECTION, [existing[0]["id"]])
             return False
-    except Exception:
-        pass  # Dedup check failed, store anyway
+    except Exception as exc:
+        log.debug("Dedup check failed, storing anyway: %s", exc)
 
     meta = metadata or {}
     meta["type"] = meta.get("type", "fact")

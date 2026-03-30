@@ -220,7 +220,7 @@ async def diagnose_error_pattern(
         "explanation": str,     # Human-readable explanation
     }
     """
-    import google.generativeai as genai
+    from google import genai
     from config import cfg
 
     _default = {"cause": "unknown", "severity": "low", "fix_type": "manual_required",
@@ -269,17 +269,19 @@ async def diagnose_error_pattern(
     )
 
     try:
-        model = genai.GenerativeModel(
-            model_name=cfg.llm_model,
-            generation_config=genai.GenerationConfig(
-                max_output_tokens=500,
-                temperature=0.1,
-            ),
-        )
+        client = genai.Client(api_key=cfg.google_api_key)
         import asyncio
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(
-            None, lambda: model.generate_content(prompt)
+            None,
+            lambda: client.models.generate_content(
+                model=cfg.llm_model,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    max_output_tokens=500,
+                    temperature=0.1,
+                ),
+            ),
         )
 
         text = response.text.strip()

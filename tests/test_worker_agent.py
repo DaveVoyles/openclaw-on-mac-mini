@@ -6,17 +6,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 @pytest.fixture
 def mock_genai():
-    """Mock google.generativeai for worker tests."""
+    """Mock google.genai for worker tests."""
     with patch("worker_agent.genai") as mock:
-        mock.configure = MagicMock()
-        mock.GenerativeModel.return_value = _mock_model()
-        mock.GenerationConfig = MagicMock()
-        mock.protos = MagicMock()
+        mock.Client.return_value = _mock_client()
+        mock.types.GenerateContentConfig = MagicMock()
+        mock.types.Part = MagicMock()
+        mock.types.FunctionResponse = MagicMock()
         yield mock
 
 
-def _mock_model():
-    model = MagicMock()
+def _mock_client():
+    client = MagicMock()
     # Simulate a response with text and no function calls
     response = MagicMock()
     response.text = "Worker result: task completed successfully"
@@ -29,8 +29,8 @@ def _mock_model():
 
     chat = MagicMock()
     chat.send_message = MagicMock(return_value=response)
-    model.start_chat.return_value = chat
-    return model
+    client.chats.create.return_value = chat
+    return client
 
 
 @pytest.mark.asyncio
@@ -87,8 +87,8 @@ async def test_spawn_worker_with_conversation_history(mock_genai):
             "Find home prices in Narberth",
             conversation_history=history,
         )
-        # Verify the model was called with history context
-        model = mock_genai.GenerativeModel.return_value
-        chat = model.start_chat.return_value
+        # Verify the client was called with history context
+        client = mock_genai.Client.return_value
+        chat = client.chats.create.return_value
         call_args = chat.send_message.call_args[0][0]
         assert "conversation context" in call_args.lower() or "Worker result" in result

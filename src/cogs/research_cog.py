@@ -123,9 +123,12 @@ class ResearchCog(commands.Cog, name="Research"):
 
     # ── /research ─────────────────────────────────────────────────────
     @app_commands.command(name="research", description="Autonomous multi-step research — searches, reads sources, synthesizes a report")
-    @app_commands.describe(query="What you want researched (be specific for best results)")
+    @app_commands.describe(
+        query="What you want researched (be specific for best results)",
+        deep="Enable deep research: 2-3 iterative passes that refine based on gaps (slower but more thorough)",
+    )
     @require_auth()
-    async def research_cmd(self, interaction: discord.Interaction, query: str):
+    async def research_cmd(self, interaction: discord.Interaction, query: str, deep: bool = False):
         from approvals import is_emergency_stopped
         from llm import is_configured as llm_is_configured
         from research_agent import ResearchAgent
@@ -142,8 +145,9 @@ class ResearchCog(commands.Cog, name="Research"):
             )
             return
 
+        mode_label = "🔬 **Deep research started**" if deep else "🔍 **Research started**"
         await interaction.response.send_message(
-            f"🔍 **Research started** — I'll post updates and a final report here.\n> {query[:120]}"
+            f"{mode_label} — I'll post updates and a final report here.\n> {query[:120]}"
         )
         original = await interaction.original_response()
 
@@ -165,10 +169,10 @@ class ResearchCog(commands.Cog, name="Research"):
                 except Exception as exc:
                     log.debug("Research progress send failed: %s", exc)
 
-        agent = ResearchAgent(max_searches=4, browse_top_n=2, timeout_seconds=180)
+        agent = ResearchAgent(max_searches=4, browse_top_n=2, timeout_seconds=300 if deep else 180)
 
         try:
-            report = await agent.run(query, on_progress=on_progress)
+            report = await agent.run(query, on_progress=on_progress, deep=deep)
         except Exception as e:
             log.error("Research command failed: %s", e)
             report = f"❌ Research failed: {e}"
