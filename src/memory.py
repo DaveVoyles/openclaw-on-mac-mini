@@ -49,12 +49,13 @@ def _atomic_write(path: Path, data: str) -> None:
 class Conversation:
     """A single conversation thread with history and metadata."""
 
-    __slots__ = ("history", "last_active", "user_name")
+    __slots__ = ("history", "last_active", "user_name", "summarized")
 
     def __init__(self, user_name: str = "User"):
         self.history: list[dict] = []      # [{"role": "user"|"model", "parts": [str]}]
         self.last_active: float = time.monotonic()
         self.user_name: str = user_name
+        self.summarized: bool = False      # True after auto-summarization to prevent re-summarizing
 
     @property
     def is_expired(self) -> bool:
@@ -79,6 +80,7 @@ class Conversation:
     def clear(self):
         self.history.clear()
         self.last_active = time.monotonic()
+        self.summarized = False
 
     @property
     def message_count(self) -> int:

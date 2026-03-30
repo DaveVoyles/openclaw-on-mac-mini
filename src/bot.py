@@ -1237,6 +1237,9 @@ async def help_cmd(interaction: discord.Interaction):
 # Discord embed description limit is 4096 chars; stay safely under it
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 
+# Responses longer than this are sent as a downloadable .md file
+_FILE_THRESHOLD = 8000
+
 # Regex to find image URLs in LLM responses:
 #   - Markdown images: ![alt](url)
 #   - Photo links the prompt produces: [📸 ...](url)  or  [Photo](url)
@@ -1853,66 +1856,104 @@ async def ask_cmd(
         channel_id=interaction.channel_id,
     )
 
-    for i, chunk in enumerate(chunks):
-        embed = discord.Embed(description=chunk, color=discord.Color.purple())
-        if i == 0:
-            display_question = question if len(question) < 200 else question[:197] + "..."
-            embed.set_author(
-                name=f"Replying to: {display_question}",
-                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-            )
-            if image_url:
-                embed.set_image(url=image_url)
-
-        is_last = i == len(chunks) - 1
-        if is_last:
-            # Clean up model name (remove "models/" prefix)
-            display_model = model_used.replace("models/", "") if model_used else "unknown"
-            if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
-                rate_str = "local · unlimited"
-            else:
-                rate_str = get_rate_info()
-            # Icon reflects the ACTUAL model used, not the preference
-            if "gemma" in display_model.lower() or "ollama" in display_model.lower():
-                actual_icon = "🏠"
-            elif "gemini" in display_model.lower():
-                actual_icon = "☁️"
-            elif "gpt" in display_model.lower() or "openai" in display_model.lower():
-                actual_icon = "🟢"
-            elif "claude" in display_model.lower() or "anthropic" in display_model.lower():
-                actual_icon = "🟣"
-            else:
-                actual_icon = "🔄"
-            footer_text = f"💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model}"
-            # Show routing notes if any issues occurred
-            if _routing_notes:
-                footer_text += " | ⚠️ " + " → ".join(_routing_notes)
-            embed.set_footer(text=footer_text)
-
-        if i == 0:
-            kwargs: dict[str, Any] = {"content": None, "embed": embed}
-            if is_last:
-                kwargs["view"] = action_view
-            if file_attachment and is_last:
-                kwargs["attachments"] = [file_attachment[0]]
-            try:
-                await interaction.edit_original_response(**kwargs)
-            except discord.NotFound:
-                # Interaction expired — fall back to followup
-                log.warning("Interaction expired, using followup for response")
-                fb_kwargs = {"embed": embed}
-                if is_last:
-                    fb_kwargs["view"] = action_view
-                if file_attachment and is_last:
-                    fb_kwargs["file"] = file_attachment[0]
-                await interaction.followup.send(**fb_kwargs)
+    # --- Helper: build footer text for the final embed ---
+    def _build_footer() -> str:
+        display_model = model_used.replace("models/", "") if model_used else "unknown"
+        if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
+            rate_str = "local · unlimited"
         else:
-            kwargs = {"embed": embed}
+            rate_str = get_rate_info()
+        if "gemma" in display_model.lower() or "ollama" in display_model.lower():
+            actual_icon = "🏠"
+        elif "gemini" in display_model.lower():
+            actual_icon = "☁️"
+        elif "gpt" in display_model.lower() or "openai" in display_model.lower():
+            actual_icon = "🟢"
+        elif "claude" in display_model.lower() or "anthropic" in display_model.lower():
+            actual_icon = "🟣"
+        else:
+            actual_icon = "🔄"
+        ft = f"💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model}"
+        if _routing_notes:
+            ft += " | ⚠️ " + " → ".join(_routing_notes)
+        return ft
+
+    # --- Long-response path: send as downloadable .md file ---
+    if len(response_text) > _FILE_THRESHOLD:
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        md_file = discord.File(
+            io.BytesIO(response_text.encode()),
+            filename=f"openclaw-response-{ts}.md",
+        )
+
+        summary = response_text[:500].rstrip()
+        if len(response_text) > 500:
+            summary += "\n\n📎 **Full response attached as file**"
+
+        embed = discord.Embed(description=summary, color=discord.Color.purple())
+        display_question = question if len(question) < 200 else question[:197] + "..."
+        embed.set_author(
+            name=f"Replying to: {display_question}",
+            icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+        )
+        if image_url:
+            embed.set_image(url=image_url)
+        embed.set_footer(text=_build_footer())
+
+        attachments = [md_file]
+        if file_attachment:
+            attachments.append(file_attachment[0])
+
+        try:
+            await interaction.edit_original_response(
+                content=None, embed=embed, attachments=attachments, view=action_view,
+            )
+        except discord.NotFound:
+            log.warning("Interaction expired, using followup for long response file")
+            await interaction.followup.send(
+                embed=embed, file=md_file, view=action_view,
+            )
+
+    # --- Normal path: split across embeds ---
+    else:
+        for i, chunk in enumerate(chunks):
+            embed = discord.Embed(description=chunk, color=discord.Color.purple())
+            if i == 0:
+                display_question = question if len(question) < 200 else question[:197] + "..."
+                embed.set_author(
+                    name=f"Replying to: {display_question}",
+                    icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                )
+                if image_url:
+                    embed.set_image(url=image_url)
+
+            is_last = i == len(chunks) - 1
             if is_last:
-                kwargs["view"] = action_view
-            if file_attachment and is_last:
-                kwargs["file"] = file_attachment[0]
-            await interaction.followup.send(**kwargs)
+                embed.set_footer(text=_build_footer())
+
+            if i == 0:
+                kwargs: dict[str, Any] = {"content": None, "embed": embed}
+                if is_last:
+                    kwargs["view"] = action_view
+                if file_attachment and is_last:
+                    kwargs["attachments"] = [file_attachment[0]]
+                try:
+                    await interaction.edit_original_response(**kwargs)
+                except discord.NotFound:
+                    log.warning("Interaction expired, using followup for response")
+                    fb_kwargs = {"embed": embed}
+                    if is_last:
+                        fb_kwargs["view"] = action_view
+                    if file_attachment and is_last:
+                        fb_kwargs["file"] = file_attachment[0]
+                    await interaction.followup.send(**fb_kwargs)
+            else:
+                kwargs = {"embed": embed}
+                if is_last:
+                    kwargs["view"] = action_view
+                if file_attachment and is_last:
+                    kwargs["file"] = file_attachment[0]
+                await interaction.followup.send(**kwargs)
 
     # Send table image if one was rendered
     if table_image_file:

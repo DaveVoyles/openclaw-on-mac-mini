@@ -650,16 +650,58 @@ def _estimate_chars(history: list[dict]) -> int:
     return total
 
 
-def _trim_history(history: list[dict], model_hint: str = "default") -> list[dict]:
+async def _trim_history(
+    history: list[dict],
+    model_hint: str = "default",
+    *,
+    conversation: "Conversation | None" = None,
+) -> list[dict]:
     """Keep first 2 turns (persona context) + last N to avoid context overflow.
 
     *model_hint* controls the context limits: 'gemini' for generous limits,
     'ollama' for Gemma3's 128K window, or 'default' for conservative fallback.
 
+    When the history has 40+ turns and hasn't been summarized yet in this
+    session, the oldest 20 non-system turns (indices 2–21) are replaced with
+    a single model turn containing a bullet-point summary.  If summarization
+    fails, falls back to the original drop behaviour.
+
     If the history still exceeds the character limit after turn trimming,
     progressively drop older turns until it fits.
     """
     max_turns, max_chars = _get_context_limits(model_hint)
+
+    # --- Auto-summarize before dropping turns ---
+    should_summarize = (
+        len(history) >= 40
+        and conversation is not None
+        and not conversation.summarized
+        and GOOGLE_API_KEY
+    )
+
+    if should_summarize:
+        original_len = len(history)
+        # Turns 2-21 (20 turns) are candidates for summarization
+        summarize_end = min(22, len(history))
+        turns_to_summarize = history[2:summarize_end]
+
+        if turns_to_summarize:
+            try:
+                summary_text = await _generate_context_summary(turns_to_summarize)
+                if summary_text:
+                    summary_turn = {
+                        "role": "model",
+                        "parts": [f"[Session Summary] {summary_text}"],
+                    }
+                    history = history[:2] + [summary_turn] + history[summarize_end:]
+                    conversation.summarized = True
+                    log.info(
+                        "Context auto-summarized: %d turns → %d turns",
+                        original_len,
+                        len(history),
+                    )
+            except Exception as exc:
+                log.warning("Auto-summarization failed, falling back to drop: %s", exc)
 
     if len(history) > max_turns:
         history = history[:2] + history[-(max_turns - 2):]
@@ -671,6 +713,43 @@ def _trim_history(history: list[dict], model_hint: str = "default") -> list[dict
         log.debug("Trimmed history to %d turns (%d chars)", len(history), _estimate_chars(history))
 
     return list(history)
+
+
+async def _generate_context_summary(turns: list[dict]) -> str:
+    """Summarize a block of conversation turns into a compact bullet-point summary.
+
+    Uses a low temperature (0.1) Gemini call with max 500 output tokens.
+    Returns the summary text, or empty string on failure.
+    """
+    lines: list[str] = []
+    for msg in turns:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        content = " ".join(str(p) for p in msg["parts"] if isinstance(p, str))[:300]
+        if content:
+            lines.append(f"{role}: {content}")
+
+    if not lines:
+        return ""
+
+    transcript = "\n".join(lines)
+    prompt = (
+        "Summarize this conversation so far in 3-5 bullet points, "
+        "preserving key facts, decisions, and findings.\n\n"
+        f"Conversation:\n{transcript}"
+    )
+
+    summary_model = genai.GenerativeModel(
+        model_name=MODEL_NAME,
+        generation_config=genai.GenerationConfig(
+            max_output_tokens=500,
+            temperature=0.1,
+        ),
+    )
+    loop = asyncio.get_running_loop()
+    response = await loop.run_in_executor(
+        None, lambda: summary_model.generate_content(prompt)
+    )
+    return response.text.strip()
 
 
 async def _try_local_model(
@@ -1006,7 +1085,7 @@ async def chat_stream(
         _model_hint = "gemini"
     else:
         _model_hint = "gemini"  # auto mode may use either, use generous default
-    history = _trim_history(history or [], model_hint=_model_hint)
+    history = await _trim_history(history or [], model_hint=_model_hint)
 
     # Track routing decisions to surface to user
     _routing_notes: list[str] = []
@@ -1259,7 +1338,7 @@ async def chat(
         _model_hint = "gemini"
     else:
         _model_hint = "gemini"  # auto mode may use either, use generous default
-    history = _trim_history(history or [], model_hint=_model_hint)
+    history = await _trim_history(history or [], model_hint=_model_hint)
 
     # -- Auto-RAG: recall relevant context ────────────────────────────────────
     recalled_context = await _auto_recall_context(user_message)
@@ -1658,7 +1737,7 @@ async def analyze_image_with_tools(
     if mime_type not in SUPPORTED_IMAGE_MIMES:
         return f"❌ Unsupported image type: {mime_type}", history or []
 
-    history = _trim_history(history or [], model_hint="gemini")
+    history = await _trim_history(history or [], model_hint="gemini")
 
     # Rate-limit check
     if not await _rate_limiter.wait_for_capacity(max_wait=30.0):
