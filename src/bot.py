@@ -1595,19 +1595,40 @@ async def ask_cmd(
     _ask_start = time.monotonic()
 
     # Progressive thinking status — shows what the bot is doing at each step
+    _progress_lines: list[str] = []
+    _progress_start = time.monotonic()
+
     async def _think(status: str) -> None:
         """Update the deferred response with a thinking status message."""
+        elapsed = time.monotonic() - _progress_start
+        _progress_lines.append(f"💭 {status} ({elapsed:.0f}s)")
+        progress = "\n".join(_progress_lines) + "\n\n⏳ *thinking…*"
         try:
-            await interaction.edit_original_response(content=f"💭 *{status}*")
+            embed = discord.Embed(description=progress, color=discord.Color.dark_grey())
+            embed.set_author(
+                name=f"Replying to: {question[:100]}",
+                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            )
+            await interaction.edit_original_response(content=None, embed=embed)
         except Exception:
             pass
 
-    # Progressive status: edit the deferred "thinking" placeholder as each tool fires
+    # Progressive status: build a running log of steps so the user sees activity
     async def _on_tool_call(tool_name: str, round_num: int) -> None:
+        elapsed = time.monotonic() - _progress_start
+        _progress_lines.append(f"🔄 Using `{tool_name}`… ({elapsed:.0f}s)")
+        # Show all steps so far as a running log
+        progress = "\n".join(_progress_lines) + "\n\n⏳ *working…*"
         try:
-            await interaction.edit_original_response(
-                content=f"🔄 *Using `{tool_name}`…* (step {round_num})"
+            embed = discord.Embed(
+                description=progress,
+                color=discord.Color.dark_grey(),
             )
+            embed.set_author(
+                name=f"Replying to: {question[:100]}",
+                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+            )
+            await interaction.edit_original_response(content=None, embed=embed)
         except Exception as exc:
             log.debug("Failed to update tool progress: %s", exc)
 
