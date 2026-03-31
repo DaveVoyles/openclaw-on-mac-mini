@@ -34,13 +34,12 @@ from constants import (
 )
 from llm import chat as llm_chat
 from memory import store as conversation_store
-from skills import get_container_logs, restart_container
+from skills import get_container_logs, get_system_stats, restart_container
 from skills.advanced_skills import (
     check_arr_health,
     check_download_clients,
     check_plex_status,
     get_download_queue,
-    get_system_stats,
     get_weather,
 )
 
