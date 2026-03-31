@@ -1034,6 +1034,60 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         trafilatura can&rsquo;t parse, OpenClaw automatically falls back to
         headless Chromium via Playwright to extract content.
       </div>
+
+      <h3>&#128302; Why Perplexity AI Is the Primary Search Provider</h3>
+      <p>
+        Perplexity is fundamentally different from traditional search engines.
+        Instead of returning a list of links with snippets (like Google or DuckDuckGo),
+        Perplexity <strong>reads the sources for you</strong> and returns a
+        <strong>synthesized answer with inline citations</strong>.
+      </p>
+      <div class="card">
+        <table>
+          <tr><th>Feature</th><th>Perplexity (Tier 1)</th><th>Tavily / DDG (Tiers 2-3)</th></tr>
+          <tr>
+            <td><strong>What you get</strong></td>
+            <td>AI-written answer with cited sources</td>
+            <td>Raw list of search result snippets</td>
+          </tr>
+          <tr>
+            <td><strong>Processing needed</strong></td>
+            <td>Ready to use &mdash; answer is pre-synthesized</td>
+            <td>Gemini must read all snippets and synthesize an answer</td>
+          </tr>
+          <tr>
+            <td><strong>Source quality</strong></td>
+            <td>Google-tier web index with real-time data</td>
+            <td>Good (Tavily) / decent (DDG)</td>
+          </tr>
+          <tr>
+            <td><strong>Cost</strong></td>
+            <td>~$0.005 per query (sonar model)</td>
+            <td>~$0.01 (Tavily) / Free (DDG)</td>
+          </tr>
+          <tr>
+            <td><strong>Token savings</strong></td>
+            <td>Lower &mdash; no extra Gemini call to synthesize</td>
+            <td>Higher &mdash; raw results + synthesis call</td>
+          </tr>
+        </table>
+      </div>
+      <p>
+        <strong>In practice:</strong> When you ask &ldquo;What&rsquo;s happening at Monday Night Raw tonight?&rdquo;,
+        Perplexity returns a direct answer like &ldquo;Monday Night Raw is live tonight from [City] at [Arena].
+        The card includes [matches].&rdquo; with source links. Tavily would return 5 search snippets that
+        Gemini then has to piece together &mdash; slower, more expensive, less reliable.
+      </p>
+      <p>
+        <strong>Usage tracking:</strong> Every Perplexity call is tracked on the
+        <a href="/dashboard">Dashboard</a> under the Spending section. You can see total calls,
+        cost, and daily breakdown alongside Gemini API spending.
+      </p>
+      <p>
+        <strong>Setup:</strong> Set <code>PERPLEXITY_API_KEY</code> in your <code>.env</code> file.
+        Get a key at <a href="https://www.perplexity.ai/settings/api" target="_blank" rel="noopener">perplexity.ai/settings/api</a>.
+        If not set, OpenClaw falls back to Tavily &rarr; DuckDuckGo automatically.
+      </p>
       <p>
         For deep multi-source topic research, use
         <a href="#research"><code>/research</code></a
