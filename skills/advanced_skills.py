@@ -70,6 +70,10 @@ OVERSEERR_API_KEY = os.getenv("OVERSEERR_API_KEY", "")
 # Perplexity AI search (primary)
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
 
+# Firecrawl (search + extract in one call)
+FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "")
+FIRECRAWL_API_URL = "https://api.firecrawl.dev/v1"
+
 # Tavily web search
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 TAVILY_API_URL = "https://api.tavily.com/search"
@@ -622,7 +626,7 @@ async def create_status_report() -> str:
 async def search_web(query: str, num_results: int = 5) -> str:
     """Search the web using the best available provider.
 
-    Search priority: Perplexity (AI-powered) → Tavily (structured) → DuckDuckGo (free) → Bing Lite (fallback)
+    Search priority: Perplexity (AI-powered) → Firecrawl (search+extract) → Tavily (structured) → DuckDuckGo (free) → Bing Lite (fallback)
 
     Uses installed ClawHub skill scripts for Tavily and DDG:
       - skills/openclaw-tavily-search/scripts/tavily_search.py  (Tavily API)
@@ -639,6 +643,16 @@ async def search_web(query: str, num_results: int = 5) -> str:
                 return result
         except Exception as e:
             log.debug("Perplexity search failed: %s", e)
+
+    # ── Firecrawl path (search + full page extraction in one call) ─────────
+    if FIRECRAWL_API_KEY:
+        try:
+            log.info("Using Firecrawl for search: %s", query[:80])
+            result = await _firecrawl_search(query, num_results)
+            if result:
+                return result
+        except Exception as e:
+            log.debug("Firecrawl search failed: %s", e)
 
     # ── Tavily path (higher quality, needs API key) ────────────────────────
     if TAVILY_API_KEY and _TAVILY_SCRIPT.exists():
@@ -799,6 +813,101 @@ async def _perplexity_search(query: str, num_results: int = 5) -> str:
     return "\n".join(lines)
 
 
+async def _firecrawl_search(query: str, num_results: int = 5) -> str:
+    """Search via Firecrawl API — returns search results with full page content."""
+    if not FIRECRAWL_API_KEY:
+        return ""
+
+    headers = {
+        "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "query": query,
+        "limit": num_results,
+        "lang": "en",
+        "scrapeOptions": {"formats": ["markdown"]},
+    }
+
+    try:
+        session = await _get_session()
+        async with session.post(
+            f"{FIRECRAWL_API_URL}/search",
+            json=payload, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            if resp.status != 200:
+                log.debug("Firecrawl search returned HTTP %d", resp.status)
+                return ""
+            data = await resp.json()
+
+        if not data.get("success") or not data.get("data"):
+            return ""
+
+        results = data["data"]
+        lines = [f"**Firecrawl Search** ({len(results)} results):\n"]
+        for i, r in enumerate(results[:num_results], 1):
+            title = r.get("title", "Untitled")
+            url = r.get("url", "")
+            markdown = r.get("markdown", "")
+            # Show first 500 chars of content
+            snippet = markdown[:500] + "…" if len(markdown) > 500 else markdown
+            lines.append(f"**{i}. [{title}]({url})**")
+            if snippet:
+                lines.append(f"> {snippet}\n")
+
+        log.info("Firecrawl search: %d results for: %s", len(results), query[:60])
+        return "\n".join(lines)
+    except Exception as e:
+        log.debug("Firecrawl search failed: %s", e)
+        return ""
+
+
+async def firecrawl_scrape(url: str) -> str:
+    """Scrape a URL via Firecrawl and return clean markdown content."""
+    if not FIRECRAWL_API_KEY:
+        return "⚠️ Firecrawl API key not configured. Set `FIRECRAWL_API_KEY` in .env."
+
+    headers = {
+        "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "url": url,
+        "formats": ["markdown"],
+    }
+
+    try:
+        session = await _get_session()
+        async with session.post(
+            f"{FIRECRAWL_API_URL}/scrape",
+            json=payload, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as resp:
+            if resp.status != 200:
+                return f"❌ Firecrawl returned HTTP {resp.status}"
+            data = await resp.json()
+
+        if not data.get("success"):
+            return f"❌ Firecrawl scrape failed: {data.get('error', 'unknown')}"
+
+        markdown = data.get("data", {}).get("markdown", "")
+        title = data.get("data", {}).get("metadata", {}).get("title", "")
+        if not markdown:
+            return "⚠️ Firecrawl returned no content."
+
+        # Trim to reasonable size
+        if len(markdown) > 6000:
+            markdown = markdown[:6000] + "\n… (truncated)"
+
+        header = f"**{title}**\n*Source: {url}*\n\n" if title else f"*Source: {url}*\n\n"
+        log.info("Firecrawl scrape: %d chars from %s", len(markdown), url)
+        return header + markdown
+    except Exception as e:
+        log.debug("Firecrawl scrape failed: %s", e)
+        return f"❌ Firecrawl error: {e}"
+
+
 def _format_tavily_results(data: dict, num_results: int) -> str:
     """Format Tavily API JSON response into Discord-friendly markdown."""
     lines = []
@@ -895,7 +1004,14 @@ async def get_weather(location: str = "", units: str = "uscs") -> str:
 
 
 async def browse_url(url: str) -> str:
-    """Fetch a URL and extract clean readable text from the page."""
+    """Fetch a URL and extract clean readable text.
+
+    Uses a 3-tier extraction chain:
+      1. trafilatura — fast HTML-based extraction (no JS support).
+      2. Jina AI Reader — free service at r.jina.ai; handles JS-rendered
+         sites and returns clean markdown without running a browser.
+      3. Playwright — headless Chromium as a last resort.
+    """
     from urllib.parse import urlparse
     import ipaddress as _ipaddress
     import socket as _socket
@@ -1143,6 +1259,7 @@ ADVANCED_SKILLS = {
     # Phase 8: Web skills
     "search_web": search_web,
     "browse_url": browse_url,
+    "firecrawl_scrape": firecrawl_scrape,
     "compare_sources": compare_sources,
     # Phase E: Weather
     "get_weather": get_weather,

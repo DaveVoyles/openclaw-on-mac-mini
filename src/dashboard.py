@@ -80,13 +80,31 @@ async def api_status_handler(request):
 
     # Search provider
     perplexity_key = os.getenv("PERPLEXITY_API_KEY", "")
+    firecrawl_key = os.getenv("FIRECRAWL_API_KEY", "")
     tavily_key = os.getenv("TAVILY_API_KEY", "")
     if perplexity_key:
-        checks["search_provider"] = {"status": "ok", "active": "Perplexity AI", "cascade": "Perplexity → Tavily → DDG → Bing Lite"}
+        cascade = "Perplexity → Firecrawl → Tavily → DDG → Bing Lite" if firecrawl_key else "Perplexity → Tavily → DDG → Bing Lite"
+        checks["search_provider"] = {"status": "ok", "active": "Perplexity AI", "cascade": cascade}
+    elif firecrawl_key:
+        checks["search_provider"] = {"status": "ok", "active": "Firecrawl", "cascade": "Firecrawl → Tavily → DDG → Bing Lite"}
     elif tavily_key:
         checks["search_provider"] = {"status": "ok", "active": "Tavily", "cascade": "Tavily → DDG → Bing Lite"}
     else:
         checks["search_provider"] = {"status": "ok", "active": "DuckDuckGo", "cascade": "DDG → Bing Lite"}
+
+    # Firecrawl tier indicator
+    checks["firecrawl"] = {
+        "status": "ok" if firecrawl_key else "not_configured",
+        "tier": "Free (500 pages/mo)" if firecrawl_key else "Not configured",
+        "configured": bool(firecrawl_key),
+    }
+
+    # Content extraction chain (Jina Reader is free / no key required)
+    checks["content_extraction"] = {
+        "status": "ok",
+        "chain": "trafilatura → Jina AI Reader → Playwright",
+        "jina_reader": "available",
+    }
 
     # Copilot proxy
     proxy_url = cfg.copilot_proxy_url
@@ -298,7 +316,9 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "latency_ms": round(bot.latency * 1000, 1) if bot and bot.latency else 0,
         "python": platform.python_version(),
         "discord_py": discord.__version__,
-        "search_provider": "Perplexity AI" if os.getenv("PERPLEXITY_API_KEY") else ("Tavily" if os.getenv("TAVILY_API_KEY") else "DuckDuckGo"),
+        "search_provider": "Perplexity AI" if os.getenv("PERPLEXITY_API_KEY") else ("Firecrawl" if os.getenv("FIRECRAWL_API_KEY") else ("Tavily" if os.getenv("TAVILY_API_KEY") else "DuckDuckGo")),
+        "firecrawl_tier": "Free (500 pages/mo)" if os.getenv("FIRECRAWL_API_KEY") else "Not configured",
+        "content_extraction": "trafilatura → Jina Reader → Playwright",
         "model": MODEL_NAME,
         "local_model": OLLAMA_MODEL if LOCAL_LLM_ENABLED else None,
         "rate_info": get_rate_info(),

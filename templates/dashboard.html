@@ -1171,6 +1171,22 @@
               ></span>
             </div>
             <div class="stat-row">
+              <span class="stat-label">🔥 Firecrawl</span
+              ><span
+                class="stat-value"
+                id="sys-firecrawl-tier"
+                style="font-size: 0.75rem"
+              ></span>
+            </div>
+            <div class="stat-row">
+              <span class="stat-label">Content Extraction</span
+              ><span
+                class="stat-value"
+                id="sys-content-extraction"
+                style="color: var(--mint-green)"
+              ></span>
+            </div>
+            <div class="stat-row">
               <span class="stat-label">Rate Limits</span
               ><span class="stat-value" id="sys-rates"></span>
             </div>
@@ -1573,6 +1589,12 @@
           d.local_model || "Disabled";
         document.getElementById("sys-search-provider").textContent =
           d.search_provider || "DuckDuckGo";
+        const fcTier = document.getElementById("sys-firecrawl-tier");
+        const fcText = d.firecrawl_tier || "Not configured";
+        fcTier.textContent = fcText;
+        fcTier.style.color = fcText.includes("Free") ? "var(--mint-green)" : "var(--muted)";
+        document.getElementById("sys-content-extraction").textContent =
+          d.content_extraction || "trafilatura → Jina Reader → Playwright";
         document.getElementById("sys-rates").textContent = d.rate_info;
         document.getElementById("sys-python").textContent = d.python;
         document.getElementById("sys-discordpy").textContent = d.discord_py;

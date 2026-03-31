@@ -446,6 +446,19 @@
         description: The full URL to fetch (must start with http:// or https://)
     required:
       - url
+- name: firecrawl_scrape
+  description:
+    Scrape a URL via Firecrawl API and return clean markdown content. More reliable than browse_url for
+    complex sites — handles JS rendering, anti-bot protection, and dynamic content. Use when browse_url
+    fails or for high-quality content extraction. Requires FIRECRAWL_API_KEY.
+  parameters:
+    type: object
+    properties:
+      url:
+        type: string
+        description: The full URL to scrape (must start with http:// or https://)
+    required:
+      - url
 - name: webfetch_md
   description:
     Smartly scrape and fetch any URL, converting it into clean Markdown (optimized for AI reading). Use this as
