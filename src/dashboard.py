@@ -264,36 +264,17 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     except Exception as exc:
         log.debug("Failed to load recent activity: %s", exc)
 
-    # Model usage stats from audit log
+    # Model usage stats from error journal (has model_used per /ask call)
     model_usage = {}
     try:
-        import json
-
-        from config import cfg as model_cfg
-        audit_file = model_cfg.audit_dir / "audit.jsonl"
-        if audit_file.exists():
-            week_ago = time.time() - 7 * 86400
-            for line in audit_file.read_text().strip().split("\n"):
-                try:
-                    entry = json.loads(line)
-                    # Check if this entry has model info and is recent
-                    ts = entry.get("ts", 0)
-                    if isinstance(ts, str):
-                        from datetime import datetime
-                        ts = datetime.fromisoformat(ts).timestamp()
-                    if ts < week_ago:
-                        continue
-                    detail = entry.get("detail", "")
-                    if "via " in detail:
-                        model = detail.split("via ")[-1].strip()
-                        model_usage[model] = model_usage.get(model, 0) + 1
-                    # Also check for model_used in the entry
-                    model_used = entry.get("model_used", "")
-                    if model_used:
-                        model_usage[model_used] = model_usage.get(model_used, 0) + 1
-                except Exception as exc:
-                    log.debug("Model usage entry parse failed: %s", exc)
-                    continue
+        from error_tracker import get_recent_outcomes
+        outcomes = get_recent_outcomes(hours=7 * 24, limit=5000)
+        for entry in outcomes:
+            model = entry.get("model_used", "")
+            if model and model not in ("unknown", "error", "timeout", "none"):
+                # Normalize: strip "models/" prefix for cleaner display
+                model = model.replace("models/", "")
+                model_usage[model] = model_usage.get(model, 0) + 1
     except Exception as exc:
         log.debug("Model usage stats failed: %s", exc)
 
