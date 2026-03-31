@@ -8,30 +8,26 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install dependencies
+      - name: Set up virtualenv
         run: |
-          python -m pip install --upgrade pip
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-test.txt
 
       - name: Lint with ruff
         run: |
+          source .venv/bin/activate
           ruff check src/ tests/ --output-format=github
 
       - name: Run tests
         env:
-          # Stub values so modules load cleanly — no real API calls are made
           GOOGLE_API_KEY: ""
           LOCAL_LLM_ENABLED: "false"
           AGENTMAIL_API_KEY: ""
@@ -41,9 +37,11 @@ jobs:
           SPENDING_FILE: /tmp/openclaw-test/spending.json
           CONFIG_DIR: ${{ github.workspace }}/config
         run: |
-          python -m pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=term-missing:skip-covered
+          source .venv/bin/activate
+          python3 -m pytest tests/ -v --tb=short --cov=src --cov-report=xml --cov-report=term-missing:skip-covered
 
       - name: Check coverage threshold
         if: always()
         run: |
-          python -m pytest tests/ -q --cov=src --cov-fail-under=40 2>/dev/null || echo "⚠️ Coverage below 40% threshold"
+          source .venv/bin/activate
+          python3 -m pytest tests/ -q --cov=src --cov-fail-under=40 2>/dev/null || echo "⚠️ Coverage below 40% threshold"
