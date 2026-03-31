@@ -2204,12 +2204,17 @@
                   el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Discord.</p>';
                   return;
               }
-              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th>Type</th><th>Status</th><th>Details</th><th></th></tr></thead><tbody>' +
+              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th title="Skill = runs a built-in automation function (e.g. health check, backup)&#10;Prompt = sends a text prompt to the AI for a freeform response" style="cursor:help;text-decoration:underline dotted">Type &#9432;</th><th>Status</th><th>Details</th><th></th></tr></thead><tbody>' +
                   data.tasks.map(t => {
-                      const schedule = t.cron_expression ? `<code>${esc(t.cron_expression)}</code>` :
-                                      t.interval >= 1440 ? `${Math.round(t.interval/1440)}d` :
-                                      t.interval >= 60 ? `${Math.round(t.interval/60)}h` : `${t.interval}m`;
-                      const type = t.prompt ? '💬 Prompt' : '⚙️ Skill';
+                      const schedule = t.schedule_human || (
+                          t.cron_expression ? `<code>${esc(t.cron_expression)}</code>` :
+                                      t.interval >= 1440 ? `Every ${Math.round(t.interval/1440)}d` :
+                                      t.interval >= 60 ? `Every ${Math.round(t.interval/60)}h` : t.interval > 0 ? `Every ${t.interval}m` : 'On demand');
+                      const typeLabel = t.prompt ? '💬 Prompt' : '⚙️ Skill';
+                      const typeTooltip = t.prompt
+                          ? 'Prompt: Sends this text to the AI each run and returns its freeform response'
+                          : 'Skill: Runs a built-in automation function (e.g. health_check, docker_status)';
+                      const type = `<span title="${typeTooltip}" style="cursor:help">${typeLabel}</span>`;
                       const status = t.enabled ? '🟢' : '⏸️';
                       const details = t.prompt ? esc(t.prompt).substring(0, 60) + (t.prompt.length > 60 ? '…' : '') : esc(t.args);
                       const taskId = esc(t.id || t.name);

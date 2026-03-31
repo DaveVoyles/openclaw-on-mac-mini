@@ -480,6 +480,48 @@ async def api_threads_handler(request: web.Request) -> web.Response:
 # D-4  Scheduled Tasks endpoint
 # ---------------------------------------------------------------------------
 
+_CRON_DOW = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun"}
+
+
+def _cron_to_human(expr: str) -> str:
+    """Convert a cron expression to a human-readable string (best-effort)."""
+    try:
+        parts = expr.strip().split()
+        if len(parts) != 5:
+            return expr
+        minute, hour, dom, month, dow = parts
+
+        time_str = ""
+        if hour != "*" and minute != "*":
+            time_str = f"at {hour.zfill(2)}:{minute.zfill(2)}"
+        elif hour != "*":
+            time_str = f"at hour {hour}"
+        elif minute != "*":
+            every_m = minute.lstrip("*/")
+            time_str = f"every {every_m} min"
+
+        day_str = ""
+        if dow != "*":
+            day_names = []
+            for part in dow.split(","):
+                if "-" in part:
+                    lo, hi = part.split("-", 1)
+                    day_names.append(f"{_CRON_DOW.get(int(lo), lo)}–{_CRON_DOW.get(int(hi), hi)}")
+                else:
+                    day_names.append(_CRON_DOW.get(int(part), part))
+            day_str = ", ".join(day_names)
+        elif dom != "*":
+            day_str = f"day {dom} of month"
+
+        if month != "*":
+            day_str += f" (month {month})"
+
+        if day_str and time_str:
+            return f"{day_str} {time_str}"
+        return day_str or time_str or expr
+    except Exception:
+        return expr
+
 
 async def api_schedules_handler(request):
     """Return scheduled tasks for the dashboard."""
@@ -493,11 +535,35 @@ async def api_schedules_handler(request):
         # Keep only essential fields
         clean = []
         for t in tasks:
+            # Resolve task name: prefer action, then skill_name, then name
+            name = t.get("action") or t.get("skill_name") or t.get("name") or "unknown"
+
+            # Build human-readable schedule description
+            cron_expr = t.get("cron_expression") or t.get("cron") or ""
+            interval = t.get("interval_minutes", t.get("interval", 0))
+            cron_hour = t.get("cron_hour", -1)
+            cron_minute = t.get("cron_minute", 0)
+
+            if cron_expr:
+                schedule_human = _cron_to_human(cron_expr)
+            elif interval and interval > 0:
+                if interval >= 1440:
+                    schedule_human = f"Every {interval // 1440} day(s)"
+                elif interval >= 60:
+                    schedule_human = f"Every {interval // 60} hour(s)"
+                else:
+                    schedule_human = f"Every {interval} min"
+            elif cron_hour >= 0:
+                schedule_human = f"Daily at {cron_hour:02d}:{cron_minute:02d}"
+            else:
+                schedule_human = "On demand"
+
             clean.append({
                 "id": t.get("task_id", t.get("id", "")),
-                "name": t.get("skill_name", t.get("name", "unknown")),
-                "interval": t.get("interval_minutes", t.get("interval", 0)),
-                "cron_expression": t.get("cron_expression", t.get("cron", "")),
+                "name": name,
+                "interval": interval,
+                "cron_expression": cron_expr,
+                "schedule_human": schedule_human,
                 "prompt": t.get("prompt", ""),
                 "last_run": t.get("last_run", 0),
                 "next_run": t.get("next_run", 0),
