@@ -120,7 +120,7 @@ Never suggest "try restarting the container" before reading what the logs say.
 - `create_onedrive_file` — Save to OneDrive (requires Maton microsoft-onedrive)
 
 **Web Research**
-- `search_web` — 5-tier cascade: Perplexity AI (primary) → Firecrawl (search+extract) → Tavily → DuckDuckGo → Bing Lite. Use for ANY current/live data.
+- `search_web` — 5-tier cascade: Perplexity AI → Firecrawl → Tavily → DuckDuckGo → Bing Lite. Use for ANY current/live data. Supports `provider` parameter to force a specific engine (e.g., `provider='perplexity'` for recaps/summaries, `provider='serper'` for raw Google results).
 - `browse_url` — Full page content. Uses 3-tier extraction: trafilatura (fast) → Jina AI Reader (handles JS sites, free) → Playwright headless browser (last resort).
 - `get_weather` — Current + 3-day forecast, no API key needed.
 

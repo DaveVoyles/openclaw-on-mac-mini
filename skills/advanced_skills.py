@@ -626,19 +626,47 @@ async def create_status_report() -> str:
 # ---------------------------------------------------------------------------
 
 
-async def search_web(query: str, num_results: int = 5) -> str:
+async def search_web(query: str, num_results: int = 5, provider: str = "") -> str:
     """Search the web using the best available provider.
 
     Search priority: Perplexity (AI-powered) → Firecrawl (search+extract) → Tavily (structured) → DuckDuckGo (free) → Bing Lite (fallback)
 
-    Uses installed ClawHub skill scripts for Tavily and DDG:
-      - skills/openclaw-tavily-search/scripts/tavily_search.py  (Tavily API)
-      - skills/free-web-search/scripts/web_search.py            (DDG, no key)
+    Args:
+        query: Search query
+        num_results: Max results (1-10)
+        provider: Force a specific provider: 'perplexity', 'firecrawl', 'tavily',
+                  'serper', 'duckduckgo'. Empty = auto cascade.
     """
     num_results = min(max(num_results, 1), 10)
+    provider = provider.lower().strip()
+
+    # ── Forced provider selection ──────────────────────────────────────────
+    if provider:
+        if provider == "perplexity":
+            if not PERPLEXITY_API_KEY:
+                return "⚠️ Perplexity API key not configured."
+            return await _perplexity_search(query, num_results) or "❌ Perplexity returned no results."
+        elif provider == "firecrawl":
+            if not FIRECRAWL_API_KEY:
+                return "⚠️ Firecrawl API key not configured."
+            return await _firecrawl_search(query, num_results) or "❌ Firecrawl returned no results."
+        elif provider == "serper":
+            if not SERPER_API_KEY:
+                return "⚠️ Serper API key not configured. Uncomment SERPER_API_KEY in .env."
+            return await serper_search(query, num_results)
+        elif provider in ("tavily",):
+            if not TAVILY_API_KEY:
+                return "⚠️ Tavily API key not configured."
+            # Fall through to Tavily section below
+        elif provider in ("duckduckgo", "ddg"):
+            pass  # Fall through to DDG section below
+        else:
+            return f"⚠️ Unknown provider `{provider}`. Options: perplexity, firecrawl, serper, tavily, duckduckgo."
+
+    # ── Auto cascade (when no provider forced) ─────────────────────────────
 
     # ── Perplexity path (AI-synthesized answers with citations) ────────────
-    if PERPLEXITY_API_KEY:
+    if not provider and PERPLEXITY_API_KEY:
         try:
             log.info("Using Perplexity for search: %s", query[:80])
             result = await _perplexity_search(query, num_results)
@@ -648,7 +676,7 @@ async def search_web(query: str, num_results: int = 5) -> str:
             log.debug("Perplexity search failed: %s", e)
 
     # ── Firecrawl path (search + full page extraction in one call) ─────────
-    if FIRECRAWL_API_KEY:
+    if not provider and FIRECRAWL_API_KEY:
         try:
             log.info("Using Firecrawl for search: %s", query[:80])
             result = await _firecrawl_search(query, num_results)

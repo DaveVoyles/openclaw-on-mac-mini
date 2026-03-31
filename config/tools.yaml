@@ -405,9 +405,11 @@
     properties: {}
 - name: search_web
   description:
-    Search the live web for current information using Tavily AI Search (with DuckDuckGo and Bing fallbacks). Use
-    when the user asks about news, current events, facts, documentation, real estate listings, weather, or anything that requires
-    up-to-date information from the internet.
+    Search the live web using a 5-tier cascade (Perplexity AI → Firecrawl → Tavily → DuckDuckGo → Bing Lite).
+    Use when the user asks about news, current events, facts, or anything requiring up-to-date information.
+    You can force a specific provider with the 'provider' parameter — use 'perplexity' for AI-synthesized
+    answers with citations (best for recaps, summaries), 'serper' for raw Google results, 'firecrawl' for
+    search + full page content, or leave empty for auto cascade.
   parameters:
     type: object
     properties:
@@ -417,6 +419,9 @@
       num_results:
         type: integer
         description: Number of results to return (1-10, default 5)
+      provider:
+        type: string
+        description: "Force a specific search provider: 'perplexity', 'firecrawl', 'serper', 'tavily', 'duckduckgo'. Leave empty for auto cascade."
     required:
       - query
 - name: get_weather
