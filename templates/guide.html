@@ -1029,10 +1029,13 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         </table>
       </div>
       <div class="tip">
-        <strong>&#128161; Playwright fallback:</strong> When
-        <code>browse_url</code> encounters JS-rendered pages that
-        trafilatura can&rsquo;t parse, OpenClaw automatically falls back to
-        headless Chromium via Playwright to extract content.
+        <strong>&#128161; 3-Tier Content Extraction:</strong> When
+        <code>browse_url</code> encounters pages that trafilatura can&rsquo;t parse,
+        OpenClaw tries two fallbacks automatically:
+        <ol style="margin:0.5rem 0 0 1.5rem">
+          <li><strong>Jina AI Reader</strong> &mdash; Free service that converts any URL to clean markdown. Handles JS-rendered sites without running a browser. Fast and reliable.</li>
+          <li><strong>Playwright</strong> &mdash; Full headless Chromium browser as last resort. Renders the page completely, then extracts text.</li>
+        </ol>
       </div>
 
       <h3>&#128302; Why Perplexity AI Is the Primary Search Provider</h3>
@@ -1093,6 +1096,43 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         <a href="#research"><code>/research</code></a
         >.
       </p>
+
+      <h3>&#128293; Other Premium APIs to Consider</h3>
+
+      <h4>Firecrawl &mdash; Search + Extract in One Call</h4>
+      <p>
+        <a href="https://firecrawl.dev" target="_blank" rel="noopener">Firecrawl</a> combines web search
+        AND full page content extraction into a single API call, returning clean markdown.
+      </p>
+      <ul>
+        <li><strong>How it works:</strong> Send a search query &rarr; get back structured results
+          with full page content already extracted as markdown. No need to browse URLs separately.</li>
+        <li><strong>Why useful:</strong> Our research pipeline does search &rarr; browse &rarr; synthesize
+          (3 steps). Firecrawl collapses the first two into one, making research 30-40% faster.</li>
+        <li><strong>Handles:</strong> JS-rendered sites, anti-bot protection, dynamic content.</li>
+        <li><strong>Cost:</strong> ~$0.004/page. Free tier: 500 pages/month.</li>
+        <li><strong>Best for:</strong> Research-heavy workflows where speed matters.</li>
+        <li><strong>Website:</strong> <a href="https://firecrawl.dev" target="_blank" rel="noopener">firecrawl.dev</a></li>
+      </ul>
+
+      <h4>Serper &mdash; Google Search Results API</h4>
+      <p>
+        <a href="https://serper.dev" target="_blank" rel="noopener">Serper</a> provides direct access to
+        Google SERP (Search Engine Results Page) data via API. Returns the exact same
+        results you&rsquo;d see on google.com, but as structured JSON.
+      </p>
+      <ul>
+        <li><strong>How it works:</strong> Send a query &rarr; get back Google&rsquo;s results as JSON
+          (titles, snippets, URLs, knowledge panels, &ldquo;People Also Ask&rdquo;, featured snippets).</li>
+        <li><strong>Why useful:</strong> Google is still the most comprehensive search engine.
+          Perplexity synthesizes answers (great for Q&amp;A), but sometimes you want the raw
+          Google results for deeper analysis or when Perplexity&rsquo;s answer is too condensed.</li>
+        <li><strong>Unique data:</strong> Knowledge Graph panels, &ldquo;People Also Ask&rdquo; questions,
+          shopping results, news results &mdash; data other search APIs don&rsquo;t provide.</li>
+        <li><strong>Cost:</strong> $5/month for 2,500 queries. Very affordable.</li>
+        <li><strong>Best for:</strong> Current events, fact-checking, product research, news monitoring.</li>
+        <li><strong>Website:</strong> <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a></li>
+      </ul>
 
       <h3>Inline Search (via <code>/ask</code>)</h3>
       <p>The AI can search the web and fetch content to answer questions:</p>

@@ -121,7 +121,7 @@ Never suggest "try restarting the container" before reading what the logs say.
 
 **Web Research**
 - `search_web` — 4-tier cascade: Perplexity AI (primary) → Tavily → DuckDuckGo → Bing Lite. Use for ANY current/live data.
-- `browse_url` — Full page content. Use after search_web to read promising results. Web browsing now handles JS-rendered sites via Playwright headless Chromium fallback when trafilatura fails.
+- `browse_url` — Full page content. Uses 3-tier extraction: trafilatura (fast) → Jina AI Reader (handles JS sites, free) → Playwright headless browser (last resort).
 - `get_weather` — Current + 3-day forecast, no API key needed.
 
 **Infrastructure (Core)**

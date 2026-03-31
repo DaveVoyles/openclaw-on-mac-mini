@@ -977,7 +977,15 @@ async def browse_url(url: str) -> str:
     )
 
     if not text:
-        # Fallback: try Playwright for JS-rendered content
+        # Fallback 1: try Jina AI Reader (free, handles JS sites, returns markdown)
+        try:
+            log.info("Trying Jina Reader fallback for: %s", url)
+            text = await _jina_fetch(url)
+        except Exception as e:
+            log.debug("Jina Reader fallback failed: %s", e)
+
+    if not text:
+        # Fallback 2: try Playwright headless browser (last resort)
         try:
             log.info("Trying Playwright fallback for: %s", url)
             text = await _playwright_fetch(url)
@@ -995,6 +1003,26 @@ async def browse_url(url: str) -> str:
         text = text[:6000] + "\n… (truncated)"
 
     return f"**Source**: {url}\n\n{text}"
+
+
+async def _jina_fetch(url: str) -> str:
+    """Fetch clean markdown content via Jina AI Reader. Free, handles JS sites."""
+    jina_url = f"https://r.jina.ai/{url}"
+    headers = {"Accept": "text/markdown", "X-No-Cache": "true"}
+    try:
+        session = await _get_session()
+        async with session.get(
+            jina_url, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=20),
+        ) as resp:
+            if resp.status != 200:
+                log.debug("Jina Reader returned HTTP %d for %s", resp.status, url)
+                return ""
+            text = await resp.text()
+            return text[:6000] if text else ""
+    except Exception as e:
+        log.debug("Jina Reader failed for %s: %s", url, e)
+        return ""
 
 
 async def _playwright_fetch(url_or_html: str) -> str:
