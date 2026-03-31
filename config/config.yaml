@@ -16,14 +16,14 @@ llm:
   primary_model: "gemini-2.5-flash"
   fallback_model: "gpt-4o-mini"
   # copilot_proxy_url: ""  # Set COPILOT_PROXY_URL env var to route through Copilot proxy
-  max_tokens: 2000
+  max_tokens: 4096
   temperature: 0.7
-  max_tool_rounds: 5
+  max_tool_rounds: 12
   rate_limits:
     per_minute: 60
     per_hour: 500
   conversation:
-    ttl_minutes: 30
+    ttl_minutes: 60
     max_history: 50
 
 # Local LLM (Ollama) — hybrid routing

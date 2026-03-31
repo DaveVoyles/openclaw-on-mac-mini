@@ -73,7 +73,7 @@ MAX_CALLS_PER_MINUTE = cfg.llm_rpm_limit
 MAX_CALLS_PER_HOUR = cfg.llm_rph_limit
 
 # Function-call loop limit (prevent infinite tool invocations)
-MAX_TOOL_ROUNDS = 12
+MAX_TOOL_ROUNDS = cfg.llm_max_tool_rounds
 
 # ---------------------------------------------------------------------------
 # System prompt (cached with mtime-based invalidation)

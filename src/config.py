@@ -77,6 +77,7 @@ class _Config:
     llm_rph_limit: int = int(os.getenv("LLM_RPH_LIMIT", str(_rate_limits.get("per_hour", 500))))
     llm_max_tool_rounds: int = int(os.getenv("LLM_MAX_TOOL_ROUNDS", str(_llm.get("max_tool_rounds", 12))))
     llm_max_history_turns: int = int(os.getenv("LLM_MAX_HISTORY_TURNS", str(_conversation.get("max_history", 50))))
+    conversation_ttl_minutes: int = int(os.getenv("CONVERSATION_TTL_MINUTES", str(_conversation.get("ttl_minutes", 30))))
 
     # -- Deep / Thinking -------------------------------------------------------
     thinking_model: str = os.getenv("THINKING_MODEL", "gemini-2.5-flash")
@@ -161,6 +162,12 @@ class _Config:
             warnings.append(f"llm_temperature={self.llm_temperature} out of range 0.0-2.0")
         if self.llm_rpm_limit <= 0:
             warnings.append(f"llm_rpm_limit={self.llm_rpm_limit} must be > 0")
+        if not (256 <= self.llm_max_tokens <= 32768):
+            warnings.append(f"llm_max_tokens={self.llm_max_tokens} out of range 256-32768")
+        if not (1 <= self.llm_max_tool_rounds <= 30):
+            warnings.append(f"llm_max_tool_rounds={self.llm_max_tool_rounds} out of range 1-30")
+        if not (1 <= self.conversation_ttl_minutes <= 1440):
+            warnings.append(f"conversation_ttl_minutes={self.conversation_ttl_minutes} out of range 1-1440")
         return warnings
 
 
