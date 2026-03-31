@@ -857,6 +857,9 @@ async def _firecrawl_search(query: str, num_results: int = 5) -> str:
                 lines.append(f"> {snippet}\n")
 
         log.info("Firecrawl search: %d results for: %s", len(results), query[:60])
+        # Track usage
+        from spending import tracker as spending_tracker
+        await spending_tracker.record_firecrawl(pages=len(results), action="search")
         return "\n".join(lines)
     except Exception as e:
         log.debug("Firecrawl search failed: %s", e)
@@ -902,6 +905,9 @@ async def firecrawl_scrape(url: str) -> str:
 
         header = f"**{title}**\n*Source: {url}*\n\n" if title else f"*Source: {url}*\n\n"
         log.info("Firecrawl scrape: %d chars from %s", len(markdown), url)
+        # Track usage
+        from spending import tracker as spending_tracker
+        await spending_tracker.record_firecrawl(pages=1, action="scrape")
         return header + markdown
     except Exception as e:
         log.debug("Firecrawl scrape failed: %s", e)

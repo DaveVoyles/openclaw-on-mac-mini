@@ -1138,13 +1138,13 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
       <p>The AI can search the web and fetch content to answer questions:</p>
       <ul>
         <li>
-          <code>search_web</code>: 4-tier cascade search (Perplexity AI &rarr;
+          <code>search_web</code>: 5-tier cascade search (Perplexity AI &rarr; Firecrawl &rarr;
           Tavily &rarr; DuckDuckGo &rarr; Bing Lite).
         </li>
         <li>
           <code>browse_url</code>: Extract clean text and markdown from a
-          specific URL. Falls back to Playwright headless Chromium for
-          JS-rendered sites.
+          specific URL. 3-tier extraction: trafilatura &rarr; Jina AI Reader
+          (handles JS sites, free) &rarr; Playwright headless Chromium (last resort).
         </li>
       </ul>
 
@@ -1216,12 +1216,12 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
           generating 2&ndash;3 keyword variations per sub-query for broader coverage
         </li>
         <li>
-          <strong>Searches</strong> each sub-query in parallel (4-tier cascade:
+          <strong>Searches</strong> each sub-query in parallel (5-tier cascade:
           Perplexity AI &rarr; Tavily &rarr; DuckDuckGo &rarr; Bing Lite)
         </li>
         <li>
           <strong>Browses</strong> the top source URLs to extract full article
-          content (with Playwright fallback for JS-rendered sites)
+          content (3-tier: trafilatura &rarr; Jina AI Reader &rarr; Playwright)
         </li>
         <li>
           <strong>Ranks sources</strong> by quality tier: academic/official &gt;

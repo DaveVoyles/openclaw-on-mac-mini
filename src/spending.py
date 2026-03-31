@@ -68,6 +68,12 @@ class SpendingTracker:
                 "total_cost_usd": 0.0,
                 "daily": {},  # "2026-03-30": {calls, cost_usd}
             },
+            "firecrawl": {    # Firecrawl API tracking
+                "calls": 0,
+                "pages_scraped": 0,
+                "total_cost_usd": 0.0,
+                "daily": {},  # "2026-03-30": {calls, pages, cost_usd}
+            },
         }
 
     def _save(self):
@@ -106,6 +112,25 @@ class SpendingTracker:
             await loop.run_in_executor(None, self._save)
             log.info("Perplexity: +1 call ($%.4f) — total $%.4f (%d calls)",
                      cost_per_query, pplx["total_cost_usd"], pplx["calls"])
+
+    async def record_firecrawl(self, pages: int = 1, action: str = "scrape"):
+        """Record a Firecrawl API call. Free tier: 500 pages/month. ~$0.004/page on paid."""
+        cost_per_page = 0.004
+        cost = cost_per_page * pages
+        async with self._lock:
+            today = datetime.date.today().isoformat()
+            fc = self._data.setdefault("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}})
+            fc["calls"] += 1
+            fc["pages_scraped"] += pages
+            fc["total_cost_usd"] += cost
+            day = fc["daily"].setdefault(today, {"calls": 0, "pages": 0, "cost_usd": 0.0})
+            day["calls"] += 1
+            day["pages"] += pages
+            day["cost_usd"] += cost
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._save)
+            log.info("Firecrawl: +%d page(s) [%s] — total %d/%d free pages ($%.4f)",
+                     pages, action, fc["pages_scraped"], 500, fc["total_cost_usd"])
 
     async def _record_locked(self, input_tokens: int, output_tokens: int):
         """Internal: called while holding self._lock."""
@@ -190,9 +215,10 @@ class SpendingTracker:
         d = self._data
         total_tokens = d["total_input_tokens"] + d["total_output_tokens"]
         pplx = d.get("perplexity", {"calls": 0, "total_cost_usd": 0.0})
+        fc = d.get("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0})
 
         # Combined cost
-        combined_cost = d["total_cost_usd"] + pplx.get("total_cost_usd", 0.0)
+        combined_cost = d["total_cost_usd"] + pplx.get("total_cost_usd", 0.0) + fc.get("total_cost_usd", 0.0)
 
         # Progress bar
         pct = min(100.0, (combined_cost / BUDGET_LIMIT) * 100) if BUDGET_LIMIT > 0 else 0.0
@@ -210,13 +236,18 @@ class SpendingTracker:
             f"  Calls:  {pplx.get('calls', 0):,}",
             f"  Cost:   ${pplx.get('total_cost_usd', 0.0):.4f}",
             f"",
+            f"**🔥 Firecrawl:**",
+            f"  Calls:  {fc.get('calls', 0):,}",
+            f"  Pages:  {fc.get('pages_scraped', 0):,} / 500 free",
+            f"  Cost:   ${fc.get('total_cost_usd', 0.0):.4f}",
+            f"",
             f"**⚡ Gemini LLM:**",
             f"  Calls:  {d['calls']:,}",
             f"  Cost:   ${d['total_cost_usd']:.4f}",
             f"  Tokens: {total_tokens:,} ({d['total_input_tokens']:,} in / {d['total_output_tokens']:,} out)",
         ]
 
-        total_calls = d["calls"] + pplx.get("calls", 0)
+        total_calls = d["calls"] + pplx.get("calls", 0) + fc.get("calls", 0)
         if total_calls > 0:
             avg_cost = combined_cost / total_calls
             lines.append(f"")

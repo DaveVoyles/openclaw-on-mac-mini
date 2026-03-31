@@ -1107,6 +1107,20 @@
                 ><span class="stat-value" id="sp-pplx-cost" style="color: var(--gold)">$0.0000</span>
               </div>
             </div>
+            <div style="border-top: 1px solid var(--border); margin: 0.75rem 0; padding-top: 0.75rem">
+              <div class="stat-row">
+                <span class="stat-label">🔥 Firecrawl Calls</span
+                ><span class="stat-value" id="sp-fc-calls">0</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">🔥 Pages Scraped</span
+                ><span class="stat-value" id="sp-fc-pages">0 / 500</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">🔥 Firecrawl Cost</span
+                ><span class="stat-value" id="sp-fc-cost" style="color: var(--gold)">$0.0000</span>
+              </div>
+            </div>
             <div class="stat-row" style="margin-top: 0.75rem">
               <a
                 href="https://aistudio.google.com/spend?project=gen-lang-client-0162710322"
@@ -1540,6 +1554,15 @@
         const pplx = sp.perplexity || {calls: 0, total_cost_usd: 0};
         document.getElementById("sp-pplx-calls").textContent = (pplx.calls || 0).toLocaleString();
         document.getElementById("sp-pplx-cost").textContent = `$${(pplx.total_cost_usd || 0).toFixed(4)}`;
+
+        // Firecrawl stats
+        const fc = sp.firecrawl || {calls: 0, pages_scraped: 0, total_cost_usd: 0};
+        document.getElementById("sp-fc-calls").textContent = (fc.calls || 0).toLocaleString();
+        const fcPages = fc.pages_scraped || 0;
+        const fcPagesEl = document.getElementById("sp-fc-pages");
+        fcPagesEl.textContent = `${fcPages} / 500`;
+        fcPagesEl.style.color = fcPages >= 450 ? 'var(--danger,#f85149)' : fcPages >= 300 ? '#ff9800' : 'var(--mint-green)';
+        document.getElementById("sp-fc-cost").textContent = `$${(fc.total_cost_usd || 0).toFixed(4)}`;
 
         // Daily chart
         const days = Object.entries(sp.daily)
