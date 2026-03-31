@@ -1275,6 +1275,45 @@ def _extract_image_url(text: str) -> str | None:
     return None
 
 
+def _format_markdown_for_discord(text: str) -> str:
+    """Convert markdown elements that Discord embeds don't render natively.
+
+    Discord embed descriptions support bold, italic, strikethrough, code blocks,
+    and masked links — but NOT headers (# ## ###). This converts:
+      ### heading  →  **heading**          (bold)
+      ## heading   →  **heading**          (bold)
+      # heading    →  __**heading**__      (bold + underline)
+    """
+    lines = text.split("\n")
+    result: list[str] = []
+    in_code_block = False
+
+    for line in lines:
+        # Don't touch anything inside code fences
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            result.append(line)
+            continue
+        if in_code_block:
+            result.append(line)
+            continue
+
+        # Convert headers to bold (Discord embeds ignore # syntax)
+        header_match = re.match(r'^(#{1,3})\s+(.+)$', line)
+        if header_match:
+            level = len(header_match.group(1))
+            heading_text = header_match.group(2).strip()
+            if level == 1:
+                result.append(f"__**{heading_text}**__")
+            else:
+                result.append(f"**{heading_text}**")
+            continue
+
+        result.append(line)
+
+    return "\n".join(result)
+
+
 def _format_tables_for_discord(text: str) -> str:
     """Convert markdown tables to clean, padded ANSI code blocks for Discord.
 
@@ -1884,6 +1923,7 @@ async def ask_cmd(
     except Exception as e:
         log.debug("Table image rendering failed: %s", e)
 
+    response_text = _format_markdown_for_discord(response_text)
     response_text = _format_tables_for_discord(response_text)
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
