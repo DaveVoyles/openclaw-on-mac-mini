@@ -3,12 +3,7 @@
 from discord import app_commands
 
 from audit import audit_log  # noqa: F401 — re-exported for cog convenience
-
-
-def is_service_allowed(skill: str, service: str) -> bool:
-    """Forward to bot.py's is_service_allowed — imported lazily to avoid circular imports."""
-    from bot import is_service_allowed as _is_service_allowed
-    return _is_service_allowed(skill, service)
+from permissions import is_allowed, is_service_allowed  # noqa: F401 — re-exported
 
 
 def require_auth():
@@ -19,7 +14,6 @@ def require_auth():
     """
 
     async def predicate(interaction) -> bool:
-        from bot import is_allowed
         if not is_allowed(interaction):
             raise app_commands.CheckFailure(
                 "🔒 You are not authorized to use this command."

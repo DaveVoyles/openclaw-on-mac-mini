@@ -41,6 +41,14 @@ _TOOL_CACHE_MAX_SIZE = 256
 # {"tool_name|arg_hash": (result, timestamp)}
 _tool_cache: dict[str, tuple[str, float]] = {}
 
+# Skill invocation counters
+_skill_call_counts: dict[str, int] = {}
+
+
+def get_skill_stats() -> dict[str, int]:
+    """Return skill call counts sorted by frequency (descending)."""
+    return dict(sorted(_skill_call_counts.items(), key=lambda x: x[1], reverse=True))
+
 
 def _cache_key(name: str, args: dict) -> str:
     return f"{name}|{hashlib.md5(str(sorted(args.items())).encode()).hexdigest()[:8]}"
@@ -73,6 +81,9 @@ async def _execute_function_call(name: str, args: dict) -> str:
     # Circuit breaker: fast-fail on repeatedly broken tools
     if circuit_breaker.is_open(name):
         return f"⚠️ {name} is temporarily unavailable (circuit open — recent failures). Try an alternative approach."
+
+    # Track invocation count
+    _skill_call_counts[name] = _skill_call_counts.get(name, 0) + 1
 
     # Return cached result for read-only snapshot tools if still fresh
     if name in _CACHEABLE_TOOLS:

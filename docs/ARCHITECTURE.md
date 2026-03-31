@@ -9,6 +9,29 @@ Key architectural patterns:
 - **Proactive loops** (`monitor_skills.py`, `rss_skills.py`) run on the scheduler and alert on changes
 - **Mission Control** (`mission_control.py`) acts as a Kanban store backed by `data/tasks.json`
 
+---
+
+## Modular Structure (March 31, 2026)
+
+`bot.py` was split from 3,084 → 1,195 lines. `llm.py` extracted companion modules for its internals.
+
+```
+bot.py was split from 3,084 → 1,195 lines:
+├── bot.py (1,195) — Core: init, auth, /ask command
+├── discord_commands.py (1,131) — 30 slash commands
+├── discord_background.py (477) — Background loops
+└── discord_web.py (319) — Health server
+
+llm.py has extracted companion modules:
+├── llm.py (1,889) — Public API facade
+├── llm_client.py (257) — Gemini client wrapper
+├── llm_tools.py (264) — Tool execution
+├── llm_patterns.py (194) — Regex + validation
+└── llm_ratelimit.py (82) — Rate limiting
+```
+
+---
+
 ```mermaid
 graph TB
     %% ── User Interface ──────────────────────────────────────────
@@ -19,8 +42,15 @@ graph TB
 
     %% ── Core Bot ────────────────────────────────────────────────
     subgraph OpenClaw ["🐾 OpenClaw (Docker Container)"]
-        Bot["bot.py\nCommand Router\n(40+ commands)"]
-        LLM["llm.py\nLLM Dispatcher"]
+        Bot["bot.py\nCore: init, auth, /ask\n(1,195 lines)"]
+        DiscordCmds["discord_commands.py\n30 slash commands"]
+        DiscordBG["discord_background.py\n5 background loops"]
+        DiscordWeb["discord_web.py\nHealth/metrics server"]
+        LLM["llm.py\nLLM Dispatcher\n(public API facade)"]
+        LLMClient["llm_client.py\nGemini client wrapper"]
+        LLMTools["llm_tools.py\nTool execution engine"]
+        LLMPatterns["llm_patterns.py\nQuery classification"]
+        LLMRateLimit["llm_ratelimit.py\nRate limiter"]
         ResearchAgent["research_agent.py\nReAct Research Loop"]
         Skills["skills/\nadvanced_skills.py"]
         Gateway["gateway.py\nMaton Client"]
@@ -41,6 +71,19 @@ graph TB
         ThreadStore["thread_store.py\nSQLite Thread Persistence\nWAL mode"]
         Metrics["/metrics\nPrometheus Endpoint\n:8765"]
 
+        subgraph BotModules ["📦 bot.py modules (extracted)"]
+            DiscordCmds
+            DiscordBG
+            DiscordWeb
+        end
+
+        subgraph LLMModules ["📦 llm.py modules (extracted)"]
+            LLMClient
+            LLMTools
+            LLMPatterns
+            LLMRateLimit
+        end
+
         subgraph Cogs ["📦 Discord Cogs (src/cogs/)"]
             DockerCog["docker_cog.py\n6 commands"]
             MediaCog["media_cog.py\n6 commands"]
@@ -50,7 +93,14 @@ graph TB
     end
 
     Discord -->|"events & interactions"| Bot
+    Bot --> DiscordCmds
+    Bot --> DiscordBG
+    Bot --> DiscordWeb
     Bot --> LLM
+    LLM --> LLMClient
+    LLM --> LLMTools
+    LLM --> LLMPatterns
+    LLM --> LLMRateLimit
     Bot -->|"contextual recall"| VectorStore
     Bot --> ThreadStore
     Bot --> ResearchAgent
@@ -263,7 +313,7 @@ graph TB
     classDef infra fill:#3a2d1e,stroke:#c08040,color:#fff
     classDef actor fill:#1e1e3a,stroke:#6060d9,color:#fff
 
-    class Discord,Bot,LLM,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
+    class Discord,Bot,DiscordCmds,DiscordBG,DiscordWeb,LLM,LLMClient,LLMTools,LLMPatterns,LLMRateLimit,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
     class DockerCog,MediaCog,NetworkCog,AnalyticsCog service
     class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,PerplexityAPI,FirecrawlAPI,TavilyAPI,DDGNet,SerperAPI,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
@@ -277,7 +327,7 @@ graph TB
 
 | Flow                            | Path                                                                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **User command → response**     | User → Discord → `bot.py` → `llm.py` (Gemini) → `skills/` → target service → Discord                                                            |
+| **User command → response**     | User → Discord → `bot.py` → `llm.py` (`llm_client` + `llm_tools` + `llm_patterns`) → `skills/` → target service → Discord |
 | **Media request approval**      | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit → Plex                                                               |
 | **Web search (5-tier cascade)** | `search_web()` → Perplexity AI (primary) → Firecrawl (search+extract) → Tavily (structured) → DuckDuckGo Lite (free) → Bing HTML scrape (last resort); Serper Google SERP available as direct tool |
 | **Weather**                     | `/weather` or `/ask weather…` → `llm.py` → `get_weather()` → `wttr.in` JSON API                                                                 |

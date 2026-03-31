@@ -9,7 +9,6 @@ discord_background.py, and the web/health server in discord_web.py.
 
 import asyncio
 import datetime
-import functools
 import io
 import json
 import logging
@@ -44,6 +43,12 @@ from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
 from memory import get_model_preference
 from memory import store as conversation_store
+from permissions import (  # noqa: F401 — re-exported for backward compat
+    ALLOWED_USER_IDS,
+    is_allowed,
+    is_service_allowed,
+    require_auth,
+)
 from qmd import remember_fact
 from scheduler import scheduler
 from skills import SKILLS
@@ -56,11 +61,6 @@ load_dotenv()
 
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "")
-ALLOWED_USER_IDS = [
-    int(uid.strip())
-    for uid in os.getenv("ALLOWED_USER_IDS", "").split(",")
-    if uid.strip()
-]
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
@@ -144,75 +144,6 @@ AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 
 from audit import _audit_buffer, audit_log  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Authorization helper
-# ---------------------------------------------------------------------------
-
-
-def is_allowed(interaction: discord.Interaction) -> bool:
-    """Return True if the invoking user is on the allow-list."""
-    if not ALLOWED_USER_IDS:
-        return True
-    return interaction.user.id in ALLOWED_USER_IDS
-
-
-def require_auth(func):
-    """Decorator that gates a slash-command handler behind the allow-list."""
-
-    @functools.wraps(func)
-    async def wrapper(interaction: discord.Interaction, *args, **kwargs):
-        if not is_allowed(interaction):
-            await interaction.response.send_message(
-                "🔒 You are not authorized to use this command.", ephemeral=True
-            )
-            return
-        return await func(interaction, *args, **kwargs)
-
-    return wrapper
-
-
-# ---------------------------------------------------------------------------
-# Permissions helper (reads config/permissions.yaml)
-# ---------------------------------------------------------------------------
-
-_permissions_cache: dict | None = None
-_permissions_mtime: float = 0.0
-
-
-def _load_permissions() -> dict:
-    global _permissions_cache, _permissions_mtime
-    perms_file = CONFIG_DIR / "permissions.yaml"
-    try:
-        current_mtime = perms_file.stat().st_mtime if perms_file.exists() else 0.0
-    except OSError:
-        current_mtime = 0.0
-    if _permissions_cache is not None and current_mtime == _permissions_mtime:
-        return _permissions_cache
-    if perms_file.exists():
-        try:
-            with open(perms_file) as f:
-                _permissions_cache = yaml.safe_load(f) or {}
-        except Exception as exc:
-            log.warning("Failed to parse permissions YAML: %s", exc)
-            _permissions_cache = _permissions_cache or {}
-    else:
-        _permissions_cache = {}
-    _permissions_mtime = current_mtime
-    return _permissions_cache
-
-
-def is_service_allowed(skill: str, service: str) -> bool:
-    """Check permissions.yaml to see if a service is allowed for a skill."""
-    perms = _load_permissions()
-    cmd_perms = perms.get("commands", {}).get(skill, {})
-    denied = cmd_perms.get("denied_services", [])
-    allowed = cmd_perms.get("allowed_services", [])
-    if service in denied:
-        return False
-    if allowed and service not in allowed:
-        return False
-    return True
-
 
 # ---------------------------------------------------------------------------
 # Module-level aiohttp session (reused for attachment downloads)
@@ -245,18 +176,20 @@ class OpenClawBot(commands.Bot):
         self._health_runner = None
 
     async def setup_hook(self):
-        """Load cogs, register commands, and sync on startup."""
-        for cog in (
-            "cogs.docker_cog",
-            "cogs.media_cog",
-            "cogs.network_cog",
-            "cogs.analytics_cog",
-            "cogs.memory_cog",
-            "cogs.research_cog",
-            "cogs.dream_cog",
-        ):
-            await self.load_extension(cog)
-        log.info("Loaded cogs: docker, media, network, analytics, memory, research, dream")
+        """Load cogs dynamically, register commands, and sync on startup."""
+        cogs_dir = Path(__file__).parent / "cogs"
+        loaded: list[str] = []
+        for cog_file in sorted(cogs_dir.glob("*_cog.py")):
+            if cog_file.name.startswith("_"):
+                continue
+            module = f"cogs.{cog_file.stem}"
+            try:
+                await self.load_extension(module)
+                loaded.append(module)
+                log.info("Loaded cog: %s", module)
+            except Exception as e:
+                log.error("Failed to load cog %s: %s", module, e)
+        log.info("Loaded %d cogs: %s", len(loaded), ", ".join(loaded))
 
         if DISCORD_GUILD_ID:
             guild = discord.Object(id=int(DISCORD_GUILD_ID))
@@ -1121,6 +1054,14 @@ async def ask_cmd(
     except Exception as exc:
         log.debug("Error tracking record failed: %s", exc)
 
+    # Response-time tracking
+    try:
+        from spending import record_response_time
+        elapsed_ms = (time.monotonic() - _ask_start) * 1000
+        record_response_time(elapsed_ms, model=model_used)
+    except Exception as exc:
+        log.debug("Response time tracking failed: %s", exc)
+
     conversation_store.cleanup_expired()
 
     # Fire-and-forget: correction detection & profile learning (Phase 14)
@@ -1183,6 +1124,16 @@ async def ask_cmd(
 
 
 def main():
+    # Run config validation and log results
+    issues = cfg.validate()
+    for issue in issues:
+        if issue.startswith("❌"):
+            log.error("Config: %s", issue)
+        elif issue.startswith("⚠️"):
+            log.warning("Config: %s", issue)
+        else:
+            log.info("Config: %s", issue)
+
     if not DISCORD_BOT_TOKEN:
         log.error("DISCORD_BOT_TOKEN not set. Create a .env file or set the environment variable.")
         sys.exit(1)

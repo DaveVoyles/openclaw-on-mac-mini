@@ -63,9 +63,7 @@ async def restart_gateway() -> str:
         import llm as _llm
         await _llm.close_sessions()
         # Reset cached model instances so they reinitialize next call
-        _llm._model = None
-        _llm._model_system_prompt = None
-        _llm._thinking_model = None
+        _llm._reset_models()
         log.info("Maintenance: LLM sessions cleared")
         results.append("LLM sessions cleared")
     except Exception as e:

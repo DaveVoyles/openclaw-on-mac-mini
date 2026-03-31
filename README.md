@@ -13,7 +13,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 40+ Discord slash commands across 7 cogs                               |
+| **Interface**    | 40+ Discord slash commands across 7 cogs + modular command system        |
 | **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 3 12B local (Ollama) |
 | **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
 | **Local LLM**    | Ollama (`gemma3:12b`) — free, with native tool calling support         |
@@ -492,13 +492,20 @@ Uptime Kuma (:3001)              Grafana dashboard
 
 ```
 ~/openclaw/
-├── bot.py                 # Main Discord bot (33 slash commands, health/metrics HTTP server)
+├── bot.py                 # Core Discord bot — init, auth, /ask (1,195 lines, split from 3,084)
+├── discord_commands.py    # 30 slash commands extracted from bot.py
+├── discord_background.py  # 5 background loop tasks (audit, cleanup, briefing, proactive, errors)
+├── discord_web.py         # aiohttp health/metrics/smoke/webhook web server
 ├── skills/
 │   ├── __init__.py        # Core Docker & system monitoring skills + unified registry
 │   └── advanced_skills.py # Media, network, Plex, health, and reporting skills
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
-├── llm.py                 # Hybrid LLM: Ollama (local) + Gemini 2.5 Flash (tool use), 106 tools
+├── llm.py                 # Hybrid LLM: public API facade (1,889 lines)
+├── llm_client.py          # Gemini client wrapper, model config, system prompt loading
+├── llm_tools.py           # Tool execution engine, function calling loop
+├── llm_patterns.py        # Regex patterns for query classification, hallucination detection
+├── llm_ratelimit.py       # Sliding-window rate limiter (60 RPM / 500 RPH)
 ├── memory.py              # Per-user conversation memory (30 min TTL)
 ├── approvals.py           # Approval workflow engine + Discord button UI
 ├── network.py             # Tailscale status, connectivity check, speed test

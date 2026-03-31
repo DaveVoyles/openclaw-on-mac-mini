@@ -1,9 +1,11 @@
 """
 OpenClaw Spending Tracker — Gemini API Cost Monitoring
 Tracks token usage per API call and persists cumulative spending to disk.
+Also provides response-time and error-rate tracking for /ask queries.
 """
 
 import asyncio
+import collections
 import datetime
 import fcntl
 import json
@@ -330,3 +332,31 @@ async def get_spending() -> str:
 async def get_daily_spending(days: int = 7) -> str:
     """Return daily spending breakdown."""
     return tracker.daily_breakdown(days=days)
+
+
+# ---------------------------------------------------------------------------
+# Response-time tracking (in-memory, last 1000 queries)
+# ---------------------------------------------------------------------------
+
+_response_times: collections.deque = collections.deque(maxlen=1000)
+
+
+def record_response_time(latency_ms: float, model: str = "unknown"):
+    """Append a response-time sample for /ask."""
+    _response_times.append({"ms": latency_ms, "model": model, "ts": time.time()})
+
+
+def get_response_stats() -> dict:
+    """Return aggregate response-time statistics."""
+    if not _response_times:
+        return {"count": 0, "avg_ms": 0, "p50_ms": 0, "p95_ms": 0, "p99_ms": 0, "last_10": []}
+    times = sorted(r["ms"] for r in _response_times)
+    n = len(times)
+    return {
+        "count": n,
+        "avg_ms": round(sum(times) / n, 0),
+        "p50_ms": round(times[n // 2], 0),
+        "p95_ms": round(times[int(n * 0.95)], 0) if n >= 20 else round(times[-1], 0),
+        "p99_ms": round(times[int(n * 0.99)], 0) if n >= 100 else round(times[-1], 0),
+        "last_10": [round(r["ms"], 0) for r in list(_response_times)[-10:]],
+    }

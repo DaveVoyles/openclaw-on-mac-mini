@@ -13,6 +13,7 @@ import socket
 import sys
 import json
 import datetime
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -35,6 +36,7 @@ from config import (
 # ---------------------------------------------------------------------------
 
 from http_session import SessionManager
+from search_provider import get_stats
 
 _sessions = SessionManager(
     timeout=TIMEOUT_SLOW,
@@ -670,26 +672,38 @@ async def search_web(query: str, num_results: int = 5, provider: str = "") -> st
 
     # ── Perplexity path (AI-synthesized answers with citations) ────────────
     if not provider and PERPLEXITY_API_KEY:
+        stats = get_stats("perplexity")
+        start = time.monotonic()
         try:
             log.info("Using Perplexity for search: %s", query[:80])
             result = await _perplexity_search(query, num_results)
             if result:
+                stats.record_success((time.monotonic() - start) * 1000)
                 return result
+            stats.record_failure()
         except Exception as e:
+            stats.record_failure()
             log.debug("Perplexity search failed: %s", e)
 
     # ── Firecrawl path (search + full page extraction in one call) ─────────
     if not provider and FIRECRAWL_API_KEY:
+        stats = get_stats("firecrawl")
+        start = time.monotonic()
         try:
             log.info("Using Firecrawl for search: %s", query[:80])
             result = await _firecrawl_search(query, num_results)
             if result:
+                stats.record_success((time.monotonic() - start) * 1000)
                 return result
+            stats.record_failure()
         except Exception as e:
+            stats.record_failure()
             log.debug("Firecrawl search failed: %s", e)
 
     # ── Tavily path (higher quality, needs API key) ────────────────────────
     if TAVILY_API_KEY and _TAVILY_SCRIPT.exists():
+        stats = get_stats("tavily")
+        start = time.monotonic()
         # Ensure num_results is a solid integer for the CLI
         clean_num = int(float(num_results))
         cmd = [
@@ -712,19 +726,27 @@ async def search_web(query: str, num_results: int = 5, provider: str = "") -> st
                 err = stderr.decode().strip()[:300]
                 # Fall through to DDG if Tavily fails at runtime
                 log.warning("Tavily script failed: %s", err)
+                stats.record_failure()
             else:
                 try:
                     data = json.loads(stdout.decode())
-                    return _format_tavily_results(data, int(float(num_results)))
+                    result = _format_tavily_results(data, int(float(num_results)))
+                    stats.record_success((time.monotonic() - start) * 1000)
+                    return result
                 except json.JSONDecodeError:
                     log.error("Tavily script returned invalid JSON: %s", stdout.decode()[:200])
+                    stats.record_failure()
         except asyncio.TimeoutError:
             log.warning("Tavily script timed out")
+            stats.record_failure()
         except Exception as e:
             log.warning("Tavily script error: %s", e)
+            stats.record_failure()
 
     # ── Free DuckDuckGo fallback (no API key required) ─────────────────────
     if _DDG_SCRIPT.exists():
+        stats = get_stats("duckduckgo")
+        start = time.monotonic()
         # Ensure num_results is an integer for the CLI
         clean_num = int(float(num_results))
         cmd = [
@@ -742,19 +764,27 @@ async def search_web(query: str, num_results: int = 5, provider: str = "") -> st
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=25)
             if proc.returncode != 0:
+                stats.record_failure()
                 return f"❌ Web search failed: {stderr.decode().strip()[:200]}"
             data = json.loads(stdout.decode())
             if "error" in data:
+                stats.record_failure()
                 return f"❌ {data['error']}"
-            return _format_ddg_results(data, int(float(num_results)))
+            result = _format_ddg_results(data, int(float(num_results)))
+            stats.record_success((time.monotonic() - start) * 1000)
+            return result
         except asyncio.TimeoutError:
+            stats.record_failure()
             return "❌ Web search timed out (25s)."
         except Exception as e:
+            stats.record_failure()
             return f"❌ Web search error: {e}"
 
     # ── Bing lite fallback (multi-search-engine skill provides pattern) ──────
     # Parse HTML from Bing lite search (no API key, no script required)
     log.info("Falling back to Bing lite for: %s", query)
+    stats = get_stats("bing")
+    start = time.monotonic()
     try:
         import urllib.parse
         bing_url = "https://www.bing.com/search?q=" + urllib.parse.quote_plus(query)
@@ -784,10 +814,13 @@ async def search_web(query: str, num_results: int = 5, provider: str = "") -> st
                             snippet = snippet_el.get_text(strip=True)[:250] if snippet_el else ""
                             lines.append(f"**{i}. {title}**\n{snippet}\n🔗 <{url_link}>")
                     if lines:
+                        stats.record_success((time.monotonic() - start) * 1000)
                         return "\n\n".join(lines) + "\n\n*via Bing (fallback)*"
                 except ImportError:
                     pass
+        stats.record_failure()
     except Exception as e:
+        stats.record_failure()
         log.warning("Bing fallback failed: %s", e)
 
     # ── Nothing worked ────────────────────────────────────────────────────

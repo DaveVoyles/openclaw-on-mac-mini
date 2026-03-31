@@ -930,6 +930,22 @@
           </details>
         </div>
 
+        <!-- Response Time Stats -->
+        <div class="card">
+          <h2>⏱️ Response Time</h2>
+          <div id="resp-stats" style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem">
+            <div><span id="resp-count" style="font-size:1.5rem;font-weight:bold;color:var(--spirit-blue)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Queries Answered</span></div>
+            <div><span id="resp-avg" style="font-size:1.5rem;font-weight:bold;color:var(--spirit-blue)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Avg (ms)</span></div>
+            <div><span id="resp-p50" style="font-size:1.5rem;font-weight:bold;color:var(--muted)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">P50 (ms)</span></div>
+            <div><span id="resp-p95" style="font-size:1.5rem;font-weight:bold;color:var(--gold)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">P95 (ms)</span></div>
+            <div><span id="resp-p99" style="font-size:1.5rem;font-weight:bold;color:var(--orange)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">P99 (ms)</span></div>
+          </div>
+          <details>
+            <summary style="cursor:pointer;color:var(--muted);font-size:0.82rem">Last 10 Responses</summary>
+            <div id="resp-sparkline" style="display:flex;align-items:flex-end;gap:3px;height:60px;padding-top:0.5rem"></div>
+          </details>
+        </div>
+
         <!-- Memory Health (Auto-Dream) -->
         <div class="card">
           <h2>🧠 Memory Health</h2>
@@ -940,6 +956,19 @@
             <div><span id="dream-last" style="font-size:1.1rem;font-weight:bold;color:var(--muted)">—</span><br><span style="font-size:0.78rem;color:var(--muted)">Last Dream</span></div>
           </div>
           <div id="dream-metrics" style="display:flex;flex-direction:column;gap:0.5rem"></div>
+        </div>
+
+        <!-- Configuration Status -->
+        <div class="card">
+          <details>
+          <summary style="cursor:pointer;user-select:none"><h2 style="display:inline">🔧 Configuration Status</h2></summary>
+          <p style="color:var(--muted);font-size:0.85rem;margin-bottom:1rem;font-style:italic">
+            Shows which API keys and services are configured. Missing keys disable the corresponding features.
+          </p>
+          <div id="config-status-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.5rem">
+            <span style="color:var(--muted);font-style:italic">Loading...</span>
+          </div>
+          </details>
         </div>
 
         <!-- Container Health Matrix -->
@@ -1301,6 +1330,22 @@
         <div class="card" id="conversations-card">
           <h2>&#128172; Saved Conversations</h2>
           <div id="threads-list" class="scrollable-list">
+            <p class="muted-text">Loading&hellip;</p>
+          </div>
+        </div>
+
+        <!-- Search Provider Stats -->
+        <div class="card">
+          <h2>🔍 Search Provider Stats</h2>
+          <div id="search-stats-content">
+            <p class="muted-text">Loading&hellip;</p>
+          </div>
+        </div>
+
+        <!-- Top Skills -->
+        <div class="card">
+          <h2>⚡ Top Skills</h2>
+          <div id="skill-stats-content">
             <p class="muted-text">Loading&hellip;</p>
           </div>
         </div>
@@ -2142,6 +2187,82 @@
           });
       }
 
+      // Search Provider Stats
+      function loadSearchStats() {
+          fetch('/api/search-stats').then(r => r.json()).then(data => {
+              const el = document.getElementById('search-stats-content');
+              const providers = Object.entries(data);
+              if (providers.length === 0) {
+                  el.innerHTML = '<p class="muted-text">No search calls recorded yet.</p>';
+                  return;
+              }
+              el.innerHTML = '<table style="width:100%"><thead><tr>' +
+                  '<th>Provider</th><th>Calls</th><th>Success Rate</th><th>Avg Latency</th>' +
+                  '</tr></thead><tbody>' +
+                  providers.map(([name, s]) => {
+                      const rateColor = s.success_rate >= 90 ? '#4caf50' : s.success_rate >= 60 ? '#ff9800' : '#f44336';
+                      return '<tr>' +
+                          '<td style="text-transform:capitalize">' + esc(name) + '</td>' +
+                          '<td>' + s.calls + '</td>' +
+                          '<td style="color:' + rateColor + '">' + s.success_rate + '%</td>' +
+                          '<td>' + s.avg_latency_ms + ' ms</td>' +
+                          '</tr>';
+                  }).join('') +
+                  '</tbody></table>';
+          }).catch(() => {
+              document.getElementById('search-stats-content').innerHTML =
+                  '<p class="muted-text">Failed to load search stats.</p>';
+          });
+      }
+
+      // Top Skills (invocation counts)
+      function loadSkillStats() {
+          fetch('/api/skill-stats').then(r => r.json()).then(data => {
+              const el = document.getElementById('skill-stats-content');
+              const skills = Object.entries(data).slice(0, 10);
+              if (skills.length === 0) {
+                  el.innerHTML = '<p class="muted-text">No skill calls recorded yet.</p>';
+                  return;
+              }
+              el.innerHTML = '<table style="width:100%"><thead><tr>' +
+                  '<th>Skill</th><th>Calls</th>' +
+                  '</tr></thead><tbody>' +
+                  skills.map(([name, count]) =>
+                      '<tr><td><code>' + esc(name) + '</code></td><td>' + count + '</td></tr>'
+                  ).join('') +
+                  '</tbody></table>';
+          }).catch(() => {
+              document.getElementById('skill-stats-content').innerHTML =
+                  '<p class="muted-text">Failed to load skill stats.</p>';
+          });
+      }
+
+      // Configuration Status
+      function loadConfigStatus() {
+          fetch('/api/config-status').then(r => r.json()).then(data => {
+              const el = document.getElementById('config-status-list');
+              if (!data.services || data.services.length === 0) {
+                  el.innerHTML = '<p class="muted-text">No config data available.</p>';
+                  return;
+              }
+              el.innerHTML = data.services.map(s => {
+                  const ok = s.status === 'configured';
+                  const icon = ok ? '🟢' : '⚪';
+                  const color = ok ? '#4caf50' : 'var(--muted)';
+                  const label = ok ? 'Configured' : 'Not set';
+                  const detail = s.detail ? ' — ' + esc(s.detail) : '';
+                  return '<div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0.5rem;border-radius:6px;background:var(--surface)">' +
+                      '<span>' + icon + '</span>' +
+                      '<span style="flex:1;font-size:0.85rem">' + esc(s.name) + '</span>' +
+                      '<span style="font-size:0.75rem;color:' + color + '">' + label + detail + '</span>' +
+                      '</div>';
+              }).join('');
+          }).catch(() => {
+              document.getElementById('config-status-list').innerHTML =
+                  '<p class="muted-text">Failed to load config status.</p>';
+          });
+      }
+
       // Init
       (async () => {
         try {
@@ -2155,7 +2276,11 @@
           loadResearch();
           loadSchedules();
           loadErrors();
+          loadResponseStats();
           loadDreamHealth();
+          loadSearchStats();
+          loadSkillStats();
+          loadConfigStatus();
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -2164,7 +2289,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); loadDreamHealth(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadSkillStats(); loadConfigStatus(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -2202,6 +2327,30 @@
               } else {
                   errList.innerHTML = '<p class="muted-text">No errors in the last 24 hours 🎉</p>';
               }
+          }).catch(() => {});
+      }
+
+      // Response Time Stats
+      function loadResponseStats() {
+          fetch('/api/response-stats').then(r => r.json()).then(data => {
+              document.getElementById('resp-count').textContent = data.count || 0;
+              document.getElementById('resp-avg').textContent = (data.avg_ms || 0).toLocaleString();
+              document.getElementById('resp-p50').textContent = (data.p50_ms || 0).toLocaleString();
+              document.getElementById('resp-p95').textContent = (data.p95_ms || 0).toLocaleString();
+              document.getElementById('resp-p99').textContent = (data.p99_ms || 0).toLocaleString();
+
+              const container = document.getElementById('resp-sparkline');
+              const last10 = data.last_10 || [];
+              if (last10.length === 0) {
+                  container.innerHTML = '<span style="color:var(--muted);font-size:0.78rem">No data yet</span>';
+                  return;
+              }
+              const maxVal = Math.max(...last10, 1);
+              container.innerHTML = last10.map(ms => {
+                  const pct = Math.max(5, (ms / maxVal) * 100);
+                  const color = ms > (data.p95_ms || Infinity) ? 'var(--orange)' : 'var(--spirit-blue)';
+                  return '<div style="flex:1;background:' + color + ';height:' + pct + '%;border-radius:2px 2px 0 0;min-width:8px" title="' + ms + ' ms"></div>';
+              }).join('');
           }).catch(() => {});
       }
 

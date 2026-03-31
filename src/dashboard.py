@@ -16,7 +16,7 @@ import discord
 import yaml
 from aiohttp import web
 
-from spending import tracker as spending_tracker
+from spending import tracker as spending_tracker, get_response_stats
 
 log = logging.getLogger("openclaw.dashboard")
 
@@ -339,6 +339,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "commands": _command_list(),
         "activity": activity,
         "model_usage": model_usage,
+        "response_stats": get_response_stats(),
     }
     return web.json_response(payload)
 
@@ -710,6 +711,11 @@ async def api_errors_handler(request):
         return web.json_response({"total": 0, "success_rate": 1.0, "recent_errors": []})
 
 
+async def api_response_stats_handler(request):
+    """Return response-time statistics for /ask queries."""
+    return web.json_response(get_response_stats())
+
+
 async def api_dream_health_handler(request):
     """Return dream/memory health data for the dashboard."""
     try:
@@ -733,6 +739,29 @@ async def api_dream_health_handler(request):
             "overall": 0, "metrics": {}, "entry_count": 0,
             "avg_importance": 0, "last_dream": None, "health_history": [],
         })
+
+
+# ---------------------------------------------------------------------------
+# Config Status endpoint
+# ---------------------------------------------------------------------------
+
+
+async def api_config_status_handler(request):
+    """Return configuration status for every key API/service."""
+    from config import cfg
+    return web.json_response({"services": cfg.config_status()})
+
+
+async def api_search_stats_handler(request):
+    """Return per-provider search usage statistics."""
+    from search_provider import all_stats
+    return web.json_response(all_stats())
+
+
+async def api_skill_stats_handler(request):
+    """Return skill invocation counts."""
+    from llm_tools import get_skill_stats
+    return web.json_response(get_skill_stats())
 
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"

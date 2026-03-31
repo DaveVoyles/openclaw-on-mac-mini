@@ -210,23 +210,66 @@ class _Config:
     # -- Validation ------------------------------------------------------------
 
     def validate(self) -> list[str]:
-        """Check config sanity; return list of warning messages."""
-        warnings: list[str] = []
+        """Check config sanity; return list of warning/error messages."""
+        issues: list[str] = []
+
+        # --- Required ---
         if not self.discord_token:
-            warnings.append("discord_token is empty — bot will not connect to Discord")
+            issues.append("❌ DISCORD_BOT_TOKEN not set — bot cannot start")
+        if not self.google_api_key:
+            issues.append("⚠️ GOOGLE_API_KEY not set — Gemini LLM unavailable")
+
+        # --- Range checks ---
         if not (1 <= self.health_port <= 65535):
-            warnings.append(f"health_port={self.health_port} out of range 1-65535")
+            issues.append(f"❌ health_port={self.health_port} out of range 1-65535")
         if not (0.0 <= self.llm_temperature <= 2.0):
-            warnings.append(f"llm_temperature={self.llm_temperature} out of range 0.0-2.0")
+            issues.append(f"⚠️ llm_temperature={self.llm_temperature} out of range 0.0-2.0")
         if self.llm_rpm_limit <= 0:
-            warnings.append(f"llm_rpm_limit={self.llm_rpm_limit} must be > 0")
+            issues.append(f"⚠️ llm_rpm_limit={self.llm_rpm_limit} must be > 0")
         if not (256 <= self.llm_max_tokens <= 32768):
-            warnings.append(f"llm_max_tokens={self.llm_max_tokens} out of range 256-32768")
+            issues.append(f"⚠️ llm_max_tokens={self.llm_max_tokens} out of range 256-32768")
         if not (1 <= self.llm_max_tool_rounds <= 30):
-            warnings.append(f"llm_max_tool_rounds={self.llm_max_tool_rounds} out of range 1-30")
+            issues.append(f"⚠️ llm_max_tool_rounds={self.llm_max_tool_rounds} out of range 1-30")
         if not (1 <= self.conversation_ttl_minutes <= 1440):
-            warnings.append(f"conversation_ttl_minutes={self.conversation_ttl_minutes} out of range 1-1440")
-        return warnings
+            issues.append(f"⚠️ conversation_ttl_minutes={self.conversation_ttl_minutes} out of range 1-1440")
+
+        # --- Optional but recommended ---
+        if not self.perplexity_api_key:
+            issues.append("ℹ️ PERPLEXITY_API_KEY not set — using Tavily/DDG for search")
+        if not self.firecrawl_api_key:
+            issues.append("ℹ️ FIRECRAWL_API_KEY not set — Firecrawl search unavailable")
+        if not self.nas_url or not self.nas_password:
+            issues.append("ℹ️ NAS_URL/NAS_PASSWORD not set — NAS features unavailable")
+
+        return issues
+
+    def config_status(self) -> list[dict]:
+        """Return a list of {name, status, detail} dicts for every key API/service."""
+        entries = []
+
+        def _add(name: str, configured: bool, detail: str = ""):
+            entries.append({
+                "name": name,
+                "status": "configured" if configured else "missing",
+                "detail": detail,
+            })
+
+        _add("Discord Bot Token", bool(self.discord_token))
+        _add("Google API Key (Gemini)", bool(self.google_api_key))
+        _add("Perplexity API Key", bool(self.perplexity_api_key), "Web search fallback to Tavily/DDG")
+        _add("Firecrawl API Key", bool(self.firecrawl_api_key), "Web scraping")
+        _add("Tavily API Key", bool(self.tavily_api_key), "Web search")
+        _add("Serper API Key", bool(self.serper_api_key), "Google search")
+        _add("NAS Credentials", bool(self.nas_url and self.nas_password), "Synology NAS")
+        _add("Ollama (Local LLM)", self.local_llm_enabled, self.ollama_url)
+        _add("Overseerr API Key", bool(self.overseerr_api_key), "Media requests")
+        _add("Sonarr API Key", bool(self.sonarr_api_key), "TV show management")
+        _add("Radarr API Key", bool(self.radarr_api_key), "Movie management")
+        _add("Tautulli API Key", bool(self.tautulli_api_key), "Plex monitoring")
+        _add("Gmail Credentials", bool(self.gmail_user and self.gmail_app_password), "Email")
+        _add("Google OAuth", bool(self.google_oauth_client_id and self.google_oauth_refresh_token), "Calendar")
+        _add("Copilot Proxy", self.copilot_proxy_enabled, self.copilot_proxy_url or "not set")
+        return entries
 
 
 cfg = _Config()

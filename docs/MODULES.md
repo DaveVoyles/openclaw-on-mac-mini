@@ -2,7 +2,7 @@
 
 Quick reference for all source files. Consult this before exploring the codebase.
 
-## Core Modules (src/\*.py) — 39 files
+## Core Modules (src/\*.py) — 46 files
 
 | File                    | Purpose                                                                  | Key Exports                                                          |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
@@ -10,7 +10,7 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `analyzer.py`           | AI-powered container log analysis using Gemini                           | `analyze_logs()`                                                     |
 | `approvals.py`          | Security & approval workflows with Discord UI                            | `ApprovalStore`, `ApprovalRequest`, `RiskLevel`                      |
 | `autonomous_skills.py`  | Task planning via planning-with-files skill                              | `init_planning_files()`                                              |
-| `bot.py`                | Main Discord bot — 30 slash commands, event handlers, conversation store | `OpenClawBot`, command handlers                                      |
+| `bot.py`                | Core Discord bot — init, auth, `/ask` command (1,195 lines, split from 3,084) | `OpenClawBot`, `/ask` handler                                        |
 | `calendar_skills.py`    | Google Calendar API integration (read/create events)                     | `get_calendar_events()`, `create_calendar_event()`                   |
 | `cog_helpers.py`        | Shared utilities for cogs (audit_log, service_allowed)                   | `audit_log()`, `is_service_allowed()`                                |
 | `config.py`             | Centralized config from YAML + env vars                                  | `cfg` (config object)                                                |
@@ -20,7 +20,11 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `gateway.py`            | Maton OAuth proxy client for 100+ third-party APIs                       | `gateway_api_call()`, `gateway_create_connection()`                  |
 | `git_skills.py`         | Git operations (status, log, diff, commit)                               | `git_status()`, `git_diff()`, `git_log()`                            |
 | `http_session.py`       | Shared aiohttp session manager                                           | `SessionManager` class                                               |
-| `llm.py`                | Gemini + Ollama hybrid LLM dispatcher with function calling              | `chat()`, `chat_deep()`, `_gemini_chat()`                            |
+| `llm.py`                | Gemini + Ollama hybrid LLM dispatcher — public API facade (1,889 lines) | `chat()`, `chat_deep()`, `_gemini_chat()`                            |
+| `llm_client.py`         | Gemini client wrapper, model config, system prompt loading (257 lines)   | `get_model()`, `load_system_prompt()`, `MODEL_CONFIG`                |
+| `llm_tools.py`          | Tool execution engine, function calling loop (264 lines)                 | `execute_tool_call()`, `run_function_calling_loop()`                 |
+| `llm_patterns.py`       | Regex patterns for query classification, hallucination detection (194 lines) | `needs_tools()`, `is_hallucination()`, `TOOL_PATTERNS`           |
+| `llm_ratelimit.py`      | Sliding-window rate limiter with jittered backoff (82 lines)             | `RateLimiter` class (per-minute, per-hour)                           |
 | `maintenance_skills.py` | 4:00 AM automated maintenance (backups, updates)                         | `run_maintenance()`, `update_skills()`, `backup_to_nas()`            |
 | `memory.py`             | Per-user conversation context + named thread persistence                 | `ConversationStore`, `Thread` class                                  |
 | `mission_control.py`    | Kanban-style task management (get/update/complete tasks)                 | `get_mission_tasks()`, `update_mission_task()`                       |
@@ -45,6 +49,9 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `json_utils.py`         | JSON validation, repair, and extraction for robust tool result parsing   | `validate_json()`, `repair_json()`, `extract_json()`                 |
 | `ollama_tools.py`       | Ollama native tool calling protocol for local Gemma model                | `ollama_chat_with_tools()`, `OLLAMA_TOOL_DECLARATIONS`               |
 | `model_router.py`       | Multi-model query classification and routing (Gemini/GPT-4o/Claude/Gemma) | `classify_query()`, `route_to_model()`, `MODEL_CONFIGS`            |
+| `discord_commands.py`   | 30 standalone slash commands extracted from bot.py (1,131 lines)         | `register_commands(bot)`                                             |
+| `discord_background.py` | 5 background loop tasks (audit writer, cleanup, briefing, proactive, error monitor) | `start_background_tasks(bot)`                                       |
+| `discord_web.py`        | aiohttp health/metrics/smoke/webhook web server (319 lines)              | `create_web_app(bot)`                                                |
 | `fact_extractor.py`     | Automatic fact extraction from conversations for long-term memory        | `extract_facts()`, `should_store()`, `deduplicate()`                 |
 
 ## Cog Modules (src/cogs/\*.py) — 7 cogs, 34 commands
@@ -322,4 +329,73 @@ Extracts memorable facts from conversations and stores them in long-term memory.
 
 ---
 
-Last updated: July 2025
+---
+
+## Module Details — Modular Split (March 2026)
+
+`bot.py` was refactored from 3,084 → 1,195 lines by extracting commands, background tasks, and the web server into dedicated modules. `llm.py` extracted its client setup, tool engine, regex patterns, and rate limiter.
+
+### discord_commands.py — Slash Commands
+
+All slash commands except `/ask` (which stays in `bot.py`) are registered here via `register_commands(bot)`. Called once after the bot connects.
+
+**Exports:** `register_commands(bot)`.
+**Dependencies:** `bot.py` (bot instance), `cog_helpers`, `skills`, `llm`.
+
+---
+
+### discord_background.py — Background Loop Tasks
+
+Long-running asyncio loops: audit log flush, expired session cleanup, morning briefing, proactive monitoring, and error monitor. All functions accept the bot instance.
+
+**Exports:** `start_background_tasks(bot)`.
+**Dependencies:** `bot.py` (bot instance), `memory`, `scheduler`.
+
+---
+
+### discord_web.py — Web / Health Server
+
+aiohttp web application serving `/health`, `/metrics`, `/smoke`, `/dashboard`, and `/webhooks` endpoints. The bot instance is stored in `app["bot"]`.
+
+**Exports:** `create_web_app(bot)`.
+**Dependencies:** `bot.py` (bot instance), `dashboard`, `webhook_formatter`.
+
+---
+
+### llm_client.py — Gemini Client Wrapper
+
+Initializes the Gemini client, manages model configuration, and loads the system prompt from `config/prompts/system.txt`.
+
+**Exports:** `get_model()`, `load_system_prompt()`, `MODEL_CONFIG`.
+**Dependencies:** `google.genai`, `config`.
+
+---
+
+### llm_tools.py — Tool Execution Engine
+
+Executes function calls returned by Gemini, manages the multi-turn tool-calling loop, and caches tool results.
+
+**Exports:** `execute_tool_call()`, `run_function_calling_loop()`.
+**Dependencies:** `skills`, `llm_client`.
+
+---
+
+### llm_patterns.py — Regex Patterns & Validation
+
+Regex-based query classification (`needs_tools()`), hallucination detection, and response validation utilities.
+
+**Exports:** `needs_tools()`, `is_hallucination()`, `TOOL_PATTERNS`.
+**Dependencies:** `re` (stdlib).
+
+---
+
+### llm_ratelimit.py — Rate Limiter
+
+Sliding-window rate limiter with per-minute (60 RPM) and per-hour (500 RPH) limits plus jittered backoff.
+
+**Exports:** `RateLimiter` class.
+**Dependencies:** `asyncio`, `time` (stdlib).
+
+---
+
+Last updated: March 2026
