@@ -13,8 +13,9 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 56 Discord slash commands                                              |
-| **LLM**          | Gemini 2.5 Flash + GPT-4o + Claude Sonnet 4.5 + Gemma 3 12B local     |
+| **Interface**    | 40+ Discord slash commands across 7 cogs                               |
+| **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 3 12B local (Ollama) |
+| **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
 | **Local LLM**    | Ollama (`gemma3:12b`) — free, with native tool calling support         |
 | **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
 | **Status**       | **Phase 15 — Frontier Intelligence** ✅                                |
@@ -99,7 +100,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 **Phase 8 — Web, Browsing & Vision** ✅
 
 - `/websearch` — live web search via Perplexity AI (primary), Tavily, DuckDuckGo, and Bing Lite fallbacks
-- `/browse <url>` — fetch and read a web page; optional Q&A; Playwright headless Chromium fallback for JS-rendered sites
+- `/browse <url>` — fetch and read a web page; optional Q&A; 3-tier extraction: trafilatura → Jina AI Reader → Playwright headless Chromium
 - `/analyze-image` — analyze an uploaded image with Gemini vision
 - `/analyze-file` — analyze a document (PDF, TXT, JSON…) with Gemini
 - ClawHub `free-web-search` and `openclaw-tavily-search` skill bundles installed
@@ -113,7 +114,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Dashboard published at https://davevoyles.github.io/openclaw-dashboard/ (GitHub Pages)
 - 5 Gemini tool declarations for LLM-driven task management
 - LLM routing keywords: _task_, _kanban_, _backlog_, _in progress_, _todo_, _ticket_
-- 50+ registered skills
+- 116 registered skills
 
 **Phase 10 — Persistent Agent Plans** ✅
 
@@ -199,8 +200,9 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 
 **Phase 17 — Deep Research Pro & Search Upgrades** ✅
 
-- **Perplexity AI** as primary search provider — 4-tier cascade: Perplexity → Tavily → DuckDuckGo → Bing Lite (`PERPLEXITY_API_KEY` env var)
-- **Playwright browser fallback** — JS-rendered sites now handled via headless Chromium when trafilatura extraction fails (added to Dockerfile and requirements.txt)
+- **Perplexity AI** as primary search provider — 5-tier cascade: Perplexity AI → Firecrawl → Tavily → DuckDuckGo → Bing Lite (`PERPLEXITY_API_KEY`, `FIRECRAWL_API_KEY` env vars)
+- **Serper** (Google SERP) installed as a direct tool, not in cascade (`SERPER_API_KEY` env var)
+- **3-tier content extraction** — trafilatura (fast) → Jina AI Reader (free, handles JS-rendered sites) → Playwright headless Chromium (last resort)
 - **Deep Research Pro methodology** — keyword variations (2–3 per sub-query), source quality ranking (academic > news > blog > social), cross-reference checking, confidence levels in reports, methodology section
 - `/research deep:true` for extended multi-pass research with exhaustive source coverage
 
@@ -347,52 +349,47 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 ### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Your Devices                                 │
-│   📱 iPhone / iPad / MacBook (Discord app or browser)               │
-└──────────────────────────┬──────────────────────────────────────────┘
-                           │ Discord API (outbound bot connection)
-                           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│                     Discord Gateway                                  │
-│   Slash commands, embeds, button UIs, approval flows                 │
-└──────────────────────────┬───────────────────────────────────────────┘
-                           │
-                           ▼
-┌──────────────────────────────────────────────────────────────────────┐
-│              OpenClaw Bot (Docker, port 8765)                        │
-│  ┌──────────────┐  ┌──────────────────────────┐  ┌────────────┐  │
-│  │   bot.py     │  │         llm.py           │  │ approvals  │  │
-│  │ 28 commands  │  │  ┌─────────┬───────────┐ │  │ button UI  │  │
-│  └──────┬───────┘  │  │ Ollama  │  Gemini   │ │  └────────────┘  │
-│         │           │  │gemma3  │ 2.5 Flash │ │                  │
-│         │           │  │(local) │(tool use) │ │                  │
-│         │           │  └────┬───┴─────┬─────┘ │                  │
-│         │           └───────┼─────────┼───────┘                  │
-│         │    hybrid routing │         │ function calling          │
-│         ▼                   ▼         ▼                           │
-│  ┌─────────────────────────────────────────────────────────┐    │
-│  │                   Skill Registry (50+ skills)            │    │
-│  │  Docker · System · Media(*arr) · Plex · Network ·       │    │
-│  │  AI Analysis · Scheduling · QMD Memory · AgentMail      │    │
-│  └───────────────────────────┬─────────────────────────────┘    │
-│            /health            │           /metrics (Prometheus)      │
-└───────────────────────────────┼──────────────────────────────────────┘
-
-> **Multi-model routing (Phase 15):** In addition to Gemini and Ollama, OpenClaw can route
-> queries to GPT-4o and Claude Sonnet 4.5 through a local Copilot proxy server (port 9191).
-> Code queries → Claude, creative writing → GPT-4o, tools → Gemini, simple chat → Gemma.
-
-                                │ LAN (192.168.1.x)
-              ┌─────────────────┼──────────────────────┐
-              ▼                 ▼                      ▼
-     ┌────────────────┐ ┌───────────────┐   ┌──────────────────┐
-     │  Docker Engine │ │ *arr Services │   │ Synology NAS     │
-     │ (20 containers │ │ Sonarr/Radarr │   │ 192.168.1.8      │
-     │  on Mac Mini)  │ │ Lidarr/Prowlarr│  │ Media storage    │
-     └────────────────┘ │ SABnzbd/qBit  │   │ Traefik proxy    │
-                        │ Plex/Tautulli │   │ Uptime Kuma      │
-                        └───────────────┘   └──────────────────┘
+User (Discord)
+  │
+  ▼
+┌─────────────────────────────────────────────────────────┐
+│ OpenClaw Bot (Mac Mini M4 Pro · Docker · 116 skills)    │
+│                                                         │
+│  ┌─ LLM Layer ──────────────────────────────────────┐  │
+│  │ Gemini 2.5 Flash (primary, 106 tools registered) │  │
+│  │ Gemma 3 12B (local fallback via Ollama)           │  │
+│  │ Hallucination guard + auto-retry                  │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌─ Search Cascade ─────────────────────────────────┐  │
+│  │ 1. Perplexity AI (synthesized answers + citations)│  │
+│  │ 2. Firecrawl (search + extract in one call)       │  │
+│  │ 3. Tavily (structured search)                     │  │
+│  │ 4. DuckDuckGo (free)                              │  │
+│  │ 5. Bing Lite (last resort)                        │  │
+│  │ + Serper Google SERP (direct tool, not in cascade)│  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌─ Content Extraction ─────────────────────────────┐  │
+│  │ trafilatura → Jina AI Reader → Playwright         │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌─ Memory ─────────────────────────────────────────┐  │
+│  │ ChromaDB (3 collections) · QMD facts · SQLite     │  │
+│  │ User profiles · Auto-RAG context injection        │  │
+│  │ Auto-Dream (4AM daily cognitive consolidation)    │  │
+│  └───────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌─ Integrations ───────────────────────────────────┐  │
+│  │ Gmail · Google Calendar · NAS FileStation          │  │
+│  │ Docker socket · Obsidian vault · Sonarr/Radarr    │  │
+│  └───────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+          │                    │                │
+          ▼                    ▼                ▼
+   Synology NAS         Perplexity/         Docker
+   (FileStation)        Firecrawl/          Containers
+                        Tavily APIs         (20+ services)
 ```
 
 ### Request Flow — AI Hybrid Routing
@@ -413,7 +410,7 @@ sequenceDiagram
 
     U->>B: /ask "is sonarr healthy?"
     B->>B: _needs_tools()? → Yes ("sonarr")
-    B->>G: prompt + 27 tool declarations
+    B->>G: prompt + 106 tool declarations
     G-->>B: call check_arr_health()
     B->>S: invoke check_arr_health
     S-->>B: {"sonarr": "healthy", ...}
@@ -501,7 +498,7 @@ Uptime Kuma (:3001)              Grafana dashboard
 │   └── advanced_skills.py # Media, network, Plex, health, and reporting skills
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
-├── llm.py                 # Hybrid LLM: Ollama (local) + Gemini 2.5 Flash (tool use), 27 tools
+├── llm.py                 # Hybrid LLM: Ollama (local) + Gemini 2.5 Flash (tool use), 106 tools
 ├── memory.py              # Per-user conversation memory (30 min TTL)
 ├── approvals.py           # Approval workflow engine + Discord button UI
 ├── network.py             # Tailscale status, connectivity check, speed test

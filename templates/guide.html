@@ -300,7 +300,7 @@
       <ul>
         <li>
           <strong>Google Gemini 2.5 Flash</strong> &mdash; AI reasoning with
-          function calling (93 skills) &mdash; used for tool-requiring, weather,
+          function calling (116 skills) &mdash; used for tool-requiring, weather,
           and research queries
         </li>
         <li>
@@ -390,12 +390,12 @@ You get a Discord embed with your active downloads</code></pre>
           </tr>
           <tr>
             <td><code>/help</code></td>
-            <td>Full list of all 29 commands grouped by category.</td>
+            <td>Full list of all 40+ commands grouped by category.</td>
           </tr>
           <tr>
             <td><code>/skills</code></td>
             <td>
-              See all 93 LLM-callable skills that <code>/ask</code> can use.
+              See all 116 LLM-callable skills that <code>/ask</code> can use.
             </td>
           </tr>
         </table>
@@ -986,9 +986,9 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         and interact with Git repositories for code-related tasks.
       </p>
 
-      <h3>4-Tier Search Cascade</h3>
+      <h3>5-Tier Search Cascade</h3>
       <p>
-        Every <code>search_web</code> call tries four sources in order until
+        Every <code>search_web</code> call tries five sources in order until
         one succeeds:
       </p>
       <div class="card">
@@ -1007,7 +1007,15 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
             <td><code>PERPLEXITY_API_KEY</code></td>
           </tr>
           <tr>
-            <td><strong>2 &mdash; Tavily</strong></td>
+            <td><strong>2 &mdash; Firecrawl</strong></td>
+            <td>
+              Search + full page content extraction in one API call; returns
+              clean markdown. Handles JS-rendered sites and anti-bot protection
+            </td>
+            <td><code>FIRECRAWL_API_KEY</code></td>
+          </tr>
+          <tr>
+            <td><strong>3 &mdash; Tavily</strong></td>
             <td>
               AI-optimized semantic search; returns direct answers, not just
               links
@@ -1015,14 +1023,14 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
             <td><code>TAVILY_API_KEY</code></td>
           </tr>
           <tr>
-            <td><strong>3 &mdash; DuckDuckGo</strong></td>
+            <td><strong>4 &mdash; DuckDuckGo</strong></td>
             <td>
               Free DDG Lite via <code>free-web-search</code> ClawHub skill
             </td>
             <td>None</td>
           </tr>
           <tr>
-            <td><strong>4 &mdash; Bing Lite</strong></td>
+            <td><strong>5 &mdash; Bing Lite</strong></td>
             <td>Scraped with BeautifulSoup4 as last resort</td>
             <td>None</td>
           </tr>
@@ -1047,7 +1055,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
       </p>
       <div class="card">
         <table>
-          <tr><th>Feature</th><th>Perplexity (Tier 1)</th><th>Tavily / DDG (Tiers 2-3)</th></tr>
+          <tr><th>Feature</th><th>Perplexity (Tier 1)</th><th>Tavily / DDG (Tiers 3-4)</th></tr>
           <tr>
             <td><strong>What you get</strong></td>
             <td>AI-written answer with cited sources</td>
@@ -1097,12 +1105,13 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         >.
       </p>
 
-      <h3>&#128293; Other Premium APIs to Consider</h3>
+      <h3>&#128293; Integrated Premium Search APIs</h3>
 
-      <h4>Firecrawl &mdash; Search + Extract in One Call</h4>
+      <h4>Firecrawl &mdash; Search + Extract in One Call (Tier 2)</h4>
       <p>
         <a href="https://firecrawl.dev" target="_blank" rel="noopener">Firecrawl</a> combines web search
         AND full page content extraction into a single API call, returning clean markdown.
+        It is tier 2 in the search cascade.
       </p>
       <ul>
         <li><strong>How it works:</strong> Send a search query &rarr; get back structured results
@@ -1111,14 +1120,15 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
           (3 steps). Firecrawl collapses the first two into one, making research 30-40% faster.</li>
         <li><strong>Handles:</strong> JS-rendered sites, anti-bot protection, dynamic content.</li>
         <li><strong>Cost:</strong> ~$0.004/page. Free tier: 500 pages/month.</li>
-        <li><strong>Best for:</strong> Research-heavy workflows where speed matters.</li>
+        <li><strong>Setup:</strong> Set <code>FIRECRAWL_API_KEY</code> in your <code>.env</code> file.</li>
         <li><strong>Website:</strong> <a href="https://firecrawl.dev" target="_blank" rel="noopener">firecrawl.dev</a></li>
       </ul>
 
-      <h4>Serper &mdash; Google Search Results API</h4>
+      <h4>Serper &mdash; Google SERP API (Direct Tool)</h4>
       <p>
         <a href="https://serper.dev" target="_blank" rel="noopener">Serper</a> provides direct access to
-        Google SERP (Search Engine Results Page) data via API. Returns the exact same
+        Google SERP (Search Engine Results Page) data via API. Installed as a direct tool,
+        <strong>not part of the search cascade</strong>. Returns the exact same
         results you&rsquo;d see on google.com, but as structured JSON.
       </p>
       <ul>
@@ -1130,7 +1140,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         <li><strong>Unique data:</strong> Knowledge Graph panels, &ldquo;People Also Ask&rdquo; questions,
           shopping results, news results &mdash; data other search APIs don&rsquo;t provide.</li>
         <li><strong>Cost:</strong> $5/month for 2,500 queries. Very affordable.</li>
-        <li><strong>Best for:</strong> Current events, fact-checking, product research, news monitoring.</li>
+        <li><strong>Setup:</strong> Set <code>SERPER_API_KEY</code> in your <code>.env</code> file.</li>
         <li><strong>Website:</strong> <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a></li>
       </ul>
 

@@ -23,3 +23,20 @@ _Last updated: 2026-03-30_
 - Docker operations run directly on Mac Mini (no SSH needed)
 - NAS operations need SSH on port 24 or FileStation API
 - Audiobooks at /Misc/audiobooks on NAS
+
+- [User Profile]
+Preferences: report_frequency=2x weekly (Monday 7 AM, Friday 7 AM), lacrosse_report_format=table with Rank, Team, Next Game, Time, How to Watch, wwe_recap_frequency=weekly, wwe_recap_delivery_time=Tuesday 7 AM ET, wwe_recap_content_format=title + 1 paragraph for each match, explain wh
+
+- [Session handover for Dave] Here is a structured handover note for this conversation:
+
+**Decisions Made:**
+*   WWE weekly recap content format preference confirmed as "more detailed recap" and "2 pages long", utilizing the previously provided template.
+
+**Pending Items:**
+*   The specific "weekend W
+
+- User prefers tabular output with specific columns for schedules: Teams & Ranking | Date & Time | How to Watch Online.
+
+- User prefers lacrosse reports formatted as a table with columns: Teams & ranking, Time, How to watch Online.
+
+- User preference: lacrosse_report_format = table with Rank, Team, Next Game, Time, How to Watch

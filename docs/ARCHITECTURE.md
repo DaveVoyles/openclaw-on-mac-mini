@@ -19,7 +19,7 @@ graph TB
 
     %% ── Core Bot ────────────────────────────────────────────────
     subgraph OpenClaw ["🐾 OpenClaw (Docker Container)"]
-        Bot["bot.py\nCommand Router\n(54 commands)"]
+        Bot["bot.py\nCommand Router\n(40+ commands)"]
         LLM["llm.py\nLLM Dispatcher"]
         ResearchAgent["research_agent.py\nReAct Research Loop"]
         Skills["skills/\nadvanced_skills.py"]
@@ -135,15 +135,26 @@ graph TB
     MatonCore -.->|"100+ SaaS APIs"| ExtAPIs[("External\nSaaS APIs")]
 
     %% ── Search Skills ───────────────────────────────────────────
-    subgraph SearchSkills ["🔍 Search Skills (ClawHub)"]
+    subgraph SearchSkills ["🔍 Search Cascade (5-tier)"]
+        Perplexity["Perplexity AI\n(primary, synthesized answers)"]
+        Firecrawl["Firecrawl\n(search + extract)"]
         Tavily["openclaw-tavily-search\ntavily_search.py"]
         DDG["free-web-search\nweb_search.py"]
+        BingLite["Bing Lite\n(last resort)"]
+        Serper["Serper Google SERP\n(direct tool, not in cascade)"]
     end
 
-    Skills -->|"subprocess"| Tavily
-    Skills -->|"subprocess fallback"| DDG
+    Skills -->|"tier 1"| Perplexity
+    Skills -->|"tier 2"| Firecrawl
+    Skills -->|"tier 3"| Tavily
+    Skills -->|"tier 4"| DDG
+    Skills -->|"tier 5"| BingLite
+    Skills -->|"direct tool"| Serper
+    Perplexity -->|"PERPLEXITY_API_KEY"| PerplexityAPI["Perplexity API\nhttps://api.perplexity.ai"]
+    Firecrawl -->|"FIRECRAWL_API_KEY"| FirecrawlAPI["Firecrawl API\nhttps://api.firecrawl.dev"]
     Tavily -->|"TAVILY_API_KEY"| TavilyAPI["Tavily API\nhttps://api.tavily.com"]
     DDG --> DDGNet["DuckDuckGo Lite\n+ Bing HTML fallback"]
+    Serper -->|"SERPER_API_KEY"| SerperAPI["Google SERP API\nhttps://google.serper.dev"]
     Skills -->|"get_weather"| WttrIn["wttr.in\nWeather API (free)"]
 
     %% ── Mission Control ─────────────────────────────────────────
@@ -254,7 +265,7 @@ graph TB
 
     class Discord,Bot,LLM,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
     class DockerCog,MediaCog,NetworkCog,AnalyticsCog service
-    class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,TavilyAPI,DDGNet,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
+    class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,PerplexityAPI,FirecrawlAPI,TavilyAPI,DDGNet,SerperAPI,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
     class DockerEngine,Glances,Tailscale,Cloudflare,Prometheus,UptimeKuma,NAS,Traefik,SynDDNS infra
     class User actor
@@ -268,7 +279,7 @@ graph TB
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **User command → response**     | User → Discord → `bot.py` → `llm.py` (Gemini) → `skills/` → target service → Discord                                                            |
 | **Media request approval**      | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit → Plex                                                               |
-| **Web search (3-tier cascade)** | `search_web()` → Tavily API (primary) → DuckDuckGo Lite (fallback) → Bing HTML scrape (last resort)                                             |
+| **Web search (5-tier cascade)** | `search_web()` → Perplexity AI (primary) → Firecrawl (search+extract) → Tavily (structured) → DuckDuckGo Lite (free) → Bing HTML scrape (last resort); Serper Google SERP available as direct tool |
 | **Weather**                     | `/weather` or `/ask weather…` → `llm.py` → `get_weather()` → `wttr.in` JSON API                                                                 |
 | **Deep research**               | `/research` → `research_agent.py` → Gemini (plan) → `search_web()` × N → `browse_url()` → Gemini (synthesize) → Discord thread                  |
 | **Session recall**              | Session expires → `memory.py` → `summarize_conversation()` → saved to disk + QMD; next session → recall note injected                           |

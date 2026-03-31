@@ -47,14 +47,17 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `model_router.py`       | Multi-model query classification and routing (Gemini/GPT-4o/Claude/Gemma) | `classify_query()`, `route_to_model()`, `MODEL_CONFIGS`            |
 | `fact_extractor.py`     | Automatic fact extraction from conversations for long-term memory        | `extract_facts()`, `should_store()`, `deduplicate()`                 |
 
-## Cog Modules (src/cogs/\*.py) — 4 cogs, 18 commands
+## Cog Modules (src/cogs/\*.py) — 7 cogs, 34 commands
 
 | File               | Commands                                                                 | Purpose                             |
 | ------------------ | ------------------------------------------------------------------------ | ----------------------------------- |
 | `analytics_cog.py` | `/spending`, `/auditlog`, `/audit-summary`                               | Budget tracking and audit trail     |
 | `docker_cog.py`    | `/containers`, `/status`, `/logs`, `/system`, `/dockerstats`, `/restart` | Docker container management         |
+| `dream_cog.py`     | `/dream`, `/memory-health`, `/memory-export`                             | Auto-Dream cognitive memory system  |
 | `media_cog.py`     | `/search`, `/queue`, `/recent`, `/health`, `/nowplaying`, `/watch`       | \*arr stack + Plex media management |
+| `memory_cog.py`    | `/remember`, `/recall`, `/goals`, `/memory-stats`, `/memory-refresh`, `/rules`, `/profile`, `/profile-edit` | Memory, profiles, and learned rules |
 | `network_cog.py`   | `/network`, `/tailscale`, `/speedtest`                                   | Network diagnostics and VPN status  |
+| `research_cog.py`  | `/websearch`, `/browse`, `/research`, `/research-search`, `/sources`     | Web search, browsing, deep research |
 
 ## Configuration Files (config/)
 
@@ -62,7 +65,7 @@ Quick reference for all source files. Consult this before exploring the codebase
 | -------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `config.yaml`        | Main bot config (LLM models, security settings, routing keywords, Docker stack refs, channel roles, vault settings) |
 | `permissions.yaml`   | Role-based access control + per-service restart permissions                                                         |
-| `tools.yaml`         | 84 Gemini function-calling tool declarations (externalized from llm.py)                                             |
+| `tools.yaml`         | 106 Gemini function-calling tool declarations (externalized from llm.py)                                            |
 | `prompts/system.txt` | System prompt for conversational LLM mode                                                                           |
 
 ## Skills Directory (skills/)
