@@ -1236,36 +1236,73 @@
           <div id="model-usage"></div>
         </div>
 
-        <!-- Commands -->
+
+        <!-- D-4: Scheduled Tasks -->
         <div class="card">
-          <h2>&#128172; Discord Commands</h2>
-          <p
-            style="
-              color: var(--muted);
-              font-size: 0.85rem;
-              margin-bottom: 1rem;
-              font-style: italic;
-            "
-          >
-            Manual slash commands you type directly in Discord to control the
-            bot.
-          </p>
-          <input
-            type="text"
-            class="search-box"
-            id="cmd-search"
-            placeholder="&#128269; Search commands..."
-            oninput="filterCmds()"
-          />
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 14rem">Command</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody id="commands-body"></tbody>
-          </table>
+          <h2>⏰ Scheduled Tasks</h2>
+          <div id="schedules-list"></div>
+        </div>
+
+        <!-- Config -->
+        <div class="card">
+          <h2>&#128272; Security &amp; Config</h2>
+          <div id="config-rows"></div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="card">
+          <details open>
+          <summary style="cursor:pointer;user-select:none"><h2 style="display:inline">&#128203; Recent Activity</h2></summary>
+          <div class="scrollable-list" style="max-height:260px">
+            <table style="width:100%">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Detail</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody id="activity-body"></tbody>
+            </table>
+          </div>
+          <p id="activity-empty" style="color:var(--muted);text-align:center;padding:1rem;display:none">No recent activity</p>
+          </details>
+        </div>
+
+        <!-- Memory Browser -->
+        <div class="card" id="memory-browser-card">
+          <h2>&#129504; Memory Browser</h2>
+          <div class="memory-stats-bar" id="memory-stats">
+            <span class="stat-chip"><span class="stat-chip-label">Loading stats&hellip;</span></span>
+          </div>
+
+          <div class="section-subheading">&#128221; Facts (<span id="fact-count">0</span>)</div>
+          <input type="text" id="fact-search" placeholder="Search facts&hellip;" class="search-box" />
+          <div id="facts-list" class="scrollable-list"></div>
+
+          <details style="margin-top:0.75rem">
+            <summary style="cursor:pointer;font-weight:600;color:var(--spirit-blue);padding:0.4rem 0;user-select:none">
+              &#128207; Learned Rules (<span id="rule-count">0</span>)
+            </summary>
+            <div id="rules-list" class="scrollable-list" style="margin-top:0.35rem"></div>
+          </details>
+        </div>
+
+        <!-- Research History -->
+        <div class="card">
+          <h2>📊 Research History</h2>
+          <input type="text" class="search-box" id="research-search" placeholder="🔍 Search reports..." oninput="filterResearch()" />
+          <div id="research-list" class="scrollable-list"></div>
+        </div>
+
+        <!-- Saved Conversations -->
+        <div class="card" id="conversations-card">
+          <h2>&#128172; Saved Conversations</h2>
+          <div id="threads-list" class="scrollable-list">
+            <p class="muted-text">Loading&hellip;</p>
+          </div>
         </div>
 
         <!-- Skills -->
@@ -1304,70 +1341,38 @@
           </details>
         </div>
 
-        <!-- D-4: Scheduled Tasks -->
+        <!-- Discord Commands (collapsed by default) -->
         <div class="card">
-          <h2>⏰ Scheduled Tasks</h2>
-          <div id="schedules-list"></div>
-        </div>
-
-        <!-- Config -->
-        <div class="card">
-          <h2>&#128272; Security &amp; Config</h2>
-          <div id="config-rows"></div>
-        </div>
-
-        <!-- Recent Activity -->
-        <div class="card">
-          <h2>&#128203; Recent Activity</h2>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>User</th>
-                  <th>Action</th>
-                  <th>Detail</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody id="activity-body"></tbody>
-            </table>
-          </div>
-          <p id="activity-empty" style="color:var(--muted);text-align:center;padding:1rem;display:none">No recent activity</p>
-        </div>
-
-        <!-- Memory Browser -->
-        <div class="card" id="memory-browser-card">
-          <h2>&#129504; Memory Browser</h2>
-          <div class="memory-stats-bar" id="memory-stats">
-            <span class="stat-chip"><span class="stat-chip-label">Loading stats&hellip;</span></span>
-          </div>
-
-          <div class="section-subheading">&#128221; Facts (<span id="fact-count">0</span>)</div>
-          <input type="text" id="fact-search" placeholder="Search facts&hellip;" class="search-box" />
-          <div id="facts-list" class="scrollable-list"></div>
-
-          <details style="margin-top:0.75rem">
-            <summary style="cursor:pointer;font-weight:600;color:var(--spirit-blue);padding:0.4rem 0;user-select:none">
-              &#128207; Learned Rules (<span id="rule-count">0</span>)
-            </summary>
-            <div id="rules-list" class="scrollable-list" style="margin-top:0.35rem"></div>
+          <details>
+          <summary style="cursor:pointer;user-select:none"><h2 style="display:inline">&#128172; Discord Commands</h2></summary>
+          <p
+            style="
+              color: var(--muted);
+              font-size: 0.85rem;
+              margin-bottom: 1rem;
+              font-style: italic;
+            "
+          >
+            Manual slash commands you type directly in Discord to control the
+            bot.
+          </p>
+          <input
+            type="text"
+            class="search-box"
+            id="cmd-search"
+            placeholder="&#128269; Search commands..."
+            oninput="filterCmds()"
+          />
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 14rem">Command</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody id="commands-body"></tbody>
+          </table>
           </details>
-        </div>
-
-        <!-- Research History -->
-        <div class="card">
-          <h2>📊 Research History</h2>
-          <input type="text" class="search-box" id="research-search" placeholder="🔍 Search reports..." oninput="filterResearch()" />
-          <div id="research-list" class="scrollable-list"></div>
-        </div>
-
-        <!-- Saved Conversations -->
-        <div class="card" id="conversations-card">
-          <h2>&#128172; Saved Conversations</h2>
-          <div id="threads-list" class="scrollable-list">
-            <p class="muted-text">Loading&hellip;</p>
-          </div>
         </div>
 
         <div class="footer">
@@ -2204,7 +2209,7 @@
                   el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Discord.</p>';
                   return;
               }
-              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th title="Skill = runs a built-in automation function (e.g. health check, backup)&#10;Prompt = sends a text prompt to the AI for a freeform response" style="cursor:help;text-decoration:underline dotted">Type &#9432;</th><th>Status</th><th>Details</th><th></th></tr></thead><tbody>' +
+              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th id="type-col-header" style="cursor:help;text-decoration:underline dotted;position:relative" data-tooltip="Skill = runs a built-in automation function (e.g. health check, backup)\nPrompt = sends a text prompt to the AI for a freeform response">Type &#9432;</th><th>Status</th><th>Details</th><th></th></tr></thead><tbody>' +
                   data.tasks.map(t => {
                       const schedule = t.schedule_human || (
                           t.cron_expression ? `<code>${esc(t.cron_expression)}</code>` :
@@ -2214,7 +2219,7 @@
                       const typeTooltip = t.prompt
                           ? 'Prompt: Sends this text to the AI each run and returns its freeform response'
                           : 'Skill: Runs a built-in automation function (e.g. health_check, docker_status)';
-                      const type = `<span title="${typeTooltip}" style="cursor:help">${typeLabel}</span>`;
+                      const type = `<span class="type-tip" data-tooltip="${typeTooltip}" style="cursor:help">${typeLabel}</span>`;
                       const status = t.enabled ? '🟢' : '⏸️';
                       const details = t.prompt ? esc(t.prompt).substring(0, 60) + (t.prompt.length > 60 ? '…' : '') : esc(t.args);
                       const taskId = esc(t.id || t.name);
@@ -2227,7 +2232,35 @@
                           <td><button onclick="deleteTask('${taskId}')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem" title="Delete task">✕</button></td>
                       </tr>`;
                   }).join('') + '</tbody></table>';
+              // Attach tooltip listeners to Type column elements
+              _attachTypeTooltips();
           }).catch(() => {});
+      }
+
+      function _attachTypeTooltips() {
+          const targets = document.querySelectorAll('#type-col-header, .type-tip');
+          targets.forEach(el => {
+              el.addEventListener('mouseenter', function(e) {
+                  const tip = this.getAttribute('data-tooltip');
+                  if (!tip) return;
+                  let popup = document.getElementById('metric-tooltip');
+                  if (!popup) {
+                      popup = document.createElement('div');
+                      popup.id = 'metric-tooltip';
+                      popup.style.cssText = 'position:fixed;z-index:9999;max-width:320px;padding:10px 14px;background:#1e1e2e;border:1px solid #444;border-radius:8px;font-size:0.8rem;line-height:1.4;color:#e0e0e0;box-shadow:0 4px 12px rgba(0,0,0,0.4);pointer-events:none;transition:opacity 0.15s;white-space:pre-line';
+                      document.body.appendChild(popup);
+                  }
+                  popup.textContent = tip;
+                  popup.style.opacity = '1';
+                  const rect = this.getBoundingClientRect();
+                  popup.style.left = rect.left + 'px';
+                  popup.style.top = (rect.bottom + 6) + 'px';
+              });
+              el.addEventListener('mouseleave', function() {
+                  const popup = document.getElementById('metric-tooltip');
+                  if (popup) popup.style.opacity = '0';
+              });
+          });
       }
 
       function formatUptime(s) {
