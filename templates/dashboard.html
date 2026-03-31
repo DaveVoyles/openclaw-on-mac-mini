@@ -910,7 +910,8 @@
 
         <!-- Active Goals -->
         <div class="card">
-          <h2>🎯 Active Goals</h2>
+          <h2 id="goals-heading" style="cursor:help"
+              data-tooltip="Goals are automatically detected from your Discord conversations — things like projects you're working on, features you want to build, or tasks you've mentioned repeatedly. Tracking them helps OpenClaw give you more relevant answers and remind you of unfinished work.">🎯 Active Goals</h2>
           <div id="goals-list"></div>
         </div>
 
@@ -1961,6 +1962,31 @@
             document.getElementById('goals-list').innerHTML =
               '<p class="muted-text">Failed to load goals.</p>';
         });
+
+        // Tooltip for the Active Goals heading
+        const heading = document.getElementById('goals-heading');
+        if (heading) {
+          heading.addEventListener('mouseenter', function() {
+            const tip = this.getAttribute('data-tooltip');
+            if (!tip) return;
+            let popup = document.getElementById('metric-tooltip');
+            if (!popup) {
+              popup = document.createElement('div');
+              popup.id = 'metric-tooltip';
+              popup.style.cssText = 'position:fixed;z-index:9999;max-width:320px;padding:10px 14px;background:var(--surface,#1e1e2e);border:1px solid var(--border,#444);border-radius:8px;font-size:0.8rem;line-height:1.4;color:var(--ink,#e0e0e0);box-shadow:0 4px 12px rgba(0,0,0,0.4);pointer-events:none;transition:opacity 0.15s';
+              document.body.appendChild(popup);
+            }
+            popup.textContent = tip;
+            popup.style.opacity = '1';
+            const rect = this.getBoundingClientRect();
+            popup.style.left = rect.left + 'px';
+            popup.style.top = (rect.bottom + 6) + 'px';
+          });
+          heading.addEventListener('mouseleave', function() {
+            const popup = document.getElementById('metric-tooltip');
+            if (popup) popup.style.opacity = '0';
+          });
+        }
       }
 
       // =========================================================================
