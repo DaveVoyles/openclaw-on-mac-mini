@@ -64,8 +64,10 @@ async def extract_and_store_goal(
         return None
 
     prompt = (
-        "Extract the user's goal or intention from this message as a single concise statement "
-        "(10-30 words). Include the key details (what, about what topic, how often). "
+        "Extract the user's goal or intention from this message as a single "
+        "complete sentence (10-40 words). The sentence MUST be grammatically "
+        "complete — do NOT cut off mid-word or mid-phrase. Include key details "
+        "(what, about what topic, how often).\n"
         "If there is no clear goal, reply with exactly: NONE\n\n"
         f"Message: {user_message}\n\n"
         "Goal:"
@@ -88,6 +90,14 @@ async def extract_and_store_goal(
 
         goal_text = response.text.strip().split("\n")[0].strip()  # Take first line only
         if not goal_text or goal_text.upper() == "NONE" or len(goal_text) < 10:
+            return None
+
+        # Reject incomplete/truncated goals
+        if goal_text.endswith(("-", "–", ",", "the", "a", "an", "to", "of", "on", "in", "for")):
+            log.debug("Rejected truncated goal: %s", goal_text)
+            return None
+        if not goal_text[-1].isalnum() and goal_text[-1] not in ".!?)\"'":
+            log.debug("Rejected goal with bad ending: %s", goal_text)
             return None
 
         # Check for duplicate goals
