@@ -19,7 +19,6 @@ The same OAuth2 credentials (with gmail.* scopes added) can also be used
 by a future Gmail OAuth2 skill without re-authorizing.
 """
 
-import asyncio
 import datetime
 import logging
 import os

@@ -6,11 +6,12 @@ touching the real /memory/spending.json on disk.
 """
 
 import json
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 import spending as spending_module
-from spending import SpendingTracker, PRICE_INPUT_PER_M, PRICE_OUTPUT_PER_M, BUDGET_LIMIT
+from spending import BUDGET_LIMIT, PRICE_INPUT_PER_M, PRICE_OUTPUT_PER_M, SpendingTracker
 
 pytestmark = pytest.mark.asyncio
 

@@ -7,10 +7,7 @@ Covers successful execution, timeout, and unsupported-language guard.
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 from code_sandbox import run_code
-
 
 # ---------------------------------------------------------------------------
 # run_code

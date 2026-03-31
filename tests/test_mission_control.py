@@ -6,11 +6,11 @@ task detail retrieval, status/priority emoji mapping, and error handling.
 """
 
 import json
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import AsyncMock, patch
 
 import mission_control as mc
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

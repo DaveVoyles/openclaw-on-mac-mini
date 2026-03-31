@@ -2,7 +2,7 @@
 import pytest
 
 import agent_loop
-from agent_loop import Plan, Step, plan_to_markdown, plan_from_markdown, save_plan, load_plan
+from agent_loop import Plan, Step, load_plan, plan_from_markdown, plan_to_markdown, save_plan
 
 
 @pytest.fixture(autouse=True)

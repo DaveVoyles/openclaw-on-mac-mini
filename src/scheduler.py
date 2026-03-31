@@ -9,9 +9,9 @@ import datetime
 import json
 import logging
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, Awaitable, Optional
+from typing import Awaitable, Callable, Optional
 
 from utils import atomic_write
 
@@ -416,7 +416,7 @@ async def create_scheduled_task(
     else:
         schedule_desc = "on demand"
 
-    action_desc = f"prompt job" if prompt else f"`{skill_name}`"
+    action_desc = "prompt job" if prompt else f"`{skill_name}`"
     hint = f" ({label})" if label else ""
     return f"✅ Scheduled task `{task.task_id}` created: {action_desc} runs {schedule_desc}{hint}."
 

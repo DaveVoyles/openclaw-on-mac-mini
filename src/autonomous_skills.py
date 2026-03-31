@@ -1,8 +1,6 @@
 import asyncio
-import os
-import sys
-import logging
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -60,8 +58,8 @@ async def decompose_goal(goal: str, project_name: str = "") -> str:
 
     Returns a summary of the created plan with its ID.
     """
-    from llm import chat as _llm_chat
     from agent_loop import create_plan
+    from llm import chat as _llm_chat
 
     plan_prompt = (
         "You are a project planner. Break the following goal into 3-7 concrete, "

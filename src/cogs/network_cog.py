@@ -7,8 +7,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from network import get_network_status, get_tailscale_status, run_speed_test
 from cog_helpers import audit_log
+from network import get_network_status, get_tailscale_status, run_speed_test
 
 
 class NetworkCog(commands.Cog, name="Network"):

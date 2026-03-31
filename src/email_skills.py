@@ -202,7 +202,7 @@ async def read_inbox(provider: str = "gmail", count: int = 10) -> str:
             timeout=25,
         )
     except asyncio.TimeoutError:
-        return f"❌ Email read timed out — mail server may be slow."
+        return "❌ Email read timed out — mail server may be slow."
     except imaplib.IMAP4.error as e:
         return f"❌ IMAP error (check App Password): {e}"
     except (OSError, ConnectionError) as e:
@@ -235,7 +235,7 @@ async def search_emails(query: str, provider: str = "gmail") -> str:
             timeout=25,
         )
     except asyncio.TimeoutError:
-        return f"❌ Email search timed out — mail server may be slow."
+        return "❌ Email search timed out — mail server may be slow."
     except imaplib.IMAP4.error as e:
         return f"❌ IMAP search error: {e}"
     except (OSError, ConnectionError) as e:

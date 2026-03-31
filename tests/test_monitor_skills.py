@@ -5,13 +5,11 @@ Covers: SSRF guard, content hashing, snapshot CRUD, change detection,
 list/remove operations, and _fetch_text normalization.
 """
 
-import json
 import hashlib
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import monitor_skills as ms
-
 
 # ---------------------------------------------------------------------------
 # Helpers

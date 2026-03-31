@@ -6,11 +6,11 @@ requiring a running Docker daemon or Gemini API key.
 """
 
 import types
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 
 from analyzer import _basic_analysis, analyze_logs
-
 
 # ---------------------------------------------------------------------------
 # _basic_analysis — pure pattern-matching, no external calls
@@ -71,13 +71,13 @@ class TestBasicAnalysis:
         errors = "\n".join(f"ERROR: issue {i}" for i in range(10))
         result = _basic_analysis("service", errors)
         # Should show at most 5 error snippets
-        error_lines = [l for l in result.split("\n") if "issue" in l]
+        error_lines = [ln for ln in result.split("\n") if "issue" in ln]
         assert len(error_lines) <= 5
 
     def test_limits_warnings_to_five_displayed(self):
         warns = "\n".join(f"WARN: warning {i}" for i in range(10))
         result = _basic_analysis("service", warns)
-        warn_lines = [l for l in result.split("\n") if "warning" in l]
+        warn_lines = [ln for ln in result.split("\n") if "warning" in ln]
         assert len(warn_lines) <= 5
 
     def test_case_insensitive_error_detection(self):

@@ -8,12 +8,9 @@ All IMAP/SMTP calls are mocked.
 
 import imaplib
 import smtplib
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 import email_skills as mod
-
 
 # ---------------------------------------------------------------------------
 # _provider_creds

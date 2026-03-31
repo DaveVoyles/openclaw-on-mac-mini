@@ -7,8 +7,8 @@ import asyncio
 import logging
 import os
 from urllib.parse import quote
+
 import aiohttp
-from typing import Optional
 
 log = logging.getLogger("openclaw.agentmail")
 

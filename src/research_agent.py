@@ -372,8 +372,8 @@ class ResearchAgent:
 
     async def _auto_save(self, query: str, report: str, post) -> None:
         """Save research report to the Obsidian vault (primary) and NAS (secondary)."""
-        import re as _re
         import datetime as _dt
+        import re as _re
 
         safe_slug = _re.sub(r"[^a-zA-Z0-9]+", "_", query[:40]).strip("_").lower()
         date_str = _dt.date.today().isoformat()
@@ -409,8 +409,9 @@ class ResearchAgent:
                 await post("done", f"Report also saved to NAS: `{filename}`")
                 # Also try Google Docs if Maton is configured
                 try:
-                    from gateway import create_google_doc
                     import os as _os
+
+                    from gateway import create_google_doc
                     if _os.getenv("MATON_API_KEY"):
                         doc_result = await asyncio.wait_for(
                             create_google_doc(title=f"Research: {query[:60]}", content=full_doc),
@@ -582,9 +583,9 @@ class ResearchAgent:
             from llm import chat_deep
             text, _ = await chat_deep(prompt)
             lines = [
-                l.strip().lstrip("0123456789.-) ")
-                for l in text.strip().split("\n")
-                if l.strip()
+                ln.strip().lstrip("0123456789.-) ")
+                for ln in text.strip().split("\n")
+                if ln.strip()
             ]
             return lines[:3]
         except Exception as e:

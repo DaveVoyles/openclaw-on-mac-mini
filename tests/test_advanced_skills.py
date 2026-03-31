@@ -9,11 +9,11 @@ Covers:
 """
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 
-from skills.advanced_skills import ping_host, _truncate, check_service_ports
-
+from skills.advanced_skills import _truncate, check_service_ports, ping_host
 
 # ---------------------------------------------------------------------------
 # _truncate — pure function, no external calls

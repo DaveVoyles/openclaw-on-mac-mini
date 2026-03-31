@@ -7,9 +7,6 @@ Validates YAML defaults, env-var overrides, and allowed-user-ID parsing.
 import importlib
 import sys
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

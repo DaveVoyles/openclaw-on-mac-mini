@@ -13,16 +13,19 @@ import logging
 import os
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from memory import Conversation
 
 import aiohttp
 from google import genai
 
+from config import cfg
 from skills import SKILLS
 from spending import tracker as spending_tracker
-from config import cfg
 
 log = logging.getLogger("openclaw.llm")
 
@@ -647,8 +650,6 @@ async def _run_tool_loop(
         # Rate-limit check before sending results back
         _rate_limiter.record()
         if not _rate_limiter.check():
-            # Return partial results as a courtesy message
-            partial = "\n".join(results)
             # Build a fake text-only response — caller handles this
             return response, rounds + 1
 
@@ -1151,8 +1152,9 @@ async def chat_stream(
     # ── Multi-model routing (Phase 8) ───────────────────────────────────
     if model_preference == "auto":
         try:
-            from model_router import classify_query, chat_openai, chat_anthropic
             import os
+
+            from model_router import chat_anthropic, chat_openai, classify_query
             route = classify_query(
                 user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
@@ -1190,8 +1192,9 @@ async def chat_stream(
     # ── Forced OpenAI / Anthropic mode ─────────────────────────────────
     if model_preference in ("openai", "anthropic"):
         try:
-            from model_router import chat_openai, chat_anthropic
             import os
+
+            from model_router import chat_anthropic, chat_openai
             system_prompt = _load_system_prompt()
             if model_preference == "openai":
                 reply = await chat_openai(model_message, history, system_prompt,
@@ -1251,7 +1254,7 @@ async def chat_stream(
     # Rate-limit pre-check — if Gemini is rate-limited, try Copilot proxy as fallback
     if not _rate_limiter.check():
         try:
-            from model_router import chat_openai, COPILOT_PROXY_ENABLED
+            from model_router import COPILOT_PROXY_ENABLED, chat_openai
             if COPILOT_PROXY_ENABLED:
                 system_prompt = _load_system_prompt()
                 reply = await chat_openai(model_message, history, system_prompt,
@@ -1426,8 +1429,9 @@ async def chat(
     # -- Multi-model routing (Phase 8) ────────────────────────────────────
     if model_preference == "auto":
         try:
-            from model_router import classify_query, chat_openai, chat_anthropic, ModelRoute
             import os
+
+            from model_router import chat_anthropic, chat_openai, classify_query
             route = classify_query(
                 user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
@@ -1465,8 +1469,9 @@ async def chat(
     # -- Forced OpenAI / Anthropic mode ──────────────────────────────────────
     if model_preference in ("openai", "anthropic"):
         try:
-            from model_router import chat_openai, chat_anthropic
             import os
+
+            from model_router import chat_anthropic, chat_openai
             system_prompt = _load_system_prompt()
             if model_preference == "openai":
                 reply = await chat_openai(model_message, history, system_prompt,
@@ -1525,7 +1530,7 @@ async def chat(
     # -- Auto mode: Copilot for simple queries, Gemini for tool queries ─────
     if not _needs_tools(user_message):
         try:
-            from model_router import chat_openai, COPILOT_PROXY_ENABLED
+            from model_router import COPILOT_PROXY_ENABLED, chat_openai
             if COPILOT_PROXY_ENABLED:
                 system_prompt = _load_system_prompt()
                 reply = await chat_openai(model_message, history, system_prompt,

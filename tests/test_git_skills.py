@@ -5,12 +5,12 @@ Covers: _run_git subprocess handling, git_status/log/diff/commit,
 webfetch missing skill handling, and GIT_SKILLS dict.
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 import git_skills as gs
-
 
 # ---------------------------------------------------------------------------
 # _run_git
@@ -82,7 +82,7 @@ class TestGitLog:
     async def test_git_log_uses_limit(self):
         """git_log should pass the limit argument."""
         with patch.object(gs, "_run_git", new_callable=AsyncMock, return_value="abc123 message") as mock:
-            result = await gs.git_log(limit=3)
+            await gs.git_log(limit=3)
             mock.assert_called_once_with(["log", "--oneline", "-n 3"])
 
 

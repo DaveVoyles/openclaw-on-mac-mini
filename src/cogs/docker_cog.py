@@ -7,6 +7,14 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from approvals import (
+    ApprovalView,
+    RiskLevel,
+    approval_store,
+    build_approval_embed,
+    is_emergency_stopped,
+)
+from cog_helpers import audit_log, is_service_allowed
 from skills import (
     get_container_logs,
     get_container_status,
@@ -16,14 +24,6 @@ from skills import (
     list_containers,
     restart_container,
 )
-from approvals import (
-    ApprovalView,
-    RiskLevel,
-    approval_store,
-    build_approval_embed,
-    is_emergency_stopped,
-)
-from cog_helpers import audit_log, is_service_allowed
 
 
 class DockerCog(commands.Cog, name="Docker"):

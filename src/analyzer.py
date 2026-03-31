@@ -3,10 +3,7 @@ OpenClaw Analyzer — Phase 5: AI-Powered Log Analysis
 Uses the existing Gemini LLM to analyze container logs and suggest fixes.
 """
 
-import asyncio
 import logging
-import os
-from typing import Optional
 
 from subprocess_utils import run as _run
 
@@ -36,7 +33,8 @@ async def analyze_logs(service: str, lines: int = 50) -> str:
 
     # Use LLM for analysis
     try:
-        from llm import chat as llm_chat, is_configured as llm_is_configured
+        from llm import chat as llm_chat
+        from llm import is_configured as llm_is_configured
         if not llm_is_configured():
             return _basic_analysis(service, log_text)
 

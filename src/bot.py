@@ -4,7 +4,6 @@ Autonomous AI agent for home automation and system management.
 """
 
 import asyncio
-import collections
 import datetime
 import functools
 import io
@@ -20,84 +19,89 @@ from typing import Any
 
 import aiohttp
 import discord
-from discord.ext import commands
 import yaml
 from aiohttp import web
 from discord import app_commands
+from discord.ext import commands
 from dotenv import load_dotenv
 
+from agent_loop import cancel_plan as al_cancel_plan
+from agent_loop import list_plans as al_list_plans
+from agent_loop import read_plan as al_read_plan
+from agent_loop import resume_plan as al_resume_plan
+from agent_loop import scan_interrupted as scan_interrupted_plans
+from agentmail import send_agent_mail
+from analyzer import analyze_logs
+from approvals import (
+    approval_store,
+    is_emergency_stopped,
+    set_emergency_stop,
+)
+from calendar_skills import get_upcoming_events
+from code_sandbox import run_code as sandbox_run_code
+from config import cfg
+from constants import (
+    ATTACHMENT_TEXT_MAX_CHARS,
+    AUDIT_FLUSH_INTERVAL,
+    BRIEFING_CHECK_INTERVAL,
+    BRIEFING_HOUR,
+    BRIEFING_MINUTE_WINDOW,
+    CLEANUP_INTERVAL,
+    DEFAULT_ANALYZE_LINES,
+    DOCUMENT_MAX_CHARS,
+    EMBED_DESC_LIMIT,
+    EMBED_FIELD_LIMIT,
+    EMBED_PROMPT_LIMIT,
+    EMBED_SPLIT_LIMIT,
+    LOG_SNIPPET_MAX_CHARS,
+    MAX_FILE_SIZE,
+    OUTPUT_MAX_CHARS,
+    PDF_MAX_PAGES,
+    PROACTIVE_LOG_LINES,
+    PROACTIVE_SCAN_INTERVAL,
+)
+from dashboard import (
+    api_dashboard_handler,
+    api_dream_health_handler,
+    api_errors_handler,
+    api_goals_handler,
+    api_memories_handler,
+    api_research_handler,
+    api_schedule_delete_handler,
+    api_schedules_handler,
+    api_status_handler,
+    api_threads_handler,
+    dashboard_handler,
+    guide_handler,
+)
+from git_skills import git_diff, git_status
+from image_gen import generate_image
+from image_gen import is_available as sd_is_available
+from llm import SUPPORTED_IMAGE_MIMES, get_rate_info
+from llm import analyze_document as llm_analyze_document
+from llm import analyze_image as llm_analyze_image
+from llm import chat as llm_chat
+from llm import chat_stream as llm_chat_stream
+from llm import is_configured as llm_is_configured
+from memory import get_model_preference, set_model_preference
+from memory import store as conversation_store
+from mission_control import get_mission_tasks
+from qmd import remember_fact
+from scheduler import scheduler
 from skills import (
     SKILLS,
     get_container_logs,
-    get_container_status,
-    get_docker_stats,
     get_system_stats,
-    get_uptime,
-    list_containers,
     restart_container,
 )
 from skills.advanced_skills import (
-    browse_url,
     check_arr_health,
     check_download_clients,
     check_plex_status,
     check_service_ports,
     create_status_report,
     get_download_queue,
-    get_plex_activity,
     get_weather,
-    ping_host,
-    search_web,
-)
-from analyzer import analyze_logs
-from scheduler import scheduler
-
-from agentmail import send_agent_mail
-from calendar_skills import get_upcoming_events
-from git_skills import git_status, git_diff
-from mission_control import get_mission_tasks
-from qmd import remember_fact, recall_fact
-from research_agent import ResearchAgent
-
-from llm import chat as llm_chat, is_configured as llm_is_configured, get_rate_info
-from llm import chat_stream as llm_chat_stream
-from llm import analyze_image as llm_analyze_image, analyze_document as llm_analyze_document
-from llm import SUPPORTED_IMAGE_MIMES
-from memory import store as conversation_store
-from memory import get_model_preference, set_model_preference
-from dashboard import api_dashboard_handler, api_dream_health_handler, api_errors_handler, api_goals_handler, api_memories_handler, api_research_handler, api_schedule_delete_handler, api_schedules_handler, api_status_handler, api_threads_handler, dashboard_handler, guide_handler
-from image_gen import generate_image, is_available as sd_is_available
-from code_sandbox import run_code as sandbox_run_code
-from approvals import (
-    ApprovalView,
-    RiskLevel,
-    approval_store,
-    build_approval_embed,
-    is_emergency_stopped,
-    set_emergency_stop,
-)
-from agent_loop import scan_interrupted as scan_interrupted_plans, list_plans as al_list_plans, resume_plan as al_resume_plan, read_plan as al_read_plan, cancel_plan as al_cancel_plan
-from config import cfg
-from constants import (
-    EMBED_DESC_LIMIT,
-    EMBED_SPLIT_LIMIT,
-    EMBED_FIELD_LIMIT,
-    EMBED_PROMPT_LIMIT,
-    PROACTIVE_SCAN_INTERVAL,
-    CLEANUP_INTERVAL,
-    AUDIT_FLUSH_INTERVAL,
-    BRIEFING_CHECK_INTERVAL,
-    BRIEFING_HOUR,
-    BRIEFING_MINUTE_WINDOW,
-    LOG_SNIPPET_MAX_CHARS,
-    MEMORY_SNIPPET_MAX_CHARS,
-    DOCUMENT_MAX_CHARS,
-    ATTACHMENT_TEXT_MAX_CHARS,
-    PROACTIVE_LOG_LINES,
-    DEFAULT_ANALYZE_LINES,
-    PDF_MAX_PAGES,
-    MAX_FILE_SIZE,
-    OUTPUT_MAX_CHARS,
 )
 
 # ---------------------------------------------------------------------------
@@ -198,8 +202,7 @@ def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:
 
 AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 
-from audit import audit_log, _audit_buffer  # noqa: E402
-
+from audit import _audit_buffer, audit_log  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Authorization helper
@@ -595,8 +598,10 @@ class OpenClawBot(commands.Bot):
                         # E3+E4+E5: Auto-diagnosis → fix → learn pipeline
                         try:
                             from error_tracker import (
-                                diagnose_error_pattern, execute_fix,
-                                record_incident, get_recent_outcomes,
+                                diagnose_error_pattern,
+                                execute_fix,
+                                get_recent_outcomes,
+                                record_incident,
                             )
                             recent = get_recent_outcomes(hours=1)
                             recent_errors = [e for e in recent if not e.get("success")]
@@ -929,7 +934,7 @@ class OpenClawBot(commands.Bot):
 
         # 2. ollama
         try:
-            from llm import _ollama_available, LOCAL_LLM_ENABLED
+            from llm import LOCAL_LLM_ENABLED, _ollama_available
             if not LOCAL_LLM_ENABLED:
                 checks["ollama"] = {"status": "skipped", "reason": "LOCAL_LLM_ENABLED=false"}
             else:
@@ -960,6 +965,7 @@ class OpenClawBot(commands.Bot):
         # 4. memory_sqlite
         try:
             import sqlite3 as _sqlite3
+
             from thread_store import DB_PATH as _threads_db_path
             t0 = time.monotonic()
             conn = _sqlite3.connect(str(_threads_db_path), timeout=5)
@@ -2020,7 +2026,7 @@ async def ask_cmd(
     async def _post_response_learning():
         try:
             # Correction detection → rule learning
-            from rules_engine import detect_correction, extract_rule, add_rule
+            from rules_engine import add_rule, detect_correction, extract_rule
             if detect_correction(question):
                 # Get the bot's previous response (second-to-last model message)
                 prev_bot_msg = ""
@@ -2051,7 +2057,7 @@ async def ask_cmd(
 
         try:
             # Automatic fact extraction from conversation
-            from fact_extractor import should_extract, extract_and_store_facts
+            from fact_extractor import extract_and_store_facts, should_extract
             if should_extract(interaction.user.id, question):
                 await extract_and_store_facts(question, response_text, interaction.user.id)
         except Exception as e:
@@ -2109,7 +2115,7 @@ async def model_show_cmd(interaction: discord.Interaction):
     except Exception as exc:
         log.debug("Copilot proxy status check failed: %s", exc)
     try:
-        from llm import _ollama_available, LOCAL_LLM_ENABLED, OLLAMA_MODEL
+        from llm import LOCAL_LLM_ENABLED, OLLAMA_MODEL, _ollama_available
         ollama_up = await _ollama_available() if LOCAL_LLM_ENABLED else False
         status = f"{'🟢' if ollama_up else '🔴'} Ollama ({OLLAMA_MODEL}): {'online' if ollama_up else 'offline'}"
         if not LOCAL_LLM_ENABLED:
@@ -2585,6 +2591,7 @@ async def analyze_file_cmd(
         file_type_label = "PDF"
         try:
             import io
+
             import pypdf
             reader = pypdf.PdfReader(io.BytesIO(file_bytes))
             pages_text = []

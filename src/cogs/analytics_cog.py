@@ -13,9 +13,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from spending import tracker as spending_tracker
 from cog_helpers import audit_log
-
+from spending import tracker as spending_tracker
 
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 

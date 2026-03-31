@@ -8,7 +8,6 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 log = logging.getLogger("openclaw.error_tracker")
 
@@ -221,6 +220,7 @@ async def diagnose_error_pattern(
     }
     """
     from google import genai
+
     from config import cfg
 
     _default = {"cause": "unknown", "severity": "low", "fix_type": "manual_required",

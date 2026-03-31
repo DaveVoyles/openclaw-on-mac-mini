@@ -4,12 +4,12 @@ Tests for qmd.py — QMDMemory and async skill wrappers.
 File I/O is redirected to a temporary directory via patching.
 """
 
-import pytest
-import pytest_asyncio
 from unittest.mock import patch
 
+import pytest
+
 import qmd as qmd_module
-from qmd import QMDMemory, remember_fact, recall_fact, list_memories
+from qmd import QMDMemory, list_memories, recall_fact, remember_fact
 
 pytestmark = pytest.mark.asyncio
 
@@ -97,7 +97,7 @@ class TestQMDMemorySearch:
         for i in range(15):
             await mem.add(f"matching fact {i}")
         result = await mem.search("matching")
-        lines = [l for l in result.split("\n") if l.strip().startswith("•")]
+        lines = [ln for ln in result.split("\n") if ln.strip().startswith("•")]
         assert len(lines) <= 10
 
     async def test_search_bullet_format(self, mem):

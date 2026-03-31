@@ -10,7 +10,6 @@ lazily inside chat(), which we do not call here.
 import sys
 import time
 from collections import deque
-import pytest
 from unittest.mock import MagicMock, patch
 
 # If google-genai is not installed (e.g. CI without deps), stub it out
@@ -19,8 +18,7 @@ if "google.genai" not in sys.modules:
     sys.modules.setdefault("google", MagicMock())
     sys.modules.setdefault("google.genai", MagicMock())
 
-from llm import RateLimiter, is_configured, get_rate_info  # noqa: E402
-
+from llm import RateLimiter, get_rate_info, is_configured  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # RateLimiter

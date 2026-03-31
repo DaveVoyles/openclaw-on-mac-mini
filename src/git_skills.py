@@ -28,7 +28,8 @@ async def git_log(limit: int = 5):
 async def git_diff(staged: bool = False):
     """Compare code changes between current state and previous commits."""
     args = ["diff"]
-    if staged: args.append("--staged")
+    if staged:
+        args.append("--staged")
     return await _run_git(args)
 
 async def git_commit(message: str):

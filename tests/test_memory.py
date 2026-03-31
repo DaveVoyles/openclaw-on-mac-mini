@@ -5,15 +5,13 @@ These are pure in-memory data structures; no external dependencies.
 """
 
 import time
-import pytest
 
 from memory import (
+    CONTEXT_TTL,
+    MAX_HISTORY_LENGTH,
     Conversation,
     ConversationStore,
-    MAX_HISTORY_LENGTH,
-    CONTEXT_TTL,
 )
-
 
 # ---------------------------------------------------------------------------
 # Conversation

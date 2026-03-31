@@ -40,7 +40,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]  # line length handled by formatter
+ignore = ["E501", "E402"]  # E501: line length handled by formatter; E402: deferred imports are intentional
 
 [tool.ruff.lint.isort]
 known-first-party = ["skills"]

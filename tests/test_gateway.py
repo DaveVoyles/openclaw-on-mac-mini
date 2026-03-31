@@ -1,7 +1,8 @@
 """Tests for gateway module — request size limits and input validation."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio

@@ -5,15 +5,14 @@ File I/O is redirected to a temp path. The async runner loop is not
 started here; _execute_task and _is_due are tested in isolation.
 """
 
-import asyncio
 import datetime
 import json
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 
 import scheduler as scheduler_module
-from scheduler import TaskScheduler, ScheduledTask
-
+from scheduler import ScheduledTask, TaskScheduler
 
 # ---------------------------------------------------------------------------
 # Fixtures

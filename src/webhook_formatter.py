@@ -80,7 +80,7 @@ def format_plex(payload: dict) -> tuple[str, str, discord.Color]:
     if user:
         lines.append(f"**User**: {user}")
 
-    title = f"🔔 Webhook: Plex"
+    title = "🔔 Webhook: Plex"
     color = discord.Color.blurple()
     if "play" in event.lower():
         color = discord.Color.green()

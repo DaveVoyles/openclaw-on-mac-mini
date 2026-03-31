@@ -1,6 +1,7 @@
 """Tests for search_web skill (mocked — no real API calls)."""
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 
 @pytest.mark.asyncio

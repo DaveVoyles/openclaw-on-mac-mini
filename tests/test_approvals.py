@@ -6,18 +6,17 @@ not tested here since it requires a running Discord gateway.
 """
 
 import time
+
 import pytest
 
 from approvals import (
-    ApprovalStore,
-    ApprovalRequest,
-    RiskLevel,
     APPROVAL_TTL,
+    ApprovalRequest,
+    ApprovalStore,
+    RiskLevel,
     is_emergency_stopped,
     set_emergency_stop,
 )
-import approvals as approvals_module
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

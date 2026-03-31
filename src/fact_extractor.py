@@ -8,7 +8,6 @@ import hashlib
 import logging
 import re
 import time
-from typing import Optional
 
 log = logging.getLogger("openclaw.fact_extractor")
 
@@ -54,6 +53,7 @@ async def extract_and_store_facts(
     Returns list of extracted facts (for logging/debugging).
     """
     from google import genai
+
     from config import cfg
 
     if not cfg.google_api_key:

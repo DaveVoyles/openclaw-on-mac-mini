@@ -24,7 +24,6 @@ Usage pattern (with scheduler):
   → Will alert whenever the page content changes.
 """
 
-import asyncio
 import hashlib
 import json
 import logging

@@ -5,8 +5,9 @@ Uses mocks for all backends so tests run without ChromaDB/disk/LLM.
 """
 
 import sys
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 import memory_manager
 

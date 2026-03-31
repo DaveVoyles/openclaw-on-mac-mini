@@ -24,6 +24,7 @@ async def _get_session() -> aiohttp.ClientSession:
     return await _sessions.get()
 
 from config import cfg as _cfg
+
 HOST = _cfg.docker_host_ip
 DNS_TEST_HOST = os.getenv("DNS_TEST_HOST", "8.8.8.8")
 PING_TEST_HOST = os.getenv("PING_TEST_HOST", "1.1.1.1")
@@ -96,7 +97,7 @@ async def get_tailscale_status() -> str:
     if rc != 0:
         return f"❌ Tailscale error: {err.strip() or 'unknown error'}"
 
-    lines = [l for l in peers_out.strip().splitlines() if l.strip()]
+    lines = [ln for ln in peers_out.strip().splitlines() if ln.strip()]
     if not lines:
         return "⚠️ Tailscale is not connected."
 

@@ -3,7 +3,6 @@ OpenClaw Approvals — Phase 4: Security & Approval Workflows
 Manages pending action requests with Discord button UI, timeouts, and audit trail.
 """
 
-import asyncio
 import datetime
 import logging
 import threading
@@ -11,7 +10,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Coroutine
+from typing import Callable, Coroutine
 
 import discord
 

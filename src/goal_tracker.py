@@ -57,6 +57,7 @@ async def extract_and_store_goal(
     Returns the goal text if one was extracted, None otherwise.
     """
     from google import genai
+
     from config import cfg
 
     if not cfg.google_api_key:

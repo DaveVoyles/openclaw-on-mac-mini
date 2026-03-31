@@ -9,10 +9,10 @@ All Gemini / Ollama network calls are mocked — nothing hits real APIs.
 """
 
 import sys
-import asyncio
 import time
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 # Ensure google.genai is stubbed before importing llm
 _genai_mock = MagicMock()
@@ -33,7 +33,6 @@ sys.modules.setdefault("google.genai", _genai_mock)
 sys.modules.setdefault("google.genai.types", _genai_mock.types)
 
 import llm  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # System prompt loading

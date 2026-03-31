@@ -1,7 +1,8 @@
 """Tests for research_agent module — ResearchAgent with mocked dependencies."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from research_agent import ResearchAgent, run_scheduled_research
 

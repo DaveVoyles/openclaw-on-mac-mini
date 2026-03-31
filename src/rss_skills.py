@@ -23,7 +23,6 @@ import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any
 from xml.etree import ElementTree as ET
 
 import aiohttp

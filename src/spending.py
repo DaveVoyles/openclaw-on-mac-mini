@@ -226,22 +226,22 @@ class SpendingTracker:
         bar = "█" * filled + "░" * (20 - filled)
 
         lines = [
-            f"**💰 API Spending**",
-            f"",
+            "**💰 API Spending**",
+            "",
             f"**Total:** ${combined_cost:.4f} / ${BUDGET_LIMIT:.2f}",
             f"**Remaining:** ${max(0, BUDGET_LIMIT - combined_cost):.4f}",
             f"[{bar}] {pct:.1f}%",
-            f"",
-            f"**🔮 Perplexity Search:**",
+            "",
+            "**🔮 Perplexity Search:**",
             f"  Calls:  {pplx.get('calls', 0):,}",
             f"  Cost:   ${pplx.get('total_cost_usd', 0.0):.4f}",
-            f"",
-            f"**🔥 Firecrawl:**",
+            "",
+            "**🔥 Firecrawl:**",
             f"  Calls:  {fc.get('calls', 0):,}",
             f"  Pages:  {fc.get('pages_scraped', 0):,} / 500 free",
             f"  Cost:   ${fc.get('total_cost_usd', 0.0):.4f}",
-            f"",
-            f"**⚡ Gemini LLM:**",
+            "",
+            "**⚡ Gemini LLM:**",
             f"  Calls:  {d['calls']:,}",
             f"  Cost:   ${d['total_cost_usd']:.4f}",
             f"  Tokens: {total_tokens:,} ({d['total_input_tokens']:,} in / {d['total_output_tokens']:,} out)",
@@ -250,14 +250,14 @@ class SpendingTracker:
         total_calls = d["calls"] + pplx.get("calls", 0) + fc.get("calls", 0)
         if total_calls > 0:
             avg_cost = combined_cost / total_calls
-            lines.append(f"")
+            lines.append("")
             lines.append(f"**Avg per call:** ${avg_cost:.6f}")
             if avg_cost > 0:
                 calls_left = int(max(0, BUDGET_LIMIT - combined_cost) / avg_cost)
                 lines.append(f"**Est. calls remaining:** ~{calls_left:,}")
 
         if d["first_call"]:
-            lines.append(f"")
+            lines.append("")
             lines.append(f"**Tracking since:** {d['first_call'][:10]}")
 
         return "\n".join(lines)

@@ -14,7 +14,6 @@ import asyncio
 import logging
 import os
 import secrets
-import shlex
 import tempfile
 
 log = logging.getLogger("openclaw.code_sandbox")

@@ -1,11 +1,11 @@
 """Tests for tool_health module — CircuitBreaker and ToolHealthTracker."""
 
-import pytest
 import time
 from unittest.mock import patch
 
-from tool_health import CircuitBreaker, ToolHealthTracker
+import pytest
 
+from tool_health import CircuitBreaker, ToolHealthTracker
 
 # ---------------------------------------------------------------------------
 # CircuitBreaker tests

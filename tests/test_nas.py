@@ -6,7 +6,6 @@ rejection, file-write validation, raw login, and SSRF-style path guards.
 All aiohttp calls are mocked.
 """
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

@@ -18,11 +18,11 @@ def _parse_markdown_table(text: str) -> Optional[tuple[list[str], list[list[str]
 
     Returns (headers, rows) or None if no valid table found.
     """
-    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
+    lines = [ln.strip() for ln in text.strip().split("\n") if ln.strip()]
     if len(lines) < 2:
         return None
 
-    table_lines = [l for l in lines if l.startswith("|") and l.endswith("|")]
+    table_lines = [ln for ln in lines if ln.startswith("|") and ln.endswith("|")]
     if len(table_lines) < 2:
         return None
 

@@ -4,12 +4,12 @@ Tests for agentmail.py — send_agent_mail.
 All HTTP calls are mocked via aioresponses to avoid real network traffic.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 
 import agentmail as agentmail_module
 from agentmail import send_agent_mail
-
 
 # ---------------------------------------------------------------------------
 # Configuration guards

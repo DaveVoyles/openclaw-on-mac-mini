@@ -153,7 +153,7 @@ class MemoryCog(commands.Cog, name="Memory"):
     async def rules_cmd(self, interaction: discord.Interaction, action: str = "list", query: str = ""):
         await interaction.response.defer(ephemeral=True)
         try:
-            from rules_engine import get_all_rules, get_relevant_rules, delete_rule
+            from rules_engine import delete_rule, get_all_rules, get_relevant_rules
 
             if action == "delete" and query:
                 success = await delete_rule(query)
@@ -233,7 +233,13 @@ class MemoryCog(commands.Cog, name="Memory"):
     async def profile_edit_cmd(self, interaction: discord.Interaction, field: str, value: str):
         await interaction.response.defer(ephemeral=True)
         try:
-            from user_profile import update_preference, add_interest, add_context_note, update_field, sync_profile_to_vectors
+            from user_profile import (
+                add_context_note,
+                add_interest,
+                sync_profile_to_vectors,
+                update_field,
+                update_preference,
+            )
 
             if field == "preference" and "=" in value:
                 k, v = value.split("=", 1)
@@ -244,7 +250,7 @@ class MemoryCog(commands.Cog, name="Memory"):
                 msg = f"✅ Interest added: {value}"
             elif field == "note":
                 add_context_note(value)
-                msg = f"✅ Context note added"
+                msg = "✅ Context note added"
             elif field in ("working_style", "communication_style"):
                 update_field(field, value)
                 msg = f"✅ {field.replace('_', ' ').title()} updated"

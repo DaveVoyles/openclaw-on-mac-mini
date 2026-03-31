@@ -6,7 +6,6 @@ Single interface for all memory operations across QMD, ChromaDB, rules, and prof
 import hashlib
 import logging
 import time
-from typing import Optional
 
 log = logging.getLogger("openclaw.memory_manager")
 

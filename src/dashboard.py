@@ -10,11 +10,11 @@ import logging
 import os
 import platform
 import time
+from pathlib import Path
 
 import discord
 import yaml
 from aiohttp import web
-from pathlib import Path
 
 from spending import tracker as spending_tracker
 
@@ -50,6 +50,7 @@ def _load_config() -> dict:
 async def api_status_handler(request):
     """Return connectivity status for all backends."""
     import aiohttp
+
     from config import cfg
 
     checks = {}
@@ -129,9 +130,9 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     bot = request.app.get("bot")
     uptime_s = time.monotonic() - bot.start_time if bot else 0
 
-    from skills import SKILLS, list_containers, get_docker_stats, get_system_stats
+    from llm import _TOOL_DECLARATIONS, LOCAL_LLM_ENABLED, MODEL_NAME, OLLAMA_MODEL, get_rate_info
     from ontology_skills import ontology_query
-    from llm import _TOOL_DECLARATIONS, get_rate_info, MODEL_NAME, OLLAMA_MODEL, LOCAL_LLM_ENABLED
+    from skills import SKILLS, get_docker_stats, get_system_stats, list_containers
 
     # Get container status list
     container_text = await list_containers()
@@ -166,7 +167,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     stats_list = []
     if not stats_text.startswith("\u274c"):
         # Parse table Format: NAME CPU% MEM NET
-        stat_lines = [l.strip() for l in stats_text.split("\n") if l.strip() and not l.startswith("NAME")]
+        stat_lines = [ln.strip() for ln in stats_text.split("\n") if ln.strip() and not ln.startswith("NAME")]
         for sl in stat_lines:
             parts = [p.strip() for p in sl.split("\t") if p.strip()]
             if not parts or len(parts) < 2:
@@ -186,17 +187,21 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     # Format: **CPU**: 10.5% (8 cores)\n**Memory**: 4.2 / 16.0 GB (26.3%)\n**Disk** `/`: 200GB used / 500GB total (40%)
     sys_stats = {"cpu": "N/A", "mem": "N/A", "disk": "N/A"}
     for line in sys_stats_text.split("\n"):
-        if "**CPU**" in line: sys_stats["cpu"] = line.split(":", 1)[1].strip()
-        elif "Average" in line: sys_stats["cpu"] = line.split(":", 1)[1].strip() # Fallback for Load Avg
-        elif "**Memory**" in line: sys_stats["mem"] = line.split(":", 1)[1].strip()
-        elif "**Disk**" in line: sys_stats["disk"] = line.split(":", 1)[1].strip()
+        if "**CPU**" in line:
+            sys_stats["cpu"] = line.split(":", 1)[1].strip()
+        elif "Average" in line:
+            sys_stats["cpu"] = line.split(":", 1)[1].strip()
+        elif "**Memory**" in line:
+            sys_stats["mem"] = line.split(":", 1)[1].strip()
+        elif "**Disk**" in line:
+            sys_stats["disk"] = line.split(":", 1)[1].strip()
 
     # Get ontology facts (limit to recent 5)
     ontology_text = await ontology_query()
     ontology_facts = []
     if not ontology_text.startswith("❌") and "Found" in ontology_text:
         # Simple extraction of bullets
-        fact_lines = [l.strip("• ").strip() for l in ontology_text.split("\n") if l.strip().startswith("•")]
+        fact_lines = [ln.strip("• ").strip() for ln in ontology_text.split("\n") if ln.strip().startswith("•")]
         ontology_facts = fact_lines[:8]
 
     cfg = _load_config()
@@ -263,6 +268,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     model_usage = {}
     try:
         import json
+
         from config import cfg as model_cfg
         audit_file = model_cfg.audit_dir / "audit.jsonl"
         if audit_file.exists():
@@ -659,7 +665,7 @@ async def api_errors_handler(request):
 async def api_dream_health_handler(request):
     """Return dream/memory health data for the dashboard."""
     try:
-        from dream_cycle import DreamCycle, _load_index, _compute_health
+        from dream_cycle import DreamCycle, _compute_health, _load_index
         cycle = DreamCycle()
         index = _load_index(cycle.index_path)
         health = _compute_health(index, cycle.memory_path)

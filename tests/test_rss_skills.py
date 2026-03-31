@@ -9,8 +9,6 @@ non-HTTP URL rejection, and search_rss keyword filtering.
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 import rss_skills as mod
 
 # ---------------------------------------------------------------------------

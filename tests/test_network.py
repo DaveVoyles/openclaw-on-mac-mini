@@ -5,13 +5,10 @@ Validates ping/diagnostic helpers return properly formatted strings.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, patch, MagicMock
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import network as network_module
 from network import _run, get_network_status, get_tailscale_status
-
 
 # ---------------------------------------------------------------------------
 # _run helper

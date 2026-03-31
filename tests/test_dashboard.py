@@ -23,7 +23,6 @@ if not _TEMPLATES_DIR.exists():
     pytest.skip("templates/ directory not found", allow_module_level=True)
 
 # Patch _TEMPLATES_DIR before the module reads the files
-import importlib
 # Remove cached module so we can re-import with correct paths
 sys.modules.pop("dashboard", None)
 # Temporarily monkey-patch pathlib resolution by pre-loading the HTML

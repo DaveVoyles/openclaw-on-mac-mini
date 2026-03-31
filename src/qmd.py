@@ -107,7 +107,7 @@ async def remember_fact(content: str, tags: Optional[str] = "", source: str = "u
     try:
         route = _classify_fact(content)
         if route == "preference":
-            from user_profile import update_preference, sync_profile_to_vectors
+            from user_profile import sync_profile_to_vectors, update_preference
             # Try to parse "key = value" or "key: value" patterns
             for sep in ("=", ":"):
                 if sep in content:

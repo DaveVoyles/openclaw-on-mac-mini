@@ -346,8 +346,6 @@ async def migrate_json_threads(threads_dir: Path) -> int:
             data = json.loads(f.read_text())
             name = data.get("name", f.stem)
             history = data.get("history", [])
-            saved_at = data.get("saved_at", time.time())
-            user_name = data.get("user_name", "User")
 
             # Extract user_id from filename (format: {user_id}_{name}.json)
             parts = f.stem.split("_", 1)

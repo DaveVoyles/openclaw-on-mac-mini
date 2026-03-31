@@ -14,7 +14,6 @@ import asyncio
 import datetime
 import json as _json
 import logging
-import os
 import ssl
 import time
 
@@ -451,6 +450,7 @@ _WORD_NUMS: dict[str, str] = {v: k for k, v in _NUM_WORDS.items()}
 
 # Common author-style prefixes to strip: "Tom Clancy - ", "J.K. Rowling - "
 import re as _re
+
 _AUTHOR_PREFIX_RE = _re.compile(
     r"^[A-Z][A-Za-z.']+(?:\s+[A-Z][A-Za-z.']+)*\s*[-–—]\s*", flags=_re.UNICODE
 )

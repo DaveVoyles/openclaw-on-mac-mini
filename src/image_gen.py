@@ -8,7 +8,6 @@ See ``scripts/sd_server.py`` for the host-side service that wraps the
 """
 
 import asyncio
-import io
 import logging
 import os
 

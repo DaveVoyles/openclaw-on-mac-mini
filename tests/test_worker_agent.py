@@ -1,7 +1,8 @@
 """Tests for worker_agent module — spawn_worker with mocked Gemini."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture

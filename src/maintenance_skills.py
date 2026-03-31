@@ -18,6 +18,7 @@ CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 NAS_BACKUP_PATH = os.getenv("NAS_BACKUP_PATH", "/volume1/docker/openclaw/backups")
 NAS_SSH_USER = os.getenv("NAS_SSH_USER", "dave")
 from config import cfg as _cfg
+
 NAS_HOST = os.getenv("NAS_HOST", _cfg.nas_host)
 NAS_SSH_PORT = int(os.getenv("NAS_SSH_PORT", "24"))
 
@@ -288,11 +289,11 @@ async def run_memory_consolidation() -> str:
     Distills multiple session summaries into a single weekly insight memory.
     """
     try:
-        import vector_store
-        from llm import chat
-
         # Fetch recent conversation summaries from the last 7 days
         import time
+
+        import vector_store
+        from llm import chat
         week_ago = time.time() - (7 * 86400)
         results = await vector_store.search(
             vector_store.CONVERSATIONS_COLLECTION,

@@ -1,12 +1,9 @@
 """Tests for hybrid model selection (model_preference routing)."""
 
 import json
-import types
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # memory.py — per-user preference storage

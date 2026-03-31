@@ -7,10 +7,7 @@ This module converts our tool declarations to Ollama format and handles
 the tool-calling loop.
 """
 
-import asyncio
-import json
 import logging
-from typing import Any, Optional
 
 import aiohttp
 

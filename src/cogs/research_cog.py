@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cog_helpers import audit_log, require_auth, truncate_for_embed, split_response
+from cog_helpers import audit_log, require_auth, split_response, truncate_for_embed
 from constants import MEMORY_SNIPPET_MAX_CHARS
 
 log = logging.getLogger("openclaw")
@@ -94,8 +94,8 @@ class ResearchCog(commands.Cog, name="Research"):
     @app_commands.describe(url="URL to fetch (must start with http:// or https://)", question="Optional: what to focus on")
     @require_auth()
     async def browse_cmd(self, interaction: discord.Interaction, url: str, question: str = ""):
-        from skills.advanced_skills import browse_url
         from llm import analyze_document as llm_analyze_document
+        from skills.advanced_skills import browse_url
 
         if not url.startswith(("http://", "https://")):
             await interaction.response.send_message(

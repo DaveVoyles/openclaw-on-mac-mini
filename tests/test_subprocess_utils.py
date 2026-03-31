@@ -6,6 +6,7 @@ and command-not-found error.
 """
 
 import pytest
+
 import subprocess_utils as su
 
 

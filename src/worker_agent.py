@@ -53,20 +53,18 @@ async def spawn_worker(
         The worker's synthesized result as a string.
     """
     # Import lazily to avoid circular imports at module load time
+
     from llm import (
-        _get_model,
+        GOOGLE_API_KEY,
+        MAX_TOKENS,
+        MAX_TOOL_ROUNDS,
+        MODEL_NAME,
+        TEMPERATURE,
+        _build_tools,
         _execute_function_call,
         _rate_limiter,
         _record_usage,
-        MAX_TOOL_ROUNDS,
-        _build_tools,
-        _load_system_prompt,
-        MODEL_NAME,
-        GOOGLE_API_KEY,
-        TEMPERATURE,
-        MAX_TOKENS,
     )
-    import os
 
     if not GOOGLE_API_KEY:
         return "❌ Worker: GOOGLE_API_KEY not set."

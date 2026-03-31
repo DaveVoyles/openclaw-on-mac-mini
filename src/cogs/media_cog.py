@@ -9,6 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from cog_helpers import audit_log
 from skills.advanced_skills import (
     check_arr_health,
     check_download_clients,
@@ -18,8 +19,6 @@ from skills.advanced_skills import (
     get_recent_additions,
     search_media,
 )
-from cog_helpers import audit_log
-
 
 # Maps known NL intent keywords to skills + default intervals
 _WATCH_SKILL_MAP = {

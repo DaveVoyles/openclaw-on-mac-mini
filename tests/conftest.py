@@ -63,7 +63,6 @@ def _clear_module_caches():
     """Reset module-level caches between tests to prevent state leakage."""
     yield
     # Clean up any module caches that might leak between tests
-    import importlib
     for mod_name in list(sys.modules.keys()):
         if mod_name.startswith(("llm", "memory", "spending", "scheduler")):
             mod = sys.modules[mod_name]
