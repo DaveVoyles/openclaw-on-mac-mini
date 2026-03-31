@@ -467,6 +467,7 @@ async def api_schedules_handler(request):
         clean = []
         for t in tasks:
             clean.append({
+                "id": t.get("task_id", t.get("id", "")),
                 "name": t.get("skill_name", t.get("name", "unknown")),
                 "interval": t.get("interval_minutes", t.get("interval", 0)),
                 "cron_expression": t.get("cron_expression", t.get("cron", "")),
@@ -480,6 +481,25 @@ async def api_schedules_handler(request):
     except Exception as exc:
         log.debug("Schedules API failed: %s", exc)
         return web.json_response({"tasks": []})
+
+
+async def api_schedule_delete_handler(request):
+    """Delete a scheduled task by ID."""
+    try:
+        task_id = request.match_info.get("task_id", "")
+        if not task_id:
+            return web.json_response({"error": "Missing task_id"}, status=400)
+
+        from scheduler import cancel_scheduled_task
+        result = await cancel_scheduled_task(task_id)
+
+        if result.startswith("✅"):
+            return web.json_response({"ok": True, "message": result})
+        else:
+            return web.json_response({"ok": False, "message": result}, status=404)
+    except Exception as exc:
+        log.debug("Schedule delete failed: %s", exc)
+        return web.json_response({"error": str(exc)}, status=500)
 
 
 def _command_list() -> list[dict]:
