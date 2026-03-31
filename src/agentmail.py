@@ -10,32 +10,24 @@ from urllib.parse import quote
 
 import aiohttp
 
+from config import TIMEOUT_DEFAULT, cfg as _cfg
+from http_session import SessionManager
+
 log = logging.getLogger("openclaw.agentmail")
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-AGENTMAIL_API_KEY = os.getenv("AGENTMAIL_API_KEY", "")
-AGENTMAIL_INBOX = os.getenv("AGENTMAIL_INBOX", "")  # e.g. "openclaw" → openclaw@agentmail.to
+AGENTMAIL_API_KEY = _cfg.agentmail_api_key
+AGENTMAIL_INBOX = _cfg.agentmail_inbox
 
-_http_session: aiohttp.ClientSession | None = None
-
-
-async def _get_session() -> aiohttp.ClientSession:
-    global _http_session
-    if _http_session is None or _http_session.closed:
-        _http_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=15)
-        )
-    return _http_session
+_sessions = SessionManager(timeout=TIMEOUT_DEFAULT, name="agentmail")
+_get_session = _sessions.get
 
 
 async def close_session() -> None:
-    global _http_session
-    if _http_session and not _http_session.closed:
-        await _http_session.close()
-        _http_session = None
+    await _sessions.close()
 
 
 async def send_agent_mail(to: str, subject: str, body: str) -> str:

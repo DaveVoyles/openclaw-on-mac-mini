@@ -26,11 +26,13 @@ import time
 
 import aiohttp
 
+from config import TIMEOUT_DEFAULT, cfg as _cfg
+
 log = logging.getLogger("openclaw.calendar")
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
-GOOGLE_REFRESH_TOKEN = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "")
+GOOGLE_CLIENT_ID = _cfg.google_oauth_client_id
+GOOGLE_CLIENT_SECRET = _cfg.google_oauth_client_secret
+GOOGLE_REFRESH_TOKEN = _cfg.google_oauth_refresh_token
 
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _CALENDAR_BASE = "https://www.googleapis.com/calendar/v3"
@@ -42,7 +44,7 @@ _access_token_cache: str | None = None
 _access_token_expiry: float = 0.0
 from http_session import SessionManager
 
-_sessions = SessionManager(timeout=10, name="calendar")
+_sessions = SessionManager(timeout=TIMEOUT_DEFAULT, name="calendar")
 _get_session = _sessions.get
 close_session = _sessions.close
 

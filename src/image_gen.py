@@ -13,19 +13,16 @@ import os
 
 import aiohttp
 
+from config import TIMEOUT_FAST, cfg as _cfg
+from http_session import SessionManager
+
 log = logging.getLogger("openclaw.image_gen")
 
-SD_URL = os.getenv("SD_URL", "http://host.docker.internal:7861")
-SD_TIMEOUT = int(os.getenv("SD_TIMEOUT", "120"))  # seconds
+SD_URL = _cfg.sd_url
+SD_TIMEOUT = _cfg.sd_timeout
 
-_session: aiohttp.ClientSession | None = None
-
-
-async def _get_session() -> aiohttp.ClientSession:
-    global _session
-    if _session is None or _session.closed:
-        _session = aiohttp.ClientSession()
-    return _session
+_sessions = SessionManager(timeout=TIMEOUT_FAST, name="image_gen")
+_get_session = _sessions.get
 
 
 async def is_available() -> bool:
@@ -34,7 +31,7 @@ async def is_available() -> bool:
         session = await _get_session()
         async with session.get(
             f"{SD_URL}/health",
-            timeout=aiohttp.ClientTimeout(total=5),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST),
         ) as resp:
             return resp.status == 200
     except Exception as exc:

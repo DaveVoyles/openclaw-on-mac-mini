@@ -21,13 +21,23 @@ import aiohttp
 log = logging.getLogger("openclaw.advanced_skills")
 
 # ---------------------------------------------------------------------------
+# Configuration — loaded from environment
+# ---------------------------------------------------------------------------
+
+from config import (
+    TIMEOUT_DEFAULT,
+    TIMEOUT_SLOW,
+    cfg as _cfg,
+)
+
+# ---------------------------------------------------------------------------
 # Shared HTTP session (created on first use, reused across all API calls)
 # ---------------------------------------------------------------------------
 
 from http_session import SessionManager
 
 _sessions = SessionManager(
-    timeout=30,
+    timeout=TIMEOUT_SLOW,
     name="advanced_skills",
     connector_limit=50,
     connector_limit_per_host=15,
@@ -36,49 +46,43 @@ _sessions = SessionManager(
 _get_session = _sessions.get
 close_session = _sessions.close
 
-# ---------------------------------------------------------------------------
-# Configuration — loaded from environment
-# ---------------------------------------------------------------------------
-
-from config import cfg as _cfg
-
-HOST = os.getenv("DOCKER_HOST_IP", _cfg.docker_host_ip)
+HOST = _cfg.docker_host_ip
 
 # *arr services
-SONARR_URL = os.getenv("SONARR_URL", f"http://{HOST}:8989")
-SONARR_API_KEY = os.getenv("SONARR_API_KEY", "")
-RADARR_URL = os.getenv("RADARR_URL", f"http://{HOST}:7878")
-RADARR_API_KEY = os.getenv("RADARR_API_KEY", "")
-LIDARR_URL = os.getenv("LIDARR_URL", f"http://{HOST}:8686")
-LIDARR_API_KEY = os.getenv("LIDARR_API_KEY", "")
-PROWLARR_URL = os.getenv("PROWLARR_URL", f"http://{HOST}:9696")
-PROWLARR_API_KEY = os.getenv("PROWLARR_API_KEY", "")
+SONARR_URL = _cfg.sonarr_url
+SONARR_API_KEY = _cfg.sonarr_api_key
+RADARR_URL = _cfg.radarr_url
+RADARR_API_KEY = _cfg.radarr_api_key
+LIDARR_URL = _cfg.lidarr_url
+LIDARR_API_KEY = _cfg.lidarr_api_key
+PROWLARR_URL = _cfg.prowlarr_url
+PROWLARR_API_KEY = _cfg.prowlarr_api_key
 
 # Download clients
-SABNZBD_URL = os.getenv("SABNZBD_URL", f"http://{HOST}:8775")
-SABNZBD_API_KEY = os.getenv("SABNZBD_API_KEY", "")
-QBIT_URL = os.getenv("QBIT_URL", f"http://{HOST}:8080")
+SABNZBD_URL = _cfg.sabnzbd_url
+SABNZBD_API_KEY = _cfg.sabnzbd_api_key
+QBIT_URL = _cfg.qbit_url
 
 # Plex / Tautulli
-TAUTULLI_URL = os.getenv("TAUTULLI_URL", f"http://{HOST}:8181")
-TAUTULLI_API_KEY = os.getenv("TAUTULLI_API_KEY", "")
+TAUTULLI_URL = _cfg.tautulli_url
+TAUTULLI_API_KEY = _cfg.tautulli_api_key
 
 # Overseerr
-OVERSEERR_URL = os.getenv("OVERSEERR_URL", f"http://{HOST}:5055")
-OVERSEERR_API_KEY = os.getenv("OVERSEERR_API_KEY", "")
+OVERSEERR_URL = _cfg.overseerr_url
+OVERSEERR_API_KEY = _cfg.overseerr_api_key
 
 # Perplexity AI search (primary)
-PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
+PERPLEXITY_API_KEY = _cfg.perplexity_api_key
 
 # Firecrawl (search + extract in one call)
-FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "")
+FIRECRAWL_API_KEY = _cfg.firecrawl_api_key
 FIRECRAWL_API_URL = "https://api.firecrawl.dev/v1"
 
 # Serper (Google SERP results API — not wired into cascade yet)
-SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+SERPER_API_KEY = _cfg.serper_api_key
 
 # Tavily web search
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+TAVILY_API_KEY = _cfg.tavily_api_key
 TAVILY_API_URL = "https://api.tavily.com/search"
 
 # Paths to installed ClawHub skill scripts (relative to this file's directory)
@@ -88,8 +92,8 @@ _DDG_SCRIPT = _SKILLS_DIR / "free-web-search" / "scripts" / "web_search.py"
 
 COMMAND_TIMEOUT = 15
 
-# Default location for weather queries (overridable via env var)
-WEATHER_DEFAULT_LOCATION = os.getenv("WEATHER_DEFAULT_LOCATION", "Philadelphia, PA")
+# Default location for weather queries
+WEATHER_DEFAULT_LOCATION = _cfg.weather_default_location
 
 # ---------------------------------------------------------------------------
 # HTTP helper
@@ -194,7 +198,7 @@ async def check_download_clients() -> str:
         tasks.append(_api_get(f"{SABNZBD_URL}/api?mode=version&output=json&apikey={SABNZBD_API_KEY}"))
         task_labels.append("sabnzbd")
 
-    qbit_configured = bool(os.getenv("QBIT_URL", ""))
+    qbit_configured = bool(QBIT_URL)
     if qbit_configured:
         tasks.append(_api_get(f"{QBIT_URL}/api/v2/app/version"))
         task_labels.append("qbit")
@@ -424,7 +428,7 @@ async def get_download_queue() -> str:
     if SABNZBD_API_KEY:
         tasks.append(_api_get(f"{SABNZBD_URL}/api?mode=queue&output=json&apikey={SABNZBD_API_KEY}"))
         task_labels.append("sabnzbd")
-    qbit_configured = bool(os.getenv("QBIT_URL", ""))
+    qbit_configured = bool(QBIT_URL)
     if qbit_configured:
         tasks.append(_api_get(f"{QBIT_URL}/api/v2/torrents/info?filter=active"))
         task_labels.append("qbit")
@@ -554,8 +558,7 @@ async def check_service_ports() -> str:
     # Only check download clients if configured
     if SABNZBD_API_KEY:
         services.append(("SABnzbd", HOST, 8775))
-    qbit_url = os.getenv("QBIT_URL", "")
-    if qbit_url:
+    if QBIT_URL:
         services.append(("qBittorrent", HOST, 8080))
 
     async def _check_port(host: str, port: int) -> bool:
@@ -704,7 +707,7 @@ async def search_web(query: str, num_results: int = 5, provider: str = "") -> st
                 stderr=asyncio.subprocess.PIPE,
                 env={**os.environ, "TAVILY_API_KEY": TAVILY_API_KEY},
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=20)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=TIMEOUT_DEFAULT)
             if proc.returncode != 0:
                 err = stderr.decode().strip()[:300]
                 # Fall through to DDG if Tavily fails at runtime
@@ -763,7 +766,7 @@ async def search_web(query: str, num_results: int = 5, provider: str = "") -> st
         }
         session = await _get_session()
         async with session.get(
-            bing_url, headers=bing_headers, timeout=aiohttp.ClientTimeout(total=15)
+            bing_url, headers=bing_headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT)
         ) as resp:
             if resp.status == 200:
                 html = await resp.text()
@@ -822,7 +825,7 @@ async def _perplexity_search(query: str, num_results: int = 5) -> str:
     session = await _get_session()
     async with session.post(
         url, json=payload, headers=headers,
-        timeout=aiohttp.ClientTimeout(total=30),
+        timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
     ) as resp:
         if resp.status != 200:
             log.debug("Perplexity returned HTTP %d", resp.status)
@@ -865,7 +868,7 @@ async def _firecrawl_search(query: str, num_results: int = 5) -> str:
         async with session.post(
             f"{FIRECRAWL_API_URL}/search",
             json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=30),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
         ) as resp:
             if resp.status != 200:
                 log.debug("Firecrawl search returned HTTP %d", resp.status)
@@ -916,7 +919,7 @@ async def firecrawl_scrape(url: str) -> str:
         async with session.post(
             f"{FIRECRAWL_API_URL}/scrape",
             json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=30),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
         ) as resp:
             if resp.status != 200:
                 return f"❌ Firecrawl returned HTTP {resp.status}"
@@ -984,7 +987,7 @@ async def serper_search(query: str, num_results: int = 5, search_type: str = "se
         session = await _get_session()
         async with session.post(
             endpoint, json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=15),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT),
         ) as resp:
             if resp.status != 200:
                 return f"❌ Serper returned HTTP {resp.status}"
@@ -1084,7 +1087,7 @@ async def get_weather(location: str = "", units: str = "uscs") -> str:
     url = f"https://wttr.in/{encoded}?format=j1"
     try:
         session = await _get_session()
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT)) as resp:
             if resp.status != 200:
                 return f"❌ Weather not available for `{loc}` (HTTP {resp.status})"
             data = await resp.json(content_type=None)
@@ -1172,7 +1175,7 @@ async def browse_url(url: str) -> str:
         async with session.get(
             url,
             headers=headers,
-            timeout=aiohttp.ClientTimeout(total=20),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT),
         ) as resp:
             if resp.status == 403:
                 return (
@@ -1252,7 +1255,7 @@ async def _jina_fetch(url: str) -> str:
         session = await _get_session()
         async with session.get(
             jina_url, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=20),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT),
         ) as resp:
             if resp.status != 200:
                 log.debug("Jina Reader returned HTTP %d for %s", resp.status, url)

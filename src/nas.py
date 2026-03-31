@@ -19,7 +19,7 @@ import time
 
 import aiohttp
 
-from config import cfg
+from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW, cfg
 
 log = logging.getLogger("openclaw.nas")
 
@@ -80,7 +80,7 @@ async def _get_nas_session() -> aiohttp.ClientSession:
                 enable_cleanup_closed=True,
             )
             _nas_session = aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=20),
+                timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT),
                 connector=connector,
             )
         return _nas_session
@@ -436,6 +436,24 @@ async def get_disk_smart_status() -> str:
     return "\n".join(lines)
 
 
+async def get_nas_full_status() -> str:
+    """Batch-query all common NAS status endpoints in parallel."""
+    results = await asyncio.gather(
+        get_nas_storage_health(),
+        get_backup_status(),
+        get_nas_alerts(),
+        return_exceptions=True,
+    )
+    parts = []
+    labels = ["📊 Storage Health", "💾 Backup Status", "🔔 Alerts"]
+    for label, result in zip(labels, results):
+        if isinstance(result, Exception):
+            parts.append(f"**{label}**: ❌ {result}")
+        else:
+            parts.append(f"**{label}**\n{result}")
+    return "\n\n---\n\n".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # FileStation — fuzzy matching helpers
 # ---------------------------------------------------------------------------
@@ -696,7 +714,7 @@ async def nas_write_file(
             f"{NAS_URL}/webapi/entry.cgi",
             data=data,
             ssl=_SSL_CTX,
-            timeout=aiohttp.ClientTimeout(total=30),
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
         ) as resp:
             result = await resp.json(content_type=None)
     except Exception as e:

@@ -36,14 +36,16 @@ import aiohttp
 
 log = logging.getLogger("openclaw.monitor")
 
-MEMORY_DIR = Path(os.getenv("MEMORY_DIR", "/memory"))
+from config import TIMEOUT_DEFAULT, cfg as _cfg
+
+MEMORY_DIR = _cfg.memory_dir
 _SNAPSHOTS_FILE = MEMORY_DIR / "url_snapshots.json"
 
-_TIMEOUT = aiohttp.ClientTimeout(total=20)
+_TIMEOUT = aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT)
 
 from http_session import SessionManager
 
-_sessions = SessionManager(timeout=20, name="monitor")
+_sessions = SessionManager(timeout=TIMEOUT_DEFAULT, name="monitor")
 _get_session = _sessions.get
 close_session = _sessions.close
 

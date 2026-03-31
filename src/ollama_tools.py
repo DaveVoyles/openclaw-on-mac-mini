@@ -11,6 +11,8 @@ import logging
 
 import aiohttp
 
+from config import TIMEOUT_LONG, TIMEOUT_SLOW
+
 log = logging.getLogger("openclaw.ollama_tools")
 
 # Subset of tools safe for local execution (read-only, no approvals needed)
@@ -131,7 +133,7 @@ async def chat_ollama_with_tools(
                 async with session.post(
                     f"{ollama_url}/api/chat",
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60),
+                    timeout=aiohttp.ClientTimeout(total=TIMEOUT_LONG),
                 ) as resp:
                     if resp.status != 200:
                         log.warning("Ollama tools returned HTTP %d", resp.status)
@@ -186,7 +188,7 @@ async def chat_ollama_with_tools(
             async with session.post(
                 f"{ollama_url}/api/chat",
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()

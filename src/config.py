@@ -39,6 +39,16 @@ _security = _yaml.get("security", {})
 _rate_limits = _llm.get("rate_limits", {})
 _conversation = _llm.get("conversation", {})
 
+# ---------------------------------------------------------------------------
+# Timeout constants (seconds)
+#   from config import TIMEOUT_FAST, TIMEOUT_DEFAULT, TIMEOUT_SLOW, TIMEOUT_LONG
+# ---------------------------------------------------------------------------
+
+TIMEOUT_FAST = 5         # Health checks, quick status
+TIMEOUT_DEFAULT = 15     # Standard API calls
+TIMEOUT_SLOW = 30        # Web scraping, search APIs
+TIMEOUT_LONG = 60        # Container operations, LLM calls
+TIMEOUT_EXTENDED = 120   # Image generation, research
 
 # ---------------------------------------------------------------------------
 # Config namespace — env vars take precedence over YAML
@@ -129,6 +139,54 @@ class _Config:
     outlook_user: str = os.getenv("OUTLOOK_USER", "")
     outlook_app_password: str = os.getenv("OUTLOOK_APP_PASSWORD", "")
 
+    # -- *arr services ---------------------------------------------------------
+    sonarr_url: str = os.getenv("SONARR_URL", f"http://{docker_host_ip}:8989")
+    sonarr_api_key: str = os.getenv("SONARR_API_KEY", "")
+    radarr_url: str = os.getenv("RADARR_URL", f"http://{docker_host_ip}:7878")
+    radarr_api_key: str = os.getenv("RADARR_API_KEY", "")
+    lidarr_url: str = os.getenv("LIDARR_URL", f"http://{docker_host_ip}:8686")
+    lidarr_api_key: str = os.getenv("LIDARR_API_KEY", "")
+    prowlarr_url: str = os.getenv("PROWLARR_URL", f"http://{docker_host_ip}:9696")
+    prowlarr_api_key: str = os.getenv("PROWLARR_API_KEY", "")
+
+    # -- Download clients ------------------------------------------------------
+    sabnzbd_url: str = os.getenv("SABNZBD_URL", f"http://{docker_host_ip}:8775")
+    sabnzbd_api_key: str = os.getenv("SABNZBD_API_KEY", "")
+    qbit_url: str = os.getenv("QBIT_URL", f"http://{docker_host_ip}:8080")
+
+    # -- Plex / Tautulli -------------------------------------------------------
+    tautulli_url: str = os.getenv("TAUTULLI_URL", f"http://{docker_host_ip}:8181")
+    tautulli_api_key: str = os.getenv("TAUTULLI_API_KEY", "")
+
+    # -- Search APIs -----------------------------------------------------------
+    perplexity_api_key: str = os.getenv("PERPLEXITY_API_KEY", "")
+    firecrawl_api_key: str = os.getenv("FIRECRAWL_API_KEY", "")
+    serper_api_key: str = os.getenv("SERPER_API_KEY", "")
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
+
+    # -- Image generation (Stable Diffusion) -----------------------------------
+    sd_url: str = os.getenv("SD_URL", "http://host.docker.internal:7861")
+    sd_timeout: int = int(os.getenv("SD_TIMEOUT", str(TIMEOUT_EXTENDED)))
+
+    # -- AgentMail -------------------------------------------------------------
+    agentmail_api_key: str = os.getenv("AGENTMAIL_API_KEY", "")
+    agentmail_inbox: str = os.getenv("AGENTMAIL_INBOX", "")
+
+    # -- Google OAuth (Calendar, Gmail) ----------------------------------------
+    google_oauth_client_id: str = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+    google_oauth_client_secret: str = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "")
+    google_oauth_refresh_token: str = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "")
+
+    # -- Weather ---------------------------------------------------------------
+    weather_default_location: str = os.getenv("WEATHER_DEFAULT_LOCATION", "Philadelphia, PA")
+
+    # -- Network testing -------------------------------------------------------
+    dns_test_host: str = os.getenv("DNS_TEST_HOST", "8.8.8.8")
+    ping_test_host: str = os.getenv("PING_TEST_HOST", "1.1.1.1")
+
+    # -- Copilot proxy token ---------------------------------------------------
+    copilot_proxy_token: str = os.getenv("COPILOT_PROXY_TOKEN", "")
+
     # -- Webhook security ------------------------------------------------------
     webhook_secret: str = os.getenv("WEBHOOK_SECRET", "")
 
@@ -145,9 +203,9 @@ class _Config:
     auto_recall_top_k: int = int(os.getenv("AUTO_RECALL_TOP_K", str(_yaml.get("vector_store", {}).get("contextual_top_k", 3))))
 
     # -- Timeouts (seconds) ----------------------------------------------------
-    default_timeout: int = 20
-    browse_timeout: int = 20
-    research_timeout: int = 120
+    default_timeout: int = TIMEOUT_DEFAULT
+    browse_timeout: int = TIMEOUT_DEFAULT
+    research_timeout: int = TIMEOUT_EXTENDED
 
     # -- Validation ------------------------------------------------------------
 

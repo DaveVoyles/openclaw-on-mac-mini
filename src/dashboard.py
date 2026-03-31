@@ -51,7 +51,7 @@ async def api_status_handler(request):
     """Return connectivity status for all backends."""
     import aiohttp
 
-    from config import cfg
+    from config import TIMEOUT_FAST, cfg
 
     checks = {}
 
@@ -61,7 +61,7 @@ async def api_status_handler(request):
             "docker", "info", "--format", "{{.ContainersRunning}}",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TIMEOUT_FAST)
         checks["docker"] = {"status": "ok", "containers": stdout.decode().strip()}
     except Exception as exc:
         log.debug("Docker status check failed: %s", exc)
@@ -70,7 +70,7 @@ async def api_status_handler(request):
     # Ollama
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{cfg.ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=3)) as resp:
+            async with session.get(f"{cfg.ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
                 checks["ollama"] = {"status": "ok" if resp.status == 200 else "down"}
     except Exception as exc:
         log.debug("Ollama status check failed: %s", exc)
@@ -80,9 +80,9 @@ async def api_status_handler(request):
     checks["gemini"] = {"status": "ok" if cfg.google_api_key else "no_key"}
 
     # Search provider
-    perplexity_key = os.getenv("PERPLEXITY_API_KEY", "")
-    firecrawl_key = os.getenv("FIRECRAWL_API_KEY", "")
-    tavily_key = os.getenv("TAVILY_API_KEY", "")
+    perplexity_key = cfg.perplexity_api_key
+    firecrawl_key = cfg.firecrawl_api_key
+    tavily_key = cfg.tavily_api_key
     if perplexity_key:
         cascade = "Perplexity → Firecrawl → Tavily → DDG → Bing Lite" if firecrawl_key else "Perplexity → Tavily → DDG → Bing Lite"
         checks["search_provider"] = {"status": "ok", "active": "Perplexity AI", "cascade": cascade}
@@ -112,9 +112,9 @@ async def api_status_handler(request):
     if proxy_url:
         try:
             async with aiohttp.ClientSession() as session:
-                token = os.getenv("COPILOT_PROXY_TOKEN", "")
+                token = cfg.copilot_proxy_token
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
-                async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=3)) as resp:
+                async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
                     checks["copilot_proxy"] = {"status": "ok" if resp.status == 200 else "down"}
         except Exception as exc:
             log.debug("Copilot proxy check failed: %s", exc)
@@ -204,6 +204,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         fact_lines = [ln.strip("• ").strip() for ln in ontology_text.split("\n") if ln.strip().startswith("•")]
         ontology_facts = fact_lines[:8]
 
+    from config import cfg as app_cfg
     cfg = _load_config()
     sp = spending_tracker
 
@@ -303,8 +304,8 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "latency_ms": round(bot.latency * 1000, 1) if bot and bot.latency else 0,
         "python": platform.python_version(),
         "discord_py": discord.__version__,
-        "search_provider": "Perplexity AI" if os.getenv("PERPLEXITY_API_KEY") else ("Firecrawl" if os.getenv("FIRECRAWL_API_KEY") else ("Tavily" if os.getenv("TAVILY_API_KEY") else "DuckDuckGo")),
-        "firecrawl_tier": "Free (500 pages/mo)" if os.getenv("FIRECRAWL_API_KEY") else "Not configured",
+        "search_provider": "Perplexity AI" if app_cfg.perplexity_api_key else ("Firecrawl" if app_cfg.firecrawl_api_key else ("Tavily" if app_cfg.tavily_api_key else "DuckDuckGo")),
+        "firecrawl_tier": "Free (500 pages/mo)" if app_cfg.firecrawl_api_key else "Not configured",
         "content_extraction": "trafilatura → Jina Reader → Playwright",
         "model": MODEL_NAME,
         "local_model": OLLAMA_MODEL if LOCAL_LLM_ENABLED else None,

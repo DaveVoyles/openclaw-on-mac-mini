@@ -34,15 +34,17 @@ _SSRF_PRIVATE = re.compile(
     re.IGNORECASE,
 )
 
-MEMORY_DIR = Path(os.getenv("MEMORY_DIR", "/memory"))
+from config import TIMEOUT_DEFAULT, cfg as _cfg
+
+MEMORY_DIR = _cfg.memory_dir
 _FEEDS_FILE = MEMORY_DIR / "rss_feeds.json"
 
-_TIMEOUT = aiohttp.ClientTimeout(total=15)
+_TIMEOUT = aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT)
 _MAX_ITEMS = 20
 
 from http_session import SessionManager
 
-_sessions = SessionManager(timeout=15, name="rss")
+_sessions = SessionManager(timeout=TIMEOUT_DEFAULT, name="rss")
 _get_session = _sessions.get
 close_session = _sessions.close
 

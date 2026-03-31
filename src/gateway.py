@@ -28,17 +28,19 @@ from urllib.parse import quote as urlquote
 
 import aiohttp
 
+from config import TIMEOUT_SLOW, cfg as _cfg
+
 log = logging.getLogger("openclaw.gateway")
 
-MATON_API_KEY = os.getenv("MATON_API_KEY", "")
+MATON_API_KEY = _cfg.maton_api_key
 GATEWAY_BASE = "https://gateway.maton.ai"
 CTRL_BASE = "https://ctrl.maton.ai"
 
-_TIMEOUT = 30
+_TIMEOUT = TIMEOUT_SLOW
 
 from http_session import SessionManager
 
-_sessions = SessionManager(timeout=_TIMEOUT, name="gateway")
+_sessions = SessionManager(timeout=TIMEOUT_SLOW, name="gateway")
 _get_gateway_session = _sessions.get
 close_gateway_session = _sessions.close
 

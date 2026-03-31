@@ -40,6 +40,7 @@ from approvals import (
 from calendar_skills import get_upcoming_events
 from code_sandbox import run_code as sandbox_run_code
 from config import cfg
+from http_session import SessionManager
 from constants import (
     ATTACHMENT_TEXT_MAX_CHARS,
     AUDIT_FLUSH_INTERVAL,
@@ -110,20 +111,16 @@ from skills.advanced_skills import (
 
 load_dotenv()
 
-DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN", "")
-DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID", "")
-ALLOWED_USER_IDS = [
-    int(uid.strip())
-    for uid in os.getenv("ALLOWED_USER_IDS", "").split(",")
-    if uid.strip()
-]
-HEALTH_PORT = int(os.getenv("HEALTH_PORT", "8765"))
-AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
-LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
-CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
+DISCORD_BOT_TOKEN = cfg.discord_token
+DISCORD_GUILD_ID = cfg.discord_guild_id
+ALLOWED_USER_IDS = cfg.allowed_user_ids
+HEALTH_PORT = cfg.health_port
+AUDIT_DIR = cfg.audit_dir
+LOG_DIR = cfg.log_dir
+CONFIG_DIR = cfg.config_dir
 # Channel for proactive push notifications (morning briefing, alerts)
-ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+ALERT_CHANNEL_ID = cfg.alert_channel_id
+WEBHOOK_SECRET = cfg.webhook_secret
 
 # ---------------------------------------------------------------------------
 # Channel role architecture — prevents context bleed between workflows
@@ -289,14 +286,11 @@ def is_service_allowed(skill: str, service: str) -> bool:
 # Module-level aiohttp session (reused for attachment downloads)
 # ---------------------------------------------------------------------------
 
-_bot_http_session: aiohttp.ClientSession | None = None
+_bot_sessions = SessionManager(timeout=20, name="bot_http")
 
 
-def _get_bot_http_session() -> aiohttp.ClientSession:
-    global _bot_http_session
-    if _bot_http_session is None or _bot_http_session.closed:
-        _bot_http_session = aiohttp.ClientSession()
-    return _bot_http_session
+async def _get_bot_http_session() -> aiohttp.ClientSession:
+    return await _bot_sessions.get()
 
 
 # ---------------------------------------------------------------------------
@@ -856,6 +850,7 @@ class OpenClawBot(commands.Bot):
 
         # Close all async sessions — lazy imports to avoid errors if modules weren't loaded
         _close_fns = [
+            ("spending", lambda: __import__("spending").tracker.flush()),
             ("llm", lambda: __import__("llm").close_sessions()),
             ("agentmail", lambda: __import__("agentmail").close_session()),
             ("nas", lambda: __import__("nas").close_session()),
@@ -866,11 +861,6 @@ class OpenClawBot(commands.Bot):
                 await fn()
             except Exception as exc:
                 log.debug("close %s: %s", name, exc)
-        # Close attachment download session
-        global _bot_http_session
-        if _bot_http_session and not _bot_http_session.closed:
-            await _bot_http_session.close()
-            _bot_http_session = None
         if self._health_runner:
             await self._health_runner.cleanup()
         await super().close()
@@ -1439,7 +1429,7 @@ def _split_response(text: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 # Minimum interval (seconds) between Discord message edits to stay under rate limits
-_STREAM_EDIT_INTERVAL = 1.5
+_STREAM_EDIT_INTERVAL = 3.0
 
 
 # ---------------------------------------------------------------------------
@@ -1560,7 +1550,7 @@ async def _handle_image_attachment(
     Returns the augmented question string with the analysis appended.
     """
     try:
-        session = _get_bot_http_session()
+        session = await _get_bot_http_session()
         async with session.get(
             attachment.url, timeout=aiohttp.ClientTimeout(total=30)
         ) as resp:
@@ -1582,7 +1572,7 @@ async def _handle_doc_attachment(
     Returns the augmented question string with the document text appended.
     """
     try:
-        session = _get_bot_http_session()
+        session = await _get_bot_http_session()
         async with session.get(
             attachment.url, timeout=aiohttp.ClientTimeout(total=30)
         ) as resp:
@@ -2567,7 +2557,7 @@ async def analyze_image_cmd(
     await interaction.response.defer()
 
     try:
-        session = _get_bot_http_session()
+        session = await _get_bot_http_session()
         async with session.get(image.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status != 200:
                 await interaction.followup.send(f"❌ Could not download image (HTTP {resp.status}).")
@@ -2613,7 +2603,7 @@ async def analyze_file_cmd(
 
     # Download the file bytes
     try:
-        session = _get_bot_http_session()
+        session = await _get_bot_http_session()
         async with session.get(file.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
             if resp.status != 200:
                 await interaction.followup.send(f"❌ Could not download file (HTTP {resp.status}).")

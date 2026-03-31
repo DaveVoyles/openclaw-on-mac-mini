@@ -9,6 +9,7 @@ import fcntl
 import json
 import logging
 import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -35,9 +36,15 @@ BUDGET_LIMIT = float(os.getenv("GEMINI_BUDGET_LIMIT", "30.00"))             # $ 
 class SpendingTracker:
     """Persistent JSON-based token usage and cost tracker."""
 
+    _BATCH_SIZE = 10
+    _write_interval = 60  # seconds
+
     def __init__(self):
         self._lock = asyncio.Lock()
         self._data = self._load()
+        self._dirty = False
+        self._write_count = 0
+        self._last_write = time.monotonic()
 
     def _load(self) -> dict[str, Any]:
         if SPENDING_FILE.exists():
@@ -108,8 +115,7 @@ class SpendingTracker:
             day = pplx["daily"].setdefault(today, {"calls": 0, "cost_usd": 0.0})
             day["calls"] += 1
             day["cost_usd"] += cost_per_query
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._save)
+            self._maybe_flush_sync()
             log.info("Perplexity: +1 call ($%.4f) — total $%.4f (%d calls)",
                      cost_per_query, pplx["total_cost_usd"], pplx["calls"])
 
@@ -127,10 +133,30 @@ class SpendingTracker:
             day["calls"] += 1
             day["pages"] += pages
             day["cost_usd"] += cost
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self._save)
+            self._maybe_flush_sync()
             log.info("Firecrawl: +%d page(s) [%s] — total %d/%d free pages ($%.4f)",
                      pages, action, fc["pages_scraped"], 500, fc["total_cost_usd"])
+
+    def _maybe_flush_sync(self) -> None:
+        """Flush to disk if batch size or time threshold exceeded. Must hold _lock."""
+        self._dirty = True
+        self._write_count += 1
+        now = time.monotonic()
+        if self._write_count >= self._BATCH_SIZE or (now - self._last_write) > self._write_interval:
+            self._save()
+            self._dirty = False
+            self._write_count = 0
+            self._last_write = now
+
+    async def flush(self) -> None:
+        """Flush pending data to disk. Call on bot shutdown."""
+        async with self._lock:
+            if self._dirty:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, self._save)
+                self._dirty = False
+                self._write_count = 0
+                self._last_write = time.monotonic()
 
     async def _record_locked(self, input_tokens: int, output_tokens: int):
         """Internal: called while holding self._lock."""
@@ -158,9 +184,7 @@ class SpendingTracker:
         day["cost_usd"] += cost
         day["calls"] += 1
 
-        # Run blocking file I/O in executor to avoid stalling the event loop
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._save)
+        self._maybe_flush_sync()
 
         log.info(
             "Spending: +%d in / +%d out ($%.6f) — total $%.4f / $%.2f budget",

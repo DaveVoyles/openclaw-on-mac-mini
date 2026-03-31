@@ -15,7 +15,9 @@ log = logging.getLogger("openclaw.network")
 
 from http_session import SessionManager
 
-_sessions = SessionManager(timeout=5, name="network")
+from config import TIMEOUT_FAST, cfg as _cfg
+
+_sessions = SessionManager(timeout=TIMEOUT_FAST, name="network")
 close_session = _sessions.close
 
 
@@ -23,11 +25,9 @@ async def _get_session() -> aiohttp.ClientSession:
     """Return the shared HTTP session via the SessionManager."""
     return await _sessions.get()
 
-from config import cfg as _cfg
-
 HOST = _cfg.docker_host_ip
-DNS_TEST_HOST = os.getenv("DNS_TEST_HOST", "8.8.8.8")
-PING_TEST_HOST = os.getenv("PING_TEST_HOST", "1.1.1.1")
+DNS_TEST_HOST = _cfg.dns_test_host
+PING_TEST_HOST = _cfg.ping_test_host
 
 # Common Tailscale binary locations on macOS
 _TAILSCALE_PATHS = [
