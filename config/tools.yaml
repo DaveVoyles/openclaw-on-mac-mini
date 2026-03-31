@@ -459,6 +459,26 @@
         description: The full URL to scrape (must start with http:// or https://)
     required:
       - url
+- name: serper_search
+  description:
+    Search Google via Serper API — returns actual Google SERP results as structured data including
+    organic results, knowledge graph, answer boxes, and People Also Ask. Use when you need raw
+    Google search results, fact-checking, news, or data that Perplexity might not surface.
+    NOT in the automatic search cascade — call directly when Google-specific data is needed.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: The search query
+      num_results:
+        type: integer
+        description: "Number of results (1-10, default 5)"
+      search_type:
+        type: string
+        description: "Type of search: 'search' (web), 'news', 'images', or 'places'. Default: 'search'"
+    required:
+      - query
 - name: webfetch_md
   description:
     Smartly scrape and fetch any URL, converting it into clean Markdown (optimized for AI reading). Use this as

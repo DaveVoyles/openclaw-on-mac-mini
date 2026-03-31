@@ -74,6 +74,9 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
 FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", "")
 FIRECRAWL_API_URL = "https://api.firecrawl.dev/v1"
 
+# Serper (Google SERP results API — not wired into cascade yet)
+SERPER_API_KEY = os.getenv("SERPER_API_KEY", "")
+
 # Tavily web search
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
 TAVILY_API_URL = "https://api.tavily.com/search"
@@ -914,6 +917,92 @@ async def firecrawl_scrape(url: str) -> str:
         return f"❌ Firecrawl error: {e}"
 
 
+# ---------------------------------------------------------------------------
+# Serper — Google SERP Results API (prepared but NOT in cascade yet)
+# To enable: uncomment SERPER_API_KEY in .env and add to search_web() cascade
+# ---------------------------------------------------------------------------
+
+async def serper_search(query: str, num_results: int = 5, search_type: str = "search") -> str:
+    """Search Google via Serper API. Returns structured SERP results.
+
+    Args:
+        query: Search query
+        num_results: Max results (1-10)
+        search_type: 'search' (web), 'news', 'images', or 'places'
+
+    Returns Google SERP data including organic results, knowledge graph,
+    People Also Ask, and featured snippets.
+    """
+    if not SERPER_API_KEY:
+        return "⚠️ Serper API key not configured. Set `SERPER_API_KEY` in .env (uncomment the line)."
+
+    headers = {
+        "X-API-KEY": SERPER_API_KEY,
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "q": query,
+        "num": min(max(num_results, 1), 10),
+    }
+
+    endpoint = {
+        "search": "https://google.serper.dev/search",
+        "news": "https://google.serper.dev/news",
+        "images": "https://google.serper.dev/images",
+        "places": "https://google.serper.dev/places",
+    }.get(search_type, "https://google.serper.dev/search")
+
+    try:
+        session = await _get_session()
+        async with session.post(
+            endpoint, json=payload, headers=headers,
+            timeout=aiohttp.ClientTimeout(total=15),
+        ) as resp:
+            if resp.status != 200:
+                return f"❌ Serper returned HTTP {resp.status}"
+            data = await resp.json()
+
+        lines = [f"**Google Search Results** (via Serper):\n"]
+
+        # Knowledge Graph (if present)
+        kg = data.get("knowledgeGraph", {})
+        if kg:
+            title = kg.get("title", "")
+            desc = kg.get("description", "")
+            if title:
+                lines.append(f"📋 **{title}**: {desc}\n")
+
+        # Featured Snippet (Answer Box)
+        ab = data.get("answerBox", {})
+        if ab:
+            answer = ab.get("answer") or ab.get("snippet", "")
+            if answer:
+                lines.append(f"💡 **Answer:** {answer}\n")
+
+        # Organic Results
+        organic = data.get("organic", [])
+        for i, r in enumerate(organic[:num_results], 1):
+            title = r.get("title", "Untitled")
+            link = r.get("link", "")
+            snippet = r.get("snippet", "")
+            lines.append(f"**{i}. [{title}]({link})**")
+            if snippet:
+                lines.append(f"> {snippet}\n")
+
+        # People Also Ask
+        paa = data.get("peopleAlsoAsk", [])
+        if paa:
+            lines.append("**People Also Ask:**")
+            for q in paa[:3]:
+                lines.append(f"- {q.get('question', '')}")
+
+        log.info("Serper %s: %d results for: %s", search_type, len(organic), query[:60])
+        return "\n".join(lines)
+    except Exception as e:
+        log.debug("Serper search failed: %s", e)
+        return f"❌ Serper error: {e}"
+
+
 def _format_tavily_results(data: dict, num_results: int) -> str:
     """Format Tavily API JSON response into Discord-friendly markdown."""
     lines = []
@@ -1266,6 +1355,7 @@ ADVANCED_SKILLS = {
     "search_web": search_web,
     "browse_url": browse_url,
     "firecrawl_scrape": firecrawl_scrape,
+    "serper_search": serper_search,
     "compare_sources": compare_sources,
     # Phase E: Weather
     "get_weather": get_weather,
