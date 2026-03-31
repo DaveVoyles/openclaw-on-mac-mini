@@ -63,6 +63,11 @@ class SpendingTracker:
             "daily": {},      # "2026-03-23": {input, output, cost, calls}
             "first_call": None,
             "last_call": None,
+            "perplexity": {   # Perplexity API tracking
+                "calls": 0,
+                "total_cost_usd": 0.0,
+                "daily": {},  # "2026-03-30": {calls, cost_usd}
+            },
         }
 
     def _save(self):
@@ -82,9 +87,25 @@ class SpendingTracker:
     # -----------------------------------------------------------------------
 
     async def record(self, input_tokens: int, output_tokens: int):
-        """Record token usage from a single API call."""
+        """Record token usage from a single Gemini API call."""
         async with self._lock:
             await self._record_locked(input_tokens, output_tokens)
+
+    async def record_perplexity(self, model: str = "sonar"):
+        """Record a Perplexity API call. Sonar: ~$0.005/query."""
+        cost_per_query = {"sonar": 0.005, "sonar-pro": 0.01}.get(model, 0.005)
+        async with self._lock:
+            today = datetime.date.today().isoformat()
+            pplx = self._data.setdefault("perplexity", {"calls": 0, "total_cost_usd": 0.0, "daily": {}})
+            pplx["calls"] += 1
+            pplx["total_cost_usd"] += cost_per_query
+            day = pplx["daily"].setdefault(today, {"calls": 0, "cost_usd": 0.0})
+            day["calls"] += 1
+            day["cost_usd"] += cost_per_query
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._save)
+            log.info("Perplexity: +1 call ($%.4f) — total $%.4f (%d calls)",
+                     cost_per_query, pplx["total_cost_usd"], pplx["calls"])
 
     async def _record_locked(self, input_tokens: int, output_tokens: int):
         """Internal: called while holding self._lock."""
@@ -168,35 +189,40 @@ class SpendingTracker:
         """Human-readable spending summary."""
         d = self._data
         total_tokens = d["total_input_tokens"] + d["total_output_tokens"]
+        pplx = d.get("perplexity", {"calls": 0, "total_cost_usd": 0.0})
+
+        # Combined cost
+        combined_cost = d["total_cost_usd"] + pplx.get("total_cost_usd", 0.0)
 
         # Progress bar
-        pct = self.budget_pct_used
+        pct = min(100.0, (combined_cost / BUDGET_LIMIT) * 100) if BUDGET_LIMIT > 0 else 0.0
         filled = int(pct / 5)  # 20-char bar
         bar = "█" * filled + "░" * (20 - filled)
 
         lines = [
-            f"**💰 Gemini API Spending**",
+            f"**💰 API Spending**",
             f"",
-            f"**Budget:** ${d['total_cost_usd']:.4f} / ${BUDGET_LIMIT:.2f}",
-            f"**Remaining:** ${self.budget_remaining:.4f}",
+            f"**Total:** ${combined_cost:.4f} / ${BUDGET_LIMIT:.2f}",
+            f"**Remaining:** ${max(0, BUDGET_LIMIT - combined_cost):.4f}",
             f"[{bar}] {pct:.1f}%",
             f"",
-            f"**Tokens Used:**",
-            f"  Input:  {d['total_input_tokens']:,}",
-            f"  Output: {d['total_output_tokens']:,}",
-            f"  Total:  {total_tokens:,}",
+            f"**🔮 Perplexity Search:**",
+            f"  Calls:  {pplx.get('calls', 0):,}",
+            f"  Cost:   ${pplx.get('total_cost_usd', 0.0):.4f}",
             f"",
-            f"**API Calls:** {d['calls']:,}",
+            f"**⚡ Gemini LLM:**",
+            f"  Calls:  {d['calls']:,}",
+            f"  Cost:   ${d['total_cost_usd']:.4f}",
+            f"  Tokens: {total_tokens:,} ({d['total_input_tokens']:,} in / {d['total_output_tokens']:,} out)",
         ]
 
-        if d["calls"] > 0:
-            avg_cost = d["total_cost_usd"] / d["calls"]
-            avg_tokens = total_tokens / d["calls"]
-            lines.append(f"**Avg per call:** ${avg_cost:.6f} ({avg_tokens:.0f} tokens)")
-
-            # Estimate calls remaining at current rate
+        total_calls = d["calls"] + pplx.get("calls", 0)
+        if total_calls > 0:
+            avg_cost = combined_cost / total_calls
+            lines.append(f"")
+            lines.append(f"**Avg per call:** ${avg_cost:.6f}")
             if avg_cost > 0:
-                calls_left = int(self.budget_remaining / avg_cost)
+                calls_left = int(max(0, BUDGET_LIMIT - combined_cost) / avg_cost)
                 lines.append(f"**Est. calls remaining:** ~{calls_left:,}")
 
         if d["first_call"]:

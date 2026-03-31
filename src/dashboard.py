@@ -321,6 +321,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "total_output_tokens": sp.total_output_tokens,
             "calls": sp.calls,
             "daily": sp.daily,
+            "perplexity": sp._data.get("perplexity", {"calls": 0, "total_cost_usd": 0.0, "daily": {}}),
         },
         "daily_tokens": daily_tokens,
         "skills": skills_list,

@@ -756,6 +756,8 @@ async def search_web(query: str, num_results: int = 5) -> str:
 
 async def _perplexity_search(query: str, num_results: int = 5) -> str:
     """Search via Perplexity API — returns AI-synthesized answer with citations."""
+    from spending import tracker as spending_tracker
+
     url = "https://api.perplexity.ai/chat/completions"
     headers = {
         "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
@@ -781,6 +783,9 @@ async def _perplexity_search(query: str, num_results: int = 5) -> str:
             log.debug("Perplexity returned HTTP %d", resp.status)
             return ""
         data = await resp.json()
+
+    # Track usage
+    await spending_tracker.record_perplexity(model="sonar")
 
     answer = data["choices"][0]["message"]["content"]
     citations = data.get("citations", [])
