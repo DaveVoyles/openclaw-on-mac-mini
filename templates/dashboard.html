@@ -2010,19 +2010,50 @@
 
               const metricsEl = document.getElementById('dream-metrics');
               const names = {freshness: 'Freshness', coverage: 'Coverage', coherence: 'Coherence', efficiency: 'Efficiency', reachability: 'Reachability'};
+              const tooltips = {
+                freshness: 'How many memories have been referenced in the last 30 days. Low = your memories are going stale and unused. Improve by asking questions that trigger memory recall.',
+                coverage: 'How many knowledge categories (Projects, People, Decisions, etc.) were updated in the last 14 days. Low = some areas of your knowledge are outdated. Improve by having conversations across different topics.',
+                coherence: 'What percentage of memories are linked to at least one other memory. Low = your knowledge is isolated facts with no connections. Improve by running dream cycles — they auto-link related entries.',
+                efficiency: 'How concise your long-term memory file (MEMORY.md) is. Decreases as the file grows beyond 500 lines. Improve by archiving old, low-importance entries.',
+                reachability: 'How well-connected your memory graph is — can you reach most memories from any starting point? Low = knowledge silos with no cross-references. Improve by linking related topics across projects.'
+              };
               if (data.metrics && Object.keys(data.metrics).length) {
                   metricsEl.innerHTML = Object.entries(names).map(([key, label]) => {
                       const val = (data.metrics[key] || 0);
                       const pct = Math.round(val * 100);
                       const color = pct >= 70 ? '#4caf50' : pct >= 40 ? '#ff9800' : '#f44336';
-                      return `<div style="display:flex;align-items:center;gap:0.5rem">
-                          <span style="width:90px;font-size:0.82rem;color:var(--muted)">${label}</span>
+                      const tip = tooltips[key] || '';
+                      return `<div style="display:flex;align-items:center;gap:0.5rem;position:relative" class="metric-row" data-tooltip="${esc(tip)}">
+                          <span style="width:90px;font-size:0.82rem;color:var(--muted);cursor:help;text-decoration:underline dotted var(--muted)">${label}</span>
                           <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
                               <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width 0.4s"></div>
                           </div>
                           <span style="width:35px;text-align:right;font-size:0.78rem;font-weight:600;color:${color}">${pct}%</span>
                       </div>`;
                   }).join('');
+                  // Attach tooltip hover listeners
+                  metricsEl.querySelectorAll('.metric-row').forEach(row => {
+                    row.addEventListener('mouseenter', function(e) {
+                      const tip = this.getAttribute('data-tooltip');
+                      if (!tip) return;
+                      let popup = document.getElementById('metric-tooltip');
+                      if (!popup) {
+                        popup = document.createElement('div');
+                        popup.id = 'metric-tooltip';
+                        popup.style.cssText = 'position:fixed;z-index:9999;max-width:320px;padding:10px 14px;background:var(--surface,#1e1e2e);border:1px solid var(--border,#444);border-radius:8px;font-size:0.8rem;line-height:1.4;color:var(--ink,#e0e0e0);box-shadow:0 4px 12px rgba(0,0,0,0.4);pointer-events:none;transition:opacity 0.15s';
+                        document.body.appendChild(popup);
+                      }
+                      popup.textContent = tip;
+                      popup.style.opacity = '1';
+                      const rect = this.getBoundingClientRect();
+                      popup.style.left = rect.left + 'px';
+                      popup.style.top = (rect.bottom + 6) + 'px';
+                    });
+                    row.addEventListener('mouseleave', function() {
+                      const popup = document.getElementById('metric-tooltip');
+                      if (popup) popup.style.opacity = '0';
+                    });
+                  });
               } else {
                   metricsEl.innerHTML = '<p class="muted-text">No dream data yet. Run /dream in Discord.</p>';
               }
