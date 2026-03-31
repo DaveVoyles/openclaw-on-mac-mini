@@ -1512,6 +1512,10 @@
 
       async function loadData() {
         const r = await fetch("/api/dashboard");
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("application/json")) {
+          throw new Error("Dashboard API returned non-JSON (got " + ct.split(";")[0] + "). Are you accessing via the correct host/port?");
+        }
         return await r.json();
       }
 
