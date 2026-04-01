@@ -826,10 +826,10 @@ async def api_topology_handler(request):
     import re
 
     nodes = [
-        {"id": "mac-mini", "label": "Mac Mini M4", "type": "host", "ip": "192.168.1.93", "x": 400, "y": 200},
-        {"id": "nas", "label": "Synology NAS", "type": "host", "ip": "192.168.1.8", "x": 200, "y": 200},
+        {"id": "mac-mini", "label": "Mac Mini M4", "type": "host", "ip": "192.168.1.93", "x": 400, "y": 275},
+        {"id": "nas", "label": "Synology NAS", "type": "host", "ip": "192.168.1.8", "x": 200, "y": 275},
         {"id": "internet", "label": "Internet", "type": "cloud", "x": 600, "y": 50},
-        {"id": "traefik", "label": "Traefik", "type": "proxy", "x": 300, "y": 100},
+        {"id": "traefik", "label": "Traefik", "type": "proxy", "x": 300, "y": 120},
     ]
     edges = [
         {"source": "internet", "target": "nas", "label": "HTTPS:443"},
