@@ -289,6 +289,15 @@
           <li>
             <a href="#auto-dream">38. Auto-Dream (Cognitive Memory)</a>
           </li>
+          <li>
+            <a href="#scheduled-research">39. Scheduled Research Reports</a>
+          </li>
+          <li>
+            <a href="#webhooks">40. Webhook Notifications</a>
+          </li>
+          <li>
+            <a href="#health-alerts">41. Container Health Alerts</a>
+          </li>
         </ul>
       </div>
 
@@ -301,7 +310,7 @@
       <ul>
         <li>
           <strong>Google Gemini 2.5 Flash</strong> &mdash; AI reasoning with
-          function calling (116 skills) &mdash; used for tool-requiring, weather,
+          function calling (117 skills) &mdash; used for tool-requiring, weather,
           and research queries
         </li>
         <li>
@@ -396,7 +405,7 @@ You get a Discord embed with your active downloads</code></pre>
           <tr>
             <td><code>/skills</code></td>
             <td>
-              See all 116 LLM-callable skills that <code>/ask</code> can use.
+              See all 117 LLM-callable skills that <code>/ask</code> can use.
             </td>
           </tr>
         </table>
@@ -3282,6 +3291,85 @@ Division 1 men's lacrosse games this week and post a table.
         <code>/ask "run a dream cycle"</code> — the LLM will call the
         <code>dream_now</code> tool automatically.
       </div>
+
+      <!-- 39. Scheduled Research Reports -->
+      <h2 id="scheduled-research">39. Scheduled Research Reports</h2>
+      <p>
+        Use <code>schedule_research_report</code> to set up recurring
+        research on any topic. The bot runs a full autonomous research cycle
+        on the specified cron schedule, posts results to a Discord thread,
+        and saves the report to the Obsidian vault.
+      </p>
+
+      <h3>How to Use</h3>
+      <p>Ask the bot via <code>/ask</code>:</p>
+      <pre><code>/ask Schedule a weekly WWE recap every Sunday at 8am</code></pre>
+      <p>
+        The LLM calls <code>schedule_research_report(topic, cron)</code>
+        which creates a cron-scheduled job. You can also be explicit:
+      </p>
+      <pre><code>/ask Schedule a research report on "AI agent frameworks" with cron "0 9 * * 1"</code></pre>
+
+      <h3>Examples</h3>
+      <ul>
+        <li><strong>Weekly sports recap:</strong> <em>"Schedule a weekly WWE recap every Sunday at 8am"</em> &rarr; cron <code>0 8 * * 0</code></li>
+        <li><strong>Daily market summary:</strong> <em>"Research stock market trends every weekday at 7am"</em> &rarr; cron <code>0 7 * * 1-5</code></li>
+        <li><strong>Monthly tech roundup:</strong> <em>"Monthly AI research report on the 1st at 9am"</em> &rarr; cron <code>0 9 1 * *</code></li>
+      </ul>
+
+      <div class="tip">
+        <strong>&#128161; Tip:</strong> Manage scheduled research with
+        <code>/schedule list</code> and <code>/schedule remove</code> — they
+        appear alongside your other cron jobs.
+      </div>
+
+      <!-- 40. Webhook Notifications -->
+      <h2 id="webhooks">40. Webhook Notifications</h2>
+      <p>
+        OpenClaw receives real-time webhook events from Sonarr, Radarr, and
+        Plex. When a download completes or media is added, the bot
+        automatically posts a formatted notification to your Discord channel.
+      </p>
+
+      <h3>Supported Events</h3>
+      <ul>
+        <li><strong>Sonarr</strong> &mdash; episode grabbed, imported, or upgraded</li>
+        <li><strong>Radarr</strong> &mdash; movie grabbed, imported, or upgraded</li>
+        <li><strong>Plex</strong> &mdash; media added, playback started</li>
+        <li><strong>qBittorrent</strong> &mdash; download completed</li>
+      </ul>
+      <p>
+        Webhooks are parsed by <code>webhook_formatter.py</code> and
+        delivered as rich Discord embeds with media title, quality, and
+        source details.
+      </p>
+
+      <div class="tip">
+        <strong>&#128161; Tip:</strong> Configure webhook URLs in Sonarr/Radarr
+        settings &rarr; Connect &rarr; Webhook, pointing to
+        <code>http://openclaw:8765/webhook/&lt;service&gt;</code>.
+      </div>
+
+      <!-- 41. Container Health Alerts -->
+      <h2 id="health-alerts">41. Container Health Alerts</h2>
+      <p>
+        OpenClaw monitors all Docker containers every 5 minutes. If any
+        container is in an <strong>unhealthy</strong> or
+        <strong>exited</strong> state, the bot posts an alert embed to your
+        <code>#alerts</code> Discord channel.
+      </p>
+
+      <h3>What Gets Checked</h3>
+      <ul>
+        <li>Container health status (healthy / unhealthy / no healthcheck)</li>
+        <li>Container running state (running / exited / restarting)</li>
+        <li>Automatic recovery detection &mdash; alerts clear when containers return to healthy</li>
+      </ul>
+      <p>
+        This runs as a background loop in <code>discord_background.py</code>
+        &mdash; no configuration needed. Alerts include the container name,
+        status, and how long it has been in the bad state.
+      </p>
 
       <div
         style="

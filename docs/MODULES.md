@@ -77,6 +77,22 @@ Quick reference for all source files. Consult this before exploring the codebase
 
 ## Skills Directory (skills/)
 
+The `skills/` package contains the core skill modules plus 13 ClawHub skill bundles.
+
+### Skill Modules (skills/\*.py) — 4 files
+
+`advanced_skills.py` was split into focused modules for maintainability:
+
+| File                  | Lines | Purpose                                                          | Key Exports                                   |
+| --------------------- | ----- | ---------------------------------------------------------------- | --------------------------------------------- |
+| `__init__.py`         | —     | Core Docker & system monitoring skills + unified registry        | `ALL_SKILLS` dict                             |
+| `advanced_skills.py`  | 256   | Orchestration glue — re-exports from sub-modules, reporting      | `ADVANCED_SKILLS` dict                        |
+| `search_skills.py`    | 524   | Web search providers (Perplexity, Firecrawl, Tavily, DDG, Bing) with retry logic | `SEARCH_SKILLS` dict         |
+| `media_skills.py`     | 479   | \*arr services, Plex, download clients                           | `MEDIA_SKILLS` dict                           |
+| `web_skills.py`       | 274   | URL browsing, content extraction, multi-source comparison        | `WEB_SKILLS` dict                             |
+
+### ClawHub Bundles
+
 13 ClawHub skill bundles installed. See `docs/SERVICES.md` for the full table with versions and API keys.
 
 ## Test Files (tests/)
@@ -84,7 +100,7 @@ Quick reference for all source files. Consult this before exploring the codebase
 | File                       | Tests                                                                           |
 | -------------------------- | ------------------------------------------------------------------------------- |
 | `conftest.py`              | Shared fixtures: `mock_llm`, `mock_discord_interaction`, `_clear_module_caches` |
-| `test_advanced_skills.py`  | Media, network, report generation skills                                        |
+| `test_advanced_skills.py`  | Media, network, report generation skills (covers search_skills, media_skills, web_skills) |
 | `test_agentmail.py`        | AgentMail API integration                                                       |
 | `test_analyzer.py`         | Log analysis engine                                                             |
 | `test_approvals.py`        | Approval workflow system                                                        |
@@ -220,7 +236,7 @@ Autonomous research engine that decomposes a query into sub-questions, searches 
 - `_auto_save(query, report, post)` — save to Obsidian vault + NAS + Google Docs
 
 **Exports:** `ResearchAgent` class (used directly, not a skill dict).
-**Dependencies:** `skills.advanced_skills` (search_web, browse_url), `obsidian_writer`, `nas`, `gateway`, `llm.chat_deep`.
+**Dependencies:** `skills.search_skills` (search_web), `skills.web_skills` (browse_url), `obsidian_writer`, `nas`, `gateway`, `llm.chat_deep`.
 
 ---
 
@@ -398,4 +414,43 @@ Sliding-window rate limiter with per-minute (60 RPM) and per-hour (500 RPH) limi
 
 ---
 
-Last updated: March 2026
+### search_skills.py — Web Search Providers
+
+Search cascade logic extracted from `advanced_skills.py`. Implements the 5-tier web search cascade (Perplexity AI → Firecrawl → Tavily → DuckDuckGo → Bing Lite) with per-provider retry logic via `search_provider.retry_once`.
+
+**Key Functions:**
+- `search_web(query, provider, max_results)` — unified search entry point with cascade fallback
+- Provider-specific helpers for Perplexity, Firecrawl, Tavily, DuckDuckGo, Bing, and Serper
+
+**Exports:** `SEARCH_SKILLS` dict.
+**Dependencies:** `aiohttp`, `http_session.SessionManager`, `search_provider.retry_once`, `config`.
+
+---
+
+### media_skills.py — \*arr & Plex Skills
+
+Media stack skills extracted from `advanced_skills.py`. Covers Sonarr, Radarr, Lidarr, Prowlarr, Plex (via Tautulli), SABnzbd, and qBittorrent.
+
+**Key Functions:**
+- `check_arr_health()`, `search_media(query)`, `get_download_queue()`
+- `check_download_clients()`, `check_plex_status()`, `get_recent_additions()`
+
+**Exports:** `MEDIA_SKILLS` dict.
+**Dependencies:** `aiohttp`, `http_session.SessionManager`, `config`.
+
+---
+
+### web_skills.py — URL Browsing & Extraction
+
+Web page content extraction extracted from `advanced_skills.py`. Three-tier extraction: trafilatura → Jina AI Reader → Playwright headless browser.
+
+**Key Functions:**
+- `browse_url(url, question)` — fetch and read a web page; optional Q&A
+- `compare_sources(urls_json, question)` — multi-source comparison
+
+**Exports:** `WEB_SKILLS` dict.
+**Dependencies:** `aiohttp`, `http_session.SessionManager`, `config`.
+
+---
+
+Last updated: April 2026

@@ -95,7 +95,11 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `LOCAL_LLM_ENABLED` toggle in `.env` — disable local LLM without a code change
 - Response footer shows `via gemma3:12b` (local · unlimited) or `via gemini-2.5-flash` with rate info
 - AgentMail fixed: correct `/v0/inboxes/{inbox_id}/messages/send` endpoint
-- `skills/` reorganized as a Python package (`skills/__init__.py` + `skills/advanced_skills.py`)
+- `skills/` reorganized as a Python package (`skills/__init__.py` + 4 skill modules)
+  - `advanced_skills.py` (256) — orchestration glue, reporting
+  - `search_skills.py` (524) — web search cascade with provider retry logic
+  - `media_skills.py` (479) — \*arr services, Plex, download clients
+  - `web_skills.py` (274) — URL browsing, content extraction
 
 **Phase 8 — Web, Browsing & Vision** ✅
 
@@ -114,7 +118,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Dashboard published at https://davevoyles.github.io/openclaw-dashboard/ (GitHub Pages)
 - 5 Gemini tool declarations for LLM-driven task management
 - LLM routing keywords: _task_, _kanban_, _backlog_, _in progress_, _todo_, _ticket_
-- 116 registered skills
+- 117 registered skills
 
 **Phase 10 — Persistent Agent Plans** ✅
 
@@ -205,6 +209,16 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **3-tier content extraction** — trafilatura (fast) → Jina AI Reader (free, handles JS-rendered sites) → Playwright headless Chromium (last resort)
 - **Deep Research Pro methodology** — keyword variations (2–3 per sub-query), source quality ranking (academic > news > blog > social), cross-reference checking, confidence levels in reports, methodology section
 - `/research deep:true` for extended multi-pass research with exhaustive source coverage
+
+**Phase 18 — Scheduled Research, Webhooks & Health Alerts** ✅
+
+- **Scheduled research reports** — `schedule_research_report(topic, cron)` creates recurring research via cron; reports posted to Discord thread + saved to vault
+- **Webhook notifications** — Sonarr/Radarr/Plex download events auto-posted to Discord via `webhook_formatter.py`
+- **Container health auto-alerts** — `discord_background.py` checks Docker containers every 5 minutes, alerts on unhealthy/exited state
+- **Search provider retry logic** — Perplexity and Firecrawl calls retry once on transient failures via `search_provider.retry_once`
+- **API quota dashboard** — new dashboard card + `/api/quota-status` endpoint showing real-time API usage across providers
+- **Skill module split** — `advanced_skills.py` (1,426 lines) split into `search_skills.py` (524), `media_skills.py` (479), `web_skills.py` (274), `advanced_skills.py` (256)
+- 117 registered skills (was 116)
 
 **Planned**
 
@@ -353,7 +367,7 @@ User (Discord)
   │
   ▼
 ┌─────────────────────────────────────────────────────────┐
-│ OpenClaw Bot (Mac Mini M4 Pro · Docker · 116 skills)    │
+│ OpenClaw Bot (Mac Mini M4 Pro · Docker · 117 skills)    │
 │                                                         │
 │  ┌─ LLM Layer ──────────────────────────────────────┐  │
 │  │ Gemini 2.5 Flash (primary, 106 tools registered) │  │
@@ -498,7 +512,10 @@ Uptime Kuma (:3001)              Grafana dashboard
 ├── discord_web.py         # aiohttp health/metrics/smoke/webhook web server
 ├── skills/
 │   ├── __init__.py        # Core Docker & system monitoring skills + unified registry
-│   └── advanced_skills.py # Media, network, Plex, health, and reporting skills
+│   ├── advanced_skills.py # Orchestration glue, reporting (256 lines, split from 1,426)
+│   ├── search_skills.py   # Web search cascade with retry logic (524 lines)
+│   ├── media_skills.py    # *arr services, Plex, download clients (479 lines)
+│   └── web_skills.py      # URL browsing, content extraction (274 lines)
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
 ├── llm.py                 # Hybrid LLM: public API facade (1,889 lines)

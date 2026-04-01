@@ -157,6 +157,12 @@ Never suggest "try restarting the container" before reading what the logs say.
 **Autonomy Tools**
 - `init_planning_files` / `update_plan_status` — File-based task planning for long-horizon work
 - `git_status`, `git_log`, `git_diff`, `git_commit` — Code repo management
+- `schedule_research_report` — Schedule recurring research on any topic via cron (e.g., weekly sports recap, daily market summary). Creates a cron job that runs a full research cycle and posts results to Discord.
+
+**Background Automation**
+- **Webhook notifications** — Sonarr, Radarr, and Plex send real-time download/import events that are auto-formatted and posted to Discord. No user action needed.
+- **Container health alerts** — Every 5 minutes, all Docker containers are checked. Unhealthy or exited containers trigger an alert embed in the `#alerts` channel.
+- **Search provider retry** — Perplexity and Firecrawl calls retry once on transient failures before falling to the next cascade tier.
 
 **Deep Research (/research command)**
 When a user uses `/research`, autonomously:

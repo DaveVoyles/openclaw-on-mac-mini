@@ -11,16 +11,16 @@ Key architectural patterns:
 
 ---
 
-## Modular Structure (March 31, 2026)
+## Modular Structure (April 2026)
 
-`bot.py` was split from 3,084 → 1,195 lines. `llm.py` extracted companion modules for its internals.
+`bot.py` was split from 3,084 → 1,195 lines. `llm.py` extracted companion modules. `advanced_skills.py` split into focused skill modules.
 
 ```
 bot.py was split from 3,084 → 1,195 lines:
 ├── bot.py (1,195) — Core: init, auth, /ask command
 ├── discord_commands.py (1,131) — 30 slash commands
-├── discord_background.py (477) — Background loops
-└── discord_web.py (319) — Health server
+├── discord_background.py (477) — Background loops + container health alerts
+└── discord_web.py (319) — Health server + /api/quota-status
 
 llm.py has extracted companion modules:
 ├── llm.py (1,889) — Public API facade
@@ -28,6 +28,12 @@ llm.py has extracted companion modules:
 ├── llm_tools.py (264) — Tool execution
 ├── llm_patterns.py (194) — Regex + validation
 └── llm_ratelimit.py (82) — Rate limiting
+
+skills/advanced_skills.py split into focused modules:
+├── advanced_skills.py (256) — Orchestration glue, reporting
+├── search_skills.py (524) — Web search cascade + retry logic
+├── media_skills.py (479) — *arr services, Plex, download clients
+└── web_skills.py (274) — URL browsing, content extraction
 ```
 
 ---
@@ -52,7 +58,7 @@ graph TB
         LLMPatterns["llm_patterns.py\nQuery classification"]
         LLMRateLimit["llm_ratelimit.py\nRate limiter"]
         ResearchAgent["research_agent.py\nReAct Research Loop"]
-        Skills["skills/\nadvanced_skills.py"]
+        Skills["skills/\nsearch_skills · media_skills\nweb_skills · advanced_skills"]
         Gateway["gateway.py\nMaton Client"]
         Approvals["approvals.py\nApproval Workflow"]
         Scheduler["scheduler.py\nCron Jobs"]
@@ -60,6 +66,7 @@ graph TB
         Spending["spending.py\nCost Tracker"]
         Dashboard["dashboard.py\nHTML Dashboard + JSON API\n:8765/dashboard"]
         WebhookFmt["webhook_formatter.py\nIncoming Webhook Parser"]
+        HealthAlerts["discord_background.py\nContainer Health Alerts\n(every 5 min)"]
         WorkerAgent["worker_agent.py\nBackground Sub-Agent"]
         Maintenance["maintenance_skills.py\n4 AM Cron Maintenance"]
         ObsidianWriter["obsidian_writer.py\nVault Writer"]
@@ -109,6 +116,8 @@ graph TB
     Bot --> Approvals
     Bot --> Scheduler
     Bot --> WebhookFmt
+    Bot --> HealthAlerts
+    HealthAlerts -->|"unhealthy/exited"| Discord
 
     %% ── Cogs feed into bot ────────────────────────────────────
     DockerCog --> Bot
@@ -313,7 +322,7 @@ graph TB
     classDef infra fill:#3a2d1e,stroke:#c08040,color:#fff
     classDef actor fill:#1e1e3a,stroke:#6060d9,color:#fff
 
-    class Discord,Bot,DiscordCmds,DiscordBG,DiscordWeb,LLM,LLMClient,LLMTools,LLMPatterns,LLMRateLimit,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
+    class Discord,Bot,DiscordCmds,DiscordBG,DiscordWeb,LLM,LLMClient,LLMTools,LLMPatterns,LLMRateLimit,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,HealthAlerts,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
     class DockerCog,MediaCog,NetworkCog,AnalyticsCog service
     class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,PerplexityAPI,FirecrawlAPI,TavilyAPI,DDGNet,SerperAPI,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
@@ -341,7 +350,10 @@ graph TB
 | **Cost tracking**               | Every Gemini call → `spending.py` → `data/memory/spending.json`                                                                                 |
 | **Scheduled tasks**             | `scheduler.py` cron → any skill function                                                                                                        |
 | **Incoming webhook**            | Sonarr/Radarr/Plex/qBittorrent → `webhook_formatter.py` → `bot.py` → Discord notification                                                       |
-| **Dashboard**                   | Browser → `:8765/dashboard` → `dashboard.py` → HTML page + `/api/dashboard` JSON                                                                |
+| **Container health alerts**     | `discord_background.py` (every 5 min) → `list_containers()` → filter unhealthy/exited → Discord `#alerts` embed                                  |
+| **Scheduled research**          | `scheduler.py` cron → `schedule_research_report(topic, cron)` → `research_agent.py` → Discord thread + vault                                     |
+| **API quota dashboard**         | Browser → `:8765/api/quota-status` → `spending.py` `get_quota_status()` → JSON; dashboard card auto-refreshes                                    |
+| **Dashboard**                   | Browser → `:8765/dashboard` → `dashboard.py` → HTML page + `/api/dashboard` JSON + `/api/quota-status`                                           |
 | **Background autonomy**         | `worker_agent.py` → spawns fresh Gemini session → `llm.py` → skills                                                                             |
 | **RSS feeds**                   | `scheduler.py` (periodic) → `rss_skills.py` → external feeds → `data/memory/rss_feeds.json` → LLM summarization → Discord notification                     |
 | **URL change detection**        | `scheduler.py` (periodic) → `monitor_skills.py` → `_fetch_text()` → SHA-256 compare → `data/memory/url_snapshots.json` → alert on diff                     |
