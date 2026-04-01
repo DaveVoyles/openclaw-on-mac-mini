@@ -188,6 +188,7 @@ class TestPersistence:
         with patch.object(spending_module, "SPENDING_FILE", temp_file):
             t1 = SpendingTracker()
             await t1.record(1000, 500)
+            await t1.flush()
             cost1 = t1.total_cost
             calls1 = t1._data["calls"]
 
@@ -208,6 +209,7 @@ class TestPersistence:
         with patch.object(spending_module, "SPENDING_FILE", temp_file):
             t = SpendingTracker()
             await t.record(100, 50)
+            await t.flush()
 
         data = json.loads(temp_file.read_text())
         assert "total_cost_usd" in data

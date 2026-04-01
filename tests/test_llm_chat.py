@@ -33,6 +33,7 @@ sys.modules.setdefault("google.genai", _genai_mock)
 sys.modules.setdefault("google.genai.types", _genai_mock.types)
 
 import llm  # noqa: E402
+import llm_client  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # System prompt loading
@@ -41,7 +42,7 @@ import llm  # noqa: E402
 class TestSystemPrompt:
     def test_default_prompt_when_file_missing(self, tmp_path, monkeypatch):
         """When the prompt file doesn't exist, fall back to the hardcoded default."""
-        monkeypatch.setattr(llm, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         llm._system_prompt_cache = None
         llm._system_prompt_mtime = 0.0
         prompt = llm._load_system_prompt()
@@ -53,7 +54,7 @@ class TestSystemPrompt:
         prompts_dir.mkdir()
         system_file = prompts_dir / "system.txt"
         system_file.write_text("You are TestBot.")
-        monkeypatch.setattr(llm, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         llm._system_prompt_cache = None
         llm._system_prompt_mtime = 0.0
         assert llm._load_system_prompt() == "You are TestBot."
@@ -64,7 +65,7 @@ class TestSystemPrompt:
         prompts_dir.mkdir()
         system_file = prompts_dir / "system.txt"
         system_file.write_text("v1")
-        monkeypatch.setattr(llm, "CONFIG_DIR", tmp_path)
+        monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         llm._system_prompt_cache = None
         llm._system_prompt_mtime = 0.0
         assert llm._load_system_prompt() == "v1"

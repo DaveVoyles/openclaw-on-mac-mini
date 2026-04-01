@@ -55,7 +55,7 @@ class TestSuccessfulSend:
 
         with patch.object(agentmail_module, "AGENTMAIL_API_KEY", "real-key"):
             with patch.object(agentmail_module, "AGENTMAIL_INBOX", "openclaw"):
-                with patch("agentmail.aiohttp.ClientSession", return_value=mock_session):
+                with patch("agentmail._get_session", new=AsyncMock(return_value=mock_session)):
                     result = await send_agent_mail("user@example.com", "Test", "Body")
                     assert "✅" in result
                     assert "msg-abc123" in result
@@ -87,7 +87,7 @@ class TestSuccessfulSend:
 
         with patch.object(agentmail_module, "AGENTMAIL_API_KEY", "key"):
             with patch.object(agentmail_module, "AGENTMAIL_INBOX", "openclaw"):
-                with patch("agentmail.aiohttp.ClientSession", return_value=mock_session):
+                with patch("agentmail._get_session", new=AsyncMock(return_value=mock_session)):
                     await send_agent_mail("a@b.com", "s", "b")
                     assert any("openclaw%40agentmail.to" in u or "openclaw@agentmail.to" in u
                                for u in captured_urls)
@@ -114,7 +114,7 @@ class TestErrorResponses:
 
         with patch.object(agentmail_module, "AGENTMAIL_API_KEY", "key"):
             with patch.object(agentmail_module, "AGENTMAIL_INBOX", "openclaw"):
-                with patch("agentmail.aiohttp.ClientSession", return_value=mock_session):
+                with patch("agentmail._get_session", new=AsyncMock(return_value=mock_session)):
                     result = await send_agent_mail("a@b.com", "s", "b")
                     assert "❌" in result
                     assert "403" in result
@@ -141,7 +141,7 @@ class TestErrorResponses:
 
         with patch.object(agentmail_module, "AGENTMAIL_API_KEY", "key"):
             with patch.object(agentmail_module, "AGENTMAIL_INBOX", "openclaw"):
-                with patch("agentmail.aiohttp.ClientSession", return_value=mock_session):
+                with patch("agentmail._get_session", new=AsyncMock(return_value=mock_session)):
                     result = await send_agent_mail("a@b.com", "s", "b")
                     assert "❌" in result
                     assert "timed out" in result.lower()
@@ -166,7 +166,7 @@ class TestErrorResponses:
 
         with patch.object(agentmail_module, "AGENTMAIL_API_KEY", "key"):
             with patch.object(agentmail_module, "AGENTMAIL_INBOX", "openclaw"):
-                with patch("agentmail.aiohttp.ClientSession", return_value=mock_session):
+                with patch("agentmail._get_session", new=AsyncMock(return_value=mock_session)):
                     result = await send_agent_mail("a@b.com", "s", "b")
                     assert "❌" in result
 

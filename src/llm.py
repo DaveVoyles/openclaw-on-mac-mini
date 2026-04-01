@@ -37,6 +37,7 @@ from llm_client import (  # noqa: F401
     TEMPERATURE,
     THINKING_BUDGET,
     THINKING_MODEL,
+    _build_tools,
     _client,
     _get_model,
     _get_thinking_model,
