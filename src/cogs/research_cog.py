@@ -1,8 +1,9 @@
 """Research & web browsing commands — extracted from bot.py.
 
-Handles: /research, /research-search, /sources, /websearch, /browse
+Handles: /research, /research-search, /sources, /websearch, /browse, /compare
 """
 
+import asyncio
 import logging
 
 import discord
@@ -274,6 +275,47 @@ class ResearchCog(commands.Cog, name="Research"):
 
         await interaction.followup.send("\n".join(lines), ephemeral=True)
         audit_log(interaction.user, "sources_search", detail=query)
+
+    # ── /compare ─────────────────────────────────────────────────────
+    @app_commands.command(name="compare", description="Compare answers from multiple search providers side-by-side")
+    @app_commands.describe(query="The question to compare across providers")
+    @require_auth()
+    async def compare_cmd(self, interaction: discord.Interaction, query: str):
+        from skills.search_skills import _firecrawl_search, _perplexity_search, serper_search
+
+        await interaction.response.defer()
+
+        results = await asyncio.gather(
+            _perplexity_search(query, 3),
+            _firecrawl_search(query, 3),
+            serper_search(query, 3),
+            return_exceptions=True,
+        )
+
+        providers = ["🔮 Perplexity", "🔥 Firecrawl", "🔍 Serper (Google)"]
+
+        for provider_name, result in zip(providers, results):
+            if isinstance(result, Exception):
+                embed = discord.Embed(
+                    title=provider_name,
+                    description=f"❌ Failed: {result}",
+                    color=discord.Color.red(),
+                )
+            elif not result:
+                embed = discord.Embed(
+                    title=provider_name,
+                    description="No results (provider may not be configured)",
+                    color=discord.Color.greyple(),
+                )
+            else:
+                embed = discord.Embed(
+                    title=provider_name,
+                    description=truncate_for_embed(result),
+                    color=discord.Color.blue(),
+                )
+            await interaction.followup.send(embed=embed)
+
+        audit_log(interaction.user, "compare", detail=query)
 
 
 async def setup(bot: commands.Bot):

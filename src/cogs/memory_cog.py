@@ -1,7 +1,7 @@
 """Memory & knowledge management commands — extracted from bot.py.
 
 Handles: /remember, /recall, /memory-stats, /memory-refresh,
-         /rules, /profile, /profile-edit, /goals
+         /rules, /profile, /profile-edit, /goals, /export-conversations
 """
 
 import logging
@@ -266,6 +266,46 @@ class MemoryCog(commands.Cog, name="Memory"):
         except Exception as e:
             await interaction.followup.send(f"⚠️ Update failed: {e}", ephemeral=True)
         audit_log(interaction.user, "profile_edit", detail=f"{field}={value[:100]}")
+
+    # ── /export-conversations ─────────────────────────────────────────
+    @app_commands.command(name="export-conversations", description="Export all saved conversations as a JSON file")
+    @require_auth()
+    async def export_conversations_cmd(self, interaction: discord.Interaction):
+        import datetime
+        import io
+        import json
+
+        from thread_store import get_thread_messages, list_user_threads
+
+        await interaction.response.defer(ephemeral=True)
+
+        threads = await list_user_threads(user_id=interaction.user.id, limit=500)
+
+        # Enrich each thread with its messages
+        enriched: list[dict] = []
+        for t in threads:
+            messages = await get_thread_messages(t["id"])
+            enriched.append({**t, "messages": messages})
+
+        export_data = {
+            "exported_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "user": str(interaction.user),
+            "thread_count": len(enriched),
+            "threads": enriched,
+        }
+
+        content = json.dumps(export_data, indent=2, default=str)
+        file = discord.File(
+            io.BytesIO(content.encode()),
+            filename=f"openclaw-conversations-{datetime.date.today()}.json",
+        )
+
+        await interaction.followup.send(
+            f"📦 Exported {len(enriched)} conversation threads.",
+            file=file,
+            ephemeral=True,
+        )
+        audit_log(interaction.user, "export_conversations")
 
 
 async def setup(bot: commands.Bot):

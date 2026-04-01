@@ -1,42 +1,61 @@
 """
-OpenClaw Advanced Skills — Phase 5: Media, Network, Plex, Reports
-Each skill is a standalone async function returning a string result.
-API keys are loaded from environment variables set in .env.
+OpenClaw Advanced Skills — facade that re-exports from focused sub-modules.
+
+Sub-modules:
+  - search_skills: web search providers and cascade logic
+  - media_skills:  *arr services, Plex, download clients
+  - web_skills:    URL browsing, content extraction, multi-source comparison
+
+Local skills (network/weather/reports) remain here.
 """
 
 import asyncio
-import logging
-import os
-import shlex
-import ssl
-import socket
-import sys
-import json
 import datetime
-import time
-from pathlib import Path
-from typing import Optional
+import logging
+import shlex
 
 import aiohttp
+
+from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW, cfg as _cfg
+from http_session import SessionManager
 
 log = logging.getLogger("openclaw.advanced_skills")
 
 # ---------------------------------------------------------------------------
-# Configuration — loaded from environment
+# Re-export everything from sub-modules (backward-compatible)
 # ---------------------------------------------------------------------------
 
-from config import (
-    TIMEOUT_DEFAULT,
-    TIMEOUT_SLOW,
-    cfg as _cfg,
+from skills.search_skills import (  # noqa: F401
+    search_web,
+    _perplexity_search,
+    _firecrawl_search,
+    firecrawl_scrape,
+    serper_search,
+    _format_tavily_results,
+    _format_ddg_results,
+    SEARCH_SKILLS,
+)
+from skills.media_skills import (  # noqa: F401
+    check_arr_health,
+    check_download_clients,
+    check_plex_status,
+    get_plex_activity,
+    search_media,
+    get_download_queue,
+    get_recent_additions,
+    add_to_sonarr,
+    add_to_radarr,
+    MEDIA_SKILLS,
+)
+from skills.web_skills import (  # noqa: F401
+    browse_url,
+    compare_sources,
+    WEB_SKILLS,
 )
 
 # ---------------------------------------------------------------------------
-# Shared HTTP session (created on first use, reused across all API calls)
+# Shared HTTP session (used by local skills only — weather)
 # ---------------------------------------------------------------------------
-
-from http_session import SessionManager
-from search_provider import get_stats
 
 _sessions = SessionManager(
     timeout=TIMEOUT_SLOW,
@@ -48,103 +67,18 @@ _sessions = SessionManager(
 _get_session = _sessions.get
 close_session = _sessions.close
 
+# ---------------------------------------------------------------------------
+# Configuration for local skills
+# ---------------------------------------------------------------------------
+
 HOST = _cfg.docker_host_ip
-
-# *arr services
-SONARR_URL = _cfg.sonarr_url
-SONARR_API_KEY = _cfg.sonarr_api_key
-RADARR_URL = _cfg.radarr_url
-RADARR_API_KEY = _cfg.radarr_api_key
-LIDARR_URL = _cfg.lidarr_url
-LIDARR_API_KEY = _cfg.lidarr_api_key
-PROWLARR_URL = _cfg.prowlarr_url
-PROWLARR_API_KEY = _cfg.prowlarr_api_key
-
-# Download clients
-SABNZBD_URL = _cfg.sabnzbd_url
 SABNZBD_API_KEY = _cfg.sabnzbd_api_key
 QBIT_URL = _cfg.qbit_url
-
-# Plex / Tautulli
-TAUTULLI_URL = _cfg.tautulli_url
-TAUTULLI_API_KEY = _cfg.tautulli_api_key
-
-# Overseerr
-OVERSEERR_URL = _cfg.overseerr_url
-OVERSEERR_API_KEY = _cfg.overseerr_api_key
-
-# Perplexity AI search (primary)
-PERPLEXITY_API_KEY = _cfg.perplexity_api_key
-
-# Firecrawl (search + extract in one call)
-FIRECRAWL_API_KEY = _cfg.firecrawl_api_key
-FIRECRAWL_API_URL = "https://api.firecrawl.dev/v1"
-
-# Serper (Google SERP results API — not wired into cascade yet)
-SERPER_API_KEY = _cfg.serper_api_key
-
-# Tavily web search
-TAVILY_API_KEY = _cfg.tavily_api_key
-TAVILY_API_URL = "https://api.tavily.com/search"
-
-# Paths to installed ClawHub skill scripts (relative to this file's directory)
-_SKILLS_DIR = Path(__file__).parent
-_TAVILY_SCRIPT = _SKILLS_DIR / "openclaw-tavily-search" / "scripts" / "tavily_search.py"
-_DDG_SCRIPT = _SKILLS_DIR / "free-web-search" / "scripts" / "web_search.py"
-
-COMMAND_TIMEOUT = 15
-
-# Default location for weather queries
 WEATHER_DEFAULT_LOCATION = _cfg.weather_default_location
 
 # ---------------------------------------------------------------------------
-# HTTP helper
+# Helpers
 # ---------------------------------------------------------------------------
-
-
-async def _api_get(url: str, headers: dict | None = None, timeout: int = 10) -> dict | list | str:
-    """Make an async HTTP GET request and return JSON or text."""
-    try:
-        session = await _get_session()
-        async with session.get(
-            url, headers=headers, timeout=aiohttp.ClientTimeout(total=timeout)
-        ) as resp:
-            if resp.content_type and "json" in resp.content_type:
-                return await resp.json()
-            return await resp.text()
-    except asyncio.TimeoutError:
-        log.warning("GET %s timed out after %ds", url, timeout)
-        return f"Request timed out ({timeout}s)"
-    except Exception as e:
-        log.warning("GET %s failed (%s): %s", url, type(e).__name__, e)
-        return f"Request failed: {e}"
-
-
-async def _api_post(url: str, json_data: dict, headers: dict | None = None, timeout: int = 15) -> dict | list | str:
-    """Make an async HTTP POST request and return JSON or text."""
-    try:
-        session = await _get_session()
-        async with session.post(
-            url, json=json_data, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            body = await resp.text()
-            if resp.status >= 400:
-                try:
-                    err = json.loads(body)
-                    msg = err.get("message") or err.get("errorMessage") or str(err)
-                except (json.JSONDecodeError, AttributeError):
-                    msg = body[:300]
-                return f"HTTP {resp.status}: {msg}"
-            if resp.content_type and "json" in resp.content_type:
-                return json.loads(body)
-            return body
-    except asyncio.TimeoutError:
-        log.warning("POST %s timed out after %ds", url, timeout)
-        return f"Request timed out ({timeout}s)"
-    except Exception as e:
-        log.warning("POST %s failed (%s): %s", url, type(e).__name__, e)
-        return f"Request failed: {e}"
 
 
 def _truncate(text: str, limit: int = 1900) -> str:
@@ -154,952 +88,7 @@ def _truncate(text: str, limit: int = 1900) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 6.3  Service Health Checks
-# ---------------------------------------------------------------------------
-
-
-async def check_arr_health() -> str:
-    """Query all *arr services for system health status (parallel requests)."""
-    services = [
-        ("Sonarr", SONARR_URL, SONARR_API_KEY, "/api/v3/health"),
-        ("Radarr", RADARR_URL, RADARR_API_KEY, "/api/v3/health"),
-        ("Lidarr", LIDARR_URL, LIDARR_API_KEY, "/api/v1/health"),
-        ("Prowlarr", PROWLARR_URL, PROWLARR_API_KEY, "/api/v1/health"),
-    ]
-    # Kick off all configured requests in parallel
-    configured = [(n, u, k, e) for n, u, k, e in services if k]
-    unconfigured = [n for n, _, k, _ in services if not k]
-
-    tasks = [
-        _api_get(f"{url}{endpoint}", headers={"X-Api-Key": key})
-        for _, url, key, endpoint in configured
-    ]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    lines = [f"⚠️ **{n}**: API key not configured" for n in unconfigured]
-    for (name, _, _, _), data in zip(configured, results):
-        if isinstance(data, Exception):
-            lines.append(f"❌ **{name}**: {data}")
-        elif isinstance(data, list):
-            if not data:
-                lines.append(f"✅ **{name}**: Healthy")
-            else:
-                issues = ", ".join(d.get("message", "?") for d in data[:3])
-                lines.append(f"⚠️ **{name}**: {issues}")
-        else:
-            lines.append(f"❌ **{name}**: {data}")
-    return "\n".join(lines) or "No services configured."
-
-
-async def check_download_clients() -> str:
-    """Check connectivity to SABnzbd and qBittorrent (parallel requests)."""
-    tasks: list = []
-    task_labels: list[str] = []
-
-    if SABNZBD_API_KEY:
-        tasks.append(_api_get(f"{SABNZBD_URL}/api?mode=version&output=json&apikey={SABNZBD_API_KEY}"))
-        task_labels.append("sabnzbd")
-
-    qbit_configured = bool(QBIT_URL)
-    if qbit_configured:
-        tasks.append(_api_get(f"{QBIT_URL}/api/v2/app/version"))
-        task_labels.append("qbit")
-
-    if not tasks:
-        return "⚠️ No download clients configured (set SABNZBD_API_KEY and/or QBIT_URL in .env)"
-
-    gathered = await asyncio.gather(*tasks, return_exceptions=True)
-    lines = []
-
-    for label, data in zip(task_labels, gathered):
-        if label == "sabnzbd":
-            if isinstance(data, dict) and "version" in data:
-                lines.append(f"✅ **SABnzbd**: v{data['version']}")
-            else:
-                lines.append(f"❌ **SABnzbd**: {data}")
-        elif label == "qbit":
-            if isinstance(data, str) and data.startswith("v"):
-                lines.append(f"✅ **qBittorrent**: {data.strip()}")
-            else:
-                lines.append(f"⚠️ **qBittorrent**: {data}")
-
-    return "\n".join(lines)
-
-
-async def check_plex_status() -> str:
-    """Check Plex server status via Tautulli API."""
-    if not TAUTULLI_API_KEY:
-        return "⚠️ Tautulli API key not configured. Set TAUTULLI_API_KEY in .env."
-
-    data = await _api_get(
-        f"{TAUTULLI_URL}/api/v2?apikey={TAUTULLI_API_KEY}&cmd=server_info"
-    )
-    if isinstance(data, dict):
-        resp = data.get("response", {})
-        if resp.get("result") == "success":
-            info = resp.get("data", {})
-            name = info.get("pms_name", "Plex")
-            version = info.get("pms_version", "?")
-            platform = info.get("pms_platform", "?")
-            return f"✅ **{name}**: v{version} ({platform})"
-        return f"❌ Plex: {resp.get('message', 'unknown error')}"
-    return f"❌ Plex: {data}"
-
-
-async def get_plex_activity() -> str:
-    """Get real-time Plex activity: who is watching what, progress, quality, and stream type.
-
-    Uses the Tautulli /api/v2?cmd=get_activity endpoint which returns current streams.
-    Returns a formatted summary of active sessions or "Nothing playing" if idle.
-    """
-    if not TAUTULLI_API_KEY:
-        return "⚠️ Tautulli API key not configured. Set TAUTULLI_API_KEY in .env."
-
-    data = await _api_get(
-        f"{TAUTULLI_URL}/api/v2?apikey={TAUTULLI_API_KEY}&cmd=get_activity"
-    )
-    if not isinstance(data, dict):
-        return f"❌ Plex activity: {data}"
-
-    resp = data.get("response", {})
-    if resp.get("result") != "success":
-        return f"❌ Plex activity: {resp.get('message', 'unknown error')}"
-
-    activity = resp.get("data", {})
-    stream_count = activity.get("stream_count", 0)
-
-    if not stream_count or stream_count == 0:
-        return "🎬 Plex — nothing currently playing."
-
-    sessions = activity.get("sessions", [])
-    lines: list[str] = [f"🎬 **{stream_count} active stream{'s' if stream_count != 1 else ''}**"]
-
-    for s in sessions:
-        user = s.get("friendly_name") or s.get("username", "Unknown")
-        title = s.get("full_title") or s.get("title", "Unknown title")
-        media_type = s.get("media_type", "")
-        type_icon = "📺" if media_type == "episode" else "🎬" if media_type == "movie" else "🎵"
-
-        progress_pct = s.get("progress_percent", 0)
-        view_offset = int(s.get("view_offset", 0)) // 1000  # ms → seconds
-        duration = int(s.get("duration", 0)) // 1000
-        time_str = f"{view_offset // 60}:{view_offset % 60:02d}/{duration // 60}:{duration % 60:02d}" if duration else ""
-
-        quality = s.get("quality_profile") or s.get("stream_video_resolution") or "?"
-        transcode = s.get("transcode_decision", "")
-        stream_type = "🔄 Transcode" if transcode == "transcode" else "▶️ Direct"
-        player = s.get("player", "")
-        platform = s.get("platform", "")
-
-        lines.append(
-            f"{type_icon} **{user}** — {title} "
-            f"({progress_pct}% · {time_str}) "
-            f"[{quality} · {stream_type}]"
-            + (f" on {player}/{platform}" if player else "")
-        )
-
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# 6.4  Media Automation
-# ---------------------------------------------------------------------------
-
-
-async def search_media(query: str, media_type: str = "all") -> str:
-    """
-    Search for media across Sonarr (TV) and Radarr (Movies).
-    media_type: 'tv', 'movie', or 'all' (default).
-    """
-    results = []
-
-    if media_type in ("tv", "all") and SONARR_API_KEY:
-        data = await _api_get(
-            f"{SONARR_URL}/api/v3/series/lookup?term={query}",
-            headers={"X-Api-Key": SONARR_API_KEY},
-        )
-        if isinstance(data, list):
-            for item in data[:5]:
-                title = item.get("title", "?")
-                year = item.get("year", "?")
-                status = item.get("status", "?")
-                results.append(f"📺 **{title}** ({year}) — {status}")
-
-    if media_type in ("movie", "all") and RADARR_API_KEY:
-        data = await _api_get(
-            f"{RADARR_URL}/api/v3/movie/lookup?term={query}",
-            headers={"X-Api-Key": RADARR_API_KEY},
-        )
-        if isinstance(data, list):
-            for item in data[:5]:
-                title = item.get("title", "?")
-                year = item.get("year", "?")
-                studio = item.get("studio", "")
-                results.append(f"🎬 **{title}** ({year}) {studio}".strip())
-
-    if not results:
-        return f"No results found for '{query}'."
-    return "\n".join(results[:10])
-
-
-async def add_to_sonarr(title: str, tvdb_id: int = 0) -> str:
-    """Add a TV show to Sonarr for monitoring and automatic downloading."""
-    if not SONARR_API_KEY:
-        return "❌ Sonarr API key not configured."
-
-    headers = {"X-Api-Key": SONARR_API_KEY}
-
-    # Resolve tvdbId via lookup if not provided
-    if tvdb_id:
-        series_data = {"title": title, "tvdbId": tvdb_id}
-    else:
-        lookup = await _api_get(
-            f"{SONARR_URL}/api/v3/series/lookup?term={title}",
-            headers=headers,
-        )
-        if not isinstance(lookup, list) or not lookup:
-            return f"❌ No TV show found matching '{title}' in Sonarr lookup."
-        series_data = lookup[0]
-
-    payload = {
-        "title": series_data.get("title", title),
-        "tvdbId": series_data.get("tvdbId", tvdb_id),
-        "qualityProfileId": 1,
-        "rootFolderPath": "/tv",
-        "monitored": True,
-        "addOptions": {"searchForMissingEpisodes": True},
-    }
-
-    result = await _api_post(
-        f"{SONARR_URL}/api/v3/series", payload, headers=headers
-    )
-    if isinstance(result, str) and result.startswith("HTTP"):
-        if "already" in result.lower() or "exist" in result.lower():
-            return f"ℹ️ **{payload['title']}** is already in Sonarr."
-        return f"❌ Failed to add to Sonarr: {result}"
-    added_title = result.get("title", title) if isinstance(result, dict) else title
-    return f"✅ Added **{added_title}** to Sonarr — searching for episodes."
-
-
-async def add_to_radarr(title: str, tmdb_id: int = 0) -> str:
-    """Add a movie to Radarr for monitoring and automatic downloading."""
-    if not RADARR_API_KEY:
-        return "❌ Radarr API key not configured."
-
-    headers = {"X-Api-Key": RADARR_API_KEY}
-
-    # Resolve tmdbId via lookup if not provided
-    if tmdb_id:
-        movie_data = {"title": title, "tmdbId": tmdb_id}
-    else:
-        lookup = await _api_get(
-            f"{RADARR_URL}/api/v3/movie/lookup?term={title}",
-            headers=headers,
-        )
-        if not isinstance(lookup, list) or not lookup:
-            return f"❌ No movie found matching '{title}' in Radarr lookup."
-        movie_data = lookup[0]
-
-    payload = {
-        "title": movie_data.get("title", title),
-        "tmdbId": movie_data.get("tmdbId", tmdb_id),
-        "qualityProfileId": 1,
-        "rootFolderPath": "/movies",
-        "monitored": True,
-        "addOptions": {"searchForMovie": True},
-    }
-
-    result = await _api_post(
-        f"{RADARR_URL}/api/v3/movie", payload, headers=headers
-    )
-    if isinstance(result, str) and result.startswith("HTTP"):
-        if "already" in result.lower() or "exist" in result.lower():
-            return f"ℹ️ **{payload['title']}** is already in Radarr."
-        return f"❌ Failed to add to Radarr: {result}"
-    added_title = result.get("title", title) if isinstance(result, dict) else title
-    return f"✅ Added **{added_title}** to Radarr — searching for download."
-
-
-async def get_download_queue() -> str:
-    """Get combined download queue from SABnzbd and qBittorrent (parallel requests)."""
-    lines = []
-
-    # Fire configured client requests in parallel
-    tasks: list = []
-    task_labels: list[str] = []
-    if SABNZBD_API_KEY:
-        tasks.append(_api_get(f"{SABNZBD_URL}/api?mode=queue&output=json&apikey={SABNZBD_API_KEY}"))
-        task_labels.append("sabnzbd")
-    qbit_configured = bool(QBIT_URL)
-    if qbit_configured:
-        tasks.append(_api_get(f"{QBIT_URL}/api/v2/torrents/info?filter=active"))
-        task_labels.append("qbit")
-
-    if not tasks:
-        return "No download clients configured."
-
-    gathered = await asyncio.gather(*tasks, return_exceptions=True)
-
-    for label, data in zip(task_labels, gathered):
-        if label == "sabnzbd":
-            if isinstance(data, dict):
-                queue = data.get("queue", {})
-                slots = queue.get("slots", [])
-                speed = queue.get("speed", "0 B/s")
-                remaining = queue.get("timeleft", "N/A")
-                if slots:
-                    lines.append(f"**SABnzbd** ({len(slots)} items, {speed}, ETA: {remaining}):")
-                    for s in slots[:5]:
-                        name = s.get("filename", "?")[:50]
-                        pct = s.get("percentage", "?")
-                        size = s.get("sizeleft", "?")
-                        lines.append(f"  • `{name}` — {pct}% ({size} left)")
-                else:
-                    lines.append("**SABnzbd**: Queue empty ✅")
-        elif label == "qbit":
-            if isinstance(data, list):
-                if data:
-                    lines.append(f"\n**qBittorrent** ({len(data)} active):")
-                    for t in data[:5]:
-                        name = t.get("name", "?")[:50]
-                        progress = round(t.get("progress", 0) * 100, 1)
-                        dlspeed = t.get("dlspeed", 0)
-                        speed_str = f"{dlspeed / 1024 / 1024:.1f} MB/s" if dlspeed else "0"
-                        lines.append(f"  • `{name}` — {progress}% ({speed_str})")
-                else:
-                    lines.append("**qBittorrent**: No active torrents ✅")
-
-    return "\n".join(lines) or "No download clients configured."
-
-
-async def get_recent_additions(limit: int = 10) -> str:
-    """Get recently added media from Tautulli (Plex)."""
-    if not TAUTULLI_API_KEY:
-        return "⚠️ Tautulli API key not configured."
-
-    data = await _api_get(
-        f"{TAUTULLI_URL}/api/v2?apikey={TAUTULLI_API_KEY}"
-        f"&cmd=get_recently_added&count={min(max(limit, 1), 25)}"
-    )
-    if not isinstance(data, dict):
-        return f"❌ {data}"
-
-    resp = data.get("response", {})
-    if resp.get("result") != "success":
-        return f"❌ {resp.get('message', 'unknown error')}"
-
-    items = resp.get("data", {}).get("recently_added", [])
-    if not items:
-        return "No recent additions found."
-
-    lines = []
-    for item in items[:limit]:
-        title = item.get("title", "?")
-        year = item.get("year", "")
-        media_type = item.get("media_type", "")
-        added = item.get("added_at", "")
-        if added:
-            try:
-                dt = datetime.datetime.fromtimestamp(int(added))
-                added = dt.strftime("%Y-%m-%d %H:%M")
-            except (ValueError, OSError):
-                pass
-        icon = {"movie": "🎬", "show": "📺", "season": "📺", "episode": "📺"}.get(media_type, "🎵")
-        year_str = f" ({year})" if year else ""
-        lines.append(f"{icon} **{title}**{year_str} — added {added}")
-
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# 6.6  Network & Connectivity
-# ---------------------------------------------------------------------------
-
-
-async def ping_host(host: str) -> str:
-    """Ping a host and return latency info."""
-    # Validate host - only allow IPs and hostnames
-    safe_host = shlex.quote(host).strip("'")
-    if not all(c.isalnum() or c in ".-_" for c in safe_host):
-        return "❌ Invalid hostname."
-
-    proc = await asyncio.create_subprocess_exec(
-        "ping", "-c", "3", "-W", "3", safe_host,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    try:
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-        output = stdout.decode()
-        # Extract summary line
-        for line in output.split("\n"):
-            if "round-trip" in line or "rtt" in line:
-                return f"✅ **{host}**: {line.strip()}"
-            if "avg" in line.lower():
-                return f"✅ **{host}**: {line.strip()}"
-        if proc.returncode == 0:
-            return f"✅ **{host}**: reachable"
-        return f"❌ **{host}**: unreachable"
-    except asyncio.TimeoutError:
-        proc.kill()
-        return f"❌ **{host}**: ping timed out"
-
-
-async def check_service_ports() -> str:
-    """Check if key services are listening on expected ports (all in parallel)."""
-    services = [
-        ("Sonarr", HOST, 8989),
-        ("Radarr", HOST, 7878),
-        ("Lidarr", HOST, 8686),
-        ("Prowlarr", HOST, 9696),
-        ("Tautulli", HOST, 8181),
-        ("Overseerr", HOST, 5055),
-        ("Glances", HOST, 61208),
-        ("OpenClaw", HOST, 8765),
-    ]
-    # Only check download clients if configured
-    if SABNZBD_API_KEY:
-        services.append(("SABnzbd", HOST, 8775))
-    if QBIT_URL:
-        services.append(("qBittorrent", HOST, 8080))
-
-    async def _check_port(host: str, port: int) -> bool:
-        try:
-            _, writer = await asyncio.wait_for(
-                asyncio.open_connection(host, port), timeout=3
-            )
-            writer.close()
-            try:
-                await writer.wait_closed()
-            except Exception:
-                pass
-            return True
-        except Exception:
-            return False
-
-    results = await asyncio.gather(
-        *[_check_port(host, port) for _, host, port in services]
-    )
-    lines = []
-    for (name, _, port), ok in zip(services, results):
-        lines.append(f"{'✅' if ok else '❌'} **{name}** (:{port})" + ("" if ok else " — not responding"))
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# 6.5  Status Report Generation
-# ---------------------------------------------------------------------------
-
-
-async def create_status_report() -> str:
-    """Generate a comprehensive system status report."""
-    sections = []
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    sections.append(f"**System Status Report** — {timestamp}\n")
-
-    # Service health
-    sections.append("### Service Health")
-    health = await check_arr_health()
-    sections.append(health)
-
-    # Download clients
-    sections.append("\n### Download Clients")
-    dl = await check_download_clients()
-    sections.append(dl)
-
-    # Plex
-    sections.append("\n### Plex")
-    plex = await check_plex_status()
-    sections.append(plex)
-
-    # Active downloads
-    sections.append("\n### Active Downloads")
-    queue = await get_download_queue()
-    sections.append(queue)
-
-    report = "\n".join(sections)
-    return _truncate(report)
-
-
-# ---------------------------------------------------------------------------
-# Registry
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# Phase 8: Web Search & Browsing
-# ---------------------------------------------------------------------------
-
-
-async def search_web(query: str, num_results: int = 5, provider: str = "") -> str:
-    """Search the web using the best available provider.
-
-    Search priority: Perplexity (AI-powered) → Firecrawl (search+extract) → Tavily (structured) → DuckDuckGo (free) → Bing Lite (fallback)
-
-    Args:
-        query: Search query
-        num_results: Max results (1-10)
-        provider: Force a specific provider: 'perplexity', 'firecrawl', 'tavily',
-                  'serper', 'duckduckgo'. Empty = auto cascade.
-    """
-    num_results = min(max(num_results, 1), 10)
-    provider = provider.lower().strip()
-
-    # ── Forced provider selection ──────────────────────────────────────────
-    if provider:
-        if provider == "perplexity":
-            if not PERPLEXITY_API_KEY:
-                return "⚠️ Perplexity API key not configured."
-            return await _perplexity_search(query, num_results) or "❌ Perplexity returned no results."
-        elif provider == "firecrawl":
-            if not FIRECRAWL_API_KEY:
-                return "⚠️ Firecrawl API key not configured."
-            return await _firecrawl_search(query, num_results) or "❌ Firecrawl returned no results."
-        elif provider == "serper":
-            if not SERPER_API_KEY:
-                return "⚠️ Serper API key not configured. Uncomment SERPER_API_KEY in .env."
-            return await serper_search(query, num_results)
-        elif provider in ("tavily",):
-            if not TAVILY_API_KEY:
-                return "⚠️ Tavily API key not configured."
-            # Fall through to Tavily section below
-        elif provider in ("duckduckgo", "ddg"):
-            pass  # Fall through to DDG section below
-        else:
-            return f"⚠️ Unknown provider `{provider}`. Options: perplexity, firecrawl, serper, tavily, duckduckgo."
-
-    # ── Auto cascade (when no provider forced) ─────────────────────────────
-
-    # ── Perplexity path (AI-synthesized answers with citations) ────────────
-    if not provider and PERPLEXITY_API_KEY:
-        stats = get_stats("perplexity")
-        start = time.monotonic()
-        try:
-            log.info("Using Perplexity for search: %s", query[:80])
-            result = await _perplexity_search(query, num_results)
-            if result:
-                stats.record_success((time.monotonic() - start) * 1000)
-                return result
-            stats.record_failure()
-        except Exception as e:
-            stats.record_failure()
-            log.debug("Perplexity search failed: %s", e)
-
-    # ── Firecrawl path (search + full page extraction in one call) ─────────
-    if not provider and FIRECRAWL_API_KEY:
-        stats = get_stats("firecrawl")
-        start = time.monotonic()
-        try:
-            log.info("Using Firecrawl for search: %s", query[:80])
-            result = await _firecrawl_search(query, num_results)
-            if result:
-                stats.record_success((time.monotonic() - start) * 1000)
-                return result
-            stats.record_failure()
-        except Exception as e:
-            stats.record_failure()
-            log.debug("Firecrawl search failed: %s", e)
-
-    # ── Tavily path (higher quality, needs API key) ────────────────────────
-    if TAVILY_API_KEY and _TAVILY_SCRIPT.exists():
-        stats = get_stats("tavily")
-        start = time.monotonic()
-        # Ensure num_results is a solid integer for the CLI
-        clean_num = int(float(num_results))
-        cmd = [
-            sys.executable,
-            str(_TAVILY_SCRIPT),
-            "--query", query,
-            "--max-results", str(clean_num),
-            "--include-answer",
-            "--format", "raw",
-        ]
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env={**os.environ, "TAVILY_API_KEY": TAVILY_API_KEY},
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=TIMEOUT_DEFAULT)
-            if proc.returncode != 0:
-                err = stderr.decode().strip()[:300]
-                # Fall through to DDG if Tavily fails at runtime
-                log.warning("Tavily script failed: %s", err)
-                stats.record_failure()
-            else:
-                try:
-                    data = json.loads(stdout.decode())
-                    result = _format_tavily_results(data, int(float(num_results)))
-                    stats.record_success((time.monotonic() - start) * 1000)
-                    return result
-                except json.JSONDecodeError:
-                    log.error("Tavily script returned invalid JSON: %s", stdout.decode()[:200])
-                    stats.record_failure()
-        except asyncio.TimeoutError:
-            log.warning("Tavily script timed out")
-            stats.record_failure()
-        except Exception as e:
-            log.warning("Tavily script error: %s", e)
-            stats.record_failure()
-
-    # ── Free DuckDuckGo fallback (no API key required) ─────────────────────
-    if _DDG_SCRIPT.exists():
-        stats = get_stats("duckduckgo")
-        start = time.monotonic()
-        # Ensure num_results is an integer for the CLI
-        clean_num = int(float(num_results))
-        cmd = [
-            sys.executable,
-            str(_DDG_SCRIPT),
-            query,
-            "--json",
-            "--pages", str(min(clean_num, 5)),
-        ]
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=25)
-            if proc.returncode != 0:
-                stats.record_failure()
-                return f"❌ Web search failed: {stderr.decode().strip()[:200]}"
-            data = json.loads(stdout.decode())
-            if "error" in data:
-                stats.record_failure()
-                return f"❌ {data['error']}"
-            result = _format_ddg_results(data, int(float(num_results)))
-            stats.record_success((time.monotonic() - start) * 1000)
-            return result
-        except asyncio.TimeoutError:
-            stats.record_failure()
-            return "❌ Web search timed out (25s)."
-        except Exception as e:
-            stats.record_failure()
-            return f"❌ Web search error: {e}"
-
-    # ── Bing lite fallback (multi-search-engine skill provides pattern) ──────
-    # Parse HTML from Bing lite search (no API key, no script required)
-    log.info("Falling back to Bing lite for: %s", query)
-    stats = get_stats("bing")
-    start = time.monotonic()
-    try:
-        import urllib.parse
-        bing_url = "https://www.bing.com/search?q=" + urllib.parse.quote_plus(query)
-        bing_headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            ),
-        }
-        session = await _get_session()
-        async with session.get(
-            bing_url, headers=bing_headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT)
-        ) as resp:
-            if resp.status == 200:
-                html = await resp.text()
-                # Extract result snippets via basic HTML parsing
-                try:
-                    from bs4 import BeautifulSoup
-                    soup = BeautifulSoup(html, "html.parser")
-                    lines = []
-                    for i, result in enumerate(soup.select("li.b_algo")[:int(float(num_results))], 1):
-                        title_el = result.select_one("h2 a")
-                        snippet_el = result.select_one(".b_caption p")
-                        if title_el:
-                            title = title_el.get_text(strip=True)
-                            url_link = title_el.get("href", "")
-                            snippet = snippet_el.get_text(strip=True)[:250] if snippet_el else ""
-                            lines.append(f"**{i}. {title}**\n{snippet}\n🔗 <{url_link}>")
-                    if lines:
-                        stats.record_success((time.monotonic() - start) * 1000)
-                        return "\n\n".join(lines) + "\n\n*via Bing (fallback)*"
-                except ImportError:
-                    pass
-        stats.record_failure()
-    except Exception as e:
-        stats.record_failure()
-        log.warning("Bing fallback failed: %s", e)
-
-    # ── Nothing worked ────────────────────────────────────────────────────
-    if not TAVILY_API_KEY and not PERPLEXITY_API_KEY:
-        return (
-            "⚠️ Web search not configured. Either:\n"
-            "• Set `PERPLEXITY_API_KEY` in .env for Perplexity AI Search, or\n"
-            "• Set `TAVILY_API_KEY` in .env for Tavily AI Search, or\n"
-            "• Ensure `skills/free-web-search/` is installed (run: "
-            "`npx clawhub@latest install free-web-search`)"
-        )
-    return "❌ All web search methods exhausted. Check logs for details."
-
-
-async def _perplexity_search(query: str, num_results: int = 5) -> str:
-    """Search via Perplexity API — returns AI-synthesized answer with citations."""
-    from spending import tracker as spending_tracker
-
-    url = "https://api.perplexity.ai/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": "sonar",
-        "messages": [
-            {"role": "system", "content": "Be precise and concise. Cite sources."},
-            {"role": "user", "content": query},
-        ],
-        "max_tokens": 1024,
-        "return_citations": True,
-        "search_recency_filter": "month",
-    }
-
-    session = await _get_session()
-    async with session.post(
-        url, json=payload, headers=headers,
-        timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
-    ) as resp:
-        if resp.status != 200:
-            log.debug("Perplexity returned HTTP %d", resp.status)
-            return ""
-        data = await resp.json()
-
-    # Track usage
-    await spending_tracker.record_perplexity(model="sonar")
-
-    answer = data["choices"][0]["message"]["content"]
-    citations = data.get("citations", [])
-
-    lines = [f"**Perplexity AI Answer:**\n{answer}"]
-    if citations:
-        lines.append("\n**Sources:**")
-        for i, cite in enumerate(citations[:num_results], 1):
-            lines.append(f"{i}. {cite}")
-
-    return "\n".join(lines)
-
-
-async def _firecrawl_search(query: str, num_results: int = 5) -> str:
-    """Search via Firecrawl API — returns search results with full page content."""
-    if not FIRECRAWL_API_KEY:
-        return ""
-
-    headers = {
-        "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "query": query,
-        "limit": num_results,
-        "lang": "en",
-        "scrapeOptions": {"formats": ["markdown"]},
-    }
-
-    try:
-        session = await _get_session()
-        async with session.post(
-            f"{FIRECRAWL_API_URL}/search",
-            json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
-        ) as resp:
-            if resp.status != 200:
-                log.debug("Firecrawl search returned HTTP %d", resp.status)
-                return ""
-            data = await resp.json()
-
-        if not data.get("success") or not data.get("data"):
-            return ""
-
-        results = data["data"]
-        lines = [f"**Firecrawl Search** ({len(results)} results):\n"]
-        for i, r in enumerate(results[:num_results], 1):
-            title = r.get("title", "Untitled")
-            url = r.get("url", "")
-            markdown = r.get("markdown", "")
-            # Show first 500 chars of content
-            snippet = markdown[:500] + "…" if len(markdown) > 500 else markdown
-            lines.append(f"**{i}. [{title}]({url})**")
-            if snippet:
-                lines.append(f"> {snippet}\n")
-
-        log.info("Firecrawl search: %d results for: %s", len(results), query[:60])
-        # Track usage
-        from spending import tracker as spending_tracker
-        await spending_tracker.record_firecrawl(pages=len(results), action="search")
-        return "\n".join(lines)
-    except Exception as e:
-        log.debug("Firecrawl search failed: %s", e)
-        return ""
-
-
-async def firecrawl_scrape(url: str) -> str:
-    """Scrape a URL via Firecrawl and return clean markdown content."""
-    if not FIRECRAWL_API_KEY:
-        return "⚠️ Firecrawl API key not configured. Set `FIRECRAWL_API_KEY` in .env."
-
-    headers = {
-        "Authorization": f"Bearer {FIRECRAWL_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "url": url,
-        "formats": ["markdown"],
-    }
-
-    try:
-        session = await _get_session()
-        async with session.post(
-            f"{FIRECRAWL_API_URL}/scrape",
-            json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
-        ) as resp:
-            if resp.status != 200:
-                return f"❌ Firecrawl returned HTTP {resp.status}"
-            data = await resp.json()
-
-        if not data.get("success"):
-            return f"❌ Firecrawl scrape failed: {data.get('error', 'unknown')}"
-
-        markdown = data.get("data", {}).get("markdown", "")
-        title = data.get("data", {}).get("metadata", {}).get("title", "")
-        if not markdown:
-            return "⚠️ Firecrawl returned no content."
-
-        # Trim to reasonable size
-        if len(markdown) > 6000:
-            markdown = markdown[:6000] + "\n… (truncated)"
-
-        header = f"**{title}**\n*Source: {url}*\n\n" if title else f"*Source: {url}*\n\n"
-        log.info("Firecrawl scrape: %d chars from %s", len(markdown), url)
-        # Track usage
-        from spending import tracker as spending_tracker
-        await spending_tracker.record_firecrawl(pages=1, action="scrape")
-        return header + markdown
-    except Exception as e:
-        log.debug("Firecrawl scrape failed: %s", e)
-        return f"❌ Firecrawl error: {e}"
-
-
-# ---------------------------------------------------------------------------
-# Serper — Google SERP Results API (prepared but NOT in cascade yet)
-# To enable: uncomment SERPER_API_KEY in .env and add to search_web() cascade
-# ---------------------------------------------------------------------------
-
-async def serper_search(query: str, num_results: int = 5, search_type: str = "search") -> str:
-    """Search Google via Serper API. Returns structured SERP results.
-
-    Args:
-        query: Search query
-        num_results: Max results (1-10)
-        search_type: 'search' (web), 'news', 'images', or 'places'
-
-    Returns Google SERP data including organic results, knowledge graph,
-    People Also Ask, and featured snippets.
-    """
-    if not SERPER_API_KEY:
-        return "⚠️ Serper API key not configured. Set `SERPER_API_KEY` in .env (uncomment the line)."
-
-    headers = {
-        "X-API-KEY": SERPER_API_KEY,
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "q": query,
-        "num": min(max(num_results, 1), 10),
-    }
-
-    endpoint = {
-        "search": "https://google.serper.dev/search",
-        "news": "https://google.serper.dev/news",
-        "images": "https://google.serper.dev/images",
-        "places": "https://google.serper.dev/places",
-    }.get(search_type, "https://google.serper.dev/search")
-
-    try:
-        session = await _get_session()
-        async with session.post(
-            endpoint, json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT),
-        ) as resp:
-            if resp.status != 200:
-                return f"❌ Serper returned HTTP {resp.status}"
-            data = await resp.json()
-
-        lines = [f"**Google Search Results** (via Serper):\n"]
-
-        # Knowledge Graph (if present)
-        kg = data.get("knowledgeGraph", {})
-        if kg:
-            title = kg.get("title", "")
-            desc = kg.get("description", "")
-            if title:
-                lines.append(f"📋 **{title}**: {desc}\n")
-
-        # Featured Snippet (Answer Box)
-        ab = data.get("answerBox", {})
-        if ab:
-            answer = ab.get("answer") or ab.get("snippet", "")
-            if answer:
-                lines.append(f"💡 **Answer:** {answer}\n")
-
-        # Organic Results
-        organic = data.get("organic", [])
-        for i, r in enumerate(organic[:num_results], 1):
-            title = r.get("title", "Untitled")
-            link = r.get("link", "")
-            snippet = r.get("snippet", "")
-            lines.append(f"**{i}. [{title}]({link})**")
-            if snippet:
-                lines.append(f"> {snippet}\n")
-
-        # People Also Ask
-        paa = data.get("peopleAlsoAsk", [])
-        if paa:
-            lines.append("**People Also Ask:**")
-            for q in paa[:3]:
-                lines.append(f"- {q.get('question', '')}")
-
-        log.info("Serper %s: %d results for: %s", search_type, len(organic), query[:60])
-        return "\n".join(lines)
-    except Exception as e:
-        log.debug("Serper search failed: %s", e)
-        return f"❌ Serper error: {e}"
-
-
-def _format_tavily_results(data: dict, num_results: int) -> str:
-    """Format Tavily API JSON response into Discord-friendly markdown."""
-    lines = []
-    if data.get("answer"):
-        lines.append(f"**Answer**: {data['answer']}\n")
-    results = data.get("results", [])
-    if not results:
-        return f"No web results found for: {data.get('query', '?')}"
-    for i, r in enumerate(results[:num_results], 1):
-        title = r.get("title", "Untitled")
-        url = r.get("url", "")
-        content = (r.get("content") or "")[:300].strip()
-        lines.append(f"**{i}. {title}**\n{content}\n🔗 <{url}>")
-    return "\n\n".join(lines)
-
-
-def _format_ddg_results(data: dict, num_results: int) -> str:
-    """Format free-web-search JSON response into Discord-friendly markdown."""
-    results = data.get("results", [])[:num_results]
-    if not results:
-        return f"No web results found for: {data.get('query', '?')}"
-    lines = []
-    for i, r in enumerate(results, 1):
-        title = r.get("title", "Untitled")
-        url = r.get("url", "")
-        text = (r.get("text") or r.get("snippet") or "")[:300].strip()
-        lines.append(f"**{i}. {title}**\n{text}\n🔗 <{url}>")
-    src = "DuckDuckGo (free)"
-    return "\n\n".join(lines) + f"\n\n*via {src}*"
-
-
-# ---------------------------------------------------------------------------
-# Weather — via wttr.in (no API key; uses installed weather skill pattern)
+# Weather — via wttr.in (no API key required)
 # ---------------------------------------------------------------------------
 
 
@@ -1162,265 +151,129 @@ async def get_weather(location: str = "", units: str = "uscs") -> str:
         return f"⚠️ Could not parse weather data for `{loc}`: {e}"
 
 
-async def browse_url(url: str) -> str:
-    """Fetch a URL and extract clean readable text.
 
-    Uses a 3-tier extraction chain:
-      1. trafilatura — fast HTML-based extraction (no JS support).
-      2. Jina AI Reader — free service at r.jina.ai; handles JS-rendered
-         sites and returns clean markdown without running a browser.
-      3. Playwright — headless Chromium as a last resort.
-    """
-    from urllib.parse import urlparse
-    import ipaddress as _ipaddress
-    import socket as _socket
+# ---------------------------------------------------------------------------
+# Network & Connectivity
+# ---------------------------------------------------------------------------
 
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
-        return "❌ Only HTTP and HTTPS URLs are supported."
 
-    # SSRF guard: block private / loopback addresses
-    hostname = parsed.hostname or ""
+async def ping_host(host: str) -> str:
+    """Ping a host and return latency info."""
+    # Validate host - only allow IPs and hostnames
+    safe_host = shlex.quote(host).strip("'")
+    if not all(c.isalnum() or c in ".-_" for c in safe_host):
+        return "❌ Invalid hostname."
+
+    proc = await asyncio.create_subprocess_exec(
+        "ping", "-c", "3", "-W", "3", safe_host,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
     try:
-        resolved = _socket.getaddrinfo(hostname, None, _socket.AF_UNSPEC, _socket.SOCK_STREAM)
-        for _, _, _, _, addr in resolved:
-            ip = _ipaddress.ip_address(addr[0])
-            if ip.is_private or ip.is_loopback or ip.is_link_local:
-                return "❌ Cannot browse private or loopback addresses."
-    except (OSError, ValueError):
-        pass  # DNS failure will be caught by the HTTP request below
-
-    try:
-        import trafilatura
-    except ImportError:
-        return "❌ trafilatura is not installed (run: pip install trafilatura)."
-
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        ),
-    }
-
-    try:
-        session = await _get_session()
-        async with session.get(
-            url,
-            headers=headers,
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT),
-        ) as resp:
-            if resp.status == 403:
-                return (
-                    f"🚫 {url} returned HTTP 403 (bot-blocking). "
-                    "This site (e.g. Zillow, Redfin, Realtor.com) actively blocks automated access. "
-                    "Do NOT retry this URL. Instead, use your own knowledge about this neighborhood, "
-                    "typical prices, and property tax rates to provide a detailed, helpful answer."
-                )
-            if resp.status == 429:
-                return (
-                    f"🚫 {url} returned HTTP 429 (rate-limited/bot-blocked). "
-                    "This site is blocking automated requests. "
-                    "Do NOT retry. Use your own knowledge to answer the user's question."
-                )
-            if resp.status != 200:
-                return f"❌ Could not fetch URL (HTTP {resp.status})."
-            # Limit response size to 5MB to avoid memory issues
-            content_length = resp.headers.get("Content-Length")
-            if content_length and int(content_length) > 5 * 1024 * 1024:
-                return "❌ Page too large (>5MB)."
-            # Stream with hard size cap to avoid memory bloat
-            chunks: list[bytes] = []
-            total = 0
-            _MAX_DOWNLOAD = 5 * 1024 * 1024
-            async for chunk in resp.content.iter_chunked(8192):
-                total += len(chunk)
-                if total > _MAX_DOWNLOAD:
-                    break
-                chunks.append(chunk)
-            html = b"".join(chunks).decode("utf-8", errors="replace")
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        output = stdout.decode()
+        # Extract summary line
+        for line in output.split("\n"):
+            if "round-trip" in line or "rtt" in line:
+                return f"✅ **{host}**: {line.strip()}"
+            if "avg" in line.lower():
+                return f"✅ **{host}**: {line.strip()}"
+        if proc.returncode == 0:
+            return f"✅ **{host}**: reachable"
+        return f"❌ **{host}**: unreachable"
     except asyncio.TimeoutError:
-        return "❌ URL fetch timed out (20s)."
-    except Exception as e:
-        return f"❌ Could not fetch URL: {e}"
+        proc.kill()
+        return f"❌ **{host}**: ping timed out"
 
-    text = trafilatura.extract(
-        html,
-        include_comments=False,
-        include_tables=True,
-        no_fallback=False,
-    )
 
-    if not text:
-        # Fallback 1: try Jina AI Reader (free, handles JS sites, returns markdown)
+
+async def check_service_ports() -> str:
+    """Check if key services are listening on expected ports (all in parallel)."""
+    services = [
+        ("Sonarr", HOST, 8989),
+        ("Radarr", HOST, 7878),
+        ("Lidarr", HOST, 8686),
+        ("Prowlarr", HOST, 9696),
+        ("Tautulli", HOST, 8181),
+        ("Overseerr", HOST, 5055),
+        ("Glances", HOST, 61208),
+        ("OpenClaw", HOST, 8765),
+    ]
+    # Only check download clients if configured
+    if SABNZBD_API_KEY:
+        services.append(("SABnzbd", HOST, 8775))
+    if QBIT_URL:
+        services.append(("qBittorrent", HOST, 8080))
+
+    async def _check_port(host: str, port: int) -> bool:
         try:
-            log.info("Trying Jina Reader fallback for: %s", url)
-            text = await _jina_fetch(url)
-        except Exception as e:
-            log.debug("Jina Reader fallback failed: %s", e)
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port), timeout=3
+            )
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+            return True
+        except Exception:
+            return False
 
-    if not text:
-        # Fallback 2: try Playwright headless browser (last resort)
-        try:
-            log.info("Trying Playwright fallback for: %s", url)
-            text = await _playwright_fetch(url)
-        except Exception as e:
-            log.debug("Playwright fallback failed: %s", e)
-
-    if not text:
-        return (
-            f"⚠️ Could not extract readable content from `{url}`. "
-            "The page may be JavaScript-rendered or paywalled."
-        )
-
-    # Trim to a reasonable size for Discord + LLM context
-    if len(text) > 6000:
-        text = text[:6000] + "\n… (truncated)"
-
-    return f"**Source**: {url}\n\n{text}"
-
-
-async def _jina_fetch(url: str) -> str:
-    """Fetch clean markdown content via Jina AI Reader. Free, handles JS sites."""
-    jina_url = f"https://r.jina.ai/{url}"
-    headers = {"Accept": "text/markdown", "X-No-Cache": "true"}
-    try:
-        session = await _get_session()
-        async with session.get(
-            jina_url, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT_DEFAULT),
-        ) as resp:
-            if resp.status != 200:
-                log.debug("Jina Reader returned HTTP %d for %s", resp.status, url)
-                return ""
-            text = await resp.text()
-            return text[:6000] if text else ""
-    except Exception as e:
-        log.debug("Jina Reader failed for %s: %s", url, e)
-        return ""
-
-
-async def _playwright_fetch(url_or_html: str) -> str:
-    """Fetch page content using headless browser for JS-rendered sites.
-
-    Accepts a URL (http/https) or raw HTML string. When given already-fetched
-    HTML it renders it in Chromium so JS executes, then extracts text via
-    trafilatura.
-    """
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        return ""
-
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-            if url_or_html.startswith(("http://", "https://")):
-                await page.goto(url_or_html, timeout=20000, wait_until="networkidle")
-            else:
-                await page.set_content(url_or_html, wait_until="networkidle")
-            rendered = await page.content()
-            await browser.close()
-
-        import trafilatura
-        text = trafilatura.extract(
-            rendered, include_tables=True, include_comments=False,
-        )
-        return text or ""
-    except Exception as e:
-        log.debug("Playwright render failed: %s", e)
-        return ""
-
-
-# ---------------------------------------------------------------------------
-# Multi-source comparison
-# ---------------------------------------------------------------------------
-
-async def compare_sources(urls_json: str, question: str) -> str:
-    """
-    Browse multiple URLs in parallel and synthesize a comparison answer.
-
-    Fetches up to 5 URLs concurrently, then asks the LLM to compare/contrast
-    the content and answer the question. Great for competitive analysis,
-    comparing documentation pages, or fact-checking across sources.
-
-    Args:
-        urls_json: JSON array of URLs, e.g. '["https://site1.com","https://site2.com"]'
-        question:  What to compare or answer from these sources.
-
-    Returns a synthesized comparison using all successfully fetched pages.
-    """
-    import json as _json
-
-    try:
-        urls = _json.loads(urls_json)
-        if not isinstance(urls, list) or not urls:
-            return "❌ urls_json must be a non-empty JSON array of URL strings."
-    except _json.JSONDecodeError as e:
-        return f"❌ Invalid urls_json: {e}"
-
-    urls = urls[:5]  # cap at 5
-
-    # Fetch all in parallel
-    pages = await asyncio.gather(
-        *[asyncio.wait_for(browse_url(u), timeout=20) for u in urls],
-        return_exceptions=True,
+    results = await asyncio.gather(
+        *[_check_port(host, port) for _, host, port in services]
     )
-
-    sections: list[str] = []
-    for url, result in zip(urls, pages):
-        if isinstance(result, Exception):
-            sections.append(f"[{url}: error — {result}]")
-        elif isinstance(result, str):
-            sections.append(f"=== Source: {url} ===\n{result[:2000]}")
-        else:
-            sections.append(f"[{url}: no content]")
-
-    if not sections:
-        return "❌ Could not fetch any of the provided URLs."
-
-    combined = "\n\n".join(sections)[:7000]
-    prompt = (
-        f"You have {len(sections)} source(s) to compare. "
-        f"Answer this question: **{question}**\n\n"
-        "Use only the source content below. Cite which source supports each point. "
-        "Note any contradictions or gaps.\n\n"
-        f"{combined}"
-    )
-
-    try:
-        from llm import chat as _llm_chat
-        synthesis, _, _ = await asyncio.wait_for(_llm_chat(prompt), timeout=35)
-        return synthesis[:1900]
-    except Exception as e:
-        log.warning("compare_sources LLM synthesis failed: %s", e)
-        return f"📄 **Raw sources** (LLM synthesis unavailable):\n\n{combined[:1800]}"
+    lines = []
+    for (name, _, port), ok in zip(services, results):
+        lines.append(f"{'✅' if ok else '❌'} **{name}** (:{port})" + ("" if ok else " — not responding"))
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
-# Registry
+# Status Report Generation
+# ---------------------------------------------------------------------------
+
+
+async def create_status_report() -> str:
+    """Generate a comprehensive system status report."""
+    sections = []
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sections.append(f"**System Status Report** — {timestamp}\n")
+
+    # Service health
+    sections.append("### Service Health")
+    health = await check_arr_health()
+    sections.append(health)
+
+    # Download clients
+    sections.append("\n### Download Clients")
+    dl = await check_download_clients()
+    sections.append(dl)
+
+    # Plex
+    sections.append("\n### Plex")
+    plex = await check_plex_status()
+    sections.append(plex)
+
+    # Active downloads
+    sections.append("\n### Active Downloads")
+    queue = await get_download_queue()
+    sections.append(queue)
+
+    report = "\n".join(sections)
+    return _truncate(report)
+
+
+
+# ---------------------------------------------------------------------------
+# Merged registry — all skills from sub-modules + local
 # ---------------------------------------------------------------------------
 
 ADVANCED_SKILLS = {
-    "check_arr_health": check_arr_health,
-    "check_download_clients": check_download_clients,
-    "check_plex_status": check_plex_status,
-    "get_plex_activity": get_plex_activity,
-    "search_media": search_media,
-    "add_to_sonarr": add_to_sonarr,
-    "add_to_radarr": add_to_radarr,
-    "get_download_queue": get_download_queue,
-    "get_recent_additions": get_recent_additions,
+    **SEARCH_SKILLS,
+    **MEDIA_SKILLS,
+    **WEB_SKILLS,
+    "get_weather": get_weather,
     "ping_host": ping_host,
     "check_service_ports": check_service_ports,
     "create_status_report": create_status_report,
-    # Phase 8: Web skills
-    "search_web": search_web,
-    "browse_url": browse_url,
-    "firecrawl_scrape": firecrawl_scrape,
-    "serper_search": serper_search,
-    "compare_sources": compare_sources,
-    # Phase E: Weather
-    "get_weather": get_weather,
 }

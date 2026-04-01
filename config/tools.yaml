@@ -1262,4 +1262,18 @@
   parameters:
     type: object
     properties: {}
+- name: compare_search_providers
+  description: >-
+    Compare answers from multiple search providers (Perplexity, Firecrawl,
+    Serper/Google) side-by-side for the same query. Use when the user wants to
+    cross-reference results, verify information across sources, or see which
+    provider gives the best answer. Runs all providers in parallel.
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: The question or search query to compare across providers
+    required:
+      - query
 
