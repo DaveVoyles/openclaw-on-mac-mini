@@ -3,7 +3,6 @@ Tests for search_provider.py — SearchStats tracking and registry.
 """
 
 import asyncio
-from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest

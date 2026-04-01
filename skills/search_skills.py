@@ -446,7 +446,7 @@ async def serper_search(query: str, num_results: int = 5, search_type: str = "se
                 return f"❌ Serper returned HTTP {resp.status}"
             data = await resp.json()
 
-        lines = [f"**Google Search Results** (via Serper):\n"]
+        lines = ["**Google Search Results** (via Serper):\n"]
 
         kg = data.get("knowledgeGraph", {})
         if kg:

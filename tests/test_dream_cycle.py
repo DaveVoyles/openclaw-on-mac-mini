@@ -4,12 +4,10 @@ Tests for dream_cycle.py — importance scoring, reachability, and index I/O.
 
 import datetime
 import json
-from pathlib import Path
 
 import pytest
 
 import dream_cycle as mod
-
 
 # ---------------------------------------------------------------------------
 # _compute_importance

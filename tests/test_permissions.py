@@ -2,13 +2,11 @@
 Tests for permissions.py — user allow-list and service permission checks.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
-import pytest
 
 import permissions as mod
-
 
 # ---------------------------------------------------------------------------
 # Helpers

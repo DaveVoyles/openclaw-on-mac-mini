@@ -843,20 +843,22 @@ async def api_topology_handler(request):
         container_text = await list_containers()
         if not container_text.startswith("\u274c"):
             lines = [ln.strip() for ln in container_text.split("\n") if ln.strip() and not ln.startswith("NAMES")]
-            angle_step = (2 * math.pi) / max(len(lines), 1)
+            num_containers = max(len(lines), 1)
+            radius = max(180, num_containers * 14)
+            angle_step = (2 * math.pi) / num_containers
             for i, line in enumerate(lines):
                 parts = [p.strip() for p in line.split("\t") if p.strip()]
                 if not parts:
                     parts = [p.strip() for p in re.split(r'\s{2,}', line) if p.strip()]
                 if parts:
                     name = parts[0]
-                    status = parts[1] if len(parts) > 1 else "unknown"
-                    angle = angle_step * i
-                    x = 400 + math.cos(angle) * 120
-                    y = 200 + math.sin(angle) * 120
+                    is_up = any("Up" in p for p in parts)
+                    angle = angle_step * i - (math.pi / 2)
+                    x = 400 + math.cos(angle) * radius
+                    y = 250 + math.sin(angle) * radius
                     nodes.append({
                         "id": name, "label": name, "type": "container",
-                        "status": "up" if "Up" in status else "down",
+                        "status": "up" if is_up else "down",
                         "x": round(x), "y": round(y),
                     })
                     edges.append({"source": "mac-mini", "target": name})

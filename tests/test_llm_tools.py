@@ -2,7 +2,6 @@
 Tests for llm_tools.py — tool cache, skill stats, and execution.
 """
 
-import hashlib
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 

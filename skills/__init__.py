@@ -98,7 +98,7 @@ async def get_container_logs(service: str, lines: int = 100) -> str:
     all_lines = out.strip().splitlines()
 
     _signal_re = _re.compile(r"error|warn|exception|critical|fatal|traceback", _re.IGNORECASE)
-    signal_lines = [l for l in all_lines if _signal_re.search(l)]
+    signal_lines = [ln for ln in all_lines if _signal_re.search(ln)]
     tail_lines = all_lines[-100:]
 
     # Merge: signal lines first (deduplicated), then the tail
