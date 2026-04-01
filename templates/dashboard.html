@@ -1372,6 +1372,14 @@
           </div>
         </div>
 
+        <!-- API Quota Status -->
+        <div class="card">
+          <h2>📊 API Quotas</h2>
+          <div id="quota-status-content">
+            <p class="muted-text">Loading&hellip;</p>
+          </div>
+        </div>
+
         <!-- Top Skills -->
         <div class="card">
           <h2>⚡ Top Skills</h2>
@@ -2245,13 +2253,14 @@
                   return;
               }
               el.innerHTML = '<table style="width:100%"><thead><tr>' +
-                  '<th>Provider</th><th>Calls</th><th>Success Rate</th><th>Avg Latency</th>' +
+                  '<th>Provider</th><th>Calls</th><th>Retries</th><th>Success Rate</th><th>Avg Latency</th>' +
                   '</tr></thead><tbody>' +
                   providers.map(([name, s]) => {
                       const rateColor = s.success_rate >= 90 ? '#4caf50' : s.success_rate >= 60 ? '#ff9800' : '#f44336';
                       return '<tr>' +
                           '<td style="text-transform:capitalize">' + esc(name) + '</td>' +
                           '<td>' + s.calls + '</td>' +
+                          '<td>' + (s.retries || 0) + '</td>' +
                           '<td style="color:' + rateColor + '">' + s.success_rate + '%</td>' +
                           '<td>' + s.avg_latency_ms + ' ms</td>' +
                           '</tr>';
@@ -2260,6 +2269,51 @@
           }).catch(() => {
               document.getElementById('search-stats-content').innerHTML =
                   '<p class="muted-text">Failed to load search stats.</p>';
+          });
+      }
+
+      // API Quota Status
+      function loadQuotaStatus() {
+          fetch('/api/quota-status').then(r => r.json()).then(data => {
+              const el = document.getElementById('quota-status-content');
+              const providers = Object.entries(data);
+              if (providers.length === 0) {
+                  el.innerHTML = '<p class="muted-text">No quota data available.</p>';
+                  return;
+              }
+              function barColor(pct) {
+                  if (pct >= 80) return '#f44336';
+                  if (pct >= 50) return '#ff9800';
+                  return '#4caf50';
+              }
+              function progressBar(pct) {
+                  const color = barColor(pct);
+                  return '<div style="background:rgba(255,255,255,0.08);border-radius:4px;height:8px;width:100%;margin-top:2px">' +
+                      '<div style="background:' + color + ';height:100%;border-radius:4px;width:' + Math.min(pct, 100) + '%"></div></div>';
+              }
+              let html = '<table style="width:100%"><thead><tr>' +
+                  '<th>Provider</th><th>Daily</th><th>Monthly</th>' +
+                  '</tr></thead><tbody>';
+              providers.forEach(([name, q]) => {
+                  let dailyCell = '—';
+                  let monthlyCell = '—';
+                  if (q.daily_limit > 0) {
+                      dailyCell = q.daily_used + ' / ' + q.daily_limit + progressBar(q.daily_pct);
+                  }
+                  if (q.monthly_limit > 0) {
+                      monthlyCell = q.monthly_used + ' / ' + q.monthly_limit + progressBar(q.monthly_pct);
+                  }
+                  html += '<tr>' +
+                      '<td style="text-transform:capitalize">' + esc(name) + '</td>' +
+                      '<td>' + dailyCell + '</td>' +
+                      '<td>' + monthlyCell + '</td>' +
+                      '</tr>';
+              });
+              html += '</tbody></table>';
+              el.innerHTML = html;
+          }).catch(() => {
+              document.getElementById('quota-status-content').innerHTML =
+                  '<p class="muted-text">Failed to load quota data.</p>';
           });
       }
 
@@ -2329,6 +2383,7 @@
           loadKnowledgeGraph();
           loadTopology();
           loadSearchStats();
+          loadQuotaStatus();
           loadSkillStats();
           loadConfigStatus();
           refreshStatus();
@@ -2339,7 +2394,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadSkillStats(); loadConfigStatus(); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {

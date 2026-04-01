@@ -461,6 +461,93 @@ async def _post_error_alert(bot, patterns: list[dict]):
 
 
 # ---------------------------------------------------------------------------
+# Container health auto-alerts
+# ---------------------------------------------------------------------------
+
+# Tracks last-seen status per container to avoid repeat alerts
+_container_prev_state: dict[str, str] = {}
+
+CONTAINER_HEALTH_INTERVAL = 300  # 5 minutes
+
+
+async def container_health_loop(bot):
+    """Check Docker container health every 5 minutes and alert on unhealthy/exited."""
+    await asyncio.sleep(60)  # initial delay to let containers settle on startup
+    while True:
+        try:
+            await _check_container_health(bot)
+        except Exception as e:
+            log.warning("Container health check error: %s", e)
+        await asyncio.sleep(CONTAINER_HEALTH_INTERVAL)
+
+
+async def _check_container_health(bot):
+    """Run ``docker ps -a`` and alert on unhealthy or exited containers."""
+    if not ALERT_CHANNEL_ID:
+        return
+
+    from subprocess_utils import run as _run
+
+    rc, out, err = await _run(
+        ["docker", "ps", "-a", "--format", "{{.Names}}\t{{.Status}}"],
+        timeout=15,
+    )
+    if rc != 0:
+        log.debug("docker ps failed: %s", err)
+        return
+
+    global _container_prev_state
+    alerts: list[str] = []
+
+    for line in out.strip().splitlines():
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        name, status = parts[0].strip(), parts[1].strip()
+
+        # Determine if this container is in a bad state
+        status_lower = status.lower()
+        is_bad = "unhealthy" in status_lower or status_lower.startswith("exited")
+
+        prev = _container_prev_state.get(name)
+        if is_bad:
+            # Derive a short label for the state
+            if "unhealthy" in status_lower:
+                state_label = "unhealthy"
+            else:
+                state_label = "Exited"
+
+            # Only alert on state *change* (or first time seeing a bad state)
+            if prev != state_label:
+                alerts.append(f"🚨 **Container Alert**: `{name}` is **{state_label}**")
+                _container_prev_state[name] = state_label
+        else:
+            # Container is healthy/running — clear any previous bad state
+            if prev is not None:
+                _container_prev_state.pop(name, None)
+
+    if not alerts:
+        return
+
+    channel = bot.get_channel(ALERT_CHANNEL_ID)
+    if not channel:
+        return
+
+    embed = discord.Embed(
+        title="🚨 Container Health Alert",
+        description="\n".join(alerts)[:4000],
+        color=discord.Color.red(),
+    )
+    embed.set_footer(text="Container Health Monitor • checks every 5 min")
+    try:
+        await channel.send(embed=embed)
+        audit_log(None, "container_health", detail=f"{len(alerts)} alerts")
+        log.info("Container health alert: %d containers in bad state", len(alerts))
+    except Exception as e:
+        log.error("Failed to send container health alert: %s", e)
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -472,6 +559,7 @@ def start_background_tasks(bot):
         asyncio.create_task(morning_briefing_loop(bot))
         asyncio.create_task(proactive_insight_loop(bot))
         asyncio.create_task(error_monitor_loop(bot))
+        asyncio.create_task(container_health_loop(bot))
         log.info("Proactive tasks started (alert channel: %d)", ALERT_CHANNEL_ID)
     else:
         log.info("ALERT_CHANNEL_ID not set — proactive push notifications disabled")

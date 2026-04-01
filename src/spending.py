@@ -360,3 +360,83 @@ def get_response_stats() -> dict:
         "p99_ms": round(times[int(n * 0.99)], 0) if n >= 100 else round(times[-1], 0),
         "last_10": [round(r["ms"], 0) for r in list(_response_times)[-10:]],
     }
+
+
+# ---------------------------------------------------------------------------
+# Quota tracking — estimated remaining allowance per provider
+# ---------------------------------------------------------------------------
+
+# Known quotas (approximate free-tier / practical limits)
+PROVIDER_QUOTAS: dict[str, dict[str, int]] = {
+    "perplexity": {"daily": 200, "monthly": 0},
+    "firecrawl":  {"daily": 0,   "monthly": 500},
+    "tavily":     {"daily": 0,   "monthly": 1000},
+    "gemini":     {"daily": 1500, "monthly": 0},
+}
+
+
+def get_quota_status() -> dict[str, dict]:
+    """Return remaining quota estimates per provider.
+
+    Returns a dict keyed by provider name, each containing:
+      daily_limit, daily_used, daily_remaining, daily_pct,
+      monthly_limit, monthly_used, monthly_remaining, monthly_pct
+    """
+    today = datetime.date.today().isoformat()
+    month_prefix = today[:7]  # "YYYY-MM"
+
+    data = tracker._data
+    result: dict[str, dict] = {}
+
+    for provider, limits in PROVIDER_QUOTAS.items():
+        daily_limit = limits["daily"]
+        monthly_limit = limits["monthly"]
+
+        # Count usage from spending data
+        if provider == "gemini":
+            daily_used = data.get("daily", {}).get(today, {}).get("calls", 0)
+            monthly_used = sum(
+                d.get("calls", 0)
+                for key, d in data.get("daily", {}).items()
+                if key.startswith(month_prefix)
+            )
+        elif provider in ("perplexity", "firecrawl"):
+            sub = data.get(provider, {})
+            daily_used = sub.get("daily", {}).get(today, {}).get("calls", 0)
+            monthly_used = sum(
+                d.get("calls", 0)
+                for key, d in sub.get("daily", {}).items()
+                if key.startswith(month_prefix)
+            )
+            # Firecrawl tracks pages, which is the real quota unit
+            if provider == "firecrawl":
+                daily_used = sub.get("daily", {}).get(today, {}).get("pages", 0)
+                monthly_used = sum(
+                    d.get("pages", 0)
+                    for key, d in sub.get("daily", {}).items()
+                    if key.startswith(month_prefix)
+                )
+        else:
+            # Tavily and others — pull from search_provider stats for today's count
+            from search_provider import get_stats as _get_stats
+            stats = _get_stats(provider)
+            daily_used = stats.total_calls  # in-memory only, approximate
+            monthly_used = stats.total_calls
+
+        daily_remaining = max(0, daily_limit - daily_used) if daily_limit else 0
+        monthly_remaining = max(0, monthly_limit - monthly_used) if monthly_limit else 0
+        daily_pct = round((daily_used / daily_limit) * 100, 1) if daily_limit else 0.0
+        monthly_pct = round((monthly_used / monthly_limit) * 100, 1) if monthly_limit else 0.0
+
+        result[provider] = {
+            "daily_limit": daily_limit,
+            "daily_used": daily_used,
+            "daily_remaining": daily_remaining,
+            "daily_pct": daily_pct,
+            "monthly_limit": monthly_limit,
+            "monthly_used": monthly_used,
+            "monthly_remaining": monthly_remaining,
+            "monthly_pct": monthly_pct,
+        }
+
+    return result

@@ -1224,6 +1224,22 @@
           Slower but produces more comprehensive reports. Default false.
     required:
       - query
+- name: schedule_research_report
+  description: >-
+    Schedule a recurring research report on a topic. Use for weekly recaps,
+    news monitoring, or any periodic research. Examples: 'Schedule a weekly
+    WWE recap every Sunday' or 'Research PC gaming news every Friday'.
+  parameters:
+    type: object
+    properties:
+      topic:
+        type: string
+        description: "The research topic or query"
+      cron_expression:
+        type: string
+        description: "Cron schedule, e.g. '0 8 * * 0' for Sunday 8am, '0 18 * * 5' for Friday 6pm"
+    required:
+      - topic
 - name: dream_now
   description: >-
     Run a cognitive dream cycle to consolidate memories, score importance, and

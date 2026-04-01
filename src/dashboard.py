@@ -16,7 +16,7 @@ import discord
 import yaml
 from aiohttp import web
 
-from spending import tracker as spending_tracker, get_response_stats
+from spending import tracker as spending_tracker, get_response_stats, get_quota_status
 
 log = logging.getLogger("openclaw.dashboard")
 
@@ -779,6 +779,11 @@ async def api_search_stats_handler(request):
     """Return per-provider search usage statistics."""
     from search_provider import all_stats
     return web.json_response(all_stats())
+
+
+async def api_quota_status_handler(request):
+    """Return estimated remaining quota per provider."""
+    return web.json_response(get_quota_status())
 
 
 async def api_skill_stats_handler(request):

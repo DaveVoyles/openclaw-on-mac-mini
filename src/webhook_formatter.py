@@ -50,12 +50,42 @@ def format_arr(payload: dict) -> tuple[str, str, discord.Color]:
 
 
 def format_sonarr(payload: dict) -> tuple[str, str, discord.Color]:
-    """Format Sonarr webhook → (title, description, color)."""
+    """Format Sonarr webhook → (title, description, color).
+
+    Uses a friendly "📺 New episode downloaded" message for Download events.
+    """
+    event = payload.get("eventType", "")
+    if event == "Download":
+        series = payload.get("series", {}).get("title", "Unknown")
+        ep = payload.get("episodes", [{}])[0] if payload.get("episodes") else {}
+        season = ep.get("seasonNumber", 0)
+        episode = ep.get("episodeNumber", 0)
+        ep_title = ep.get("title", "")
+        desc = f"📺 **New episode downloaded**: {series} S{season:02d}E{episode:02d}"
+        if ep_title:
+            desc += f" — {ep_title}"
+        if payload.get("isUpgrade"):
+            desc += "\n⬆️ Quality upgrade"
+        return "📺 Sonarr: Episode Downloaded", desc, discord.Color.green()
     return format_arr(payload)
 
 
 def format_radarr(payload: dict) -> tuple[str, str, discord.Color]:
-    """Format Radarr webhook → (title, description, color)."""
+    """Format Radarr webhook → (title, description, color).
+
+    Uses a friendly "🎬 New movie downloaded" message for Download events.
+    """
+    event = payload.get("eventType", "")
+    if event == "Download":
+        movie = payload.get("movie", {})
+        title = movie.get("title", "Unknown")
+        year = movie.get("year", "")
+        desc = f"🎬 **New movie downloaded**: {title}"
+        if year:
+            desc += f" ({year})"
+        if payload.get("isUpgrade"):
+            desc += "\n⬆️ Quality upgrade"
+        return "🎬 Radarr: Movie Downloaded", desc, discord.Color.green()
     return format_arr(payload)
 
 
@@ -65,12 +95,21 @@ def format_lidarr(payload: dict) -> tuple[str, str, discord.Color]:
 
 
 def format_plex(payload: dict) -> tuple[str, str, discord.Color]:
-    """Format Plex webhook → (title, description, color)."""
+    """Format Plex webhook → (title, description, color).
+
+    Uses a friendly "▶️ Now playing" message for play events.
+    """
     event = payload.get("event", payload.get("type", "Event"))
     meta = payload.get("Metadata", {})
     p_title = meta.get("title", "Unknown")
     p_type = meta.get("type", "")
     user = payload.get("Account", {}).get("title", "")
+
+    if "play" in event.lower():
+        desc = f"▶️ **Now playing**: {p_title}"
+        if user:
+            desc += f" by {user}"
+        return "▶️ Plex: Now Playing", desc, discord.Color.green()
 
     lines: list[str] = []
     lines.append(f"**Event**: {event}")
@@ -82,10 +121,6 @@ def format_plex(payload: dict) -> tuple[str, str, discord.Color]:
 
     title = "🔔 Webhook: Plex"
     color = discord.Color.blurple()
-    if "play" in event.lower():
-        color = discord.Color.green()
-        title = "▶️ Plex: Now Playing"
-
     description = "\n".join(lines) or "*(no details)*"
     return title, description, color
 

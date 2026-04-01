@@ -459,8 +459,51 @@ async def list_scheduled_tasks() -> str:
     return "\n".join(lines)
 
 
+async def schedule_research_report(topic: str, cron_expression: str = "0 8 * * 0") -> str:
+    """Schedule a recurring research report on a topic.
+
+    Creates a scheduled task that runs ``run_scheduled_research`` with the
+    given topic on the specified cron schedule.  Defaults to Sunday 8 AM.
+    """
+    if not topic:
+        return "❌ Please provide a research topic."
+
+    # Validate cron expression early
+    try:
+        from croniter import croniter
+        croniter(cron_expression)
+    except Exception as exc:
+        return f"❌ Invalid cron expression `{cron_expression}`: {exc}"
+
+    task = scheduler.create(
+        action="run_scheduled_research",
+        args={"query": topic, "deep": False},
+        cron_expression=cron_expression,
+        created_by="llm",
+        notify_channel_id=int(os.getenv("ALERT_CHANNEL_ID", "0")),
+        alert_only=False,
+    )
+
+    # Build human-readable schedule hint
+    try:
+        import datetime as _dt
+        from croniter import croniter as _cron
+        next_dt = _cron(cron_expression, _dt.datetime.now()).get_next(_dt.datetime)
+        next_str = next_dt.strftime("%A %H:%M")
+    except Exception:
+        next_str = cron_expression
+
+    return (
+        f"✅ Scheduled research report `{task.task_id}` created.\n"
+        f"**Topic**: {topic}\n"
+        f"**Schedule**: `{cron_expression}` (next: {next_str})\n"
+        f"Results will be posted to the alert channel automatically."
+    )
+
+
 SCHEDULER_SKILLS = {
     "create_scheduled_task": create_scheduled_task,
     "cancel_scheduled_task": cancel_scheduled_task,
     "list_scheduled_tasks": list_scheduled_tasks,
+    "schedule_research_report": schedule_research_report,
 }
