@@ -7,7 +7,6 @@ Routes: GET /dashboard (HTML), GET /api/dashboard (JSON),
 import asyncio
 import json
 import logging
-import os
 import platform
 import time
 from pathlib import Path
@@ -842,7 +841,7 @@ async def api_topology_handler(request):
         from skills import list_containers
         container_text = await list_containers()
         if not container_text.startswith("\u274c"):
-            lines = [l.strip() for l in container_text.split("\n") if l.strip() and not l.startswith("NAMES")]
+            lines = [ln.strip() for ln in container_text.split("\n") if l.strip() and not l.startswith("NAMES")]
             angle_step = (2 * math.pi) / max(len(lines), 1)
             for i, line in enumerate(lines):
                 parts = [p.strip() for p in line.split("\t") if p.strip()]
