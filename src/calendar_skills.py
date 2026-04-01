@@ -21,12 +21,12 @@ by a future Gmail OAuth2 skill without re-authorizing.
 
 import datetime
 import logging
-import os
 import time
 
 import aiohttp
 
-from config import TIMEOUT_DEFAULT, cfg as _cfg
+from config import TIMEOUT_DEFAULT
+from config import cfg as _cfg
 
 log = logging.getLogger("openclaw.calendar")
 

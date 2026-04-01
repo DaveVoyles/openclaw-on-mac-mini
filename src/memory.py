@@ -21,6 +21,7 @@ log = logging.getLogger("openclaw.memory")
 
 # How long to keep a conversation context alive (seconds)
 from config import cfg
+
 CONTEXT_TTL = cfg.conversation_ttl_minutes * 60
 # Maximum messages per conversation (to limit token usage)
 MAX_HISTORY_LENGTH = cfg.llm_max_history_turns

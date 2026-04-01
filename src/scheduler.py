@@ -487,6 +487,7 @@ async def schedule_research_report(topic: str, cron_expression: str = "0 8 * * 0
     # Build human-readable schedule hint
     try:
         import datetime as _dt
+
         from croniter import croniter as _cron
         next_dt = _cron(cron_expression, _dt.datetime.now()).get_next(_dt.datetime)
         next_str = next_dt.strftime("%A %H:%M")

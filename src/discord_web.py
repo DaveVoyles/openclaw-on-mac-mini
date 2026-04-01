@@ -16,8 +16,7 @@ import time
 import discord
 from aiohttp import web
 
-from audit import audit_log
-from constants import EMBED_FIELD_LIMIT, EMBED_SPLIT_LIMIT
+from constants import EMBED_FIELD_LIMIT
 from dashboard import (
     api_config_status_handler,
     api_dashboard_handler,

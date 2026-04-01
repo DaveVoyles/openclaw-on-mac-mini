@@ -9,10 +9,10 @@ Usage: python3 session-catchup.py [project-path]
 """
 
 import json
-import sys
 import os
+import sys
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 PLANNING_FILES = ['task_plan.md', 'progress.md', 'findings.md']
 

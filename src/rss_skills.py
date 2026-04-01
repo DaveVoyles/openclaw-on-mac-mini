@@ -18,11 +18,9 @@ Feeds can also be used as scheduled tasks:
 import asyncio
 import json
 import logging
-import os
 import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import aiohttp
@@ -34,7 +32,8 @@ _SSRF_PRIVATE = re.compile(
     re.IGNORECASE,
 )
 
-from config import TIMEOUT_DEFAULT, cfg as _cfg
+from config import TIMEOUT_DEFAULT
+from config import cfg as _cfg
 
 MEMORY_DIR = _cfg.memory_dir
 _FEEDS_FILE = MEMORY_DIR / "rss_feeds.json"

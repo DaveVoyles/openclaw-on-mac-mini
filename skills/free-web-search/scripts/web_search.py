@@ -18,14 +18,14 @@ Accuracy & recency strategy:
      fall back to full-page paragraph extraction.
 """
 
-import sys
-import json
-import time
-import logging
 import argparse
-import urllib.parse
+import json
+import logging
 import random
 import re
+import sys
+import time
+import urllib.parse
 from datetime import datetime
 from typing import Optional
 

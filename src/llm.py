@@ -21,13 +21,12 @@ import aiohttp
 from google import genai
 
 from config import cfg
-from skills import SKILLS
 
 # ---------------------------------------------------------------------------
 # Re-exports from sub-modules (preserves backward-compatible imports)
 # ---------------------------------------------------------------------------
-
 from llm_client import (  # noqa: F401
+    _TOOL_DECLARATIONS,
     GOOGLE_API_KEY,
     LOCAL_LLM_ENABLED,
     MAX_TOKENS,
@@ -38,13 +37,12 @@ from llm_client import (  # noqa: F401
     TEMPERATURE,
     THINKING_BUDGET,
     THINKING_MODEL,
-    _ModelConfig,
-    _TOOL_DECLARATIONS,
     _client,
     _get_model,
     _get_thinking_model,
     _init_gemini_model,
     _load_system_prompt,
+    _ModelConfig,
     _record_usage,
     _reset_models,
 )
@@ -66,6 +64,7 @@ from llm_tools import (  # noqa: F401
     _extract_history,
     _run_tool_loop,
 )
+from skills import SKILLS
 
 log = logging.getLogger("openclaw.llm")
 
@@ -469,6 +468,7 @@ async def chat_stream(
     if model_preference == "auto":
         try:
             import os
+
             from model_router import chat_anthropic, chat_openai, classify_query
             route = classify_query(
                 user_message,
@@ -508,6 +508,7 @@ async def chat_stream(
     if model_preference in ("openai", "anthropic"):
         try:
             import os
+
             from model_router import chat_anthropic, chat_openai
             system_prompt = _load_system_prompt()
             if model_preference == "openai":
@@ -720,6 +721,7 @@ async def chat(
     if model_preference == "auto":
         try:
             import os
+
             from model_router import chat_anthropic, chat_openai, classify_query
             route = classify_query(
                 user_message,
@@ -759,6 +761,7 @@ async def chat(
     if model_preference in ("openai", "anthropic"):
         try:
             import os
+
             from model_router import chat_anthropic, chat_openai
             system_prompt = _load_system_prompt()
             if model_preference == "openai":

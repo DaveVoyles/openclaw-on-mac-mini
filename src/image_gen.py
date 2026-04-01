@@ -9,11 +9,11 @@ See ``scripts/sd_server.py`` for the host-side service that wraps the
 
 import asyncio
 import logging
-import os
 
 import aiohttp
 
-from config import TIMEOUT_FAST, cfg as _cfg
+from config import TIMEOUT_FAST
+from config import cfg as _cfg
 from http_session import SessionManager
 
 log = logging.getLogger("openclaw.image_gen")

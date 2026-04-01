@@ -7,7 +7,6 @@ from pathlib import Path
 
 import discord
 import yaml
-from discord import app_commands
 
 from config import cfg
 

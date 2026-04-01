@@ -144,7 +144,6 @@ AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 
 from audit import _audit_buffer, audit_log  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Module-level aiohttp session (reused for attachment downloads)
 # ---------------------------------------------------------------------------
@@ -313,6 +312,7 @@ bot = OpenClawBot()
 # ---------------------------------------------------------------------------
 
 from discord_commands import register_commands  # noqa: E402
+
 register_commands(bot)
 
 # ---------------------------------------------------------------------------

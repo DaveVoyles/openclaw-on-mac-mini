@@ -13,7 +13,8 @@ from pathlib import Path
 
 import aiohttp
 
-from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW, cfg as _cfg
+from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW
+from config import cfg as _cfg
 from http_session import SessionManager
 from search_provider import get_stats, retry_once
 

@@ -15,7 +15,8 @@ import discord
 import yaml
 from aiohttp import web
 
-from spending import tracker as spending_tracker, get_response_stats, get_quota_status
+from spending import get_quota_status, get_response_stats
+from spending import tracker as spending_tracker
 
 log = logging.getLogger("openclaw.dashboard")
 

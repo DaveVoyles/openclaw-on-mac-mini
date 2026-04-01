@@ -8,7 +8,7 @@ import logging
 
 import aiohttp
 
-from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW, cfg as _cfg
+from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW
 from http_session import SessionManager
 
 log = logging.getLogger("openclaw.web_skills")
@@ -41,9 +41,9 @@ async def browse_url(url: str) -> str:
          sites and returns clean markdown without running a browser.
       3. Playwright — headless Chromium as a last resort.
     """
-    from urllib.parse import urlparse
     import ipaddress as _ipaddress
     import socket as _socket
+    from urllib.parse import urlparse
 
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):

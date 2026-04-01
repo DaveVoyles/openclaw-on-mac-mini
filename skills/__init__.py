@@ -7,12 +7,14 @@ import asyncio
 import logging
 import os
 import shlex
-from typing import Optional
 
-from subprocess_utils import run as _run, COMMAND_TIMEOUT
+from memory_manager import recall as memory_recall  # noqa: F401
+from memory_manager import stats as memory_stats  # noqa: F401
 
 # Unified memory manager (Phase 16)
-from memory_manager import store as memory_store, recall as memory_recall, stats as memory_stats  # noqa: F401
+from memory_manager import store as memory_store  # noqa: F401
+from subprocess_utils import COMMAND_TIMEOUT  # noqa: F401
+from subprocess_utils import run as _run
 
 log = logging.getLogger("openclaw.skills")
 
@@ -22,7 +24,6 @@ log = logging.getLogger("openclaw.skills")
 
 
 from utils import truncate as _truncate
-
 
 # ---------------------------------------------------------------------------
 # 6.1  Docker & Container Management
@@ -324,6 +325,7 @@ async def get_uptime() -> str:
 
 import os as _os
 from pathlib import Path as _Path
+
 import yaml as _yaml
 
 _COMPOSE_PATHS = [
@@ -431,15 +433,17 @@ SKILLS = {
 
 # Merge advanced skills (media, network, Plex, reports)
 from .advanced_skills import ADVANCED_SKILLS  # noqa: E402
+
 SKILLS.update(ADVANCED_SKILLS)
 
 # Merge analyzer skills (AI log analysis)
 from analyzer import ANALYZER_SKILLS  # noqa: E402
+
 SKILLS.update(ANALYZER_SKILLS)
 
 # Add Phase 5 supplemental skills (QMD, AgentMail)
-from qmd import remember_fact, recall_fact, list_memories
 from agentmail import send_agent_mail
+from qmd import list_memories, recall_fact, remember_fact
 
 SKILLS.update({
     "remember_fact": remember_fact,
@@ -458,8 +462,8 @@ SKILLS.update({
 })
 
 # Add spending tracker skills
-from spending import get_spending, get_daily_spending
 from autonomous_skills import AUTONOMOUS_SKILLS
+from spending import get_daily_spending, get_spending
 
 SKILLS.update({
     "get_spending": get_spending,
@@ -470,10 +474,10 @@ SKILLS.update({
 SKILLS.update(AUTONOMOUS_SKILLS)
 
 # Add Phase 6 extended integrations (Overseerr, NAS, Email, Calendar)
-from overseerr import OVERSEERR_SKILLS
-from nas import NAS_SKILLS
-from email_skills import EMAIL_SKILLS
 from calendar_skills import CALENDAR_SKILLS
+from email_skills import EMAIL_SKILLS
+from nas import NAS_SKILLS
+from overseerr import OVERSEERR_SKILLS
 
 SKILLS.update(OVERSEERR_SKILLS)
 SKILLS.update(NAS_SKILLS)
@@ -482,54 +486,67 @@ SKILLS.update(CALENDAR_SKILLS)
 
 # Add Maton API Gateway skill (managed OAuth proxy to 100+ APIs)
 from gateway import GATEWAY_SKILLS
+
 SKILLS.update(GATEWAY_SKILLS)
 
 # Mission Control — Kanban task management
 from mission_control import MISSION_CONTROL_SKILLS
+
 SKILLS.update(MISSION_CONTROL_SKILLS)
 
 # Ontology — structured graph memory
 from ontology_skills import ONTOLOGY_SKILLS
+
 SKILLS.update(ONTOLOGY_SKILLS)
 
 # Web & Git skills (webfetch-md, git-essentials)
 from git_skills import GIT_SKILLS
+
 SKILLS.update(GIT_SKILLS)
 
 # Worker sub-agent (autonomous task delegation)
 from worker_agent import WORKER_SKILLS
+
 SKILLS.update(WORKER_SKILLS)
 
 # Scheduler LLM controls (create/cancel/list scheduled tasks)
 from scheduler import SCHEDULER_SKILLS
+
 SKILLS.update(SCHEDULER_SKILLS)
 
 # RSS feed monitoring
 from rss_skills import RSS_SKILLS
+
 SKILLS.update(RSS_SKILLS)
 
 # URL change monitoring
 from monitor_skills import MONITOR_SKILLS
+
 SKILLS.update(MONITOR_SKILLS)
 
 # Weather skill (Phase E — wraps wttr.in via aiohttp, no API key)
 from .advanced_skills import get_weather
+
 SKILLS.update({"get_weather": get_weather})
 
 # Obsidian vault — save/list/index markdown notes
 from obsidian_writer import OBSIDIAN_SKILLS
+
 SKILLS.update(OBSIDIAN_SKILLS)
 
 # Maintenance — 4AM cron: skill updates, gateway restart, NAS backup
 from maintenance_skills import MAINTENANCE_SKILLS
+
 SKILLS.update(MAINTENANCE_SKILLS)
 
 # Dream Cycle — Auto-Dream memory consolidation engine
 from dream_cycle import DREAM_SKILLS
+
 SKILLS.update(DREAM_SKILLS)
 
 # Agent Loop — persistent plan management for autonomous goals
 from agent_loop import AGENT_LOOP_SKILLS
+
 SKILLS.update(AGENT_LOOP_SKILLS)
 
 # Code sandbox — LLM-driven Python execution (Phase 3: Code Interpreter)
@@ -642,4 +659,5 @@ if _uncategorized:
 
 # Scheduled research — recurring research queries
 from research_agent import run_scheduled_research
+
 SKILLS["run_scheduled_research"] = run_scheduled_research

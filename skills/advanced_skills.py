@@ -16,7 +16,8 @@ import shlex
 
 import aiohttp
 
-from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW, cfg as _cfg
+from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW
+from config import cfg as _cfg
 from http_session import SessionManager
 
 log = logging.getLogger("openclaw.advanced_skills")
@@ -25,32 +26,32 @@ log = logging.getLogger("openclaw.advanced_skills")
 # Re-export everything from sub-modules (backward-compatible)
 # ---------------------------------------------------------------------------
 
-from skills.search_skills import (  # noqa: F401
-    search_web,
-    _perplexity_search,
-    _firecrawl_search,
-    firecrawl_scrape,
-    serper_search,
-    _format_tavily_results,
-    _format_ddg_results,
-    SEARCH_SKILLS,
-)
 from skills.media_skills import (  # noqa: F401
+    MEDIA_SKILLS,
+    add_to_radarr,
+    add_to_sonarr,
     check_arr_health,
     check_download_clients,
     check_plex_status,
-    get_plex_activity,
-    search_media,
     get_download_queue,
+    get_plex_activity,
     get_recent_additions,
-    add_to_sonarr,
-    add_to_radarr,
-    MEDIA_SKILLS,
+    search_media,
+)
+from skills.search_skills import (  # noqa: F401
+    SEARCH_SKILLS,
+    _firecrawl_search,
+    _format_ddg_results,
+    _format_tavily_results,
+    _perplexity_search,
+    firecrawl_scrape,
+    search_web,
+    serper_search,
 )
 from skills.web_skills import (  # noqa: F401
+    WEB_SKILLS,
     browse_url,
     compare_sources,
-    WEB_SKILLS,
 )
 
 # ---------------------------------------------------------------------------

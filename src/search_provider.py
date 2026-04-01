@@ -1,9 +1,8 @@
 """Search provider abstraction — unified interface for all search backends."""
 import asyncio
-import time
 import logging
-from dataclasses import dataclass, field
-from typing import Callable, Coroutine, Any
+from dataclasses import dataclass
+from typing import Any, Callable, Coroutine
 
 import aiohttp
 

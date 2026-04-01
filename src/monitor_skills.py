@@ -27,16 +27,15 @@ Usage pattern (with scheduler):
 import hashlib
 import json
 import logging
-import os
 import re
 from datetime import datetime, timezone
-from pathlib import Path
 
 import aiohttp
 
 log = logging.getLogger("openclaw.monitor")
 
-from config import TIMEOUT_DEFAULT, cfg as _cfg
+from config import TIMEOUT_DEFAULT
+from config import cfg as _cfg
 
 MEMORY_DIR = _cfg.memory_dir
 _SNAPSHOTS_FILE = MEMORY_DIR / "url_snapshots.json"

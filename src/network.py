@@ -5,7 +5,6 @@ Provides Tailscale status, external connectivity checks, and DNS resolution.
 
 import asyncio
 import logging
-import os
 import socket
 from typing import Optional
 
@@ -13,9 +12,9 @@ import aiohttp
 
 log = logging.getLogger("openclaw.network")
 
+from config import TIMEOUT_FAST
+from config import cfg as _cfg
 from http_session import SessionManager
-
-from config import TIMEOUT_FAST, cfg as _cfg
 
 _sessions = SessionManager(timeout=TIMEOUT_FAST, name="network")
 close_session = _sessions.close

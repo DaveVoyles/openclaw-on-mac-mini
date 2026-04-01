@@ -5,12 +5,10 @@ Integrates with AgentMail.to for sending e-mails via AI.
 
 import asyncio
 import logging
-import os
 from urllib.parse import quote
 
-import aiohttp
-
-from config import TIMEOUT_DEFAULT, cfg as _cfg
+from config import TIMEOUT_DEFAULT
+from config import cfg as _cfg
 from http_session import SessionManager
 
 log = logging.getLogger("openclaw.agentmail")

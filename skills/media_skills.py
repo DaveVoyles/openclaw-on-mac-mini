@@ -10,7 +10,8 @@ import logging
 
 import aiohttp
 
-from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW, cfg as _cfg
+from config import TIMEOUT_SLOW
+from config import cfg as _cfg
 from http_session import SessionManager
 
 log = logging.getLogger("openclaw.media_skills")

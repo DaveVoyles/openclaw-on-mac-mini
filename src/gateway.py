@@ -22,13 +22,13 @@ Rate limit: 10 requests/second per account.
 import asyncio
 import json
 import logging
-import os
 from typing import Any
 from urllib.parse import quote as urlquote
 
 import aiohttp
 
-from config import TIMEOUT_SLOW, cfg as _cfg
+from config import TIMEOUT_SLOW
+from config import cfg as _cfg
 
 log = logging.getLogger("openclaw.gateway")
 
