@@ -1274,8 +1274,10 @@
 
         <!-- Config -->
         <div class="card">
-          <h2>&#128272; Security &amp; Config</h2>
+          <details>
+          <summary style="cursor:pointer;user-select:none"><h2 style="display:inline">&#128272; Security &amp; Config</h2></summary>
           <div id="config-rows"></div>
+          </details>
         </div>
 
         <!-- Recent Activity -->
@@ -1845,7 +1847,25 @@
           const statusClass = c.is_up
             ? "health-status-up"
             : "health-status-down";
-          div.innerHTML = `<div class="health-status-dot ${statusClass}"></div><span class="health-name" title="${esc(c.status)}">${esc(c.name)}</span>`;
+          div.innerHTML = `<div class="health-status-dot ${statusClass}"></div><span class="health-name" style="cursor:help">${esc(c.name)}</span>`;
+          div.addEventListener('mouseenter', function(e) {
+            let popup = document.getElementById('container-tooltip');
+            if (!popup) {
+              popup = document.createElement('div');
+              popup.id = 'container-tooltip';
+              popup.style.cssText = 'position:fixed;z-index:9999;max-width:300px;padding:8px 12px;background:var(--surface,#1e1e2e);border:1px solid var(--border,#444);border-radius:8px;font-size:0.8rem;line-height:1.4;color:var(--ink,#e0e0e0);box-shadow:0 4px 12px rgba(0,0,0,0.4);pointer-events:none;transition:opacity 0.15s';
+              document.body.appendChild(popup);
+            }
+            popup.innerHTML = `<strong>${esc(c.name)}</strong><br><span style="color:${c.is_up ? 'var(--mint-green,#4caf50)' : 'var(--danger,#f44336)'}">${esc(c.status)}</span>`;
+            popup.style.opacity = '1';
+            const rect = this.getBoundingClientRect();
+            popup.style.left = rect.left + 'px';
+            popup.style.top = (rect.bottom + 6) + 'px';
+          });
+          div.addEventListener('mouseleave', function() {
+            const popup = document.getElementById('container-tooltip');
+            if (popup) popup.style.opacity = '0';
+          });
           cg.appendChild(div);
         });
       }
