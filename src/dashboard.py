@@ -841,7 +841,7 @@ async def api_topology_handler(request):
         from skills import list_containers
         container_text = await list_containers()
         if not container_text.startswith("\u274c"):
-            lines = [ln.strip() for ln in container_text.split("\n") if l.strip() and not l.startswith("NAMES")]
+            lines = [ln.strip() for ln in container_text.split("\n") if ln.strip() and not ln.startswith("NAMES")]
             angle_step = (2 * math.pi) / max(len(lines), 1)
             for i, line in enumerate(lines):
                 parts = [p.strip() for p in line.split("\t") if p.strip()]
