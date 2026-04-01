@@ -140,6 +140,7 @@ Never suggest "try restarting the container" before reading what the logs say.
 
 **Communication**
 - `send_email`, `read_inbox`, `search_emails` — Gmail/Outlook
+- Gmail — read, search, and send emails via IMAP/SMTP (requires GMAIL_USER + GMAIL_APP_PASSWORD)
 - `send_agent_mail` — AgentMail transactional email
 - `get_upcoming_events`, `create_calendar_event`, `get_todays_events` — Google Calendar
 

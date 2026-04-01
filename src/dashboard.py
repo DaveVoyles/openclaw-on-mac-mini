@@ -162,6 +162,29 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                     "is_up": is_up
                 })
 
+    # Fetch NAS containers (Synology DS920+ at 192.168.1.8)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ssh", "-p", "24", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+            "dave@192.168.1.8",
+            "/usr/local/bin/docker ps --format '{{.Names}}\t{{.Status}}'",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode == 0:
+            for line in stdout.decode().strip().split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.split("\t")
+                if len(parts) >= 2:
+                    containers.append({
+                        "name": f"{parts[0]} (NAS)",
+                        "status": parts[1],
+                        "is_up": "Up" in parts[1],
+                    })
+    except Exception as e:
+        log.debug("NAS container fetch failed: %s", e)
+
     # Get resource stats
     stats_text = await get_docker_stats()
     stats_list = []

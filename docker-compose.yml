@@ -16,6 +16,10 @@ services:
     mem_limit: 2g
     cpus: "2.0"
 
+    # Docker socket access requires matching the host's socket group (root/GID 0 on OrbStack)
+    group_add:
+      - "0"
+
     # Logging
     logging:
       driver: "json-file"
