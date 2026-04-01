@@ -958,6 +958,34 @@
           <div id="dream-metrics" style="display:flex;flex-direction:column;gap:0.5rem"></div>
         </div>
 
+        <!-- Knowledge Graph (3D Visualization) -->
+        <div class="card">
+          <details open>
+            <summary style="cursor:pointer;user-select:none">
+              <h2 style="display:inline">🕸️ Knowledge Graph</h2>
+            </summary>
+            <div id="knowledge-graph-container" style="width:100%;height:400px;position:relative;background:#0d1117;border-radius:8px;overflow:hidden">
+              <canvas id="kg-canvas" style="width:100%;height:100%"></canvas>
+              <div id="kg-info" style="position:absolute;top:8px;right:8px;font-size:0.75rem;color:#8b949e"></div>
+              <div id="kg-tooltip" style="position:absolute;display:none;padding:8px 12px;background:#1a1b2e;border:1px solid #555;border-radius:8px;font-size:0.8rem;color:#e8e8e8;box-shadow:0 6px 20px rgba(0,0,0,0.7);pointer-events:none;z-index:10"></div>
+            </div>
+          </details>
+        </div>
+
+        <!-- Network Topology (2D Canvas) -->
+        <div class="card">
+          <details open>
+            <summary style="cursor:pointer;user-select:none">
+              <h2 style="display:inline">🌐 Network Topology</h2>
+            </summary>
+            <div id="topology-container" style="width:100%;height:450px;position:relative;background:#0d1117;border-radius:8px;overflow:hidden">
+              <canvas id="topo-canvas" style="width:100%;height:100%"></canvas>
+              <div id="topo-info" style="position:absolute;top:8px;right:8px;font-size:0.75rem;color:#8b949e"></div>
+              <div id="topo-tooltip" style="position:absolute;display:none;padding:8px 12px;background:#1a1b2e;border:1px solid #555;border-radius:8px;font-size:0.8rem;color:#e8e8e8;box-shadow:0 6px 20px rgba(0,0,0,0.7);pointer-events:none;z-index:10"></div>
+            </div>
+          </details>
+        </div>
+
         <!-- Configuration Status -->
         <div class="card">
           <details>
@@ -2298,6 +2326,8 @@
           loadErrors();
           loadResponseStats();
           loadDreamHealth();
+          loadKnowledgeGraph();
+          loadTopology();
           loadSearchStats();
           loadSkillStats();
           loadConfigStatus();
@@ -2309,7 +2339,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadSkillStats(); loadConfigStatus(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadSkillStats(); loadConfigStatus(); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -2460,6 +2490,491 @@
             }
           })
           .catch(err => alert('Error: ' + err));
+      }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      // =========================================================================
+      // 3D Knowledge Graph — Three.js force-directed visualization
+      // =========================================================================
+      async function loadKnowledgeGraph() {
+        const container = document.getElementById('knowledge-graph-container');
+        const info = document.getElementById('kg-info');
+        const tooltip = document.getElementById('kg-tooltip');
+        if (!container) return;
+
+        let resp, data;
+        try {
+          resp = await fetch('/api/knowledge-graph');
+          data = await resp.json();
+        } catch (_) {
+          info.textContent = 'Failed to load graph data';
+          return;
+        }
+
+        if (!data.nodes.length) {
+          info.textContent = 'No memories yet — run /dream to populate';
+          return;
+        }
+        info.textContent = `${data.nodes.length} memories · ${data.edges.length} connections`;
+
+        const width = container.clientWidth;
+        const height = 400;
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0d1117);
+
+        const camera = new THREE.PerspectiveCamera(60, width / height, 1, 1000);
+        camera.position.z = 200;
+
+        const canvas = document.getElementById('kg-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(window.devicePixelRatio);
+
+        // Nodes as spheres
+        const nodeObjects = [];
+        const nodeMap = {};
+        const tagColors = {};
+        const colorPalette = [0x58a6ff, 0x3fb950, 0xd29922, 0xbc8cff, 0xf85149, 0x79c0ff, 0x56d364, 0xe3b341];
+
+        data.nodes.forEach(function(node) {
+          const size = 2 + node.importance * 6;
+          const tag = (node.tags && node.tags[0]) || 'default';
+          if (!tagColors[tag]) tagColors[tag] = colorPalette[Object.keys(tagColors).length % colorPalette.length];
+
+          const geo = new THREE.SphereGeometry(size, 16, 16);
+          const mat = new THREE.MeshBasicMaterial({ color: tagColors[tag], transparent: true, opacity: 0.85 });
+          const mesh = new THREE.Mesh(geo, mat);
+
+          const phi = Math.random() * Math.PI * 2;
+          const theta = Math.random() * Math.PI;
+          const r = 50 + Math.random() * 80;
+          mesh.position.set(
+            r * Math.sin(theta) * Math.cos(phi),
+            r * Math.sin(theta) * Math.sin(phi),
+            r * Math.cos(theta)
+          );
+
+          mesh.userData = { id: node.id, summary: node.summary, importance: node.importance, tags: node.tags };
+          scene.add(mesh);
+          nodeObjects.push(mesh);
+          nodeMap[node.id] = mesh;
+        });
+
+        // Edges as lines
+        const edgeLines = [];
+        data.edges.forEach(function(edge) {
+          const source = nodeMap[edge.source];
+          const target = nodeMap[edge.target];
+          if (!source || !target) return;
+          const geo = new THREE.BufferGeometry().setFromPoints([source.position.clone(), target.position.clone()]);
+          const mat = new THREE.LineBasicMaterial({ color: 0x30363d, transparent: true, opacity: 0.4 });
+          const line = new THREE.Line(geo, mat);
+          line.userData = { source: edge.source, target: edge.target };
+          scene.add(line);
+          edgeLines.push(line);
+        });
+
+        // Mouse interaction — rotation
+        let isDragging = false;
+        let prevMouse = { x: 0, y: 0 };
+        let rotation = { x: 0, y: 0 };
+
+        container.addEventListener('mousedown', function(e) { isDragging = true; prevMouse = { x: e.clientX, y: e.clientY }; });
+        window.addEventListener('mouseup', function() { isDragging = false; });
+        container.addEventListener('mousemove', function(e) {
+          if (isDragging) {
+            rotation.y += (e.clientX - prevMouse.x) * 0.005;
+            rotation.x += (e.clientY - prevMouse.y) * 0.005;
+            prevMouse = { x: e.clientX, y: e.clientY };
+          }
+        });
+
+        // Zoom
+        container.addEventListener('wheel', function(e) {
+          e.preventDefault();
+          camera.position.z = Math.max(50, Math.min(500, camera.position.z + e.deltaY * 0.5));
+        }, { passive: false });
+
+        // Raycaster for hover tooltips
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        container.addEventListener('mousemove', function(e) {
+          const rect = container.getBoundingClientRect();
+          mouse.x = ((e.clientX - rect.left) / width) * 2 - 1;
+          mouse.y = -((e.clientY - rect.top) / height) * 2 + 1;
+          raycaster.setFromCamera(mouse, camera);
+          const intersects = raycaster.intersectObjects(nodeObjects);
+          if (intersects.length > 0) {
+            const d = intersects[0].object.userData;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
+            tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+            tooltip.innerHTML = '<strong>' + esc(d.id) + '</strong><br>' + esc(d.summary) + '<br><span style="color:var(--gold)">Importance: ' + (d.importance * 100).toFixed(0) + '%</span>';
+          } else {
+            tooltip.style.display = 'none';
+          }
+        });
+
+        // Animation loop
+        function animate() {
+          requestAnimationFrame(animate);
+          scene.rotation.y = rotation.y + performance.now() * 0.0001;
+          scene.rotation.x = rotation.x;
+          renderer.render(scene, camera);
+        }
+        animate();
+
+        // Handle resize
+        window.addEventListener('resize', function() {
+          const w = container.clientWidth;
+          camera.aspect = w / height;
+          camera.updateProjectionMatrix();
+          renderer.setSize(w, height);
+        });
+      }
+    </script>
+    <script>
+      // =========================================================================
+      // 2D Network Topology — Canvas force-directed visualization
+      // =========================================================================
+      async function loadTopology() {
+        const container = document.getElementById('topology-container');
+        const info = document.getElementById('topo-info');
+        const tooltip = document.getElementById('topo-tooltip');
+        if (!container) return;
+
+        let resp, data;
+        try {
+          resp = await fetch('/api/topology');
+          data = await resp.json();
+        } catch (_) {
+          info.textContent = 'Failed to load topology';
+          return;
+        }
+
+        if (!data.nodes.length) {
+          info.textContent = 'No topology data available';
+          return;
+        }
+
+        const hosts = data.nodes.filter(n => n.type !== 'container').length;
+        const containers = data.nodes.filter(n => n.type === 'container').length;
+        info.textContent = `${hosts} hosts · ${containers} containers · ${data.edges.length} links`;
+
+        const canvas = document.getElementById('topo-canvas');
+        const ctx = canvas.getContext('2d');
+        const dpr = window.devicePixelRatio || 1;
+
+        function resize() {
+          const w = container.clientWidth;
+          const h = container.clientHeight || 450;
+          canvas.width = w * dpr;
+          canvas.height = h * dpr;
+          canvas.style.width = w + 'px';
+          canvas.style.height = h + 'px';
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          return { w, h };
+        }
+        let dims = resize();
+
+        // Build node objects with positions
+        const nodeMap = {};
+        const nodes = data.nodes.map(n => {
+          const obj = {
+            id: n.id, label: n.label, type: n.type,
+            ip: n.ip || '', status: n.status || '',
+            x: n.x || Math.random() * dims.w,
+            y: n.y || Math.random() * dims.h,
+            vx: 0, vy: 0,
+            radius: n.type === 'host' ? 24 : n.type === 'cloud' ? 20 : n.type === 'proxy' ? 18 : 12,
+          };
+          nodeMap[n.id] = obj;
+          return obj;
+        });
+        const edges = data.edges.map(e => ({
+          source: nodeMap[e.source], target: nodeMap[e.target], label: e.label || ''
+        })).filter(e => e.source && e.target);
+
+        // Colors
+        const TOPO_COLORS = {
+          host: '#58a6ff', cloud: '#e6edf3', proxy: '#bc8cff',
+          container_up: '#3fb950', container_down: '#f85149',
+        };
+        function nodeColor(n) {
+          if (n.type === 'container') return n.status === 'up' ? TOPO_COLORS.container_up : TOPO_COLORS.container_down;
+          return TOPO_COLORS[n.type] || '#8b949e';
+        }
+
+        // Force simulation
+        const REPULSION = 3000;
+        const SPRING_K = 0.005;
+        const SPRING_LEN = 100;
+        const DAMPING = 0.85;
+        const CENTER_GRAVITY = 0.002;
+        let settled = false;
+        let simTicks = 0;
+        const MAX_TICKS = 200;
+
+        function simulate() {
+          if (settled) return;
+          const cx = dims.w / 2, cy = dims.h / 2;
+          nodes.forEach(n => { n.fx = 0; n.fy = 0; });
+
+          // Repulsion (Coulomb)
+          for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+              const a = nodes[i], b = nodes[j];
+              let dx = a.x - b.x, dy = a.y - b.y;
+              let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              const force = REPULSION / (dist * dist);
+              const fx = (dx / dist) * force, fy = (dy / dist) * force;
+              a.fx += fx; a.fy += fy;
+              b.fx -= fx; b.fy -= fy;
+            }
+          }
+
+          // Spring attraction along edges
+          edges.forEach(e => {
+            const dx = e.target.x - e.source.x, dy = e.target.y - e.source.y;
+            const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+            const force = SPRING_K * (dist - SPRING_LEN);
+            const fx = (dx / dist) * force, fy = (dy / dist) * force;
+            e.source.fx += fx; e.source.fy += fy;
+            e.target.fx -= fx; e.target.fy -= fy;
+          });
+
+          // Center gravity
+          nodes.forEach(n => {
+            n.fx += (cx - n.x) * CENTER_GRAVITY;
+            n.fy += (cy - n.y) * CENTER_GRAVITY;
+          });
+
+          // Integrate
+          let totalMotion = 0;
+          nodes.forEach(n => {
+            if (n._dragging) return;
+            n.vx = (n.vx + n.fx) * DAMPING;
+            n.vy = (n.vy + n.fy) * DAMPING;
+            n.x += n.vx;
+            n.y += n.vy;
+            n.x = Math.max(n.radius, Math.min(dims.w - n.radius, n.x));
+            n.y = Math.max(n.radius, Math.min(dims.h - n.radius, n.y));
+            totalMotion += Math.abs(n.vx) + Math.abs(n.vy);
+          });
+
+          simTicks++;
+          if (totalMotion < 0.5 || simTicks > MAX_TICKS) settled = true;
+        }
+
+        // Drawing helpers
+        function drawArrowhead(fromX, fromY, toX, toY, r) {
+          const angle = Math.atan2(toY - fromY, toX - fromX);
+          const headLen = 8;
+          const x = toX - Math.cos(angle) * r;
+          const y = toY - Math.sin(angle) * r;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - headLen * Math.cos(angle - 0.4), y - headLen * Math.sin(angle - 0.4));
+          ctx.lineTo(x - headLen * Math.cos(angle + 0.4), y - headLen * Math.sin(angle + 0.4));
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(139,148,158,0.6)';
+          ctx.fill();
+        }
+
+        function drawCloud(x, y, r) {
+          ctx.beginPath();
+          ctx.arc(x, y - r * 0.15, r * 0.6, Math.PI * 0.5, Math.PI * 1.5);
+          ctx.arc(x - r * 0.3, y - r * 0.5, r * 0.45, Math.PI, Math.PI * 1.75);
+          ctx.arc(x + r * 0.15, y - r * 0.6, r * 0.5, Math.PI * 1.2, Math.PI * 1.9);
+          ctx.arc(x + r * 0.5, y - r * 0.25, r * 0.4, Math.PI * 1.5, Math.PI * 0.5);
+          ctx.arc(x, y + r * 0.2, r * 0.7, 0, Math.PI);
+          ctx.closePath();
+        }
+
+        function drawHexagon(x, y, r) {
+          ctx.beginPath();
+          for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i - Math.PI / 6;
+            const px = x + r * Math.cos(angle), py = y + r * Math.sin(angle);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+        }
+
+        function draw() {
+          ctx.clearRect(0, 0, dims.w, dims.h);
+
+          // Edges — curved lines
+          edges.forEach(e => {
+            const s = e.source, t = e.target;
+            const mx = (s.x + t.x) / 2, my = (s.y + t.y) / 2;
+            const dx = t.x - s.x, dy = t.y - s.y;
+            const nx = -dy * 0.15, ny = dx * 0.15;
+            const cpx = mx + nx, cpy = my + ny;
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.quadraticCurveTo(cpx, cpy, t.x, t.y);
+            ctx.strokeStyle = 'rgba(139,148,158,0.3)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            drawArrowhead(cpx, cpy, t.x, t.y, t.radius);
+          });
+
+          // Nodes
+          nodes.forEach(n => {
+            const color = nodeColor(n);
+            ctx.save();
+            ctx.shadowColor = color;
+            ctx.shadowBlur = n.type === 'container' ? 6 : 12;
+
+            if (n.type === 'cloud') {
+              drawCloud(n.x, n.y, n.radius);
+              ctx.fillStyle = color;
+              ctx.globalAlpha = 0.25;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            } else if (n.type === 'proxy') {
+              drawHexagon(n.x, n.y, n.radius);
+              ctx.fillStyle = color;
+              ctx.globalAlpha = 0.25;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.strokeStyle = color;
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            } else {
+              ctx.beginPath();
+              ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+              ctx.fillStyle = color;
+              ctx.globalAlpha = n.type === 'container' ? 0.35 : 0.2;
+              ctx.fill();
+              ctx.globalAlpha = 1;
+              ctx.strokeStyle = color;
+              ctx.lineWidth = n.type === 'host' ? 2.5 : 1.5;
+              ctx.stroke();
+            }
+            ctx.restore();
+
+            // Label
+            ctx.font = n.type === 'container' ? '10px -apple-system, sans-serif' : 'bold 11px -apple-system, sans-serif';
+            ctx.fillStyle = '#c9d1d9';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            ctx.fillText(n.label, n.x, n.y + n.radius + 4);
+          });
+        }
+
+        // Animation loop
+        let animId = null;
+        function tick() {
+          simulate();
+          draw();
+          if (!settled) {
+            animId = requestAnimationFrame(tick);
+          } else {
+            animId = null;
+          }
+        }
+        tick();
+
+        // Mouse interaction — drag & tooltip
+        let dragNode = null;
+
+        function getMousePos(e) {
+          const rect = canvas.getBoundingClientRect();
+          return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function hitNode(mx, my) {
+          for (let i = nodes.length - 1; i >= 0; i--) {
+            const n = nodes[i];
+            const dx = mx - n.x, dy = my - n.y;
+            if (dx * dx + dy * dy < (n.radius + 4) * (n.radius + 4)) return n;
+          }
+          return null;
+        }
+
+        function hitEdge(mx, my) {
+          for (const e of edges) {
+            if (!e.label) continue;
+            const emx = (e.source.x + e.target.x) / 2, emy = (e.source.y + e.target.y) / 2;
+            const dx = mx - emx, dy = my - emy;
+            if (dx * dx + dy * dy < 400) return e;
+          }
+          return null;
+        }
+
+        canvas.addEventListener('mousedown', function(e) {
+          const pos = getMousePos(e);
+          const n = hitNode(pos.x, pos.y);
+          if (n) {
+            dragNode = n;
+            n._dragging = true;
+            n.vx = 0; n.vy = 0;
+            canvas.style.cursor = 'grabbing';
+          }
+        });
+
+        canvas.addEventListener('mousemove', function(e) {
+          const pos = getMousePos(e);
+          if (dragNode) {
+            dragNode.x = pos.x;
+            dragNode.y = pos.y;
+            settled = false; simTicks = Math.max(simTicks, MAX_TICKS - 30);
+            if (!animId) tick();
+            return;
+          }
+          const n = hitNode(pos.x, pos.y);
+          const edge = !n ? hitEdge(pos.x, pos.y) : null;
+          if (n) {
+            canvas.style.cursor = 'grab';
+            let html = '<strong>' + esc(n.label) + '</strong>';
+            if (n.ip) html += '<br>IP: ' + esc(n.ip);
+            if (n.type) html += '<br>Type: ' + esc(n.type);
+            if (n.status) html += '<br>Status: <span style="color:' + (n.status === 'up' ? TOPO_COLORS.container_up : TOPO_COLORS.container_down) + '">' + esc(n.status) + '</span>';
+            tooltip.innerHTML = html;
+            tooltip.style.display = 'block';
+            tooltip.style.left = Math.min(pos.x + 12, dims.w - 160) + 'px';
+            tooltip.style.top = (pos.y - 10) + 'px';
+          } else if (edge) {
+            canvas.style.cursor = 'default';
+            tooltip.innerHTML = '<strong>' + esc(edge.source.label) + ' → ' + esc(edge.target.label) + '</strong><br>' + esc(edge.label);
+            tooltip.style.display = 'block';
+            tooltip.style.left = Math.min(pos.x + 12, dims.w - 160) + 'px';
+            tooltip.style.top = (pos.y - 10) + 'px';
+          } else {
+            canvas.style.cursor = 'default';
+            tooltip.style.display = 'none';
+          }
+        });
+
+        canvas.addEventListener('mouseup', function() {
+          if (dragNode) dragNode._dragging = false;
+          dragNode = null;
+          canvas.style.cursor = 'default';
+        });
+
+        canvas.addEventListener('mouseleave', function() {
+          if (dragNode) dragNode._dragging = false;
+          dragNode = null;
+          tooltip.style.display = 'none';
+          canvas.style.cursor = 'default';
+        });
+
+        // Redraw static state
+        if (settled) draw();
+
+        // Handle resize
+        window.addEventListener('resize', function() {
+          dims = resize();
+          settled = false; simTicks = Math.max(simTicks, MAX_TICKS - 20);
+          if (!animId) tick();
+        });
       }
     </script>
   </body>

@@ -24,6 +24,7 @@ from dashboard import (
     api_dream_health_handler,
     api_errors_handler,
     api_goals_handler,
+    api_knowledge_graph_handler,
     api_memories_handler,
     api_research_handler,
     api_response_stats_handler,
@@ -33,6 +34,7 @@ from dashboard import (
     api_skill_stats_handler,
     api_status_handler,
     api_threads_handler,
+    api_topology_handler,
     dashboard_handler,
     guide_handler,
 )
@@ -313,6 +315,8 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_get("/api/config-status", api_config_status_handler)
     app.router.add_get("/api/search-stats", api_search_stats_handler)
     app.router.add_get("/api/skill-stats", api_skill_stats_handler)
+    app.router.add_get("/api/knowledge-graph", api_knowledge_graph_handler)
+    app.router.add_get("/api/topology", api_topology_handler)
     app.router.add_get("/guide", guide_handler)
     app.router.add_get("/smoke", _smoke_handler)
     app.router.add_post("/webhook/{source}", _webhook_handler)

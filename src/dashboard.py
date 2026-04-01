@@ -787,6 +787,80 @@ async def api_skill_stats_handler(request):
     return web.json_response(get_skill_stats())
 
 
+async def api_knowledge_graph_handler(request):
+    """Return knowledge graph nodes and edges for 3D visualization."""
+    index_path = Path("/app/data/dream/index.json")
+    if not index_path.exists():
+        return web.json_response({"nodes": [], "edges": []})
+    try:
+        data = json.loads(index_path.read_text())
+        entries = data.get("entries", [])
+        nodes = []
+        edges = []
+        for e in entries:
+            if e.get("archived"):
+                continue
+            nodes.append({
+                "id": e["id"],
+                "summary": e.get("summary", "")[:60],
+                "importance": e.get("importance", 0.5),
+                "tags": e.get("tags", []),
+                "created": e.get("created", ""),
+            })
+            for rel in e.get("related", []):
+                edges.append({"source": e["id"], "target": rel})
+        return web.json_response({"nodes": nodes, "edges": edges})
+    except Exception as exc:
+        log.debug("Knowledge graph API failed: %s", exc)
+        return web.json_response({"nodes": [], "edges": []})
+
+
+async def api_topology_handler(request):
+    """Return network topology for visualization."""
+    import math
+    import re
+
+    nodes = [
+        {"id": "mac-mini", "label": "Mac Mini M4", "type": "host", "ip": "192.168.1.93", "x": 400, "y": 200},
+        {"id": "nas", "label": "Synology NAS", "type": "host", "ip": "192.168.1.8", "x": 200, "y": 200},
+        {"id": "internet", "label": "Internet", "type": "cloud", "x": 600, "y": 50},
+        {"id": "traefik", "label": "Traefik", "type": "proxy", "x": 300, "y": 100},
+    ]
+    edges = [
+        {"source": "internet", "target": "nas", "label": "HTTPS:443"},
+        {"source": "nas", "target": "traefik", "label": "SSL termination"},
+        {"source": "traefik", "target": "mac-mini", "label": "HTTP:8100"},
+        {"source": "mac-mini", "target": "nas", "label": "NFS/SMB"},
+    ]
+
+    try:
+        from skills import list_containers
+        container_text = await list_containers()
+        if not container_text.startswith("\u274c"):
+            lines = [l.strip() for l in container_text.split("\n") if l.strip() and not l.startswith("NAMES")]
+            angle_step = (2 * math.pi) / max(len(lines), 1)
+            for i, line in enumerate(lines):
+                parts = [p.strip() for p in line.split("\t") if p.strip()]
+                if not parts:
+                    parts = [p.strip() for p in re.split(r'\s{2,}', line) if p.strip()]
+                if parts:
+                    name = parts[0]
+                    status = parts[1] if len(parts) > 1 else "unknown"
+                    angle = angle_step * i
+                    x = 400 + math.cos(angle) * 120
+                    y = 200 + math.sin(angle) * 120
+                    nodes.append({
+                        "id": name, "label": name, "type": "container",
+                        "status": "up" if "Up" in status else "down",
+                        "x": round(x), "y": round(y),
+                    })
+                    edges.append({"source": "mac-mini", "target": name})
+    except Exception as e:
+        log.debug("Topology container fetch failed: %s", e)
+
+    return web.json_response({"nodes": nodes, "edges": edges})
+
+
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()
 
