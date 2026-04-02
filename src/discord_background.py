@@ -224,13 +224,29 @@ async def proactive_insight_loop(bot):
 
 
 async def _gather_system_signals():
-    """Collect health checks and log snippets. Returns None if all clean."""
-    health, dl_clients, plex = await asyncio.gather(
+    """Collect health checks, disk space, and log snippets. Returns None if all clean."""
+    health, dl_clients, plex, sys_stats = await asyncio.gather(
         check_arr_health(),
         check_download_clients(),
         check_plex_status(),
+        get_system_stats(),
         return_exceptions=True,
     )
+
+    # NAS disk space via SSH
+    nas_disk = ""
+    try:
+        from maintenance_skills import NAS_HOST, NAS_SSH_PORT, NAS_SSH_USER
+        from subprocess_utils import run as _run
+        rc, out, _ = await _run(
+            ["ssh", "-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
+             f"{NAS_SSH_USER}@{NAS_HOST}", "df -h /volume1 /volume2 2>/dev/null | grep -v Filesystem"],
+            timeout=10,
+        )
+        if rc == 0 and out.strip():
+            nas_disk = f"NAS disk:\n{out.strip()}"
+    except Exception as exc:
+        log.debug("NAS disk check failed: %s", exc)
 
     key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
     log_snippets: dict[str, str] = {}
@@ -242,17 +258,43 @@ async def _gather_system_signals():
         except Exception as exc:
             log.debug("Container log fetch for %s failed: %s", svc, exc)
 
+    # Check for disk space alerts (>90% used)
+    disk_alert = False
+    if isinstance(sys_stats, str) and "Disk" in sys_stats:
+        for line in sys_stats.split("\n"):
+            if "Disk" in line:
+                try:
+                    pct = int(line.split("(")[1].split("%")[0])
+                    if pct >= 90:
+                        disk_alert = True
+                except (IndexError, ValueError):
+                    pass
+    if nas_disk:
+        for line in nas_disk.split("\n"):
+            try:
+                parts = line.split()
+                if len(parts) >= 5:
+                    pct = int(parts[4].rstrip("%"))
+                    if pct >= 90:
+                        disk_alert = True
+            except (IndexError, ValueError):
+                pass
+
     all_clean = all(
         isinstance(r, str) and not _error_re.search(r)
         for r in [health, dl_clients, plex]
         if isinstance(r, str)
     )
-    if all_clean and not log_snippets:
+    if all_clean and not log_snippets and not disk_alert:
         return None
 
     summary_parts = [
         f"Health checks:\n  *arr: {health}\n  Download clients: {dl_clients}\n  Plex: {plex}"
     ]
+    if isinstance(sys_stats, str):
+        summary_parts.append(f"System stats:\n{sys_stats}")
+    if nas_disk:
+        summary_parts.append(nas_disk)
     if log_snippets:
         summary_parts.append("Log anomalies:")
         for svc, snippet in log_snippets.items():
@@ -261,24 +303,36 @@ async def _gather_system_signals():
     return "\n\n".join(summary_parts), log_snippets
 
 
-async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
-    """Parse SELF_HEAL directives and execute safe fixes.
-
-    Returns (cleaned_analysis, heal_results).
-    """
-    heal_actions: list[tuple[str, str]] = []  # (action_type, target)
-    display_analysis = analysis
+def _parse_heal_actions(analysis: str) -> list[tuple[str, str]]:
+    """Extract SELF_HEAL directives from LLM analysis text."""
+    actions: list[tuple[str, str]] = []
     for line in analysis.split("\n"):
         if line.strip().startswith("SELF_HEAL:"):
             parts = line.strip().split()
             if len(parts) >= 3 and parts[1] == "restart_container":
                 target = parts[2].lower().strip()
                 if target in _SAFE_RESTART_TARGETS:
-                    heal_actions.append(("restart_container", target))
+                    actions.append(("restart_container", target))
             elif len(parts) >= 2 and parts[1] == "fix_qbit_download_path":
-                heal_actions.append(("fix_qbit_download_path", ""))
+                actions.append(("fix_qbit_download_path", ""))
             elif len(parts) >= 2 and parts[1] == "fix_arr_remote_path":
-                heal_actions.append(("fix_arr_remote_path", ""))
+                actions.append(("fix_arr_remote_path", ""))
+            elif parts[1] == "copilot_fix":
+                copilot_prompt = " ".join(parts[2:]) if len(parts) > 2 else ""
+                if copilot_prompt:
+                    actions.append(("copilot_fix_pending", copilot_prompt))
+    return actions
+
+
+async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
+    """Parse SELF_HEAL directives and execute safe fixes.
+
+    Returns (cleaned_analysis, heal_results).
+    """
+    heal_actions = _parse_heal_actions(analysis)
+    display_analysis = analysis
+    for line in analysis.split("\n"):
+        if line.strip().startswith("SELF_HEAL:"):
             display_analysis = display_analysis.replace(line, "").strip()
 
     heal_results: list[str] = []
@@ -301,6 +355,14 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
                 heal_results.append(f"🔧 *arr path fix: {result}")
                 audit_log(None, "self_heal", detail=f"fix_arr_remote_path: {result[:200]}")
                 log.info("Self-heal: fix_arr_remote_path → %s", result[:80])
+            elif action_type == "copilot_fix_pending":
+                # Don't execute — return a pending approval message
+                heal_results.append(
+                    f"🤖 **Copilot CLI fix suggested** (requires approval):\n"
+                    f"> {target}\n"
+                    f"React ✅ on this message to approve (uses API tokens)."
+                )
+                audit_log(None, "self_heal", detail=f"copilot_fix proposed: {target[:200]}")
         except Exception as exc:
             heal_results.append(f"❌ `{action_type} {target}`: {exc}")
             log.warning("Self-heal %s failed for %s: %s", action_type, target, exc)
@@ -329,10 +391,13 @@ async def _run_proactive_scan(bot):
         "SELF_HEAL: restart_container <container_name>\n"
         "SELF_HEAL: fix_qbit_download_path\n"
         "SELF_HEAL: fix_arr_remote_path\n"
+        "SELF_HEAL: copilot_fix <description of what to fix>\n"
         "Use fix_qbit_download_path when qBittorrent's download path has drifted from /downloads "
         "(e.g. health check shows 'rom-downloads' or bad remote path mapping).\n"
         "Use fix_arr_remote_path when Sonarr/Radarr report remote path mapping errors — this will "
         "fix qBittorrent's config and restart the affected *arr services.\n"
+        "Use copilot_fix for novel/complex issues that don't have a dedicated fix skill — "
+        "this spawns the Copilot CLI and requires user approval before running.\n"
         "Only suggest restart_container for non-critical services (sonarr, radarr, lidarr, "
         "prowlarr, sabnzbd, tautulli, overseerr). Do NOT suggest restarting plex, postgres, "
         "or openclaw itself. If no safe fix exists, omit the SELF_HEAL line.\n\n"
@@ -364,7 +429,40 @@ async def _run_proactive_scan(bot):
             )
 
         embed.set_footer(text="Autonomous monitoring scan • every 2h")
-        await channel.send(embed=embed)
+        msg = await channel.send(embed=embed)
+
+        # If a copilot_fix is pending approval, add reaction and wait for user
+        copilot_prompts = [
+            target for action_type, target in
+            [(a, t) for a, t in _parse_heal_actions(analysis)]
+            if action_type == "copilot_fix_pending"
+        ]
+        if copilot_prompts:
+            await msg.add_reaction("✅")
+            await msg.add_reaction("❌")
+
+            # Wait for user reaction (up to 10 minutes)
+            def _check(reaction, user):
+                return (
+                    reaction.message.id == msg.id
+                    and str(reaction.emoji) in ("✅", "❌")
+                    and not user.bot
+                )
+
+            try:
+                reaction, user = await bot.wait_for("reaction_add", timeout=600, check=_check)
+                if str(reaction.emoji) == "✅":
+                    from maintenance_skills import copilot_fix
+                    for cp in copilot_prompts:
+                        result = await asyncio.wait_for(copilot_fix(cp), timeout=180)
+                        await channel.send(f"🤖 **Copilot CLI result** (approved by {user.display_name}):\n{result[:1900]}")
+                        audit_log(user, "copilot_fix_approved", detail=cp[:200])
+                else:
+                    await channel.send("❌ Copilot CLI fix skipped.")
+                    audit_log(user, "copilot_fix_rejected", detail=copilot_prompts[0][:200])
+            except asyncio.TimeoutError:
+                log.debug("Copilot fix approval timed out")
+
         audit_log(None, "proactive_scan", detail="insight posted")
         log.info("Proactive scan posted an insight (healed: %d)", len(heal_results))
     except asyncio.TimeoutError:
@@ -488,6 +586,8 @@ async def _post_error_alert(bot, patterns: list[dict]):
 
 # Tracks last-seen status per container to avoid repeat alerts
 _container_prev_state: dict[str, str] = {}
+_container_unhealthy_count: dict[str, int] = {}  # consecutive unhealthy checks
+_AUTO_RESTART_THRESHOLD = 2  # restart after N consecutive unhealthy checks
 
 CONTAINER_HEALTH_INTERVAL = 300  # 5 minutes
 
@@ -520,6 +620,7 @@ async def _check_container_health(bot):
 
     global _container_prev_state
     alerts: list[str] = []
+    auto_restart_results: list[str] = []
 
     for line in out.strip().splitlines():
         parts = line.split("\t", 1)
@@ -539,28 +640,46 @@ async def _check_container_health(bot):
             else:
                 state_label = "Exited"
 
+            # Track consecutive unhealthy count
+            _container_unhealthy_count[name] = _container_unhealthy_count.get(name, 0) + 1
+            count = _container_unhealthy_count[name]
+
             # Only alert on state *change* (or first time seeing a bad state)
             if prev != state_label:
                 alerts.append(f"🚨 **Container Alert**: `{name}` is **{state_label}**")
                 _container_prev_state[name] = state_label
+
+            # Auto-restart after N consecutive unhealthy checks (safe targets only)
+            if count >= _AUTO_RESTART_THRESHOLD and name in _SAFE_RESTART_TARGETS:
+                try:
+                    result = await asyncio.wait_for(restart_container(name), timeout=60)
+                    auto_restart_results.append(f"🔧 Auto-restarted `{name}` (unhealthy ×{count}): {result}")
+                    audit_log(None, "self_heal", detail=f"auto_restart {name} after {count} unhealthy checks: {result}")
+                    log.info("Auto-restart: %s after %d unhealthy checks → %s", name, count, result[:80])
+                    _container_unhealthy_count[name] = 0
+                except Exception as exc:
+                    auto_restart_results.append(f"❌ Auto-restart `{name}` failed: {exc}")
+                    log.warning("Auto-restart %s failed: %s", name, exc)
         else:
             # Container is healthy/running — clear any previous bad state
             if prev is not None:
                 _container_prev_state.pop(name, None)
+            _container_unhealthy_count.pop(name, None)
 
-    if not alerts:
+    if not alerts and not auto_restart_results:
         return
 
     channel = bot.get_channel(ALERT_CHANNEL_ID)
     if not channel:
         return
 
+    desc_parts = alerts + auto_restart_results
     embed = discord.Embed(
         title="🚨 Container Health Alert",
-        description="\n".join(alerts)[:4000],
-        color=discord.Color.red(),
+        description="\n".join(desc_parts)[:4000],
+        color=discord.Color.red() if alerts else discord.Color.green(),
     )
-    embed.set_footer(text="Container Health Monitor • checks every 5 min")
+    embed.set_footer(text="Container Health Monitor • auto-restarts safe targets after 2 failures")
     try:
         await channel.send(embed=embed)
         audit_log(None, "container_health", detail=f"{len(alerts)} alerts")

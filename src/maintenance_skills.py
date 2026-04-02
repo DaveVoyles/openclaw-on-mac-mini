@@ -414,6 +414,45 @@ async def fix_arr_remote_path() -> str:
     return "\n".join(issues)
 
 
+async def copilot_fix(prompt: str, cwd: str = "~/openclaw") -> str:
+    """
+    Run a fix via Copilot CLI on the Mac Mini host in programmatic mode.
+
+    Spawns: copilot -p "<prompt>" --allow-all-tools --no-ask-user
+    Returns the CLI output (truncated to 2000 chars for Discord).
+    """
+    from subprocess_utils import run as _run
+
+    host_ip = _cfg.docker_host_ip
+    host_user = os.getenv("HOST_SSH_USER", "davevoyles")
+    ssh_opts = ["-o", "ConnectTimeout=15", "-o", "BatchMode=yes"]
+
+    safe_prompt = prompt.replace('"', '\\"').replace("'", "'\\''")
+
+    # Run copilot CLI on the host via SSH
+    cmd = (
+        f"cd {cwd} && "
+        f"copilot -p \"{safe_prompt}\" --allow-all-tools --no-ask-user 2>&1"
+    )
+
+    log.info("Copilot CLI bridge: running on %s@%s — prompt: %s", host_user, host_ip, prompt[:80])
+
+    rc, out, err = await _run(
+        ["ssh"] + ssh_opts + [f"{host_user}@{host_ip}", cmd],
+        timeout=180,
+    )
+
+    if rc != 0 and not out:
+        return f"❌ Copilot CLI failed (exit {rc}): {err[:500]}"
+
+    result = (out or err or "No output").strip()
+    if len(result) > 2000:
+        result = result[:1950] + "\n\n…(truncated)"
+
+    log.info("Copilot CLI bridge: completed (exit %d, %d chars)", rc, len(result))
+    return f"{'✅' if rc == 0 else '⚠️'} Copilot CLI result:\n```\n{result}\n```"
+
+
 # ---------------------------------------------------------------------------
 # Skill exports
 # ---------------------------------------------------------------------------
@@ -427,4 +466,5 @@ MAINTENANCE_SKILLS = {
     "run_memory_consolidation": run_memory_consolidation,
     "fix_qbit_download_path": fix_qbit_download_path,
     "fix_arr_remote_path": fix_arr_remote_path,
+    "copilot_fix": copilot_fix,
 }
