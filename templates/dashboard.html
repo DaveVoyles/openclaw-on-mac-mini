@@ -648,6 +648,7 @@
           <span>🏠 Ollama: <span id="st-ollama" class="status-dot">…</span></span>
           <span>☁️ Gemini: <span id="st-gemini" class="status-dot">…</span></span>
           <span>🔗 Copilot: <span id="st-copilot" class="status-dot">…</span></span>
+          <span>🎭 Patreon: <span id="st-patreon" class="status-dot">…</span></span>
         </div>
 
         <!-- Container Health Matrix -->
@@ -2412,7 +2413,12 @@
                   const el = document.getElementById('st-' + key.replace('copilot_proxy', 'copilot'));
                   if (el) {
                       const [icon, cls] = map[val.status] || ['❓', ''];
-                      el.textContent = icon + (val.containers ? ` (${val.containers})` : '');
+                      let extra = val.containers ? ` (${val.containers})` : '';
+                      if (key === 'patreon' && val.cookie_hours !== undefined) {
+                          const days = Math.floor(val.cookie_hours / 24);
+                          extra = days > 0 ? ` (${days}d)` : ` (${val.cookie_hours}h)`;
+                      }
+                      el.textContent = icon + extra;
                       el.className = 'status-dot ' + cls;
                   }
               }

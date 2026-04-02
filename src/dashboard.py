@@ -122,6 +122,28 @@ async def api_status_handler(request):
     else:
         checks["copilot_proxy"] = {"status": "not_configured"}
 
+    # Patreon (MonsterVision) — cookie health
+    try:
+        async with aiohttp.ClientSession() as session:
+            monstervision_url = f"http://{cfg.docker_host_ip}:8766/api/status"
+            async with session.get(monstervision_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
+                if resp.status == 200:
+                    mv_data = await resp.json()
+                    cookie = mv_data.get("cookie_status", {})
+                    label = cookie.get("label", "unknown")
+                    remaining_h = cookie.get("remaining_hours", 0)
+                    if label == "ok" and remaining_h > 72:
+                        checks["patreon"] = {"status": "ok", "cookie_hours": int(remaining_h)}
+                    elif label == "ok" and remaining_h > 0:
+                        checks["patreon"] = {"status": "no_key", "cookie_hours": int(remaining_h)}
+                    else:
+                        checks["patreon"] = {"status": "down", "cookie_hours": 0}
+                else:
+                    checks["patreon"] = {"status": "down"}
+    except Exception as exc:
+        log.debug("Patreon/MonsterVision status check failed: %s", exc)
+        checks["patreon"] = {"status": "down"}
+
     return web.json_response(checks)
 
 
