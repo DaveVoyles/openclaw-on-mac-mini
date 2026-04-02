@@ -121,18 +121,31 @@ async def get_container_logs(service: str, lines: int = 100) -> str:
 
 
 async def restart_container(service: str) -> str:
-    """Restart a Docker container by name. Returns result message."""
+    """Restart a Docker container by name. Falls back to NAS via SSH if not found locally."""
     safe_name = shlex.quote(service).strip("'")
 
-    # Verify container exists first
+    # Try local Docker first
     rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
-    if rc != 0:
-        return f"❌ Container '{service}' not found."
+    if rc == 0:
+        rc, out, err = await _run(["docker", "restart", safe_name], timeout=60)
+        if rc != 0:
+            return f"❌ Failed to restart '{service}': {err.strip()}"
+        return f"✅ Container '{service}' restarted successfully."
 
-    rc, out, err = await _run(["docker", "restart", safe_name], timeout=60)
-    if rc != 0:
-        return f"❌ Failed to restart '{service}': {err.strip()}"
-    return f"✅ Container '{service}' restarted successfully."
+    # Not found locally — try NAS via SSH
+    try:
+        from maintenance_skills import NAS_HOST, NAS_SSH_PORT, NAS_SSH_USER
+        ssh_opts = ["-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+        ssh_target = f"{NAS_SSH_USER}@{NAS_HOST}"
+        rc, out, err = await _run(
+            ["ssh"] + ssh_opts + [ssh_target, f"/usr/local/bin/docker restart {safe_name}"],
+            timeout=60,
+        )
+        if rc == 0:
+            return f"✅ Container '{service}' restarted on NAS successfully."
+        return f"❌ Container '{service}' not found locally or on NAS."
+    except Exception:
+        return f"❌ Container '{service}' not found."
 
 
 async def stop_container(service: str) -> str:

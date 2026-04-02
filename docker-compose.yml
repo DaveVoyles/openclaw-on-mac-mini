@@ -52,6 +52,7 @@ services:
       - NAS_SSH_PORT=${NAS_SSH_PORT:-24}
       - NAS_SSH_USER=${NAS_SSH_USER:-dave}
       - NAS_BACKUP_PATH=${NAS_BACKUP_PATH:-/volume1/docker/openclaw/backups}
+      - QBIT_URL=${QBIT_URL:-http://192.168.1.8:8080}
       - PLANS_DIR=/plans
 
     # Volume mounts
@@ -73,6 +74,10 @@ services:
 
       # Cache directory (ChromaDB, onnxruntime, user profiles need writable cache)
       - /tmp/openclaw-cache:/home/openclaw/.cache:rw
+
+      # SSH keys for NAS access (backup, health check, self-heal)
+      - /Users/davevoyles/.ssh/id_ed25519:/home/openclaw/.ssh/id_ed25519:ro
+      - /Users/davevoyles/.ssh/known_hosts:/home/openclaw/.ssh/known_hosts:ro
 
       # Audiobook library on NAS (read-only browse access for search queries)
       - /Users/davevoyles/mnt/Misc/audiobooks:/audiobooks:ro
