@@ -255,6 +255,21 @@ class OpenClawBot(commands.Bot):
         from discord_background import start_background_tasks
         start_background_tasks(self)
 
+        # Set bot presence/activity
+        container_count = len(self.guilds)
+        try:
+            from skills import list_containers
+            result = await list_containers()
+            container_count = len([ln for ln in result.split("\n") if ln.strip() and not ln.startswith("NAMES")])
+        except Exception:
+            pass
+        await self.change_presence(
+            activity=discord.Activity(
+                type=discord.ActivityType.watching,
+                name=f"{container_count} containers | /ask",
+            )
+        )
+
         # Scan for interrupted plans from previous runs
         if ALERT_CHANNEL_ID:
             interrupted = scan_interrupted_plans()
@@ -572,9 +587,38 @@ class ResponseActions(discord.ui.View):
                 subject=f"OpenClaw: {self._question[:80]}",
                 body=self._response_text,
             )
-            await interaction.followup.send(f"�� Emailed!\n{result}", ephemeral=True)
+            await interaction.followup.send(f"📧 Emailed!\n{result}", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Email failed: {e}", ephemeral=True)
+
+    @discord.ui.button(label="👍", style=discord.ButtonStyle.success)
+    async def thumbs_up_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._record_feedback(interaction, "positive")
+
+    @discord.ui.button(label="👎", style=discord.ButtonStyle.danger)
+    async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._record_feedback(interaction, "negative")
+
+    async def _record_feedback(self, interaction: discord.Interaction, rating: str):
+        import json
+        from pathlib import Path
+        try:
+            feedback_file = Path("/memory/feedback.jsonl")
+            entry = {
+                "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "user_id": interaction.user.id,
+                "question": self._question[:200],
+                "rating": rating,
+            }
+            feedback_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(feedback_file, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+            emoji = "👍" if rating == "positive" else "👎"
+            await interaction.response.send_message(
+                f"{emoji} Feedback recorded — thanks!", ephemeral=True,
+            )
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
 async def _handle_image_attachment(

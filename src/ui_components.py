@@ -96,3 +96,15 @@ def build_embed(
     if thumbnail_url:
         embed.set_thumbnail(url=thumbnail_url)
     return embed
+
+
+def error_embed(message: str, *, title: str = "❌ Error") -> discord.Embed:
+    """Create a consistently-formatted error embed."""
+    import datetime
+
+    return discord.Embed(
+        title=title,
+        description=message[:4096],
+        color=discord.Color.red(),
+        timestamp=datetime.datetime.now(datetime.timezone.utc),
+    )

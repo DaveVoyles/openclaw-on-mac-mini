@@ -199,48 +199,91 @@ def register_commands(bot):  # noqa: C901 — large but flat
     @bot.tree.command(name="help", description="List available OpenClaw commands")
     @require_auth
     async def help_cmd(interaction: discord.Interaction):
+        categories = {
+            "🤖 AI & Chat": [
+                ("`/ask <question>`", "Ask OpenClaw anything (AI-powered)"),
+                ("`/clear`", "Clear your conversation history"),
+                ("`/websearch <query>`", "Search the live web"),
+                ("`/browse <url>`", "Fetch and read a web page"),
+                ("`/research <topic>`", "Deep multi-source research"),
+                ("`/analyze-image <image>`", "Analyze an image with Gemini Vision"),
+                ("`/analyze-file <file>`", "Analyze a document/PDF with AI"),
+            ],
+            "🐳 Docker & System": [
+                ("`/containers`", "List running Docker containers"),
+                ("`/status <service>`", "Detailed container status"),
+                ("`/logs <service>`", "View container logs"),
+                ("`/system`", "System resource usage"),
+                ("`/dockerstats`", "Per-container resource usage"),
+                ("`/restart <service>`", "Restart a container (approval required)"),
+                ("`/ports`", "Check service port connectivity"),
+                ("`/report`", "Full system status report"),
+                ("`/analyze <service>`", "AI-powered log analysis"),
+            ],
+            "🎬 Media & Downloads": [
+                ("`/search <query>`", "Search Sonarr/Radarr for media"),
+                ("`/queue`", "Active downloads (SABnzbd + qBit)"),
+                ("`/recent`", "Recently added media"),
+                ("`/health`", "Check *arr services & download clients"),
+                ("`/nowplaying`", "What's playing on Plex"),
+                ("`/watch`", "Manage monitoring watches"),
+            ],
+            "🧠 Memory & Knowledge": [
+                ("`/remember <fact>`", "Store a long-term memory"),
+                ("`/recall <query>`", "Search stored memories"),
+                ("`/rules`", "View learned behavioral rules"),
+                ("`/profile`", "View your user profile"),
+                ("`/goals`", "View active goals"),
+                ("`/dream`", "Trigger memory consolidation"),
+                ("`/memory-health`", "Memory system health metrics"),
+            ],
+            "⚙️ Admin & Analytics": [
+                ("`/spending`", "Gemini API spending & budget"),
+                ("`/schedule`", "Manage scheduled tasks"),
+                ("`/auditlog`", "Recent audit log entries"),
+                ("`/skills`", "List all available skills"),
+                ("`/pending`", "Pending approval requests"),
+                ("`/estop`", "Emergency stop / resume"),
+                ("`/help`", "This help message"),
+            ],
+        }
+
+        # Build the initial embed showing all categories
         embed = discord.Embed(
             title="📖 OpenClaw Commands",
-            description="Available slash commands:",
+            description="Choose a category below, or browse all commands:",
             color=discord.Color.blurple(),
         )
-        commands_list = [
-            ("`/ask <question>`", "Ask OpenClaw anything (AI-powered)"),
-            ("`/clear`", "Clear your conversation history"),
-            ("`/ping`", "Check if OpenClaw is alive"),
-            ("`/about`", "Show version and system info"),
-            ("`/whoami`", "Show your identity and permissions"),
-            ("`/containers`", "List all running Docker containers"),
-            ("`/status <service>`", "Get detailed container status"),
-            ("`/logs <service> [lines]`", "View container logs (default 30 lines)"),
-            ("`/system`", "Show system resource usage"),
-            ("`/dockerstats`", "Show per-container resource usage"),
-            ("`/restart <service>`", "Restart a container (requires approval)"),
-            ("`/search <query> [type]`", "Search Sonarr/Radarr for media"),
-            ("`/queue`", "Show active downloads (SABnzbd + qBit)"),
-            ("`/recent [count]`", "Recently added media (via Plex)"),
-            ("`/health`", "Check *arr services and download clients"),
-            ("`/ports`", "Check service port connectivity"),
-            ("`/report`", "Generate full system status report"),
-            ("`/analyze <service> [lines]`", "AI-powered log analysis"),
-            ("`/schedule`", "Manage scheduled tasks"),
-            ("`/spending`", "View Gemini API spending & budget"),
-            ("`/skills`", "List all available skills"),
-            ("`/pending`", "List pending approval requests"),
-            ("`/auditlog [lines]`", "View recent audit log entries"),
-            ("`/estop`", "Emergency stop — halt all bot actions"),
-            ("`/estop resume`", "Resume bot after emergency stop"),
-            ("`/websearch <query> [results]`", "Search the live web via Tavily AI Search"),
-            ("`/browse <url> [question]`", "Fetch and read a web page; optionally Q&A it"),
-            ("`/analyze-image <image> [question]`", "Analyze an image with Gemini Vision"),
-            ("`/analyze-file <file> [question]`", "Analyze a document/PDF with Gemini AI"),
-            ("`/help`", "This help message"),
-        ]
-        for name, desc in commands_list:
-            embed.add_field(name=name, value=desc, inline=False)
+        for cat_name, cmds in categories.items():
+            cmd_names = ", ".join(c[0].split("`")[1].split(" ")[0] for c in cmds)
+            embed.add_field(name=cat_name, value=cmd_names, inline=False)
+        embed.set_footer(text=f"OpenClaw v{VERSION} • {len(sum(categories.values(), []))} commands")
 
-        embed.set_footer(text=f"OpenClaw v{VERSION} • Phase 5")
-        await interaction.response.send_message(embed=embed)
+        # Select menu for category drill-down
+        class HelpSelect(discord.ui.Select):
+            def __init__(self):
+                options = [
+                    discord.SelectOption(label=cat.split(" ", 1)[1], emoji=cat.split(" ")[0], value=cat)
+                    for cat in categories
+                ]
+                super().__init__(placeholder="Choose a category…", options=options)
+
+            async def callback(self, inter: discord.Interaction):
+                cat = self.values[0]
+                cmds = categories.get(cat, [])
+                cat_embed = discord.Embed(
+                    title=f"📖 {cat}",
+                    color=discord.Color.blurple(),
+                )
+                for name, desc in cmds:
+                    cat_embed.add_field(name=name, value=desc, inline=False)
+                cat_embed.set_footer(text="Use the dropdown to switch categories")
+                await inter.response.edit_message(embed=cat_embed)
+
+        view = discord.ui.View(timeout=300)
+        view.add_item(HelpSelect())
+
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         audit_log(interaction.user, "help")
 
     # ------------------------------------------------------------------
