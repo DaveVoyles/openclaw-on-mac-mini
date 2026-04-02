@@ -2414,9 +2414,8 @@
                   if (el) {
                       const [icon, cls] = map[val.status] || ['❓', ''];
                       let extra = val.containers ? ` (${val.containers})` : '';
-                      if (key === 'patreon' && val.cookie_hours !== undefined) {
-                          const days = Math.floor(val.cookie_hours / 24);
-                          extra = days > 0 ? ` (${days}d)` : ` (${val.cookie_hours}h)`;
+                      if (key === 'patreon' && val.detail) {
+                          extra = ` (${val.detail})`;
                       }
                       el.textContent = icon + extra;
                       el.className = 'status-dot ' + cls;

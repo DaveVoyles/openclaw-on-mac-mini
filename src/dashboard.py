@@ -123,21 +123,39 @@ async def api_status_handler(request):
         checks["copilot_proxy"] = {"status": "not_configured"}
 
     # Patreon (MonsterVision) — cookie health
+    # The API's cookie_status checks session_id (365d expiry) but actual
+    # Patreon auth relies on Cloudflare cookies that expire in minutes.
+    # Real signal: check cron logs for 403/expired warnings.
     try:
         async with aiohttp.ClientSession() as session:
             monstervision_url = f"http://{cfg.docker_host_ip}:8766/api/status"
             async with session.get(monstervision_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
                 if resp.status == 200:
                     mv_data = await resp.json()
-                    cookie = mv_data.get("cookie_status", {})
-                    label = cookie.get("label", "unknown")
-                    remaining_h = cookie.get("remaining_hours", 0)
-                    if label == "ok" and remaining_h > 72:
-                        checks["patreon"] = {"status": "ok", "cookie_hours": int(remaining_h)}
-                    elif label == "ok" and remaining_h > 0:
-                        checks["patreon"] = {"status": "no_key", "cookie_hours": int(remaining_h)}
+                    failed = mv_data.get("failed", 0)
+                    status = mv_data.get("status", "unknown")
+
+                    # Check cron log for recent cookie warnings (last 20 lines)
+                    cookie_warning = False
+                    try:
+                        from subprocess_utils import run as _run
+                        rc, log_out, _ = await _run(
+                            ["docker", "exec", "monstervision", "tail", "-20", "/app/state/cron.log"],
+                            timeout=5,
+                        )
+                        if rc == 0 and log_out:
+                            cookie_warning = "cookies have expired" in log_out.lower() or "403" in log_out
+                    except Exception:
+                        pass
+
+                    if failed > 0:
+                        checks["patreon"] = {"status": "down", "detail": f"{failed} failed downloads"}
+                    elif cookie_warning:
+                        checks["patreon"] = {"status": "no_key", "detail": "Cookie expired — re-export needed"}
+                    elif status in ("downloading", "sleeping", "idle"):
+                        checks["patreon"] = {"status": "ok", "detail": status}
                     else:
-                        checks["patreon"] = {"status": "down", "cookie_hours": 0}
+                        checks["patreon"] = {"status": "no_key", "detail": status}
                 else:
                     checks["patreon"] = {"status": "down"}
     except Exception as exc:
