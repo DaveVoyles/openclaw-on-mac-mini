@@ -149,6 +149,11 @@ class MemoryCog(commands.Cog, name="Memory"):
     # ── /rules ────────────────────────────────────────────────────────
     @app_commands.command(name="rules", description="View or manage learned behavioral rules")
     @app_commands.describe(action="list (default), search, or delete", query="Search query or rule ID to delete")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="List all", value="list"),
+        app_commands.Choice(name="Search", value="search"),
+        app_commands.Choice(name="Delete", value="delete"),
+    ])
     @require_auth()
     async def rules_cmd(self, interaction: discord.Interaction, action: str = "list", query: str = ""):
         await interaction.response.defer(ephemeral=True)

@@ -932,6 +932,25 @@ async def ask_cmd(
         channel_id=interaction.channel_id,
     )
 
+    # Auto-create thread for long conversations (3+ messages, not already in thread)
+    _auto_thread = None
+    if (
+        conv.message_count >= 6  # 3 user + 3 bot messages
+        and not isinstance(interaction.channel, discord.Thread)
+        and hasattr(interaction.channel, "create_thread")
+    ):
+        try:
+            thread_title = question[:90] if len(question) <= 90 else question[:87] + "…"
+            _auto_thread = await interaction.channel.create_thread(
+                name=f"💬 {thread_title}",
+                auto_archive_duration=1440,
+                reason="Auto-threaded long /ask conversation",
+            )
+            log.info("Auto-created thread '%s' for %s (%d msgs)",
+                     _auto_thread.name, interaction.user, conv.message_count)
+        except Exception as e:
+            log.debug("Auto-thread creation failed: %s", e)
+
     def _build_footer() -> str:
         display_model = model_used.replace("models/", "") if model_used else "unknown"
         if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
@@ -991,44 +1010,70 @@ async def ask_cmd(
 
     # Normal path: split across embeds
     else:
-        for i, chunk in enumerate(chunks):
-            embed = discord.Embed(description=chunk, color=discord.Color.purple())
-            if i == 0:
-                display_question = question if len(question) < 200 else question[:197] + "..."
-                embed.set_author(
-                    name=f"Replying to: {display_question}",
-                    icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                )
-                if image_url:
-                    embed.set_image(url=image_url)
-
-            is_last = i == len(chunks) - 1
-            if is_last:
-                embed.set_footer(text=_build_footer())
-
-            if i == 0:
-                kwargs: dict[str, Any] = {"content": None, "embed": embed}
+        # If auto-threaded, redirect responses there and leave a link in the channel
+        if _auto_thread:
+            await interaction.edit_original_response(
+                content=f"💬 Conversation continued in {_auto_thread.mention}",
+                embed=None,
+            )
+            for i, chunk in enumerate(chunks):
+                embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                if i == 0:
+                    display_question = question if len(question) < 200 else question[:197] + "..."
+                    embed.set_author(
+                        name=f"Replying to: {display_question}",
+                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                    )
+                    if image_url:
+                        embed.set_image(url=image_url)
+                is_last = i == len(chunks) - 1
                 if is_last:
-                    kwargs["view"] = action_view
+                    embed.set_footer(text=_build_footer())
+                send_kwargs = {"embed": embed}
+                if is_last:
+                    send_kwargs["view"] = action_view
                 if file_attachment and is_last:
-                    kwargs["attachments"] = [file_attachment[0]]
-                try:
-                    await interaction.edit_original_response(**kwargs)
-                except discord.NotFound:
-                    log.warning("Interaction expired, using followup for response")
-                    fb_kwargs = {"embed": embed}
+                    send_kwargs["file"] = file_attachment[0]
+                await _auto_thread.send(**send_kwargs)
+        else:
+            for i, chunk in enumerate(chunks):
+                embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                if i == 0:
+                    display_question = question if len(question) < 200 else question[:197] + "..."
+                    embed.set_author(
+                        name=f"Replying to: {display_question}",
+                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                    )
+                    if image_url:
+                        embed.set_image(url=image_url)
+
+                is_last = i == len(chunks) - 1
+                if is_last:
+                    embed.set_footer(text=_build_footer())
+
+                if i == 0:
+                    kwargs: dict[str, Any] = {"content": None, "embed": embed}
                     if is_last:
-                        fb_kwargs["view"] = action_view
+                        kwargs["view"] = action_view
                     if file_attachment and is_last:
-                        fb_kwargs["file"] = file_attachment[0]
-                    await interaction.followup.send(**fb_kwargs)
-            else:
-                kwargs = {"embed": embed}
-                if is_last:
-                    kwargs["view"] = action_view
-                if file_attachment and is_last:
-                    kwargs["file"] = file_attachment[0]
-                await interaction.followup.send(**kwargs)
+                        kwargs["attachments"] = [file_attachment[0]]
+                    try:
+                        await interaction.edit_original_response(**kwargs)
+                    except discord.NotFound:
+                        log.warning("Interaction expired, using followup for response")
+                        fb_kwargs = {"embed": embed}
+                        if is_last:
+                            fb_kwargs["view"] = action_view
+                        if file_attachment and is_last:
+                            fb_kwargs["file"] = file_attachment[0]
+                        await interaction.followup.send(**fb_kwargs)
+                else:
+                    kwargs = {"embed": embed}
+                    if is_last:
+                        kwargs["view"] = action_view
+                    if file_attachment and is_last:
+                        kwargs["file"] = file_attachment[0]
+                    await interaction.followup.send(**kwargs)
 
     # Send table image if one was rendered
     if table_image_file:

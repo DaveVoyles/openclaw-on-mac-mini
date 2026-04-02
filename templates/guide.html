@@ -301,6 +301,12 @@
           <li>
             <a href="#self-healing">42. Self-Healing Infrastructure</a>
           </li>
+          <li>
+            <a href="#context-menus">43. Right-Click Context Menus</a>
+          </li>
+          <li>
+            <a href="#interactive-ui">44. Autocomplete &amp; Interactive UI</a>
+          </li>
         </ul>
       </div>
 
@@ -3437,6 +3443,69 @@ Division 1 men's lacrosse games this week and post a table.
 /ask Fix the qBittorrent download path
 /ask Clean up disk space on the server
 /ask Use copilot to fix the Sonarr database corruption</code></pre>
+
+      <!-- 43. Right-Click Context Menus -->
+      <h2 id="context-menus">43. Right-Click Context Menus</h2>
+      <p>
+        Right-click any message in Discord to access quick AI actions
+        without typing a command.
+      </p>
+
+      <h3>Available Actions</h3>
+      <table>
+        <thead>
+          <tr><th>Menu Item</th><th>What It Does</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Analyze with AI</strong></td>
+            <td>Sends the message to Gemini for summarization, action item extraction, and analysis. Response is ephemeral (only you see it).</td>
+          </tr>
+          <tr>
+            <td><strong>Save to Memory</strong></td>
+            <td>Stores the message content as a long-term memory fact in ChromaDB. Useful for saving important info from conversations.</td>
+          </tr>
+          <tr>
+            <td><strong>Research This</strong></td>
+            <td>Runs a research query using the message content as the topic. Results are posted publicly in the channel.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>
+        <strong>How to use:</strong> Right-click (or long-press on mobile) any
+        message &rarr; <em>Apps</em> &rarr; choose an action.
+      </p>
+
+      <!-- 44. Autocomplete & Interactive UI -->
+      <h2 id="interactive-ui">44. Autocomplete &amp; Interactive UI</h2>
+
+      <h3>Live Autocomplete</h3>
+      <p>
+        Container commands (<code>/restart</code>, <code>/status</code>,
+        <code>/logs</code>) now suggest container names as you type. The
+        suggestions come from a live <code>docker ps</code> query &mdash;
+        no more typos or guessing names.
+      </p>
+
+      <h3>Choice Selectors</h3>
+      <ul>
+        <li><code>/search</code> &mdash; media type selector: TV Shows, Movies, or All</li>
+        <li><code>/rules</code> &mdash; action selector: List all, Search, or Delete</li>
+      </ul>
+
+      <h3>Pagination</h3>
+      <p>
+        Commands that return long lists (like <code>/rules</code>) now show
+        paginated results with &#9664;&#65039;/&#9654;&#65039; buttons instead
+        of truncating. Navigate through pages without re-running the command.
+      </p>
+
+      <h3>Auto-Threading</h3>
+      <p>
+        When a <code>/ask</code> conversation exceeds 3 exchanges in the same
+        channel, OpenClaw automatically creates a Discord thread to keep the
+        channel clean. A link to the thread appears in the original channel.
+      </p>
 
       <div
         style="

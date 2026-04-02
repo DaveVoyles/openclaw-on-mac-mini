@@ -58,6 +58,11 @@ class MediaCog(commands.Cog, name="Media"):
         query="Search term (e.g. 'Breaking Bad')",
         media_type="'tv', 'movie', or 'all' (default: all)",
     )
+    @app_commands.choices(media_type=[
+        app_commands.Choice(name="All", value="all"),
+        app_commands.Choice(name="TV Shows", value="tv"),
+        app_commands.Choice(name="Movies", value="movie"),
+    ])
     async def search_cmd(self, interaction: discord.Interaction, query: str, media_type: str = "all"):
         await interaction.response.defer()
         result = await search_media(query, media_type)

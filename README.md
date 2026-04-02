@@ -233,6 +233,17 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Expanded SELF_HEAL directives** — proactive scanner LLM can now emit: `restart_container`, `fix_qbit_download_path`, `fix_arr_remote_path`, `auto_cleanup_disk`, `copilot_fix`
 - **Dashboard improvements** — human-readable cron schedules, Type tooltips, collapsible sections, model usage chart fix, topology container status fix
 
+**Phase 20 — Discord UX Enhancements** ✅
+
+- **Dynamic autocomplete** — `/restart`, `/status`, `/logs` suggest live container names from `docker ps` as you type
+- **Right-click context menus** — "Analyze with AI", "Save to Memory", "Research This" on any Discord message
+- **Pagination buttons** — ◀️/▶️ on `/rules` and other long lists (was truncating at 20 items)
+- **Choice selectors** — `/search` media type (TV/Movie/All) and `/rules` action (List/Search/Delete) as clickable options
+- **Auto-threading** — long `/ask` conversations (3+ exchanges) auto-create a Discord thread to keep channels clean
+- **NAS container restart** — `restart_container()` falls back to SSH when container runs on NAS, not Mac Mini
+- **UI components library** — `ui_components.py` with reusable `PaginationView`, `paginate_items()`, `build_embed()`
+- **Context menu cog** — `cogs/context_cog.py` (auto-loaded) for right-click actions
+
 **Planned**
 
 - Grafana dashboards
