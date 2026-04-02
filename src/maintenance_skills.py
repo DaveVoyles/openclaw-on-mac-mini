@@ -414,6 +414,98 @@ async def fix_arr_remote_path() -> str:
     return "\n".join(issues)
 
 
+async def check_nas_health() -> str:
+    """Check NAS RAID status and disk space via SSH."""
+    from subprocess_utils import run as _run
+
+    ssh_opts = ["-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+    ssh_target = f"{NAS_SSH_USER}@{NAS_HOST}"
+    lines: list[str] = []
+
+    # RAID status
+    rc, out, _ = await _run(
+        ["ssh"] + ssh_opts + [ssh_target, "cat /proc/mdstat 2>/dev/null | grep -E 'md|blocks|\\[' | head -10"],
+        timeout=15,
+    )
+    if rc == 0 and out.strip():
+        if "degraded" in out.lower() or "_" in out:
+            lines.append(f"🔴 **RAID**: DEGRADED\n```\n{out.strip()}\n```")
+        else:
+            lines.append("✅ **RAID**: Healthy")
+    else:
+        lines.append("⚠️ **RAID**: Could not check (SSH failed)")
+
+    # Disk space
+    rc, out, _ = await _run(
+        ["ssh"] + ssh_opts + [ssh_target, "df -h /volume1 /volume2 2>/dev/null"],
+        timeout=15,
+    )
+    if rc == 0 and out.strip():
+        for line in out.strip().split("\n"):
+            if line.startswith("Filesystem"):
+                continue
+            parts = line.split()
+            if len(parts) >= 5:
+                mount = parts[5] if len(parts) > 5 else parts[0]
+                pct = int(parts[4].rstrip("%"))
+                icon = "🔴" if pct >= 90 else "🟡" if pct >= 75 else "✅"
+                lines.append(f"{icon} **{mount}**: {parts[2]} used / {parts[1]} total ({pct}%)")
+
+    # Uptime
+    rc, out, _ = await _run(
+        ["ssh"] + ssh_opts + [ssh_target, "uptime -p 2>/dev/null || uptime"],
+        timeout=10,
+    )
+    if rc == 0 and out.strip():
+        lines.append(f"⏱️ **Uptime**: {out.strip()}")
+
+    return "\n".join(lines) or "❌ Could not reach NAS via SSH"
+
+
+async def auto_cleanup_disk() -> str:
+    """Auto-clean disk space: prune Docker images, rotate logs, clean temp files."""
+    from subprocess_utils import run as _run
+
+    results: list[str] = []
+
+    # Docker image prune (dangling)
+    rc, out, _ = await _run(["docker", "image", "prune", "-f"], timeout=60)
+    if rc == 0:
+        results.append(f"🐳 Docker prune: {out.strip().split(chr(10))[-1] if out else 'done'}")
+
+    # Docker builder prune
+    rc, out, _ = await _run(["docker", "builder", "prune", "-f", "--keep-storage=2GB"], timeout=60)
+    if rc == 0:
+        results.append(f"🔨 Builder prune: done")
+
+    # Clean old logs in /memory/logs (older than 7 days)
+    rc, out, _ = await _run(
+        ["find", "/memory/logs", "-name", "*.log", "-mtime", "+7", "-delete", "-print"],
+        timeout=30,
+    )
+    if rc == 0 and out.strip():
+        count = len(out.strip().split("\n"))
+        results.append(f"📝 Cleaned {count} old log file(s)")
+
+    # Clean old audit logs (older than 30 days)
+    rc, out, _ = await _run(
+        ["find", "/memory/audit", "-name", "*.jsonl", "-mtime", "+30", "-delete", "-print"],
+        timeout=30,
+    )
+    if rc == 0 and out.strip():
+        count = len(out.strip().split("\n"))
+        results.append(f"📋 Cleaned {count} old audit file(s)")
+
+    # Report current disk usage after cleanup
+    rc, out, _ = await _run(["df", "-h", "/"], timeout=10)
+    if rc == 0:
+        for line in out.strip().split("\n"):
+            if not line.startswith("Filesystem"):
+                results.append(f"💾 After cleanup: {line.strip()}")
+
+    return "\n".join(results) or "No cleanup actions taken"
+
+
 async def copilot_fix(prompt: str, cwd: str = "~/openclaw") -> str:
     """
     Run a fix via Copilot CLI on the Mac Mini host in programmatic mode.
@@ -467,4 +559,6 @@ MAINTENANCE_SKILLS = {
     "fix_qbit_download_path": fix_qbit_download_path,
     "fix_arr_remote_path": fix_arr_remote_path,
     "copilot_fix": copilot_fix,
+    "check_nas_health": check_nas_health,
+    "auto_cleanup_disk": auto_cleanup_disk,
 }

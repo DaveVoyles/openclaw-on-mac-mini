@@ -208,7 +208,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     # Get server system stats (CPU/MEM/Disk)
     sys_stats_text = await get_system_stats()
     # Format: **CPU**: 10.5% (8 cores)\n**Memory**: 4.2 / 16.0 GB (26.3%)\n**Disk** `/`: 200GB used / 500GB total (40%)
-    sys_stats = {"cpu": "N/A", "mem": "N/A", "disk": "N/A"}
+    sys_stats = {"cpu": "N/A", "mem": "N/A", "disk": "N/A", "nas_disks": []}
     for line in sys_stats_text.split("\n"):
         if "**CPU**" in line:
             sys_stats["cpu"] = line.split(":", 1)[1].strip()
@@ -218,6 +218,25 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             sys_stats["mem"] = line.split(":", 1)[1].strip()
         elif "**Disk**" in line:
             sys_stats["disk"] = line.split(":", 1)[1].strip()
+
+    # NAS disk space
+    try:
+        from maintenance_skills import check_nas_health
+        nas_health = await check_nas_health()
+        for line in nas_health.split("\n"):
+            if "/volume" in line:
+                # Parse: ✅ **/volume1**: 1.2T used / 3.6T total (34%)
+                import re
+                match = re.search(r'\*\*(/volume\d+)\*\*:\s+(.+?\s+used)\s*/\s*(.+?\s+total)\s*\((\d+)%\)', line)
+                if match:
+                    sys_stats["nas_disks"].append({
+                        "mount": match.group(1),
+                        "used": match.group(2).replace(" used", ""),
+                        "total": match.group(3).replace(" total", ""),
+                        "pct": int(match.group(4)),
+                    })
+    except Exception as exc:
+        log.debug("NAS disk stats for dashboard failed: %s", exc)
 
     # Get ontology facts (limit to recent 5)
     ontology_text = await ontology_query()

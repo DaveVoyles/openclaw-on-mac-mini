@@ -1081,7 +1081,11 @@
           </div>
         </div>
 
-        <!-- Ontology Browser / Facts -->
+        <!-- NAS Storage -->
+        <div class="card" id="nas-disk-card" style="display:none">
+          <h2>💾 NAS Storage</h2>
+          <div id="nas-disk-bars"></div>
+        </div>
         <div class="card">
           <h2>&#129504; Long-Term Memory (Ontology)</h2>
           <div id="ontology-list">
@@ -1717,6 +1721,25 @@
             d.sys_stats.mem || "--";
           document.getElementById("server-disk").textContent =
             d.sys_stats.disk || "--";
+
+          // NAS disk bars
+          const nasDisks = d.sys_stats.nas_disks || [];
+          if (nasDisks.length > 0) {
+            document.getElementById("nas-disk-card").style.display = "block";
+            const container = document.getElementById("nas-disk-bars");
+            container.innerHTML = nasDisks.map(disk => {
+              const color = disk.pct >= 90 ? 'var(--danger,#f85149)' : disk.pct >= 75 ? 'var(--gold,#d29922)' : 'var(--mint-green,#3fb950)';
+              return `<div style="margin-bottom:0.75rem">
+                <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:0.25rem">
+                  <span><code>${esc(disk.mount)}</code></span>
+                  <span>${esc(disk.used)} / ${esc(disk.total)} (${disk.pct}%)</span>
+                </div>
+                <div style="background:var(--border);border-radius:4px;height:10px;overflow:hidden">
+                  <div style="width:${disk.pct}%;height:100%;background:${color};border-radius:4px;transition:width 0.5s"></div>
+                </div>
+              </div>`;
+            }).join('');
+          }
         }
 
         // Ontology

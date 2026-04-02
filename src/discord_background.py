@@ -233,20 +233,13 @@ async def _gather_system_signals():
         return_exceptions=True,
     )
 
-    # NAS disk space via SSH
+    # NAS disk space and RAID via SSH
     nas_disk = ""
     try:
-        from maintenance_skills import NAS_HOST, NAS_SSH_PORT, NAS_SSH_USER
-        from subprocess_utils import run as _run
-        rc, out, _ = await _run(
-            ["ssh", "-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=5", "-o", "BatchMode=yes",
-             f"{NAS_SSH_USER}@{NAS_HOST}", "df -h /volume1 /volume2 2>/dev/null | grep -v Filesystem"],
-            timeout=10,
-        )
-        if rc == 0 and out.strip():
-            nas_disk = f"NAS disk:\n{out.strip()}"
+        from maintenance_skills import check_nas_health
+        nas_disk = await asyncio.wait_for(check_nas_health(), timeout=20)
     except Exception as exc:
-        log.debug("NAS disk check failed: %s", exc)
+        log.debug("NAS health check failed: %s", exc)
 
     key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
     log_snippets: dict[str, str] = {}
@@ -269,16 +262,8 @@ async def _gather_system_signals():
                         disk_alert = True
                 except (IndexError, ValueError):
                     pass
-    if nas_disk:
-        for line in nas_disk.split("\n"):
-            try:
-                parts = line.split()
-                if len(parts) >= 5:
-                    pct = int(parts[4].rstrip("%"))
-                    if pct >= 90:
-                        disk_alert = True
-            except (IndexError, ValueError):
-                pass
+    if nas_disk and "🔴" in nas_disk:
+        disk_alert = True
 
     all_clean = all(
         isinstance(r, str) and not _error_re.search(r)
@@ -294,7 +279,7 @@ async def _gather_system_signals():
     if isinstance(sys_stats, str):
         summary_parts.append(f"System stats:\n{sys_stats}")
     if nas_disk:
-        summary_parts.append(nas_disk)
+        summary_parts.append(f"NAS health:\n{nas_disk}")
     if log_snippets:
         summary_parts.append("Log anomalies:")
         for svc, snippet in log_snippets.items():
@@ -317,6 +302,8 @@ def _parse_heal_actions(analysis: str) -> list[tuple[str, str]]:
                 actions.append(("fix_qbit_download_path", ""))
             elif len(parts) >= 2 and parts[1] == "fix_arr_remote_path":
                 actions.append(("fix_arr_remote_path", ""))
+            elif len(parts) >= 2 and parts[1] == "auto_cleanup_disk":
+                actions.append(("auto_cleanup_disk", ""))
             elif parts[1] == "copilot_fix":
                 copilot_prompt = " ".join(parts[2:]) if len(parts) > 2 else ""
                 if copilot_prompt:
@@ -355,6 +342,12 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
                 heal_results.append(f"🔧 *arr path fix: {result}")
                 audit_log(None, "self_heal", detail=f"fix_arr_remote_path: {result[:200]}")
                 log.info("Self-heal: fix_arr_remote_path → %s", result[:80])
+            elif action_type == "auto_cleanup_disk":
+                from maintenance_skills import auto_cleanup_disk
+                result = await asyncio.wait_for(auto_cleanup_disk(), timeout=120)
+                heal_results.append(f"🧹 Disk cleanup: {result}")
+                audit_log(None, "self_heal", detail=f"auto_cleanup_disk: {result[:200]}")
+                log.info("Self-heal: auto_cleanup_disk → %s", result[:80])
             elif action_type == "copilot_fix_pending":
                 # Don't execute — return a pending approval message
                 heal_results.append(
@@ -391,6 +384,7 @@ async def _run_proactive_scan(bot):
         "SELF_HEAL: restart_container <container_name>\n"
         "SELF_HEAL: fix_qbit_download_path\n"
         "SELF_HEAL: fix_arr_remote_path\n"
+        "SELF_HEAL: auto_cleanup_disk\n"
         "SELF_HEAL: copilot_fix <description of what to fix>\n"
         "Use fix_qbit_download_path when qBittorrent's download path has drifted from /downloads "
         "(e.g. health check shows 'rom-downloads' or bad remote path mapping).\n"
@@ -398,6 +392,8 @@ async def _run_proactive_scan(bot):
         "fix qBittorrent's config and restart the affected *arr services.\n"
         "Use copilot_fix for novel/complex issues that don't have a dedicated fix skill — "
         "this spawns the Copilot CLI and requires user approval before running.\n"
+        "Use auto_cleanup_disk when disk space is critically low (>90% used) — "
+        "this prunes Docker images, rotates logs, and cleans temp files.\n"
         "Only suggest restart_container for non-critical services (sonarr, radarr, lidarr, "
         "prowlarr, sabnzbd, tautulli, overseerr). Do NOT suggest restarting plex, postgres, "
         "or openclaw itself. If no safe fix exists, omit the SELF_HEAL line.\n\n"
