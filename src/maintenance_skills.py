@@ -329,6 +329,92 @@ async def run_memory_consolidation() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Self-healing skills — automated config repair
+# ---------------------------------------------------------------------------
+
+QBIT_CONFIG_PATH = "/volume1/docker/qbittorrent/config/qBittorrent/qBittorrent.conf"
+QBIT_EXPECTED_SAVE_PATH = "/downloads"
+
+
+async def fix_qbit_download_path() -> str:
+    """Check qBittorrent's download path and fix if it drifted from /downloads."""
+    from subprocess_utils import run as _run
+
+    ssh_opts = ["-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+    ssh_target = f"{NAS_SSH_USER}@{NAS_HOST}"
+
+    # Read current config
+    rc, out, _ = await _run(
+        ["ssh"] + ssh_opts + [ssh_target, f"grep -E 'DefaultSavePath|TempPath' {QBIT_CONFIG_PATH}"],
+        timeout=15,
+    )
+    if rc != 0:
+        return "❌ Could not read qBittorrent config via SSH"
+
+    current_save = ""
+    for line in out.strip().split("\n"):
+        if "DefaultSavePath=" in line:
+            current_save = line.split("=", 1)[1].strip()
+
+    if current_save == QBIT_EXPECTED_SAVE_PATH:
+        return f"✅ qBittorrent download path is correct: `{current_save}`"
+
+    # Fix: stop container, edit config, restart
+    log.info("Self-heal: qBittorrent save path drifted to '%s', fixing to '%s'", current_save, QBIT_EXPECTED_SAVE_PATH)
+
+    commands = [
+        f"/usr/local/bin/docker stop qbittorrent",
+        f"sleep 2",
+        f"sed -i "
+        f"-e 's|Session\\\\DefaultSavePath=.*|Session\\\\DefaultSavePath={QBIT_EXPECTED_SAVE_PATH}|' "
+        f"-e 's|Session\\\\TempPath=.*|Session\\\\TempPath={QBIT_EXPECTED_SAVE_PATH}/incomplete|' "
+        f"{QBIT_CONFIG_PATH}",
+        f"/usr/local/bin/docker start qbittorrent",
+    ]
+    rc, out, err = await _run(
+        ["ssh"] + ssh_opts + [ssh_target, " && ".join(commands)],
+        timeout=30,
+    )
+    if rc != 0:
+        return f"❌ Failed to fix qBittorrent config: {err[:200]}"
+
+    return f"✅ Fixed qBittorrent download path: `{current_save}` → `{QBIT_EXPECTED_SAVE_PATH}` (container restarted)"
+
+
+async def fix_arr_remote_path() -> str:
+    """Detect and fix *arr health issues by restarting services after qBit path is corrected."""
+    from skills.media_skills import check_arr_health
+
+    health = await check_arr_health()
+    issues: list[str] = []
+
+    if "remote" in health.lower() or "rom-downloads" in health.lower() or "path" in health.lower():
+        # The path mapping issue is caused by qBittorrent reporting a wrong path.
+        # Fix qBit first, then restart the *arr services so they re-query.
+        qbit_result = await fix_qbit_download_path()
+        issues.append(qbit_result)
+
+        if "✅ Fixed" in qbit_result or "✅ qBittorrent download path is correct" in qbit_result:
+            from skills import restart_container
+            for svc in ["sonarr", "radarr"]:
+                try:
+                    result = await restart_container(svc)
+                    issues.append(f"🔄 Restarted `{svc}`: {result}")
+                except Exception as e:
+                    issues.append(f"❌ Failed to restart `{svc}`: {e}")
+
+            # Verify health after restart
+            import asyncio
+            await asyncio.sleep(15)
+            new_health = await check_arr_health()
+            issues.append(f"\n**Health after fix:**\n{new_health}")
+    else:
+        issues.append(f"✅ No remote path issues detected.\n{health}")
+
+    return "\n".join(issues)
+
+
+# ---------------------------------------------------------------------------
 # Skill exports
 # ---------------------------------------------------------------------------
 
@@ -339,4 +425,6 @@ MAINTENANCE_SKILLS = {
     "run_maintenance": run_maintenance,
     "run_memory_decay": run_memory_decay,
     "run_memory_consolidation": run_memory_consolidation,
+    "fix_qbit_download_path": fix_qbit_download_path,
+    "fix_arr_remote_path": fix_arr_remote_path,
 }

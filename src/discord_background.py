@@ -262,11 +262,11 @@ async def _gather_system_signals():
 
 
 async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
-    """Parse SELF_HEAL directives and execute safe restarts.
+    """Parse SELF_HEAL directives and execute safe fixes.
 
     Returns (cleaned_analysis, heal_results).
     """
-    heal_actions: list[str] = []
+    heal_actions: list[tuple[str, str]] = []  # (action_type, target)
     display_analysis = analysis
     for line in analysis.split("\n"):
         if line.strip().startswith("SELF_HEAL:"):
@@ -274,19 +274,36 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
             if len(parts) >= 3 and parts[1] == "restart_container":
                 target = parts[2].lower().strip()
                 if target in _SAFE_RESTART_TARGETS:
-                    heal_actions.append(target)
+                    heal_actions.append(("restart_container", target))
+            elif len(parts) >= 2 and parts[1] == "fix_qbit_download_path":
+                heal_actions.append(("fix_qbit_download_path", ""))
+            elif len(parts) >= 2 and parts[1] == "fix_arr_remote_path":
+                heal_actions.append(("fix_arr_remote_path", ""))
             display_analysis = display_analysis.replace(line, "").strip()
 
     heal_results: list[str] = []
-    for target in heal_actions:
+    for action_type, target in heal_actions:
         try:
-            result = await asyncio.wait_for(restart_container(target), timeout=60)
-            heal_results.append(f"🔧 `{target}`: {result}")
-            audit_log(None, "self_heal", detail=f"restart {target}: {result}")
-            log.info("Self-heal: restarted %s → %s", target, result[:80])
+            if action_type == "restart_container":
+                result = await asyncio.wait_for(restart_container(target), timeout=60)
+                heal_results.append(f"🔧 `{target}`: {result}")
+                audit_log(None, "self_heal", detail=f"restart {target}: {result}")
+                log.info("Self-heal: restarted %s → %s", target, result[:80])
+            elif action_type == "fix_qbit_download_path":
+                from maintenance_skills import fix_qbit_download_path
+                result = await asyncio.wait_for(fix_qbit_download_path(), timeout=60)
+                heal_results.append(f"🔧 qBittorrent path fix: {result}")
+                audit_log(None, "self_heal", detail=f"fix_qbit_download_path: {result[:200]}")
+                log.info("Self-heal: fix_qbit_download_path → %s", result[:80])
+            elif action_type == "fix_arr_remote_path":
+                from maintenance_skills import fix_arr_remote_path
+                result = await asyncio.wait_for(fix_arr_remote_path(), timeout=120)
+                heal_results.append(f"🔧 *arr path fix: {result}")
+                audit_log(None, "self_heal", detail=f"fix_arr_remote_path: {result[:200]}")
+                log.info("Self-heal: fix_arr_remote_path → %s", result[:80])
         except Exception as exc:
-            heal_results.append(f"❌ `{target}`: {exc}")
-            log.warning("Self-heal restart failed for %s: %s", target, exc)
+            heal_results.append(f"❌ `{action_type} {target}`: {exc}")
+            log.warning("Self-heal %s failed for %s: %s", action_type, target, exc)
 
     return display_analysis, heal_results
 
@@ -310,6 +327,12 @@ async def _run_proactive_scan(bot):
         "If everything is within normal operation, respond with exactly: NO_ALERT\n\n"
         "If you find an issue, also include a SELF_HEAL section at the end with the format:\n"
         "SELF_HEAL: restart_container <container_name>\n"
+        "SELF_HEAL: fix_qbit_download_path\n"
+        "SELF_HEAL: fix_arr_remote_path\n"
+        "Use fix_qbit_download_path when qBittorrent's download path has drifted from /downloads "
+        "(e.g. health check shows 'rom-downloads' or bad remote path mapping).\n"
+        "Use fix_arr_remote_path when Sonarr/Radarr report remote path mapping errors — this will "
+        "fix qBittorrent's config and restart the affected *arr services.\n"
         "Only suggest restart_container for non-critical services (sonarr, radarr, lidarr, "
         "prowlarr, sabnzbd, tautulli, overseerr). Do NOT suggest restarting plex, postgres, "
         "or openclaw itself. If no safe fix exists, omit the SELF_HEAL line.\n\n"
