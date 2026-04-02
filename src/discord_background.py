@@ -594,9 +594,52 @@ async def container_health_loop(bot):
     while True:
         try:
             await _check_container_health(bot)
+            await _check_monstervision_cookies(bot)
         except Exception as e:
             log.warning("Container health check error: %s", e)
         await asyncio.sleep(CONTAINER_HEALTH_INTERVAL)
+
+
+_cookie_alert_sent = False  # only alert once per expiry cycle
+
+
+async def _check_monstervision_cookies(bot):
+    """Check MonsterVision logs for cookie expiry warnings and alert."""
+    global _cookie_alert_sent
+    if not ALERT_CHANNEL_ID:
+        return
+
+    from subprocess_utils import run as _run
+
+    rc, out, _ = await _run(
+        ["docker", "logs", "monstervision", "--tail", "20"],
+        timeout=10,
+    )
+    if rc != 0:
+        return
+
+    has_warning = "cookies have expired" in out or "cookies.txt is" in out and "old" in out
+
+    if has_warning and not _cookie_alert_sent:
+        channel = bot.get_channel(ALERT_CHANNEL_ID)
+        if channel:
+            import discord
+            embed = discord.Embed(
+                title="🍪 MonsterVision Cookie Expired",
+                description=(
+                    "Patreon cookies have expired. New videos **cannot be downloaded** until refreshed.\n\n"
+                    "**To fix:**\n"
+                    "1. Log into [patreon.com](https://patreon.com) in Chrome\n"
+                    "2. Export cookies with a cookie exporter extension\n"
+                    "3. Copy to `~/Patreon/cookies/cookies.txt`"
+                ),
+                color=discord.Color.orange(),
+            )
+            await channel.send(embed=embed)
+            _cookie_alert_sent = True
+            log.info("Cookie expiry alert sent to Discord")
+    elif not has_warning:
+        _cookie_alert_sent = False  # reset when cookies are fresh
 
 
 async def _check_container_health(bot):
