@@ -163,7 +163,10 @@ ALLOWED_USER_IDS
 MATON_API_KEY
 
 # Search & Weather
-TAVILY_API_KEY
+PERPLEXITY_API_KEY           # Perplexity AI (tier 1 search, synthesized answers)
+FIRECRAWL_API_KEY            # Firecrawl (tier 2 search + extract)
+TAVILY_API_KEY               # Tavily AI search (tier 3)
+SERPER_API_KEY               # Serper Google SERP (direct tool, not in cascade)
 WEATHER_DEFAULT_LOCATION     # default city for /weather (e.g. "Philadelphia")
 
 # Proactive Notifications

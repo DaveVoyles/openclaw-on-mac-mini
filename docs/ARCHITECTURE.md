@@ -13,7 +13,7 @@ Key architectural patterns:
 
 ## Modular Structure (April 2026)
 
-`bot.py` was split from 3,084 → 1,195 lines. `llm.py` extracted companion modules. `advanced_skills.py` split into focused skill modules.
+`bot.py` was split from 3,084 → 1,146 lines. `llm.py` extracted companion modules. `advanced_skills.py` split into focused skill modules.
 
 ```
 bot.py was split from 3,084 → 1,146 lines:
