@@ -174,17 +174,22 @@ class MemoryCog(commands.Cog, name="Memory"):
                     await interaction.followup.send("No matching rules found.", ephemeral=True)
                 return
 
-            # Default: list all
+            # Default: list all with pagination
             all_rules = await get_all_rules()
             if not all_rules:
                 await interaction.followup.send("📝 No learned rules yet. I'll learn them when you correct me!", ephemeral=True)
                 return
-            lines = [f"📝 **Learned Rules ({len(all_rules)} total):**\n"]
-            for r in all_rules[-20:]:
-                lines.append(f"• {r['rule']}  `{r['id']}`")
-            if len(all_rules) > 20:
-                lines.append(f"\n_...and {len(all_rules) - 20} more (use `/rules action:search` to find specific rules)_")
-            await interaction.followup.send("\n".join(lines), ephemeral=True)
+
+            from ui_components import PaginationView, paginate_items
+            items = [f"• {r['rule']}  `{r['id']}`" for r in all_rules]
+            pages = paginate_items(
+                items,
+                title=f"📝 Learned Rules ({len(all_rules)} total)",
+                color=discord.Color.blue(),
+                per_page=10,
+            )
+            view = PaginationView(pages) if len(pages) > 1 else None
+            await interaction.followup.send(embed=pages[0], view=view, ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"⚠️ Rules unavailable: {e}", ephemeral=True)
         audit_log(interaction.user, "rules", detail=f"{action} {query}")
