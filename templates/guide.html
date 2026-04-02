@@ -298,6 +298,9 @@
           <li>
             <a href="#health-alerts">41. Container Health Alerts</a>
           </li>
+          <li>
+            <a href="#self-healing">42. Self-Healing Infrastructure</a>
+          </li>
         </ul>
       </div>
 
@@ -3370,6 +3373,70 @@ Division 1 men's lacrosse games this week and post a table.
         &mdash; no configuration needed. Alerts include the container name,
         status, and how long it has been in the bad state.
       </p>
+      <p>
+        <strong>Auto-restart:</strong> If a container in the safe list
+        (sonarr, radarr, lidarr, prowlarr, sabnzbd, qbittorrent, tautulli, overseerr)
+        is unhealthy for <strong>2 consecutive checks</strong> (10 minutes),
+        OpenClaw automatically restarts it and reports the result.
+      </p>
+
+      <!-- 42. Self-Healing Infrastructure -->
+      <h2 id="self-healing">42. Self-Healing Infrastructure</h2>
+      <p>
+        OpenClaw can automatically detect and fix common infrastructure issues
+        without manual intervention. The proactive scanner (every 2 hours)
+        gathers health signals, analyzes them with AI, and executes safe fixes.
+      </p>
+
+      <h3>Available Self-Heal Actions</h3>
+      <table>
+        <thead>
+          <tr><th>Directive</th><th>What It Does</th><th>Trigger</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>restart_container</code></td>
+            <td>Restarts a safe-list container</td>
+            <td>Automatic</td>
+          </tr>
+          <tr>
+            <td><code>fix_qbit_download_path</code></td>
+            <td>SSHs to NAS, fixes qBittorrent&rsquo;s save path if it drifted from <code>/downloads</code></td>
+            <td>Automatic</td>
+          </tr>
+          <tr>
+            <td><code>fix_arr_remote_path</code></td>
+            <td>Fixes qBittorrent config + restarts Sonarr/Radarr when remote path errors detected</td>
+            <td>Automatic</td>
+          </tr>
+          <tr>
+            <td><code>auto_cleanup_disk</code></td>
+            <td>Prunes Docker images, rotates logs, cleans temp files when disk &gt; 90% full</td>
+            <td>Automatic</td>
+          </tr>
+          <tr>
+            <td><code>copilot_fix</code></td>
+            <td>Spawns Copilot CLI on Mac Mini to fix novel issues; <strong>requires user approval</strong> via &#9989; Discord reaction</td>
+            <td>Requires approval</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Monitoring Signals</h3>
+      <ul>
+        <li><strong>*arr health</strong> &mdash; Sonarr, Radarr, Lidarr, Prowlarr <code>/api/v3/health</code> endpoints</li>
+        <li><strong>Download clients</strong> &mdash; SABnzbd + qBittorrent connectivity</li>
+        <li><strong>System stats</strong> &mdash; CPU, memory, disk usage via Glances</li>
+        <li><strong>NAS health</strong> &mdash; RAID status, disk space, uptime via SSH</li>
+        <li><strong>Container logs</strong> &mdash; error/warning pattern scan on key services</li>
+        <li><strong>Plex status</strong> &mdash; playback and library health</li>
+      </ul>
+
+      <h3>Using via /ask</h3>
+      <pre><code>/ask Check NAS health and disk space
+/ask Fix the qBittorrent download path
+/ask Clean up disk space on the server
+/ask Use copilot to fix the Sonarr database corruption</code></pre>
 
       <div
         style="

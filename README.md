@@ -220,6 +220,19 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Skill module split** — `advanced_skills.py` (1,426 lines) split into `search_skills.py` (524), `media_skills.py` (479), `web_skills.py` (274), `advanced_skills.py` (256)
 - 117 registered skills (was 116)
 
+**Phase 19 — Self-Healing Infrastructure** ✅
+
+- **Proactive config repair** — `fix_qbit_download_path` SSHs to NAS, detects qBittorrent download path drift, stops container, fixes config, restarts
+- **Cascading *arr fix** — `fix_arr_remote_path` detects Sonarr/Radarr remote path mapping errors, fixes qBittorrent, restarts affected services, verifies health
+- **Container auto-restart** — unhealthy containers in the safe list auto-restart after 2 consecutive failed health checks (every 5 min)
+- **Disk space monitoring** — proactive scan includes local disk (Glances) + NAS volumes (SSH `df -h`); alerts at >90% usage
+- **NAS health check** — `check_nas_health` queries RAID status (`/proc/mdstat`), disk space, and uptime via SSH
+- **Disk auto-cleanup** — `auto_cleanup_disk` prunes Docker images, rotates logs, cleans temp files when space is critical
+- **Copilot CLI bridge** — `copilot_fix(prompt)` spawns Copilot CLI in programmatic mode on Mac Mini host via SSH; user-initiated runs directly, bot-detected requires ✅ approval via Discord reaction
+- **NAS Storage dashboard widget** — color-coded progress bars per NAS volume (green <75%, yellow 75–90%, red >90%)
+- **Expanded SELF_HEAL directives** — proactive scanner LLM can now emit: `restart_container`, `fix_qbit_download_path`, `fix_arr_remote_path`, `auto_cleanup_disk`, `copilot_fix`
+- **Dashboard improvements** — human-readable cron schedules, Type tooltips, collapsible sections, model usage chart fix, topology container status fix
+
 **Planned**
 
 - Grafana dashboards

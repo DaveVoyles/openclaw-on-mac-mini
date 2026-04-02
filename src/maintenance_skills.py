@@ -363,13 +363,13 @@ async def fix_qbit_download_path() -> str:
     log.info("Self-heal: qBittorrent save path drifted to '%s', fixing to '%s'", current_save, QBIT_EXPECTED_SAVE_PATH)
 
     commands = [
-        f"/usr/local/bin/docker stop qbittorrent",
-        f"sleep 2",
+        "/usr/local/bin/docker stop qbittorrent",
+        "sleep 2",
         f"sed -i "
         f"-e 's|Session\\\\DefaultSavePath=.*|Session\\\\DefaultSavePath={QBIT_EXPECTED_SAVE_PATH}|' "
         f"-e 's|Session\\\\TempPath=.*|Session\\\\TempPath={QBIT_EXPECTED_SAVE_PATH}/incomplete|' "
         f"{QBIT_CONFIG_PATH}",
-        f"/usr/local/bin/docker start qbittorrent",
+        "/usr/local/bin/docker start qbittorrent",
     ]
     rc, out, err = await _run(
         ["ssh"] + ssh_opts + [ssh_target, " && ".join(commands)],
@@ -476,7 +476,7 @@ async def auto_cleanup_disk() -> str:
     # Docker builder prune
     rc, out, _ = await _run(["docker", "builder", "prune", "-f", "--keep-storage=2GB"], timeout=60)
     if rc == 0:
-        results.append(f"🔨 Builder prune: done")
+        results.append("🔨 Builder prune: done")
 
     # Clean old logs in /memory/logs (older than 7 days)
     rc, out, _ = await _run(
