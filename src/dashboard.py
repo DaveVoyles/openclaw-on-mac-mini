@@ -123,9 +123,8 @@ async def api_status_handler(request):
         checks["copilot_proxy"] = {"status": "not_configured"}
 
     # Patreon (MonsterVision) — cookie health
-    # The API's cookie_status checks session_id (365d expiry) but actual
-    # Patreon auth relies on Cloudflare cookies that expire in minutes.
-    # Real signal: check cron logs for 403/expired warnings.
+    # Use the API's cookie_status as the primary signal; only fall back to
+    # cron-log scraping when cookie_status is absent or inconclusive.
     try:
         async with aiohttp.ClientSession() as session:
             monstervision_url = f"http://{cfg.docker_host_ip}:8766/api/status"
@@ -134,19 +133,22 @@ async def api_status_handler(request):
                     mv_data = await resp.json()
                     failed = mv_data.get("failed", 0)
                     status = mv_data.get("status", "unknown")
+                    cookie_info = mv_data.get("cookie_status", {})
+                    cookie_ok = cookie_info.get("label") == "ok"
 
-                    # Check cron log for recent cookie warnings (last 20 lines)
+                    # Only scrape cron log when the API doesn't report cookies OK
                     cookie_warning = False
-                    try:
-                        from subprocess_utils import run as _run
-                        rc, log_out, _ = await _run(
-                            ["docker", "exec", "monstervision", "tail", "-20", "/app/state/cron.log"],
-                            timeout=5,
-                        )
-                        if rc == 0 and log_out:
-                            cookie_warning = "cookies have expired" in log_out.lower() or "403" in log_out
-                    except Exception:
-                        pass
+                    if not cookie_ok:
+                        try:
+                            from subprocess_utils import run as _run
+                            rc, log_out, _ = await _run(
+                                ["docker", "exec", "monstervision", "tail", "-20", "/app/state/cron.log"],
+                                timeout=5,
+                            )
+                            if rc == 0 and log_out:
+                                cookie_warning = "cookies have expired" in log_out.lower() or "403" in log_out
+                        except Exception:
+                            pass
 
                     if failed > 0:
                         checks["patreon"] = {"status": "down", "detail": f"{failed} failed downloads"}

@@ -604,10 +604,29 @@ _cookie_alert_sent = False  # only alert once per expiry cycle
 
 
 async def _check_monstervision_cookies(bot):
-    """Check MonsterVision logs for cookie expiry warnings and alert."""
+    """Check MonsterVision API + logs for cookie expiry warnings and alert."""
     global _cookie_alert_sent
     if not ALERT_CHANNEL_ID:
         return
+
+    import aiohttp
+    from config_loader import get as _cfg
+
+    # Trust the API's cookie_status first; skip log scraping when cookies are OK
+    try:
+        cfg = _cfg()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"http://{cfg.docker_host_ip}:8766/api/status",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    if data.get("cookie_status", {}).get("label") == "ok":
+                        _cookie_alert_sent = False  # reset when cookies are fresh
+                        return
+    except Exception:
+        pass  # fall through to log-based check
 
     from subprocess_utils import run as _run
 
