@@ -13,7 +13,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 40+ Discord slash commands across 7 cogs + modular command system        |
+| **Interface**    | 40+ Discord slash commands across 7 cogs (36 cog commands) + modular command system |
 | **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 3 12B local (Ollama) |
 | **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
 | **Local LLM**    | Ollama (`gemma3:12b`) — free, with native tool calling support         |
@@ -96,9 +96,9 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Response footer shows `via gemma3:12b` (local · unlimited) or `via gemini-2.5-flash` with rate info
 - AgentMail fixed: correct `/v0/inboxes/{inbox_id}/messages/send` endpoint
 - `skills/` reorganized as a Python package (`skills/__init__.py` + 4 skill modules)
-  - `advanced_skills.py` (256) — orchestration glue, reporting
-  - `search_skills.py` (524) — web search cascade with provider retry logic
-  - `media_skills.py` (479) — \*arr services, Plex, download clients
+  - `advanced_skills.py` (280) — orchestration glue, reporting
+  - `search_skills.py` (525) — web search cascade with provider retry logic
+  - `media_skills.py` (480) — \*arr services, Plex, download clients
   - `web_skills.py` (274) — URL browsing, content extraction
 
 **Phase 8 — Web, Browsing & Vision** ✅
@@ -217,7 +217,7 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Container health auto-alerts** — `discord_background.py` checks Docker containers every 5 minutes, alerts on unhealthy/exited state
 - **Search provider retry logic** — Perplexity and Firecrawl calls retry once on transient failures via `search_provider.retry_once`
 - **API quota dashboard** — new dashboard card + `/api/quota-status` endpoint showing real-time API usage across providers
-- **Skill module split** — `advanced_skills.py` (1,426 lines) split into `search_skills.py` (524), `media_skills.py` (479), `web_skills.py` (274), `advanced_skills.py` (256)
+- **Skill module split** — `advanced_skills.py` (1,426 lines) split into `search_skills.py` (525), `media_skills.py` (480), `web_skills.py` (274), `advanced_skills.py` (280)
 - 117 registered skills (was 116)
 
 **Phase 19 — Self-Healing Infrastructure** ✅
@@ -519,30 +519,59 @@ Uptime Kuma (:3001)              Grafana dashboard
 
 ```
 ~/openclaw/
-├── bot.py                 # Core Discord bot — init, auth, /ask (1,195 lines, split from 3,084)
-├── discord_commands.py    # 30 slash commands extracted from bot.py
-├── discord_background.py  # 5 background loop tasks (audit, cleanup, briefing, proactive, errors)
-├── discord_web.py         # aiohttp health/metrics/smoke/webhook web server
+├── bot.py                 # Core Discord bot — init, auth, /ask (1,146 lines, split from 3,084)
+├── discord_commands.py    # Slash commands extracted from bot.py (1,130 lines)
+├── discord_background.py  # Background loop tasks + container health alerts (702 lines)
+├── discord_web.py         # aiohttp health/metrics/smoke/webhook web server (332 lines)
 ├── skills/
-│   ├── __init__.py        # Core Docker & system monitoring skills + unified registry
-│   ├── advanced_skills.py # Orchestration glue, reporting (256 lines, split from 1,426)
-│   ├── search_skills.py   # Web search cascade with retry logic (524 lines)
-│   ├── media_skills.py    # *arr services, Plex, download clients (479 lines)
+│   ├── __init__.py        # Core Docker & system monitoring skills + unified registry (676 lines)
+│   ├── advanced_skills.py # Orchestration glue, reporting (280 lines, split from 1,426)
+│   ├── search_skills.py   # Web search cascade with retry logic (525 lines)
+│   ├── media_skills.py    # *arr services, Plex, download clients (480 lines)
 │   └── web_skills.py      # URL browsing, content extraction (274 lines)
+├── src/                   # 60 Python modules (see docs/MODULES.md for full list)
+│   ├── llm.py             # Hybrid LLM: public API facade (1,098 lines)
+│   ├── llm_client.py      # Gemini client wrapper, model config, system prompt loading
+│   ├── llm_tools.py       # Tool execution engine, function calling loop (275 lines)
+│   ├── llm_patterns.py    # Regex patterns for query classification, hallucination detection
+│   ├── llm_ratelimit.py   # Sliding-window rate limiter (60 RPM / 500 RPH)
+│   ├── dream_cycle.py     # Auto-Dream cognitive memory consolidation (916 lines)
+│   ├── agent_loop.py      # Plan management — observe/think/act engine (658 lines)
+│   ├── research_agent.py  # Autonomous multi-step research with synthesis (632 lines)
+│   ├── memory.py          # Per-user conversation memory (30 min TTL)
+│   ├── vector_store.py    # ChromaDB semantic memory — 3 collections
+│   ├── thread_store.py    # SQLite-backed persistent thread storage (WAL mode)
+│   ├── dashboard.py       # Web dashboard (served at /dashboard, self-contained HTML)
+│   ├── nas.py             # Synology DSM REST API queries
+│   ├── scheduler.py       # Scheduled task system with persistence (510 lines)
+│   ├── error_tracker.py   # Persistent error tracking and analysis (444 lines)
+│   ├── maintenance_skills.py # 4:00 AM automated maintenance (564 lines)
+│   ├── spending.py        # Gemini API cost tracking ($30 budget)
+│   ├── approvals.py       # Approval workflow engine + Discord button UI
+│   ├── network.py         # Tailscale status, connectivity check, speed test
+│   ├── model_router.py    # Multi-model query classification and routing
+│   ├── permissions.py     # Role-based permission system (90 lines)
+│   ├── search_provider.py # Search provider retry/fallback logic (91 lines)
+│   ├── code_sandbox.py    # Sandboxed Python execution (113 lines)
+│   ├── tool_health.py     # Tool health monitoring and reporting (180 lines)
+│   ├── table_renderer.py  # Discord-formatted table rendering (166 lines)
+│   ├── image_gen.py       # Image generation utilities (91 lines)
+│   ├── goal_tracker.py    # Auto-tracked goals from conversations (188 lines)
+│   ├── memory_manager.py  # Memory lifecycle management (199 lines)
+│   ├── webhook_formatter.py # Incoming webhook parser (Sonarr/Radarr/Plex)
+│   └── ... (see docs/MODULES.md for all 60 modules)
+│   └── cogs/              # 7 Discord cogs (36 commands)
+│       ├── analytics_cog.py  # /spending, /auditlog, /audit-summary
+│       ├── docker_cog.py     # /containers, /status, /logs, /system, /dockerstats, /restart
+│       ├── dream_cog.py      # /dream, /memory-health, /memory-export
+│       ├── media_cog.py      # /search, /queue, /recent, /health, /nowplaying, /watch
+│       ├── memory_cog.py     # /remember, /recall, /goals, /memory-stats, + 5 more
+│       ├── network_cog.py    # /network, /tailscale, /speedtest
+│       └── research_cog.py   # /websearch, /browse, /research, /compare, + 2 more
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
-├── llm.py                 # Hybrid LLM: public API facade (1,889 lines)
-├── llm_client.py          # Gemini client wrapper, model config, system prompt loading
-├── llm_tools.py           # Tool execution engine, function calling loop
-├── llm_patterns.py        # Regex patterns for query classification, hallucination detection
-├── llm_ratelimit.py       # Sliding-window rate limiter (60 RPM / 500 RPH)
-├── memory.py              # Per-user conversation memory (30 min TTL)
-├── approvals.py           # Approval workflow engine + Discord button UI
-├── network.py             # Tailscale status, connectivity check, speed test
 ├── qmd.py                 # Long-term memory (QMD pattern — persists to qmd.json)
 ├── agentmail.py           # Email via AgentMail.to API
-├── spending.py            # Gemini API cost tracking ($30 budget, per-call token logging)
-├── dashboard.py           # Web dashboard (served at /dashboard, self-contained HTML)
 ├── openclaw.code-workspace  # VS Code workspace — opens project via Remote SSH
 ├── docker-compose.yml     # Container orchestration
 ├── Dockerfile             # Copies *.py + skills/ package into container
@@ -566,6 +595,7 @@ Uptime Kuma (:3001)              Grafana dashboard
 │       ├── dream-log.md   # Dream cycle history
 │       ├── archive.md     # Archived low-importance entries
 │       └── episodes/      # Episodic memory snapshots
+├── tests/                 # 37 test files (see docs/MODULES.md)
 ├── docs/
 │   └── IMPLEMENTATION-PLAN.md  # Full 7-phase plan
 ├── docker-stack/          # Full Docker infrastructure for the Mac Mini (see this folder

@@ -2,31 +2,38 @@
 
 Quick reference for all source files. Consult this before exploring the codebase.
 
-## Core Modules (src/\*.py) — 46 files
+## Core Modules (src/\*.py) — 60 files
 
 | File                    | Purpose                                                                  | Key Exports                                                          |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | `agentmail.py`          | Email integration via AgentMail.to API                                   | `send_agent_mail()`                                                  |
 | `analyzer.py`           | AI-powered container log analysis using Gemini                           | `analyze_logs()`                                                     |
 | `approvals.py`          | Security & approval workflows with Discord UI                            | `ApprovalStore`, `ApprovalRequest`, `RiskLevel`                      |
+| `audit.py`              | Audit event recording helpers                                            | `audit_event()`                                                      |
 | `autonomous_skills.py`  | Task planning via planning-with-files skill                              | `init_planning_files()`                                              |
-| `bot.py`                | Core Discord bot — init, auth, `/ask` command (1,195 lines, split from 3,084) | `OpenClawBot`, `/ask` handler                                        |
+| `bot.py`                | Core Discord bot — init, auth, `/ask` command (1,146 lines, split from 3,084) | `OpenClawBot`, `/ask` handler                                        |
 | `calendar_skills.py`    | Google Calendar API integration (read/create events)                     | `get_calendar_events()`, `create_calendar_event()`                   |
 | `cog_helpers.py`        | Shared utilities for cogs (audit_log, service_allowed)                   | `audit_log()`, `is_service_allowed()`                                |
+| `code_sandbox.py`       | Sandboxed Python code execution in ephemeral Docker container            | `execute_python_code()`                                              |
 | `config.py`             | Centralized config from YAML + env vars                                  | `cfg` (config object)                                                |
 | `constants.py`          | Shared numeric constants (Discord limits, timeouts, sizes)               | `EMBED_DESC_LIMIT`, `MAX_FILE_SIZE`, `PROACTIVE_SCAN_INTERVAL`, etc. |
 | `dashboard.py`          | Lightweight HTML dashboard + JSON API on `:8765`                         | `run_dashboard_server()`, API routes                                 |
+| `dream_cycle.py`        | Auto-Dream cognitive memory consolidation — collect/consolidate/evaluate (916 lines) | `DreamCycle` class, `run_dream_cycle()`                  |
 | `email_skills.py`       | Gmail/Outlook via IMAP/SMTP + App Passwords                              | `send_email()`, `fetch_emails()`, `search_emails()`                  |
+| `error_tracker.py`      | Persistent error tracking, pattern analysis, and recurring error detection (444 lines) | `ErrorTracker` class                                    |
 | `gateway.py`            | Maton OAuth proxy client for 100+ third-party APIs                       | `gateway_api_call()`, `gateway_create_connection()`                  |
 | `git_skills.py`         | Git operations (status, log, diff, commit)                               | `git_status()`, `git_diff()`, `git_log()`                            |
+| `goal_tracker.py`       | Auto-tracked goals extracted from conversations (188 lines)              | `GoalTracker` class, `extract_goals()`                               |
 | `http_session.py`       | Shared aiohttp session manager                                           | `SessionManager` class                                               |
-| `llm.py`                | Gemini + Ollama hybrid LLM dispatcher — public API facade (1,889 lines) | `chat()`, `chat_deep()`, `_gemini_chat()`                            |
+| `image_gen.py`          | Image generation and analysis utilities (91 lines)                       | `generate_image()`, `analyze_image()`                                |
+| `llm.py`                | Gemini + Ollama hybrid LLM dispatcher — public API facade (1,098 lines) | `chat()`, `chat_deep()`, `_gemini_chat()`                            |
 | `llm_client.py`         | Gemini client wrapper, model config, system prompt loading (257 lines)   | `get_model()`, `load_system_prompt()`, `MODEL_CONFIG`                |
-| `llm_tools.py`          | Tool execution engine, function calling loop (264 lines)                 | `execute_tool_call()`, `run_function_calling_loop()`                 |
+| `llm_tools.py`          | Tool execution engine, function calling loop (275 lines)                 | `execute_tool_call()`, `run_function_calling_loop()`                 |
 | `llm_patterns.py`       | Regex patterns for query classification, hallucination detection (194 lines) | `needs_tools()`, `is_hallucination()`, `TOOL_PATTERNS`           |
 | `llm_ratelimit.py`      | Sliding-window rate limiter with jittered backoff (82 lines)             | `RateLimiter` class (per-minute, per-hour)                           |
 | `maintenance_skills.py` | 4:00 AM automated maintenance (backups, updates)                         | `run_maintenance()`, `update_skills()`, `backup_to_nas()`            |
 | `memory.py`             | Per-user conversation context + named thread persistence                 | `ConversationStore`, `Thread` class                                  |
+| `memory_manager.py`     | Memory lifecycle management — decay, consolidation, cleanup (199 lines)  | `MemoryManager` class                                                |
 | `mission_control.py`    | Kanban-style task management (get/update/complete tasks)                 | `get_mission_tasks()`, `update_mission_task()`                       |
 | `monitor_skills.py`     | URL content change detection + monitoring                                | `snapshot_url()`, `check_url_for_changes()`                          |
 | `nas.py`                | Synology DSM REST API queries (storage, health, alerts)                  | `get_nas_storage_health()`, `get_nas_alerts()`                       |
@@ -34,27 +41,32 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `obsidian_writer.py`    | Markdown + YAML frontmatter writer to Obsidian vault                     | `save_to_vault()`, `build_frontmatter()`                             |
 | `ontology_skills.py`    | Graph memory via ontology ClawHub script                                 | `add_fact()`, `query_graph()`, `list_entities()`                     |
 | `overseerr.py`          | Overseerr media request management API                                   | `get_overseerr_requests()`, `update_request_status()`                |
+| `permissions.py`        | Role-based permission checks and access control (90 lines)               | `check_permission()`, `is_allowed()`                                 |
 | `qmd.py`                | Quick Memory Discovery — persistent fact storage + knowledge routing   | `QMDMemory` class with `remember()`, `recall()`, `search()`          |
 | `research_agent.py`     | Autonomous multi-step research with synthesis                            | `ResearchAgent` class                                                |
 | `rss_skills.py`         | RSS/Atom feed fetching & LLM summarization                               | `fetch_rss_feed()`, `get_rss_digest()`                               |
 | `rules_engine.py`       | Correction learning — extracts rules from user corrections               | `detect_correction()`, `extract_rule()`, `add_rule()`, `get_relevant_rules()` |
 | `scheduler.py`          | Cron-based task scheduler with prompt jobs and JSON persistence (`croniter`) | `Scheduler` class, cron expressions, prompt jobs                     |
+| `search_provider.py`    | Search provider retry/fallback logic for cascade (91 lines)              | `retry_once()`                                                       |
 | `spending.py`           | Gemini API cost tracker (input/output tokens vs budget)                  | `SpendingTracker` class with `summary()`, `daily_breakdown()`        |
 | `subprocess_utils.py`   | Async subprocess runner with timeout                                     | `run()` — returns (returncode, stdout, stderr)                       |
+| `table_renderer.py`     | Discord-formatted table rendering for embeds (166 lines)                 | `render_table()`, `format_columns()`                                 |
 | `webhook_formatter.py`  | Webhook payload formatters (Sonarr, Radarr, Plex, qBittorrent)           | `FORMATTERS` dict, `format_arr()`, `format_plex()`                   |
 | `thread_store.py`       | SQLite-backed persistent thread/message storage (WAL mode)               | `ThreadStore` class with `create_thread()`, `search_threads()`       |
+| `tool_health.py`        | Tool health monitoring, status tracking, and reporting (180 lines)       | `check_tool_health()`, `get_health_report()`                         |
 | `user_profile.py`       | Structured user profile — preferences, interests, working style          | `load_profile()`, `learn_from_message()`, `get_profile_prompt()`     |
+| `utils.py`              | Shared utility functions (truncation, formatting) (69 lines)             | `truncate()`, `format_bytes()`                                       |
 | `vector_store.py`       | ChromaDB semantic memory — memories, conversations, research collections | `VectorStore` class with `search()`, `add_memory()`, `recall()`      |
 | `worker_agent.py`       | Sub-agent spawning for task delegation                                   | `spawn_worker()`                                                     |
 | `json_utils.py`         | JSON validation, repair, and extraction for robust tool result parsing   | `validate_json()`, `repair_json()`, `extract_json()`                 |
 | `ollama_tools.py`       | Ollama native tool calling protocol for local Gemma model                | `ollama_chat_with_tools()`, `OLLAMA_TOOL_DECLARATIONS`               |
 | `model_router.py`       | Multi-model query classification and routing (Gemini/GPT-4o/Claude/Gemma) | `classify_query()`, `route_to_model()`, `MODEL_CONFIGS`            |
-| `discord_commands.py`   | 30 standalone slash commands extracted from bot.py (1,131 lines)         | `register_commands(bot)`                                             |
-| `discord_background.py` | 5 background loop tasks (audit writer, cleanup, briefing, proactive, error monitor) | `start_background_tasks(bot)`                                       |
-| `discord_web.py`        | aiohttp health/metrics/smoke/webhook web server (319 lines)              | `create_web_app(bot)`                                                |
+| `discord_commands.py`   | Slash commands extracted from bot.py (1,130 lines)                       | `register_commands(bot)`                                             |
+| `discord_background.py` | Background loop tasks (702 lines) (audit writer, cleanup, briefing, proactive, error monitor, container health alerts) | `start_background_tasks(bot)`                                       |
+| `discord_web.py`        | aiohttp health/metrics/smoke/webhook web server (332 lines)              | `create_web_app(bot)`                                                |
 | `fact_extractor.py`     | Automatic fact extraction from conversations for long-term memory        | `extract_facts()`, `should_store()`, `deduplicate()`                 |
 
-## Cog Modules (src/cogs/\*.py) — 7 cogs, 34 commands
+## Cog Modules (src/cogs/\*.py) — 7 cogs, 36 commands
 
 | File               | Commands                                                                 | Purpose                             |
 | ------------------ | ------------------------------------------------------------------------ | ----------------------------------- |
@@ -62,9 +74,9 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `docker_cog.py`    | `/containers`, `/status`, `/logs`, `/system`, `/dockerstats`, `/restart` | Docker container management         |
 | `dream_cog.py`     | `/dream`, `/memory-health`, `/memory-export`                             | Auto-Dream cognitive memory system  |
 | `media_cog.py`     | `/search`, `/queue`, `/recent`, `/health`, `/nowplaying`, `/watch`       | \*arr stack + Plex media management |
-| `memory_cog.py`    | `/remember`, `/recall`, `/goals`, `/memory-stats`, `/memory-refresh`, `/rules`, `/profile`, `/profile-edit` | Memory, profiles, and learned rules |
+| `memory_cog.py`    | `/remember`, `/recall`, `/goals`, `/memory-stats`, `/memory-refresh`, `/rules`, `/profile`, `/profile-edit`, `/export-conversations` | Memory, profiles, and learned rules |
 | `network_cog.py`   | `/network`, `/tailscale`, `/speedtest`                                   | Network diagnostics and VPN status  |
-| `research_cog.py`  | `/websearch`, `/browse`, `/research`, `/research-search`, `/sources`     | Web search, browsing, deep research |
+| `research_cog.py`  | `/websearch`, `/browse`, `/research`, `/research-search`, `/sources`, `/compare` | Web search, browsing, deep research |
 
 ## Configuration Files (config/)
 
@@ -86,9 +98,9 @@ The `skills/` package contains the core skill modules plus 13 ClawHub skill bund
 | File                  | Lines | Purpose                                                          | Key Exports                                   |
 | --------------------- | ----- | ---------------------------------------------------------------- | --------------------------------------------- |
 | `__init__.py`         | —     | Core Docker & system monitoring skills + unified registry        | `ALL_SKILLS` dict                             |
-| `advanced_skills.py`  | 256   | Orchestration glue — re-exports from sub-modules, reporting      | `ADVANCED_SKILLS` dict                        |
-| `search_skills.py`    | 524   | Web search providers (Perplexity, Firecrawl, Tavily, DDG, Bing) with retry logic | `SEARCH_SKILLS` dict         |
-| `media_skills.py`     | 479   | \*arr services, Plex, download clients                           | `MEDIA_SKILLS` dict                           |
+| `advanced_skills.py`  | 280   | Orchestration glue — re-exports from sub-modules, reporting      | `ADVANCED_SKILLS` dict                        |
+| `search_skills.py`    | 525   | Web search providers (Perplexity, Firecrawl, Tavily, DDG, Bing) with retry logic | `SEARCH_SKILLS` dict         |
+| `media_skills.py`     | 480   | \*arr services, Plex, download clients                           | `MEDIA_SKILLS` dict                           |
 | `web_skills.py`       | 274   | URL browsing, content extraction, multi-source comparison        | `WEB_SKILLS` dict                             |
 
 ### ClawHub Bundles
@@ -97,23 +109,46 @@ The `skills/` package contains the core skill modules plus 13 ClawHub skill bund
 
 ## Test Files (tests/)
 
-| File                       | Tests                                                                           |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| `conftest.py`              | Shared fixtures: `mock_llm`, `mock_discord_interaction`, `_clear_module_caches` |
-| `test_advanced_skills.py`  | Media, network, report generation skills (covers search_skills, media_skills, web_skills) |
-| `test_agentmail.py`        | AgentMail API integration                                                       |
-| `test_analyzer.py`         | Log analysis engine                                                             |
-| `test_approvals.py`        | Approval workflow system                                                        |
-| `test_llm_chat.py`         | LLM chat + function calling                                                     |
-| `test_llm_ratelimiter.py`  | Rate limiter logic                                                              |
-| `test_memory.py`           | Conversation store + thread persistence                                         |
-| `test_mission_control.py`  | Kanban task management                                                          |
-| `test_monitor_skills.py`   | URL monitoring skills                                                           |
-| `test_qmd.py`              | Quick Memory Discovery                                                          |
-| `test_real_estate.py`      | Real estate search skills                                                       |
-| `test_scheduler.py`        | Task scheduler                                                                  |
-| `test_spending.py`         | Cost tracking                                                                   |
-| `test_subprocess_utils.py` | Subprocess runner                                                               |
+| File                         | Tests                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| `conftest.py`                | Shared fixtures: `mock_llm`, `mock_discord_interaction`, `_clear_module_caches` |
+| `test_advanced_skills.py`    | Media, network, report generation skills (covers search_skills, media_skills, web_skills) |
+| `test_agent_loop.py`         | Agent loop plan management                                                      |
+| `test_agentmail.py`          | AgentMail API integration                                                       |
+| `test_analyzer.py`           | Log analysis engine                                                             |
+| `test_approvals.py`          | Approval workflow system                                                        |
+| `test_approvals_extended.py` | Extended approval workflow tests                                                |
+| `test_code_sandbox.py`       | Code sandbox execution                                                          |
+| `test_config.py`             | Configuration loading                                                           |
+| `test_dashboard.py`          | Dashboard rendering                                                             |
+| `test_dream_cycle.py`        | Dream cycle memory consolidation                                                |
+| `test_email_skills.py`       | Email sending/receiving                                                         |
+| `test_gateway.py`            | Maton API gateway                                                               |
+| `test_git_skills.py`         | Git operations                                                                  |
+| `test_http_session.py`       | HTTP session manager                                                            |
+| `test_llm_chat.py`           | LLM chat + function calling                                                     |
+| `test_llm_patterns.py`       | LLM query patterns                                                              |
+| `test_llm_ratelimiter.py`    | Rate limiter logic                                                              |
+| `test_llm_tools.py`          | LLM tool execution                                                              |
+| `test_memory.py`             | Conversation store + thread persistence                                         |
+| `test_memory_manager.py`     | Memory lifecycle                                                                |
+| `test_mission_control.py`    | Kanban task management                                                          |
+| `test_model_selection.py`    | Model routing                                                                   |
+| `test_monitor_skills.py`     | URL monitoring skills                                                           |
+| `test_nas.py`                | NAS integration                                                                 |
+| `test_network.py`            | Network diagnostics                                                             |
+| `test_permissions.py`        | Permission checks                                                               |
+| `test_qmd.py`                | Quick Memory Discovery                                                          |
+| `test_real_estate.py`        | Real estate search skills                                                       |
+| `test_research_agent.py`     | Research agent                                                                  |
+| `test_rss_skills.py`         | RSS feed skills                                                                 |
+| `test_scheduler.py`          | Task scheduler                                                                  |
+| `test_search_provider.py`    | Search provider retry                                                           |
+| `test_spending.py`           | Cost tracking                                                                   |
+| `test_subprocess_utils.py`   | Subprocess runner                                                               |
+| `test_tool_health.py`        | Tool health monitoring                                                          |
+| `test_utils.py`              | Utility functions                                                               |
+| `test_worker_agent.py`       | Worker agent delegation                                                         |
 
 ---
 
@@ -349,7 +384,7 @@ Extracts memorable facts from conversations and stores them in long-term memory.
 
 ## Module Details — Modular Split (March 2026)
 
-`bot.py` was refactored from 3,084 → 1,195 lines by extracting commands, background tasks, and the web server into dedicated modules. `llm.py` extracted its client setup, tool engine, regex patterns, and rate limiter.
+`bot.py` was refactored from 3,084 → 1,146 lines by extracting commands, background tasks, and the web server into dedicated modules. `llm.py` extracted its client setup, tool engine, regex patterns, and rate limiter.
 
 ### discord_commands.py — Slash Commands
 
@@ -362,7 +397,7 @@ All slash commands except `/ask` (which stays in `bot.py`) are registered here v
 
 ### discord_background.py — Background Loop Tasks
 
-Long-running asyncio loops: audit log flush, expired session cleanup, morning briefing, proactive monitoring, and error monitor. All functions accept the bot instance.
+Long-running asyncio loops: audit log flush, expired session cleanup, morning briefing, proactive monitoring, error monitor, and container health alerts. All functions accept the bot instance.
 
 **Exports:** `start_background_tasks(bot)`.
 **Dependencies:** `bot.py` (bot instance), `memory`, `scheduler`.
@@ -453,4 +488,4 @@ Web page content extraction extracted from `advanced_skills.py`. Three-tier extr
 
 ---
 
-Last updated: April 2026
+Last updated: July 2026

@@ -16,23 +16,23 @@ Key architectural patterns:
 `bot.py` was split from 3,084 → 1,195 lines. `llm.py` extracted companion modules. `advanced_skills.py` split into focused skill modules.
 
 ```
-bot.py was split from 3,084 → 1,195 lines:
-├── bot.py (1,195) — Core: init, auth, /ask command
-├── discord_commands.py (1,131) — 30 slash commands
-├── discord_background.py (477) — Background loops + container health alerts
-└── discord_web.py (319) — Health server + /api/quota-status
+bot.py was split from 3,084 → 1,146 lines:
+├── bot.py (1,146) — Core: init, auth, /ask command
+├── discord_commands.py (1,130) — Slash commands
+├── discord_background.py (702) — Background loops + container health alerts
+└── discord_web.py (332) — Health server + /api/quota-status
 
 llm.py has extracted companion modules:
-├── llm.py (1,889) — Public API facade
+├── llm.py (1,098) — Public API facade
 ├── llm_client.py (257) — Gemini client wrapper
-├── llm_tools.py (264) — Tool execution
+├── llm_tools.py (275) — Tool execution
 ├── llm_patterns.py (194) — Regex + validation
 └── llm_ratelimit.py (82) — Rate limiting
 
 skills/advanced_skills.py split into focused modules:
-├── advanced_skills.py (256) — Orchestration glue, reporting
-├── search_skills.py (524) — Web search cascade + retry logic
-├── media_skills.py (479) — *arr services, Plex, download clients
+├── advanced_skills.py (280) — Orchestration glue, reporting
+├── search_skills.py (525) — Web search cascade + retry logic
+├── media_skills.py (480) — *arr services, Plex, download clients
 └── web_skills.py (274) — URL browsing, content extraction
 ```
 
@@ -48,9 +48,9 @@ graph TB
 
     %% ── Core Bot ────────────────────────────────────────────────
     subgraph OpenClaw ["🐾 OpenClaw (Docker Container)"]
-        Bot["bot.py\nCore: init, auth, /ask\n(1,195 lines)"]
-        DiscordCmds["discord_commands.py\n30 slash commands"]
-        DiscordBG["discord_background.py\n5 background loops"]
+        Bot["bot.py\nCore: init, auth, /ask\n(1,146 lines)"]
+        DiscordCmds["discord_commands.py\nSlash commands"]
+        DiscordBG["discord_background.py\nBackground loops (702 lines)"]
         DiscordWeb["discord_web.py\nHealth/metrics server"]
         LLM["llm.py\nLLM Dispatcher\n(public API facade)"]
         LLMClient["llm_client.py\nGemini client wrapper"]
@@ -91,11 +91,14 @@ graph TB
             LLMRateLimit
         end
 
-        subgraph Cogs ["📦 Discord Cogs (src/cogs/)"]
+        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 7 cogs, 36 commands"]
             DockerCog["docker_cog.py\n6 commands"]
             MediaCog["media_cog.py\n6 commands"]
             NetworkCog["network_cog.py\n3 commands"]
             AnalyticsCog["analytics_cog.py\n3 commands"]
+            DreamCog["dream_cog.py\n3 commands"]
+            MemoryCog["memory_cog.py\n9 commands"]
+            ResearchCog["research_cog.py\n6 commands"]
         end
     end
 
@@ -124,6 +127,9 @@ graph TB
     MediaCog --> Bot
     NetworkCog --> Bot
     AnalyticsCog --> Bot
+    DreamCog --> Bot
+    MemoryCog --> Bot
+    ResearchCog --> Bot
     DockerCog --> Skills
     MediaCog --> Skills
     NetworkCog --> Skills
@@ -323,7 +329,7 @@ graph TB
     classDef actor fill:#1e1e3a,stroke:#6060d9,color:#fff
 
     class Discord,Bot,DiscordCmds,DiscordBG,DiscordWeb,LLM,LLMClient,LLMTools,LLMPatterns,LLMRateLimit,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,HealthAlerts,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
-    class DockerCog,MediaCog,NetworkCog,AnalyticsCog service
+    class DockerCog,MediaCog,NetworkCog,AnalyticsCog,DreamCog,MemoryCog,ResearchCog service
     class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,PerplexityAPI,FirecrawlAPI,TavilyAPI,DDGNet,SerperAPI,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
     class DockerEngine,Glances,Tailscale,Cloudflare,Prometheus,UptimeKuma,NAS,Traefik,SynDDNS infra

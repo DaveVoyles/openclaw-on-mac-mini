@@ -26,6 +26,23 @@ from skills import (
 )
 
 
+async def _container_autocomplete(
+    interaction: discord.Interaction, current: str,
+) -> list[app_commands.Choice[str]]:
+    """Live autocomplete: query docker ps and return matching container names."""
+    try:
+        result = await list_containers()
+        names = []
+        for line in result.split("\n"):
+            if line.strip() and not line.startswith("NAMES"):
+                name = line.split()[0].strip() if line.split() else ""
+                if name and (not current or current.lower() in name.lower()):
+                    names.append(name)
+        return [app_commands.Choice(name=n, value=n) for n in sorted(names)[:25]]
+    except Exception:
+        return []
+
+
 class DockerCog(commands.Cog, name="Docker"):
     """Docker and infrastructure management commands."""
 
@@ -53,6 +70,7 @@ class DockerCog(commands.Cog, name="Docker"):
 
     @app_commands.command(name="status", description="Get detailed status for a container")
     @app_commands.describe(service="Container name (e.g. sonarr, radarr, plex)")
+    @app_commands.autocomplete(service=_container_autocomplete)
     async def status_cmd(self, interaction: discord.Interaction, service: str):
         await interaction.response.defer()
         result = await get_container_status(service)
@@ -66,6 +84,7 @@ class DockerCog(commands.Cog, name="Docker"):
 
     @app_commands.command(name="logs", description="View recent logs from a container")
     @app_commands.describe(service="Container name", lines="Number of lines (5-100, default 30)")
+    @app_commands.autocomplete(service=_container_autocomplete)
     async def logs_cmd(self, interaction: discord.Interaction, service: str, lines: int = 30):
         await interaction.response.defer()
         result = await get_container_logs(service, lines)
@@ -105,6 +124,7 @@ class DockerCog(commands.Cog, name="Docker"):
 
     @app_commands.command(name="restart", description="Restart a Docker container (requires approval)")
     @app_commands.describe(service="Container name to restart")
+    @app_commands.autocomplete(service=_container_autocomplete)
     async def restart_cmd(self, interaction: discord.Interaction, service: str):
         if is_emergency_stopped():
             await interaction.response.send_message(
