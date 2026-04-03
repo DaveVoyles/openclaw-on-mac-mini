@@ -1,6 +1,6 @@
 # OpenClaw — Discord Slash Commands Reference
 
-All 104 slash commands across `bot.py` and 16 cogs, organized by category.
+All 126 slash commands across `bot.py` and 24 cogs, organized by category.
 
 > **Risk levels:** LOW (auto-execute) | MEDIUM (logged) | HIGH (requires button approval) | CRITICAL (requires approval + preview)
 >
@@ -366,6 +366,118 @@ Output is an embed summarising the synthesised result plus a **💾 Save to Vaul
 
 ---
 
+## 🎨 Image Generation
+
+Generate images via a local Stable Diffusion instance.
+
+Requires: `SD_URL` (Stable Diffusion API base URL, e.g. `http://192.168.1.93:7860`).
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/imagine generate <prompt>` | Generate an image via Stable Diffusion txt2img | `prompt: str`, `size: 512\|768\|1024 (optional)`, `negative: str (optional)` | ✅ | MEDIUM | `imagine_cog.py` |
+| `/imagine status` | Check if Stable Diffusion is online and list available models | — | ✅ | LOW | `imagine_cog.py` |
+
+---
+
+## 🌐 DNS Management
+
+Manage DNS filtering via AdGuard Home.
+
+Requires: `ADGUARD_URL`, `ADGUARD_USER`, `ADGUARD_PASSWORD`.
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/dns status` | Show AdGuard Home status and filtering enabled/disabled | — | ✅ | LOW | `dns_cog.py` |
+| `/dns stats` | Show query counts, block counts, and top domains | — | ✅ | LOW | `dns_cog.py` |
+| `/dns block <domain>` | Block a domain via DNS rewrite | `domain: str` | ✅ | HIGH | `dns_cog.py` |
+| `/dns allow <domain>` | Unblock a previously blocked domain | `domain: str` | ✅ | HIGH | `dns_cog.py` |
+| `/dns blocked` | List all manually blocked domains | — | ✅ | LOW | `dns_cog.py` |
+
+---
+
+## 📝 Notion
+
+Search and create Notion content via Maton automation.
+
+Requires: `MATON_NOTION_SEARCH_URL`, `MATON_NOTION_CREATE_URL`, `MATON_NOTION_TODO_URL`.
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/notion search <query>` | Search Notion pages and databases | `query: str` | ✅ | LOW | `notion_cog.py` |
+| `/notion page <title> <content>` | Create a new Notion page | `title: str`, `content: str` | ✅ | MEDIUM | `notion_cog.py` |
+| `/notion todo <item>` | Add an item to the Notion todo database | `item: str` | ✅ | MEDIUM | `notion_cog.py` |
+
+---
+
+## 📄 Google Docs
+
+Create and list Google Docs via Maton automation.
+
+Requires: `MATON_GDOC_CREATE_URL`, `MATON_GDOC_LIST_URL`.
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/gdoc save <title> <content>` | Create a new Google Doc with the given content | `title: str`, `content: str` | ✅ | MEDIUM | `gdoc_cog.py` |
+| `/gdoc list` | List recent Google Docs | — | ✅ | LOW | `gdoc_cog.py` |
+
+---
+
+## 🖥️ System Performance
+
+Real-time system metrics via Glances.
+
+Requires: `GLANCES_URL` (e.g. `http://192.168.1.93:61208`).
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/perf` | System snapshot — CPU, memory, disk usage, and load average | — | ✅ | LOW | `perf_cog.py` |
+
+---
+
+## 📱 Push Notifications
+
+Send phone push notifications via ntfy.sh or a self-hosted ntfy instance.
+
+Requires: `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` (optional).
+
+Also exports `push_notification()` as a utility for other cogs to send phone alerts.
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/ntfy send <message>` | Send a phone push notification | `message: str`, `title: str (optional)`, `priority: min\|low\|default\|high\|urgent (optional)` | ✅ | MEDIUM | `ntfy_cog.py` |
+| `/ntfy test` | Send a test push notification to verify setup | — | ✅ | LOW | `ntfy_cog.py` |
+
+---
+
+## 🎬 Movie & TV
+
+Look up movies and TV shows via OMDb/IMDb.
+
+Requires: `OMDB_API_KEY` (free at https://www.omdbapi.com/).
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/movie <title>` | Look up a movie with poster, ratings, and plot | `title: str` | — | LOW | `imdb_cog.py` |
+| `/tv <title>` | Look up a TV show with season/episode info and ratings | `title: str` | — | LOW | `imdb_cog.py` |
+| `/imdb <query>` | Search both movies and TV shows | `query: str` | — | LOW | `imdb_cog.py` |
+
+---
+
+## 🐛 Error Monitoring
+
+Monitor application errors via Sentry.
+
+Requires: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_URL` (default `https://sentry.io`).
+
+| Command | Description | Parameters | Auth | Risk | File |
+| ------- | ----------- | ---------- | ---- | ---- | ---- |
+| `/sentry issues [project]` | List unresolved Sentry issues | `project: str (optional)` | ✅ | LOW | `sentry_cog.py` |
+| `/sentry projects` | List all Sentry projects in the org | — | ✅ | LOW | `sentry_cog.py` |
+| `/sentry resolve <issue_id>` | Mark a Sentry issue as resolved | `issue_id: str` | ✅ | HIGH | `sentry_cog.py` |
+| `/sentry stats [project]` | Show hourly error rate stats | `project: str (optional)` | ✅ | LOW | `sentry_cog.py` |
+
+---
+
 ## Summary
 
 | Category             | Commands | Source Files                                |
@@ -384,7 +496,15 @@ Output is an embed summarising the synthesised result plus a **💾 Save to Vaul
 | Journal              | 4        | `journal_cog.py`                            |
 | GitHub               | 4        | `github_cog.py`                             |
 | Document Review & Interview | 3   | `review_cog.py`, `interview_cog.py`         |
-| **Total**            | **107**  | + 60 LLM-callable skill functions via `/ask` |
+| Image Generation     | 2        | `imagine_cog.py`                            |
+| DNS Management       | 5        | `dns_cog.py`                                |
+| Notion               | 3        | `notion_cog.py`                             |
+| Google Docs          | 2        | `gdoc_cog.py`                               |
+| System Performance   | 1        | `perf_cog.py`                               |
+| Push Notifications   | 2        | `ntfy_cog.py`                               |
+| Movie & TV           | 3        | `imdb_cog.py`                               |
+| Error Monitoring     | 4        | `sentry_cog.py`                             |
+| **Total**            | **129**  | + 60 LLM-callable skill functions via `/ask` |
 
 ---
 

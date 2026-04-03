@@ -3674,6 +3674,84 @@ Division 1 men's lacrosse games this week and post a table.
       </ul>
       <p><strong>Setup:</strong> Set <code>GITHUB_TOKEN</code> (run <code>gh auth token</code> to get it) and <code>GITHUB_DEFAULT_REPOS=owner/repo1,owner/repo2</code> in <code>.env</code>.</p>
 
+      <h2 id="image-gen">51. Image Generation (<code>/imagine</code>)</h2>
+      <p>Generate images locally via a Stable Diffusion instance (Automatic1111 / AUTOMATIC1111 compatible API).</p>
+      <ul>
+        <li><code>/imagine generate &lt;prompt&gt; [size] [negative]</code> — Generate an image. Size options: <code>512</code>, <code>768</code>, <code>1024</code>. Use <code>negative</code> to exclude concepts.</li>
+        <li><code>/imagine status</code> — Check whether SD is reachable and list available checkpoint models.</li>
+      </ul>
+      <p><strong>Setup:</strong> Start Stable Diffusion with <code>--api</code> flag, then set <code>SD_URL=http://192.168.1.93:7860</code> in <code>.env</code>.</p>
+
+      <h2 id="dns">52. DNS Management (<code>/dns</code>)</h2>
+      <p>Control your AdGuard Home DNS filtering directly from Discord.</p>
+      <ul>
+        <li><code>/dns status</code> — Show whether filtering is enabled, query counts, and blocked counts.</li>
+        <li><code>/dns stats</code> — Full query/block statistics with top allowed and blocked domains.</li>
+        <li><code>/dns block &lt;domain&gt;</code> — Add a DNS rewrite rule to block a domain (redirects to 0.0.0.0).</li>
+        <li><code>/dns allow &lt;domain&gt;</code> — Remove a blocking DNS rewrite rule for a domain.</li>
+        <li><code>/dns blocked</code> — List all manually added blocked domains.</li>
+      </ul>
+      <p><strong>Setup:</strong> Set <code>ADGUARD_URL</code>, <code>ADGUARD_USER</code>, and <code>ADGUARD_PASSWORD</code> in <code>.env</code>. AdGuard Home must be reachable from the bot host.</p>
+
+      <h2 id="notion">53. Notion Integration (<code>/notion</code>)</h2>
+      <p>Search and create Notion content via Maton automation webhooks.</p>
+      <ul>
+        <li><code>/notion search &lt;query&gt;</code> — Full-text search across all Notion pages and databases.</li>
+        <li><code>/notion page &lt;title&gt; &lt;content&gt;</code> — Create a new Notion page in your default workspace.</li>
+        <li><code>/notion todo &lt;item&gt;</code> — Append an item to your Notion todo database.</li>
+      </ul>
+      <p><strong>Setup:</strong> Create Maton flows for Notion and set <code>MATON_NOTION_SEARCH_URL</code>, <code>MATON_NOTION_CREATE_URL</code>, and <code>MATON_NOTION_TODO_URL</code> webhook URLs in <code>.env</code>.</p>
+
+      <h2 id="gdoc">54. Google Docs (<code>/gdoc</code>)</h2>
+      <p>Create and list Google Docs from Discord via Maton automation webhooks.</p>
+      <ul>
+        <li><code>/gdoc save &lt;title&gt; &lt;content&gt;</code> — Create a new Google Doc with the given title and content.</li>
+        <li><code>/gdoc list</code> — List your most recent Google Docs (requires a Maton list flow).</li>
+      </ul>
+      <p><strong>Setup:</strong> Create Maton flows for Google Drive and set <code>MATON_GDOC_CREATE_URL</code> and <code>MATON_GDOC_LIST_URL</code> in <code>.env</code>.</p>
+
+      <h2 id="perf">55. System Performance (<code>/perf</code>)</h2>
+      <p>Real-time system metrics from the Glances REST API.</p>
+      <ul>
+        <li><code>/perf</code> — Snapshot of CPU usage, memory usage, disk usage, and load average (1m / 5m / 15m).</li>
+      </ul>
+      <p><strong>Metrics explained:</strong></p>
+      <ul>
+        <li><strong>CPU %</strong> — Overall processor utilisation across all cores.</li>
+        <li><strong>Memory %</strong> — RAM used vs total; high values may cause swapping.</li>
+        <li><strong>Disk %</strong> — Root filesystem utilisation; above 90% is critical.</li>
+        <li><strong>Load avg</strong> — 1/5/15-minute averages; values above your CPU core count indicate contention.</li>
+      </ul>
+      <p><strong>Setup:</strong> Run Glances with <code>glances -w</code> or as a Docker container on port 61208, then set <code>GLANCES_URL=http://192.168.1.93:61208</code> in <code>.env</code>.</p>
+
+      <h2 id="ntfy">56. Push Notifications (<code>/ntfy</code>)</h2>
+      <p>Send phone push notifications via <a href="https://ntfy.sh" target="_blank">ntfy.sh</a> (free public server) or your own self-hosted ntfy instance.</p>
+      <ul>
+        <li><code>/ntfy send &lt;message&gt; [title] [priority]</code> — Send a push notification. Priority options: <code>min</code>, <code>low</code>, <code>default</code>, <code>high</code>, <code>urgent</code>.</li>
+        <li><code>/ntfy test</code> — Send a test notification titled "OpenClaw Test" to verify your setup.</li>
+      </ul>
+      <p><strong>Setup:</strong> Subscribe to a topic in the ntfy app, then set <code>NTFY_URL</code>, <code>NTFY_TOPIC</code>, and optionally <code>NTFY_TOKEN</code> (for authenticated/self-hosted instances) in <code>.env</code>.</p>
+      <p>Other cogs can import and call <code>push_notification(message, title, priority)</code> from <code>ntfy_cog.py</code> to send phone alerts programmatically.</p>
+
+      <h2 id="imdb">57. Movie &amp; TV Lookup (<code>/movie</code>, <code>/tv</code>, <code>/imdb</code>)</h2>
+      <p>Rich movie and TV show lookups via the OMDb API (Open Movie Database, backed by IMDb data).</p>
+      <ul>
+        <li><code>/movie &lt;title&gt;</code> — Search for a movie. Returns an embed with poster, year, genre, IMDb/Rotten Tomatoes/Metacritic ratings, director, cast, and plot.</li>
+        <li><code>/tv &lt;title&gt;</code> — Search for a TV show. Returns seasons, episodes, network, and ratings.</li>
+        <li><code>/imdb &lt;query&gt;</code> — Search both movies and TV shows together.</li>
+      </ul>
+      <p><strong>Setup:</strong> Get a free API key at <a href="https://www.omdbapi.com/" target="_blank">omdbapi.com</a> (1,000 requests/day free), then set <code>OMDB_API_KEY</code> in <code>.env</code>.</p>
+
+      <h2 id="sentry">58. Error Monitoring (<code>/sentry</code>)</h2>
+      <p>Monitor application errors via Sentry directly from Discord.</p>
+      <ul>
+        <li><code>/sentry issues [project]</code> — List the latest unresolved issues. Omit project to see all projects' issues.</li>
+        <li><code>/sentry projects</code> — List all projects in your Sentry org.</li>
+        <li><code>/sentry resolve &lt;issue_id&gt;</code> — Mark an issue as resolved (requires approval due to HIGH risk level).</li>
+        <li><code>/sentry stats [project]</code> — Hourly error rate graph for the past 24 hours.</li>
+      </ul>
+      <p><strong>Setup:</strong> Create a Sentry internal integration token with <em>Issues &amp; Events: Read &amp; Write</em> scope, then set <code>SENTRY_AUTH_TOKEN</code>, <code>SENTRY_ORG</code> (your org slug), and optionally <code>SENTRY_URL</code> (default: <code>https://sentry.io</code>) in <code>.env</code>.</p>
+
       <div
         style="
           text-align: center;
@@ -3684,7 +3762,7 @@ Division 1 men's lacrosse games this week and post a table.
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.8.0 &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.11.0 &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"

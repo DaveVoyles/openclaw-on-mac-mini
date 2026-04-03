@@ -656,7 +656,7 @@
 
         <!-- Container Health Matrix -->
         <div class="card">
-          <h2>&#128173; What's New in v0.10.0</h2>
+          <h2>&#128173; What's New in v0.11.0</h2>
           <div
             style="
               display: grid;
@@ -936,6 +936,14 @@
             <li>📬 <strong>/email</strong> — Read inbox, search, and send email from Discord</li>
             <li>📓 <strong>/journal</strong> — Daily journal with streak tracking and AI writing prompts, saved to vault</li>
             <li>🐙 <strong>/github</strong> — Monitor PRs and issues, get DM alerts on repo activity</li>
+            <li>🎨 <strong>/imagine</strong> — Generate images via Stable Diffusion txt2img with size and negative prompt options</li>
+            <li>🌐 <strong>/dns</strong> — AdGuard Home DNS filtering: status, stats, block/allow domains</li>
+            <li>📝 <strong>/notion</strong> — Search, create pages, and add todos in Notion via Maton</li>
+            <li>📄 <strong>/gdoc</strong> — Create and list Google Docs via Maton automation</li>
+            <li>🖥️ <strong>/perf</strong> — Real-time CPU, memory, disk, and load via Glances</li>
+            <li>📱 <strong>/ntfy</strong> — Send phone push notifications via ntfy.sh; other cogs can push alerts too</li>
+            <li>🎬 <strong>/movie /tv /imdb</strong> — Movie and TV lookups with rich embeds via OMDb/IMDb</li>
+            <li>🐛 <strong>/sentry</strong> — Sentry error monitoring: list issues, projects, resolve, stats</li>
           </ul>
           <p
             style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--muted)"
@@ -1813,6 +1821,44 @@
             { name: "/github prs [repo]", desc: "List open pull requests" },
             { name: "/github issues [repo]", desc: "List open issues" },
             { name: "/github watch <repo>", desc: "Subscribe to activity DMs" },
+          ]},
+          { category: "🎨 Image Generation", commands: [
+            { name: "/imagine generate <prompt> [size] [negative]", desc: "Generate image via Stable Diffusion txt2img" },
+            { name: "/imagine status", desc: "Check SD online status and list models" },
+          ]},
+          { category: "🌐 DNS Management", commands: [
+            { name: "/dns status", desc: "AdGuard Home status and filtering toggle" },
+            { name: "/dns stats", desc: "Query/block counts and top domains" },
+            { name: "/dns block <domain>", desc: "Block domain via DNS rewrite" },
+            { name: "/dns allow <domain>", desc: "Unblock a domain" },
+            { name: "/dns blocked", desc: "List all manually blocked domains" },
+          ]},
+          { category: "📝 Notion", commands: [
+            { name: "/notion search <query>", desc: "Search Notion pages and databases" },
+            { name: "/notion page <title> <content>", desc: "Create a new Notion page" },
+            { name: "/notion todo <item>", desc: "Add item to Notion todo database" },
+          ]},
+          { category: "📄 Google Docs", commands: [
+            { name: "/gdoc save <title> <content>", desc: "Create a new Google Doc" },
+            { name: "/gdoc list", desc: "List recent Google Docs" },
+          ]},
+          { category: "🖥️ System Performance", commands: [
+            { name: "/perf", desc: "CPU, memory, disk, load average via Glances" },
+          ]},
+          { category: "📱 Push Notifications", commands: [
+            { name: "/ntfy send <message> [title] [priority]", desc: "Send phone push notification via ntfy" },
+            { name: "/ntfy test", desc: "Send test notification to verify setup" },
+          ]},
+          { category: "🎬 Movie & TV", commands: [
+            { name: "/movie <title>", desc: "Look up a movie with poster and ratings" },
+            { name: "/tv <title>", desc: "Look up a TV show with season/episode info" },
+            { name: "/imdb <query>", desc: "Search movies and TV via OMDb" },
+          ]},
+          { category: "🐛 Error Monitoring", commands: [
+            { name: "/sentry issues [project]", desc: "List unresolved Sentry issues" },
+            { name: "/sentry projects", desc: "List Sentry org projects" },
+            { name: "/sentry resolve <issue_id>", desc: "Resolve a Sentry issue" },
+            { name: "/sentry stats [project]", desc: "Hourly error rate stats" },
           ]},
         ];
         renderCmds([...d.commands, ..._extraCmdGroups]);

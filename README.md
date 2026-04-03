@@ -317,6 +317,49 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - Follow-up buttons chain — each click generates a new full response with fresh follow-up options
 - System prompt updated with `## Proactive Engagement` section: bot ends complex answers with a follow-up question, suggests `/interview` for drafting/planning tasks, offers vault saves for long responses
 
+**Phase 31 — Image Generation** ✅
+
+- `/imagine generate <prompt>` — Stable Diffusion txt2img with size and negative prompt options
+- `/imagine status` — Check SD availability and list loaded models
+
+**Phase 32 — DNS Management** ✅
+
+- `/dns status` — AdGuard Home filtering status
+- `/dns stats` — Query/block counts and top domains
+- `/dns block <domain>` / `/dns allow <domain>` — Dynamic DNS rewrite rules
+- `/dns blocked` — List all manually blocked domains
+
+**Phase 33 — Notion & Google Docs** ✅
+
+- `/notion search <query>` — Search Notion pages and databases via Maton
+- `/notion page <title> <content>` — Create Notion pages
+- `/notion todo <item>` — Add items to Notion todo database
+- `/gdoc save <title> <content>` — Create Google Docs via Maton
+- `/gdoc list` — List recent Google Docs
+
+**Phase 34 — System Performance** ✅
+
+- `/perf` — Real-time CPU, memory, disk, and load average via Glances API
+
+**Phase 35 — Push Notifications** ✅
+
+- `/ntfy send <message>` — Send phone push notifications via ntfy.sh (or self-hosted)
+- `/ntfy test` — Verify ntfy configuration
+- `push_notification()` utility exported for other cogs to send alerts
+
+**Phase 36 — Movie & TV Lookup** ✅
+
+- `/movie <title>` — Rich movie embeds with poster, ratings, plot (OMDb)
+- `/tv <title>` — TV show info with season/episode details
+- `/imdb <query>` — Combined movie and TV search
+
+**Phase 37 — Error Monitoring** ✅
+
+- `/sentry issues [project]` — List unresolved Sentry issues
+- `/sentry projects` — List Sentry org projects
+- `/sentry resolve <issue_id>` — Resolve a Sentry issue
+- `/sentry stats [project]` — Hourly error rate statistics
+
 **Planned**
 
 - Grafana dashboards
