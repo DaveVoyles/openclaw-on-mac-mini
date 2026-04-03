@@ -190,6 +190,42 @@ async def backup_config_to_nas() -> str:
     return f"✅ NAS backup ({date_str}): {summary}"
 
 
+async def backup_vault_to_nas() -> str:
+    """Backup the Obsidian vault to NAS via rsync over SSH."""
+    from subprocess_utils import run as _run
+
+    vault_dir = Path(os.getenv("VAULT_DIR", "/vault"))
+    remote_path = "/volume1/backups/vault/"
+    rsync_ssh = f"ssh -p {NAS_SSH_PORT} -o BatchMode=yes -o ConnectTimeout=10"
+
+    if not vault_dir.is_dir():
+        return f"⚠️ Vault dir {vault_dir} not found — skipping backup"
+
+    # Ensure remote directory exists
+    ssh_opts = ["-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+    rc_mkdir, _, err_mkdir = await _run(
+        ["ssh"] + ssh_opts + [f"{NAS_SSH_USER}@{NAS_HOST}", f"mkdir -p {remote_path}"],
+        timeout=20,
+    )
+    if rc_mkdir != 0:
+        return f"❌ Cannot reach NAS for vault backup: {err_mkdir[:150]}"
+
+    rc, _, err = await _run(
+        [
+            "rsync", "-avz", "--delete",
+            "-e", rsync_ssh,
+            f"{vault_dir}/",
+            f"{NAS_SSH_USER}@{NAS_HOST}:{remote_path}",
+        ],
+        timeout=120,
+    )
+
+    if rc == 0:
+        return f"✅ Vault backed up to NAS: {remote_path}"
+    else:
+        return f"❌ Vault backup failed (exit {rc}): {err[:200]}"
+
+
 # ---------------------------------------------------------------------------
 # Composite: run all maintenance tasks
 # ---------------------------------------------------------------------------
@@ -203,7 +239,8 @@ async def run_maintenance() -> str:
       1. update_skills   — git pull latest skill code
       2. restart_gateway — clear LLM/HTTP sessions
       3. backup_config_to_nas — rsync config to NAS
-      4. memory_decay    — flag stale unused memories (Phase 14B)
+      4. backup_vault_to_nas — rsync vault to NAS
+      5. memory_decay    — flag stale unused memories (Phase 14B)
 
     Registered by bot.py at startup for 4:00 AM daily execution.
     """
@@ -212,6 +249,7 @@ async def run_maintenance() -> str:
         ("skills-update", update_skills),
         ("gateway-restart", restart_gateway),
         ("nas-backup", backup_config_to_nas),
+        ("vault-backup", backup_vault_to_nas),
         ("memory-decay", run_memory_decay),
         ("dream-cycle", _run_dream_cycle),
     ]
@@ -553,6 +591,7 @@ MAINTENANCE_SKILLS = {
     "update_skills": update_skills,
     "restart_gateway": restart_gateway,
     "backup_config_to_nas": backup_config_to_nas,
+    "backup_vault_to_nas": backup_vault_to_nas,
     "run_maintenance": run_maintenance,
     "run_memory_decay": run_memory_decay,
     "run_memory_consolidation": run_memory_consolidation,

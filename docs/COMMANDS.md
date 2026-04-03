@@ -150,6 +150,41 @@ Word (.docx) and Excel (.xlsx) document creation, reading, and AI-assisted editi
 **Dependencies:** `python-docx`, `openpyxl` (in `requirements.txt`).
 **Implementation:** `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (Discord commands).
 
+> **💾 Save to NAS:** After `/doc create` or `/sheet create`, the response includes a **Save to NAS** button that rsyncs the generated file to the Synology NAS.
+
+---
+
+## Notes & Vault
+
+Quick note-taking and full-text search across the Obsidian vault.
+
+| Command                      | Description                                              | Parameters                                                    | Auth | Risk | File           |
+| ---------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- | ---- | ---- | -------------- |
+| `/note create`               | Create a Markdown note and save to the Obsidian vault    | `title: str`, `content: str`, `tags: str (optional)`          | ✅   | LOW  | `note_cog.py`  |
+| `/note list`                 | Browse recent vault notes, optionally filtered by type   | `type: research\|bookmark\|note\|analytics (optional)`        | ✅   | LOW  | `note_cog.py`  |
+| `/note view`                 | Read a vault note's full content                         | `filename: str`                                               | ✅   | LOW  | `note_cog.py`  |
+| `/note search`               | Full-text search across all vault notes                  | `query: str`                                                  | ✅   | LOW  | `note_cog.py`  |
+
+**Examples:**
+```
+/note create title:"Meeting Notes" content:"Discussed migration timeline" tags:"meeting,planning"
+/note list type:research
+/note view filename:"2026-03-25-docker-patterns.md"
+/note search query:"Sonarr upgrade"
+```
+
+**Implementation:** `src/cogs/note_cog.py` (Discord commands) + `src/obsidian_writer.py` (vault I/O).
+
+---
+
+## Research
+
+| Command          | Description                                              | Parameters                                                            | Auth | Risk | File     |
+| ---------------- | -------------------------------------------------------- | --------------------------------------------------------------------- | ---- | ---- | -------- |
+| `/research`      | Autonomous multi-step research with synthesis            | `query: str`, `deep: bool (optional)`                                 | ✅   | LOW  | `bot.py` |
+
+> **📎 Save to Vault:** After research completes, the report thread includes a **Save to Vault** button that writes the full report as a Markdown file to `data/vault/Research/`.
+
 ---
 
 ## Security & Approvals

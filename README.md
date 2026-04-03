@@ -269,6 +269,14 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Evening digest** — automated 9 PM daily summary (reminders, tasks, habits, expenses) posted to `ALERT_CHANNEL_ID`; complements the morning briefing
 - 19 new slash commands across 6 new cogs (88 total)
 
+**Phase 24 — Document Storage & Vault Workflow** ✅
+
+- `/note create/list/view/search` — quick note-taking and full-text vault search (`note_cog.py`)
+- **Save to Vault** button on `/research` reports — one-click save to `data/vault/Research/`
+- **Save to NAS** button on `/doc create` and `/sheet create` — rsync generated files to Synology NAS
+- **Nightly vault backup** — dedicated `backup_vault_to_nas()` rsync at 4 AM alongside config backup
+- **Implementation** — `src/cogs/note_cog.py` (4 commands) + `src/obsidian_writer.py` (vault I/O) + `src/maintenance_skills.py` (vault backup)
+
 **Planned**
 
 - Grafana dashboards

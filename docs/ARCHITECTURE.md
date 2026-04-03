@@ -96,7 +96,7 @@ graph TB
             LLMRateLimit
         end
 
-        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 9 cogs, 49 commands"]
+        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 10 cogs, 53 commands"]
             DockerCog["docker_cog.py\n6 commands\n+ interactive select menus"]
             MediaCog["media_cog.py\n6 commands"]
             NetworkCog["network_cog.py\n3 commands"]
@@ -106,6 +106,7 @@ graph TB
             ResearchCog["research_cog.py\n6 commands"]
             NotifyCog["notify_cog.py\n7 commands\nper-user alert prefs"]
             DocCog["doc_cog.py\n6 commands\nWord & Excel editing"]
+            NoteCog["note_cog.py\n4 commands\nVault notes & search"]
         end
     end
 

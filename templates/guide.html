@@ -1327,7 +1327,9 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
         &nbsp;&nbsp;<strong>&#128204; Save to Memory</strong> &mdash; stores the
         report summary in QMD long-term memory<br />
         &nbsp;&nbsp;<strong>&#128260; Re-run in 24h</strong> &mdash; schedules
-        the research query to repeat tomorrow
+        the research query to repeat tomorrow<br />
+        &nbsp;&nbsp;<strong>&#128206; Save to Vault</strong> &mdash; writes the
+        full report as a Markdown file to <code>data/vault/Research/</code>
       </div>
 
       <!-- 15. Session Memory -->
@@ -2090,12 +2092,38 @@ This article covers ...
       <p>
         Every night at <strong>3:50 AM</strong>, the bot scans
         <code>/vault/</code> for files modified since the last index run and
-        adds them to the QMD long-term memory store. After indexing, you can
-        search vault contents via:
+        adds them to the QMD long-term memory store. At <strong>4:00 AM</strong>,
+        the vault is also rsynced to the NAS via <code>backup_vault_to_nas</code>.
+        After indexing, you can search vault contents via:
       </p>
       <pre><code>/recall docker
+/note search query:"Sonarr upgrade"
 /ask What have I saved about Sonarr upgrades?
 /ask Show me all bookmarks tagged "reference"</code></pre>
+
+      <h3>Discord Commands (<code>/note</code>)</h3>
+      <table>
+        <tr>
+          <th>Command</th>
+          <th>What it does</th>
+        </tr>
+        <tr>
+          <td><code>/note create</code></td>
+          <td>Create a Markdown note with title, content, and optional tags, saved to the vault.</td>
+        </tr>
+        <tr>
+          <td><code>/note list</code></td>
+          <td>Browse recent vault notes, optionally filtered by type (research, bookmark, note, analytics).</td>
+        </tr>
+        <tr>
+          <td><code>/note view</code></td>
+          <td>Read a vault note&rsquo;s full content by filename.</td>
+        </tr>
+        <tr>
+          <td><code>/note search</code></td>
+          <td>Full-text search across all vault notes.</td>
+        </tr>
+      </table>
 
       <div class="tip">
         <strong>&#128161; Opening in Obsidian:</strong> The vault uses standard
