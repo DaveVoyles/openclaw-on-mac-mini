@@ -15,8 +15,6 @@ Skills:
 import logging
 import os
 
-import aiohttp
-
 log = logging.getLogger("openclaw.uptime_kuma")
 
 from config import cfg as _cfg
@@ -130,14 +128,12 @@ async def get_monitor_detail(name: str) -> str:
     name_lower = name.lower()
 
     # Find matching monitor
-    match_id = None
     match_beats = None
     for monitor_id, beats in heartbeat_list.items():
         if not beats:
             continue
         monitor_name = beats[-1].get("name", "")
         if name_lower in monitor_name.lower():
-            match_id = monitor_id
             match_beats = beats
             break
 
