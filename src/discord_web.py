@@ -13,7 +13,9 @@ import logging
 import os
 import platform
 import time
+from pathlib import Path
 
+import aiohttp
 import discord
 from aiohttp import web
 
@@ -294,6 +296,126 @@ async def _analyze_webhook_event(source: str, payload: dict, channel):
 
 
 # ---------------------------------------------------------------------------
+# Granular health-check endpoints
+# ---------------------------------------------------------------------------
+
+
+async def _health_llm_handler(request: web.Request) -> web.Response:
+    """Check LLM provider availability."""
+    checks: dict[str, str] = {}
+
+    # Ollama
+    try:
+        from config import cfg as _cfg
+        ollama_url = _cfg.ollama_url
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{ollama_url}/api/tags",
+                timeout=aiohttp.ClientTimeout(total=2),
+            ) as r:
+                checks["ollama"] = "ok" if r.status == 200 else "down"
+    except Exception:
+        checks["ollama"] = "down"
+
+    # Gemini (verify key exists)
+    checks["gemini"] = "ok" if os.getenv("GOOGLE_API_KEY") else "unconfigured"
+
+    # Copilot proxy
+    try:
+        from model_router import COPILOT_PROXY_ENABLED
+        checks["copilot_proxy"] = "ok" if COPILOT_PROXY_ENABLED else "unconfigured"
+    except Exception:
+        checks["copilot_proxy"] = "unconfigured"
+
+    any_ok = any(v == "ok" for v in checks.values())
+    status_code = 200 if any_ok else 503
+    return web.json_response(
+        {"status": "ok" if any_ok else "down", "checks": checks},
+        status=status_code,
+    )
+
+
+async def _health_memory_handler(request: web.Request) -> web.Response:
+    """Check memory subsystem health (ChromaDB, QMD, threads DB)."""
+    checks: dict[str, str] = {}
+
+    # ChromaDB
+    try:
+        from vector_store import _get_client
+        client = _get_client()
+        client.heartbeat()
+        checks["chromadb"] = "ok"
+    except Exception:
+        checks["chromadb"] = "down"
+
+    # QMD file
+    qmd_path = Path(os.getenv("QMD_PATH", "/app/data/qmd.json"))
+    checks["qmd"] = "ok" if qmd_path.exists() else "missing"
+
+    # Thread store SQLite
+    try:
+        import sqlite3 as _sqlite3
+        from thread_store import DB_PATH as _threads_db_path
+        conn = _sqlite3.connect(str(_threads_db_path), timeout=3)
+        try:
+            conn.execute("SELECT 1 FROM threads LIMIT 1")
+            checks["threads_db"] = "ok"
+        finally:
+            conn.close()
+    except Exception:
+        checks["threads_db"] = "down"
+
+    chroma_ok = checks.get("chromadb") == "ok"
+    overall = "ok" if chroma_ok else "degraded"
+    status_code = 200 if chroma_ok else 503
+    return web.json_response(
+        {"status": overall, "checks": checks},
+        status=status_code,
+    )
+
+
+async def _health_services_handler(request: web.Request) -> web.Response:
+    """Check external service connectivity (Docker, NAS, scheduler)."""
+    checks: dict[str, str] = {}
+
+    # Docker socket
+    docker_sock = Path("/var/run/docker.sock")
+    checks["docker"] = "ok" if docker_sock.exists() else "unavailable"
+
+    # NAS connectivity
+    try:
+        from config import cfg as _cfg
+        nas_host = getattr(_cfg, "nas_host", "") or os.getenv("NAS_HOST", "")
+        if nas_host:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"http://{nas_host}:5000",
+                    timeout=aiohttp.ClientTimeout(total=2),
+                ) as r:
+                    checks["nas"] = "ok" if r.status < 500 else "down"
+        else:
+            checks["nas"] = "unconfigured"
+    except Exception:
+        checks["nas"] = "down"
+
+    # Scheduler
+    try:
+        from scheduler import scheduler
+        task_count = len(scheduler.list_tasks())
+        checks["scheduler"] = f"ok ({task_count} tasks)"
+    except Exception:
+        checks["scheduler"] = "down"
+
+    any_down = any(v == "down" for v in checks.values())
+    overall = "degraded" if any_down else "ok"
+    status_code = 200 if not any_down else 503
+    return web.json_response(
+        {"status": overall, "checks": checks},
+        status=status_code,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -303,6 +425,9 @@ async def start_health_server(bot) -> web.AppRunner:
     app["bot"] = bot
     app.router.add_get("/", dashboard_handler)
     app.router.add_get("/health", _health_handler)
+    app.router.add_get("/health/llm", _health_llm_handler)
+    app.router.add_get("/health/memory", _health_memory_handler)
+    app.router.add_get("/health/services", _health_services_handler)
     app.router.add_get("/metrics", _metrics_handler)
     app.router.add_get("/dashboard", dashboard_handler)
     app.router.add_get("/api/dashboard", api_dashboard_handler)
