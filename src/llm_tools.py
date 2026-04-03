@@ -13,6 +13,7 @@ from google import genai
 from llm_client import MAX_TOOL_ROUNDS, _record_usage
 from llm_ratelimit import rate_limiter as _rate_limiter
 from skills import SKILLS
+from trace_context import get_trace_id
 
 log = logging.getLogger("openclaw.llm.tools")
 
@@ -159,8 +160,8 @@ async def _run_tool_loop(
         if not parallel:
             function_calls = function_calls[:1]
 
-        log.info("%s function call(s) [round %d]: %s", label, rounds + 1,
-                 ", ".join(f"{n}({a})" for n, a in function_calls))
+        log.info("%s function call(s) [round %d] trace=%s: %s", label, rounds + 1,
+                 get_trace_id(), ", ".join(f"{n}({a})" for n, a in function_calls))
 
         # Fire progress callbacks (before execution — with args)
         if on_tool_call:

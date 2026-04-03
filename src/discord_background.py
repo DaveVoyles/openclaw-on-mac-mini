@@ -16,6 +16,8 @@ from pathlib import Path
 
 import discord
 
+from trace_context import get_trace_id, trace_context
+
 from approvals import approval_store
 from audit import _audit_buffer, audit_log
 from constants import (
@@ -217,7 +219,10 @@ async def proactive_insight_loop(bot):
     await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)
     while True:
         try:
-            await _run_proactive_scan(bot)
+            with trace_context(command="proactive_scan"):
+                log.info("Proactive scan starting")
+                await _run_proactive_scan(bot)
+                log.info("Proactive scan complete")
         except Exception as e:
             log.warning("Proactive scan error: %s", e)
         await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)

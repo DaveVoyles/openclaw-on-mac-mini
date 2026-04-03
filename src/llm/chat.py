@@ -42,6 +42,8 @@ from .context import (
 )
 from .tool_execution import _ollama_available, _try_local_model
 
+from trace_context import get_trace_id
+
 log = logging.getLogger("openclaw.llm")
 
 
@@ -105,6 +107,8 @@ async def chat_stream(
     model_preference: str = "auto",
 ):
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
+    log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
+             model_preference, get_trace_id(), user_message)
     if model_preference == "local":
         _model_hint = "ollama"
     elif model_preference == "gemini":
@@ -360,6 +364,8 @@ async def chat(
       - ``"local"`` — force Ollama/Gemma; error if unavailable
       - ``"gemini"`` — skip everything, go straight to Gemini
     """
+    log.info("LLM chat start model_pref=%s trace=%s msg=%.60s",
+             model_preference, get_trace_id(), user_message)
     if model_preference == "local":
         _model_hint = "ollama"
     elif model_preference == "gemini":
