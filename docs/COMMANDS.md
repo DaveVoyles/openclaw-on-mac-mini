@@ -1,6 +1,6 @@
 # OpenClaw — Discord Slash Commands Reference
 
-All 56 slash commands across `bot.py` and 4 cogs, organized by category.
+All 63 slash commands across `bot.py` and 5 cogs, organized by category.
 
 > **Risk levels:** LOW (auto-execute) | MEDIUM (logged) | HIGH (requires button approval) | CRITICAL (requires approval + preview)
 >
@@ -18,7 +18,7 @@ General-purpose commands for identity, help, and conversation management.
 | `/about`         | Show OpenClaw version and system info                     | —                                              | ✅   | LOW    | `bot.py` |
 | `/whoami`        | Show your Discord identity and permission level           | —                                              | ✅   | LOW    | `bot.py` |
 | `/help`          | List available OpenClaw commands                          | —                                              | ✅   | LOW    | `bot.py` |
-| `/ask`           | AI-powered natural language query (auto-routes to Gemini/GPT-4o/Claude/Ollama) | `question: str`, `attachment: file (optional)`, `model: auto\|local\|gemini\|openai\|anthropic (optional)` | —    | MEDIUM | `bot.py` |
+| `/ask`           | AI-powered natural language query (auto-routes to Gemini/GPT-4o/Claude/Ollama); auto-creates a Discord thread after 3+ exchanges — follow-up messages work without `/ask` inside the thread | `question: str`, `attachment: file (optional)`, `model: auto\|local\|gemini\|openai\|anthropic (optional)` | —    | MEDIUM | `bot.py` |
 | `/clear`         | Clear your conversation history                           | —                                              | ✅   | LOW    | `bot.py` |
 | `/model show`    | Show your current model routing preference                | —                                              | —    | LOW    | `bot.py` |
 | `/model set`     | Set your default model routing preference                 | `preference: auto\|local\|gemini\|openai\|anthropic` | —    | LOW    | `bot.py` |
@@ -48,7 +48,7 @@ Container management, system monitoring, and infrastructure diagnostics.
 
 | Command        | Description                                      | Parameters                         | Auth | Risk     | File             |
 | -------------- | ------------------------------------------------ | ---------------------------------- | ---- | -------- | ---------------- |
-| `/containers`  | List all running Docker containers               | —                                  | —    | LOW      | `docker_cog.py`  |
+| `/containers`  | Interactive container management (select menu + action buttons: status, logs, restart) | —                    | —    | LOW      | `docker_cog.py`  |
 | `/status`      | Detailed status for a container                  | `service: str`                     | —    | LOW      | `docker_cog.py`  |
 | `/logs`        | View recent logs from a container                | `service: str`, `lines: int = 30`  | —    | LOW      | `docker_cog.py`  |
 | `/system`      | Show system resource usage (CPU, RAM, disk)      | —                                  | —    | LOW      | `docker_cog.py`  |
@@ -172,6 +172,22 @@ LLM-callable tools: `ontology_create_entity`, `ontology_get_entity`, `ontology_u
 
 ---
 
+## Notifications
+
+Per-user alert preferences — mute, filter, block, and DM controls.
+
+| Command               | Description                                    | Parameters                     | Auth | Risk | File            |
+| --------------------- | ---------------------------------------------- | ------------------------------ | ---- | ---- | --------------- |
+| `/notify show`        | Show your notification preferences             | —                              | —    | LOW  | `notify_cog.py` |
+| `/notify mute`        | Mute alerts for a duration (e.g., 30m, 2h, 8h) | `duration: str`               | —    | LOW  | `notify_cog.py` |
+| `/notify unmute`      | Resume alerts immediately                      | —                              | —    | LOW  | `notify_cog.py` |
+| `/notify filter`      | Set severity filter                            | `level: all\|warning\|critical` | —    | LOW  | `notify_cog.py` |
+| `/notify block`       | Block alerts from a specific service           | `service: str`                 | —    | LOW  | `notify_cog.py` |
+| `/notify unblock`     | Unblock a previously blocked service           | `service: str`                 | —    | LOW  | `notify_cog.py` |
+| `/notify dm`          | Toggle DM delivery for alerts                  | `enabled: on\|off`             | —    | LOW  | `notify_cog.py` |
+
+---
+
 ## Summary
 
 | Category             | Commands | Source Files                                |
@@ -183,7 +199,8 @@ LLM-callable tools: `ontology_create_entity`, `ontology_get_entity`, `ontology_u
 | AI & Research        | 10       | `bot.py`                                    |
 | Security & Approvals | 7        | `bot.py`, `analytics_cog.py`                |
 | Planning & Tasks     | 5        | `bot.py`                                    |
-| **Total**            | **56**   | + 60 LLM-callable skill functions via `/ask` |
+| Notifications        | 7        | `notify_cog.py`                             |
+| **Total**            | **63**   | + 60 LLM-callable skill functions via `/ask` |
 
 ---
 

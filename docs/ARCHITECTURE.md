@@ -74,6 +74,9 @@ graph TB
         MonitorSkills["monitor_skills.py\nURL Change Detection"]
         RSSSkills["rss_skills.py\nFeed Monitoring"]
         MissionControl["mission_control.py\nKanban Task Store"]
+        ErrorAggregator["error_aggregator.py\nError Dedup Layer"]
+        TraceContext["trace_context.py\nCorrelation ID Tracing"]
+        NotificationPrefs["notification_prefs.py\nPer-User Alert Prefs"]
         VectorStore["vector_store.py\nChromaDB Semantic Memory\n3 collections"]
         ThreadStore["thread_store.py\nSQLite Thread Persistence\nWAL mode"]
         Metrics["/metrics\nPrometheus Endpoint\n:8765"]
@@ -91,14 +94,15 @@ graph TB
             LLMRateLimit
         end
 
-        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 7 cogs, 36 commands"]
-            DockerCog["docker_cog.py\n6 commands"]
+        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 8 cogs, 43 commands"]
+            DockerCog["docker_cog.py\n6 commands\n+ interactive select menus"]
             MediaCog["media_cog.py\n6 commands"]
             NetworkCog["network_cog.py\n3 commands"]
             AnalyticsCog["analytics_cog.py\n3 commands"]
             DreamCog["dream_cog.py\n3 commands"]
             MemoryCog["memory_cog.py\n9 commands"]
             ResearchCog["research_cog.py\n6 commands"]
+            NotifyCog["notify_cog.py\n7 commands\nper-user alert prefs"]
         end
     end
 
@@ -120,6 +124,9 @@ graph TB
     Bot --> Scheduler
     Bot --> WebhookFmt
     Bot --> HealthAlerts
+    Bot --> ErrorAggregator
+    ErrorAggregator -->|"deduped alerts"| Discord
+    Bot --> TraceContext
     HealthAlerts -->|"unhealthy/exited"| Discord
 
     %% ── Cogs feed into bot ────────────────────────────────────
@@ -130,6 +137,8 @@ graph TB
     DreamCog --> Bot
     MemoryCog --> Bot
     ResearchCog --> Bot
+    NotifyCog --> Bot
+    NotifyCog --> NotificationPrefs
     DockerCog --> Skills
     MediaCog --> Skills
     NetworkCog --> Skills
@@ -329,7 +338,7 @@ graph TB
     classDef actor fill:#1e1e3a,stroke:#6060d9,color:#fff
 
     class Discord,Bot,DiscordCmds,DiscordBG,DiscordWeb,LLM,LLMClient,LLMTools,LLMPatterns,LLMRateLimit,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,HealthAlerts,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
-    class DockerCog,MediaCog,NetworkCog,AnalyticsCog,DreamCog,MemoryCog,ResearchCog service
+    class DockerCog,MediaCog,NetworkCog,AnalyticsCog,DreamCog,MemoryCog,ResearchCog,NotifyCog service
     class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,PerplexityAPI,FirecrawlAPI,TavilyAPI,DDGNet,SerperAPI,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
     class DockerEngine,Glances,Tailscale,Cloudflare,Prometheus,UptimeKuma,NAS,Traefik,SynDDNS infra
@@ -382,6 +391,10 @@ graph TB
 | **Copilot proxy**             | `llm.py` → `aiohttp` POST to `localhost:9191/v1/chat/completions` → GitHub Copilot API → OpenAI/Anthropic response                              |
 | **Fact extraction**           | `bot.py` post-response → `fact_extractor.extract_facts()` → `should_store()` similarity check → `qmd.remember_fact()` with confidence=0.6       |
 | **Ollama tool calling**       | `llm.py` → `ollama_tools.py` `ollama_chat_with_tools()` → Ollama API with tool declarations → execute read-only tools → return result           |
+| **Notification prefs**       | `/notify` → `notify_cog.py` → `notification_prefs.py` → `data/notification_prefs.json`; checked before every alert dispatch                      |
+| **Error aggregation**        | `error_aggregator.py` receives alerts → dedup by fingerprint → batch similar errors → single Discord notification with count                       |
+| **Request tracing**          | `trace_context.py` assigns correlation ID → propagated through LLM calls, skill executions, API requests → structured log output                   |
+| **Thread-based /ask**        | `/ask` (3+ exchanges) → auto-create Discord thread → follow-up messages handled without `/ask` prefix inside thread                                |
 
 ---
 

@@ -244,6 +244,14 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **UI components library** — `ui_components.py` with reusable `PaginationView`, `paginate_items()`, `build_embed()`
 - **Context menu cog** — `cogs/context_cog.py` (auto-loaded) for right-click actions
 
+**Phase 21 — Notifications, Threading & Observability** ✅
+
+- **Per-user notification preferences** — `/notify` command group (7 subcommands: show, mute, unmute, filter, block, unblock, dm) lets each user customize alert delivery
+- **Interactive container management** — `/containers` now shows a select menu with action buttons (status, logs, restart) instead of a plain text list
+- **Thread-based conversations** — `/ask` auto-creates a Discord thread after 3+ exchanges; follow-up messages work without re-typing `/ask` inside the thread
+- **Error aggregation** — `error_aggregator.py` deduplicates similar alerts, batching them into a single notification with occurrence counts
+- **Structured logging with correlation IDs** — `trace_context.py` attaches a unique correlation ID to every request, propagated through LLM calls, skill executions, and API requests for end-to-end tracing
+
 **Planned**
 
 - Grafana dashboards
@@ -570,14 +578,17 @@ Uptime Kuma (:3001)              Grafana dashboard
 │   ├── goal_tracker.py    # Auto-tracked goals from conversations (188 lines)
 │   ├── memory_manager.py  # Memory lifecycle management (199 lines)
 │   ├── webhook_formatter.py # Incoming webhook parser (Sonarr/Radarr/Plex)
-│   └── ... (see docs/MODULES.md for all 60 modules)
-│   └── cogs/              # 7 Discord cogs (36 commands)
+│   ├── error_aggregator.py # Error deduplication and alert batching
+│   ├── trace_context.py   # Structured logging with correlation IDs
+│   └── ... (see docs/MODULES.md for all 60+ modules)
+│   └── cogs/              # 8 Discord cogs (43 commands)
 │       ├── analytics_cog.py  # /spending, /auditlog, /audit-summary
 │       ├── docker_cog.py     # /containers, /status, /logs, /system, /dockerstats, /restart
 │       ├── dream_cog.py      # /dream, /memory-health, /memory-export
 │       ├── media_cog.py      # /search, /queue, /recent, /health, /nowplaying, /watch
 │       ├── memory_cog.py     # /remember, /recall, /goals, /memory-stats, + 5 more
 │       ├── network_cog.py    # /network, /tailscale, /speedtest
+│       ├── notify_cog.py     # /notify show/mute/unmute/filter/block/unblock/dm
 │       └── research_cog.py   # /websearch, /browse, /research, /compare, + 2 more
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
