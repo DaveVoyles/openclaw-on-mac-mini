@@ -1,6 +1,6 @@
 # OpenClaw — Discord Slash Commands Reference
 
-All 63 slash commands across `bot.py` and 5 cogs, organized by category.
+All 69 slash commands across `bot.py` and 6 cogs, organized by category.
 
 > **Risk levels:** LOW (auto-execute) | MEDIUM (logged) | HIGH (requires button approval) | CRITICAL (requires approval + preview)
 >
@@ -124,6 +124,34 @@ Web search, browsing, file analysis, image generation, code execution, and auton
 
 ---
 
+## Document Editing
+
+Word (.docx) and Excel (.xlsx) document creation, reading, and AI-assisted editing.
+
+| Command                      | Description                                              | Parameters                                    | Auth | Risk   | File          |
+| ---------------------------- | -------------------------------------------------------- | --------------------------------------------- | ---- | ------ | ------------- |
+| `/doc read`                  | Extract and display Word document content                | `attachment: .docx file`                       | —    | LOW    | `doc_cog.py`  |
+| `/doc edit <instructions>`   | AI-assisted Word document editing                        | `attachment: .docx file`, `instructions: str`  | —    | LOW    | `doc_cog.py`  |
+| `/doc create <description>`  | Generate a new Word document from natural language       | `description: str`                             | —    | LOW    | `doc_cog.py`  |
+| `/sheet read`                | Display Excel spreadsheet as a formatted table           | `attachment: .xlsx file`                       | —    | LOW    | `doc_cog.py`  |
+| `/sheet edit <instructions>` | AI-assisted Excel spreadsheet editing                    | `attachment: .xlsx file`, `instructions: str`  | —    | LOW    | `doc_cog.py`  |
+| `/sheet create <description>`| Generate a new Excel spreadsheet from description        | `description: str`                             | —    | LOW    | `doc_cog.py`  |
+
+**Examples:**
+```
+/doc read                          → attach a .docx file to see its content
+/doc edit "fix all typos"          → attach a .docx file + describe changes
+/doc create "weekly status report template with headers for accomplishments, blockers, and next steps"
+/sheet read                        → attach a .xlsx file to see it as a table
+/sheet edit "add a Total row"      → attach a .xlsx file + describe changes
+/sheet create "budget tracker with columns: date, category, amount, notes"
+```
+
+**Dependencies:** `python-docx`, `openpyxl` (in `requirements.txt`).
+**Implementation:** `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (Discord commands).
+
+---
+
 ## Security & Approvals
 
 Audit trail, emergency controls, and approval workflows.
@@ -197,10 +225,11 @@ Per-user alert preferences — mute, filter, block, and DM controls.
 | Media & Downloads    | 6        | `media_cog.py`                              |
 | Network              | 3        | `network_cog.py`                            |
 | AI & Research        | 10       | `bot.py`                                    |
+| Document Editing     | 6        | `doc_cog.py`                                |
 | Security & Approvals | 7        | `bot.py`, `analytics_cog.py`                |
 | Planning & Tasks     | 5        | `bot.py`                                    |
 | Notifications        | 7        | `notify_cog.py`                             |
-| **Total**            | **63**   | + 60 LLM-callable skill functions via `/ask` |
+| **Total**            | **69**   | + 60 LLM-callable skill functions via `/ask` |
 
 ---
 

@@ -112,6 +112,18 @@ Agents working on this codebase should read this file to understand what is avai
 
 ---
 
+## Document Editing
+
+| Item              | Details                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| **Purpose**       | Read, edit, and create Word (.docx) and Excel (.xlsx) documents via Discord         |
+| **Module**        | `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (Discord commands)  |
+| **Dependencies**  | `python-docx` (Word support), `openpyxl` (Excel support) — listed in `requirements.txt` |
+| **Commands**      | `/doc read`, `/doc edit`, `/doc create`, `/sheet read`, `/sheet edit`, `/sheet create` |
+| **Env Vars**      | _(none required)_                                                                   |
+
+---
+
 ## ClawHub Skill Bundles Installed
 
 These are discrete skill packages installed under `skills/<slug>/`. Some are invoked via subprocess, while others are local instruction bundles that guide agent behavior or future integrations. See `copilot-instructions.md` for the integration pattern.

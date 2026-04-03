@@ -252,6 +252,12 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Error aggregation** — `error_aggregator.py` deduplicates similar alerts, batching them into a single notification with occurrence counts
 - **Structured logging with correlation IDs** — `trace_context.py` attaches a unique correlation ID to every request, propagated through LLM calls, skill executions, and API requests for end-to-end tracing
 
+**Phase 22 — Document Editing** ✅
+
+- **Word document support** — `/doc read`, `/doc edit`, `/doc create` for reading, AI-assisted editing, and generating `.docx` files
+- **Excel spreadsheet support** — `/sheet read`, `/sheet edit`, `/sheet create` for reading, AI-assisted editing, and generating `.xlsx` files
+- **Implementation** — `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (Discord cog); depends on `python-docx` and `openpyxl`
+
 **Planned**
 
 - Grafana dashboards
@@ -387,6 +393,13 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 | `/dream`                      | Run a cognitive dream cycle (memory consolidation)              | 16    |
 | `/memory-health`              | Show memory health score and 5 metrics                          | 16    |
 | `/memory-export`              | Export memory bundle (MEMORY.md + index + episodes)             | 16    |
+
+| `/doc read`                   | Extract and display Word document content                       | 22    |
+| `/doc edit <instructions>`    | AI-assisted Word document editing (attach .docx)                | 22    |
+| `/doc create <description>`   | Generate a new Word document from description                   | 22    |
+| `/sheet read`                 | Display Excel spreadsheet as formatted table                    | 22    |
+| `/sheet edit <instructions>`  | AI-assisted Excel spreadsheet editing (attach .xlsx)            | 22    |
+| `/sheet create <description>` | Generate a new Excel spreadsheet from description               | 22    |
 
 ## Architecture
 

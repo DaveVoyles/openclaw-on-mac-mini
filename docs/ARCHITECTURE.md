@@ -33,7 +33,8 @@ skills/advanced_skills.py split into focused modules:
 ├── advanced_skills.py (280) — Orchestration glue, reporting
 ├── search_skills.py (525) — Web search cascade + retry logic
 ├── media_skills.py (480) — *arr services, Plex, download clients
-└── web_skills.py (274) — URL browsing, content extraction
+├── web_skills.py (274) — URL browsing, content extraction
+└── document_skills.py — Word (.docx) & Excel (.xlsx) reading, editing, creation
 ```
 
 ---
@@ -59,6 +60,7 @@ graph TB
         LLMRateLimit["llm_ratelimit.py\nRate limiter"]
         ResearchAgent["research_agent.py\nReAct Research Loop"]
         Skills["skills/\nsearch_skills · media_skills\nweb_skills · advanced_skills"]
+        DocumentSkills["document_skills.py\nWord & Excel Processing"]
         Gateway["gateway.py\nMaton Client"]
         Approvals["approvals.py\nApproval Workflow"]
         Scheduler["scheduler.py\nCron Jobs"]
@@ -94,7 +96,7 @@ graph TB
             LLMRateLimit
         end
 
-        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 8 cogs, 43 commands"]
+        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 9 cogs, 49 commands"]
             DockerCog["docker_cog.py\n6 commands\n+ interactive select menus"]
             MediaCog["media_cog.py\n6 commands"]
             NetworkCog["network_cog.py\n3 commands"]
@@ -103,6 +105,7 @@ graph TB
             MemoryCog["memory_cog.py\n9 commands"]
             ResearchCog["research_cog.py\n6 commands"]
             NotifyCog["notify_cog.py\n7 commands\nper-user alert prefs"]
+            DocCog["doc_cog.py\n6 commands\nWord & Excel editing"]
         end
     end
 
@@ -139,6 +142,8 @@ graph TB
     ResearchCog --> Bot
     NotifyCog --> Bot
     NotifyCog --> NotificationPrefs
+    DocCog --> Bot
+    DocCog --> DocumentSkills
     DockerCog --> Skills
     MediaCog --> Skills
     NetworkCog --> Skills

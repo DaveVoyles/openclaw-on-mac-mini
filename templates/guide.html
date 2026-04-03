@@ -307,6 +307,9 @@
           <li>
             <a href="#interactive-ui">44. Autocomplete &amp; Interactive UI</a>
           </li>
+          <li>
+            <a href="#document-editing">45. Document Editing (/doc &amp; /sheet)</a>
+          </li>
         </ul>
       </div>
 
@@ -3506,6 +3509,40 @@ Division 1 men's lacrosse games this week and post a table.
         channel, OpenClaw automatically creates a Discord thread to keep the
         channel clean. A link to the thread appears in the original channel.
       </p>
+
+      <!-- 45. Document Editing -->
+      <h2 id="document-editing">45. Document Editing (/doc &amp; /sheet)</h2>
+      <p>
+        Create, read, and edit Word documents (<code>.docx</code>) and Excel
+        spreadsheets (<code>.xlsx</code>) directly from Discord. Powered by
+        <code>python-docx</code> and <code>openpyxl</code>.
+      </p>
+
+      <h3>Word Documents</h3>
+      <table>
+        <tr><td><code>/doc read</code></td><td>Attach a <code>.docx</code> file to extract and display its content.</td></tr>
+        <tr><td><code>/doc edit &lt;instructions&gt;</code></td><td>Attach a <code>.docx</code> file and describe the changes you want (e.g., &ldquo;fix all typos&rdquo;). Returns the edited file.</td></tr>
+        <tr><td><code>/doc create &lt;description&gt;</code></td><td>Generate a new Word document from a natural language description.</td></tr>
+      </table>
+      <div class="card">
+        <h3 style="margin-top: 0">Examples</h3>
+        <pre><code>/doc read                        → attach resume.docx to see its content
+/doc edit "fix typos and reformat headings"   → attach file + describe changes
+/doc create "meeting notes template with date, attendees, agenda, and action items"</code></pre>
+      </div>
+
+      <h3>Excel Spreadsheets</h3>
+      <table>
+        <tr><td><code>/sheet read</code></td><td>Attach a <code>.xlsx</code> file to display it as a formatted table.</td></tr>
+        <tr><td><code>/sheet edit &lt;instructions&gt;</code></td><td>Attach a <code>.xlsx</code> file and describe changes (e.g., &ldquo;add a Total row&rdquo;). Returns the edited file.</td></tr>
+        <tr><td><code>/sheet create &lt;description&gt;</code></td><td>Generate a new Excel spreadsheet from a description.</td></tr>
+      </table>
+      <div class="card">
+        <h3 style="margin-top: 0">Examples</h3>
+        <pre><code>/sheet read                      → attach budget.xlsx to see it as a table
+/sheet edit "add a Total row at the bottom"   → attach file + describe changes
+/sheet create "budget tracker with columns: date, category, amount, notes"</code></pre>
+      </div>
 
       <div
         style="
