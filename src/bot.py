@@ -171,7 +171,7 @@ class OpenClawBot(commands.Bot):
         self.start_time = time.monotonic()
         self._health_runner = None
 
-    async def setup_hook(self):
+    async def setup_hook(self) -> None:
         """Load cogs dynamically, register commands, and sync on startup."""
         cogs_dir = Path(__file__).parent / "cogs"
         loaded: list[str] = []
@@ -200,7 +200,7 @@ class OpenClawBot(commands.Bot):
         from discord_web import start_health_server
         self._health_runner = await start_health_server(self)
 
-    async def on_ready(self):
+    async def on_ready(self) -> None:
         log.info("OpenClaw online as %s (ID %s)", self.user, self.user.id)
         audit_log(None, "bot_ready", f"Logged in as {self.user}")
 
@@ -286,7 +286,7 @@ class OpenClawBot(commands.Bot):
                         log.warning("Failed to post interrupted plan notice: %s", e)
                 log.info("Found %d interrupted plan(s) on startup", len(interrupted))
 
-    async def close(self):
+    async def close(self) -> None:
         """Graceful shutdown: flush audit log, close sessions, stop health server."""
         if _audit_buffer:
             entries = list(_audit_buffer)
@@ -541,7 +541,7 @@ class ResponseActions(discord.ui.View):
         return True
 
     @discord.ui.button(label="📌 Save", style=discord.ButtonStyle.secondary)
-    async def save_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def save_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             fact = self._response_text[:500]
@@ -553,7 +553,7 @@ class ResponseActions(discord.ui.View):
             await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
 
     @discord.ui.button(label="🔄 Regenerate", style=discord.ButtonStyle.secondary)
-    async def regen_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def regen_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
         conv = conversation_store.get(
             user_id=self._user_id,
@@ -576,7 +576,7 @@ class ResponseActions(discord.ui.View):
             await interaction.followup.send(f"❌ Regeneration failed: {e}")
 
     @discord.ui.button(label="📧 Email", style=discord.ButtonStyle.secondary)
-    async def email_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def email_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
             result = await send_agent_mail(
@@ -588,14 +588,14 @@ class ResponseActions(discord.ui.View):
             await interaction.followup.send(f"❌ Email failed: {e}", ephemeral=True)
 
     @discord.ui.button(label="👍", style=discord.ButtonStyle.success)
-    async def thumbs_up_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def thumbs_up_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await self._record_feedback(interaction, "positive")
 
     @discord.ui.button(label="👎", style=discord.ButtonStyle.danger)
-    async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await self._record_feedback(interaction, "negative")
 
-    async def _record_feedback(self, interaction: discord.Interaction, rating: str):
+    async def _record_feedback(self, interaction: discord.Interaction, rating: str) -> None:
         import json
         from pathlib import Path
         try:
@@ -1218,7 +1218,7 @@ async def ask_cmd(
 # ---------------------------------------------------------------------------
 
 @bot.event
-async def on_message(message: discord.Message):
+async def on_message(message: discord.Message) -> None:
     """Handle follow-up messages in bot-created threads as conversational /ask."""
     # Ignore bot messages
     if message.author.bot:

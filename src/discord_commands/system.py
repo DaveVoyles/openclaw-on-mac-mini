@@ -2,6 +2,7 @@
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from analyzer import analyze_logs
 from audit import audit_log
@@ -11,7 +12,7 @@ from skills.advanced_skills import check_service_ports, create_status_report
 from ._helpers import require_auth, truncate_for_embed
 
 
-def _register_system_commands(bot):
+def _register_system_commands(bot: commands.Bot) -> None:
     """Register /ports, /report, and /analyze."""
 
     # ------------------------------------------------------------------

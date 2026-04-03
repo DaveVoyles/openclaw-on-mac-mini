@@ -10,6 +10,8 @@ Backward-compatible: ``from discord_commands import register_commands`` still wo
 
 import logging
 
+from discord.ext import commands
+
 from ._helpers import (  # noqa: F401 — re-exported for backward compat
     ALLOWED_USER_IDS,
     _get_http_session,
@@ -33,7 +35,7 @@ from .utility import _register_utility_commands
 log = logging.getLogger("openclaw")
 
 
-def register_commands(bot):  # noqa: C901 — large but flat
+def register_commands(bot: commands.Bot) -> None:  # noqa: C901 — large but flat
     """Register all slash commands (except /ask) on *bot*.tree."""
 
     # Import send_morning_briefing lazily to avoid circular deps

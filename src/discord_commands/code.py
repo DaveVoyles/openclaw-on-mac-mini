@@ -5,6 +5,7 @@ import io
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from audit import audit_log
 from code_sandbox import run_code as sandbox_run_code
@@ -14,7 +15,7 @@ from git_skills import git_diff, git_status
 from ._helpers import require_auth, truncate_for_embed
 
 
-def _register_code_commands(bot):
+def _register_code_commands(bot: commands.Bot) -> None:
     """Register /diff and /run-code."""
 
     # ------------------------------------------------------------------

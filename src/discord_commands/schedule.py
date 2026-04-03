@@ -1,6 +1,7 @@
 """Schedule commands: /schedule."""
 
 import discord
+from discord.ext import commands
 
 from audit import audit_log
 from scheduler import scheduler
@@ -8,7 +9,7 @@ from scheduler import scheduler
 from ._helpers import require_auth
 
 
-def _register_schedule_commands(bot):
+def _register_schedule_commands(bot: commands.Bot) -> None:
     """Register /schedule (list, add, remove, toggle)."""
 
     @bot.tree.command(name="schedule", description="Manage scheduled tasks")

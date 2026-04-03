@@ -10,6 +10,7 @@ from pathlib import Path
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from audit import audit_log
 
@@ -18,7 +19,7 @@ from ._helpers import require_auth
 log = logging.getLogger("openclaw")
 
 
-def _register_monitoring_commands(bot):
+def _register_monitoring_commands(bot: commands.Bot) -> None:
     """Register /health-trend and /audit-export."""
 
     # ------------------------------------------------------------------

@@ -3,6 +3,8 @@
 import functools
 import logging
 import os
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import aiohttp
 import discord
@@ -28,7 +30,10 @@ def _is_allowed(interaction: discord.Interaction) -> bool:
     return interaction.user.id in ALLOWED_USER_IDS
 
 
-def require_auth(func):
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def require_auth(func: F) -> F:
     """Decorator that gates a slash-command handler behind the allow-list."""
 
     @functools.wraps(func)

@@ -4,6 +4,7 @@ import logging
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from audit import audit_log
 from memory import get_model_preference, set_model_preference
@@ -14,7 +15,7 @@ from ._helpers import require_auth
 log = logging.getLogger("openclaw")
 
 
-def _register_conversation_commands(bot):
+def _register_conversation_commands(bot: commands.Bot) -> None:
     """Register /clear, /model show|set, /save, /resume, /threads, /threads-search, /forget."""
 
     # ------------------------------------------------------------------

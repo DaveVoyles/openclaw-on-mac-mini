@@ -2,6 +2,7 @@
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from approvals import approval_store, is_emergency_stopped, set_emergency_stop
 from audit import audit_log
@@ -9,7 +10,7 @@ from audit import audit_log
 from ._helpers import require_auth
 
 
-def _register_safety_commands(bot):
+def _register_safety_commands(bot: commands.Bot) -> None:
     """Register /pending and /estop."""
 
     @bot.tree.command(name="pending", description="List pending approval requests")

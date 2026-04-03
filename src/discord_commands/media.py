@@ -5,8 +5,12 @@ import io
 import logging
 
 import aiohttp
+from collections.abc import Callable
+from typing import Any
+
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from audit import audit_log
 from constants import DOCUMENT_MAX_CHARS, MAX_FILE_SIZE, PDF_MAX_PAGES
@@ -22,7 +26,7 @@ from ._helpers import _get_http_session, require_auth, truncate_for_embed
 log = logging.getLogger("openclaw")
 
 
-def _register_media_commands(bot, send_morning_briefing):
+def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[..., Any]) -> None:
     """Register /analyze-image, /analyze-file, /briefing, and /imagine."""
 
     # ------------------------------------------------------------------

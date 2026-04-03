@@ -2,6 +2,7 @@
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from agentmail import send_agent_mail
 from approvals import is_emergency_stopped
@@ -10,7 +11,7 @@ from audit import audit_log
 from ._helpers import require_auth
 
 
-def _register_comms_commands(bot):
+def _register_comms_commands(bot: commands.Bot) -> None:
     """Register /mail."""
 
     @bot.tree.command(name="mail", description="Send an automated e-mail message via AgentMail")

@@ -5,6 +5,7 @@ import logging
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from agent_loop import cancel_plan as al_cancel_plan
 from agent_loop import list_plans as al_list_plans
@@ -20,7 +21,7 @@ from ._helpers import require_auth
 log = logging.getLogger("openclaw")
 
 
-def _register_agent_commands(bot):
+def _register_agent_commands(bot: commands.Bot) -> None:
     """Register /tasks, /bookmark, /weather, /plans, /plan-detail, /resume-plan, /cancel-plan."""
 
     # ------------------------------------------------------------------

@@ -4,6 +4,7 @@ import platform
 import time
 
 import discord
+from discord.ext import commands
 
 from audit import audit_log
 from config import cfg
@@ -13,7 +14,7 @@ from ._helpers import ALLOWED_USER_IDS, _is_allowed, require_auth
 VERSION = cfg.version
 
 
-def _register_utility_commands(bot):
+def _register_utility_commands(bot: commands.Bot) -> None:
     """Register /ping, /about, /whoami, and /help."""
 
     # ------------------------------------------------------------------

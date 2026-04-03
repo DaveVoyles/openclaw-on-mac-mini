@@ -2,6 +2,7 @@
 
 import discord
 from discord import app_commands
+from discord.ext import commands
 
 from audit import audit_log
 from skills import SKILLS
@@ -9,7 +10,7 @@ from skills import SKILLS
 from ._helpers import require_auth
 
 
-def _register_skills_commands(bot):
+def _register_skills_commands(bot: commands.Bot) -> None:
     """Register /skills."""
 
     @bot.tree.command(name="skills", description="List all available OpenClaw skills")
