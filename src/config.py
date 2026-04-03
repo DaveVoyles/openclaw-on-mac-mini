@@ -157,6 +157,9 @@ class _Config:
     sabnzbd_api_key: str = os.getenv("SABNZBD_API_KEY", "")
     qbit_url: str = os.getenv("QBIT_URL", f"http://{docker_host_ip}:8080")
 
+    # -- AdGuard Home (NAS) ----------------------------------------------------
+    adguard_url: str = os.getenv("ADGUARD_URL", f"http://{nas_ip}:3053")
+
     # -- Plex / Tautulli -------------------------------------------------------
     tautulli_url: str = os.getenv("TAUTULLI_URL", f"http://{docker_host_ip}:8181")
     tautulli_api_key: str = os.getenv("TAUTULLI_API_KEY", "")
@@ -277,6 +280,7 @@ class _Config:
         _add("Gmail Credentials", bool(self.gmail_user and self.gmail_app_password), "Email")
         _add("Google OAuth", bool(self.google_oauth_client_id and self.google_oauth_refresh_token), "Calendar")
         _add("Copilot Proxy", self.copilot_proxy_enabled, self.copilot_proxy_url or "not set")
+        _add("AdGuard Home", bool(self.adguard_url), f"DNS ad blocker — {self.adguard_url}")
         return entries
 
 

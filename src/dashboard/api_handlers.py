@@ -659,6 +659,7 @@ async def api_topology_handler(request):
         {"id": "nas", "label": "Synology NAS", "type": "host", "ip": _topo_cfg.nas_ip, "x": 200, "y": 275},
         {"id": "internet", "label": "Internet", "type": "cloud", "x": 300, "y": 50},
         {"id": "traefik", "label": "Traefik", "type": "proxy", "x": 300, "y": 160},
+        {"id": "adguard", "label": "AdGuard Home", "type": "container", "status": "up", "x": 80, "y": 160},
     ]
     edges = [
         {"source": "internet", "target": "mac-mini", "label": "APIs / Discord"},
@@ -666,6 +667,7 @@ async def api_topology_handler(request):
         {"source": "nas", "target": "traefik", "label": "SSL termination"},
         {"source": "traefik", "target": "mac-mini", "label": "HTTP:8100"},
         {"source": "mac-mini", "target": "nas", "label": "NFS/SMB"},
+        {"source": "nas", "target": "adguard", "label": "DNS:53"},
     ]
 
     try:
