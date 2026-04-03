@@ -1,5 +1,7 @@
 """Shared numeric constants for the OpenClaw Discord bot."""
 
+import os
+
 # ---------------------------------------------------------------------------
 # Discord embed limits (chars)
 # ---------------------------------------------------------------------------
@@ -21,6 +23,11 @@ BRIEFING_CHECK_INTERVAL = 60    # Seconds between morning-briefing schedule chec
 # ---------------------------------------------------------------------------
 BRIEFING_HOUR = 8               # Hour (0-23) to post the morning briefing
 BRIEFING_MINUTE_WINDOW = 5      # Fire only within the first N minutes of BRIEFING_HOUR
+
+# ---------------------------------------------------------------------------
+# Evening digest schedule
+# ---------------------------------------------------------------------------
+EVENING_DIGEST_HOUR = int(os.getenv("EVENING_DIGEST_HOUR", "21"))  # 9 PM
 
 # ---------------------------------------------------------------------------
 # Content / size limits
