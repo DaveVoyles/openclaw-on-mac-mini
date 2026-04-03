@@ -216,6 +216,17 @@ async def send_morning_briefing(bot, channel_override=None):
             color=discord.Color.from_rgb(255, 165, 0),
         )
         embed.set_footer(text="🤖 OpenClaw Autonomous Briefing")
+        try:
+            from health_history import predict_full as _hh_predict
+            prediction = _hh_predict("/")
+            if prediction.get("days_until_full") and prediction["days_until_full"] < 30:
+                embed.add_field(
+                    name="💾 Disk Space Warning",
+                    value=f"Root: {prediction['percent_used']}% used — estimated full in **{prediction['days_until_full']} days**",
+                    inline=False,
+                )
+        except Exception as exc:
+            log.debug("Briefing disk prediction failed: %s", exc)
         if overseerr_section:
             embed.add_field(name="🎬 Media Requests", value=overseerr_section[:200], inline=False)
         await channel.send(embed=embed)
@@ -272,6 +283,15 @@ async def _gather_system_signals():
                 _hh_record(svc_name, "ok", result[:200])
     except Exception:
         pass  # health history is best-effort
+
+    # Record disk usage for trend prediction
+    try:
+        import shutil
+        from health_history import record_disk as _hh_record_disk
+        usage = shutil.disk_usage("/")
+        _hh_record_disk("/", usage.total / 1e9, usage.used / 1e9, usage.free / 1e9, usage.used / usage.total * 100)
+    except Exception:
+        pass  # disk history is best-effort
 
     key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
     log_snippets: dict[str, str] = {}
