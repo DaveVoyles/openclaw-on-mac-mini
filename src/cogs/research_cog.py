@@ -36,6 +36,24 @@ class _ResearchView(discord.ui.View):
         await interaction.response.send_message(result, ephemeral=True)
         audit_log(interaction.user, "research_save_memory", detail=self._query[:80])
 
+    @discord.ui.button(label="💾 Save to Vault", style=discord.ButtonStyle.green)
+    async def save_to_vault_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
+        from obsidian_writer import save_to_vault
+
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        try:
+            result = await save_to_vault(
+                title=self._query,
+                content=self._report,
+                content_type="research",
+                tags=["research"],
+            )
+            await interaction.followup.send(f"💾 {result}", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
+        audit_log(interaction.user, "research_save_vault", detail=self._query[:80])
+
     @discord.ui.button(label="🔄 Re-run in 24h", style=discord.ButtonStyle.secondary)
     async def schedule_rerun(self, interaction: discord.Interaction, _button: discord.ui.Button):
         from scheduler import scheduler

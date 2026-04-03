@@ -666,15 +666,15 @@ async def nas_create_folder(path: str) -> str:
 
 
 async def nas_write_file(
-    content: str,
+    content: str | bytes,
     remote_folder: str = "/volume1/documents",
     filename: str = "openclaw_output.md",
 ) -> str:
     """
-    Write a text or markdown file to the Synology NAS via FileStation upload.
+    Write a file to the Synology NAS via FileStation upload.
 
     Args:
-        content: Text content to write.
+        content: Text string or raw bytes to write.
         remote_folder: Destination folder path on the NAS, e.g. '/volume1/documents'.
         filename: Name for the file, e.g. 'research_report.md'.
     """
@@ -704,11 +704,13 @@ async def nas_write_file(
         data.add_field("path", remote_folder)
         data.add_field("create_parents", "true")
         data.add_field("overwrite", "true")
+        file_bytes = content if isinstance(content, bytes) else content.encode("utf-8")
+        mime = "application/octet-stream" if isinstance(content, bytes) else "text/plain"
         data.add_field(
             "file",
-            content.encode("utf-8"),
+            file_bytes,
             filename=filename,
-            content_type="text/plain",
+            content_type=mime,
         )
         async with session.post(
             f"{NAS_URL}/webapi/entry.cgi",
@@ -726,7 +728,7 @@ async def nas_write_file(
 
     return (
         f"✅ Saved `{filename}` to NAS at `{remote_folder}/{filename}` "
-        f"({len(content.encode())} bytes)"
+        f"({len(content) if isinstance(content, bytes) else len(content.encode())} bytes)"
     )
 
 

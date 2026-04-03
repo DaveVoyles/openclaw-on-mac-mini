@@ -29,6 +29,38 @@ from document_skills import (
     read_word,
 )
 
+log = logging.getLogger("openclaw")
+
+NAS_OPENCLAW_FOLDER = "/volume1/documents/OpenClaw"
+
+
+class _SaveToNASView(discord.ui.View):
+    """Button to save a generated file to the Synology NAS."""
+
+    def __init__(self, file_bytes: bytes, filename: str, *, timeout: float = 120):
+        super().__init__(timeout=timeout)
+        self.file_bytes = file_bytes
+        self.filename = filename
+
+    @discord.ui.button(label="💾 Save to NAS", style=discord.ButtonStyle.green)
+    async def save_nas(self, interaction: discord.Interaction, button: discord.ui.Button):
+        button.disabled = True
+        await interaction.response.edit_message(view=self)
+        try:
+            from nas import nas_create_folder, nas_write_file
+
+            await nas_create_folder(NAS_OPENCLAW_FOLDER)
+            result = await nas_write_file(
+                content=self.file_bytes,
+                remote_folder=NAS_OPENCLAW_FOLDER,
+                filename=self.filename,
+            )
+            await interaction.followup.send(f"💾 {result}", ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
+        audit_log(interaction.user, "save_to_nas", self.filename)
+        self.stop()
+
 log = logging.getLogger("openclaw.doc_cog")
 
 
@@ -237,7 +269,7 @@ class DocCog(commands.Cog, name="Documents"):
                 description=truncate_for_embed(body[:500] + ("…" if len(body) > 500 else "")),
                 color=discord.Color.green(),
             )
-            await interaction.followup.send(embed=embed, file=out_file)
+            await interaction.followup.send(embed=embed, file=out_file, view=_SaveToNASView(doc_bytes, filename))
             audit_log(interaction, "doc_create", instructions)
 
         except json.JSONDecodeError:
@@ -363,7 +395,7 @@ class DocCog(commands.Cog, name="Documents"):
                 description=f"**Columns:** {preview}\n**Rows:** {len(rows)}",
                 color=discord.Color.green(),
             )
-            await interaction.followup.send(embed=embed, file=out_file)
+            await interaction.followup.send(embed=embed, file=out_file, view=_SaveToNASView(sheet_bytes, filename))
             audit_log(interaction, "sheet_create", instructions)
 
         except json.JSONDecodeError:
