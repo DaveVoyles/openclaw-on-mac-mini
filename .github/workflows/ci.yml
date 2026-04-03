@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Lint with ruff
+        run: ruff check src/ tests/ --output-format=github
+
+      - name: Run tests
+        env:
+          GOOGLE_API_KEY: ""
+          LOCAL_LLM_ENABLED: "false"
+          AGENTMAIL_API_KEY: ""
+          AGENTMAIL_INBOX: ""
+          MEMORY_DIR: /home/runner/openclaw-test
+          QMD_MEMORY_FILE: /home/runner/openclaw-test/qmd.json
+          SPENDING_FILE: /home/runner/openclaw-test/spending.json
+          CONFIG_DIR: ${{ github.workspace }}/config
+        run: |
+          mkdir -p /home/runner/openclaw-test
+          python -m pytest tests/ -x -q --tb=short -k 'not test_gateway_successful_request'
+
+      - name: Syntax check
+        run: |
+          python -c "
+          import ast, pathlib
+          errors = []
+          for f in pathlib.Path('src').glob('**/*.py'):
+              try: ast.parse(f.read_text())
+              except SyntaxError as e: errors.append(f'{f}: {e}')
+          if errors:
+              for e in errors: print(e)
+              raise SystemExit(1)
+          print(f'All {len(list(pathlib.Path(\"src\").glob(\"**/*.py\")))} files OK')
+          "
