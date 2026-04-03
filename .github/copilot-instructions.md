@@ -13,7 +13,30 @@ Before working on this codebase, read these two reference documents:
 
 ---
 
-# Research First: ClawHub
+## Workflow Verification (REQUIRED)
+
+**After every commit pushed to `main`, verify that ALL GitHub Actions workflows pass.** The project has two CI workflows:
+
+| Workflow | Runner | File |
+|----------|--------|------|
+| `tests.yml` | **Self-hosted macOS** (this Mac Mini) | `.github/workflows/tests.yml` |
+| `ci.yml` | Ubuntu (GitHub-hosted) | `.github/workflows/ci.yml` |
+
+### Steps after each push:
+1. **Push your commit(s)** to `main`
+2. **Check workflow status** — use the GitHub API or `gh run list --limit 2` to verify both workflows triggered
+3. **Wait for completion** — both workflows must pass before considering the task done
+4. **If a workflow fails:**
+   - Read the failure logs: `gh run view <run-id> --log-failed`
+   - Fix the issue and push a follow-up commit
+   - Do NOT move on until all workflows are green
+
+### Quick verification command:
+```bash
+gh run list --repo DaveVoyles/openclaw-on-mac-mini --limit 4 --json status,name,conclusion
+```
+
+> ⚠️ The self-hosted runner runs on this Mac Mini. If it's offline or Orbstack/Docker is down, `tests.yml` will queue indefinitely. Check `gh run list` for stuck runs.
 
 **Before implementing ANY new functionality from scratch**, check [ClawHub](https://clawhub.ai/) for existing AgentSkills bundles. Someone has likely already built what you need.
 
