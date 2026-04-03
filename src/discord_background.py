@@ -821,6 +821,44 @@ async def _check_container_health(bot):
 
 
 # ---------------------------------------------------------------------------
+# Resource-threshold monitor (every 60 s)
+# ---------------------------------------------------------------------------
+
+async def resource_monitor_loop(bot):
+    """Check per-container CPU/memory thresholds and post alerts."""
+    await bot.wait_until_ready()
+    from resource_monitor import resource_monitor
+
+    while not bot.is_closed():
+        try:
+            violations = await resource_monitor.check_all()
+            if violations:
+                channel = bot.get_channel(ALERT_CHANNEL_ID)
+                if channel:
+                    for threshold, stats in violations:
+                        embed = discord.Embed(
+                            title=f"⚠️ Resource Alert: {threshold.container}",
+                            color=discord.Color.red(),
+                        )
+                        embed.add_field(
+                            name="CPU",
+                            value=f"{stats['cpu']:.1f}% (threshold: {threshold.cpu_percent}%)",
+                            inline=True,
+                        )
+                        embed.add_field(
+                            name="Memory",
+                            value=f"{stats['memory']:.1f}% (threshold: {threshold.memory_percent}%)",
+                            inline=True,
+                        )
+                        embed.set_footer(text=f"Cooldown: {threshold.cooldown_seconds}s before next alert")
+                        await channel.send(embed=embed)
+                    audit_log(None, "resource_alert", detail=f"{len(violations)} violation(s)")
+        except Exception as e:
+            log.debug("Resource monitor loop error: %s", e)
+        await asyncio.sleep(60)
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -833,6 +871,7 @@ def start_background_tasks(bot):
         asyncio.create_task(proactive_insight_loop(bot))
         asyncio.create_task(error_monitor_loop(bot))
         asyncio.create_task(container_health_loop(bot))
+        asyncio.create_task(resource_monitor_loop(bot))
         log.info("Proactive tasks started (alert channel: %d)", ALERT_CHANNEL_ID)
     else:
         log.info("ALERT_CHANNEL_ID not set — proactive push notifications disabled")

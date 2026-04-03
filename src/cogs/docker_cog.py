@@ -21,6 +21,7 @@ from approvals import (
     is_emergency_stopped,
 )
 from cog_helpers import audit_log, is_service_allowed
+from resource_monitor import resource_monitor
 from skills import (
     get_container_logs,
     get_container_status,
@@ -515,6 +516,116 @@ class DockerCog(commands.Cog, name="Docker"):
         await interaction.response.send_message(embed=embed, view=view)
         view.message = await interaction.original_response()
         audit_log(interaction.user, "restart_requested", detail=service)
+
+
+    # -----------------------------------------------------------------------
+    # /monitor subcommand group
+    # -----------------------------------------------------------------------
+
+    monitor_group = app_commands.Group(
+        name="monitor",
+        description="Container resource monitoring — set CPU/memory thresholds and get alerts",
+    )
+
+    @monitor_group.command(name="set", description="Set CPU/memory alert thresholds for a container")
+    @app_commands.describe(
+        container="Container name",
+        cpu="CPU threshold % (default 80)",
+        memory="Memory threshold % (default 90)",
+    )
+    @app_commands.autocomplete(container=_container_autocomplete)
+    async def monitor_set(
+        self,
+        interaction: discord.Interaction,
+        container: str,
+        cpu: float = 80.0,
+        memory: float = 90.0,
+    ):
+        t = resource_monitor.set_threshold(container, cpu=cpu, memory=memory)
+        embed = discord.Embed(
+            title=f"📐 Monitor Set: {container}",
+            color=discord.Color.blue(),
+        )
+        embed.add_field(name="CPU Threshold", value=f"{t.cpu_percent}%", inline=True)
+        embed.add_field(name="Memory Threshold", value=f"{t.memory_percent}%", inline=True)
+        embed.add_field(name="Cooldown", value=f"{t.cooldown_seconds}s", inline=True)
+        embed.set_footer(text="Alerts fire when usage exceeds these thresholds")
+        await interaction.response.send_message(embed=embed)
+        audit_log(interaction.user, "monitor_set", detail=f"{container} cpu={cpu} mem={memory}")
+
+    @monitor_group.command(name="remove", description="Stop monitoring a container")
+    @app_commands.describe(container="Container name to stop monitoring")
+    @app_commands.autocomplete(container=_container_autocomplete)
+    async def monitor_remove(self, interaction: discord.Interaction, container: str):
+        if resource_monitor.remove(container):
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title=f"🗑️ Monitor Removed: {container}",
+                    description="Resource alerts disabled for this container.",
+                    color=discord.Color.greyple(),
+                )
+            )
+        else:
+            await interaction.response.send_message(
+                f"⚠️ No monitor found for `{container}`.", ephemeral=True
+            )
+        audit_log(interaction.user, "monitor_remove", detail=container)
+
+    @monitor_group.command(name="list", description="Show all monitored containers and their thresholds")
+    async def monitor_list(self, interaction: discord.Interaction):
+        thresholds = resource_monitor.list_all()
+        if not thresholds:
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="📋 Resource Monitors",
+                    description="No containers are being monitored.\nUse `/monitor set` to add one.",
+                    color=discord.Color.light_grey(),
+                )
+            )
+            return
+        lines = []
+        for t in thresholds:
+            status = "✅" if t.enabled else "⏸️"
+            lines.append(f"{status} **{t.container}** — CPU: {t.cpu_percent}% · Mem: {t.memory_percent}%")
+        embed = discord.Embed(
+            title="📋 Resource Monitors",
+            description="\n".join(lines),
+            color=discord.Color.blue(),
+        )
+        embed.set_footer(text=f"{len(thresholds)} container(s) monitored")
+        await interaction.response.send_message(embed=embed)
+        audit_log(interaction.user, "monitor_list")
+
+    @monitor_group.command(name="check", description="Run a manual resource check right now")
+    async def monitor_check(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        violations = await resource_monitor.check_all()
+        if not violations:
+            await interaction.followup.send(
+                embed=discord.Embed(
+                    title="✅ All Clear",
+                    description="No monitored containers exceed their thresholds.",
+                    color=discord.Color.green(),
+                )
+            )
+        else:
+            for threshold, stats in violations:
+                embed = discord.Embed(
+                    title=f"⚠️ Resource Alert: {threshold.container}",
+                    color=discord.Color.red(),
+                )
+                embed.add_field(
+                    name="CPU",
+                    value=f"{stats['cpu']:.1f}% (threshold: {threshold.cpu_percent}%)",
+                    inline=True,
+                )
+                embed.add_field(
+                    name="Memory",
+                    value=f"{stats['memory']:.1f}% (threshold: {threshold.memory_percent}%)",
+                    inline=True,
+                )
+                await interaction.followup.send(embed=embed)
+        audit_log(interaction.user, "monitor_check", detail=f"{len(violations)} violations")
 
 
 async def setup(bot: commands.Bot):
