@@ -537,6 +537,11 @@ from monitor_skills import MONITOR_SKILLS
 
 SKILLS.update(MONITOR_SKILLS)
 
+# Uptime Kuma — query monitor status, uptime stats, incidents
+from uptime_kuma_skills import UPTIME_KUMA_SKILLS
+
+SKILLS.update(UPTIME_KUMA_SKILLS)
+
 # Weather skill (Phase E — wraps wttr.in via aiohttp, no API key)
 from .advanced_skills import get_weather
 
@@ -604,6 +609,8 @@ SKILL_CATEGORIES = {
     "🌐 Network & Monitoring": [
         "ping_host", "check_service_ports", "get_network_status",
         "get_tailscale_status", "run_speed_test",
+        "get_all_monitor_status", "get_monitor_detail",
+        "get_monitors_down", "get_uptime_summary",
     ],
     "🔍 Web & Research": [
         "search_web", "browse_url", "webfetch_md", "get_weather",

@@ -160,6 +160,10 @@ class _Config:
     # -- AdGuard Home (NAS) ----------------------------------------------------
     adguard_url: str = os.getenv("ADGUARD_URL", f"http://{nas_ip}:3053")
 
+    # -- Uptime Kuma (Mac Mini) ------------------------------------------------
+    uptime_kuma_url: str = os.getenv("UPTIME_KUMA_URL", f"http://{docker_host_ip}:3001")
+    uptime_kuma_status_slug: str = os.getenv("UPTIME_KUMA_STATUS_SLUG", "main")
+
     # -- Plex / Tautulli -------------------------------------------------------
     tautulli_url: str = os.getenv("TAUTULLI_URL", f"http://{docker_host_ip}:8181")
     tautulli_api_key: str = os.getenv("TAUTULLI_API_KEY", "")

@@ -26,6 +26,7 @@ from .context_menus import _register_context_menus
 from .conversation import _register_conversation_commands
 from .media import _register_media_commands
 from .monitoring import _register_monitoring_commands
+from .uptime_kuma import _register_uptime_kuma_commands
 from .safety import _register_safety_commands
 from .schedule import _register_schedule_commands
 from .skills import _register_skills_commands
@@ -52,6 +53,7 @@ def register_commands(bot: commands.Bot) -> None:  # noqa: C901 — large but fl
     _register_code_commands(bot)
     _register_media_commands(bot, send_morning_briefing)
     _register_monitoring_commands(bot)
+    _register_uptime_kuma_commands(bot)
     _register_context_menus(bot)
 
     log.info("Registered %d standalone slash commands", 32)
