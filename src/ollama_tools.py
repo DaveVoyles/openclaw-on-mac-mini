@@ -12,6 +12,9 @@ import logging
 import aiohttp
 
 from config import TIMEOUT_LONG, TIMEOUT_SLOW
+from http_session import SessionManager as _SessionManager
+
+_ollama_sessions = _SessionManager(timeout=TIMEOUT_LONG, name="ollama-tools")
 
 log = logging.getLogger("openclaw.ollama_tools")
 
@@ -129,16 +132,16 @@ async def chat_ollama_with_tools(
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{ollama_url}/api/chat",
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=TIMEOUT_LONG),
-                ) as resp:
-                    if resp.status != 200:
-                        log.warning("Ollama tools returned HTTP %d", resp.status)
-                        return None, tool_calls_made
-                    data = await resp.json()
+            session = await _ollama_sessions.get()
+            async with session.post(
+                f"{ollama_url}/api/chat",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=TIMEOUT_LONG),
+            ) as resp:
+                if resp.status != 200:
+                    log.warning("Ollama tools returned HTTP %d", resp.status)
+                    return None, tool_calls_made
+                data = await resp.json()
         except Exception as e:
             log.warning("Ollama tool call failed: %s", e)
             return None, tool_calls_made
@@ -184,15 +187,15 @@ async def chat_ollama_with_tools(
             "stream": False,
             "options": {"temperature": temperature, "num_predict": max_tokens},
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{ollama_url}/api/chat",
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data.get("message", {}).get("content", ""), tool_calls_made
+        session = await _ollama_sessions.get()
+        async with session.post(
+            f"{ollama_url}/api/chat",
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                return data.get("message", {}).get("content", ""), tool_calls_made
     except Exception:
         pass
 

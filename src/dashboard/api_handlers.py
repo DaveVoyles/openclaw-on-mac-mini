@@ -8,19 +8,21 @@ import re
 import time
 from pathlib import Path
 
+import aiohttp
 import discord
 from aiohttp import web
 
+from http_session import SessionManager as _SessionManager
 from spending import get_quota_status, get_response_stats
 from spending import tracker as spending_tracker
 
 from .helpers import GITHUB_REPO, VERSION, _command_list, _cron_to_human, _load_config, log
 
+_dashboard_sessions = _SessionManager(timeout=10, name="dashboard")
+
 
 async def api_status_handler(request):
     """Return connectivity status for all backends."""
-    import aiohttp
-
     from config import TIMEOUT_FAST, cfg
 
     checks = {}
@@ -39,9 +41,9 @@ async def api_status_handler(request):
 
     # Ollama
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(f"{cfg.ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
-                checks["ollama"] = {"status": "ok" if resp.status == 200 else "down"}
+        session = await _dashboard_sessions.get()
+        async with session.get(f"{cfg.ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
+            checks["ollama"] = {"status": "ok" if resp.status == 200 else "down"}
     except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         log.debug("Ollama status check failed: %s", exc)
         checks["ollama"] = {"status": "down"}
@@ -81,11 +83,11 @@ async def api_status_handler(request):
     proxy_url = cfg.copilot_proxy_url
     if proxy_url:
         try:
-            async with aiohttp.ClientSession() as session:
-                token = cfg.copilot_proxy_token
-                headers = {"Authorization": f"Bearer {token}"} if token else {}
-                async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
-                    checks["copilot_proxy"] = {"status": "ok" if resp.status == 200 else "down"}
+            session = await _dashboard_sessions.get()
+            token = cfg.copilot_proxy_token
+            headers = {"Authorization": f"Bearer {token}"} if token else {}
+            async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
+                checks["copilot_proxy"] = {"status": "ok" if resp.status == 200 else "down"}
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             log.debug("Copilot proxy check failed: %s", exc)
             checks["copilot_proxy"] = {"status": "down"}
@@ -94,40 +96,40 @@ async def api_status_handler(request):
 
     # Patreon (MonsterVision) — cookie health
     try:
-        async with aiohttp.ClientSession() as session:
-            monstervision_url = f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status"
-            async with session.get(monstervision_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
-                if resp.status == 200:
-                    mv_data = await resp.json()
-                    failed = mv_data.get("failed", 0)
-                    status = mv_data.get("status", "unknown")
-                    cookie_info = mv_data.get("cookie_status", {})
-                    cookie_ok = cookie_info.get("label") == "ok"
+        session = await _dashboard_sessions.get()
+        monstervision_url = f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status"
+        async with session.get(monstervision_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
+            if resp.status == 200:
+                mv_data = await resp.json()
+                failed = mv_data.get("failed", 0)
+                status = mv_data.get("status", "unknown")
+                cookie_info = mv_data.get("cookie_status", {})
+                cookie_ok = cookie_info.get("label") == "ok"
 
-                    # Only scrape cron log when the API doesn't report cookies OK
-                    cookie_warning = False
-                    if not cookie_ok:
-                        try:
-                            from subprocess_utils import run as _run
-                            rc, log_out, _ = await _run(
-                                ["docker", "exec", "monstervision", "tail", "-20", "/app/state/cron.log"],
-                                timeout=5,
-                            )
-                            if rc == 0 and log_out:
-                                cookie_warning = "cookies have expired" in log_out.lower() or "403" in log_out
-                        except (OSError, asyncio.TimeoutError) as exc:
-                            log.debug("Patreon cookie cron-log check failed: %s", exc)
+                # Only scrape cron log when the API doesn't report cookies OK
+                cookie_warning = False
+                if not cookie_ok:
+                    try:
+                        from subprocess_utils import run as _run
+                        rc, log_out, _ = await _run(
+                            ["docker", "exec", "monstervision", "tail", "-20", "/app/state/cron.log"],
+                            timeout=5,
+                        )
+                        if rc == 0 and log_out:
+                            cookie_warning = "cookies have expired" in log_out.lower() or "403" in log_out
+                    except (OSError, asyncio.TimeoutError) as exc:
+                        log.debug("Patreon cookie cron-log check failed: %s", exc)
 
-                    if failed > 0:
-                        checks["patreon"] = {"status": "down", "detail": f"{failed} failed downloads"}
-                    elif cookie_warning:
-                        checks["patreon"] = {"status": "no_key", "detail": "Cookie expired — re-export needed"}
-                    elif status in ("downloading", "sleeping", "idle"):
-                        checks["patreon"] = {"status": "ok", "detail": status}
-                    else:
-                        checks["patreon"] = {"status": "no_key", "detail": status}
+                if failed > 0:
+                    checks["patreon"] = {"status": "down", "detail": f"{failed} failed downloads"}
+                elif cookie_warning:
+                    checks["patreon"] = {"status": "no_key", "detail": "Cookie expired — re-export needed"}
+                elif status in ("downloading", "sleeping", "idle"):
+                    checks["patreon"] = {"status": "ok", "detail": status}
                 else:
-                    checks["patreon"] = {"status": "down"}
+                    checks["patreon"] = {"status": "no_key", "detail": status}
+            else:
+                checks["patreon"] = {"status": "down"}
     except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         log.debug("Patreon/MonsterVision status check failed: %s", exc)
         checks["patreon"] = {"status": "down"}

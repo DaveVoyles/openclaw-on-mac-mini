@@ -20,6 +20,9 @@ from trace_context import get_trace_id, trace_context
 
 from approvals import approval_store
 from audit import _audit_buffer, audit_log
+from http_session import SessionManager as _SessionManager
+
+_bg_sessions = _SessionManager(timeout=10, name="discord-background")
 from constants import (
     AUDIT_FLUSH_INTERVAL,
     BRIEFING_CHECK_INTERVAL,
@@ -656,16 +659,16 @@ async def _check_monstervision_cookies(bot):
     # Trust the API's cookie_status first; skip log scraping when cookies are OK
     try:
         cfg = _cfg()
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status",
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    if data.get("cookie_status", {}).get("label") == "ok":
-                        _cookie_alert_sent = False  # reset when cookies are fresh
-                        return
+        session = await _bg_sessions.get()
+        async with session.get(
+            f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status",
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                if data.get("cookie_status", {}).get("label") == "ok":
+                    _cookie_alert_sent = False  # reset when cookies are fresh
+                    return
     except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         log.debug("MonsterVision API cookie check failed: %s", exc)
 

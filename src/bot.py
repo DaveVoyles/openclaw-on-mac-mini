@@ -147,17 +147,12 @@ AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 from audit import _audit_buffer, audit_log  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Module-level aiohttp session (reused for attachment downloads)
+# Shared HTTP session (reused for attachment downloads)
 # ---------------------------------------------------------------------------
 
-_bot_http_session: aiohttp.ClientSession | None = None
+from http_session import SessionManager as _SessionManager
 
-
-def _get_bot_http_session() -> aiohttp.ClientSession:
-    global _bot_http_session
-    if _bot_http_session is None or _bot_http_session.closed:
-        _bot_http_session = aiohttp.ClientSession()
-    return _bot_http_session
+_bot_sessions = _SessionManager(timeout=30, name="bot")
 
 
 # ---------------------------------------------------------------------------
@@ -316,10 +311,6 @@ class OpenClawBot(commands.Bot):
                 await fn()
             except Exception as exc:
                 log.debug("close %s: %s", name, exc)
-        global _bot_http_session
-        if _bot_http_session and not _bot_http_session.closed:
-            await _bot_http_session.close()
-            _bot_http_session = None
         if self._health_runner:
             await self._health_runner.cleanup()
         await super().close()
@@ -631,7 +622,7 @@ async def _handle_image_attachment(
 ) -> str:
     """Download and analyze an image attachment via Gemini vision."""
     try:
-        session = _get_bot_http_session()
+        session = await _bot_sessions.get()
         async with session.get(
             attachment.url, timeout=aiohttp.ClientTimeout(total=30)
         ) as resp:
@@ -650,7 +641,7 @@ async def _handle_doc_attachment(
 ) -> str:
     """Download and analyze a document attachment via Gemini."""
     try:
-        session = _get_bot_http_session()
+        session = await _bot_sessions.get()
         async with session.get(
             attachment.url, timeout=aiohttp.ClientTimeout(total=30)
         ) as resp:

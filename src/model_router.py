@@ -20,6 +20,10 @@ from typing import Optional
 
 import aiohttp
 
+from http_session import SessionManager as _SessionManager
+
+_router_sessions = _SessionManager(timeout=60, name="model-router")
+
 from config import cfg as _router_cfg
 
 log = logging.getLogger("openclaw.model_router")
@@ -41,12 +45,12 @@ async def is_ollama_alive(url: str = "") -> bool:
     if now - _ollama_last_check["ts"] < 30:
         return _ollama_last_check["alive"]
     try:
-        async with aiohttp.ClientSession() as s:
-            async with s.get(
-                f"{url}/api/tags",
-                timeout=aiohttp.ClientTimeout(total=2),
-            ) as r:
-                alive = r.status == 200
+        s = await _router_sessions.get()
+        async with s.get(
+            f"{url}/api/tags",
+            timeout=aiohttp.ClientTimeout(total=2),
+        ) as r:
+            alive = r.status == 200
     except (aiohttp.ClientError, asyncio.TimeoutError):
         alive = False
     _ollama_last_check.update(alive=alive, ts=now)
@@ -206,23 +210,23 @@ async def chat_openai(
                 "Content-Type": "application/json",
             }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{base_url}/chat/completions",
-                headers=headers,
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as resp:
-                if resp.status != 200:
-                    log.warning("OpenAI returned HTTP %d", resp.status)
-                    return None
-                data = await resp.json()
-                return data["choices"][0]["message"]["content"]
+        session = await _router_sessions.get()
+        async with session.post(
+            f"{base_url}/chat/completions",
+            headers=headers,
+            json={
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as resp:
+            if resp.status != 200:
+                log.warning("OpenAI returned HTTP %d", resp.status)
+                return None
+            data = await resp.json()
+            return data["choices"][0]["message"]["content"]
     except Exception as e:
         log.warning("OpenAI call failed: %s", e)
         return None
@@ -257,8 +261,6 @@ async def chat_anthropic(
     model = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
 
     try:
-        import aiohttp
-
         messages = []
         for msg in history[-10:]:
             role = "assistant" if msg["role"] == "model" else msg["role"]
@@ -267,31 +269,31 @@ async def chat_anthropic(
                 messages.append({"role": role, "content": content})
         messages.append({"role": "user", "content": message})
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.anthropic.com/v1/messages",
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "system": system_prompt,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": max_tokens,
-                },
-                timeout=aiohttp.ClientTimeout(total=60),
-            ) as resp:
-                if resp.status != 200:
-                    log.warning("Anthropic returned HTTP %d", resp.status)
-                    return None
-                data = await resp.json()
-                content_blocks = data.get("content", [])
-                return " ".join(
-                    b["text"] for b in content_blocks if b.get("type") == "text"
-                )
+        session = await _router_sessions.get()
+        async with session.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "system": system_prompt,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as resp:
+            if resp.status != 200:
+                log.warning("Anthropic returned HTTP %d", resp.status)
+                return None
+            data = await resp.json()
+            content_blocks = data.get("content", [])
+            return " ".join(
+                b["text"] for b in content_blocks if b.get("type") == "text"
+            )
     except Exception as e:
         log.warning("Anthropic call failed: %s", e)
         return None

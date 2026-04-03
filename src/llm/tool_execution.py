@@ -21,23 +21,22 @@ from llm_client import (
 from llm_patterns import _gemma_response_seems_valid, _needs_tools
 from llm_tools import _execute_function_call
 
+from http_session import SessionManager as _SessionManager
+
 log = logging.getLogger("openclaw.llm")
 
 
-_ollama_session: aiohttp.ClientSession | None = None
-_ollama_session_lock: asyncio.Lock | None = None
+_ollama_sessions = _SessionManager(
+    timeout=10,
+    name="ollama",
+    connector_limit=10,
+    connector_limit_per_host=5,
+)
 
 
 async def _get_ollama_session() -> aiohttp.ClientSession:
     """Return the shared Ollama aiohttp session, (re)creating if closed."""
-    global _ollama_session, _ollama_session_lock
-    if _ollama_session_lock is None:
-        _ollama_session_lock = asyncio.Lock()
-    async with _ollama_session_lock:
-        if _ollama_session is None or _ollama_session.closed:
-            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
-            _ollama_session = aiohttp.ClientSession(connector=connector)
-        return _ollama_session
+    return await _ollama_sessions.get()
 
 
 async def _ollama_available() -> bool:
@@ -147,8 +146,5 @@ async def _try_local_model(
 
 async def close_sessions() -> None:
     """Close all persistent aiohttp sessions. Call on bot shutdown."""
-    global _ollama_session
-    if _ollama_session is not None and not _ollama_session.closed:
-        await _ollama_session.close()
-        _ollama_session = None
-        log.info("Closed Ollama aiohttp session")
+    await _ollama_sessions.close()
+    log.info("Closed Ollama aiohttp session")
