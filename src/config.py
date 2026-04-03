@@ -159,6 +159,8 @@ class _Config:
 
     # -- AdGuard Home (NAS) ----------------------------------------------------
     adguard_url: str = os.getenv("ADGUARD_URL", f"http://{nas_ip}:3053")
+    adguard_user: str = os.getenv("ADGUARD_USER", "admin")
+    adguard_password: str = os.getenv("ADGUARD_PASSWORD", "")
 
     # -- Uptime Kuma (Mac Mini) ------------------------------------------------
     uptime_kuma_url: str = os.getenv("UPTIME_KUMA_URL", f"http://{docker_host_ip}:3001")
@@ -167,6 +169,9 @@ class _Config:
     # -- Plex / Tautulli -------------------------------------------------------
     tautulli_url: str = os.getenv("TAUTULLI_URL", f"http://{docker_host_ip}:8181")
     tautulli_api_key: str = os.getenv("TAUTULLI_API_KEY", "")
+
+    # -- OMDb (movie/TV info) --------------------------------------------------
+    omdb_api_key: str = os.getenv("OMDB_API_KEY", "")
 
     # -- Search APIs -----------------------------------------------------------
     perplexity_api_key: str = os.getenv("PERPLEXITY_API_KEY", "")
@@ -177,6 +182,14 @@ class _Config:
     # -- Image generation (Stable Diffusion) -----------------------------------
     sd_url: str = os.getenv("SD_URL", "http://host.docker.internal:7861")
     sd_timeout: int = int(os.getenv("SD_TIMEOUT", str(TIMEOUT_EXTENDED)))
+
+    # -- Glances (system monitor) ----------------------------------------------
+    glances_url: str = os.getenv("GLANCES_URL", "http://host.docker.internal:61208")
+
+    # -- Ntfy (push notifications) ---------------------------------------------
+    ntfy_url: str = os.getenv("NTFY_URL", "https://ntfy.sh")
+    ntfy_topic: str = os.getenv("NTFY_TOPIC", "")
+    ntfy_token: str = os.getenv("NTFY_TOKEN", "")  # for self-hosted with auth
 
     # -- AgentMail -------------------------------------------------------------
     agentmail_api_key: str = os.getenv("AGENTMAIL_API_KEY", "")
@@ -204,6 +217,11 @@ class _Config:
         for r in os.getenv("GITHUB_DEFAULT_REPOS", "").split(",")
         if r.strip()
     ]
+
+    # -- Sentry (error monitoring) ---------------------------------------------
+    sentry_auth_token: str = os.getenv("SENTRY_AUTH_TOKEN", "")
+    sentry_org: str = os.getenv("SENTRY_ORG", "")
+    sentry_url: str = os.getenv("SENTRY_URL", "https://sentry.io")
 
     # -- Webhook security ------------------------------------------------------
     webhook_secret: str = os.getenv("WEBHOOK_SECRET", "")
