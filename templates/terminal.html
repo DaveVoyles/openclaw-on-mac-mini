@@ -1,0 +1,481 @@
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terminal CLI Reference</title>
+    <style>
+      :root {
+        --heritage-blue: #002d72;
+        --spirit-blue: #68ace5;
+        --medium-blue: #0077d8;
+        --harbor-blue: #4e97e0;
+        --mint-green: #86c8bc;
+        --homewood-green: #008767;
+        --gold: #f1c400;
+        --orange: #ff9e1b;
+        --red: #cf4520;
+        --sable: #31261d;
+        --bg: #001233;
+        --surface: rgba(0, 45, 114, 0.35);
+        --border: rgba(104, 172, 229, 0.2);
+        --text: #e8f0fe;
+        --muted: rgba(104, 172, 229, 0.7);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.7;
+        padding: 2rem;
+      }
+      .container { max-width: 1100px; margin: 0 auto; }
+      a { color: var(--spirit-blue); text-decoration: none; }
+      a:hover { color: var(--gold); }
+      h1 { font-size: 2rem; margin-bottom: 0.25rem; color: var(--spirit-blue); }
+      .subtitle { color: var(--muted); margin-bottom: 2rem; font-size: 0.95rem; }
+      h2 {
+        font-size: 1.15rem;
+        color: var(--gold);
+        margin: 2rem 0 0.75rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+        gap: 1.25rem;
+        margin-bottom: 1rem;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.25rem;
+      }
+      .card h3 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--spirit-blue);
+        margin-bottom: 0.6rem;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+      td { padding: 0.3rem 0.5rem; vertical-align: top; }
+      td:first-child { white-space: nowrap; }
+      tr:hover td { background: rgba(104,172,229,0.06); }
+      code {
+        background: rgba(0,0,0,0.35);
+        border: 1px solid rgba(104,172,229,0.15);
+        border-radius: 4px;
+        padding: 0.1em 0.4em;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 0.83rem;
+        color: #9ecbff;
+        white-space: nowrap;
+      }
+      .muted { color: var(--muted); font-size: 0.82rem; }
+      .badge {
+        display: inline-block;
+        font-size: 0.68rem;
+        padding: 0.1em 0.45em;
+        border-radius: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        vertical-align: middle;
+        margin-left: 0.35rem;
+      }
+      .badge-mini { background: #003d66; color: var(--spirit-blue); }
+      .badge-both { background: #1a3a1a; color: #86c8bc; }
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-bottom: 1.5rem;
+        font-size: 0.875rem;
+        color: var(--muted);
+        border: 1px solid var(--border);
+        padding: 0.35rem 0.75rem;
+        border-radius: 6px;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      .back-link:hover { color: var(--spirit-blue); border-color: var(--spirit-blue); }
+      .toc {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        margin-bottom: 2rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 0.3rem 1.5rem;
+      }
+      .toc a { font-size: 0.85rem; color: var(--muted); }
+      .toc a:hover { color: var(--spirit-blue); }
+      .key {
+        display: inline-block;
+        background: rgba(0,0,0,0.4);
+        border: 1px solid rgba(104,172,229,0.3);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0.1em 0.45em;
+        font-family: "SFMono-Regular", Consolas, monospace;
+        font-size: 0.78rem;
+        color: #e8f0fe;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <a class="back-link" href="/dashboard">&larr; Dashboard</a>
+
+      <h1>&#9000; Terminal CLI Reference</h1>
+      <p class="subtitle">
+        Quick reference for the terminal environment on both machines.
+        <span class="badge badge-both">&#10003; both</span> = local Mac &amp; Mac Mini &nbsp;
+        <span class="badge badge-mini">Mini</span> = Mac Mini (192.168.1.93) only
+      </p>
+
+      <div class="toc">
+        <a href="#iterm2">&#9654; iTerm2</a>
+        <a href="#tmux">&#9654; tmux</a>
+        <a href="#history">&#9654; Shell history (atuin)</a>
+        <a href="#navigation">&#9654; Navigation (zoxide + fzf)</a>
+        <a href="#ls-tools">&#9654; ls / cat / find / grep</a>
+        <a href="#http-tools">&#9654; HTTP &amp; YAML (xh / yq)</a>
+        <a href="#git">&#9654; Git (delta)</a>
+        <a href="#docker">&#9654; Docker</a>
+        <a href="#openclaw">&#9654; OpenClaw</a>
+        <a href="#system">&#9654; System utilities</a>
+        <a href="#ai">&#9654; Ollama / AI</a>
+        <a href="#workflows">&#9654; Common workflows</a>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding iTerm2 -->
+      <h2 id="iterm2">&#127820; iTerm2</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Windows &amp; Panes</h3>
+          <table>
+            <tr><td><span class="key">&#8997;Space</span></td><td class="muted">Toggle visor dropdown (hotkey window)</td></tr>
+            <tr><td><span class="key">&#8984;D</span></td><td class="muted">Split pane vertically</td></tr>
+            <tr><td><span class="key">&#8984;&#8679;D</span></td><td class="muted">Split pane horizontally</td></tr>
+            <tr><td><span class="key">&#8984;&#8997;&#8592;/&#8594;</span></td><td class="muted">Navigate between panes</td></tr>
+            <tr><td><span class="key">&#8984;T</span></td><td class="muted">New tab</td></tr>
+            <tr><td><span class="key">&#8984;W</span></td><td class="muted">Close pane / tab</td></tr>
+            <tr><td><span class="key">&#8984;&#8679;&#8984;&#8595;</span></td><td class="muted">Jump between command marks</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Shell Integration Features</h3>
+          <table>
+            <tr><td><span class="key">&#8984;Click</span> file path</td><td class="muted">Open file in editor (semantic history)</td></tr>
+            <tr><td><span class="key">&#8984;F</span></td><td class="muted">Search terminal output</td></tr>
+            <tr><td>Status bar</td><td class="muted">CPU% · RAM% · Dir · Git branch · Clock</td></tr>
+            <tr><td>Notifications</td><td class="muted">Auto-notify when long commands finish</td></tr>
+            <tr><td>Unlimited scrollback</td><td class="muted">Never lose Docker / agent logs</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding tmux -->
+      <h2 id="tmux">&#9679; tmux <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Session management</h3>
+          <table>
+            <tr><td><code>ta</code></td><td class="muted">Attach to &ldquo;main&rdquo; session (or create it)</td></tr>
+            <tr><td><code>tl</code></td><td class="muted">List all sessions</td></tr>
+            <tr><td><code>tk &lt;name&gt;</code></td><td class="muted">Kill a session</td></tr>
+            <tr><td><span class="key">Ctrl+A d</span></td><td class="muted">Detach — session keeps running</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Inside tmux (prefix = Ctrl+A)</h3>
+          <table>
+            <tr><td><span class="key">Ctrl+A |</span></td><td class="muted">Split vertically</td></tr>
+            <tr><td><span class="key">Ctrl+A -</span></td><td class="muted">Split horizontally</td></tr>
+            <tr><td><span class="key">Ctrl+A h/j/k/l</span></td><td class="muted">Navigate panes (vi-style)</td></tr>
+            <tr><td><span class="key">Ctrl+A H/J/K/L</span></td><td class="muted">Resize pane</td></tr>
+            <tr><td><span class="key">Ctrl+A c</span></td><td class="muted">New window</td></tr>
+            <tr><td><span class="key">Ctrl+A 1-9</span></td><td class="muted">Switch to window number</td></tr>
+            <tr><td><span class="key">Ctrl+A ,</span></td><td class="muted">Rename current window</td></tr>
+            <tr><td><span class="key">Ctrl+A [</span></td><td class="muted">Scroll / copy mode (q to exit)</td></tr>
+            <tr><td><span class="key">Ctrl+A r</span></td><td class="muted">Reload config</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding History -->
+      <h2 id="history">&#128269; Shell History — atuin <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Usage</h3>
+          <table>
+            <tr><td><span class="key">Ctrl+R</span></td><td class="muted">Open atuin history search</td></tr>
+            <tr><td>Type to filter</td><td class="muted">Fuzzy-searches all commands</td></tr>
+            <tr><td><span class="key">Enter</span></td><td class="muted">Run selected command</td></tr>
+            <tr><td><span class="key">Tab</span></td><td class="muted">Edit command before running</td></tr>
+            <tr><td><span class="key">Esc</span></td><td class="muted">Cancel</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Sync across machines</h3>
+          <table>
+            <tr><td><code>atuin register</code></td><td class="muted">First time — create account</td></tr>
+            <tr><td><code>atuin login</code></td><td class="muted">On each additional machine</td></tr>
+            <tr><td><code>atuin sync</code></td><td class="muted">Pull shared history (end-to-end encrypted)</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding Navigation -->
+      <h2 id="navigation">&#128205; Navigation — zoxide + fzf <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>zoxide</h3>
+          <table>
+            <tr><td><code>z dock</code></td><td class="muted">Jump to ~/docker-stack</td></tr>
+            <tr><td><code>z open</code></td><td class="muted">Jump to ~/openclaw</td></tr>
+            <tr><td><code>zi</code></td><td class="muted">Interactive fuzzy dir picker</td></tr>
+            <tr><td><code>cddocker</code></td><td class="muted">cd ~/docker-stack</td></tr>
+            <tr><td><code>cdopen</code></td><td class="muted">cd ~/openclaw</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>fzf</h3>
+          <table>
+            <tr><td><span class="key">Ctrl+T</span></td><td class="muted">Fuzzy-find file, paste path</td></tr>
+            <tr><td><span class="key">Ctrl+R</span></td><td class="muted">Fuzzy history (fallback)</td></tr>
+            <tr><td><span class="key">Alt+C</span></td><td class="muted">Fuzzy cd into directory</td></tr>
+            <tr><td><code>docker ps --format '{{.Names}}' | fzf | xargs docker logs -f</code></td><td class="muted">Pick a container interactively</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding ls/cat/find/grep tools -->
+      <h2 id="ls-tools">&#128196; ls / cat / find / grep <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>eza (ls) &amp; bat (cat)</h3>
+          <table>
+            <tr><td><code>ls</code></td><td class="muted">Icons, color, dirs first</td></tr>
+            <tr><td><code>ll</code></td><td class="muted">Long format with git status column</td></tr>
+            <tr><td><code>lt</code></td><td class="muted">Tree view, 2 levels deep</td></tr>
+            <tr><td><code>lt --level=3</code></td><td class="muted">Go deeper</td></tr>
+            <tr><td><code>cat file.py</code></td><td class="muted">Syntax-highlighted, no pager</td></tr>
+            <tr><td><code>catn file.py</code></td><td class="muted">No decorations</td></tr>
+            <tr><td><code>catf file.py</code></td><td class="muted">Full bat with pager</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>fd (find) &amp; rg (ripgrep)</h3>
+          <table>
+            <tr><td><code>find '*.yml'</code></td><td class="muted">Find YAML files recursively</td></tr>
+            <tr><td><code>find . -t f</code></td><td class="muted">Files only</td></tr>
+            <tr><td><code>find . -e py -e js</code></td><td class="muted">Multiple extensions</td></tr>
+            <tr><td><code>grep "TODO" .</code></td><td class="muted">Search all files recursively</td></tr>
+            <tr><td><code>grep -t py "def "</code></td><td class="muted">Python files only</td></tr>
+            <tr><td><code>grep -l "openclaw" .</code></td><td class="muted">Just filenames</td></tr>
+            <tr><td><code>du .</code></td><td class="muted">Visual disk usage tree (dust)</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding HTTP + YAML -->
+      <h2 id="http-tools">&#127760; HTTP &amp; YAML — xh + yq <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>xh (better curl)</h3>
+          <table>
+            <tr><td><code>http GET http://192.168.1.93:8765/health</code></td><td class="muted">GET with pretty JSON output</td></tr>
+            <tr><td><code>http POST api.example.com key=value</code></td><td class="muted">POST with JSON body</td></tr>
+            <tr><td><code>https GET api.example.com/endpoint</code></td><td class="muted">HTTPS shorthand</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>yq (YAML processor)</h3>
+          <table>
+            <tr><td><code>yq '.services | keys' docker-compose.yml</code></td><td class="muted">List all service names</td></tr>
+            <tr><td><code>yq '.services.openclaw.ports' docker-compose.yml</code></td><td class="muted">Get ports for a service</td></tr>
+            <tr><td><code>yq '.services.openclaw' docker-compose.yml</code></td><td class="muted">Inspect one service</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding Git -->
+      <h2 id="git">&#127800; Git — with delta <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Aliases</h3>
+          <table>
+            <tr><td><code>gs</code></td><td class="muted">git status</td></tr>
+            <tr><td><code>gd</code></td><td class="muted">git diff (rendered by delta — side-by-side, line numbers)</td></tr>
+            <tr><td><code>gl</code></td><td class="muted">git log --oneline -10</td></tr>
+            <tr><td><code>gp</code></td><td class="muted">git push</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>delta navigation</h3>
+          <table>
+            <tr><td><span class="key">Space</span> / <span class="key">b</span></td><td class="muted">Page down / up</td></tr>
+            <tr><td><span class="key">q</span></td><td class="muted">Quit</td></tr>
+            <tr><td><span class="key">/term</span></td><td class="muted">Search in diff</td></tr>
+            <tr><td><span class="key">n</span> / <span class="key">N</span></td><td class="muted">Next / previous match</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding Docker -->
+      <h2 id="docker">&#128013; Docker <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Container operations</h3>
+          <table>
+            <tr><td><code>dps</code></td><td class="muted">docker ps</td></tr>
+            <tr><td><code>dpsa</code></td><td class="muted">docker ps -a (including stopped)</td></tr>
+            <tr><td><code>dlog &lt;c&gt;</code></td><td class="muted">docker logs &lt;container&gt;</td></tr>
+            <tr><td><code>dlogf &lt;c&gt;</code></td><td class="muted">docker logs -f (follow)</td></tr>
+            <tr><td><code>dexec &lt;c&gt;</code></td><td class="muted">docker exec -it (shell into container)</td></tr>
+            <tr><td><code>drestart &lt;c&gt;</code></td><td class="muted">Restart a container</td></tr>
+            <tr><td><code>dstats</code></td><td class="muted">Live CPU/mem for all containers</td></tr>
+            <tr><td><code>ddf</code></td><td class="muted">docker system df (disk usage)</td></tr>
+            <tr><td><code>dprune</code></td><td class="muted">Clean up stopped containers + dangling images</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Compose &amp; lazydocker</h3>
+          <table>
+            <tr><td><code>dcup</code></td><td class="muted">docker compose up -d</td></tr>
+            <tr><td><code>dcdown</code></td><td class="muted">docker compose down</td></tr>
+            <tr><td><code>dcrestart</code></td><td class="muted">docker compose restart</td></tr>
+            <tr><td><code>dclogs</code></td><td class="muted">docker compose logs -f</td></tr>
+            <tr><td><code>lzd</code></td><td class="muted">lazydocker TUI — recommended for most ops</td></tr>
+          </table>
+          <h3 style="margin-top:0.75rem">lazydocker keys</h3>
+          <table>
+            <tr><td><span class="key">[</span> / <span class="key">]</span></td><td class="muted">Switch tabs (logs / stats / config)</td></tr>
+            <tr><td><span class="key">r</span></td><td class="muted">Restart container</td></tr>
+            <tr><td><span class="key">e</span></td><td class="muted">Exec into shell</td></tr>
+            <tr><td><span class="key">d</span></td><td class="muted">Delete container</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding OpenClaw -->
+      <h2 id="openclaw">&#129408; OpenClaw <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Shortcuts</h3>
+          <table>
+            <tr><td><code>oc-health</code></td><td class="muted">Curl /health endpoint — pretty-printed JSON</td></tr>
+            <tr><td><code>oc-logs</code></td><td class="muted">Last 50 lines + follow</td></tr>
+            <tr><td><code>oc-restart</code></td><td class="muted">Rebuild &amp; restart compose stack</td></tr>
+            <tr><td><code>oc-dash</code></td><td class="muted">Open dashboard in browser</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Common workflows</h3>
+          <table>
+            <tr><td>Deploy update</td><td class="muted"><code>cdopen &rarr; gp &rarr; oc-restart &rarr; oc-logs</code></td></tr>
+            <tr><td>Check health</td><td class="muted"><code>oc-health</code> or <code>http GET http://192.168.1.93:8765/health</code></td></tr>
+            <tr><td>Tail logs</td><td class="muted"><code>oc-logs</code> — or use <code>lzd</code> for full TUI</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding System -->
+      <h2 id="system">&#128296; System Utilities <span class="badge badge-both">&#10003; both</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Monitoring &amp; info</h3>
+          <table>
+            <tr><td><code>top</code> / <code>htop</code></td><td class="muted">btop — mouse-clickable system monitor</td></tr>
+            <tr><td><code>du .</code></td><td class="muted">dust — visual disk usage with bar chart</td></tr>
+            <tr><td><code>ports</code></td><td class="muted">lsof — show all listening ports</td></tr>
+            <tr><td><code>myip</code></td><td class="muted">Show local IP address</td></tr>
+            <tr><td><code>weather</code></td><td class="muted">One-line weather (Philadelphia)</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Maintenance</h3>
+          <table>
+            <tr><td><code>upgrade</code></td><td class="muted">topgrade — update everything (brew, casks, npm, etc.)</td></tr>
+            <tr><td><code>docs</code></td><td class="muted">glow ~/docker-stack/docs — browse docs in terminal</td></tr>
+            <tr><td><code>help &lt;cmd&gt;</code></td><td class="muted">tldr &lt;cmd&gt; — concise man page</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding AI -->
+      <h2 id="ai">&#129302; Ollama / AI <span class="badge badge-mini">Mini</span></h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Interactive</h3>
+          <table>
+            <tr><td><code>ai</code></td><td class="muted">ollama run gemma4:e4b — interactive chat</td></tr>
+            <tr><td><code>ai-list</code></td><td class="muted">ollama list — show installed models</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Pipe output to AI</h3>
+          <table>
+            <tr><td><code>docker logs openclaw 2&gt;&amp;1 | tail -30 | ollama run gemma4:e4b &quot;what's wrong?&quot;</code></td><td class="muted">Debug logs</td></tr>
+            <tr><td><code>cat error.log | ollama run gemma4:e4b &quot;summarise&quot;</code></td><td class="muted">Summarise a log file</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding Workflows -->
+      <h2 id="workflows">&#9889; Common Workflows</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Something seems slow on the Mini</h3>
+          <table>
+            <tr><td>1.</td><td class="muted"><code>ssh davevoyles@192.168.1.93</code></td></tr>
+            <tr><td>2.</td><td class="muted"><code>ta</code> — attach to tmux session</td></tr>
+            <tr><td>3.</td><td class="muted"><code>btop</code> — CPU/mem/network at a glance</td></tr>
+            <tr><td>4.</td><td class="muted"><code>lzd</code> — see if a container is misbehaving</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Run a long agent job on the Mini</h3>
+          <table>
+            <tr><td>1.</td><td class="muted"><code>ssh davevoyles@192.168.1.93 &amp;&amp; ta</code></td></tr>
+            <tr><td>2.</td><td class="muted">Start the job in one pane</td></tr>
+            <tr><td>3.</td><td class="muted"><span class="key">Ctrl+A |</span> &rarr; split, run <code>oc-logs</code> to monitor</td></tr>
+            <tr><td>4.</td><td class="muted"><span class="key">Ctrl+A d</span> &rarr; detach safely — survives SSH disconnect</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Deploy OpenClaw update</h3>
+          <table>
+            <tr><td>1.</td><td class="muted"><code>cdopen</code></td></tr>
+            <tr><td>2.</td><td class="muted"><code>gp</code> — push latest</td></tr>
+            <tr><td>3.</td><td class="muted"><code>oc-restart</code> — rebuild + restart</td></tr>
+            <tr><td>4.</td><td class="muted"><code>oc-logs</code> — watch startup</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Quick checks from anywhere</h3>
+          <table>
+            <tr><td><span class="key">&#8997;Space</span></td><td class="muted">Drop down terminal visor</td></tr>
+            <tr><td><code>oc-health</code></td><td class="muted">Is OpenClaw alive?</td></tr>
+            <tr><td><code>dps</code></td><td class="muted">What containers are running?</td></tr>
+            <tr><td><code>weather</code></td><td class="muted">Quick weather check</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <p style="margin-top:2rem; font-size:0.8rem; color:var(--muted)">
+        Full setup details: <code>glow ~/docker-stack/docs</code> &mdash;
+        or see <a href="/guide" target="_blank">OpenClaw Guide</a> for Discord commands.
+      </p>
+    </div>
+  </body>
+</html>

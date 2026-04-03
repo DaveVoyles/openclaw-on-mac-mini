@@ -95,7 +95,7 @@ class _Config:
 
     # -- Local LLM (Ollama) ----------------------------------------------------
     ollama_url: str = os.getenv("OLLAMA_URL", _local_llm.get("url", "http://host.docker.internal:11434"))
-    ollama_model: str = os.getenv("OLLAMA_MODEL", _local_llm.get("model", "gemma3:12b"))
+    ollama_model: str = os.getenv("OLLAMA_MODEL", _local_llm.get("model", "gemma4:e4b"))
     local_llm_enabled: bool = os.getenv("LOCAL_LLM_ENABLED", str(_local_llm.get("enabled", True))).lower() == "true"
     default_model_preference: str = os.getenv("DEFAULT_MODEL_PREFERENCE", _local_llm.get("default_preference", "auto"))
     ollama_tools_enabled: bool = os.getenv("OLLAMA_TOOLS_ENABLED", str(_local_llm.get("tools_enabled", True))).lower() == "true"

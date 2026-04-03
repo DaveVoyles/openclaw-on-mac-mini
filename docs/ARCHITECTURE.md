@@ -175,7 +175,7 @@ graph TB
     %% ── LLM Backends ────────────────────────────────────────────
     subgraph AI ["🤖 AI / LLM Backends"]
         Gemini["Google Gemini\ngemini-2.5-flash\n(primary, tools)"]
-        Ollama["Ollama Local\ngemma3:12b\n(chat + native tools)"]
+        Ollama["Ollama Local\ngemma4:e4b\n(chat + native tools)"]
         OpenAI["OpenAI GPT-4o\n(via Copilot proxy)"]
         Anthropic["Anthropic Claude\nSonnet 4.5\n(via Copilot proxy)"]
         CopilotProxy["Copilot Proxy\nlocalhost:9191\n(routes to OpenAI/Anthropic)"]
@@ -392,7 +392,7 @@ OpenClaw supports 5 model backends, selected automatically by `model_router.py` 
 | Backend    | Model              | Endpoint                  | Use Case                          |
 | ---------- | ------------------ | ------------------------- | --------------------------------- |
 | `gemini`   | Gemini 2.5 Flash   | Google AI API             | Tool calling, complex analysis    |
-| `local`    | Gemma 3 12B        | Ollama (localhost:11434)  | Simple chat, native tool calling  |
+| `local`    | Gemma 4 E4B        | Ollama (localhost:11434)  | Simple chat, native tool calling  |
 | `openai`   | GPT-4o             | Copilot proxy (:9191)     | Creative writing, general knowledge |
 | `anthropic`| Claude Sonnet 4.5  | Copilot proxy (:9191)     | Code review, careful reasoning    |
 | `auto`     | (classified)       | (routed by category)      | Default — picks best model        |

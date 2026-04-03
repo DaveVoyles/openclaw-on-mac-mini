@@ -14,9 +14,9 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
 | **Interface**    | 40+ Discord slash commands across 7 cogs (36 cog commands) + modular command system |
-| **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 3 12B local (Ollama) |
+| **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 4 E4B local (Ollama) |
 | **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
-| **Local LLM**    | Ollama (`gemma3:12b`) — free, with native tool calling support         |
+| **Local LLM**    | Ollama (`gemma4:e4b`) — free, with native tool calling support         |
 | **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
 | **Status**       | **Phase 15 — Frontier Intelligence** ✅                                |
 
@@ -89,11 +89,11 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 **Phase 7 — Local LLM & Production Hardening** ✅
 
-- Ollama integration — `gemma3:12b` running natively on Mac Mini M4 Pro (8.1 GB, ~15–20 tok/s on M4 Neural Engine)
+- Ollama integration — `gemma4:e4b` running natively on Mac Mini M4 (9.6 GB, multimodal text/image/audio)
 - Hybrid routing in `llm.py` — keyword heuristic routes simple queries to Ollama, tool-calling queries to Gemini
 - Silent fallback — Ollama unavailable → seamlessly falls back to Gemini
 - `LOCAL_LLM_ENABLED` toggle in `.env` — disable local LLM without a code change
-- Response footer shows `via gemma3:12b` (local · unlimited) or `via gemini-2.5-flash` with rate info
+- Response footer shows `via gemma4:e4b` (local · unlimited) or `via gemini-2.5-flash` with rate info
 - AgentMail fixed: correct `/v0/inboxes/{inbox_id}/messages/send` endpoint
 - `skills/` reorganized as a Python package (`skills/__init__.py` + 4 skill modules)
   - `advanced_skills.py` (280) — orchestration glue, reporting
@@ -395,7 +395,7 @@ User (Discord)
 │                                                         │
 │  ┌─ LLM Layer ──────────────────────────────────────┐  │
 │  │ Gemini 2.5 Flash (primary, 106 tools registered) │  │
-│  │ Gemma 3 12B (local fallback via Ollama)           │  │
+│  │ Gemma 4 E4B (local fallback via Ollama)           │  │
 │  │ Hallucination guard + auto-retry                  │  │
 │  └───────────────────────────────────────────────────┘  │
 │                                                         │
@@ -750,7 +750,7 @@ Generates a comprehensive snapshot: container counts, download queue, \*arr heal
 - [x] **Phase 4**: Security & Approvals — Button-based approval UI, emergency stop, audit viewer
 - [x] **Phase 5**: Advanced Skills — Media search, downloads, Plex, health checks, scheduling, AI log analysis, QMD memory, AgentMail
 - [x] **Phase 6**: Remote Access & Monitoring — Traefik routing, Uptime Kuma, Prometheus metrics
-- [x] **Phase 7**: Local LLM — Ollama hybrid routing (gemma3:12b + Gemini 2.5 Flash)
+- [x] **Phase 7**: Local LLM — Ollama hybrid routing (gemma4:e4b + Gemini 2.5 Flash)
 - [ ] **Phase 8**: Production Hardening — Comprehensive testing, backup/restore, Grafana dashboards
 - [x] **Phase 15**: Frontier Intelligence — Auto-RAG, code interpreter, multi-model routing, Copilot proxy, persistent memory
 
@@ -877,9 +877,9 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
   - `ALLOWED_USER_IDS` — right-click your Discord profile → Copy User ID
   - `GOOGLE_API_KEY` — from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) (paid Gemini tier)
   - `OLLAMA_URL=http://host.docker.internal:11434` — Ollama endpoint (host machine)
-  - `OLLAMA_MODEL=gemma3:12b` — local model name
+  - `OLLAMA_MODEL=gemma4:e4b` — local model name
   - `LOCAL_LLM_ENABLED=true` — set false to route all queries to Gemini
-- [ ] **Install Ollama** (local LLM): `brew install ollama && brew services start ollama && ollama pull gemma3:12b`
+- [ ] **Install Ollama** (local LLM): `brew install ollama && brew services start ollama && ollama pull gemma4:e4b`
 - [ ] **Fill in service API keys in `~/openclaw/.env`** (Phase 5):
   - `SONARR_API_KEY` — from `docker-stack/sonarr/config/config.xml`
   - `RADARR_API_KEY` — from `docker-stack/radarr/config/config.xml`
@@ -891,7 +891,7 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
 - [ ] **First deploy**: `cd ~/openclaw && docker compose up -d --build`
 - [ ] **Verify**: type `/ping` in Discord, check `curl http://localhost:8765/health`
 - [ ] **Test `/ask`**: try `/ask "hello"` (→ Ollama, free) then `/ask "how's sonarr doing?"` (→ Gemini + function calling)
-- [ ] **Ollama**: runs on host via `brew services start ollama`; model is `gemma3:12b` (auto-pulled). Set `LOCAL_LLM_ENABLED=false` in `.env` to disable.
+- [ ] **Ollama**: runs on host via `brew services start ollama`; model is `gemma4:e4b` (auto-pulled). Set `LOCAL_LLM_ENABLED=false` in `.env` to disable.
 - [ ] **Add to Uptime Kuma**: run `scripts/add-uptime-kuma-monitor.py` to add the monitor
 - [ ] **Traefik route** (optional): `openclaw.davevoyles.synology.me` → configured in NAS `mac-mini.yml`
 - [ ] **AgentMail** (optional): set `AGENTMAIL_API_KEY` in `.env` for `/mail` and email-via-AI

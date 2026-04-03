@@ -29,7 +29,7 @@ llm:
 # Local LLM (Ollama) — hybrid routing
 local_llm:
   enabled: true # set LOCAL_LLM_ENABLED=false in .env to disable
-  model: "gemma3:12b" # override with OLLAMA_MODEL env var
+  model: "gemma4:e4b" # override with OLLAMA_MODEL env var
   url: "http://host.docker.internal:11434" # override with OLLAMA_URL env var
   default_preference: "auto" # auto | local | gemini — override with DEFAULT_MODEL_PREFERENCE env var
   tools_enabled: true   # enable native tool calling via Ollama /api/chat

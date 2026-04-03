@@ -124,7 +124,7 @@ Gemini service outage. Check https://status.cloud.google.com/ and retry later.
    ```
 3. **Model not pulled?**
    ```bash
-   ollama pull gemma3:12b
+   ollama pull gemma4:e4b
    ```
 
 ### Symptom: Ollama responds but quality is poor
@@ -194,7 +194,7 @@ LLM_RPH_LIMIT=500       # Calls per hour
 ```env
 LOCAL_LLM_ENABLED=true
 OLLAMA_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=gemma3:12b
+OLLAMA_MODEL=gemma4:e4b
 ```
 
 ---
@@ -479,11 +479,11 @@ curl -s http://localhost:8765/health | python -m json.tool
 2. **Check the model is pulled:**
    ```bash
    ollama list
-   # Should show gemma3:12b or your configured model
-   ollama pull gemma3:12b
+   # Should show gemma4:e4b or your configured model
+   ollama pull gemma4:e4b
    ```
 
-3. **Check memory usage**: Large models need significant RAM. `gemma3:12b` requires ~8 GB. If the host is low on memory, Ollama may timeout during inference.
+3. **Check memory usage**: Large models need significant RAM. `gemma4:e4b` requires ~10 GB. If the host is low on memory, Ollama may timeout during inference.
    ```bash
    # Check available memory
    vm_stat | head -5    # macOS

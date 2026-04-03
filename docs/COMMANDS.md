@@ -30,7 +30,7 @@ General-purpose commands for identity, help, and conversation management.
 | `/remember`      | Store a fact in long-term QMD memory                      | `content: str`, `tags: str (optional)`         | ✅   | LOW    | `bot.py` |
 | `/recall`        | Search long-term QMD memory                               | `query: str`                                   | ✅   | LOW    | `bot.py` |
 
-**`/ask` routing** — By default, queries are auto-routed: code queries → Claude (via Copilot proxy), creative writing → GPT-4o (via Copilot proxy), tool-requiring queries → Gemini 2.5 Flash, simple/conversational queries → Ollama (`gemma3:12b`, free). Auto-RAG injects top-5 relevant memories, user profile, and active rules before every call. You can override routing per-message with the `model:` parameter, or set a sticky default with `/model set`. The response footer shows which model handled the request.
+**`/ask` routing** — By default, queries are auto-routed: code queries → Claude (via Copilot proxy), creative writing → GPT-4o (via Copilot proxy), tool-requiring queries → Gemini 2.5 Flash, simple/conversational queries → Ollama (`gemma4:e4b`, free). Auto-RAG injects top-5 relevant memories, user profile, and active rules before every call. You can override routing per-message with the `model:` parameter, or set a sticky default with `/model set`. The response footer shows which model handled the request.
 
 | Model choice | Icon | Behavior |
 |---|---|---|
