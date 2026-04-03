@@ -129,7 +129,6 @@ class HabitTracker:
         chars = []
         for w in range(weeks - 1, -1, -1):
             week_start = today - timedelta(weeks=w + 1)
-            week_end = today - timedelta(weeks=w)
             days_in_week = [(week_start + timedelta(days=d)) for d in range(7)]
             hits = sum(1 for d in days_in_week if d in checkin_dates)
             idx = min(int(hits / 7 * (len(SPARKLINE_CHARS) - 1)), len(SPARKLINE_CHARS) - 1)

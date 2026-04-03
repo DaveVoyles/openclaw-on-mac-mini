@@ -1,13 +1,10 @@
 """Tests for src/error_aggregator.py."""
 
-import asyncio
 import time
-from unittest.mock import patch
 
 import pytest
 
 from src.error_aggregator import ErrorAggregator, _fingerprint
-
 
 # ---------------------------------------------------------------------------
 # Fingerprinting

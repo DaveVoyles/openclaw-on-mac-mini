@@ -11,6 +11,7 @@ log = logging.getLogger("openclaw")
 async def read_word(file_bytes: bytes) -> str:
     """Extract all text from a .docx file. Returns plain text."""
     import asyncio
+
     from docx import Document
 
     def _extract():
@@ -40,6 +41,7 @@ async def edit_word(file_bytes: bytes, edits: dict[str, str]) -> bytes:
         Modified .docx as bytes
     """
     import asyncio
+
     from docx import Document
 
     def _apply_edits():
@@ -79,8 +81,8 @@ async def create_word(title: str, content: str, headers: list[str] | None = None
         .docx file as bytes
     """
     import asyncio
+
     from docx import Document
-    from docx.shared import Pt
 
     def _create():
         doc = Document()
@@ -115,6 +117,7 @@ async def read_excel(file_bytes: bytes, sheet_name: str | None = None) -> str:
     Returns a text representation with headers and rows.
     """
     import asyncio
+
     from openpyxl import load_workbook
 
     def _extract():
@@ -158,6 +161,7 @@ async def edit_excel(file_bytes: bytes, edits: list[dict]) -> bytes:
         Modified .xlsx as bytes
     """
     import asyncio
+
     from openpyxl import load_workbook
 
     def _apply_edits():
@@ -203,6 +207,7 @@ async def create_excel(title: str, headers: list[str], rows: list[list], sheet_n
         .xlsx file as bytes
     """
     import asyncio
+
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill
 

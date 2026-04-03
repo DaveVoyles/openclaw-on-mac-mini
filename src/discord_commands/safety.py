@@ -4,7 +4,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from approvals import approval_store, is_emergency_stopped, set_emergency_stop
+from approvals import approval_store, set_emergency_stop
 from audit import audit_log
 
 from ._helpers import require_auth

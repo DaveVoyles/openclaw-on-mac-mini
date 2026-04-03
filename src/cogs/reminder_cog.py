@@ -12,7 +12,6 @@ Commands
 import asyncio
 import logging
 import time
-from datetime import datetime
 
 import discord
 from discord import app_commands
@@ -105,7 +104,7 @@ class ReminderCog(commands.Cog):
             recurring=recurring,
         )
 
-        fire_dt = datetime.fromtimestamp(fire_at)
+
         embed = discord.Embed(
             title="✅ Reminder set",
             description=message,

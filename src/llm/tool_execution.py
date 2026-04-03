@@ -9,19 +9,18 @@ import logging
 import aiohttp
 
 from config import cfg
+from http_session import SessionManager as _SessionManager
 from llm_client import (
+    _TOOL_DECLARATIONS,
     LOCAL_LLM_ENABLED,
     MAX_TOKENS,
     OLLAMA_MODEL,
     OLLAMA_URL,
     TEMPERATURE,
     _load_system_prompt,
-    _TOOL_DECLARATIONS,
 )
 from llm_patterns import _gemma_response_seems_valid, _needs_tools
 from llm_tools import _execute_function_call
-
-from http_session import SessionManager as _SessionManager
 
 log = logging.getLogger("openclaw.llm")
 

@@ -1,8 +1,6 @@
 """Tests for model_router.py — query classification and routing logic."""
 
-import pytest
 
-import model_router as mod
 from model_router import ModelRoute, classify_query
 
 

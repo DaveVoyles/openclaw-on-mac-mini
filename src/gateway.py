@@ -166,7 +166,7 @@ async def gateway_request(
         extra: dict[str, str] = {}
         if connection_id:
             extra["Maton-Connection"] = connection_id
-        result = await _http_request(url, method, body, extra)
+        await _http_request(url, method, body, extra)
     except RuntimeError as e:
         return f"❌ Gateway error: {e}"
     except asyncio.TimeoutError:

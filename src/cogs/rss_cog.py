@@ -112,7 +112,7 @@ class RSSCog(commands.GroupCog, group_name="rss", group_description="RSS feed mo
     )
     @require_auth()
     async def rss_digest_cmd(self, interaction: discord.Interaction, topic: str = ""):
-        from rss_skills import get_rss_digest, list_rss_feeds, _load_feeds
+        from rss_skills import _load_feeds, get_rss_digest
 
         await interaction.response.defer()
 

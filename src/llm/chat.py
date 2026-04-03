@@ -33,6 +33,7 @@ from llm_patterns import (
 from llm_ratelimit import rate_limiter as _rate_limiter
 from llm_tools import _extract_final_text, _extract_history, _run_tool_loop
 from skills import SKILLS
+from trace_context import get_trace_id
 
 from .context import (
     _auto_recall_context,
@@ -41,8 +42,6 @@ from .context import (
     _trim_history,
 )
 from .tool_execution import _ollama_available, _try_local_model
-
-from trace_context import get_trace_id
 
 log = logging.getLogger("openclaw.llm")
 

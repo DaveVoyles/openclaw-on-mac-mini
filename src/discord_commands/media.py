@@ -3,11 +3,10 @@
 import asyncio
 import io
 import logging
-
-import aiohttp
 from collections.abc import Callable
 from typing import Any
 
+import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands

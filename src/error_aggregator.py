@@ -11,7 +11,6 @@ import asyncio
 import logging
 import re
 import time
-from collections import defaultdict
 from dataclasses import dataclass, field
 
 log = logging.getLogger("openclaw")

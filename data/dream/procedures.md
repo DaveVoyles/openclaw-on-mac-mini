@@ -40,3 +40,9 @@ Preferences: report_frequency=2x weekly (Monday 7 AM, Friday 7 AM), lacrosse_rep
 - User prefers lacrosse reports formatted as a table with columns: Teams & ranking, Time, How to watch Online.
 
 - User preference: lacrosse_report_format = table with Rank, Team, Next Game, Time, How to Watch
+
+- [Session handover for Dave] **Decisions Made:**
+*   User preferences for WWE recap content format were confirmed: title + 1 paragraph per match, explaining context and storylines, indicating match cities, and including upcoming event details.
+
+**Pending Items:**
+*   Clarification is needed regarding

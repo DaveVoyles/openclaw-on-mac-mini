@@ -4,12 +4,10 @@ Complements test_dream_cycle.py which covers importance scoring, reachability,
 and index I/O.
 """
 
-import datetime
 
 import pytest
 
 import dream_cycle as mod
-
 
 # ---------------------------------------------------------------------------
 # _classify_category

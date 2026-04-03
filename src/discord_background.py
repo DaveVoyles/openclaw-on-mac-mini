@@ -16,11 +16,10 @@ from pathlib import Path
 
 import discord
 
-from trace_context import get_trace_id, trace_context
-
 from approvals import approval_store
 from audit import _audit_buffer, audit_log
 from http_session import SessionManager as _SessionManager
+from trace_context import trace_context
 
 _bg_sessions = _SessionManager(timeout=10, name="discord-background")
 from constants import (
@@ -408,6 +407,7 @@ async def _gather_system_signals():
     # Record disk usage for trend prediction
     try:
         import shutil
+
         from health_history import record_disk as _hh_record_disk
         usage = shutil.disk_usage("/")
         _hh_record_disk("/", usage.total / 1e9, usage.used / 1e9, usage.free / 1e9, usage.used / usage.total * 100)

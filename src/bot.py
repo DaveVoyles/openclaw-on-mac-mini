@@ -52,7 +52,7 @@ from permissions import (  # noqa: F401 — re-exported for backward compat
 from qmd import remember_fact
 from scheduler import scheduler
 from skills import SKILLS
-from trace_context import get_trace_id, setup_trace_logging, trace_context
+from trace_context import setup_trace_logging
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -149,7 +149,6 @@ from audit import _audit_buffer, audit_log  # noqa: E402
 # ---------------------------------------------------------------------------
 # Shared HTTP session (reused for attachment downloads)
 # ---------------------------------------------------------------------------
-
 from http_session import SessionManager as _SessionManager
 
 _bot_sessions = _SessionManager(timeout=30, name="bot")
@@ -1281,7 +1280,6 @@ async def on_message(message: discord.Message) -> None:
             model_pref = "gemini"
 
         response_text = ""
-        model_used = "unknown"
 
         try:
             async for chunk_text, is_final, meta in llm_chat_stream(
@@ -1292,7 +1290,6 @@ async def on_message(message: discord.Message) -> None:
             ):
                 if is_final:
                     response_text = chunk_text
-                    model_used = meta.get("model_used", "unknown")
                     if "updated_history" in meta:
                         conv.update_from_llm(meta["updated_history"])
                         conversation_store.auto_save_thread(
@@ -1302,7 +1299,6 @@ async def on_message(message: discord.Message) -> None:
         except Exception as e:
             log.error("Thread follow-up LLM error: %s", e)
             response_text = f"❌ **Error:** {e}"
-            model_used = "error"
 
         if not response_text or len(response_text.strip()) < 5:
             response_text = "⚠️ I wasn't able to generate a useful response. Try rephrasing your question."
@@ -1317,7 +1313,6 @@ async def on_message(message: discord.Message) -> None:
 
     audit_log(message.author, "thread_followup", detail=user_question[:200])
     conversation_store.cleanup_expired()
-    _current_trace.reset(_trace_token)
 
 
 # ---------------------------------------------------------------------------

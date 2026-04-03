@@ -2,16 +2,18 @@
 
 import asyncio
 import json
+import os
+
+# Ensure src/ is importable
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
-# Ensure src/ is importable
-import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from notification_prefs import NotificationPrefsStore, UserNotifPrefs
+from notification_prefs import NotificationPrefsStore
 
 
 @pytest.fixture()

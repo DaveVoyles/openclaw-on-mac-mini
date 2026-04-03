@@ -47,6 +47,7 @@ from llm import chat as llm_chat
 log = logging.getLogger("openclaw")
 
 from config import cfg as _web_cfg
+
 HEALTH_PORT = _web_cfg.health_port
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
@@ -355,6 +356,7 @@ async def _health_memory_handler(request: web.Request) -> web.Response:
     # Thread store SQLite
     try:
         import sqlite3 as _sqlite3
+
         from thread_store import DB_PATH as _threads_db_path
         conn = _sqlite3.connect(str(_threads_db_path), timeout=3)
         try:

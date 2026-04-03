@@ -4,7 +4,7 @@ Commands: /expense add, /expense list, /expense summary, /expense delete
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 import discord
 from discord import app_commands

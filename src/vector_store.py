@@ -39,6 +39,7 @@ RESEARCH_COLLECTION = "research"
 # Optional: Ollama-hosted models like embeddinggemma, nomic-embed-text, etc.
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")  # empty = ChromaDB default
 from config import cfg as _vs_cfg
+
 OLLAMA_EMBED_URL = _vs_cfg.ollama_url
 
 

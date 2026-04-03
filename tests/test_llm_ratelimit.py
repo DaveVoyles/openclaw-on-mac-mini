@@ -1,12 +1,9 @@
 """Tests for llm_ratelimit.py — sliding-window rate limiter."""
 
-import asyncio
 import time
-from unittest.mock import patch
 
 import pytest
 
-import llm_ratelimit as mod
 from llm_ratelimit import RateLimiter
 
 

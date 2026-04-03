@@ -11,14 +11,14 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import audit_log
+from overseerr import _get as _overseerr_get
 from overseerr import (
+    _media_title,
     approve_request,
     deny_request,
     get_pending_requests,
     get_request_stats,
 )
-from overseerr import _get as _overseerr_get
-from overseerr import _media_title
 from skills.advanced_skills import (
     check_arr_health,
     check_download_clients,

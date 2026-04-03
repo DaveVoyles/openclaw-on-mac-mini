@@ -99,7 +99,8 @@ class TestGuideHandler:
 
 class TestCommandList:
     def test_returns_list_of_categories(self):
-        cmds = mod._command_list()
+        from dashboard.helpers import _command_list
+        cmds = _command_list()
         assert isinstance(cmds, list)
         assert len(cmds) > 0
         first = cmds[0]

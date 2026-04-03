@@ -475,7 +475,7 @@ SKILLS.update({
 })
 
 # Add spending tracker skills
-from autonomous_skills import AUTONOMOUS_SKILLS
+from agent_loop import AGENT_LOOP_SKILLS
 from spending import get_daily_spending, get_spending
 
 SKILLS.update({
@@ -484,7 +484,7 @@ SKILLS.update({
 })
 
 # Add Phase 12 autonomous skills (Planning, Agent Loop)
-SKILLS.update(AUTONOMOUS_SKILLS)
+SKILLS.update(AGENT_LOOP_SKILLS)
 
 # Add Phase 6 extended integrations (Overseerr, NAS, Email, Calendar)
 from calendar_skills import CALENDAR_SKILLS

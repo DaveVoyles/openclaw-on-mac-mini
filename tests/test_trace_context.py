@@ -1,7 +1,7 @@
 """Tests for trace_context module."""
 import logging
-import sys
 import os
+import sys
 
 # Ensure src is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from trace_context import (
     TraceContext,
     TraceLogFilter,
-    _current_trace,
     get_trace,
     get_trace_id,
     setup_trace_logging,
@@ -91,7 +90,6 @@ class TestSetupTraceLogging:
         logger.addHandler(handler)
         try:
             # Patch so setup_trace_logging finds our test logger
-            original_handlers = logger.handlers[:]
             setup_trace_logging.__wrapped__ = None  # just call it
 
             # Manually add filter since setup_trace_logging targets "openclaw"

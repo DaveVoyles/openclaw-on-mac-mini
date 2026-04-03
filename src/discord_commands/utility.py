@@ -9,7 +9,7 @@ from discord.ext import commands
 from audit import audit_log
 from config import cfg
 
-from ._helpers import ALLOWED_USER_IDS, _is_allowed, require_auth
+from ._helpers import _is_allowed, require_auth
 
 VERSION = cfg.version
 

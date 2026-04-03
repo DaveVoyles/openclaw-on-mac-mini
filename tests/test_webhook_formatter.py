@@ -1,7 +1,6 @@
 """Tests for webhook_formatter.py — arr/plex/qbittorrent payload formatting."""
 
 import discord
-import pytest
 
 import webhook_formatter as mod
 

@@ -1,18 +1,18 @@
 """Comprehensive tests for document editing skills (Word + Excel + utility)."""
 
 import io
+
 import pytest
 
 from document_skills import (
-    create_word,
-    read_word,
-    edit_word,
     create_excel,
-    read_excel,
-    edit_excel,
+    create_word,
     detect_format,
+    edit_excel,
+    edit_word,
+    read_excel,
+    read_word,
 )
-
 
 # ── Word (.docx) ────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ async def test_read_word_empty():
     # Title heading is still present
     assert "Empty" in text
     # No body paragraphs beyond the title
-    lines = [l for l in text.split("\n") if l.strip() and l.strip() != "Empty"]
+    lines = [line for line in text.split("\n") if line.strip() and line.strip() != "Empty"]
     assert len(lines) == 0
 
 

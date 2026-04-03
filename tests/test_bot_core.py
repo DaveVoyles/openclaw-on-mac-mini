@@ -1,16 +1,13 @@
 """Tests for bot.py — utility functions and formatting helpers."""
 
 import os
-import re
 
 # Redirect filesystem side-effects before importing the module
 os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_logs")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit")
 
-import pytest
 
 import bot as mod
-
 
 # ---------------------------------------------------------------------------
 # truncate_for_embed

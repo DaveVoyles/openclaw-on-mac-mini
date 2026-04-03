@@ -1,12 +1,10 @@
 """Tests for discord_background.py — self-heal parsing and signal helpers."""
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 import discord_background as mod
-
 
 # ---------------------------------------------------------------------------
 # _parse_heal_actions
