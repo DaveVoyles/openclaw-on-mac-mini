@@ -291,8 +291,77 @@ async def send_email(
 # Registry
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Sync helper and async skill for reading a single email by IMAP ID
+# ---------------------------------------------------------------------------
+
+
+def _imap_fetch_one(provider: str, msg_id: str) -> str:
+    """Fetch the full RFC822 message for *msg_id* from INBOX and return a
+    formatted string with From, Subject, Date, and plain-text body."""
+    creds = _provider_creds(provider)
+    if not creds:
+        return _config_hint(provider)
+
+    user, password, imap_host, _, _ = creds
+    try:
+        with imaplib.IMAP4_SSL(imap_host, 993, ssl_context=_DEFAULT_SSL_CONTEXT) as imap:
+            imap.login(user, password)
+            imap.select("INBOX", readonly=True)
+            _, msg_data = imap.fetch(msg_id.encode(), "(RFC822)")
+            if not msg_data or not msg_data[0]:
+                return f"❌ No message found with ID {msg_id}."
+
+            raw = msg_data[0][1]
+            msg = email.message_from_bytes(raw)
+
+            from_addr = _decode_header(msg.get("From", ""))
+            subject = _decode_header(msg.get("Subject", "(no subject)"))
+            date = msg.get("Date", "")
+
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if (
+                        part.get_content_type() == "text/plain"
+                        and not part.get("Content-Disposition")
+                    ):
+                        charset = part.get_content_charset() or "utf-8"
+                        body = part.get_payload(decode=True).decode(
+                            charset, errors="replace"
+                        )
+                        break
+            else:
+                if msg.get_content_type() == "text/plain":
+                    charset = msg.get_content_charset() or "utf-8"
+                    body = msg.get_payload(decode=True).decode(charset, errors="replace")
+
+            return (
+                f"**From:** {from_addr}\n"
+                f"**Subject:** {subject}\n"
+                f"**Date:** {date}\n\n"
+                f"{body.strip()}"
+            )
+    except imaplib.IMAP4.error as e:
+        return f"❌ IMAP error: {e}"
+    except (OSError, ConnectionError) as e:
+        return f"❌ Network error: {e}"
+    except Exception as e:
+        return f"❌ Error fetching email: {e}"
+
+
+async def read_email_by_id(msg_id: str, provider: str = "gmail") -> str:
+    """Fetch the full body of a single email by its sequential IMAP ID."""
+    return await asyncio.to_thread(_imap_fetch_one, provider, msg_id)
+
+
+# ---------------------------------------------------------------------------
+# Registry
+# ---------------------------------------------------------------------------
+
 EMAIL_SKILLS = {
     "read_inbox": read_inbox,
     "search_emails": search_emails,
     "send_email": send_email,
+    "read_email_by_id": read_email_by_id,
 }

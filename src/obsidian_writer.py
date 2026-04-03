@@ -26,6 +26,8 @@ _SUBFOLDERS = {
     "bookmark": "Bookmarks",
     "note": "Notes",
     "analytics": "Analytics",
+    "journal": "Journal",
+    "review": "Reviews",
 }
 
 _lock: asyncio.Lock | None = None

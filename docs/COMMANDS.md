@@ -1,6 +1,6 @@
 # OpenClaw — Discord Slash Commands Reference
 
-All 88 slash commands across `bot.py` and 12 cogs, organized by category.
+All 104 slash commands across `bot.py` and 16 cogs, organized by category.
 
 > **Risk levels:** LOW (auto-execute) | MEDIUM (logged) | HIGH (requires button approval) | CRITICAL (requires approval + preview)
 >
@@ -31,6 +31,8 @@ General-purpose commands for identity, help, and conversation management.
 | `/recall`        | Search long-term QMD memory                               | `query: str`                                   | ✅   | LOW    | `bot.py` |
 
 **`/ask` routing** — By default, queries are auto-routed: code queries → Claude (via Copilot proxy), creative writing → GPT-4o (via Copilot proxy), tool-requiring queries → Gemini 2.5 Flash, simple/conversational queries → Ollama (`gemma4:e4b`, free). Auto-RAG injects top-5 relevant memories, user profile, and active rules before every call. You can override routing per-message with the `model:` parameter, or set a sticky default with `/model set`. The response footer shows which model handled the request.
+
+**`/ask` follow-up UX (Pass 9)** — Every `/ask` response now includes 2 LLM-generated follow-up question buttons (grey, secondary style) and a **🔁 Go Deeper** button that re-runs the original question with a detailed-explanation prefix. Clicking a follow-up button generates a full new response with its own follow-up buttons, so the chain continues naturally.
 
 | Model choice | Icon | Behavior |
 |---|---|---|
@@ -281,6 +283,89 @@ Reminders, tasks, translation, polls, habits, expenses, and daily digests.
 
 ---
 
+## Calendar & Email
+
+Google Calendar event management and email read/send via Gmail or Outlook.
+
+Requires: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN` (calendar); `GMAIL_USER`, `GMAIL_APP_PASSWORD` and/or `OUTLOOK_USER`, `OUTLOOK_APP_PASSWORD` (email).
+
+| Command                                               | Description                                            | Parameters                                                              | Auth | Risk   | File               |
+| ----------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- | ---- | ------ | ------------------ |
+| `/calendar today`                                     | List today's Google Calendar events                    | —                                                                       | —    | LOW    | `calendar_cog.py`  |
+| `/calendar upcoming`                                  | Next N days of events (default 7)                      | `days: int (optional)`                                                  | —    | LOW    | `calendar_cog.py`  |
+| `/calendar add <title> <when>`                        | Create a new calendar event                            | `title: str`, `when: str`, `description: str (optional)`, `location: str (optional)` | ✅ | MEDIUM | `calendar_cog.py` |
+| `/calendar delete <event_id>`                         | Delete a calendar event                                | `event_id: str`                                                         | ✅   | HIGH   | `calendar_cog.py`  |
+| `/email inbox`                                        | Show recent emails (default 10, ephemeral)             | `count: int (optional)`, `provider: str (optional)`                     | —    | LOW    | `email_cog.py`     |
+| `/email read <id>`                                    | Read full email body (ephemeral)                       | `id: str`, `provider: str (optional)`                                   | —    | LOW    | `email_cog.py`     |
+| `/email search <query>`                               | Search inbox (ephemeral)                               | `query: str`, `provider: str (optional)`                                | —    | LOW    | `email_cog.py`     |
+| `/email send <to> <subject> <body>`                   | Send an email                                          | `to: str`, `subject: str`, `body: str`, `provider: str (optional)`      | ✅   | HIGH   | `email_cog.py`     |
+
+---
+
+## Journal
+
+Vault-integrated daily journaling with AI writing prompts. Entries saved to `/vault/Journal/` as `Journal - YYYY-MM-DD.md` with Obsidian frontmatter.
+
+| Command           | Description                                                      | Parameters                | Auth | Risk | File              |
+| ----------------- | ---------------------------------------------------------------- | ------------------------- | ---- | ---- | ----------------- |
+| `/journal write`  | Save today's journal entry (opens modal if no entry provided)    | `entry: str (optional)`   | —    | LOW  | `journal_cog.py`  |
+| `/journal read`   | Read a past journal entry (default today)                        | `date: str (optional)`    | —    | LOW  | `journal_cog.py`  |
+| `/journal streak` | Show consecutive days journaled                                  | —                         | —    | LOW  | `journal_cog.py`  |
+| `/journal prompt` | Get an AI writing prompt from Gemini                             | —                         | —    | LOW  | `journal_cog.py`  |
+
+---
+
+## GitHub
+
+PR and issue monitoring with background DM alerts. Polls watched repos every 30 minutes.
+
+Requires: `GITHUB_TOKEN`, `GITHUB_DEFAULT_REPOS` (comma-separated).
+
+| Command                  | Description                                              | Parameters                            | Auth | Risk   | File             |
+| ------------------------ | -------------------------------------------------------- | ------------------------------------- | ---- | ------ | ---------------- |
+| `/github prs`            | List open PRs for a repo                                 | `repo: str (optional)`                | —    | LOW    | `github_cog.py`  |
+| `/github issues`         | List open issues for a repo                              | `repo: str (optional)`, `label: str (optional)` | — | LOW | `github_cog.py` |
+| `/github watch <repo>`   | Subscribe to PR/issue activity DMs                       | `repo: str`                           | ✅   | MEDIUM | `github_cog.py`  |
+| `/github unwatch <repo>` | Unsubscribe from repo activity DMs                       | `repo: str`                           | —    | LOW    | `github_cog.py`  |
+
+---
+
+## Document Review & Interview
+
+Structured AI critique for text and files, plus an interactive interview mode for personalized output generation.
+
+### Review
+
+| Command            | Description                                                                    | Parameters                               | Auth | Risk | File              |
+| ------------------ | ------------------------------------------------------------------------------ | ---------------------------------------- | ---- | ---- | ----------------- |
+| `/review text`     | Opens a modal to paste text; returns structured AI critique as an embed        | `mode: writing\|technical\|quick (optional)` | —    | LOW  | `review_cog.py`   |
+| `/review file`     | Upload a document for structured critique (DOCX, PDF, TXT, XLSX, MD, PY, JSON, CSV) | `mode: writing\|technical\|quick (optional)` | —    | LOW  | `review_cog.py`   |
+
+**Mode options:**
+- `writing` — clarity, tone, and structure
+- `technical` — completeness, accuracy, and readability
+- `quick` — 3-bullet summary
+
+Output is an embed with **Strengths / Areas to Improve / Specific Suggestions** sections plus a **💾 Save Review to Vault** button that saves to `/vault/Reviews/` as Obsidian Markdown.
+
+**Implementation:** `src/cogs/review_cog.py`
+
+---
+
+### Interview
+
+| Command               | Description                                                                                     | Parameters    | Auth | Risk | File                |
+| --------------------- | ----------------------------------------------------------------------------------------------- | ------------- | ---- | ---- | ------------------- |
+| `/interview <goal>`   | Bot asks 3–5 clarifying questions via sequential Discord modals, then synthesizes tailored output | `goal: str`   | —    | LOW  | `interview_cog.py`  |
+
+**Example goals:** `"write my bio"`, `"plan my week"`, `"draft a cover letter"`, `"help me decide X"`
+
+Output is an embed summarising the synthesised result plus a **💾 Save to Vault** button. Each question modal has a 10-minute timeout.
+
+**Implementation:** `src/cogs/interview_cog.py`
+
+---
+
 ## Summary
 
 | Category             | Commands | Source Files                                |
@@ -295,7 +380,11 @@ Reminders, tasks, translation, polls, habits, expenses, and daily digests.
 | Planning & Tasks     | 5        | `bot.py`                                    |
 | Notifications        | 7        | `notify_cog.py`                             |
 | Personal Assistant   | 19       | `reminder_cog.py`, `todo_cog.py`, `translate_cog.py`, `poll_cog.py`, `habit_cog.py`, `expense_cog.py` |
-| **Total**            | **88**   | + 60 LLM-callable skill functions via `/ask` |
+| Calendar & Email     | 8        | `calendar_cog.py`, `email_cog.py`           |
+| Journal              | 4        | `journal_cog.py`                            |
+| GitHub               | 4        | `github_cog.py`                             |
+| Document Review & Interview | 3   | `review_cog.py`, `interview_cog.py`         |
+| **Total**            | **107**  | + 60 LLM-callable skill functions via `/ask` |
 
 ---
 

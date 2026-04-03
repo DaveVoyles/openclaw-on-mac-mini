@@ -197,6 +197,14 @@ class _Config:
     # -- Copilot proxy token ---------------------------------------------------
     copilot_proxy_token: str = os.getenv("COPILOT_PROXY_TOKEN", "")
 
+    # -- GitHub ----------------------------------------------------------------
+    github_token: str = os.getenv("GITHUB_TOKEN", "")
+    github_default_repos: list[str] = [
+        r.strip()
+        for r in os.getenv("GITHUB_DEFAULT_REPOS", "").split(",")
+        if r.strip()
+    ]
+
     # -- Webhook security ------------------------------------------------------
     webhook_secret: str = os.getenv("WEBHOOK_SECRET", "")
 

@@ -95,6 +95,7 @@ Agents working on this codebase should read this file to understand what is avai
 | **Tailscale**       | https://tailscale.com                  | WireGuard-based mesh VPN                | Zero-config secure remote access to all home-lab devices without opening firewall ports    | Tailscale binary (auto-detected)                                                     |
 | **Google Calendar** | https://developers.google.com/calendar | Google Calendar REST API                | Read and create calendar events from agent commands                                        | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN` |
 | **Google OAuth2**   | https://console.cloud.google.com       | Google OAuth consent & token management | Provides tokens for Calendar and Gmail access; managed via `scripts/google_oauth_setup.py` | Same as above                                                                        |
+| **GitHub API**      | https://api.github.com                 | GitHub REST API v3                      | List PRs/issues and poll watched repos for the `/github` Discord cog; background DM alerts on new activity | `GITHUB_TOKEN`, `GITHUB_DEFAULT_REPOS` |
 | **Cloudflare**      | https://speed.cloudflare.com           | Speed test endpoint                     | Measures WAN download throughput via `/__down?bytes=10000000`                              | _(public URL, no key)_                                                               |
 
 ---

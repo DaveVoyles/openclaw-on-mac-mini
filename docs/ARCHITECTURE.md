@@ -96,7 +96,7 @@ graph TB
             LLMRateLimit
         end
 
-        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 10 cogs, 53 commands"]
+        subgraph Cogs ["📦 Discord Cogs (src/cogs/) — 16 cogs, 72 commands"]
             DockerCog["docker_cog.py\n6 commands\n+ interactive select menus"]
             MediaCog["media_cog.py\n6 commands"]
             NetworkCog["network_cog.py\n3 commands"]
@@ -107,6 +107,12 @@ graph TB
             NotifyCog["notify_cog.py\n7 commands\nper-user alert prefs"]
             DocCog["doc_cog.py\n6 commands\nWord & Excel editing"]
             NoteCog["note_cog.py\n4 commands\nVault notes & search"]
+            CalendarCog["calendar_cog.py\n4 commands\nGoogle Calendar"]
+            EmailCog["email_cog.py\n4 commands\nGmail / Outlook"]
+            JournalCog["journal_cog.py\n4 commands\nVault journaling"]
+            GitHubCog["github_cog.py\n4 commands\nPR/issue watching"]
+            ReviewCog["review_cog.py\n2 commands\nDoc critique & vault save"]
+            InterviewCog["interview_cog.py\n1 command\nModal Q&A synthesis"]
         end
     end
 
@@ -149,6 +155,10 @@ graph TB
     MediaCog --> Skills
     NetworkCog --> Skills
     AnalyticsCog --> Spending
+    CalendarCog --> Bot
+    EmailCog --> Bot
+    JournalCog --> Bot
+    GitHubCog --> Bot
 
     LLM --> Skills
     LLM --> Gateway
@@ -344,7 +354,7 @@ graph TB
     classDef actor fill:#1e1e3a,stroke:#6060d9,color:#fff
 
     class Discord,Bot,DiscordCmds,DiscordBG,DiscordWeb,LLM,LLMClient,LLMTools,LLMPatterns,LLMRateLimit,ResearchAgent,Skills,Gateway,Approvals,Scheduler,Memory,Spending,Metrics,Dashboard,WebhookFmt,HealthAlerts,WorkerAgent,Maintenance,ObsidianWriter,AgentLoop service
-    class DockerCog,MediaCog,NetworkCog,AnalyticsCog,DreamCog,MemoryCog,ResearchCog,NotifyCog service
+    class DockerCog,MediaCog,NetworkCog,AnalyticsCog,DreamCog,MemoryCog,ResearchCog,NotifyCog,CalendarCog,EmailCog,JournalCog,GitHubCog service
     class Gemini,Ollama,OpenAI,Anthropic,CopilotProxy,ModelRouter,PerplexityAPI,FirecrawlAPI,TavilyAPI,DDGNet,SerperAPI,Gmail,Outlook,AgentMailAPI,GoogleCal,GoogleOAuth external
     class MatonCore,ExtAPIs gateway
     class DockerEngine,Glances,Tailscale,Cloudflare,Prometheus,UptimeKuma,NAS,Traefik,SynDDNS infra

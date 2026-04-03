@@ -296,8 +296,34 @@ async def get_todays_events() -> str:
 # Registry
 # ---------------------------------------------------------------------------
 
+async def delete_calendar_event(event_id: str) -> str:
+    """Delete a Google Calendar event by its ID."""
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and GOOGLE_REFRESH_TOKEN):
+        return _not_configured()
+
+    token = await _get_access_token()
+    if not token:
+        return "❌ Failed to obtain Google access token. Check your OAuth credentials."
+
+    headers = {"Authorization": f"Bearer {token}"}
+
+    try:
+        session = await _get_session()
+        async with session.delete(
+            f"{_CALENDAR_BASE}/calendars/primary/events/{event_id}",
+            headers=headers,
+        ) as resp:
+            if resp.status == 204:
+                return f"✅ Event `{event_id}` deleted successfully."
+            body = await resp.text()
+            return f"❌ Failed to delete event ({resp.status}): {body[:200]}"
+    except Exception as e:
+        return f"❌ Calendar delete error: {e}"
+
+
 CALENDAR_SKILLS = {
     "get_upcoming_events": get_upcoming_events,
     "create_calendar_event": create_calendar_event,
     "get_todays_events": get_todays_events,
+    "delete_calendar_event": delete_calendar_event,
 }

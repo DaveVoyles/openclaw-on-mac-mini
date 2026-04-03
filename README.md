@@ -277,6 +277,46 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Nightly vault backup** — dedicated `backup_vault_to_nas()` rsync at 4 AM alongside config backup
 - **Implementation** — `src/cogs/note_cog.py` (4 commands) + `src/obsidian_writer.py` (vault I/O) + `src/maintenance_skills.py` (vault backup)
 
+**Phase 25 — Calendar & Email Discord UI** ✅
+
+- `/calendar today/upcoming` — read Google Calendar events without auth; `/calendar add/delete` create and remove events (`calendar_cog.py`)
+- `/email inbox/read/search` — browse Gmail or Outlook ephemerally; `/email send` sends email with `@require_auth` gate (`email_cog.py`)
+- Requires Google OAuth2 refresh token (`GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN`) and provider app passwords (`GMAIL_USER`, `GMAIL_APP_PASSWORD`)
+- 8 new slash commands across 2 new cogs
+
+**Phase 26 — Daily Journal** ✅
+
+- `/journal write/read/streak/prompt` — vault-integrated journaling with consecutive-day streaks and Gemini-powered AI writing prompts (`journal_cog.py`)
+- Entries saved to `/vault/Journal/` as `Journal - YYYY-MM-DD.md` with Obsidian frontmatter; modal UI when no entry text is provided
+- 4 new slash commands in 1 new cog
+
+**Phase 27 — GitHub Monitoring** ✅
+
+- `/github prs/issues` — list open PRs and issues for any repo; `/github watch/unwatch` subscribe to activity DMs (`github_cog.py`)
+- Background task polls watched repos every 30 minutes and DMs subscribed users on new PRs or issues
+- Requires `GITHUB_TOKEN` and `GITHUB_DEFAULT_REPOS` (comma-separated)
+- 4 new slash commands in 1 new cog
+
+**Phase 28 — Document Review** ✅
+
+- `/review text [mode]` and `/review file [mode]` — structured AI critique for pasted text or uploaded files (DOCX, PDF, TXT, XLSX, MD, PY, JSON, CSV)
+- Three modes: `writing` (clarity/tone/structure), `technical` (completeness/accuracy/readability), `quick` (3-bullet summary)
+- Output embed includes Strengths / Areas to Improve / Specific Suggestions + "💾 Save Review to Vault" button (saves to `/vault/Reviews/`)
+- 2 new slash commands in 1 new cog (`review_cog.py`)
+
+**Phase 29 — Interview Mode** ✅
+
+- `/interview <goal>` — bot asks 3–5 clarifying questions via sequential Discord modals, then synthesises tailored output
+- Supports open-ended goals: writing a bio, planning a week, drafting cover letters, decision support, etc.
+- Output embed + "💾 Save to Vault" button; 10-minute timeout per question modal
+- 1 new slash command in 1 new cog (`interview_cog.py`)
+
+**Phase 30 — Proactive Engagement** ✅
+
+- `/ask` responses now include 2 LLM-generated follow-up question buttons (grey, secondary) and a **🔁 Go Deeper** button
+- Follow-up buttons chain — each click generates a new full response with fresh follow-up options
+- System prompt updated with `## Proactive Engagement` section: bot ends complex answers with a follow-up question, suggests `/interview` for drafting/planning tasks, offers vault saves for long responses
+
 **Planned**
 
 - Grafana dashboards

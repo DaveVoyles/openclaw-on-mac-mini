@@ -525,13 +525,41 @@ class ResponseActions(discord.ui.View):
     """Buttons attached to /ask responses: Save, Regenerate, Email."""
 
     def __init__(
-        self, *, response_text: str, question: str, user_id: int, channel_id: int, timeout: float = 300
+        self,
+        *,
+        response_text: str,
+        question: str,
+        user_id: int,
+        channel_id: int,
+        timeout: float = 300,
+        follow_ups: list[str] | None = None,
+        bot=None,
     ):
         super().__init__(timeout=timeout)
         self._response_text = response_text
         self._question = question
         self._user_id = user_id
         self._channel_id = channel_id
+        self._bot = bot
+        # Add follow-up buttons dynamically on row 1
+        for i, fq in enumerate(follow_ups or []):
+            btn = discord.ui.Button(
+                label=fq[:80],
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"followup_{i}",
+                row=1,
+            )
+            btn.callback = self._make_followup_callback(fq)
+            self.add_item(btn)
+        # Go Deeper button on row 1
+        deeper_btn = discord.ui.Button(
+            label="🔁 Go Deeper",
+            style=discord.ButtonStyle.secondary,
+            custom_id="go_deeper",
+            row=1,
+        )
+        deeper_btn.callback = self._go_deeper_callback
+        self.add_item(deeper_btn)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self._user_id:
@@ -594,6 +622,64 @@ class ResponseActions(discord.ui.View):
     async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await self._record_feedback(interaction, "negative")
 
+    def _make_followup_callback(self, follow_up_question: str):
+        async def callback(interaction: discord.Interaction):
+            await interaction.response.defer()
+            conv = conversation_store.get(
+                user_id=self._user_id,
+                channel_id=self._channel_id,
+                user_name=str(interaction.user.display_name),
+            )
+            try:
+                response_text, updated_history, model_used = await llm_chat(
+                    user_message=follow_up_question,
+                    history=conv.history,
+                    user_name=str(interaction.user.display_name),
+                )
+                conv.update_from_llm(updated_history)
+                embed = discord.Embed(
+                    description=response_text[:_EMBED_LIMIT],
+                    color=discord.Color.purple(),
+                )
+                embed.set_footer(text=f"💬 Follow-up | via {model_used}")
+                new_follow_ups = await _generate_follow_ups(follow_up_question, response_text)
+                view = ResponseActions(
+                    response_text=response_text,
+                    question=follow_up_question,
+                    user_id=self._user_id,
+                    channel_id=self._channel_id,
+                    follow_ups=new_follow_ups,
+                    bot=self._bot,
+                )
+                await interaction.followup.send(embed=embed, view=view)
+            except Exception as e:
+                await interaction.followup.send(f"❌ Follow-up failed: {e}")
+        return callback
+
+    async def _go_deeper_callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        deeper_q = f"Give a much more detailed and thorough explanation of: {self._question}"
+        conv = conversation_store.get(
+            user_id=self._user_id,
+            channel_id=self._channel_id,
+            user_name=str(interaction.user.display_name),
+        )
+        try:
+            response_text, updated_history, model_used = await llm_chat(
+                user_message=deeper_q,
+                history=conv.history,
+                user_name=str(interaction.user.display_name),
+            )
+            conv.update_from_llm(updated_history)
+            embed = discord.Embed(
+                description=response_text[:_EMBED_LIMIT],
+                color=discord.Color.purple(),
+            )
+            embed.set_footer(text=f"🔁 Deep dive | via {model_used}")
+            await interaction.followup.send(embed=embed)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Failed: {e}")
+
     async def _record_feedback(self, interaction: discord.Interaction, rating: str) -> None:
         import json
         from pathlib import Path
@@ -614,6 +700,23 @@ class ResponseActions(discord.ui.View):
             )
         except Exception as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+async def _generate_follow_ups(question: str, response: str) -> list[str]:
+    """Generate 2 short follow-up questions based on the Q&A exchange."""
+    try:
+        from llm.chat import chat
+        prompt = (
+            f"Based on this Q&A exchange, suggest exactly 2 short follow-up questions the user might want to ask next.\n"
+            f"Q: {question[:300]}\n"
+            f"A: {response[:500]}\n\n"
+            f"Return ONLY the 2 questions, one per line, no numbering, no extra text. Keep each under 60 characters."
+        )
+        text, _, _ = await chat(prompt, model_preference="gemini")
+        lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
+        return lines[:2]
+    except Exception:
+        return []
 
 
 async def _handle_image_attachment(
@@ -972,11 +1075,15 @@ async def ask_cmd(
     image_url = _extract_image_url(response_text)
     file_attachment = _extract_file_attachment(response_text)
 
+    # Generate follow-up questions asynchronously
+    follow_ups = await _generate_follow_ups(question, response_text)
     action_view = ResponseActions(
         response_text=response_text,
         question=question,
         user_id=interaction.user.id,
         channel_id=interaction.channel_id,
+        follow_ups=follow_ups,
+        bot=None,
     )
 
     # Auto-create thread for /ask responses (if not already in a thread/DM)
