@@ -34,8 +34,8 @@ COPY src/ ./
 COPY skills/ ./skills/
 COPY templates/ ./templates/
 
-HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8765/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -sf http://localhost:8765/health || exit 1
 
 RUN useradd -u 501 -m openclaw
 # Ensure we can talk to the Docker socket by being in the correct group

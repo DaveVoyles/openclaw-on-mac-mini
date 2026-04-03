@@ -12,8 +12,11 @@ Skills:
   get_uptime_summary()           — overall uptime percentages across all monitors
 """
 
+import asyncio
 import logging
 import os
+
+import aiohttp
 
 log = logging.getLogger("openclaw.uptime_kuma")
 
@@ -79,7 +82,8 @@ async def get_all_monitor_status() -> str:
     """
     try:
         hb_data = await _fetch_heartbeat()
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        log.error("Uptime Kuma request failed: %s", e)
         return f"❌ Could not reach Uptime Kuma: {e}"
 
     heartbeat_list = hb_data.get("heartbeatList", {})
@@ -121,7 +125,8 @@ async def get_monitor_detail(name: str) -> str:
     """
     try:
         hb_data = await _fetch_heartbeat()
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        log.error("Uptime Kuma request failed: %s", e)
         return f"❌ Could not reach Uptime Kuma: {e}"
 
     heartbeat_list = hb_data.get("heartbeatList", {})
@@ -180,7 +185,8 @@ async def get_monitors_down() -> str:
     """
     try:
         hb_data = await _fetch_heartbeat()
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        log.error("Uptime Kuma request failed: %s", e)
         return f"❌ Could not reach Uptime Kuma: {e}"
 
     heartbeat_list = hb_data.get("heartbeatList", {})
@@ -212,7 +218,8 @@ async def get_uptime_summary() -> str:
     """
     try:
         hb_data = await _fetch_heartbeat()
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        log.error("Uptime Kuma request failed: %s", e)
         return f"❌ Could not reach Uptime Kuma: {e}"
 
     heartbeat_list = hb_data.get("heartbeatList", {})
