@@ -38,6 +38,20 @@ MIN_MESSAGES_TO_SUMMARIZE = 4
 _THREAD_NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 
 
+def _relative_age(seconds: float) -> str:
+    """Convert seconds elapsed into a short human-readable string like '3h ago'."""
+    if seconds < 60:
+        return "just now"
+    minutes = int(seconds / 60)
+    if minutes < 60:
+        return f"{minutes}m ago"
+    hours = int(minutes / 60)
+    if hours < 24:
+        return f"{hours}h ago"
+    days = int(hours / 24)
+    return f"{days}d ago"
+
+
 def _atomic_write(path: Path, data: str) -> None:
     """Write data to *path* atomically. Delegates to shared utility."""
     atomic_write(path, data)
@@ -282,17 +296,20 @@ class ConversationStore:
 
         lines = ["**Saved Threads**\n"]
         total_kb = 0.0
+        now = time.time()
         for f in files:
             try:
                 payload = json.loads(f.read_text())
                 name = payload.get("name", f.stem)
                 msgs = len(payload.get("history", []))
                 saved_at = payload.get("saved_at", 0)
-                saved_str = time.strftime("%Y-%m-%d %H:%M", time.localtime(saved_at))
                 size_kb = f.stat().st_size / 1024
                 total_kb += size_kb
                 est_tokens = int(f.stat().st_size / 4)  # rough: ~4 bytes per token
                 is_auto = payload.get("auto", False)
+
+                # Relative age
+                age_text = _relative_age(now - saved_at) if saved_at else "unknown"
 
                 if size_kb > 50 or msgs > 80:
                     icon = "🔴"  # very large — consider deleting
@@ -304,7 +321,7 @@ class ConversationStore:
                 tag = " *(auto)*" if is_auto else ""
                 lines.append(
                     f"{icon} **{name}**{tag} — {msgs} msgs · {size_kb:.1f} KB"
-                    f" (~{est_tokens:,} tokens) · {saved_str}"
+                    f" (~{est_tokens:,} tokens) · saved {age_text}"
                 )
             except Exception as exc:
                 lines.append(f"• `{f.stem}` (unreadable)")

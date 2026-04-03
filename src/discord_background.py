@@ -246,6 +246,19 @@ async def _gather_system_signals():
     except Exception as exc:
         log.debug("NAS health check failed: %s", exc)
 
+    # Record service-level health for trend tracking
+    try:
+        from health_history import record as _hh_record
+        for svc_name, result in [("arr", health), ("download-clients", dl_clients), ("plex", plex)]:
+            if isinstance(result, Exception):
+                _hh_record(svc_name, "down", str(result))
+            elif isinstance(result, str) and _error_re.search(result):
+                _hh_record(svc_name, "degraded", result[:200])
+            elif isinstance(result, str):
+                _hh_record(svc_name, "ok", result[:200])
+    except Exception:
+        pass  # health history is best-effort
+
     key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
     log_snippets: dict[str, str] = {}
     for svc in key_containers:
@@ -706,6 +719,16 @@ async def _check_container_health(bot):
         # Determine if this container is in a bad state
         status_lower = status.lower()
         is_bad = "unhealthy" in status_lower or status_lower.startswith("exited")
+
+        # Record health check for trend tracking
+        try:
+            from health_history import record as _hh_record
+            if is_bad:
+                _hh_record(name, "down" if status_lower.startswith("exited") else "degraded", status)
+            else:
+                _hh_record(name, "ok", status)
+        except Exception:
+            pass  # health history is best-effort
 
         prev = _container_prev_state.get(name)
         if is_bad:
