@@ -240,14 +240,17 @@ class OpenClawBot(commands.Bot):
                 return
             color = discord.Color.red() if is_alert else discord.Color.green()
             icon = "🚨" if is_alert else "✅"
-            embed = discord.Embed(
-                title=f"{icon} Watch Alert: `{action}`",
-                description=result[:EMBED_SPLIT_LIMIT] or "(no output)",
-                color=color,
-            )
-            embed.set_footer(text=f"Task {task_id} • {action}")
+            chunks = _split_response(result) if result else ["(no output)"]
             try:
-                await channel.send(embed=embed)
+                for idx, chunk in enumerate(chunks):
+                    embed = discord.Embed(
+                        title=f"{icon} Watch Alert: `{action}`" if idx == 0 else None,
+                        description=chunk,
+                        color=color,
+                    )
+                    if idx == len(chunks) - 1:
+                        embed.set_footer(text=f"Task {task_id} • {action}")
+                    await channel.send(embed=embed)
             except Exception as e:
                 log.error("Failed to post scheduler result for %s: %s", task_id, e)
 
