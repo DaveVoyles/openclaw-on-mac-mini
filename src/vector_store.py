@@ -38,7 +38,8 @@ RESEARCH_COLLECTION = "research"
 # Default: ChromaDB's built-in all-MiniLM-L6-v2 (384 dims, free, CPU)
 # Optional: Ollama-hosted models like embeddinggemma, nomic-embed-text, etc.
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "")  # empty = ChromaDB default
-OLLAMA_EMBED_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
+from config import cfg as _vs_cfg
+OLLAMA_EMBED_URL = _vs_cfg.ollama_url
 
 
 def _get_embedding_function():

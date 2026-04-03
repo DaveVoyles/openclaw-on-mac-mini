@@ -16,11 +16,11 @@ log = logging.getLogger("openclaw.maintenance")
 
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 NAS_BACKUP_PATH = os.getenv("NAS_BACKUP_PATH", "/volume1/docker/openclaw/backups")
-NAS_SSH_USER = os.getenv("NAS_SSH_USER", "dave")
 from config import cfg as _cfg
 
-NAS_HOST = os.getenv("NAS_HOST", _cfg.nas_host)
-NAS_SSH_PORT = int(os.getenv("NAS_SSH_PORT", "24"))
+NAS_SSH_USER = _cfg.nas_ssh_user
+NAS_HOST = _cfg.nas_host
+NAS_SSH_PORT = _cfg.nas_ssh_port
 
 
 # ---------------------------------------------------------------------------

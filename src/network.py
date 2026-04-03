@@ -106,7 +106,7 @@ async def get_tailscale_status() -> str:
 
     return (
         f"**Tailscale Status**\n"
-        f"IP: `{ts_ip}` → Accessible as `http://{ts_ip}:8765/health`\n"
+        f"IP: `{ts_ip}` → Accessible as `http://{ts_ip}:{_cfg.health_port}/health`\n"
         f"State: {lines[0].strip() if lines else 'Unknown'}"
     )
 
@@ -131,11 +131,11 @@ async def get_network_status() -> str:
     async def _check_health() -> str:
         try:
             session = await _get_session()
-            async with session.get(f"http://{HOST}:8765/health") as resp:
-                return f"{'✅' if resp.status == 200 else '❌'} OpenClaw health endpoint (:{8765})"
+            async with session.get(f"http://{HOST}:{_cfg.health_port}/health") as resp:
+                return f"{'✅' if resp.status == 200 else '❌'} OpenClaw health endpoint (:{_cfg.health_port})"
         except Exception as exc:
             log.debug("Health endpoint check failed: %s", exc)
-            return f"❌ OpenClaw health endpoint (:{8765})"
+            return f"❌ OpenClaw health endpoint (:{_cfg.health_port})"
 
     async def _check_tailscale() -> str:
         if not ts:

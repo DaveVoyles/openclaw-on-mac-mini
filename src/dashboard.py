@@ -63,7 +63,7 @@ async def api_status_handler(request):
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=TIMEOUT_FAST)
         checks["docker"] = {"status": "ok", "containers": stdout.decode().strip()}
-    except Exception as exc:
+    except (OSError, asyncio.TimeoutError) as exc:
         log.debug("Docker status check failed: %s", exc)
         checks["docker"] = {"status": "down"}
 
@@ -72,7 +72,7 @@ async def api_status_handler(request):
         async with aiohttp.ClientSession() as session:
             async with session.get(f"{cfg.ollama_url}/api/tags", timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
                 checks["ollama"] = {"status": "ok" if resp.status == 200 else "down"}
-    except Exception as exc:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         log.debug("Ollama status check failed: %s", exc)
         checks["ollama"] = {"status": "down"}
 
@@ -116,7 +116,7 @@ async def api_status_handler(request):
                 headers = {"Authorization": f"Bearer {token}"} if token else {}
                 async with session.get(f"{proxy_url}/models", headers=headers, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
                     checks["copilot_proxy"] = {"status": "ok" if resp.status == 200 else "down"}
-        except Exception as exc:
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
             log.debug("Copilot proxy check failed: %s", exc)
             checks["copilot_proxy"] = {"status": "down"}
     else:
@@ -127,7 +127,7 @@ async def api_status_handler(request):
     # cron-log scraping when cookie_status is absent or inconclusive.
     try:
         async with aiohttp.ClientSession() as session:
-            monstervision_url = f"http://{cfg.docker_host_ip}:8766/api/status"
+            monstervision_url = f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status"
             async with session.get(monstervision_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
                 if resp.status == 200:
                     mv_data = await resp.json()
@@ -147,8 +147,8 @@ async def api_status_handler(request):
                             )
                             if rc == 0 and log_out:
                                 cookie_warning = "cookies have expired" in log_out.lower() or "403" in log_out
-                        except Exception:
-                            pass
+                        except (OSError, asyncio.TimeoutError) as exc:
+                            log.debug("Patreon cookie cron-log check failed: %s", exc)
 
                     if failed > 0:
                         checks["patreon"] = {"status": "down", "detail": f"{failed} failed downloads"}
@@ -160,7 +160,7 @@ async def api_status_handler(request):
                         checks["patreon"] = {"status": "no_key", "detail": status}
                 else:
                     checks["patreon"] = {"status": "down"}
-    except Exception as exc:
+    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         log.debug("Patreon/MonsterVision status check failed: %s", exc)
         checks["patreon"] = {"status": "down"}
 
@@ -204,11 +204,12 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                     "is_up": is_up
                 })
 
-    # Fetch NAS containers (Synology DS920+ at 192.168.1.8)
+    # Fetch NAS containers (Synology DS920+)
     try:
+        from config import cfg as _net_cfg
         proc = await asyncio.create_subprocess_exec(
-            "ssh", "-p", "24", "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
-            "dave@192.168.1.8",
+            "ssh", "-p", str(_net_cfg.nas_ssh_port), "-o", "ConnectTimeout=5", "-o", "StrictHostKeyChecking=no",
+            f"{_net_cfg.nas_ssh_user}@{_net_cfg.nas_ip}",
             "/usr/local/bin/docker ps --format '{{.Names}}\t{{.Status}}'",
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
@@ -224,7 +225,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                         "status": parts[1],
                         "is_up": "Up" in parts[1],
                     })
-    except Exception as e:
+    except (OSError, asyncio.TimeoutError) as e:
         log.debug("NAS container fetch failed: %s", e)
 
     # Get resource stats
@@ -536,7 +537,7 @@ async def api_threads_handler(request: web.Request) -> web.Response:
                     "modified": f.stat().st_mtime,
                     "size_kb": round(f.stat().st_size / 1024, 1),
                 })
-            except Exception as exc:
+            except (json.JSONDecodeError, OSError, KeyError) as exc:
                 log.debug("Thread file parse failed %s: %s", f.name, exc)
                 continue
 
@@ -586,7 +587,8 @@ def _cron_to_human(expr: str) -> str:
         if day_str and time_str:
             return f"{day_str} {time_str}"
         return day_str or time_str or expr
-    except Exception:
+    except (ValueError, IndexError, KeyError) as exc:
+        log.debug("Cron expression parse failed for %r: %s", expr, exc)
         return expr
 
 
@@ -778,6 +780,11 @@ async def guide_handler(request: web.Request) -> web.Response:
     """Serve the guide / tutorial HTML page."""
     return web.Response(text=GUIDE_HTML, content_type="text/html")
 
+async def terminal_handler(request: web.Request) -> web.Response:
+    """Serve the terminal CLI cheat sheet page."""
+    return web.Response(text=TERMINAL_HTML, content_type="text/html")
+
+
 
 # ---------------------------------------------------------------------------
 # E7  Error Dashboard endpoint
@@ -876,7 +883,7 @@ async def api_knowledge_graph_handler(request):
             for rel in e.get("related", []):
                 edges.append({"source": e["id"], "target": rel})
         return web.json_response({"nodes": nodes, "edges": edges})
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, KeyError) as exc:
         log.debug("Knowledge graph API failed: %s", exc)
         return web.json_response({"nodes": [], "edges": []})
 
@@ -886,9 +893,10 @@ async def api_topology_handler(request):
     import math
     import re
 
+    from config import cfg as _topo_cfg
     nodes = [
-        {"id": "mac-mini", "label": "Mac Mini M4", "type": "host", "ip": "192.168.1.93", "x": 400, "y": 275},
-        {"id": "nas", "label": "Synology NAS", "type": "host", "ip": "192.168.1.8", "x": 200, "y": 275},
+        {"id": "mac-mini", "label": "Mac Mini M4", "type": "host", "ip": _topo_cfg.docker_host_ip, "x": 400, "y": 275},
+        {"id": "nas", "label": "Synology NAS", "type": "host", "ip": _topo_cfg.nas_ip, "x": 200, "y": 275},
         {"id": "internet", "label": "Internet", "type": "cloud", "x": 300, "y": 50},
         {"id": "traefik", "label": "Traefik", "type": "proxy", "x": 300, "y": 160},
     ]
@@ -940,3 +948,4 @@ DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()
 # ---------------------------------------------------------------------------
 
 GUIDE_HTML = (_TEMPLATES_DIR / "guide.html").read_text()
+TERMINAL_HTML = (_TEMPLATES_DIR / "terminal.html").read_text()

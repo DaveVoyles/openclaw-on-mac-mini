@@ -4,7 +4,7 @@ Query Synology DSM via the REST API for storage health, backup status,
 system alerts, and disk SMART data.
 
 Requires in .env:
-  NAS_URL            - DSM base URL, default https://192.168.1.8:5001
+  NAS_URL            - DSM base URL (override via NAS_URL env var)
   NAS_USER           - DSM admin/user account
   NAS_PASSWORD       - DSM account password
   NAS_VERIFY_SSL     - Set to "true" if DSM has a valid cert (default: false)

@@ -38,6 +38,7 @@ _local_llm = _yaml.get("local_llm", {})
 _security = _yaml.get("security", {})
 _rate_limits = _llm.get("rate_limits", {})
 _conversation = _llm.get("conversation", {})
+_network = _yaml.get("network", {})
 
 # ---------------------------------------------------------------------------
 # Timeout constants (seconds)
@@ -120,17 +121,18 @@ class _Config:
     maton_api_key: str = os.getenv("MATON_API_KEY", "")
 
     # -- Docker host -----------------------------------------------------------
-    docker_host_ip: str = os.getenv("DOCKER_HOST_IP", "192.168.1.93")
+    docker_host_ip: str = os.getenv("DOCKER_HOST_IP", _network.get("docker_host_ip", "192.168.1.93"))
 
     # -- Network defaults (single source for all hardcoded IPs) ----------------
-    nas_host: str = os.getenv("NAS_HOST", "192.168.1.8")
-    nas_ip: str = os.getenv("NAS_IP", "192.168.1.8")  # alias for LAN checks
+    nas_host: str = os.getenv("NAS_HOST", _network.get("nas_ip", "192.168.1.8"))
+    nas_ip: str = os.getenv("NAS_IP", _network.get("nas_ip", "192.168.1.8"))
+    nas_ssh_port: int = int(os.getenv("NAS_SSH_PORT", str(_network.get("nas_ssh_port", 24))))
+    nas_ssh_user: str = os.getenv("NAS_SSH_USER", _network.get("nas_ssh_user", "dave"))
+    plex_port: int = int(os.getenv("PLEX_PORT", str(_network.get("plex_port", 32400))))
+    monstervision_port: int = int(os.getenv("MONSTERVISION_PORT", str(_network.get("monstervision_port", 8766))))
 
     # -- Overseerr -------------------------------------------------------------
-    overseerr_url: str = os.getenv(
-        "OVERSEERR_URL",
-        f"http://{os.getenv('DOCKER_HOST_IP', '192.168.1.93')}:5055",
-    )
+    overseerr_url: str = os.getenv("OVERSEERR_URL", f"http://{docker_host_ip}:5055")
     overseerr_api_key: str = os.getenv("OVERSEERR_API_KEY", "")
 
     # -- Email -----------------------------------------------------------------

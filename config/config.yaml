@@ -60,6 +60,16 @@ nas:
   user: "dave"
   docker_path: "/volume1/docker"
 
+# Network addresses — single source of truth for all IPs and ports
+network:
+  docker_host_ip: "192.168.1.93"     # Mac Mini M4
+  nas_ip: "192.168.1.8"              # Synology DS920+
+  nas_ssh_port: 24
+  nas_ssh_user: "dave"
+  plex_port: 32400
+  ollama_port: 11434
+  monstervision_port: 8766
+
 # Channel roles — prevents context bleed between different workflows.
 # Set the matching env vars (DISCORD_CHANNEL_<ROLE>_ID) in .env with real IDs.
 # Each channel gets a prompt override injected at conversation start so the

@@ -37,12 +37,14 @@ from dashboard import (
     api_topology_handler,
     dashboard_handler,
     guide_handler,
+    terminal_handler,
 )
 from llm import chat as llm_chat
 
 log = logging.getLogger("openclaw")
 
-HEALTH_PORT = int(os.getenv("HEALTH_PORT", "8765"))
+from config import cfg as _web_cfg
+HEALTH_PORT = _web_cfg.health_port
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
@@ -319,6 +321,7 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_get("/api/knowledge-graph", api_knowledge_graph_handler)
     app.router.add_get("/api/topology", api_topology_handler)
     app.router.add_get("/guide", guide_handler)
+    app.router.add_get("/terminal", terminal_handler)
     app.router.add_get("/smoke", _smoke_handler)
     app.router.add_post("/webhook/{source}", _webhook_handler)
     runner = web.AppRunner(app)

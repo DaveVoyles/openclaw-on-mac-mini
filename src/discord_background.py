@@ -81,7 +81,7 @@ async def audit_writer_loop():
                 with open(audit_file, "a") as f:
                     for e in entries:
                         f.write(json.dumps(e) + "\n")
-            except Exception as ex:
+            except OSError as ex:
                 log.warning("Audit flush failed: %s", ex)
 
 
@@ -586,10 +586,8 @@ async def _post_error_alert(bot, patterns: list[dict]):
     try:
         await channel.send(embed=embed)
         audit_log(None, "error_monitor", detail=f"{len(patterns)} patterns: {', '.join(p['type'] for p in patterns)}")
-    except Exception as e:
+    except discord.HTTPException as e:
         log.warning("Failed to post error alert: %s", e)
-
-
 # ---------------------------------------------------------------------------
 # Container health auto-alerts
 # ---------------------------------------------------------------------------
@@ -631,7 +629,7 @@ async def _check_monstervision_cookies(bot):
         cfg = _cfg()
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"http://{cfg.docker_host_ip}:8766/api/status",
+                f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status",
                 timeout=aiohttp.ClientTimeout(total=5),
             ) as resp:
                 if resp.status == 200:
@@ -639,8 +637,8 @@ async def _check_monstervision_cookies(bot):
                     if data.get("cookie_status", {}).get("label") == "ok":
                         _cookie_alert_sent = False  # reset when cookies are fresh
                         return
-    except Exception:
-        pass  # fall through to log-based check
+    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+        log.debug("MonsterVision API cookie check failed: %s", exc)
 
     from subprocess_utils import run as _run
 
@@ -756,7 +754,7 @@ async def _check_container_health(bot):
         await channel.send(embed=embed)
         audit_log(None, "container_health", detail=f"{len(alerts)} alerts")
         log.info("Container health alert: %d containers in bad state", len(alerts))
-    except Exception as e:
+    except discord.HTTPException as e:
         log.error("Failed to send container health alert: %s", e)
 
 
