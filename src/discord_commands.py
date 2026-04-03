@@ -121,11 +121,13 @@ def _get_http_session() -> aiohttp.ClientSession:
 # ---------------------------------------------------------------------------
 
 
-def register_commands(bot):  # noqa: C901 — large but flat
-    """Register all slash commands (except /ask) on *bot*.tree."""
+# ---------------------------------------------------------------------------
+# Utility commands: /ping, /about, /whoami, /help
+# ---------------------------------------------------------------------------
 
-    # Import send_morning_briefing lazily to avoid circular deps
-    from discord_background import send_morning_briefing
+
+def _register_utility_commands(bot):
+    """Register /ping, /about, /whoami, and /help."""
 
     # ------------------------------------------------------------------
     # /ping
@@ -286,6 +288,15 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         audit_log(interaction.user, "help")
 
+
+# ---------------------------------------------------------------------------
+# Conversation commands: /clear, /model, /save, /resume, /threads, etc.
+# ---------------------------------------------------------------------------
+
+
+def _register_conversation_commands(bot):
+    """Register /clear, /model show|set, /save, /resume, /threads, /threads-search, /forget."""
+
     # ------------------------------------------------------------------
     # /clear
     # ------------------------------------------------------------------
@@ -438,8 +449,17 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.response.send_message(result, ephemeral=True)
         audit_log(interaction.user, "forget_thread", detail=name)
 
+
+# ---------------------------------------------------------------------------
+# System & monitoring commands: /ports, /report, /analyze
+# ---------------------------------------------------------------------------
+
+
+def _register_system_commands(bot):
+    """Register /ports, /report, and /analyze."""
+
     # ------------------------------------------------------------------
-    # /ports, /report, /analyze
+    # /ports
     # ------------------------------------------------------------------
 
     @bot.tree.command(name="ports", description="Check service port connectivity")
@@ -455,6 +475,10 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "ports")
 
+    # ------------------------------------------------------------------
+    # /report
+    # ------------------------------------------------------------------
+
     @bot.tree.command(name="report", description="Generate a comprehensive system status report")
     @require_auth
     async def report_cmd(interaction: discord.Interaction):
@@ -467,6 +491,10 @@ def register_commands(bot):  # noqa: C901 — large but flat
         )
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "report")
+
+    # ------------------------------------------------------------------
+    # /analyze
+    # ------------------------------------------------------------------
 
     @bot.tree.command(name="analyze", description="AI-powered container log analysis")
     @app_commands.describe(service="Container name to analyze", lines="Log lines to analyze (10-200, default 50)")
@@ -483,9 +511,14 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "analyze", detail=f"{service} lines={lines}")
 
-    # ------------------------------------------------------------------
-    # /schedule
-    # ------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Schedule commands: /schedule
+# ---------------------------------------------------------------------------
+
+
+def _register_schedule_commands(bot):
+    """Register /schedule (list, add, remove, toggle)."""
 
     @bot.tree.command(name="schedule", description="Manage scheduled tasks")
     @app_commands.describe(
@@ -573,9 +606,14 @@ def register_commands(bot):  # noqa: C901 — large but flat
                 ephemeral=True,
             )
 
-    # ------------------------------------------------------------------
-    # /skills
-    # ------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Skills commands: /skills
+# ---------------------------------------------------------------------------
+
+
+def _register_skills_commands(bot):
+    """Register /skills."""
 
     @bot.tree.command(name="skills", description="List all available OpenClaw skills")
     @app_commands.describe(category="Filter by category name (leave empty for overview)")
@@ -630,9 +668,14 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.response.send_message(embed=embed)
         audit_log(interaction.user, "skills")
 
-    # ------------------------------------------------------------------
-    # /pending, /estop
-    # ------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Safety commands: /pending, /estop
+# ---------------------------------------------------------------------------
+
+
+def _register_safety_commands(bot):
+    """Register /pending and /estop."""
 
     @bot.tree.command(name="pending", description="List pending approval requests")
     @require_auth
@@ -676,9 +719,14 @@ def register_commands(bot):  # noqa: C901 — large but flat
             )
             audit_log(interaction.user, "estop", detail="activated")
 
-    # ------------------------------------------------------------------
-    # /mail
-    # ------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Communication commands: /mail
+# ---------------------------------------------------------------------------
+
+
+def _register_comms_commands(bot):
+    """Register /mail."""
 
     @bot.tree.command(name="mail", description="Send an automated e-mail message via AgentMail")
     @app_commands.describe(to="Recipient email", subject="Email subject", body="Message body")
@@ -692,147 +740,14 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.followup.send(result)
         audit_log(interaction.user, "mail", detail=f"to={to} subj={subject}")
 
-    # ------------------------------------------------------------------
-    # /analyze-image, /analyze-file
-    # ------------------------------------------------------------------
 
-    @bot.tree.command(name="analyze-image", description="Analyze an image using Gemini AI vision")
-    @app_commands.describe(
-        image="Image file to analyze (PNG, JPEG, WebP, GIF, HEIC)",
-        question="What to ask about the image (optional)",
-    )
-    async def analyze_image_cmd(
-        interaction: discord.Interaction,
-        image: discord.Attachment,
-        question: str = "Describe this image in detail. Note any text, errors, or important information.",
-    ):
+# ---------------------------------------------------------------------------
+# Agent & mission commands: /tasks, /bookmark, /plans, etc.
+# ---------------------------------------------------------------------------
 
-        mime = (image.content_type or "").split(";")[0].strip()
-        if mime not in SUPPORTED_IMAGE_MIMES:
-            await interaction.response.send_message(
-                f"❌ Unsupported file type `{mime or 'unknown'}`. "
-                "Supported: PNG, JPEG, WebP, GIF, HEIC",
-                ephemeral=True,
-            )
-            return
 
-        if image.size > MAX_FILE_SIZE:
-            await interaction.response.send_message("❌ Image too large (max 20 MB).", ephemeral=True)
-            return
-
-        await interaction.response.defer()
-
-        try:
-            session = _get_http_session()
-            async with session.get(image.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status != 200:
-                    await interaction.followup.send(f"❌ Could not download image (HTTP {resp.status}).")
-                    return
-                image_bytes = await resp.read()
-        except Exception as e:
-            await interaction.followup.send(f"❌ Failed to fetch image: {e}")
-            return
-
-        result = await llm_analyze_image(image_bytes, mime, question)
-        result = truncate_for_embed(result)
-
-        embed = discord.Embed(
-            title="🖼️ Image Analysis",
-            description=result,
-            color=discord.Color.purple(),
-        )
-        embed.set_footer(text=f"📎 {image.filename} • via Gemini Vision")
-        await interaction.followup.send(embed=embed)
-        audit_log(interaction.user, "analyze-image", detail=f"{image.filename} q={question[:60]}")
-
-    @bot.tree.command(name="analyze-file", description="Analyze a document or file using Gemini AI")
-    @app_commands.describe(
-        file="File to analyze (PDF, TXT, JSON, CSV, YAML, log files, etc.)",
-        question="What to ask about the document (optional)",
-    )
-    async def analyze_file_cmd(
-        interaction: discord.Interaction,
-        file: discord.Attachment,
-        question: str = "Summarize this document and highlight the most important information.",
-    ):
-
-        if file.size > MAX_FILE_SIZE:
-            await interaction.response.send_message("❌ File too large (max 20 MB).", ephemeral=True)
-            return
-
-        filename = file.filename.lower()
-        mime = (file.content_type or "").split(";")[0].strip()
-
-        await interaction.response.defer()
-
-        try:
-            session = _get_http_session()
-            async with session.get(file.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                if resp.status != 200:
-                    await interaction.followup.send(f"❌ Could not download file (HTTP {resp.status}).")
-                    return
-                file_bytes = await resp.read()
-        except Exception as e:
-            await interaction.followup.send(f"❌ Failed to download file: {e}")
-            return
-
-        extracted_text: str | None = None
-        file_type_label = "text"
-
-        if filename.endswith(".pdf") or mime == "application/pdf":
-            file_type_label = "PDF"
-            try:
-                import pypdf
-                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
-                pages_text = []
-                for page in reader.pages[:PDF_MAX_PAGES]:
-                    page_text = page.extract_text()
-                    if page_text:
-                        pages_text.append(page_text)
-                extracted_text = "\n\n".join(pages_text)
-                if not extracted_text.strip():
-                    await interaction.followup.send(
-                        "⚠️ Could not extract text from this PDF (may be scanned/image-based)."
-                    )
-                    return
-            except ImportError:
-                await interaction.followup.send(
-                    "❌ pypdf not installed. Add `pypdf>=4.0` to requirements.txt."
-                )
-                return
-            except Exception as e:
-                await interaction.followup.send(f"❌ Failed to parse PDF: {e}")
-                return
-        else:
-            file_type_label = filename.rsplit(".", 1)[-1].upper() if "." in filename else "text"
-            try:
-                extracted_text = file_bytes.decode("utf-8", errors="replace")
-            except Exception as e:
-                await interaction.followup.send(f"❌ Could not decode file as text: {e}")
-                return
-
-        del file_bytes
-
-        MAX_CHARS = DOCUMENT_MAX_CHARS
-        truncated = False
-        if len(extracted_text) > MAX_CHARS:
-            extracted_text = extracted_text[:MAX_CHARS]
-            truncated = True
-
-        result = await llm_analyze_document(extracted_text, question)
-        result = truncate_for_embed(result)
-
-        embed = discord.Embed(
-            title=f"📄 {file_type_label} Analysis",
-            description=result,
-            color=discord.Color.dark_blue(),
-        )
-        footer = f"📎 {file.filename} ({file.size // 1024} KB)"
-        if truncated:
-            footer += " • ⚠️ truncated to 50,000 chars"
-        embed.set_footer(text=footer + " • via Gemini")
-        await interaction.followup.send(embed=embed)
-        audit_log(interaction.user, "analyze-file", detail=f"{file.filename} q={question[:60]}")
+def _register_agent_commands(bot):
+    """Register /tasks, /bookmark, /weather, /plans, /plan-detail, /resume-plan, /cancel-plan."""
 
     # ------------------------------------------------------------------
     # /tasks
@@ -1010,6 +925,15 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "cancel_plan", detail=plan_id[:100])
 
+
+# ---------------------------------------------------------------------------
+# Code commands: /diff, /run-code
+# ---------------------------------------------------------------------------
+
+
+def _register_code_commands(bot):
+    """Register /diff and /run-code."""
+
     # ------------------------------------------------------------------
     # /diff
     # ------------------------------------------------------------------
@@ -1029,6 +953,222 @@ def register_commands(bot):  # noqa: C901 — large but flat
         embed.set_footer(text="Run /ask \"commit these changes\" to commit via LLM")
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "diff")
+
+    # ------------------------------------------------------------------
+    # /run-code
+    # ------------------------------------------------------------------
+
+    @bot.tree.command(name="run-code", description="Execute Python code in a sandboxed container (safe, isolated)")
+    @app_commands.describe(
+        code="Python code to run (or wrap in a code block ```python ... ```)",
+    )
+    @require_auth
+    async def run_code_cmd(interaction: discord.Interaction, code: str):
+        await interaction.response.defer()
+
+        if code.startswith("```"):
+            lines = code.split("\n")
+            if lines[-1].strip() == "```":
+                lines = lines[1:-1]
+            elif lines[0].strip().startswith("```"):
+                lines[0] = ""
+            code = "\n".join(lines).strip()
+
+        if not code:
+            await interaction.edit_original_response(content="❌ No code provided.")
+            return
+
+        if len(code) > 10_000:
+            await interaction.edit_original_response(content="❌ Code too long (max 10,000 chars).")
+            return
+
+        await interaction.edit_original_response(content="⚙️ *Running code in sandboxed container…*")
+
+        stdout, stderr, exit_code = await sandbox_run_code(code)
+
+        parts = []
+        if stdout:
+            parts.append(f"**stdout:**\n```\n{stdout[:OUTPUT_MAX_CHARS]}\n```")
+        if stderr:
+            parts.append(f"**stderr:**\n```\n{stderr[:1500]}\n```")
+        if not stdout and not stderr:
+            parts.append("*(no output)*")
+
+        code_status = "✅" if exit_code == 0 else "❌"
+        header = f"{code_status} Exit code: {exit_code}"
+
+        embed = discord.Embed(
+            title="⚙️ Code Execution Result",
+            description=f"{header}\n\n" + "\n".join(parts),
+            color=discord.Color.green() if exit_code == 0 else discord.Color.red(),
+        )
+        embed.set_footer(text="Sandboxed · python:3.12-slim · no network · 256MB RAM · 30s timeout")
+
+        out_file = None
+        if len(stdout) > OUTPUT_MAX_CHARS:
+            out_file = discord.File(io.BytesIO(stdout.encode()), filename="output.txt")
+
+        from typing import Any
+        kwargs: dict[str, Any] = {"content": None, "embed": embed}
+        if out_file:
+            kwargs["attachments"] = [out_file]
+        await interaction.edit_original_response(**kwargs)
+        audit_log(interaction.user, "run_code", detail=code[:200])
+
+
+# ---------------------------------------------------------------------------
+# Media commands: /analyze-image, /analyze-file, /briefing, /imagine
+# ---------------------------------------------------------------------------
+
+
+def _register_media_commands(bot, send_morning_briefing):
+    """Register /analyze-image, /analyze-file, /briefing, and /imagine."""
+
+    # ------------------------------------------------------------------
+    # /analyze-image
+    # ------------------------------------------------------------------
+
+    @bot.tree.command(name="analyze-image", description="Analyze an image using Gemini AI vision")
+    @app_commands.describe(
+        image="Image file to analyze (PNG, JPEG, WebP, GIF, HEIC)",
+        question="What to ask about the image (optional)",
+    )
+    async def analyze_image_cmd(
+        interaction: discord.Interaction,
+        image: discord.Attachment,
+        question: str = "Describe this image in detail. Note any text, errors, or important information.",
+    ):
+
+        mime = (image.content_type or "").split(";")[0].strip()
+        if mime not in SUPPORTED_IMAGE_MIMES:
+            await interaction.response.send_message(
+                f"❌ Unsupported file type `{mime or 'unknown'}`. "
+                "Supported: PNG, JPEG, WebP, GIF, HEIC",
+                ephemeral=True,
+            )
+            return
+
+        if image.size > MAX_FILE_SIZE:
+            await interaction.response.send_message("❌ Image too large (max 20 MB).", ephemeral=True)
+            return
+
+        await interaction.response.defer()
+
+        try:
+            session = _get_http_session()
+            async with session.get(image.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    await interaction.followup.send(f"❌ Could not download image (HTTP {resp.status}).")
+                    return
+                image_bytes = await resp.read()
+        except Exception as e:
+            await interaction.followup.send(f"❌ Failed to fetch image: {e}")
+            return
+
+        result = await llm_analyze_image(image_bytes, mime, question)
+        result = truncate_for_embed(result)
+
+        embed = discord.Embed(
+            title="🖼️ Image Analysis",
+            description=result,
+            color=discord.Color.purple(),
+        )
+        embed.set_footer(text=f"📎 {image.filename} • via Gemini Vision")
+        await interaction.followup.send(embed=embed)
+        audit_log(interaction.user, "analyze-image", detail=f"{image.filename} q={question[:60]}")
+
+    # ------------------------------------------------------------------
+    # /analyze-file
+    # ------------------------------------------------------------------
+
+    @bot.tree.command(name="analyze-file", description="Analyze a document or file using Gemini AI")
+    @app_commands.describe(
+        file="File to analyze (PDF, TXT, JSON, CSV, YAML, log files, etc.)",
+        question="What to ask about the document (optional)",
+    )
+    async def analyze_file_cmd(
+        interaction: discord.Interaction,
+        file: discord.Attachment,
+        question: str = "Summarize this document and highlight the most important information.",
+    ):
+
+        if file.size > MAX_FILE_SIZE:
+            await interaction.response.send_message("❌ File too large (max 20 MB).", ephemeral=True)
+            return
+
+        filename = file.filename.lower()
+        mime = (file.content_type or "").split(";")[0].strip()
+
+        await interaction.response.defer()
+
+        try:
+            session = _get_http_session()
+            async with session.get(file.url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status != 200:
+                    await interaction.followup.send(f"❌ Could not download file (HTTP {resp.status}).")
+                    return
+                file_bytes = await resp.read()
+        except Exception as e:
+            await interaction.followup.send(f"❌ Failed to download file: {e}")
+            return
+
+        extracted_text: str | None = None
+        file_type_label = "text"
+
+        if filename.endswith(".pdf") or mime == "application/pdf":
+            file_type_label = "PDF"
+            try:
+                import pypdf
+                reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+                pages_text = []
+                for page in reader.pages[:PDF_MAX_PAGES]:
+                    page_text = page.extract_text()
+                    if page_text:
+                        pages_text.append(page_text)
+                extracted_text = "\n\n".join(pages_text)
+                if not extracted_text.strip():
+                    await interaction.followup.send(
+                        "⚠️ Could not extract text from this PDF (may be scanned/image-based)."
+                    )
+                    return
+            except ImportError:
+                await interaction.followup.send(
+                    "❌ pypdf not installed. Add `pypdf>=4.0` to requirements.txt."
+                )
+                return
+            except Exception as e:
+                await interaction.followup.send(f"❌ Failed to parse PDF: {e}")
+                return
+        else:
+            file_type_label = filename.rsplit(".", 1)[-1].upper() if "." in filename else "text"
+            try:
+                extracted_text = file_bytes.decode("utf-8", errors="replace")
+            except Exception as e:
+                await interaction.followup.send(f"❌ Could not decode file as text: {e}")
+                return
+
+        del file_bytes
+
+        MAX_CHARS = DOCUMENT_MAX_CHARS
+        truncated = False
+        if len(extracted_text) > MAX_CHARS:
+            extracted_text = extracted_text[:MAX_CHARS]
+            truncated = True
+
+        result = await llm_analyze_document(extracted_text, question)
+        result = truncate_for_embed(result)
+
+        embed = discord.Embed(
+            title=f"📄 {file_type_label} Analysis",
+            description=result,
+            color=discord.Color.dark_blue(),
+        )
+        footer = f"📎 {file.filename} ({file.size // 1024} KB)"
+        if truncated:
+            footer += " • ⚠️ truncated to 50,000 chars"
+        embed.set_footer(text=footer + " • via Gemini")
+        await interaction.followup.send(embed=embed)
+        audit_log(interaction.user, "analyze-file", detail=f"{file.filename} q={question[:60]}")
 
     # ------------------------------------------------------------------
     # /briefing
@@ -1109,65 +1249,38 @@ def register_commands(bot):  # noqa: C901 — large but flat
         await interaction.edit_original_response(content=None, embed=embed, attachments=[img_file])
         audit_log(interaction.user, "imagine", detail=prompt[:200])
 
-    # ------------------------------------------------------------------
-    # /run-code
-    # ------------------------------------------------------------------
 
-    @bot.tree.command(name="run-code", description="Execute Python code in a sandboxed container (safe, isolated)")
-    @app_commands.describe(
-        code="Python code to run (or wrap in a code block ```python ... ```)",
-    )
-    @require_auth
-    async def run_code_cmd(interaction: discord.Interaction, code: str):
-        await interaction.response.defer()
+# ---------------------------------------------------------------------------
+# Context menus (right-click commands)
+# ---------------------------------------------------------------------------
 
-        if code.startswith("```"):
-            lines = code.split("\n")
-            if lines[-1].strip() == "```":
-                lines = lines[1:-1]
-            elif lines[0].strip().startswith("```"):
-                lines[0] = ""
-            code = "\n".join(lines).strip()
 
-        if not code:
-            await interaction.edit_original_response(content="❌ No code provided.")
-            return
+def _register_context_menus(bot):
+    """Register context-menu (right-click) commands — placeholder for future use."""
+    pass
 
-        if len(code) > 10_000:
-            await interaction.edit_original_response(content="❌ Code too long (max 10,000 chars).")
-            return
 
-        await interaction.edit_original_response(content="⚙️ *Running code in sandboxed container…*")
+# ---------------------------------------------------------------------------
+# Command registration — dispatcher
+# ---------------------------------------------------------------------------
 
-        stdout, stderr, exit_code = await sandbox_run_code(code)
 
-        parts = []
-        if stdout:
-            parts.append(f"**stdout:**\n```\n{stdout[:OUTPUT_MAX_CHARS]}\n```")
-        if stderr:
-            parts.append(f"**stderr:**\n```\n{stderr[:1500]}\n```")
-        if not stdout and not stderr:
-            parts.append("*(no output)*")
+def register_commands(bot):  # noqa: C901 — large but flat
+    """Register all slash commands (except /ask) on *bot*.tree."""
 
-        code_status = "✅" if exit_code == 0 else "❌"
-        header = f"{code_status} Exit code: {exit_code}"
+    # Import send_morning_briefing lazily to avoid circular deps
+    from discord_background import send_morning_briefing
 
-        embed = discord.Embed(
-            title="⚙️ Code Execution Result",
-            description=f"{header}\n\n" + "\n".join(parts),
-            color=discord.Color.green() if exit_code == 0 else discord.Color.red(),
-        )
-        embed.set_footer(text="Sandboxed · python:3.12-slim · no network · 256MB RAM · 30s timeout")
-
-        out_file = None
-        if len(stdout) > OUTPUT_MAX_CHARS:
-            out_file = discord.File(io.BytesIO(stdout.encode()), filename="output.txt")
-
-        from typing import Any
-        kwargs: dict[str, Any] = {"content": None, "embed": embed}
-        if out_file:
-            kwargs["attachments"] = [out_file]
-        await interaction.edit_original_response(**kwargs)
-        audit_log(interaction.user, "run_code", detail=code[:200])
+    _register_utility_commands(bot)
+    _register_conversation_commands(bot)
+    _register_system_commands(bot)
+    _register_schedule_commands(bot)
+    _register_skills_commands(bot)
+    _register_safety_commands(bot)
+    _register_comms_commands(bot)
+    _register_agent_commands(bot)
+    _register_code_commands(bot)
+    _register_media_commands(bot, send_morning_briefing)
+    _register_context_menus(bot)
 
     log.info("Registered %d standalone slash commands", 30)
