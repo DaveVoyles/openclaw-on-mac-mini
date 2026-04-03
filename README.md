@@ -349,9 +349,9 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 
 **Phase 36 — Movie & TV Lookup** ✅
 
-- `/movie <title>` — Rich movie embeds with poster, ratings, plot (OMDb)
-- `/tv <title>` — TV show info with season/episode details
-- `/imdb <query>` — Combined movie and TV search
+- `/media movie <title>` — Rich movie embeds with poster, ratings, plot (OMDb)
+- `/media tv <title>` — TV show info with season/episode details
+- `/media search <query>` — Combined movie and TV search
 
 **Phase 37 — Error Monitoring** ✅
 

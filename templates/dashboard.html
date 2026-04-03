@@ -942,7 +942,7 @@
             <li>📄 <strong>/gdoc</strong> — Create and list Google Docs via Maton automation</li>
             <li>🖥️ <strong>/perf</strong> — Real-time CPU, memory, disk, and load via Glances</li>
             <li>📱 <strong>/ntfy</strong> — Send phone push notifications via ntfy.sh; other cogs can push alerts too</li>
-            <li>🎬 <strong>/movie /tv /imdb</strong> — Movie and TV lookups with rich embeds via OMDb/IMDb</li>
+            <li>🎬 <strong>/media movie /media tv /media search</strong> — Movie and TV lookups with rich embeds via OMDb/IMDb</li>
             <li>🐛 <strong>/sentry</strong> — Sentry error monitoring: list issues, projects, resolve, stats</li>
           </ul>
           <p
@@ -1850,9 +1850,9 @@
             { name: "/ntfy test", desc: "Send test notification to verify setup" },
           ]},
           { category: "🎬 Movie & TV", commands: [
-            { name: "/movie <title>", desc: "Look up a movie with poster and ratings" },
-            { name: "/tv <title>", desc: "Look up a TV show with season/episode info" },
-            { name: "/imdb <query>", desc: "Search movies and TV via OMDb" },
+            { name: "/media movie <title>", desc: "Look up a movie with poster and ratings" },
+            { name: "/media tv <title>", desc: "Look up a TV show with season/episode info" },
+            { name: "/media search <query>", desc: "Search movies and TV via OMDb" },
           ]},
           { category: "🐛 Error Monitoring", commands: [
             { name: "/sentry issues [project]", desc: "List unresolved Sentry issues" },

@@ -3733,12 +3733,12 @@ Division 1 men's lacrosse games this week and post a table.
       <p><strong>Setup:</strong> Subscribe to a topic in the ntfy app, then set <code>NTFY_URL</code>, <code>NTFY_TOPIC</code>, and optionally <code>NTFY_TOKEN</code> (for authenticated/self-hosted instances) in <code>.env</code>.</p>
       <p>Other cogs can import and call <code>push_notification(message, title, priority)</code> from <code>ntfy_cog.py</code> to send phone alerts programmatically.</p>
 
-      <h2 id="imdb">57. Movie &amp; TV Lookup (<code>/movie</code>, <code>/tv</code>, <code>/imdb</code>)</h2>
+      <h2 id="imdb">57. Movie &amp; TV Lookup (<code>/media movie</code>, <code>/media tv</code>, <code>/media search</code>)</h2>
       <p>Rich movie and TV show lookups via the OMDb API (Open Movie Database, backed by IMDb data).</p>
       <ul>
-        <li><code>/movie &lt;title&gt;</code> — Search for a movie. Returns an embed with poster, year, genre, IMDb/Rotten Tomatoes/Metacritic ratings, director, cast, and plot.</li>
-        <li><code>/tv &lt;title&gt;</code> — Search for a TV show. Returns seasons, episodes, network, and ratings.</li>
-        <li><code>/imdb &lt;query&gt;</code> — Search both movies and TV shows together.</li>
+        <li><code>/media movie &lt;title&gt;</code> — Search for a movie. Returns an embed with poster, year, genre, IMDb/Rotten Tomatoes/Metacritic ratings, director, cast, and plot.</li>
+        <li><code>/media tv &lt;title&gt;</code> — Search for a TV show. Returns seasons, episodes, network, and ratings.</li>
+        <li><code>/media search &lt;query&gt;</code> — Search both movies and TV shows together.</li>
       </ul>
       <p><strong>Setup:</strong> Get a free API key at <a href="https://www.omdbapi.com/" target="_blank">omdbapi.com</a> (1,000 requests/day free), then set <code>OMDB_API_KEY</code> in <code>.env</code>.</p>
 

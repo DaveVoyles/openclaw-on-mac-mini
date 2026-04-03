@@ -457,9 +457,9 @@ Requires: `OMDB_API_KEY` (free at https://www.omdbapi.com/).
 
 | Command | Description | Parameters | Auth | Risk | File |
 | ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/movie <title>` | Look up a movie with poster, ratings, and plot | `title: str` | — | LOW | `imdb_cog.py` |
-| `/tv <title>` | Look up a TV show with season/episode info and ratings | `title: str` | — | LOW | `imdb_cog.py` |
-| `/imdb <query>` | Search both movies and TV shows | `query: str` | — | LOW | `imdb_cog.py` |
+| `/media movie <title>` | Look up a movie with poster, ratings, and plot | `title: str` | — | LOW | `imdb_cog.py` |
+| `/media tv <title>` | Look up a TV show with season/episode info and ratings | `title: str` | — | LOW | `imdb_cog.py` |
+| `/media search <query>` | Search both movies and TV shows | `query: str` | — | LOW | `imdb_cog.py` |
 
 ---
 
