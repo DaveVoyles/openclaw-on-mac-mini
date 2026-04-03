@@ -159,6 +159,12 @@ def _command_list() -> list[dict]:
             {"name": "init_planning_files", "desc": "Initialize task_plan.md, findings.md, progress.md for complex tasks."},
             {"name": "update_plan_status", "desc": "Log progress or update status of a phase in planning files."},
         ]},
+        {"category": "📝 Notes & Vault", "commands": [
+            {"name": "/note create", "desc": "Create a note in the Obsidian vault"},
+            {"name": "/note list", "desc": "Browse recent vault notes"},
+            {"name": "/note view", "desc": "View a vault note's content"},
+            {"name": "/note search", "desc": "Search vault notes by content"},
+        ]},
         {"category": "📋 Agent Loop & Plans", "commands": [
             {"name": "/plans [status]", "desc": "List active/recent agent plans. Filter: all, in-progress, completed, interrupted."},
             {"name": "/plan-detail <plan_id>", "desc": "Show full details of a specific plan (steps, status, outputs)."},

@@ -84,6 +84,7 @@ Agents working on this codebase should read this file to understand what is avai
 | **Synology DSM**  | https://www.synology.com                            | Synology NAS operating system with REST API | Primary network storage; exposes volume stats, SMART health, Hyper Backup status, and system alerts | `NAS_URL`, `NAS_USER`, `NAS_PASSWORD`, `NAS_VERIFY_SSL` |
 | **Traefik**       | https://traefik.io                                  | Reverse proxy & TLS termination             | Routes external HTTPS traffic into internal services on the NAS; handles Let's Encrypt certs        | Lives on NAS (ports 80/443)                             |
 | **Synology DDNS** | https://www.synology.com/en-global/dsm/feature/ddns | Dynamic DNS for remote access               | Provides a stable hostname (`davevoyles.synology.me`) when WAN IP changes                           | _(Synology account)_                                    |
+| **Vault Backup**  | _(rsync over SSH)_                                  | Nightly vault-to-NAS backup                 | 4 AM cron rsyncs `data/vault/` to NAS so Obsidian notes survive host failures                       | `NAS_HOST`, `NAS_SSH_PORT`, `NAS_SSH_USER`, `NAS_BACKUP_PATH` |
 
 ---
 
