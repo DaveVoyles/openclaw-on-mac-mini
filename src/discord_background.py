@@ -353,7 +353,7 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
                 heal_results.append(
                     f"🤖 **Copilot CLI fix suggested** (requires approval):\n"
                     f"> {target}\n"
-                    f"React ✅ on this message to approve (uses API tokens)."
+                    f"Click **Approve Fix** below to run (uses API tokens)."
                 )
                 audit_log(None, "self_heal", detail=f"copilot_fix proposed: {target[:200]}")
         except Exception as exc:
@@ -361,6 +361,42 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
             log.warning("Self-heal %s failed for %s: %s", action_type, target, exc)
 
     return display_analysis, heal_results
+
+
+class _CopilotFixView(discord.ui.View):
+    """Discord button view for approving/denying Copilot CLI fix suggestions."""
+
+    def __init__(self, prompts: list[str], channel):
+        super().__init__(timeout=600)
+        self.prompts = prompts
+        self.channel = channel
+
+    @discord.ui.button(label="✅ Approve Fix", style=discord.ButtonStyle.green)
+    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(view=self)
+
+        from maintenance_skills import copilot_fix
+        for cp in self.prompts:
+            try:
+                result = await asyncio.wait_for(copilot_fix(cp), timeout=180)
+                await self.channel.send(
+                    f"🤖 **Copilot CLI result** (approved by {interaction.user.display_name}):\n{result[:1900]}"
+                )
+                audit_log(interaction.user, "copilot_fix_approved", detail=cp[:200])
+            except Exception as exc:
+                await self.channel.send(f"❌ Copilot fix failed: {exc}")
+        self.stop()
+
+    @discord.ui.button(label="❌ Skip", style=discord.ButtonStyle.grey)
+    async def deny_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for child in self.children:
+            child.disabled = True
+        await interaction.response.edit_message(view=self)
+        await self.channel.send("❌ Copilot CLI fix skipped.")
+        audit_log(interaction.user, "copilot_fix_rejected", detail=self.prompts[0][:200])
+        self.stop()
 
 
 async def _run_proactive_scan(bot):
@@ -427,37 +463,15 @@ async def _run_proactive_scan(bot):
         embed.set_footer(text="Autonomous monitoring scan • every 2h")
         msg = await channel.send(embed=embed)
 
-        # If a copilot_fix is pending approval, add reaction and wait for user
+        # If a copilot_fix is pending approval, use Discord buttons (not reactions)
         copilot_prompts = [
             target for action_type, target in
             [(a, t) for a, t in _parse_heal_actions(analysis)]
             if action_type == "copilot_fix_pending"
         ]
         if copilot_prompts:
-            await msg.add_reaction("✅")
-            await msg.add_reaction("❌")
-
-            # Wait for user reaction (up to 10 minutes)
-            def _check(reaction, user):
-                return (
-                    reaction.message.id == msg.id
-                    and str(reaction.emoji) in ("✅", "❌")
-                    and not user.bot
-                )
-
-            try:
-                reaction, user = await bot.wait_for("reaction_add", timeout=600, check=_check)
-                if str(reaction.emoji) == "✅":
-                    from maintenance_skills import copilot_fix
-                    for cp in copilot_prompts:
-                        result = await asyncio.wait_for(copilot_fix(cp), timeout=180)
-                        await channel.send(f"🤖 **Copilot CLI result** (approved by {user.display_name}):\n{result[:1900]}")
-                        audit_log(user, "copilot_fix_approved", detail=cp[:200])
-                else:
-                    await channel.send("❌ Copilot CLI fix skipped.")
-                    audit_log(user, "copilot_fix_rejected", detail=copilot_prompts[0][:200])
-            except asyncio.TimeoutError:
-                log.debug("Copilot fix approval timed out")
+            view = _CopilotFixView(copilot_prompts, channel)
+            await msg.edit(view=view)
 
         audit_log(None, "proactive_scan", detail="insight posted")
         log.info("Proactive scan posted an insight (healed: %d)", len(heal_results))
