@@ -310,6 +310,11 @@
           <li>
             <a href="#document-editing">45. Document Editing (/doc &amp; /sheet)</a>
           </li>
+          <li><a href="#review">46. Document Review (/review)</a></li>
+          <li><a href="#interview">47. Interview Mode (/interview)</a></li>
+          <li><a href="#ask-followups">48. Smart Follow-ups (/ask)</a></li>
+          <li><a href="#calendar-email">49. Calendar &amp; Email</a></li>
+          <li><a href="#journal-github">50. Journal &amp; GitHub</a></li>
         </ul>
       </div>
 
@@ -3571,6 +3576,103 @@ Division 1 men's lacrosse games this week and post a table.
 /sheet edit "add a Total row at the bottom"   → attach file + describe changes
 /sheet create "budget tracker with columns: date, category, amount, notes"</code></pre>
       </div>
+
+      <!-- 46. Document Review -->
+      <h2 id="review">46. Document Review (<code>/review</code>)</h2>
+      <p>Get structured AI feedback on any document — writing or technical. The bot returns a formatted critique with strengths, areas to improve, and specific actionable suggestions.</p>
+      <h3>Review Modes</h3>
+      <table>
+        <tr><th>Mode</th><th>Focuses On</th></tr>
+        <tr><td><code>writing</code> (default)</td><td>Clarity, tone, structure, grammar, readability</td></tr>
+        <tr><td><code>technical</code></td><td>Completeness, accuracy, target audience, readability</td></tr>
+        <tr><td><code>quick</code></td><td>3-bullet summary: best aspect, main issue, top suggestion</td></tr>
+      </table>
+      <h3>Commands</h3>
+      <h3><code>/review text [mode]</code></h3>
+      <p>Opens a modal where you paste up to 4,000 characters of text. The bot returns a structured critique embed.</p>
+      <h3><code>/review file [mode]</code></h3>
+      <p>Upload a file directly in Discord. Supported formats: <code>.docx</code>, <code>.xlsx</code>, <code>.txt</code>, <code>.md</code>, <code>.pdf</code>, <code>.py</code>, <code>.json</code>, <code>.csv</code>.</p>
+      <p>After reviewing, click <strong>💾 Save Review to Vault</strong> to store the critique in <code>/vault/Reviews/</code> as an Obsidian-compatible markdown file.</p>
+      <h3>Example Use Cases</h3>
+      <ul>
+        <li>Review a README before publishing: <code>/review file mode:technical</code></li>
+        <li>Get feedback on a cover letter: paste into <code>/review text mode:writing</code></li>
+        <li>Quick sanity check on an essay: <code>/review text mode:quick</code></li>
+      </ul>
+
+      <!-- 47. Interview Mode -->
+      <h2 id="interview">47. Interview Mode (<code>/interview</code>)</h2>
+      <p>Instead of writing a long prompt, let the bot interview you. It asks 3–5 clarifying questions via Discord modals, then synthesizes a personalized, tailored response based on your answers.</p>
+      <h3><code>/interview &lt;goal&gt;</code></h3>
+      <p>Describe what you want to create or decide. The bot generates context-specific questions, walks you through them one at a time, then produces the output.</p>
+      <h3>Example Goals</h3>
+      <ul>
+        <li><code>/interview write my professional bio</code></li>
+        <li><code>/interview plan my week</code></li>
+        <li><code>/interview draft a cover letter for a software engineering role</code></li>
+        <li><code>/interview help me decide between two job offers</code></li>
+        <li><code>/interview write a performance review for my team member</code></li>
+      </ul>
+      <h3>How It Works</h3>
+      <ol>
+        <li>Run <code>/interview &lt;goal&gt;</code></li>
+        <li>A modal appears with the first question — answer it and submit</li>
+        <li>Repeat for each question (3–5 total, 10-minute timeout per question)</li>
+        <li>After the final answer, the bot synthesizes and presents the output</li>
+        <li>Click <strong>💾 Save to Vault</strong> to store the result</li>
+      </ol>
+
+      <!-- 48. Smart Follow-ups -->
+      <h2 id="ask-followups">48. Smart Follow-ups on <code>/ask</code></h2>
+      <p>Every <code>/ask</code> response now includes interactive follow-up buttons, making it easy to go deeper without typing a new question.</p>
+      <h3>Buttons on Every Response</h3>
+      <ul>
+        <li><strong>Two follow-up question buttons</strong> — AI-generated suggestions based on the Q&amp;A. Click one to instantly ask it, with full conversation context preserved.</li>
+        <li><strong>🔁 Go Deeper</strong> — Re-runs the same question with a "give a much more detailed explanation" prefix.</li>
+        <li>Existing buttons remain: 📌 Save, 🔄 Regenerate, 📧 Email, 👍, 👎</li>
+      </ul>
+      <h3>Chaining</h3>
+      <p>Follow-up buttons chain — each new response generates fresh follow-up suggestions, enabling a flowing conversation without typing.</p>
+
+      <!-- 49. Calendar & Email -->
+      <h2 id="calendar-email">49. Calendar &amp; Email</h2>
+      <p>Manage your Google Calendar and email inbox directly from Discord. All email responses are ephemeral (only visible to you) for privacy.</p>
+      <h3>Calendar Commands</h3>
+      <ul>
+        <li><code>/calendar today</code> — List today's events</li>
+        <li><code>/calendar upcoming [days]</code> — Next N days (default 7, max 30)</li>
+        <li><code>/calendar add &lt;title&gt; &lt;when&gt; [description]</code> — Create an event. Natural language time parsing: <em>"tomorrow at 3pm"</em>, <em>"Friday 2pm-4pm"</em></li>
+        <li><code>/calendar delete &lt;event_id&gt;</code> — Delete an event (requires approval)</li>
+      </ul>
+      <p><strong>Setup:</strong> Requires <code>GOOGLE_OAUTH_CLIENT_ID</code>, <code>GOOGLE_OAUTH_CLIENT_SECRET</code>, and <code>GOOGLE_OAUTH_REFRESH_TOKEN</code> in <code>.env</code>. Run <code>python scripts/google_oauth_setup.py</code> for one-time setup.</p>
+      <h3>Email Commands</h3>
+      <ul>
+        <li><code>/email inbox [count] [provider]</code> — Show recent emails (default 10, providers: gmail/outlook)</li>
+        <li><code>/email read &lt;id&gt; [provider]</code> — Read a full email by its ID from /email inbox</li>
+        <li><code>/email search &lt;query&gt; [provider]</code> — Search your inbox</li>
+        <li><code>/email send &lt;to&gt; &lt;subject&gt; &lt;body&gt;</code> — Send email (requires approval)</li>
+      </ul>
+      <p><strong>Setup:</strong> For Gmail: enable 2FA, create an App Password at myaccount.google.com, set <code>GMAIL_USER</code> and <code>GMAIL_APP_PASSWORD</code> in <code>.env</code>.</p>
+
+      <!-- 50. Journal & GitHub -->
+      <h2 id="journal-github">50. Daily Journal &amp; GitHub Monitoring</h2>
+      <h3>Daily Journal (<code>/journal</code>)</h3>
+      <p>Keep a daily journal stored in your Obsidian vault at <code>/vault/Journal/</code>. Entries are saved as Obsidian-compatible markdown with YAML frontmatter.</p>
+      <ul>
+        <li><code>/journal write [entry]</code> — Save today's entry. Omit the text to open a full-page modal.</li>
+        <li><code>/journal read [date]</code> — Read a past entry. Use "today", "yesterday", or a date like "2025-07-10".</li>
+        <li><code>/journal streak</code> — See how many consecutive days you've journaled.</li>
+        <li><code>/journal prompt</code> — Get an AI-generated writing prompt to spark today's entry.</li>
+      </ul>
+      <h3>GitHub Monitoring (<code>/github</code>)</h3>
+      <p>Monitor pull requests and issues across your repos. Subscribe to activity and get DM alerts when things change.</p>
+      <ul>
+        <li><code>/github prs [repo]</code> — List open pull requests (uses <code>GITHUB_DEFAULT_REPOS</code> if no repo specified)</li>
+        <li><code>/github issues [repo] [label]</code> — List open issues, optionally filtered by label</li>
+        <li><code>/github watch &lt;repo&gt;</code> — Subscribe to activity. You'll get a DM when PRs/issues open or close.</li>
+        <li><code>/github unwatch &lt;repo&gt;</code> — Unsubscribe</li>
+      </ul>
+      <p><strong>Setup:</strong> Set <code>GITHUB_TOKEN</code> (run <code>gh auth token</code> to get it) and <code>GITHUB_DEFAULT_REPOS=owner/repo1,owner/repo2</code> in <code>.env</code>.</p>
 
       <div
         style="

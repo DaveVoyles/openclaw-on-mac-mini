@@ -656,7 +656,7 @@
 
         <!-- Container Health Matrix -->
         <div class="card">
-          <h2>&#128173; What's New in v0.8.0</h2>
+          <h2>&#128173; What's New in v0.10.0</h2>
           <div
             style="
               display: grid;
@@ -928,6 +928,15 @@
               </div>
             </div>
           </div>
+          <ul style="margin-top:0.75rem;padding-left:1.25rem;font-size:0.82rem;color:var(--muted);line-height:1.7">
+            <li>📋 <strong>/review</strong> — Upload or paste any document for structured AI critique (writing, technical, or quick mode)</li>
+            <li>🎤 <strong>/interview</strong> — Bot asks you 3–5 questions via modals, then generates personalized output</li>
+            <li>💬 <strong>Follow-up buttons</strong> — Every /ask response now has 2 AI-suggested follow-up questions + 🔁 Go Deeper</li>
+            <li>📅 <strong>/calendar</strong> — View and create Google Calendar events from Discord</li>
+            <li>📬 <strong>/email</strong> — Read inbox, search, and send email from Discord</li>
+            <li>📓 <strong>/journal</strong> — Daily journal with streak tracking and AI writing prompts, saved to vault</li>
+            <li>🐙 <strong>/github</strong> — Monitor PRs and issues, get DM alerts on repo activity</li>
+          </ul>
           <p
             style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--muted)"
           >
@@ -1781,7 +1790,32 @@
 
         // Commands
         _allCmds = d.commands;
-        renderCmds(d.commands);
+        const _extraCmdGroups = [
+          { category: "Document Review & Interview", commands: [
+            { name: "/review text [mode]", desc: "Paste text for structured critique (writing/technical/quick)" },
+            { name: "/review file [mode]", desc: "Upload DOCX/PDF/TXT/etc for structured critique" },
+            { name: "/interview <goal>", desc: "Sequential Q&A modals → personalized output" },
+          ]},
+          { category: "Calendar & Email", commands: [
+            { name: "/calendar today", desc: "List today's Google Calendar events" },
+            { name: "/calendar upcoming [days]", desc: "Next N days of events" },
+            { name: "/calendar add <title> <when>", desc: "Create event" },
+            { name: "/email inbox [count]", desc: "Show recent emails (ephemeral)" },
+            { name: "/email search <query>", desc: "Search inbox" },
+            { name: "/email read <id>", desc: "Read full email" },
+            { name: "/email send <to> <subject> <body>", desc: "Send email (requires approval)" },
+          ]},
+          { category: "Journal & GitHub", commands: [
+            { name: "/journal write [entry]", desc: "Save today's journal entry to vault" },
+            { name: "/journal read [date]", desc: "Read past entry" },
+            { name: "/journal streak", desc: "Streak counter" },
+            { name: "/journal prompt", desc: "AI writing prompt" },
+            { name: "/github prs [repo]", desc: "List open pull requests" },
+            { name: "/github issues [repo]", desc: "List open issues" },
+            { name: "/github watch <repo>", desc: "Subscribe to activity DMs" },
+          ]},
+        ];
+        renderCmds([...d.commands, ..._extraCmdGroups]);
 
         // Config
         const cr = document.getElementById("config-rows");
