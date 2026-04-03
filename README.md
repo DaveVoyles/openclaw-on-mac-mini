@@ -13,12 +13,12 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 40+ Discord slash commands across 7 cogs (36 cog commands) + modular command system |
+| **Interface**    | 88 Discord slash commands across 12 cogs (55 cog commands) + modular command system |
 | **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 4 E4B local (Ollama) |
 | **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
 | **Local LLM**    | Ollama (`gemma4:e4b`) — free, with native tool calling support         |
 | **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
-| **Status**       | **Phase 15 — Frontier Intelligence** ✅                                |
+| **Status**       | **Phase 23 — Personal Assistant** ✅                           |
 
 ## Features
 
@@ -257,6 +257,17 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Word document support** — `/doc read`, `/doc edit`, `/doc create` for reading, AI-assisted editing, and generating `.docx` files
 - **Excel spreadsheet support** — `/sheet read`, `/sheet edit`, `/sheet create` for reading, AI-assisted editing, and generating `.xlsx` files
 - **Implementation** — `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (Discord cog); depends on `python-docx` and `openpyxl`
+
+**Phase 23 — Personal Assistant** ✅
+
+- `/remind set/list/cancel` + `/timer` — personal reminders and countdown timers with DM delivery (`reminder_cog.py`)
+- `/todo add/list/done/delete` — task management with low/medium/high priorities (`todo_cog.py`)
+- `/translate <text> <language>` — Gemini-powered text translation (`translate_cog.py`)
+- `/poll <question> <options>` — reaction-based voting with automatic tally (`poll_cog.py`)
+- `/habit add/checkin/streak/list/delete` — daily habit tracking with streak counters (`habit_cog.py`)
+- `/expense add/list/summary/delete` — expense logging by category with weekly/monthly summaries (`expense_cog.py`)
+- **Evening digest** — automated 9 PM daily summary (reminders, tasks, habits, expenses) posted to `ALERT_CHANNEL_ID`; complements the morning briefing
+- 19 new slash commands across 6 new cogs (88 total)
 
 **Planned**
 
@@ -594,15 +605,22 @@ Uptime Kuma (:3001)              Grafana dashboard
 │   ├── error_aggregator.py # Error deduplication and alert batching
 │   ├── trace_context.py   # Structured logging with correlation IDs
 │   └── ... (see docs/MODULES.md for all 60+ modules)
-│   └── cogs/              # 8 Discord cogs (43 commands)
+│   └── cogs/              # 12 Discord cogs (55 commands)
 │       ├── analytics_cog.py  # /spending, /auditlog, /audit-summary
 │       ├── docker_cog.py     # /containers, /status, /logs, /system, /dockerstats, /restart
+│       ├── doc_cog.py        # /doc read/edit/create, /sheet read/edit/create
 │       ├── dream_cog.py      # /dream, /memory-health, /memory-export
+│       ├── expense_cog.py    # /expense add/list/summary/delete
+│       ├── habit_cog.py      # /habit add/checkin/streak/list/delete
 │       ├── media_cog.py      # /search, /queue, /recent, /health, /nowplaying, /watch
 │       ├── memory_cog.py     # /remember, /recall, /goals, /memory-stats, + 5 more
 │       ├── network_cog.py    # /network, /tailscale, /speedtest
 │       ├── notify_cog.py     # /notify show/mute/unmute/filter/block/unblock/dm
-│       └── research_cog.py   # /websearch, /browse, /research, /compare, + 2 more
+│       ├── poll_cog.py       # /poll (reaction voting with auto-tally)
+│       ├── reminder_cog.py   # /remind set/list/cancel, /timer
+│       ├── research_cog.py   # /websearch, /browse, /research, /compare, + 2 more
+│       ├── todo_cog.py       # /todo add/list/done/delete
+│       └── translate_cog.py  # /translate (Gemini-powered)
 ├── analyzer.py            # AI-powered log analysis
 ├── scheduler.py           # Scheduled task system with persistence
 ├── qmd.py                 # Long-term memory (QMD pattern — persists to qmd.json)

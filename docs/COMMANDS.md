@@ -1,6 +1,6 @@
 # OpenClaw — Discord Slash Commands Reference
 
-All 69 slash commands across `bot.py` and 6 cogs, organized by category.
+All 88 slash commands across `bot.py` and 12 cogs, organized by category.
 
 > **Risk levels:** LOW (auto-execute) | MEDIUM (logged) | HIGH (requires button approval) | CRITICAL (requires approval + preview)
 >
@@ -216,6 +216,36 @@ Per-user alert preferences — mute, filter, block, and DM controls.
 
 ---
 
+## Personal Assistant
+
+Reminders, tasks, translation, polls, habits, expenses, and daily digests.
+
+| Command                    | Description                                                    | Parameters                                                       | Auth | Risk | File              |
+| -------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------- | ---- | ---- | ----------------- |
+| `/remind set`              | Set a personal reminder (e.g. "in 30m take a break")           | `when: str`, `message: str`                                      | —    | LOW  | `reminder_cog.py` |
+| `/remind list`             | List your active reminders                                     | —                                                                | —    | LOW  | `reminder_cog.py` |
+| `/remind cancel`           | Cancel a pending reminder                                      | `reminder_id: str`                                               | —    | LOW  | `reminder_cog.py` |
+| `/timer`                   | Start a countdown timer (DMs you when done)                    | `duration: str`                                                  | —    | LOW  | `reminder_cog.py` |
+| `/todo add`                | Add a task with optional priority                              | `task: str`, `priority: low\|medium\|high (optional)`            | —    | LOW  | `todo_cog.py`     |
+| `/todo list`               | List your tasks (filterable by status/priority)                | `status: str (optional)`, `priority: str (optional)`             | —    | LOW  | `todo_cog.py`     |
+| `/todo done`               | Mark a task as completed                                       | `task_id: str`                                                   | —    | LOW  | `todo_cog.py`     |
+| `/todo delete`             | Delete a task                                                  | `task_id: str`                                                   | —    | LOW  | `todo_cog.py`     |
+| `/translate`               | Translate text to another language (Gemini-powered)            | `text: str`, `language: str`                                     | —    | LOW  | `translate_cog.py`|
+| `/poll`                    | Create a reaction-based poll with auto-tally                   | `question: str`, `options: str` (comma-separated)                | —    | LOW  | `poll_cog.py`     |
+| `/habit add`               | Start tracking a new daily habit                               | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
+| `/habit checkin`           | Check in for today on a habit                                  | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
+| `/habit streak`            | Show your current streak for a habit                           | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
+| `/habit list`              | List all tracked habits with streaks                           | —                                                                | —    | LOW  | `habit_cog.py`    |
+| `/habit delete`            | Stop tracking a habit                                          | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
+| `/expense add`             | Log an expense with category and amount                        | `amount: float`, `category: str`, `note: str (optional)`         | —    | LOW  | `expense_cog.py`  |
+| `/expense list`            | List recent expenses (filterable by category)                  | `category: str (optional)`, `days: int (optional)`               | —    | LOW  | `expense_cog.py`  |
+| `/expense summary`         | Spending summary by category (weekly/monthly)                  | `period: week\|month (optional)`                                 | —    | LOW  | `expense_cog.py`  |
+| `/expense delete`          | Delete an expense entry                                        | `expense_id: str`                                                | —    | LOW  | `expense_cog.py`  |
+
+**Evening Digest** — automated 9 PM daily summary posted to `ALERT_CHANNEL_ID`. Covers today's reminders fired, tasks completed, habits checked in, expenses logged, and upcoming items. Complements the morning briefing. Configure the hour with `EVENING_DIGEST_HOUR` (default: `21`).
+
+---
+
 ## Summary
 
 | Category             | Commands | Source Files                                |
@@ -229,7 +259,8 @@ Per-user alert preferences — mute, filter, block, and DM controls.
 | Security & Approvals | 7        | `bot.py`, `analytics_cog.py`                |
 | Planning & Tasks     | 5        | `bot.py`                                    |
 | Notifications        | 7        | `notify_cog.py`                             |
-| **Total**            | **69**   | + 60 LLM-callable skill functions via `/ask` |
+| Personal Assistant   | 19       | `reminder_cog.py`, `todo_cog.py`, `translate_cog.py`, `poll_cog.py`, `habit_cog.py`, `expense_cog.py` |
+| **Total**            | **88**   | + 60 LLM-callable skill functions via `/ask` |
 
 ---
 
