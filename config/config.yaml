@@ -106,6 +106,12 @@ channels:
         - End every response with a **Sources** section listing all URLs used.
         - When a search is blocked (403/429), construct the likely Zillow URL from the address: `https://www.zillow.com/homes/<address-slug>_rb/`
 
+# Thread-based conversations
+threads:
+  auto_create: true        # Create threads for /ask responses in regular channels
+  archive_minutes: 60      # Auto-archive after inactivity
+  max_messages: 50         # Max messages before suggesting a new thread
+
 # Obsidian vault settings
 vault:
   dir: "/vault" # Docker volume mount point — matches VAULT_DIR env var

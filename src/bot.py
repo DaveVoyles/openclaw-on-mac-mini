@@ -52,6 +52,7 @@ from permissions import (  # noqa: F401 — re-exported for backward compat
 from qmd import remember_fact
 from scheduler import scheduler
 from skills import SKILLS
+from trace_context import get_trace_id, setup_trace_logging, trace_context
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -123,6 +124,7 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger("openclaw")
+setup_trace_logging()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -703,6 +705,13 @@ async def ask_cmd(
     await interaction.response.defer()
     _ask_start = time.monotonic()
 
+    # Set up request tracing
+    from trace_context import TraceContext, _current_trace
+    _trace = TraceContext(command="ask", user_id=interaction.user.id,
+                          channel_id=interaction.channel_id)
+    _trace_token = _current_trace.set(_trace)
+    log.info("ask_cmd start question=%.80s", question)
+
     _progress_lines: list[str] = []
     _progress_start = time.monotonic()
 
@@ -892,6 +901,7 @@ async def ask_cmd(
                     conversation_store.auto_save_thread(
                         interaction.user.id, interaction.channel_id, str(interaction.user.display_name)
                     )
+                log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
                 break
 
             now = time.monotonic()
@@ -976,22 +986,24 @@ async def ask_cmd(
         channel_id=interaction.channel_id,
     )
 
-    # Auto-create thread for long conversations (3+ messages, not already in thread)
+    # Auto-create thread for /ask responses (if not already in a thread/DM)
     _auto_thread = None
     if (
-        conv.message_count >= 6  # 3 user + 3 bot messages
+        cfg.thread_auto_create
         and not isinstance(interaction.channel, discord.Thread)
+        and not isinstance(interaction.channel, discord.DMChannel)
         and hasattr(interaction.channel, "create_thread")
     ):
         try:
-            thread_title = question[:90] if len(question) <= 90 else question[:87] + "…"
+            _thread_name = question[:50].strip() + ("…" if len(question) > 50 else "")
+            _archive_dur = 60 if cfg.thread_archive_minutes <= 60 else 1440
             _auto_thread = await interaction.channel.create_thread(
-                name=f"💬 {thread_title}",
-                auto_archive_duration=1440,
-                reason="Auto-threaded long /ask conversation",
+                name=f"💬 {_thread_name}",
+                auto_archive_duration=_archive_dur,
+                reason="Auto-threaded /ask conversation",
             )
-            log.info("Auto-created thread '%s' for %s (%d msgs)",
-                     _auto_thread.name, interaction.user, conv.message_count)
+            log.info("Auto-created thread '%s' for %s",
+                     _auto_thread.name, interaction.user)
         except Exception as e:
             log.debug("Auto-thread creation failed: %s", e)
 
@@ -1205,6 +1217,113 @@ async def ask_cmd(
             log.debug("Goal tracking failed (non-critical): %s", e)
 
     asyncio.get_running_loop().create_task(_post_response_learning())
+
+
+# ---------------------------------------------------------------------------
+# Thread follow-up listener — treat messages in bot-created threads as /ask
+# ---------------------------------------------------------------------------
+
+@bot.event
+async def on_message(message: discord.Message):
+    """Handle follow-up messages in bot-created threads as conversational /ask."""
+    # Ignore bot messages
+    if message.author.bot:
+        return
+
+    # Only handle messages inside threads
+    if not isinstance(message.channel, discord.Thread):
+        await bot.process_commands(message)
+        return
+
+    # Only handle threads the bot owns
+    if message.channel.owner_id != bot.user.id:
+        await bot.process_commands(message)
+        return
+
+    # Auth check
+    if not is_allowed(message.author.id):
+        return
+
+    if is_emergency_stopped():
+        await message.channel.send(
+            "🛑 **Emergency stop is active.** Conversation is disabled. Use `/estop resume` to resume."
+        )
+        return
+
+    if not llm_is_configured():
+        await message.channel.send("⚠️ LLM not configured.")
+        return
+
+    # Max message guard
+    if cfg.thread_max_messages > 0:
+        conv = conversation_store.get(
+            user_id=message.author.id,
+            channel_id=message.channel.id,
+            user_name=str(message.author.display_name),
+        )
+        if conv.message_count >= cfg.thread_max_messages * 2:
+            await message.channel.send(
+                f"⚠️ This thread has reached {cfg.thread_max_messages} exchanges. "
+                "Please start a new `/ask` for a fresh conversation."
+            )
+            return
+
+    user_question = message.content.strip()
+    if not user_question:
+        return
+
+    _ask_start = time.monotonic()
+
+    async with message.channel.typing():
+        conv = conversation_store.get(
+            user_id=message.author.id,
+            channel_id=message.channel.id,
+            user_name=str(message.author.display_name),
+        )
+
+        model_pref = get_model_preference(message.author.id)
+        from llm import _needs_tools as llm_needs_tools
+        if model_pref == "local" and llm_needs_tools(user_question):
+            model_pref = "gemini"
+
+        response_text = ""
+        model_used = "unknown"
+
+        try:
+            async for chunk_text, is_final, meta in llm_chat_stream(
+                user_message=user_question,
+                history=conv.history,
+                user_name=str(message.author.display_name),
+                model_preference=model_pref,
+            ):
+                if is_final:
+                    response_text = chunk_text
+                    model_used = meta.get("model_used", "unknown")
+                    if "updated_history" in meta:
+                        conv.update_from_llm(meta["updated_history"])
+                        conversation_store.auto_save_thread(
+                            message.author.id, message.channel.id, str(message.author.display_name)
+                        )
+                    break
+        except Exception as e:
+            log.error("Thread follow-up LLM error: %s", e)
+            response_text = f"❌ **Error:** {e}"
+            model_used = "error"
+
+        if not response_text or len(response_text.strip()) < 5:
+            response_text = "⚠️ I wasn't able to generate a useful response. Try rephrasing your question."
+
+        response_text = _format_markdown_for_discord(response_text)
+        response_text = _format_tables_for_discord(response_text)
+        chunks = _split_response(response_text)
+
+        for chunk in chunks:
+            embed = discord.Embed(description=chunk, color=discord.Color.purple())
+            await message.channel.send(embed=embed)
+
+    audit_log(message.author, "thread_followup", detail=user_question[:200])
+    conversation_store.cleanup_expired()
+    _current_trace.reset(_trace_token)
 
 
 # ---------------------------------------------------------------------------

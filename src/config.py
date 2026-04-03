@@ -39,6 +39,7 @@ _security = _yaml.get("security", {})
 _rate_limits = _llm.get("rate_limits", {})
 _conversation = _llm.get("conversation", {})
 _network = _yaml.get("network", {})
+_threads = _yaml.get("threads", {})
 
 # ---------------------------------------------------------------------------
 # Timeout constants (seconds)
@@ -203,6 +204,11 @@ class _Config:
     # -- Auto-recall (Phase 1: Auto-RAG) --------------------------------------
     auto_recall_enabled: bool = os.getenv("AUTO_RECALL_ENABLED", str(_yaml.get("vector_store", {}).get("contextual_recall", True))).lower() == "true"
     auto_recall_top_k: int = int(os.getenv("AUTO_RECALL_TOP_K", str(_yaml.get("vector_store", {}).get("contextual_top_k", 3))))
+
+    # -- Thread-based conversations --------------------------------------------
+    thread_auto_create: bool = os.getenv("THREAD_AUTO_CREATE", str(_threads.get("auto_create", True))).lower() == "true"
+    thread_archive_minutes: int = int(os.getenv("THREAD_ARCHIVE_MINUTES", str(_threads.get("archive_minutes", 60))))
+    thread_max_messages: int = int(os.getenv("THREAD_MAX_MESSAGES", str(_threads.get("max_messages", 50))))
 
     # -- Timeouts (seconds) ----------------------------------------------------
     default_timeout: int = TIMEOUT_DEFAULT
