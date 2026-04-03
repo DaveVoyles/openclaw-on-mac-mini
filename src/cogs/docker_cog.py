@@ -7,6 +7,7 @@ Enhanced with interactive Discord UI components (select menus + action buttons).
 
 import json
 import logging
+import time
 
 import discord
 from discord import app_commands
@@ -33,6 +34,23 @@ from skills import (
 from subprocess_utils import run as _run
 
 log = logging.getLogger("openclaw.docker_cog")
+
+# ---------------------------------------------------------------------------
+# Container list cache (avoids spawning `docker ps` on every autocomplete keystroke)
+# ---------------------------------------------------------------------------
+_container_cache: dict = {"data": [], "ts": 0.0}
+CACHE_TTL = 10.0
+
+
+async def _cached_container_list() -> str:
+    """Return cached output of list_containers(), refreshing every CACHE_TTL seconds."""
+    now = time.monotonic()
+    if now - _container_cache["ts"] < CACHE_TTL and _container_cache["data"]:
+        return _container_cache["data"]
+    result = await list_containers()
+    _container_cache["data"] = result
+    _container_cache["ts"] = now
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +106,7 @@ async def _container_autocomplete(
 ) -> list[app_commands.Choice[str]]:
     """Live autocomplete: query docker ps and return matching container names."""
     try:
-        result = await list_containers()
+        result = await _cached_container_list()
         names = []
         for line in result.split("\n"):
             if line.strip() and not line.startswith("NAMES"):
