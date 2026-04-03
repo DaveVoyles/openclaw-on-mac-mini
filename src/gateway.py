@@ -172,9 +172,8 @@ async def gateway_request(
     except asyncio.TimeoutError:
         return f"❌ Gateway request timed out after {_TIMEOUT}s."
     except Exception as e:
+        log.warning("Unexpected gateway_request error: %s", e)
         return f"❌ Unexpected error: {e}"
-
-    return f"✅ `{method} /{app}/{clean_path}`\n```json\n{json.dumps(result, indent=2)[:1800]}\n```"
 
 
 async def gateway_list_connections(app: str = "") -> str:
@@ -198,6 +197,7 @@ async def gateway_list_connections(app: str = "") -> str:
     except RuntimeError as e:
         return f"❌ Could not list connections: {e}"
     except Exception as e:
+        log.warning("Unexpected gateway_list_connections error: %s", e)
         return f"❌ Unexpected error: {e}"
 
     connections: list[dict[str, Any]] = result.get("connections", [])  # type: ignore[union-attr]
@@ -235,6 +235,7 @@ async def gateway_create_connection(app: str) -> str:
     except RuntimeError as e:
         return f"❌ Could not create connection for `{app}`: {e}"
     except Exception as e:
+        log.warning("Unexpected gateway_create_connection error: %s", e)
         return f"❌ Unexpected error: {e}"
 
     conn = result.get("connection", result)  # type: ignore[union-attr]
@@ -352,7 +353,8 @@ async def create_onedrive_file(
             result = await resp.json(content_type=None)
     except asyncio.TimeoutError:
         return f"❌ OneDrive upload timed out after {_TIMEOUT}s."
-    except Exception as e:
+    except aiohttp.ClientError as e:
+        log.warning("OneDrive upload error: %s", e)
         return f"❌ OneDrive upload error: {e}"
 
     file_url = result.get("webUrl", "")

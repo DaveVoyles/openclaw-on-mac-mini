@@ -11,6 +11,8 @@ import logging
 
 log = logging.getLogger("openclaw.overseerr")
 
+import aiohttp
+
 from config import cfg as _cfg
 
 OVERSEERR_URL = _cfg.overseerr_url
@@ -42,13 +44,14 @@ async def _get(path: str) -> dict | list | str:
                 return await resp.json()
             try:
                 text = await resp.text()
-            except Exception as exc:
+            except aiohttp.ClientError as exc:
                 log.debug("Overseerr GET response body read failed: %s", exc)
                 text = "[could not read response body]"
             return f"HTTP {resp.status}: {text[:200]}"
     except asyncio.TimeoutError:
         return "Request timed out (10s)"
-    except Exception as e:
+    except aiohttp.ClientError as e:
+        log.debug("Overseerr GET request failed: %s", e)
         return f"Request failed: {e}"
 
 
@@ -65,13 +68,14 @@ async def _post(path: str) -> dict | str:
                 return {} if resp.status == 204 else await resp.json()
             try:
                 text = await resp.text()
-            except Exception as exc:
+            except aiohttp.ClientError as exc:
                 log.debug("Overseerr POST response body read failed: %s", exc)
                 text = "[could not read response body]"
             return f"HTTP {resp.status}: {text[:200]}"
     except asyncio.TimeoutError:
         return "Request timed out (10s)"
-    except Exception as e:
+    except aiohttp.ClientError as e:
+        log.debug("Overseerr POST request failed: %s", e)
         return f"Request failed: {e}"
 
 

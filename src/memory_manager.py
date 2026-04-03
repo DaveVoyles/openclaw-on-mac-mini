@@ -137,8 +137,8 @@ async def forget(memory_id: str) -> bool:
             try:
                 await vector_store.delete_document(collection, memory_id)
                 removed = True
-            except Exception:
-                pass
+            except Exception as exc:
+                log.debug("Vector delete from %s failed for %s: %s", collection, memory_id, exc)
     except Exception as e:
         log.debug("Vector forget failed: %s", e)
 
@@ -158,8 +158,8 @@ async def stats() -> dict:
         import vector_store
 
         result["vector_store"] = await vector_store.get_stats()
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Vector store stats failed: %s", exc)
 
     try:
         from qmd import list_memories
@@ -167,24 +167,24 @@ async def stats() -> dict:
         memories = await list_memories()
         if memories and memories != "Memory is empty.":
             result["qmd"]["count"] = memories.count("\n") + 1
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("QMD stats failed: %s", exc)
 
     try:
         from rules_engine import get_all_rules
 
         rules = await get_all_rules()
         result["rules"]["count"] = len(rules)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Rules stats failed: %s", exc)
 
     try:
         from user_profile import load_profile
 
         profile = load_profile()
         result["profile"]["exists"] = bool(profile)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.debug("Profile stats failed: %s", exc)
 
     return result
 
