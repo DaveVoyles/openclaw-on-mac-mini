@@ -1,8 +1,9 @@
 """
 Media Cog — extracted from bot.py
-Handles: /search, /queue, /recent, /health, /nowplaying, /watch
+Handles: /search, /queue, /recent, /health, /nowplaying, /watch, /overseerr
 """
 
+import logging
 import re
 
 import discord
@@ -10,6 +11,14 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import audit_log
+from overseerr import (
+    approve_request,
+    deny_request,
+    get_pending_requests,
+    get_request_stats,
+)
+from overseerr import _get as _overseerr_get
+from overseerr import _media_title
 from skills.advanced_skills import (
     check_arr_health,
     check_download_clients,
@@ -19,6 +28,65 @@ from skills.advanced_skills import (
     get_recent_additions,
     search_media,
 )
+
+log = logging.getLogger("openclaw.media_cog")
+
+
+# ---------------------------------------------------------------------------
+# Overseerr interactive views
+# ---------------------------------------------------------------------------
+
+class _ApproveButton(discord.ui.Button["PendingRequestView"]):
+    def __init__(self, request_id: int, title: str, *, row: int):
+        super().__init__(
+            style=discord.ButtonStyle.success,
+            label=f"✅ #{request_id} {title}"[:80],
+            custom_id=f"overseerr_approve_{request_id}",
+            row=row,
+        )
+        self.request_id = request_id
+
+    async def callback(self, interaction: discord.Interaction):
+        result = await approve_request(self.request_id)
+        await interaction.response.send_message(result, ephemeral=True)
+        self.disabled = True
+        for item in self.view.children:
+            if isinstance(item, _DenyButton) and item.request_id == self.request_id:
+                item.disabled = True
+        await interaction.message.edit(view=self.view)
+
+
+class _DenyButton(discord.ui.Button["PendingRequestView"]):
+    def __init__(self, request_id: int, title: str, *, row: int):
+        super().__init__(
+            style=discord.ButtonStyle.danger,
+            label=f"❌ #{request_id} {title}"[:80],
+            custom_id=f"overseerr_deny_{request_id}",
+            row=row,
+        )
+        self.request_id = request_id
+
+    async def callback(self, interaction: discord.Interaction):
+        result = await deny_request(self.request_id)
+        await interaction.response.send_message(result, ephemeral=True)
+        self.disabled = True
+        for item in self.view.children:
+            if isinstance(item, _ApproveButton) and item.request_id == self.request_id:
+                item.disabled = True
+        await interaction.message.edit(view=self.view)
+
+
+class PendingRequestView(discord.ui.View):
+    """Approve / deny buttons for up to 5 pending Overseerr requests."""
+
+    def __init__(self, requests: list[dict]):
+        super().__init__(timeout=300)
+        for i, req in enumerate(requests[:5]):
+            req_id = req.get("id", 0)
+            media = req.get("media", {})
+            title = _media_title(media)[:30]
+            self.add_item(_ApproveButton(req_id, title, row=i))
+            self.add_item(_DenyButton(req_id, title, row=i))
 
 # Maps known NL intent keywords to skills + default intervals
 _WATCH_SKILL_MAP = {
@@ -242,6 +310,66 @@ class MediaCog(commands.Cog, name="Media"):
         embed.set_footer(text=f"Results will post to this channel | Remove with /watch remove watch_id:{task.task_id}")
         await interaction.response.send_message(embed=embed)
         audit_log(interaction.user, "watch_add", detail=f"{task.task_id} {matched_skill} every {interval}m")
+
+
+    # ------------------------------------------------------------------
+    # /overseerr command group
+    # ------------------------------------------------------------------
+    overseerr_group = app_commands.Group(
+        name="overseerr",
+        description="Manage Overseerr media requests",
+    )
+
+    @overseerr_group.command(name="pending", description="List pending requests with approve/deny buttons")
+    async def overseerr_pending(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        data = await _overseerr_get("/request?filter=pending&take=25&sort=added")
+        if isinstance(data, str):
+            await interaction.followup.send(f"❌ Overseerr error: {data}")
+            return
+
+        results = data.get("results", []) if isinstance(data, dict) else []
+        if not results:
+            await interaction.followup.send("✅ No pending media requests.")
+            return
+
+        text = await get_pending_requests()
+        embed = discord.Embed(
+            title="📋 Pending Overseerr Requests",
+            description=text,
+            color=discord.Color.gold(),
+        )
+        view = PendingRequestView(results)
+        await interaction.followup.send(embed=embed, view=view)
+        audit_log(interaction.user, "overseerr_pending")
+
+    @overseerr_group.command(name="approve", description="Approve a pending request by ID")
+    @app_commands.describe(request_id="Numeric request ID to approve")
+    async def overseerr_approve(self, interaction: discord.Interaction, request_id: int):
+        await interaction.response.defer()
+        result = await approve_request(request_id)
+        await interaction.followup.send(result)
+        audit_log(interaction.user, "overseerr_approve", detail=f"id={request_id}")
+
+    @overseerr_group.command(name="deny", description="Deny a pending request by ID")
+    @app_commands.describe(request_id="Numeric request ID to deny")
+    async def overseerr_deny(self, interaction: discord.Interaction, request_id: int):
+        await interaction.response.defer()
+        result = await deny_request(request_id)
+        await interaction.followup.send(result)
+        audit_log(interaction.user, "overseerr_deny", detail=f"id={request_id}")
+
+    @overseerr_group.command(name="stats", description="Show request stats breakdown")
+    async def overseerr_stats(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        result = await get_request_stats()
+        embed = discord.Embed(
+            title="📊 Overseerr Request Stats",
+            description=result,
+            color=discord.Color.blue(),
+        )
+        await interaction.followup.send(embed=embed)
+        audit_log(interaction.user, "overseerr_stats")
 
 
 async def setup(bot: commands.Bot):
