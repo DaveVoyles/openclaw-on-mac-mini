@@ -5,8 +5,7 @@ Covers: get_all_monitor_status, get_monitor_detail, get_monitors_down,
 get_uptime_summary, and error handling for connection failures.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import aiohttp
 import pytest
