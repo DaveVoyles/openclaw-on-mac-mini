@@ -75,17 +75,24 @@ _TRANSIENT_HTTP_CODES = frozenset(range(500, 600))
 async def retry_once(
     coro_factory: Callable[[], Coroutine[Any, Any, Any]],
     provider_name: str,
+    *,
+    max_attempts: int = 2,
 ) -> Any:
-    """Execute *coro_factory()*, retry **once** after 1 s on transient errors.
+    """Execute *coro_factory()*, retrying on transient errors.
 
     Transient errors: ``aiohttp.ClientError``, ``asyncio.TimeoutError``,
     or an ``aiohttp.ClientResponseError`` with a 5xx status.
+
+    Args:
+        max_attempts: Total attempts including the initial call (default 2).
     """
-    try:
-        return await coro_factory()
-    except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-        stats = get_stats(provider_name)
-        stats.record_retry()
-        log.info("Retrying %s after transient error: %s", provider_name, exc)
-        await asyncio.sleep(1)
-        return await coro_factory()
+    for attempt in range(max_attempts):
+        try:
+            return await coro_factory()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            if attempt == max_attempts - 1:
+                raise
+            stats = get_stats(provider_name)
+            stats.record_retry()
+            log.debug("Retry %d/%d for %s: %s", attempt + 1, max_attempts, provider_name, exc)
+            await asyncio.sleep(1)

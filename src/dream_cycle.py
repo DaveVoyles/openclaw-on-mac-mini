@@ -46,8 +46,18 @@ class DreamCycle:
 
     async def run(self, on_progress: Optional[Callable] = None) -> str:
         """Run a complete dream cycle. Returns the dream report."""
-        start = time.monotonic()
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            async with asyncio.timeout(MAX_DREAM_SECONDS):
+                return await self._run_phases(on_progress)
+        except asyncio.TimeoutError:
+            log.warning("Dream cycle exceeded %ds timeout — aborting", MAX_DREAM_SECONDS)
+            return f"⚠️ Dream cycle exceeded {MAX_DREAM_SECONDS}s hard timeout — aborted."
+
+    async def _run_phases(self, on_progress: Optional[Callable] = None) -> str:
+        """Execute the three dream phases (called within timeout context)."""
+        start = time.monotonic()
 
         async def _progress(msg: str):
             log.info("Dream: %s", msg)
@@ -60,16 +70,12 @@ class DreamCycle:
         # ── Phase 1: Collect ──────────────────────────────────────────
         await _progress("Phase 1/3: Collecting raw material…")
         raw = await self._collect()
-        if time.monotonic() - start > MAX_DREAM_SECONDS:
-            return "⚠️ Dream cycle timed out during collection."
 
         # ── Phase 2: Consolidate ──────────────────────────────────────
         await _progress(f"Phase 2/3: Consolidating {len(raw)} items…")
         index = _load_index(self.index_path)
         changes = await self._consolidate(index, raw)
         _save_index(self.index_path, index)
-        if time.monotonic() - start > MAX_DREAM_SECONDS:
-            return "⚠️ Dream cycle timed out during consolidation."
 
         # ── Phase 3: Evaluate ─────────────────────────────────────────
         await _progress("Phase 3/3: Evaluating health & generating insights…")

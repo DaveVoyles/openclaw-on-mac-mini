@@ -180,6 +180,13 @@ async def send_morning_briefing(bot, channel_override=None):
         except Exception as exc:
             log.debug("Error stats unavailable for briefing: %s", exc)
 
+        overseerr_section = ""
+        try:
+            from overseerr import get_request_stats
+            overseerr_section = await asyncio.wait_for(get_request_stats(), timeout=10)
+        except Exception as exc:
+            log.debug("Briefing: overseerr stats failed: %s", exc)
+
         today = datetime.date.today().strftime("%A, %B %d, %Y")
         prompt = (
             f"Good morning! Generate a concise morning briefing for {today}. "
@@ -194,6 +201,8 @@ async def send_morning_briefing(bot, channel_override=None):
             prompt += f"**Active Goals**: {goals_section}\n"
         if error_stats_section:
             prompt += f"**Yesterday's /ask Stats**: {error_stats_section}\n"
+        if overseerr_section:
+            prompt += f"**Media Requests**: {overseerr_section}\n"
         prompt += "Format with clear sections, use emojis, be friendly but brief."
 
         response_text, _, _ = await llm_chat(prompt)
@@ -204,6 +213,8 @@ async def send_morning_briefing(bot, channel_override=None):
             color=discord.Color.from_rgb(255, 165, 0),
         )
         embed.set_footer(text="🤖 OpenClaw Autonomous Briefing")
+        if overseerr_section:
+            embed.add_field(name="🎬 Media Requests", value=overseerr_section[:200], inline=False)
         await channel.send(embed=embed)
         audit_log(None, "morning_briefing", detail=f"channel={ALERT_CHANNEL_ID}")
     except Exception as e:
