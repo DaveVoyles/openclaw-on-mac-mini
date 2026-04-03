@@ -983,10 +983,38 @@ async def resource_monitor_loop(bot):
 # Public entry point
 # ---------------------------------------------------------------------------
 
+async def reminder_loop(bot):
+    """Check for due reminders every 15 seconds and DM users."""
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        try:
+            from reminder_manager import reminder_manager
+
+            due = reminder_manager.get_due()
+            for r in due:
+                try:
+                    user = await bot.fetch_user(r.user_id)
+                    embed = discord.Embed(
+                        title="⏰ Reminder",
+                        description=r.message,
+                        color=discord.Color.gold(),
+                    )
+                    recur = f" (🔁 {r.recurring})" if r.recurring else ""
+                    embed.set_footer(text=f"ID: {r.id}{recur}")
+                    await user.send(embed=embed)
+                except Exception as e:
+                    log.debug("Failed to send reminder %s: %s", r.id, e)
+                reminder_manager.mark_fired(r.id)
+        except Exception as e:
+            log.debug("Reminder loop error: %s", e)
+        await asyncio.sleep(15)
+
+
 def start_background_tasks(bot):
     """Create all background asyncio tasks. Called from OpenClawBot.on_ready."""
     asyncio.create_task(background_cleanup_loop())
     asyncio.create_task(audit_writer_loop())
+    asyncio.create_task(reminder_loop(bot))
     if ALERT_CHANNEL_ID:
         asyncio.create_task(morning_briefing_loop(bot))
         asyncio.create_task(evening_digest_loop(bot))
