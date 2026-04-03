@@ -1,0 +1,58 @@
+"""
+OpenClaw Dashboard — lightweight HTML dashboard served on the health endpoint.
+
+Re-exports all public symbols for backward compatibility so that
+``from dashboard import api_dashboard_handler`` continues to work.
+"""
+
+from .api_handlers import (  # noqa: F401
+    api_config_status_handler,
+    api_dashboard_handler,
+    api_dream_health_handler,
+    api_errors_handler,
+    api_goals_handler,
+    api_knowledge_graph_handler,
+    api_memories_handler,
+    api_quota_status_handler,
+    api_research_handler,
+    api_response_stats_handler,
+    api_schedule_delete_handler,
+    api_schedules_handler,
+    api_search_stats_handler,
+    api_skill_stats_handler,
+    api_status_handler,
+    api_threads_handler,
+    api_topology_handler,
+)
+from .html_handlers import (  # noqa: F401
+    dashboard_handler,
+    guide_handler,
+    terminal_handler,
+)
+from .routes import setup_dashboard  # noqa: F401
+
+__all__ = [
+    "setup_dashboard",
+    # API handlers
+    "api_config_status_handler",
+    "api_dashboard_handler",
+    "api_dream_health_handler",
+    "api_errors_handler",
+    "api_goals_handler",
+    "api_knowledge_graph_handler",
+    "api_memories_handler",
+    "api_quota_status_handler",
+    "api_research_handler",
+    "api_response_stats_handler",
+    "api_schedule_delete_handler",
+    "api_schedules_handler",
+    "api_search_stats_handler",
+    "api_skill_stats_handler",
+    "api_status_handler",
+    "api_threads_handler",
+    "api_topology_handler",
+    # HTML handlers
+    "dashboard_handler",
+    "guide_handler",
+    "terminal_handler",
+]

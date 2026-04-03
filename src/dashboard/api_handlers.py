@@ -1,50 +1,20 @@
-"""
-OpenClaw Dashboard — lightweight HTML dashboard served on the health endpoint.
-Routes: GET /dashboard (HTML), GET /api/dashboard (JSON),
-        GET /api/memories (JSON), GET /api/threads (JSON)
-"""
+"""JSON API endpoint handlers for the dashboard."""
 
 import asyncio
 import json
-import logging
+import math
 import platform
+import re
 import time
 from pathlib import Path
 
 import discord
-import yaml
 from aiohttp import web
 
 from spending import get_quota_status, get_response_stats
 from spending import tracker as spending_tracker
 
-log = logging.getLogger("openclaw.dashboard")
-
-CONFIG_DIR = Path("/config")
-GITHUB_REPO = "https://github.com/DaveVoyles/openclaw-on-mac-mini"
-VERSION = "0.5.0"
-
-_config_cache: dict | None = None
-_config_mtime: float = 0.0
-
-
-def _load_config() -> dict:
-    global _config_cache, _config_mtime
-    cfg_file = CONFIG_DIR / "config.yaml"
-    try:
-        current_mtime = cfg_file.stat().st_mtime if cfg_file.exists() else 0.0
-    except OSError:
-        current_mtime = 0.0
-    if _config_cache is not None and current_mtime == _config_mtime:
-        return _config_cache
-    _config_cache = yaml.safe_load(cfg_file.read_text()) if cfg_file.exists() else {}
-    _config_mtime = current_mtime
-    return _config_cache or {}
-
-
-# ---------------------------------------------------------------------------
-# D-5  Live Status Banner endpoint
-# ---------------------------------------------------------------------------
+from .helpers import GITHUB_REPO, VERSION, _command_list, _cron_to_human, _load_config, log
 
 
 async def api_status_handler(request):
@@ -123,8 +93,6 @@ async def api_status_handler(request):
         checks["copilot_proxy"] = {"status": "not_configured"}
 
     # Patreon (MonsterVision) — cookie health
-    # Use the API's cookie_status as the primary signal; only fall back to
-    # cron-log scraping when cookie_status is absent or inconclusive.
     try:
         async with aiohttp.ClientSession() as session:
             monstervision_url = f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status"
@@ -180,23 +148,15 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     container_text = await list_containers()
     containers = []
     if not container_text.startswith("\u274c"):
-        # The output uses multiple spaces instead of tabs sometimes. Split by 2+ spaces.
-        import re
         lines = [line.strip() for line in container_text.split("\n") if line.strip() and not line.startswith("NAMES")]
         for line in lines:
-            # Match Names (first col), Status (middle), ignore Ports (last)
-            # Docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-            # But skills/__init__.py uses actual tab characters (\t) in the format string.
-            # Let's check if it's splitting correctly.
             parts = [p.strip() for p in line.split("\t") if p.strip()]
             if not parts or len(parts) < 2:
-                # Fallback to regex split if tabs aren't present
                 parts = [p.strip() for p in re.split(r'\s{2,}', line) if p.strip()]
 
             if len(parts) >= 2:
                 name = parts[0]
                 status = parts[1]
-                # Map status to health color/icon
                 is_up = "Up" in status
                 containers.append({
                     "name": name,
@@ -232,13 +192,10 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     stats_text = await get_docker_stats()
     stats_list = []
     if not stats_text.startswith("\u274c"):
-        # Parse table Format: NAME CPU% MEM NET
         stat_lines = [ln.strip() for ln in stats_text.split("\n") if ln.strip() and not ln.startswith("NAME")]
         for sl in stat_lines:
             parts = [p.strip() for p in sl.split("\t") if p.strip()]
             if not parts or len(parts) < 2:
-                # Fallback to regex split if tabs aren't present
-                import re
                 parts = [p.strip() for p in re.split(r'\s{2,}', sl) if p.strip()]
 
             if len(parts) >= 2:
@@ -250,7 +207,6 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
 
     # Get server system stats (CPU/MEM/Disk)
     sys_stats_text = await get_system_stats()
-    # Format: **CPU**: 10.5% (8 cores)\n**Memory**: 4.2 / 16.0 GB (26.3%)\n**Disk** `/`: 200GB used / 500GB total (40%)
     sys_stats = {"cpu": "N/A", "mem": "N/A", "disk": "N/A", "nas_disks": []}
     for line in sys_stats_text.split("\n"):
         if "**CPU**" in line:
@@ -268,8 +224,6 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         nas_health = await check_nas_health()
         for line in nas_health.split("\n"):
             if "/volume" in line:
-                # Parse: ✅ **/volume1**: 1.2T used / 3.6T total (34%)
-                import re
                 match = re.search(r'\*\*(/volume\d+)\*\*:\s+(.+?\s+used)\s*/\s*(.+?\s+total)\s*\((\d+)%\)', line)
                 if match:
                     sys_stats["nas_disks"].append({
@@ -285,7 +239,6 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     ontology_text = await ontology_query()
     ontology_facts = []
     if not ontology_text.startswith("❌") and "Found" in ontology_text:
-        # Simple extraction of bullets
         fact_lines = [ln.strip("• ").strip() for ln in ontology_text.split("\n") if ln.strip().startswith("•")]
         ontology_facts = fact_lines[:8]
 
@@ -294,7 +247,6 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     sp = spending_tracker
 
     skills_list = []
-    # Build skills from tool declarations (has descriptions)
     decl_map = {d["name"]: d.get("description", "") for d in _TOOL_DECLARATIONS}
     for name in sorted(SKILLS.keys()):
         skills_list.append({
@@ -319,8 +271,6 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         from config import cfg as app_cfg
         audit_dir = app_cfg.audit_dir
         if audit_dir.exists():
-            import json
-            # Read most recent JSONL files (named YYYY-MM-DD.jsonl)
             log_files = sorted(audit_dir.glob("*.jsonl"), reverse=True)
             raw_entries: list[dict] = []
             for lf in log_files:
@@ -350,7 +300,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     except Exception as exc:
         log.debug("Failed to load recent activity: %s", exc)
 
-    # Model usage stats from error journal (has model_used per /ask call)
+    # Model usage stats from error journal
     model_usage = {}
     try:
         from error_tracker import get_recent_outcomes
@@ -358,7 +308,6 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         for entry in outcomes:
             model = entry.get("model_used", "")
             if model and model not in ("unknown", "error", "timeout", "none"):
-                # Normalize: strip "models/" prefix for cleaner display
                 model = model.replace("models/", "")
                 model_usage[model] = model_usage.get(model, 0) + 1
     except Exception as exc:
@@ -475,7 +424,6 @@ async def api_research_handler(request):
     """Return past research reports for the dashboard."""
     try:
         import vector_store
-        # Get recent research from ChromaDB
         col = vector_store._get_collection(vector_store.RESEARCH_COLLECTION)
         if col.count() == 0:
             return web.json_response({"reports": []})
@@ -497,7 +445,6 @@ async def api_research_handler(request):
                 "sources": meta.get("sources", ""),
             })
 
-        # Sort by date descending
         reports.sort(key=lambda r: r.get("date", 0), reverse=True)
         return web.json_response({"reports": reports[:20]})
     except Exception as e:
@@ -520,7 +467,6 @@ async def api_threads_handler(request: web.Request) -> web.Response:
                 raw = json.loads(f.read_text())
                 history = raw if isinstance(raw, list) else raw.get("history", [])
 
-                # Extract preview from first user message
                 preview = ""
                 for msg in history[:5]:
                     if msg.get("role") == "user":
@@ -544,70 +490,17 @@ async def api_threads_handler(request: web.Request) -> web.Response:
     return web.json_response({"threads": threads[:30]})
 
 
-# ---------------------------------------------------------------------------
-# D-4  Scheduled Tasks endpoint
-# ---------------------------------------------------------------------------
-
-_CRON_DOW = {0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat", 7: "Sun"}
-
-
-def _cron_to_human(expr: str) -> str:
-    """Convert a cron expression to a human-readable string (best-effort)."""
-    try:
-        parts = expr.strip().split()
-        if len(parts) != 5:
-            return expr
-        minute, hour, dom, month, dow = parts
-
-        time_str = ""
-        if hour != "*" and minute != "*":
-            time_str = f"at {hour.zfill(2)}:{minute.zfill(2)}"
-        elif hour != "*":
-            time_str = f"at hour {hour}"
-        elif minute != "*":
-            every_m = minute.lstrip("*/")
-            time_str = f"every {every_m} min"
-
-        day_str = ""
-        if dow != "*":
-            day_names = []
-            for part in dow.split(","):
-                if "-" in part:
-                    lo, hi = part.split("-", 1)
-                    day_names.append(f"{_CRON_DOW.get(int(lo), lo)}–{_CRON_DOW.get(int(hi), hi)}")
-                else:
-                    day_names.append(_CRON_DOW.get(int(part), part))
-            day_str = ", ".join(day_names)
-        elif dom != "*":
-            day_str = f"day {dom} of month"
-
-        if month != "*":
-            day_str += f" (month {month})"
-
-        if day_str and time_str:
-            return f"{day_str} {time_str}"
-        return day_str or time_str or expr
-    except (ValueError, IndexError, KeyError) as exc:
-        log.debug("Cron expression parse failed for %r: %s", expr, exc)
-        return expr
-
-
 async def api_schedules_handler(request):
     """Return scheduled tasks for the dashboard."""
     try:
-        import json
-        from pathlib import Path
         schedules_file = Path("/memory/schedules.json")
         if not schedules_file.exists():
             return web.json_response({"tasks": []})
         tasks = json.loads(schedules_file.read_text())
-        # Keep only essential fields
         clean = []
         for t in tasks:
-            # Resolve task name: prefer action, then skill_name, then name
             name = t.get("action") or t.get("skill_name") or t.get("name") or "unknown"
 
-            # Build human-readable schedule description
             cron_expr = t.get("cron_expression") or t.get("cron") or ""
             interval = t.get("interval_minutes", t.get("interval", 0))
             cron_hour = t.get("cron_hour", -1)
@@ -664,133 +557,6 @@ async def api_schedule_delete_handler(request):
         return web.json_response({"error": str(exc)}, status=500)
 
 
-def _command_list() -> list[dict]:
-    """Static command reference grouped by category."""
-    return [
-        {"category": "🏛️ Foundation", "commands": [
-            {"name": "/ping", "desc": "Check if bot is alive"},
-            {"name": "/about", "desc": "Version and system info"},
-            {"name": "/whoami", "desc": "Your Discord identity & permissions"},
-            {"name": "/help", "desc": "List all commands"},
-        ]},
-        {"category": "🐳 Docker & System", "commands": [
-            {"name": "/containers", "desc": "List running containers"},
-            {"name": "/status <service>", "desc": "Container detail + resources"},
-            {"name": "/logs <service> [lines]", "desc": "View container logs"},
-            {"name": "/system", "desc": "CPU, memory, disk usage"},
-            {"name": "/dockerstats", "desc": "Per-container resource usage"},
-            {"name": "/restart <service>", "desc": "Restart a container (requires approval)"},
-        ]},
-        {"category": "🤖 AI & LLM", "commands": [
-            {"name": "/ask <question> [model]", "desc": "AI-powered query — auto-routes to Gemini (tools) or Ollama (chat). Optional model: auto/local/gemini."},
-            {"name": "/model show", "desc": "Show your current LLM routing preference and Ollama status."},
-            {"name": "/model set <preference>", "desc": "Set your default LLM routing: auto (smart), local (Gemma), or gemini (cloud)."},
-            {"name": "/research <query> [deep:true]", "desc": "Deep multi-step research — Discord thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section"},
-            {"name": "/weather [location]", "desc": "Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var)"},
-            {"name": "/clear", "desc": "Clear active conversation history"},
-            {"name": "/save <name>", "desc": "Save current conversation as a named thread (persisted to disk)"},
-            {"name": "/resume <name>", "desc": "Resume a previously saved conversation thread"},
-            {"name": "/threads", "desc": "List all your saved conversation threads"},
-            {"name": "/forget <name>", "desc": "Delete a saved conversation thread"},
-            {"name": "/analyze <service> [lines]", "desc": "AI log analysis"},
-        ]},
-        {"category": "🎬 Media & Downloads", "commands": [
-            {"name": "/search <query> [type]", "desc": "Search Sonarr/Radarr catalogs"},
-            {"name": "/queue", "desc": "Active downloads (SABnzbd + qBit)"},
-            {"name": "/recent [count]", "desc": "Recently added Plex media"},
-            {"name": "/health", "desc": "Check *arr + download client health"},
-            {"name": "/ports", "desc": "Service port connectivity check"},
-            {"name": "/report", "desc": "Comprehensive status report"},
-        ]},
-        {"category": "🧠 Memory & Automation", "commands": [
-            {"name": "/remember <fact> [tags]", "desc": "Store a fact in long-term memory"},
-            {"name": "/recall <query>", "desc": "Search long-term memory"},
-            {"name": "/schedule", "desc": "Manage scheduled tasks (CRUD via slash command)"},
-            {"name": "/skills", "desc": "List all LLM-callable skills"},
-            {"name": "/briefing", "desc": "On-demand morning briefing (weather + health + calendar)"},
-            {"name": "/audit-summary", "desc": "Analytics on today's audit log"},
-            {"name": "/nowplaying", "desc": "Live Plex active streams"},
-            {"name": "/dream", "desc": "Run cognitive dream cycle (memory consolidation)"},
-            {"name": "/memory-health", "desc": "Show memory health score and 5 metrics"},
-            {"name": "/memory-export", "desc": "Export memory bundle"},
-        ]},
-        {"category": "🌐 Network & Monitoring", "commands": [
-            {"name": "/network", "desc": "LAN, internet, DNS connectivity"},
-            {"name": "/tailscale", "desc": "Tailscale VPN status"},
-            {"name": "/speedtest", "desc": "Network speed test"},
-            {"name": "/spending [breakdown]", "desc": "Gemini API cost tracking"},
-        ]},
-        {"category": "Security & Admin", "commands": [
-            {"name": "/pending", "desc": "Pending approval requests"},
-            {"name": "/auditlog [lines]", "desc": "View audit trail"},
-            {"name": "/estop [stop|resume]", "desc": "Emergency stop all actions"},
-            {"name": "/mail <to> <subject> <body>", "desc": "Send email via AgentMail"},
-        ]},
-        {"category": "Third-Party API Gateway (via /ask)", "commands": [
-            {"name": "gateway_request", "desc": "Call any of 100+ APIs (Slack, GitHub, Notion, HubSpot, Stripe…) via Maton managed OAuth. Invoked by /ask."},
-            {"name": "gateway_list_connections", "desc": "List active Maton OAuth connections (optionally filter by app). Invoked by /ask."},
-            {"name": "gateway_create_connection", "desc": "Create a new Maton OAuth connection for an app and return the authorization URL. Invoked by /ask."},
-        ]},
-        {"category": "Knowledge Graph & Ontology (via /ask)", "commands": [
-            {"name": "ontology_create_entity", "desc": "Create a new typed entity (Person, Project, Task, etc.) in graph memory."},
-            {"name": "ontology_get_entity", "desc": "Retrieve all details and relations for a specific entity name."},
-            {"name": "ontology_relate", "desc": "Create a typed link between two entities (e.g., 'blocks', 'manages')."},
-            {"name": "ontology_query", "desc": "Search the knowledge graph for entities by name or type."},
-        ]},
-        {"category": "Self-Management & Autonomy (via /ask)", "commands": [
-            {"name": "spawn_worker", "desc": "Spawn a focused AI sub-agent to accomplish a specific goal autonomously using its own tool loop."},
-            {"name": "create_scheduled_task", "desc": "Create a recurring scheduled task (LLM-controlled). Supports cron expressions, prompt jobs, or interval-based."},
-            {"name": "cancel_scheduled_task", "desc": "Cancel a scheduled task by ID."},
-            {"name": "list_scheduled_tasks", "desc": "List all active scheduled tasks with cron expressions, run counts, and next run times."},
-            {"name": "webfetch_md", "desc": "Smartly scrape any URL and convert main content to clean Markdown."},
-            {"name": "git_status", "desc": "Check project repository status for code changes."},
-            {"name": "git_log", "desc": "View recent code change history (commit log)."},
-            {"name": "git_diff", "desc": "Compare code changes or view uncommitted changes."},
-            {"name": "git_commit", "desc": "Commit all current changes with a brief summary message."},
-            {"name": "init_planning_files", "desc": "Initialize task_plan.md, findings.md, progress.md for complex tasks."},
-            {"name": "update_plan_status", "desc": "Log progress or update status of a phase in planning files."},
-        ]},
-        {"category": "📋 Agent Loop & Plans", "commands": [
-            {"name": "/plans [status]", "desc": "List active/recent agent plans. Filter: all, in-progress, completed, interrupted."},
-            {"name": "/plan-detail <plan_id>", "desc": "Show full details of a specific plan (steps, status, outputs)."},
-            {"name": "/resume-plan <plan_id>", "desc": "Resume an interrupted plan from where it left off."},
-            {"name": "/cancel-plan <plan_id>", "desc": "Cancel an active plan (marks interrupted, resets in-progress steps)."},
-            {"name": "create_plan", "desc": "(via /ask) Create a new task plan with a goal and ordered steps. Returns plan_id."},
-            {"name": "update_plan_step", "desc": "(via /ask) Update a step's status (done/failed/skipped) with output summary."},
-            {"name": "read_plan", "desc": "(via /ask) Read the current state of a plan including all step statuses."},
-            {"name": "list_plans", "desc": "(via /ask) List plans filtered by status."},
-            {"name": "adjust_plan", "desc": "(via /ask) Add, remove, or reorder steps in an active plan."},
-            {"name": "cancel_plan", "desc": "(via /ask) Cancel an active plan and mark it interrupted."},
-            {"name": "resume_plan", "desc": "(via /ask) Resume an interrupted plan from where it left off."},
-        ]},
-    ]
-
-
-# ---------------------------------------------------------------------------
-# HTML dashboard (self-contained, no external deps)
-# ---------------------------------------------------------------------------
-
-
-async def dashboard_handler(request: web.Request) -> web.Response:
-    """Serve the dashboard HTML page."""
-    return web.Response(text=DASHBOARD_HTML, content_type="text/html")
-
-
-async def guide_handler(request: web.Request) -> web.Response:
-    """Serve the guide / tutorial HTML page."""
-    return web.Response(text=GUIDE_HTML, content_type="text/html")
-
-async def terminal_handler(request: web.Request) -> web.Response:
-    """Serve the terminal CLI cheat sheet page."""
-    return web.Response(text=TERMINAL_HTML, content_type="text/html")
-
-
-
-# ---------------------------------------------------------------------------
-# E7  Error Dashboard endpoint
-# ---------------------------------------------------------------------------
-
-
 async def api_errors_handler(request):
     """Return error stats for the dashboard."""
     try:
@@ -830,11 +596,6 @@ async def api_dream_health_handler(request):
             "overall": 0, "metrics": {}, "entry_count": 0,
             "avg_importance": 0, "last_dream": None, "health_history": [],
         })
-
-
-# ---------------------------------------------------------------------------
-# Config Status endpoint
-# ---------------------------------------------------------------------------
 
 
 async def api_config_status_handler(request):
@@ -890,9 +651,6 @@ async def api_knowledge_graph_handler(request):
 
 async def api_topology_handler(request):
     """Return network topology for visualization."""
-    import math
-    import re
-
     from config import cfg as _topo_cfg
     nodes = [
         {"id": "mac-mini", "label": "Mac Mini M4", "type": "host", "ip": _topo_cfg.docker_host_ip, "x": 400, "y": 275},
@@ -936,16 +694,3 @@ async def api_topology_handler(request):
         log.debug("Topology container fetch failed: %s", e)
 
     return web.json_response({"nodes": nodes, "edges": edges})
-
-
-_TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
-DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()
-
-
-
-# ---------------------------------------------------------------------------
-# Guide / Tutorial page
-# ---------------------------------------------------------------------------
-
-GUIDE_HTML = (_TEMPLATES_DIR / "guide.html").read_text()
-TERMINAL_HTML = (_TEMPLATES_DIR / "terminal.html").read_text()
