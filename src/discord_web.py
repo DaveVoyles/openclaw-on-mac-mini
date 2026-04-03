@@ -7,6 +7,7 @@ dashboard, and webhook endpoints.  The bot instance is stored in
 """
 
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -225,7 +226,8 @@ async def _webhook_handler(request: web.Request) -> web.Response:
     """
     if WEBHOOK_SECRET:
         auth = request.headers.get("Authorization", "")
-        if auth != f"Bearer {WEBHOOK_SECRET}":
+        expected = f"Bearer {WEBHOOK_SECRET}"
+        if not hmac.compare_digest(auth.encode(), expected.encode()):
             return web.json_response({"error": "unauthorized"}, status=401)
 
     from webhook_formatter import FORMATTERS, format_generic
@@ -234,7 +236,7 @@ async def _webhook_handler(request: web.Request) -> web.Response:
     source = request.match_info.get("source", "unknown").lower()
     try:
         payload = await request.json()
-    except Exception as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         log.debug("Webhook JSON parse failed: %s", exc)
         payload = {}
 

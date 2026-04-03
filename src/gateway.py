@@ -171,6 +171,9 @@ async def gateway_request(
         return f"❌ Gateway error: {e}"
     except asyncio.TimeoutError:
         return f"❌ Gateway request timed out after {_TIMEOUT}s."
+    except (aiohttp.ClientError, json.JSONDecodeError) as e:
+        log.warning("Gateway request network/parse error: %s", e)
+        return f"❌ Gateway error: {e}"
     except Exception as e:
         log.warning("Unexpected gateway_request error: %s", e)
         return f"❌ Unexpected error: {e}"
@@ -196,6 +199,9 @@ async def gateway_list_connections(app: str = "") -> str:
         result = await _http_request(url)
     except RuntimeError as e:
         return f"❌ Could not list connections: {e}"
+    except (aiohttp.ClientError, json.JSONDecodeError) as e:
+        log.warning("Gateway list_connections network/parse error: %s", e)
+        return f"❌ Connection list error: {e}"
     except Exception as e:
         log.warning("Unexpected gateway_list_connections error: %s", e)
         return f"❌ Unexpected error: {e}"
@@ -234,6 +240,9 @@ async def gateway_create_connection(app: str) -> str:
         result = await _http_request(url, "POST", {"app": app})
     except RuntimeError as e:
         return f"❌ Could not create connection for `{app}`: {e}"
+    except (aiohttp.ClientError, json.JSONDecodeError) as e:
+        log.warning("Gateway create_connection network/parse error: %s", e)
+        return f"❌ Connection creation error: {e}"
     except Exception as e:
         log.warning("Unexpected gateway_create_connection error: %s", e)
         return f"❌ Unexpected error: {e}"

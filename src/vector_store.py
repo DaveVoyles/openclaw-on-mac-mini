@@ -234,6 +234,20 @@ async def search(
     return output
 
 
+async def search_safe(
+    collection_name: str,
+    query: str,
+    top_k: int = DEFAULT_TOP_K,
+    **kwargs,
+) -> list[dict]:
+    """Search with fallback — returns empty list if vector store is down."""
+    try:
+        return await search(collection_name, query, top_k, **kwargs)
+    except Exception as e:
+        log.warning("Vector search failed (collection=%s): %s — returning empty", collection_name, e)
+        return []
+
+
 async def search_all(
     query: str,
     top_k: int = DEFAULT_TOP_K,

@@ -11,10 +11,16 @@ Routing strategy:
   - Everything else → Gemini (reliable default)
 """
 
+import asyncio
 import logging
 import os
 import re
+import time
 from typing import Optional
+
+import aiohttp
+
+from config import cfg as _router_cfg
 
 log = logging.getLogger("openclaw.model_router")
 
@@ -22,6 +28,31 @@ log = logging.getLogger("openclaw.model_router")
 # When COPILOT_PROXY_URL is set, OpenAI and Anthropic calls route through it
 COPILOT_PROXY_URL = os.getenv("COPILOT_PROXY_URL", "")
 COPILOT_PROXY_ENABLED = COPILOT_PROXY_URL != ""
+
+# Ollama health-check state (cached for 30 s)
+_OLLAMA_URL = _router_cfg.ollama_url
+_ollama_last_check: dict = {"alive": True, "ts": 0.0}
+
+
+async def is_ollama_alive(url: str = "") -> bool:
+    """Fast pre-flight check — cached for 30 s to avoid spamming Ollama."""
+    url = url or _OLLAMA_URL
+    now = time.monotonic()
+    if now - _ollama_last_check["ts"] < 30:
+        return _ollama_last_check["alive"]
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{url}/api/tags",
+                timeout=aiohttp.ClientTimeout(total=2),
+            ) as r:
+                alive = r.status == 200
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        alive = False
+    _ollama_last_check.update(alive=alive, ts=now)
+    if not alive:
+        log.info("Ollama health check failed — routing will prefer Gemini")
+    return alive
 
 # Query type classifications
 _CODE_PATTERN = re.compile(
@@ -69,6 +100,7 @@ def classify_query(
     has_image: bool = False,
     needs_tools: bool = False,
     model_preference: str = "auto",
+    ollama_alive: bool = True,
 ) -> ModelRoute:
     """Classify a query and return the optimal model route.
 
@@ -79,11 +111,13 @@ def classify_query(
     4. Code query + Claude available → Anthropic (best code quality)
     5. Creative writing + GPT available → OpenAI (strong creative)
     6. Analysis/research → Gemini (good reasoning + tools)
-    7. Simple chat → Ollama (free, fast)
+    7. Simple chat → Ollama (free, fast) — falls back to Gemini if Ollama is down
     8. Default → Gemini
     """
     # Honor explicit preference
     if model_preference == "local":
+        if not ollama_alive:
+            return ModelRoute("gemini", "user preference: local but Ollama down — fallback to Gemini")
         return ModelRoute("ollama", "user preference: local")
     if model_preference == "gemini":
         return ModelRoute("gemini", "user preference: gemini")
@@ -118,8 +152,10 @@ def classify_query(
     if _ANALYSIS_PATTERN.search(message):
         return ModelRoute("gemini", "analysis/research query")
 
-    # Simple chat → Ollama (free, fast, private)
-    return ModelRoute("ollama", "simple conversational query")
+    # Simple chat → Ollama if alive, else Gemini
+    if ollama_alive:
+        return ModelRoute("ollama", "simple conversational query")
+    return ModelRoute("gemini", "simple query — Ollama down, using Gemini")
 
 
 # ---------------------------------------------------------------------------

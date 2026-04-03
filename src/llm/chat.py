@@ -130,14 +130,15 @@ async def chat_stream(
         try:
             import os
 
-            from model_router import chat_anthropic, chat_openai, classify_query
+            from model_router import chat_anthropic, chat_openai, classify_query, is_ollama_alive
+            _ollama_up = await is_ollama_alive()
             route = classify_query(
                 user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
                 has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
                 needs_tools=_needs_tools(user_message),
+                ollama_alive=_ollama_up,
             )
-            log.debug("Model router (stream): %s", route)
 
             if route.model_type == "openai":
                 system_prompt = _load_system_prompt()
@@ -234,8 +235,10 @@ async def chat_stream(
                     _routing_notes.append("Gemini rate-limited → used Copilot proxy")
                     yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
                     return
-        except Exception:
-            pass
+        except (ImportError, KeyError) as exc:
+            log.debug("Copilot proxy fallback unavailable: %s", exc)
+        except Exception as exc:
+            log.warning("Copilot proxy fallback failed (rate-limit recovery): %s", exc)
         msg = (
             "⚠️ Rate limit reached. Please wait a moment before asking again. "
             f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)"
@@ -385,12 +388,14 @@ async def chat(
         try:
             import os
 
-            from model_router import chat_anthropic, chat_openai, classify_query
+            from model_router import chat_anthropic, chat_openai, classify_query, is_ollama_alive
+            _ollama_up = await is_ollama_alive()
             route = classify_query(
                 user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
                 has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
                 needs_tools=_needs_tools(user_message),
+                ollama_alive=_ollama_up,
             )
             log.debug("Model router: %s", route)
 
