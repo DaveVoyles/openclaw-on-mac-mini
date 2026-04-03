@@ -364,7 +364,12 @@ def _register_conversation_commands(bot):
     ])
     async def model_set_cmd(interaction: discord.Interaction, preference: app_commands.Choice[str]):
         result = set_model_preference(interaction.user.id, preference.value)
-        await interaction.response.send_message(result, ephemeral=True)
+        embed = discord.Embed(
+            title="⚙️ Model Preference Updated",
+            description=result,
+            color=discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         audit_log(interaction.user, "model_set", detail=preference.value)
 
     bot.tree.add_command(model_group)
@@ -378,7 +383,13 @@ def _register_conversation_commands(bot):
     @require_auth
     async def save_cmd(interaction: discord.Interaction, name: str):
         result = conversation_store.save_thread(interaction.user.id, interaction.channel_id, name)
-        await interaction.response.send_message(result, ephemeral=True)
+        is_err = result.startswith("❌")
+        embed = discord.Embed(
+            title="💾 Save Thread" if not is_err else "❌ Save Failed",
+            description=result,
+            color=discord.Color.red() if is_err else discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         audit_log(interaction.user, "save_thread", detail=name)
 
     @bot.tree.command(name="resume", description="Resume a previously saved conversation thread")
@@ -386,7 +397,13 @@ def _register_conversation_commands(bot):
     @require_auth
     async def resume_cmd(interaction: discord.Interaction, name: str):
         result = conversation_store.load_thread(interaction.user.id, interaction.channel_id, name)
-        await interaction.response.send_message(result, ephemeral=True)
+        is_err = result.startswith("❌")
+        embed = discord.Embed(
+            title="▶️ Resume Thread" if not is_err else "❌ Resume Failed",
+            description=result,
+            color=discord.Color.red() if is_err else discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         audit_log(interaction.user, "resume_thread", detail=name)
 
     @bot.tree.command(name="threads", description="List all your saved conversation threads")
@@ -450,7 +467,13 @@ def _register_conversation_commands(bot):
     @require_auth
     async def forget_cmd(interaction: discord.Interaction, name: str):
         result = conversation_store.delete_thread(interaction.user.id, name)
-        await interaction.response.send_message(result, ephemeral=True)
+        is_err = result.startswith("❌")
+        embed = discord.Embed(
+            title="🗑️ Delete Thread" if not is_err else "❌ Delete Failed",
+            description=result,
+            color=discord.Color.red() if is_err else discord.Color.orange(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         audit_log(interaction.user, "forget_thread", detail=name)
 
 
@@ -710,17 +733,24 @@ def _register_safety_commands(bot):
     async def estop_cmd(interaction: discord.Interaction, action: str = "stop"):
         if action.lower() in ("resume", "start", "off", "deactivate"):
             set_emergency_stop(False)
-            await interaction.response.send_message(
-                "\u2705 **Emergency stop deactivated.** Bot is now accepting actions."
+            embed = discord.Embed(
+                title="✅ Emergency Stop Deactivated",
+                description="Bot is now accepting actions.",
+                color=discord.Color.green(),
             )
+            await interaction.response.send_message(embed=embed)
             audit_log(interaction.user, "estop", detail="resume")
         else:
             set_emergency_stop(True)
-            await interaction.response.send_message(
-                "\U0001f6d1 **EMERGENCY STOP ACTIVATED**\n"
-                "All write actions (restart, etc.) are now blocked.\n"
-                "Use `/estop resume` to resume normal operations."
+            embed = discord.Embed(
+                title="🛑 EMERGENCY STOP ACTIVATED",
+                description=(
+                    "All write actions (restart, etc.) are now blocked.\n"
+                    "Use `/estop resume` to resume normal operations."
+                ),
+                color=discord.Color.red(),
             )
+            await interaction.response.send_message(embed=embed)
             audit_log(interaction.user, "estop", detail="activated")
 
 
