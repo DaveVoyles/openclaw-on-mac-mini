@@ -1,12 +1,13 @@
 """
 IMDb Cog — movie and TV lookups via OMDb API.
 
-Commands:
-  /movie <title>  — full details for a movie
-  /tv <title>     — full details for a TV series
-  /imdb <query>   — search both movies and TV, return top 5 results
+Commands (under /media group):
+  /media movie <title>   — full details for a movie
+  /media tv <title>      — full details for a TV series
+  /media search <query>  — search both movies and TV, return top 5 results
 """
 
+import asyncio
 import logging
 
 import aiohttp
@@ -36,9 +37,11 @@ class ImdbCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # ── /movie ────────────────────────────────────────────────────────────
+    media = app_commands.Group(name="media", description="Movie and TV lookups via IMDb/OMDb")
 
-    @app_commands.command(name="movie", description="Look up a movie on IMDb via OMDb")
+    # ── /media movie ──────────────────────────────────────────────────────
+
+    @media.command(name="movie", description="Look up a movie on IMDb via OMDb")
     @app_commands.describe(title="Movie title to search for")
     async def movie(self, interaction: discord.Interaction, title: str):
         await interaction.response.defer(ephemeral=True)
@@ -61,9 +64,9 @@ class ImdbCog(commands.Cog):
             log.exception("movie lookup failed")
             await interaction.followup.send("❌ Failed to fetch movie info.", ephemeral=True)
 
-    # ── /tv ───────────────────────────────────────────────────────────────
+    # ── /media tv ─────────────────────────────────────────────────────────
 
-    @app_commands.command(name="tv", description="Look up a TV series on IMDb via OMDb")
+    @media.command(name="tv", description="Look up a TV series on IMDb via OMDb")
     @app_commands.describe(title="TV series title to search for")
     async def tv(self, interaction: discord.Interaction, title: str):
         await interaction.response.defer(ephemeral=True)
@@ -98,11 +101,11 @@ class ImdbCog(commands.Cog):
             log.exception("tv lookup failed")
             await interaction.followup.send("❌ Failed to fetch TV info.", ephemeral=True)
 
-    # ── /imdb ─────────────────────────────────────────────────────────────
+    # ── /media search ─────────────────────────────────────────────────────
 
-    @app_commands.command(name="imdb", description="Search IMDb for movies and TV shows (top 5)")
+    @media.command(name="search", description="Search IMDb for movies and TV shows (top 5)")
     @app_commands.describe(query="Title or keyword to search")
-    async def imdb(self, interaction: discord.Interaction, query: str):
+    async def search(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer(ephemeral=True)
         try:
             if not cfg.omdb_api_key:
@@ -144,7 +147,7 @@ class ImdbCog(commands.Cog):
                 description=truncate_for_embed("\n\n".join(lines)),
                 color=discord.Color.gold(),
             )
-            embed.set_footer(text="Use /movie or /tv for full details")
+            embed.set_footer(text="Use /media movie or /media tv for full details")
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception:
             log.exception("imdb search failed")
@@ -155,7 +158,6 @@ class ImdbCog(commands.Cog):
 
 async def _search_both(query: str) -> tuple[dict, dict]:
     """Run OMDb search for movies and series concurrently."""
-    import asyncio
 
     movie_task = asyncio.create_task(_omdb_get({"s": query, "type": "movie"}))
     tv_task = asyncio.create_task(_omdb_get({"s": query, "type": "series"}))
