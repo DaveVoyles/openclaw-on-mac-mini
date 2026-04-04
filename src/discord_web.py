@@ -219,6 +219,15 @@ async def _smoke_handler(request: web.Request) -> web.Response:
     return web.json_response(payload, status=status_code)
 
 
+async def _trigger_scan_handler(request: web.Request) -> web.Response:
+    """POST /api/trigger-scan — immediately run a proactive insight scan."""
+    import asyncio
+    from discord_background import _run_proactive_scan
+    bot = request.app["bot"]
+    asyncio.create_task(_run_proactive_scan(bot))
+    return web.json_response({"status": "scan triggered"})
+
+
 async def _webhook_handler(request: web.Request) -> web.Response:
     """Receive inbound webhooks from Sonarr, Radarr, Plex, qBittorrent, etc.
 
@@ -453,6 +462,7 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_get("/terminal", terminal_handler)
     app.router.add_get("/smoke", _smoke_handler)
     app.router.add_post("/webhook/{source}", _webhook_handler)
+    app.router.add_post("/api/trigger-scan", _trigger_scan_handler)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
