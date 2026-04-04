@@ -52,14 +52,19 @@ Agents working on this codebase should read this file to understand what is avai
 
 ## Media Stack
 
+**Service Locations:**
+- **Mac Mini (192.168.1.93):** Sonarr, Radarr, Lidarr, Prowlarr, Plex, Tautulli, Overseerr
+- **NAS (192.168.1.8):** SABnzbd, qBittorrent, gluetun (VPN container)
+
 | Service               | Link                        | Description                    | Why We Use It                                                                 | Env Var(s)                           | Default Port |
 | --------------------- | --------------------------- | ------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------ | :----------: |
 | **Sonarr**            | https://sonarr.tv           | TV show collection manager     | Automate TV show downloads, tracking, and library management                  | `SONARR_URL`, `SONARR_API_KEY`       |     8989     |
 | **Radarr**            | https://radarr.video        | Movie collection manager       | Automate movie downloads and library management                               | `RADARR_URL`, `RADARR_API_KEY`       |     7878     |
 | **Lidarr**            | https://lidarr.audio        | Music collection manager       | Automate music album downloads and library management                         | `LIDARR_URL`, `LIDARR_API_KEY`       |     8686     |
 | **Prowlarr**          | https://prowlarr.com        | Indexer manager for \*arr apps | Single place to manage all torrent/usenet indexers across the \*arr stack     | `PROWLARR_URL`, `PROWLARR_API_KEY`   |     9696     |
-| **SABnzbd**           | https://sabnzbd.org         | Usenet (NZB) download client   | Handles all usenet downloads; integrates with \*arr stack                     | `SABNZBD_URL`, `SABNZBD_API_KEY`     |     8775     |
-| **qBittorrent**       | https://www.qbittorrent.org | BitTorrent download client     | Handles torrent downloads for the \*arr stack                                 | `QBIT_URL`                           |     8080     |
+| **SABnzbd** (NAS)     | https://sabnzbd.org         | Usenet (NZB) download client   | Handles all usenet downloads; runs via gluetun VPN on NAS                     | `SABNZBD_URL`, `SABNZBD_API_KEY`     |     8775     |
+| **qBittorrent** (NAS) | https://www.qbittorrent.org | BitTorrent download client     | Handles torrent downloads; runs via gluetun VPN on NAS (`network_mode: service:gluetun`) | `QBIT_URL`                           |     8080     |
+| **gluetun** (NAS)     | https://github.com/qdm12/gluetun | VPN container (WireGuard/OpenVPN) | Provides VPN tunnel for download clients to protect privacy; qBit/SABnzbd share its network stack | _(configured via docker-compose)_    |      —       |
 | **Plex Media Server** | https://www.plex.tv         | Media streaming server         | Serves movies, TV, music to all devices; monitored via Tautulli               | _(via Tautulli)_                     |      —       |
 | **Tautulli**          | https://tautulli.com        | Plex analytics and monitoring  | Usage stats, recently-added items, server health for Plex                     | `TAUTULLI_URL`, `TAUTULLI_API_KEY`   |     8181     |
 | **Overseerr**         | https://overseerr.dev       | Media request management       | Users submit and admins approve media requests; integrates with Sonarr/Radarr | `OVERSEERR_URL`, `OVERSEERR_API_KEY` |     5055     |
