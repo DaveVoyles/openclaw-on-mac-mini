@@ -591,25 +591,41 @@ class _CopilotFixView(discord.ui.View):
         # Acknowledge immediately — must happen within 3 s or Discord shows "This interaction failed"
         await self._ack(interaction)
 
+        # Send a visible "running" status right away so the user knows the fix is in progress.
+        # We'll edit this message in-place with the result when done.
+        n = len(self.prompts)
+        status_msg = await interaction.channel.send(
+            f"⏳ **Running Copilot fix{'es' if n > 1 else ''}** ({n} task{'s' if n > 1 else ''}) "
+            f"— approved by **{interaction.user.display_name}**. This may take up to 3 minutes…"
+        )
+
+        results: list[str] = []
         try:
             from maintenance_skills import copilot_fix
             for cp in self.prompts:
                 try:
                     result = await asyncio.wait_for(copilot_fix(cp), timeout=180)
-                    await interaction.channel.send(
-                        f"🤖 **Copilot CLI result** (approved by {interaction.user.display_name}):\n{result[:1900]}"
-                    )
+                    results.append(result[:1800])
                     audit_log(interaction.user, "copilot_fix_approved", detail=cp[:200])
                 except asyncio.TimeoutError:
-                    await interaction.channel.send("⏱️ Copilot fix timed out after 3 minutes.")
+                    results.append("⏱️ Timed out after 3 minutes.")
                 except Exception as exc:
-                    await interaction.channel.send(f"❌ Copilot fix failed: {exc}")
+                    results.append(f"❌ Failed: {exc}")
         except Exception as exc:
             log.exception("approve_button fix execution failed")
-            try:
-                await interaction.followup.send(f"❌ Fix execution error: {exc}", ephemeral=True)
-            except Exception:
-                pass
+            results.append(f"❌ Execution error: {exc}")
+
+        # Edit the status message in-place with the final result
+        summary = "\n\n".join(results) if results else "No output."
+        final = (
+            f"🤖 **Copilot CLI result** (approved by **{interaction.user.display_name}**):\n"
+            f"{summary[:1900]}"
+        )
+        try:
+            await status_msg.edit(content=final)
+        except Exception:
+            await interaction.channel.send(final)
+
         self.stop()
 
     @discord.ui.button(label="❌ Skip", style=discord.ButtonStyle.grey, custom_id="copilot_deny")
