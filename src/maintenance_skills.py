@@ -559,11 +559,15 @@ async def copilot_fix(prompt: str, cwd: str = "~/openclaw") -> str:
 
     safe_prompt = prompt.replace('"', '\\"').replace("'", "'\\''")
 
-    # Run copilot CLI on the host via SSH
-    cmd = (
-        f"cd {cwd} && "
-        f"copilot -p \"{safe_prompt}\" --allow-all-tools --no-ask-user 2>&1"
-    )
+    # Resolve the copilot binary path.
+    # SSH with BatchMode=yes uses a non-login shell that skips .zshrc/.zprofile,
+    # so /opt/homebrew/bin is not in PATH. We wrap in a login shell to fix that,
+    # and also honour an explicit COPILOT_CLI_PATH override for environments where
+    # the login shell init is slow or the binary lives elsewhere.
+    copilot_bin = os.getenv("COPILOT_CLI_PATH", "copilot")
+    inner_cmd = f'cd {cwd} && {copilot_bin} -p "{safe_prompt}" --allow-all-tools --no-ask-user 2>&1'
+    # Run through a login shell so Homebrew PATH is loaded on the Mac Mini host.
+    cmd = f"/bin/zsh -l -c '{inner_cmd}'"
 
     log.info("Copilot CLI bridge: running on %s@%s — prompt: %s", host_user, host_ip, prompt[:80])
 
