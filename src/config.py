@@ -152,10 +152,10 @@ class _Config:
     prowlarr_url: str = os.getenv("PROWLARR_URL", f"http://{docker_host_ip}:9696")
     prowlarr_api_key: str = os.getenv("PROWLARR_API_KEY", "")
 
-    # -- Download clients ------------------------------------------------------
-    sabnzbd_url: str = os.getenv("SABNZBD_URL", f"http://{docker_host_ip}:8775")
+    # -- Download clients (moved to NAS 192.168.1.8 via gluetun) ---------------
+    sabnzbd_url: str = os.getenv("SABNZBD_URL", "http://192.168.1.8:8775")
     sabnzbd_api_key: str = os.getenv("SABNZBD_API_KEY", "")
-    qbit_url: str = os.getenv("QBIT_URL", f"http://{docker_host_ip}:8080")
+    qbit_url: str = os.getenv("QBIT_URL", "http://192.168.1.8:8080")
 
     # -- AdGuard Home (NAS) ----------------------------------------------------
     adguard_url: str = os.getenv("ADGUARD_URL", f"http://{nas_ip}:3053")

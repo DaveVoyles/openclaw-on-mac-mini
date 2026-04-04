@@ -391,6 +391,14 @@ async def _gather_system_signals():
     except Exception as exc:
         log.debug("NAS health check failed: %s", exc)
 
+    # gluetun VPN container (qBittorrent + SABnzbd depend on it)
+    vpn_status = ""
+    try:
+        from maintenance_skills import check_gluetun_vpn
+        vpn_status = await asyncio.wait_for(check_gluetun_vpn(), timeout=15)
+    except Exception as exc:
+        log.debug("gluetun VPN check failed: %s", exc)
+
     # Record service-level health for trend tracking
     try:
         from health_history import record as _hh_record
@@ -447,7 +455,7 @@ async def _gather_system_signals():
         return None
 
     summary_parts = [
-        f"Health checks:\n  *arr: {health}\n  Download clients: {dl_clients}\n  Plex: {plex}"
+        f"Health checks:\n  *arr: {health}\n  Download clients: {dl_clients}\n  VPN (gluetun): {vpn_status or 'not checked'}\n  Plex: {plex}"
     ]
     if isinstance(sys_stats, str):
         summary_parts.append(f"System stats:\n{sys_stats}")

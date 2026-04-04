@@ -370,7 +370,11 @@ async def run_memory_consolidation() -> str:
 # Self-healing skills — automated config repair
 # ---------------------------------------------------------------------------
 
-QBIT_CONFIG_PATH = "/volume1/docker/qbittorrent/config/qBittorrent/qBittorrent.conf"
+# qBittorrent download path auto-fix constants
+QBIT_CONFIG_PATH = os.getenv(
+    "QBIT_CONFIG_PATH",
+    "/volume1/docker/qbittorrent/config/qBittorrent/qBittorrent.conf"
+)
 QBIT_EXPECTED_SAVE_PATH = "/downloads"
 
 
@@ -450,6 +454,33 @@ async def fix_arr_remote_path() -> str:
         issues.append(f"✅ No remote path issues detected.\n{health}")
 
     return "\n".join(issues)
+
+
+async def check_gluetun_vpn() -> str:
+    """Check gluetun VPN container status on NAS (qBittorrent + SABnzbd depend on it)."""
+    from subprocess_utils import run as _run
+
+    ssh_opts = ["-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
+    ssh_target = f"{NAS_SSH_USER}@{NAS_HOST}"
+
+    # Check container health
+    rc, out, err = await _run(
+        ["ssh"] + ssh_opts + [ssh_target, "/usr/local/bin/docker inspect gluetun --format '{{.State.Health.Status}} {{.State.Status}}'"],
+        timeout=15,
+    )
+    if rc != 0:
+        return f"❌ gluetun: not found on NAS ({err.strip()[:100]})"
+
+    parts = out.strip().split()
+    health_status = parts[0] if len(parts) > 0 else "unknown"
+    container_status = parts[1] if len(parts) > 1 else "unknown"
+
+    if health_status == "healthy" and container_status == "running":
+        return "✅ gluetun VPN: healthy"
+    elif container_status != "running":
+        return f"❌ gluetun VPN: container {container_status}"
+    else:
+        return f"⚠️ gluetun VPN: health={health_status}, status={container_status}"
 
 
 async def check_nas_health() -> str:
@@ -603,5 +634,6 @@ MAINTENANCE_SKILLS = {
     "fix_arr_remote_path": fix_arr_remote_path,
     "copilot_fix": copilot_fix,
     "check_nas_health": check_nas_health,
+    "check_gluetun_vpn": check_gluetun_vpn,
     "auto_cleanup_disk": auto_cleanup_disk,
 }

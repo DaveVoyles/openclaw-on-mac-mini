@@ -135,6 +135,14 @@ async def restart_container(service: str) -> str:
     # Not found locally — try NAS via SSH
     try:
         from maintenance_skills import NAS_HOST, NAS_SSH_PORT, NAS_SSH_USER
+
+        # Special case: qbittorrent depends on gluetun (VPN) — check gluetun is healthy first
+        if service == "qbittorrent":
+            from maintenance_skills import check_gluetun_vpn
+            vpn_check = await check_gluetun_vpn()
+            if "❌" in vpn_check or "unhealthy" in vpn_check.lower():
+                return f"❌ Cannot restart qbittorrent: gluetun VPN is down or unhealthy ({vpn_check})"
+
         ssh_opts = ["-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
         ssh_target = f"{NAS_SSH_USER}@{NAS_HOST}"
         rc, out, err = await _run(
@@ -142,6 +150,12 @@ async def restart_container(service: str) -> str:
             timeout=60,
         )
         if rc == 0:
+            # Double-check qbittorrent: verify it came up healthy
+            if service == "qbittorrent":
+                await asyncio.sleep(5)  # Give it time to start
+                post_check = await check_gluetun_vpn()
+                if "❌" in post_check:
+                    return f"⚠️ qbittorrent restarted but gluetun VPN is now down: {post_check}"
             return f"✅ Container '{service}' restarted on NAS successfully."
         detail = (err or out or "unknown error").strip()
         return f"❌ Failed to restart '{service}' on NAS: {detail[:200]}"
