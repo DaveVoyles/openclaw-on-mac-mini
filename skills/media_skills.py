@@ -190,7 +190,7 @@ async def check_plex_status() -> str:
         return "⚠️ Tautulli API key not configured. Set TAUTULLI_API_KEY in .env."
 
     data = await _api_get(
-        f"{TAUTULLI_URL}/api/v2?apikey={TAUTULLI_API_KEY}&cmd=server_info"
+        f"{TAUTULLI_URL}/api/v2?apikey={TAUTULLI_API_KEY}&cmd=get_server_info"
     )
     if isinstance(data, dict):
         resp = data.get("response", {})
