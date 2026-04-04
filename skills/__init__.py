@@ -143,7 +143,8 @@ async def restart_container(service: str) -> str:
         )
         if rc == 0:
             return f"✅ Container '{service}' restarted on NAS successfully."
-        return f"❌ Container '{service}' not found locally or on NAS."
+        detail = (err or out or "unknown error").strip()
+        return f"❌ Failed to restart '{service}' on NAS: {detail[:200]}"
     except Exception:
         return f"❌ Container '{service}' not found."
 

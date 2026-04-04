@@ -175,6 +175,9 @@ async def check_download_clients() -> str:
         elif label == "qbit":
             if isinstance(data, str) and data.startswith("v"):
                 lines.append(f"✅ **qBittorrent**: {data.strip()}")
+            elif isinstance(data, str) and "Forbidden" in data:
+                # qBittorrent WebUI is up but API requires a session login — service is healthy
+                lines.append("✅ **qBittorrent**: up (WebUI auth required)")
             else:
                 lines.append(f"⚠️ **qBittorrent**: {data}")
 
