@@ -284,8 +284,9 @@ graph TB
         Radarr["Radarr :7878\nMovies"]
         Lidarr["Lidarr :8686\nMusic"]
         Prowlarr["Prowlarr :9696\nIndexers"]
-        SABnzbd["SABnzbd :8775\nUsenet DL"]
-        QBit["qBittorrent :8080\nTorrent DL"]
+        SABnzbd["SABnzbd :8775\nUsenet DL\n(via gluetun VPN)"]
+        QBit["qBittorrent :8080\nTorrent DL\n(via gluetun VPN)"]
+        Gluetun["gluetun\nVPN Container\n(on NAS)"]
         Plex["Plex Media\nServer"]
         Tautulli["Tautulli :8181\nPlex Metrics"]
         Overseerr["Overseerr :5055\nMedia Requests"]
@@ -299,7 +300,10 @@ graph TB
     Skills --> QBit
     Skills --> Tautulli
     Skills --> Overseerr
+    Skills -.->|"VPN health check"| Gluetun
 
+    Gluetun --> SABnzbd
+    Gluetun --> QBit
     Prowlarr --> SABnzbd
     Prowlarr --> QBit
     Sonarr --> SABnzbd
@@ -368,7 +372,7 @@ graph TB
 | Flow                            | Path                                                                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **User command → response**     | User → Discord → `bot.py` → `llm.py` (`llm_client` + `llm_tools` + `llm_patterns`) → `skills/` → target service → Discord |
-| **Media request approval**      | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit → Plex                                                               |
+| **Media request approval**      | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit (via gluetun VPN on NAS) → Plex                                                               |
 | **Web search (5-tier cascade)** | `search_web()` → Perplexity AI (primary) → Firecrawl (search+extract) → Tavily (structured) → DuckDuckGo Lite (free) → Bing HTML scrape (last resort); Serper Google SERP available as direct tool |
 | **Weather**                     | `/weather` or `/ask weather…` → `llm.py` → `get_weather()` → `wttr.in` JSON API                                                                 |
 | **Deep research**               | `/research` → `research_agent.py` → Gemini (plan) → `search_web()` × N → `browse_url()` → Gemini (synthesize) → Discord thread                  |
@@ -381,7 +385,7 @@ graph TB
 | **Cost tracking**               | Every Gemini call → `spending.py` → `data/memory/spending.json`                                                                                 |
 | **Scheduled tasks**             | `scheduler.py` cron → any skill function                                                                                                        |
 | **Incoming webhook**            | Sonarr/Radarr/Plex/qBittorrent → `webhook_formatter.py` → `bot.py` → Discord notification                                                       |
-| **Container health alerts**     | `discord_background.py` (every 5 min) → `list_containers()` → filter unhealthy/exited → Discord `#alerts` embed                                  |
+| **Container health alerts**     | `discord_background.py` (every 5 min) → `list_containers()` + `check_gluetun_vpn()` → filter unhealthy/exited/VPN down → Discord `#alerts` embed                                  |
 | **Scheduled research**          | `scheduler.py` cron → `schedule_research_report(topic, cron)` → `research_agent.py` → Discord thread + vault                                     |
 | **API quota dashboard**         | Browser → `:8765/api/quota-status` → `spending.py` `get_quota_status()` → JSON; dashboard card auto-refreshes                                    |
 | **Dashboard**                   | Browser → `:8765/dashboard` → `dashboard.py` → HTML page + `/api/dashboard` JSON + `/api/quota-status`                                           |
