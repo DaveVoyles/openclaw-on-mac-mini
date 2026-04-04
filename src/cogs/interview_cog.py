@@ -19,6 +19,15 @@ log = logging.getLogger("openclaw.interview_cog")
 # keyed by user_id
 # Each session: {"goal": str, "questions": list[str], "answers": list[str]}
 _sessions: dict[int, dict] = {}
+_SESSION_MAX_SIZE = 100  # Maximum concurrent interview sessions
+
+
+def _evict_oldest_session():
+    """Remove the oldest session if we're at capacity."""
+    if len(_sessions) >= _SESSION_MAX_SIZE:
+        # Remove first (oldest) entry
+        oldest_key = next(iter(_sessions))
+        del _sessions[oldest_key]
 
 
 # ── LLM helpers ───────────────────────────────────────────────────────────────
@@ -175,6 +184,7 @@ class InterviewCog(commands.Cog):
             )
             return
 
+        _evict_oldest_session()  # Ensure we don't exceed capacity
         _sessions[interaction.user.id] = {
             "goal": goal,
             "questions": questions,
