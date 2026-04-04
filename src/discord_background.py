@@ -544,26 +544,52 @@ class _CopilotFixView(discord.ui.View):
         self.prompts = prompts
 
     async def on_timeout(self):
-        """Disable buttons when view times out."""
+        """Disable buttons when view times out (after 1 hour)."""
         try:
             for child in self.children:
                 child.disabled = True
-            log.debug("_CopilotFixView timed out after 1 hour")
+            # Try to update the message so buttons appear disabled in Discord
+            if hasattr(self, "message") and self.message:
+                await self.message.edit(content="⏱️ Copilot fix approval expired.", view=self)
         except Exception:
             pass
+        log.debug("_CopilotFixView timed out after 1 hour")
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Called before any button handler. Ensures the interaction is always acknowledged."""
+        if self.is_finished():
+            # View timed out or was stopped — button is stale. Always ack to avoid
+            # "This interaction failed" in Discord, then bail out.
+            await interaction.response.send_message(
+                "⏱️ This approval has already expired or was already resolved.", ephemeral=True
+            )
+            return False
+        return True
+
+    async def _ack(self, interaction: discord.Interaction) -> None:
+        """Immediately acknowledge the interaction (must happen within 3 seconds).
+
+        Uses defer_update() so Discord doesn't show a loading spinner on the message.
+        Disables the buttons optimistically so the user sees instant feedback.
+        """
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.response.edit_message(view=self)
+        except discord.InteractionResponded:
+            pass  # Already acknowledged (shouldn't happen, but safe)
+        except Exception as exc:
+            log.warning("_CopilotFixView ack via edit_message failed: %s", exc)
+            # Last-resort acknowledgment — sends an ephemeral so Discord doesn't mark as failed
+            try:
+                await interaction.response.defer_update()
+            except Exception:
+                pass
 
     @discord.ui.button(label="✅ Approve Fix", style=discord.ButtonStyle.green, custom_id="copilot_approve")
     async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            for child in self.children:
-                child.disabled = True
-            await interaction.response.edit_message(view=self)
-        except Exception as exc:
-            log.warning("approve_button edit_message failed: %s", exc)
-            try:
-                await interaction.response.send_message("⚙️ Processing fix...", ephemeral=True)
-            except Exception:
-                pass  # Already responded somehow
+        # Acknowledge immediately — must happen within 3 s or Discord shows "This interaction failed"
+        await self._ack(interaction)
 
         try:
             from maintenance_skills import copilot_fix
@@ -588,16 +614,8 @@ class _CopilotFixView(discord.ui.View):
 
     @discord.ui.button(label="❌ Skip", style=discord.ButtonStyle.grey, custom_id="copilot_deny")
     async def deny_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        try:
-            for child in self.children:
-                child.disabled = True
-            await interaction.response.edit_message(view=self)
-        except Exception as exc:
-            log.warning("deny_button edit_message failed: %s", exc)
-            try:
-                await interaction.response.send_message("⚙️ Skipping fix...", ephemeral=True)
-            except Exception:
-                pass  # Already responded somehow
+        # Acknowledge immediately
+        await self._ack(interaction)
 
         try:
             await interaction.channel.send("❌ Copilot CLI fix skipped.")
