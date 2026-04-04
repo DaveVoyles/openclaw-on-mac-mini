@@ -89,6 +89,7 @@ class TestTryLocalModelForce:
     async def test_force_skips_needs_tools_check(self):
         """When force=True, _needs_tools() should NOT be consulted."""
         import llm
+        from llm import tool_execution
 
         # A message that would normally trigger _needs_tools
         msg = "restart the plex container"
@@ -96,9 +97,9 @@ class TestTryLocalModelForce:
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
-            patch.object(llm, "_ollama_available", new_callable=AsyncMock, return_value=True),
-            patch.object(llm, "_chat_ollama", new_callable=AsyncMock, return_value="Done!"),
-            patch.object(llm, "_gemma_response_seems_valid", return_value=True),
+            patch.object(tool_execution, "_ollama_available", new_callable=AsyncMock, return_value=True),
+            patch.object(tool_execution, "_chat_ollama", new_callable=AsyncMock, return_value="Done!"),
+            patch.object(tool_execution, "_gemma_response_seems_valid", return_value=True),
         ):
             result = await llm._try_local_model(msg, [], force=True)
             assert result == "Done!"
@@ -117,10 +118,11 @@ class TestTryLocalModelForce:
     async def test_force_still_checks_ollama_available(self):
         """Even with force=True, if Ollama is down, should return None."""
         import llm
+        from llm import tool_execution
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
-            patch.object(llm, "_ollama_available", new_callable=AsyncMock, return_value=False),
+            patch.object(tool_execution, "_ollama_available", new_callable=AsyncMock, return_value=False),
         ):
             result = await llm._try_local_model("hello", [], force=True)
             assert result is None
@@ -137,27 +139,33 @@ class TestChatModelPreference:
     @pytest.mark.asyncio
     async def test_chat_local_preference_success(self):
         """model_preference='local' should force Ollama path."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
-            patch.object(llm, "_ollama_available", new_callable=AsyncMock, return_value=True),
-            patch.object(llm, "_try_local_model", new_callable=AsyncMock, return_value="Hello from Gemma!"),
+            patch.object(chat_module, "_ollama_available", new_callable=AsyncMock, return_value=True),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value="Hello from Gemma!"),
         ):
             text, hist, model = await llm.chat("hello", model_preference="local")
             assert text == "Hello from Gemma!"
             assert model == llm.OLLAMA_MODEL
             # Verify force=True was passed
-            llm._try_local_model.assert_called_once_with("hello", [], force=True)
+            chat_module._try_local_model.assert_called_once_with("hello", [], force=True)
 
     @pytest.mark.asyncio
     async def test_chat_local_preference_ollama_down(self):
         """model_preference='local' with Ollama down should return error."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
-            patch.object(llm, "_ollama_available", new_callable=AsyncMock, return_value=False),
+            patch.object(chat_module, "_ollama_available", new_callable=AsyncMock, return_value=False),
         ):
             text, hist, model = await llm.chat("hello", model_preference="local")
             assert "not reachable" in text
@@ -166,9 +174,12 @@ class TestChatModelPreference:
     @pytest.mark.asyncio
     async def test_chat_local_preference_disabled(self):
         """model_preference='local' with LOCAL_LLM_ENABLED=False should return error."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
-        with patch.object(llm, "LOCAL_LLM_ENABLED", False):
+        with patch.object(chat_module, "LOCAL_LLM_ENABLED", False):
             text, hist, model = await llm.chat("hello", model_preference="local")
             assert "disabled" in text
             assert model == "none"
@@ -176,15 +187,18 @@ class TestChatModelPreference:
     @pytest.mark.asyncio
     async def test_chat_gemini_preference_skips_ollama(self):
         """model_preference='gemini' should go straight to Gemini."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
         mock_model = MagicMock()
         with (
-            patch.object(llm, "GOOGLE_API_KEY", "test-key"),
-            patch.object(llm, "_rate_limiter") as mock_rl,
-            patch.object(llm, "_get_model", new_callable=AsyncMock, return_value=mock_model),
-            patch.object(llm, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini says hi", [], "gemini-2.5-flash")),
-            patch.object(llm, "_try_local_model", new_callable=AsyncMock) as mock_local,
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_get_model", new_callable=AsyncMock, return_value=mock_model),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini says hi", [], "gemini-2.5-flash")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock) as mock_local,
         ):
             mock_rl.check.return_value = True
             text, hist, model = await llm.chat("hello", model_preference="gemini")
@@ -196,9 +210,12 @@ class TestChatModelPreference:
     @pytest.mark.asyncio
     async def test_chat_gemini_preference_no_api_key(self):
         """model_preference='gemini' without API key should return error."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
-        with patch.object(llm, "GOOGLE_API_KEY", ""):
+        with patch.object(chat_module, "GOOGLE_API_KEY", ""):
             text, hist, model = await llm.chat("hello", model_preference="gemini")
             assert "not configured" in text
             assert model == "none"
@@ -206,14 +223,17 @@ class TestChatModelPreference:
     @pytest.mark.asyncio
     async def test_chat_auto_preference_tries_copilot_first(self):
         """model_preference='auto' should try Copilot proxy then fall through to Gemini."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
         mock_model = MagicMock()
         with (
             patch("model_router.COPILOT_PROXY_ENABLED", False),
-            patch.object(llm, "_rate_limiter") as mock_rl,
-            patch.object(llm, "_get_model", new_callable=AsyncMock, return_value=mock_model),
-            patch.object(llm, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_get_model", new_callable=AsyncMock, return_value=mock_model),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
             mock_rl.check.return_value = True
             text, hist, model = await llm.chat("hello", model_preference="auto")
@@ -233,12 +253,15 @@ class TestChatStreamModelPreference:
     @pytest.mark.asyncio
     async def test_stream_local_preference_success(self):
         """model_preference='local' in chat_stream should yield from Ollama."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
-            patch.object(llm, "_ollama_available", new_callable=AsyncMock, return_value=True),
-            patch.object(llm, "_try_local_model", new_callable=AsyncMock, return_value="Gemma streaming!"),
+            patch.object(chat_module, "_ollama_available", new_callable=AsyncMock, return_value=True),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value="Gemma streaming!"),
         ):
             chunks = []
             async for text, is_final, meta in llm.chat_stream("hi", model_preference="local"):
@@ -251,11 +274,14 @@ class TestChatStreamModelPreference:
     @pytest.mark.asyncio
     async def test_stream_local_preference_ollama_down(self):
         """model_preference='local' with Ollama down should yield error."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
         with (
             patch.object(llm, "LOCAL_LLM_ENABLED", True),
-            patch.object(llm, "_ollama_available", new_callable=AsyncMock, return_value=False),
+            patch.object(chat_module, "_ollama_available", new_callable=AsyncMock, return_value=False),
         ):
             chunks = []
             async for text, is_final, meta in llm.chat_stream("hi", model_preference="local"):
@@ -266,18 +292,21 @@ class TestChatStreamModelPreference:
     @pytest.mark.asyncio
     async def test_stream_gemini_preference_skips_local(self):
         """model_preference='gemini' in chat_stream should skip local path."""
+        import sys
         import llm
+        
+        chat_module = sys.modules['llm.chat']
 
         mock_model = MagicMock()
         mock_model.model_name = "gemini-2.5-flash"
 
         with (
-            patch.object(llm, "GOOGLE_API_KEY", "test-key"),
-            patch.object(llm, "_rate_limiter") as mock_rl,
-            patch.object(llm, "_get_model", new_callable=AsyncMock, return_value=mock_model),
-            patch.object(llm, "_needs_tools", return_value=True),
-            patch.object(llm, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini answer", [], "gemini-2.5-flash")),
-            patch.object(llm, "_try_local_model", new_callable=AsyncMock) as mock_local,
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_get_model", new_callable=AsyncMock, return_value=mock_model),
+            patch.object(chat_module, "_needs_tools", return_value=True),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini answer", [], "gemini-2.5-flash")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock) as mock_local,
         ):
             mock_rl.check.return_value = True
             chunks = []
