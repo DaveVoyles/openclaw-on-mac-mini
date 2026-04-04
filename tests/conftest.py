@@ -77,3 +77,35 @@ def _clear_module_caches():
                     except Exception as e:
                         import warnings
                         warnings.warn(f"Failed to clear cache {attr} on {mod_name}: {e}")
+
+
+@pytest.fixture(autouse=True, scope="function")
+async def _cleanup_http_sessions():
+    """Close all aiohttp sessions after each test to prevent 'Unclosed client session' warnings."""
+    yield
+    # Close all SessionManager instances
+    try:
+        from http_session import close_all
+        await close_all()
+    except Exception:
+        pass  # Ignore if module not imported yet
+
+
+@pytest.fixture(autouse=True)
+def _mock_llm_model_init(monkeypatch):
+    """Mock LLM model initialization to avoid requiring API keys in tests."""
+    # Prevent model initialization from requiring API keys
+    def mock_get_model():
+        """Mock _get_model to return a MagicMock instead of real Gemini model."""
+        return MagicMock()
+    
+    def mock_init_gemini(*args, **kwargs):
+        """Mock Gemini model init."""
+        return MagicMock()
+    
+    # Patch before llm module imports
+    try:
+        import llm_client
+        monkeypatch.setattr(llm_client, "_init_gemini_model", mock_init_gemini)
+    except Exception:
+        pass  # Module not imported yet, that's fine

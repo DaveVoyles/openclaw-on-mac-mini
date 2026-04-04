@@ -1,4 +1,4 @@
-.PHONY: test test-verbose lint format type-check build clean help
+.PHONY: test test-verbose lint format type-check build clean deploy help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -23,6 +23,12 @@ build:
 	@echo "🐳 Building Docker image..."
 	docker build -t openclaw:latest .
 
+deploy:
+	@echo "🚀 Rebuilding and restarting container..."
+	docker compose build openclaw
+	docker compose up -d openclaw
+	@echo "✅ Container redeployed"
+
 clean:
 	@echo "🧹 Cleaning..."
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -39,5 +45,6 @@ help:
 	@echo "  format        Auto-fix formatting with ruff"
 	@echo "  type-check    Run type checker (pyright/mypy)"
 	@echo "  build         Build Docker image"
+	@echo "  deploy        Rebuild + restart container (use after git pull/commit)"
 	@echo "  clean         Remove __pycache__, .pyc, caches"
 	@echo "  help          Show this help"
