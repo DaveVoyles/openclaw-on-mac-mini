@@ -539,36 +539,71 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
 class _CopilotFixView(discord.ui.View):
     """Discord button view for approving/denying Copilot CLI fix suggestions."""
 
-    def __init__(self, prompts: list[str], channel):
-        super().__init__(timeout=600)
+    def __init__(self, prompts: list[str]):
+        super().__init__(timeout=3600)
         self.prompts = prompts
-        self.channel = channel
 
-    @discord.ui.button(label="✅ Approve Fix", style=discord.ButtonStyle.green)
+    async def on_timeout(self):
+        """Disable buttons when view times out."""
+        try:
+            for child in self.children:
+                child.disabled = True
+            log.debug("_CopilotFixView timed out after 1 hour")
+        except Exception:
+            pass
+
+    @discord.ui.button(label="✅ Approve Fix", style=discord.ButtonStyle.green, custom_id="copilot_approve")
     async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        for child in self.children:
-            child.disabled = True
-        await interaction.response.edit_message(view=self)
-
-        from maintenance_skills import copilot_fix
-        for cp in self.prompts:
+        try:
+            for child in self.children:
+                child.disabled = True
+            await interaction.response.edit_message(view=self)
+        except Exception as exc:
+            log.warning("approve_button edit_message failed: %s", exc)
             try:
-                result = await asyncio.wait_for(copilot_fix(cp), timeout=180)
-                await self.channel.send(
-                    f"🤖 **Copilot CLI result** (approved by {interaction.user.display_name}):\n{result[:1900]}"
-                )
-                audit_log(interaction.user, "copilot_fix_approved", detail=cp[:200])
-            except Exception as exc:
-                await self.channel.send(f"❌ Copilot fix failed: {exc}")
+                await interaction.response.send_message("⚙️ Processing fix...", ephemeral=True)
+            except Exception:
+                pass  # Already responded somehow
+
+        try:
+            from maintenance_skills import copilot_fix
+            for cp in self.prompts:
+                try:
+                    result = await asyncio.wait_for(copilot_fix(cp), timeout=180)
+                    await interaction.channel.send(
+                        f"🤖 **Copilot CLI result** (approved by {interaction.user.display_name}):\n{result[:1900]}"
+                    )
+                    audit_log(interaction.user, "copilot_fix_approved", detail=cp[:200])
+                except asyncio.TimeoutError:
+                    await interaction.channel.send("⏱️ Copilot fix timed out after 3 minutes.")
+                except Exception as exc:
+                    await interaction.channel.send(f"❌ Copilot fix failed: {exc}")
+        except Exception as exc:
+            log.exception("approve_button fix execution failed")
+            try:
+                await interaction.followup.send(f"❌ Fix execution error: {exc}", ephemeral=True)
+            except Exception:
+                pass
         self.stop()
 
-    @discord.ui.button(label="❌ Skip", style=discord.ButtonStyle.grey)
+    @discord.ui.button(label="❌ Skip", style=discord.ButtonStyle.grey, custom_id="copilot_deny")
     async def deny_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        for child in self.children:
-            child.disabled = True
-        await interaction.response.edit_message(view=self)
-        await self.channel.send("❌ Copilot CLI fix skipped.")
-        audit_log(interaction.user, "copilot_fix_rejected", detail=self.prompts[0][:200])
+        try:
+            for child in self.children:
+                child.disabled = True
+            await interaction.response.edit_message(view=self)
+        except Exception as exc:
+            log.warning("deny_button edit_message failed: %s", exc)
+            try:
+                await interaction.response.send_message("⚙️ Skipping fix...", ephemeral=True)
+            except Exception:
+                pass  # Already responded somehow
+
+        try:
+            await interaction.channel.send("❌ Copilot CLI fix skipped.")
+            audit_log(interaction.user, "copilot_fix_rejected", detail=self.prompts[0][:200])
+        except Exception as exc:
+            log.warning("deny_button cleanup failed: %s", exc)
         self.stop()
 
 
@@ -643,7 +678,7 @@ async def _run_proactive_scan(bot):
             if action_type == "copilot_fix_pending"
         ]
         if copilot_prompts:
-            view = _CopilotFixView(copilot_prompts, channel)
+            view = _CopilotFixView(copilot_prompts)
             await msg.edit(view=view)
 
         audit_log(None, "proactive_scan", detail="insight posted")
