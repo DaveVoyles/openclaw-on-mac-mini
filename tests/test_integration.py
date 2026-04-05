@@ -4,7 +4,7 @@ These tests verify end-to-end functionality without mocking core components.
 They use real Discord.py objects where possible but avoid actual API calls.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
 import pytest
@@ -27,7 +27,7 @@ class TestAskCommandIntegration:
         pass
 
 
-# Integration Test 2: Proactive Monitoring Flow  
+# Integration Test 2: Proactive Monitoring Flow
 class TestProactiveMonitoringIntegration:
     """Test proactive insight generation and posting."""
 

@@ -1,6 +1,5 @@
 """Tests for bot message/attachment handlers."""
 
-import io
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord

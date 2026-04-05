@@ -323,6 +323,6 @@ try:
     _log = _logging.getLogger("openclaw.config")
     for _w in cfg.validate():
         _log.warning("Config: %s", _w)
-except (ImportError, AttributeError) as e:
+except (ImportError, AttributeError):
     # Logging may not be available during early import; validation runs again on bot startup
     pass

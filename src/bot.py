@@ -19,7 +19,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import aiohttp
 import discord
 import yaml
 from discord import app_commands
@@ -31,13 +30,11 @@ from agentmail import send_agent_mail
 from approvals import is_emergency_stopped
 from config import cfg
 from constants import (
-    ATTACHMENT_TEXT_MAX_CHARS,
     EMBED_DESC_LIMIT,
     EMBED_SPLIT_LIMIT,
     MAX_FILE_SIZE,
 )
 from llm import SUPPORTED_IMAGE_MIMES, get_rate_info
-from llm import analyze_image as llm_analyze_image
 from llm import chat as llm_chat
 from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
@@ -146,12 +143,12 @@ def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:
 AUDIT_DIR.mkdir(parents=True, exist_ok=True)
 
 from audit import _audit_buffer, audit_log  # noqa: E402
+from constants import HTTP_TIMEOUT_DEFAULT
 
 # ---------------------------------------------------------------------------
 # Shared HTTP session (reused for attachment downloads)
 # ---------------------------------------------------------------------------
 from http_session import SessionManager as _SessionManager
-from constants import HTTP_TIMEOUT_DEFAULT
 
 _bot_sessions = _SessionManager(timeout=HTTP_TIMEOUT_DEFAULT, name="bot")
 
@@ -361,9 +358,17 @@ _BARE_IMAGE_RE = re.compile(
 
 from bot_formatting import (
     extract_file_attachment as _extract_file_attachment,
+)
+from bot_formatting import (
     extract_image_url as _extract_image_url,
+)
+from bot_formatting import (
     format_markdown_for_discord as _format_markdown_for_discord,
+)
+from bot_formatting import (
     format_tables_for_discord as _format_tables_for_discord,
+)
+from bot_formatting import (
     split_response as _split_response,
 )
 
@@ -582,9 +587,12 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
 
 
 from bot_attachments import (
-    handle_image_attachment as _handle_image_attachment,
     handle_doc_attachment as _handle_doc_attachment,
 )
+from bot_attachments import (
+    handle_image_attachment as _handle_image_attachment,
+)
+
 
 @bot.tree.command(name="ask", description="Ask OpenClaw anything (AI-powered with function calling)")
 @app_commands.describe(

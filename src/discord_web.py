@@ -222,6 +222,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
 async def _trigger_scan_handler(request: web.Request) -> web.Response:
     """POST /api/trigger-scan — immediately run a proactive insight scan."""
     import asyncio
+
     from discord_background import _run_proactive_scan
     bot = request.app["bot"]
     asyncio.create_task(_run_proactive_scan(bot))

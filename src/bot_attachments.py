@@ -1,12 +1,13 @@
 """Attachment handling for OpenClaw bot - images and documents."""
 
+import logging
+
 import aiohttp
 import discord
 
 from constants import ATTACHMENT_TEXT_MAX_CHARS
 from http_session import SessionManager
 from llm import analyze_image as llm_analyze_image
-import logging
 
 log = logging.getLogger("openclaw.bot_attachments")
 
