@@ -1,0 +1,188 @@
+version: "3.9"
+
+services:
+  openclaw:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: ghcr.io/davevoyles/openclaw:latest
+    container_name: openclaw-prod
+    hostname: openclaw-prod
+    restart: unless-stopped
+
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE  # Allow binding to privileged ports if needed
+    read_only: true
+
+    # Resource limits (production-grade)
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+    # Docker socket access
+    group_add:
+      - "0"
+
+    # Production logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+        labels: "production,openclaw"
+
+    # Port mappings
+    ports:
+      - "8765:8765"  # Health check / Web UI
+
+    # Environment variables
+    env_file:
+      - .env
+
+    environment:
+      - HEALTH_PORT=8765
+      - LOG_DIR=/logs
+      - AUDIT_DIR=/audit
+      - MC_TASKS_FILE=/app/data/tasks.json
+      - VAULT_DIR=/vault
+      - PLANS_DIR=/plans
+      - PYTHONUNBUFFERED=1
+      - TZ=America/New_York
+      # Production mode flags
+      - ENVIRONMENT=production
+      - DEBUG=false
+
+    # Volume mounts (production)
+    volumes:
+      # Docker socket access
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+
+      # Configuration (read-only)
+      - ./config:/config:ro
+
+      # Persistent data (read-write with backups)
+      - openclaw-logs:/logs:rw
+      - openclaw-memory:/memory:rw
+      - openclaw-audit:/audit:rw
+      - openclaw-vault:/vault:rw
+      - openclaw-plans:/plans:rw
+      - openclaw-dream:/app/data/dream:rw
+      - openclaw-chromadb:/memory/chromadb:rw
+
+      # Tasks file (persistent)
+      - ./data/tasks.json:/app/data/tasks.json:rw
+
+      # Temp directories (required for read_only: true)
+      - openclaw-tmp:/tmp:rw
+      - openclaw-cache:/home/openclaw/.cache:rw
+
+      # SSH keys for NAS access (production)
+      - ${SSH_KEY_PATH:-~/.ssh/id_ed25519}:/home/openclaw/.ssh/id_ed25519:ro
+      - ${SSH_KNOWN_HOSTS:-~/.ssh/known_hosts}:/home/openclaw/.ssh/known_hosts:ro
+
+      # External mounts (optional - configure as needed)
+      # - /path/to/audiobooks:/audiobooks:ro
+
+    # Health check (production intervals)
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sf http://localhost:8765/health || exit 1"
+        ]
+      interval: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+
+    # Network configuration
+    networks:
+      - openclaw-net
+
+    # Labels for monitoring and management
+    labels:
+      - "com.openclaw.environment=production"
+      - "com.openclaw.version=0.6.0"
+      - "com.openclaw.service=discord-bot"
+
+# Named volumes for production data persistence
+volumes:
+  openclaw-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/logs
+
+  openclaw-memory:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/memory
+
+  openclaw-audit:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/audit
+
+  openclaw-vault:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/vault
+
+  openclaw-plans:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/plans
+
+  openclaw-dream:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/dream
+
+  openclaw-chromadb:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${DATA_DIR:-./data}/chromadb
+
+  openclaw-tmp:
+    driver: local
+
+  openclaw-cache:
+    driver: local
+
+# Isolated network
+networks:
+  openclaw-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

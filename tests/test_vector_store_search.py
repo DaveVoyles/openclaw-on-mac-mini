@@ -140,3 +140,65 @@ class TestChannelScopedIsolation:
         assert "same" in ids
         assert "legacy" in ids
         assert "other" not in ids
+
+    @pytest.mark.asyncio
+    async def test_search_fallback_channel_scope_excludes_other_channels(self):
+        fake = _FakeCollection([
+            _chroma_result([]),
+            _chroma_result([
+                {"id": "same-channel", "text": "same channel", "metadata": {"channel_id": "10"}},
+                {"id": "legacy", "text": "legacy entry", "metadata": {"source": "old"}},
+                {"id": "other-channel", "text": "other channel", "metadata": {"channel_id": "88"}},
+            ]),
+        ])
+
+        with patch.object(mod, "_get_collection", return_value=fake):
+            with request_context(channel_id=10):
+                results = await mod.search(mod.MEMORIES_COLLECTION, "hello", top_k=5, track_access=False)
+
+        assert len(fake.query_calls) == 2
+        ids = [item["id"] for item in results]
+        assert "same-channel" in ids
+        assert "legacy" in ids
+        assert "other-channel" not in ids
+
+    @pytest.mark.asyncio
+    async def test_search_without_context_does_not_reuse_previous_scope(self):
+        fake = _FakeCollection([_chroma_result([]), _chroma_result([])])
+
+        with patch.object(mod, "_get_collection", return_value=fake):
+            with request_context(channel_id=10, thread_id=20):
+                await mod.search(
+                    mod.MEMORIES_COLLECTION,
+                    "hello",
+                    top_k=1,
+                    track_access=False,
+                    enable_scope_fallback=False,
+                )
+            await mod.search(
+                mod.MEMORIES_COLLECTION,
+                "hello",
+                top_k=1,
+                track_access=False,
+                enable_scope_fallback=False,
+            )
+
+        assert "where" in fake.query_calls[0]
+        assert "where" not in fake.query_calls[1]
+
+    @pytest.mark.asyncio
+    async def test_search_skips_fallback_when_disabled(self):
+        fake = _FakeCollection([_chroma_result([])])
+
+        with patch.object(mod, "_get_collection", return_value=fake):
+            with request_context(channel_id=10, thread_id=20):
+                results = await mod.search(
+                    mod.MEMORIES_COLLECTION,
+                    "hello",
+                    top_k=5,
+                    track_access=False,
+                    enable_scope_fallback=False,
+                )
+
+        assert results == []
+        assert len(fake.query_calls) == 1

@@ -1,0 +1,334 @@
+"""
+Plugin Registry - Central management of installed plugins.
+
+Handles:
+- Plugin installation and removal
+- Enabling/disabling plugins
+- Conflict resolution
+- Plugin state persistence
+- Query and listing
+"""
+
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+from .plugin_base import Plugin, PluginMetadata
+from .plugin_loader import PluginLoader
+
+log = logging.getLogger("openclaw.plugin_system.registry")
+
+
+class PluginRegistry:
+    """
+    Central registry for managing installed plugins.
+
+    Maintains plugin state, handles installation/removal,
+    and provides query interface.
+    """
+
+    def __init__(
+        self,
+        plugins_dir: Path,
+        data_dir: Path,
+        skills_registry: dict[str, Any],
+        config: dict[str, Any] | None = None,
+    ):
+        """
+        Initialize the plugin registry.
+
+        Args:
+            plugins_dir: Directory containing plugins
+            data_dir: Directory for plugin data
+            skills_registry: Global skills registry
+            config: Bot configuration
+        """
+        self.plugins_dir = Path(plugins_dir)
+        self.data_dir = Path(data_dir)
+        self.state_file = self.data_dir / "plugin_state.json"
+
+        self.loader = PluginLoader(
+            plugins_dir=plugins_dir,
+            data_dir=data_dir / "plugins",
+            skills_registry=skills_registry,
+            config=config,
+        )
+
+        self._plugins: dict[str, Plugin] = {}
+        self._disabled_plugins: set[str] = set()
+
+        # Load state
+        self._load_state()
+
+    def _load_state(self) -> None:
+        """Load plugin state from disk."""
+        if not self.state_file.exists():
+            return
+
+        try:
+            with open(self.state_file) as f:
+                state = json.load(f)
+                self._disabled_plugins = set(state.get("disabled", []))
+            log.debug("Loaded plugin state")
+        except Exception as e:
+            log.error(f"Failed to load plugin state: {e}")
+
+    def _save_state(self) -> None:
+        """Save plugin state to disk."""
+        try:
+            state = {
+                "disabled": list(self._disabled_plugins),
+            }
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.state_file, "w") as f:
+                json.dump(state, f, indent=2)
+            log.debug("Saved plugin state")
+        except Exception as e:
+            log.error(f"Failed to save plugin state: {e}")
+
+    async def load_all_plugins(self) -> dict[str, bool]:
+        """
+        Discover and load all plugins.
+
+        Returns:
+            Dictionary mapping plugin names to load success status
+        """
+        results = {}
+        plugin_dirs = await self.loader.discover_plugins()
+
+        for plugin_dir in plugin_dirs:
+            plugin_name = plugin_dir.name
+
+            # Skip disabled plugins
+            if plugin_name in self._disabled_plugins:
+                log.info(f"Skipping disabled plugin: {plugin_name}")
+                results[plugin_name] = False
+                continue
+
+            plugin = await self.loader.load_plugin(plugin_dir)
+            if plugin and plugin.metadata:
+                self._plugins[plugin.metadata.name] = plugin
+                results[plugin.metadata.name] = True
+            else:
+                results[plugin_name] = False
+
+        return results
+
+    async def install_plugin(self, plugin_dir: Path) -> tuple[bool, str]:
+        """
+        Install a plugin from a directory.
+
+        Args:
+            plugin_dir: Path to plugin directory
+
+        Returns:
+            Tuple of (success, message)
+        """
+        # Validate manifest
+        metadata = self.loader.load_manifest(plugin_dir)
+        if not metadata:
+            return False, "Invalid or missing plugin.yaml"
+
+        # Check if already installed
+        if metadata.name in self._plugins:
+            return False, f"Plugin {metadata.name} already installed"
+
+        # Check for conflicts
+        conflict = self._check_conflicts(metadata)
+        if conflict:
+            return False, conflict
+
+        # Load plugin
+        plugin = await self.loader.load_plugin(plugin_dir)
+        if not plugin:
+            return False, "Failed to load plugin"
+
+        self._plugins[metadata.name] = plugin
+        self._save_state()
+
+        return True, f"Installed {metadata.name} v{metadata.version}"
+
+    async def uninstall_plugin(self, plugin_name: str) -> tuple[bool, str]:
+        """
+        Uninstall a plugin.
+
+        Args:
+            plugin_name: Name of plugin to uninstall
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if plugin_name not in self._plugins:
+            return False, f"Plugin {plugin_name} not found"
+
+        plugin = self._plugins[plugin_name]
+
+        # Unload plugin
+        success = await self.loader.unload_plugin(plugin)
+        if not success:
+            return False, "Failed to unload plugin"
+
+        del self._plugins[plugin_name]
+        self._disabled_plugins.discard(plugin_name)
+        self._save_state()
+
+        return True, f"Uninstalled {plugin_name}"
+
+    async def enable_plugin(self, plugin_name: str) -> tuple[bool, str]:
+        """
+        Enable a disabled plugin.
+
+        Args:
+            plugin_name: Name of plugin to enable
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if plugin_name not in self._disabled_plugins:
+            if plugin_name in self._plugins:
+                return False, f"Plugin {plugin_name} already enabled"
+            return False, f"Plugin {plugin_name} not found"
+
+        # Load plugin
+        plugin_dir = self.plugins_dir / plugin_name
+        if not plugin_dir.exists():
+            return False, f"Plugin directory not found: {plugin_dir}"
+
+        plugin = await self.loader.load_plugin(plugin_dir)
+        if not plugin or not plugin.metadata:
+            return False, "Failed to load plugin"
+
+        self._plugins[plugin.metadata.name] = plugin
+        self._disabled_plugins.remove(plugin_name)
+        self._save_state()
+
+        await plugin.on_enable()
+
+        return True, f"Enabled {plugin_name}"
+
+    async def disable_plugin(self, plugin_name: str) -> tuple[bool, str]:
+        """
+        Disable a plugin without uninstalling.
+
+        Args:
+            plugin_name: Name of plugin to disable
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if plugin_name not in self._plugins:
+            return False, f"Plugin {plugin_name} not found"
+
+        plugin = self._plugins[plugin_name]
+
+        await plugin.on_disable()
+
+        # Unload plugin
+        success = await self.loader.unload_plugin(plugin)
+        if not success:
+            return False, "Failed to unload plugin"
+
+        del self._plugins[plugin_name]
+        self._disabled_plugins.add(plugin_name)
+        self._save_state()
+
+        return True, f"Disabled {plugin_name}"
+
+    async def reload_plugin(self, plugin_name: str) -> tuple[bool, str]:
+        """
+        Reload a plugin (hot-reload).
+
+        Args:
+            plugin_name: Name of plugin to reload
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if plugin_name not in self._plugins:
+            return False, f"Plugin {plugin_name} not found"
+
+        old_plugin = self._plugins[plugin_name]
+
+        new_plugin = await self.loader.reload_plugin(old_plugin)
+        if not new_plugin:
+            return False, "Failed to reload plugin"
+
+        self._plugins[plugin_name] = new_plugin
+
+        return True, f"Reloaded {plugin_name}"
+
+    def get_plugin(self, plugin_name: str) -> Plugin | None:
+        """
+        Get a plugin by name.
+
+        Args:
+            plugin_name: Plugin name
+
+        Returns:
+            Plugin instance or None
+        """
+        return self._plugins.get(plugin_name)
+
+    def list_plugins(self) -> list[PluginMetadata]:
+        """
+        List all loaded plugins.
+
+        Returns:
+            List of plugin metadata
+        """
+        metadata_list = []
+        for plugin in self._plugins.values():
+            if plugin.metadata:
+                metadata_list.append(plugin.metadata)
+        return metadata_list
+
+    def list_disabled_plugins(self) -> list[str]:
+        """
+        List disabled plugins.
+
+        Returns:
+            List of disabled plugin names
+        """
+        return list(self._disabled_plugins)
+
+    def get_plugin_info(self, plugin_name: str) -> dict[str, Any] | None:
+        """
+        Get detailed information about a plugin.
+
+        Args:
+            plugin_name: Plugin name
+
+        Returns:
+            Plugin info dictionary or None
+        """
+        plugin = self._plugins.get(plugin_name)
+        if not plugin or not plugin.metadata:
+            return None
+
+        return {
+            "metadata": plugin.metadata.to_dict(),
+            "loaded": plugin.is_loaded(),
+            "enabled": plugin.is_enabled(),
+            "skills": plugin.api.get_registered_skills(),
+            "commands": plugin.api.get_registered_commands(),
+        }
+
+    def _check_conflicts(self, metadata: PluginMetadata) -> str | None:
+        """
+        Check for conflicts with existing plugins.
+
+        Args:
+            metadata: Plugin metadata to check
+
+        Returns:
+            Error message if conflict found, None otherwise
+        """
+        # Check for name conflicts
+        if metadata.name in self._plugins:
+            return f"Plugin with name '{metadata.name}' already exists"
+
+        # TODO: Check for skill/command name conflicts
+        # TODO: Check for incompatible versions
+
+        return None

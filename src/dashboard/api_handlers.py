@@ -21,6 +21,16 @@ from .helpers import GITHUB_REPO, VERSION, _command_list, _cron_to_human, _load_
 _dashboard_sessions = _SessionManager(timeout=10, name="dashboard")
 
 
+def _parse_sms_user_id(raw_value: str | int | None) -> int | None:
+    if raw_value in (None, ""):
+        return None
+    try:
+        parsed = int(raw_value)
+        return parsed if parsed > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 async def api_status_handler(request):
     """Return connectivity status for all backends."""
     from config import TIMEOUT_FAST, cfg
@@ -135,6 +145,124 @@ async def api_status_handler(request):
         checks["patreon"] = {"status": "down"}
 
     return web.json_response(checks)
+
+
+async def api_sms_settings_handler(request: web.Request) -> web.Response:
+    """Get/update dashboard SMS preferences for a specific Discord user."""
+    from config import cfg
+    from sms_ux import UserSMSPrefs, configure_sms_phone, sms_prefs, status_snapshot
+
+    if request.method == "GET":
+        user_id = _parse_sms_user_id(request.query.get("user_id"))
+        if user_id is None:
+            return web.json_response(
+                {
+                    "needs_user_id": True,
+                    "twilio_enabled": bool(cfg.twilio_enabled),
+                }
+            )
+
+        prefs = sms_prefs.get(user_id)
+        snap = status_snapshot(user_id)
+        return web.json_response(
+            {
+                "user_id": user_id,
+                "phone_number": prefs.phone_number,
+                "masked_phone": snap["masked_phone"],
+                "is_verified": prefs.is_verified,
+                "verification_status": prefs.verification_status or "unknown",
+                "verification_started_at": prefs.verification_started_at,
+                "verified_at": prefs.verified_at,
+                "remaining_sends": snap["remaining_sends"],
+                "twilio_enabled": bool(cfg.twilio_enabled),
+            }
+        )
+
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        return web.json_response({"error": "Invalid JSON payload"}, status=400)
+
+    user_id = _parse_sms_user_id(payload.get("user_id"))
+    if user_id is None:
+        return web.json_response({"error": "Valid user_id is required"}, status=400)
+
+    phone_number = str(payload.get("phone_number", "")).strip()
+    if not phone_number:
+        prefs = UserSMSPrefs(user_id=user_id)
+        await sms_prefs.update(prefs)
+        return web.json_response(
+            {
+                "ok": True,
+                "user_id": user_id,
+                "phone_number": "",
+                "masked_phone": "not set",
+                "is_verified": False,
+                "verification_status": "unknown",
+                "remaining_sends": 5,
+            }
+        )
+
+    try:
+        prefs = await configure_sms_phone(user_id, phone_number)
+    except Exception as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+
+    snap = status_snapshot(user_id)
+    return web.json_response(
+        {
+            "ok": True,
+            "user_id": user_id,
+            "phone_number": prefs.phone_number,
+            "masked_phone": snap["masked_phone"],
+            "is_verified": prefs.is_verified,
+            "verification_status": prefs.verification_status or "unknown",
+            "remaining_sends": snap["remaining_sends"],
+        }
+    )
+
+
+async def api_sms_status_handler(request: web.Request) -> web.Response:
+    """Return SMS status details for dashboard display."""
+    from config import cfg
+    from sms_ux import status_snapshot
+
+    user_id = _parse_sms_user_id(request.query.get("user_id"))
+    if user_id is None:
+        return web.json_response(
+            {
+                "needs_user_id": True,
+                "twilio_enabled": bool(cfg.twilio_enabled),
+                "configured": False,
+            }
+        )
+
+    snap = status_snapshot(user_id)
+    return web.json_response(
+        {
+            "user_id": user_id,
+            "configured": bool(snap["phone_number"]),
+            "twilio_enabled": bool(cfg.twilio_enabled),
+            **snap,
+        }
+    )
+
+
+async def api_sms_history_handler(request: web.Request) -> web.Response:
+    """Return recent outbound SMS sends for dashboard display."""
+    from sms_ux import recent_sends_snapshot
+
+    user_id = _parse_sms_user_id(request.query.get("user_id"))
+    if user_id is None:
+        return web.json_response({"needs_user_id": True, "sends": []})
+
+    limit_raw = request.query.get("limit", "10")
+    try:
+        limit = max(1, min(int(limit_raw), 25))
+    except ValueError:
+        limit = 10
+
+    return web.json_response({"user_id": user_id, "sends": recent_sends_snapshot(user_id, limit=limit)})
 
 
 async def api_dashboard_handler(request: web.Request) -> web.Response:

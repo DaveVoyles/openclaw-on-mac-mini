@@ -45,3 +45,27 @@ aiofiles>=24.1
 
 # SMS provider integration (Discord one-tap SMS)
 twilio>=9.3.0
+
+# Workflow DAG execution (Phase 3 automation)
+networkx>=3.0
+
+# Observability & Monitoring (Phase 4)
+prometheus-client>=0.20.0
+memory-profiler>=0.61.0
+psutil>=6.1.0
+
+# Machine Learning / Data Science (Phase 3)
+scikit-learn>=1.6.1
+pandas>=2.2.0
+statsmodels>=0.14.0  # For ARIMA time series forecasting
+scipy>=1.15.0  # Scientific computing
+
+# API integrations (Phase 3)
+requests>=2.31.0  # For API calls if httpx not suitable
+
+# Phase 3: Data Export & Reporting
+pandas>=2.2.0
+pyarrow>=15.0.0
+reportlab>=4.0.0
+weasyprint>=60.0
+jinja2>=3.1.0

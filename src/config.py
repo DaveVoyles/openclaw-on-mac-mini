@@ -200,6 +200,20 @@ class _Config:
     newsapi_key: str = os.getenv("NEWSAPI_KEY", "")  # Free: 100 req/day
     apisports_key: str = os.getenv("APISPORTS_KEY", "")  # Free: 100 req/day
     alphavantage_key: str = os.getenv("ALPHAVANTAGE_KEY", "")  # Free: 25 req/day
+    
+    # -- Trakt.tv (TV & Movie tracking) ----------------------------------------
+    trakt_client_id: str = os.getenv("TRAKT_CLIENT_ID", "")
+    trakt_client_secret: str = os.getenv("TRAKT_CLIENT_SECRET", "")
+    trakt_access_token: str = os.getenv("TRAKT_ACCESS_TOKEN", "")
+    trakt_refresh_token: str = os.getenv("TRAKT_REFRESH_TOKEN", "")
+    
+    # -- Health & Fitness APIs -------------------------------------------------
+    fitbit_client_id: str = os.getenv("FITBIT_CLIENT_ID", "")
+    fitbit_client_secret: str = os.getenv("FITBIT_CLIENT_SECRET", "")
+    fitbit_access_token: str = os.getenv("FITBIT_ACCESS_TOKEN", "")
+    fitbit_refresh_token: str = os.getenv("FITBIT_REFRESH_TOKEN", "")
+    openfoodfacts_user_agent: str = os.getenv("OPENFOODFACTS_USER_AGENT", "OpenClaw/0.6.0")
+    polygon_api_key: str = os.getenv("POLYGON_API_KEY", "")  # Free: 5 API calls/min
 
     # -- Image generation (Stable Diffusion) -----------------------------------
     sd_url: str = os.getenv("SD_URL", "http://host.docker.internal:7861")

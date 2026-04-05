@@ -1290,6 +1290,31 @@
           </details>
         </div>
 
+        <div class="card">
+          <h2>📲 SMS Preferences</h2>
+          <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.6rem">View/update SMS phone preferences and recent sends for a Discord user ID.</p>
+          <form id="sms-settings-form" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.8rem">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
+              Discord User ID
+              <input id="sms-user-id" type="text" placeholder="123456789012345678" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
+              Phone (E.164)
+              <input id="sms-phone-number" type="text" placeholder="+15551234567" style="min-width:200px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+            </label>
+            <button type="submit" style="background:var(--spirit-blue);color:white;border:none;border-radius:6px;padding:0.45rem 0.9rem;cursor:pointer">Save</button>
+            <button type="button" onclick="loadSmsPanel()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.45rem 0.9rem;cursor:pointer">Reload</button>
+          </form>
+          <div id="sms-settings-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.6rem"></div>
+          <div id="sms-status-content" class="scrollable-list" style="max-height:130px">
+            <p class="muted-text">Set a Discord user ID to load SMS status.</p>
+          </div>
+          <h3 style="margin:0.8rem 0 0.45rem 0;font-size:0.9rem;color:var(--muted)">Recent Sends</h3>
+          <div id="sms-history-content" class="scrollable-list" style="max-height:220px">
+            <p class="muted-text">No sends yet.</p>
+          </div>
+        </div>
+
         <!-- Container Health Matrix -->
         <div class="card">
           <h2>&#128373; Container Health Status</h2>
@@ -2845,9 +2870,121 @@
           });
       }
 
+      function getSmsUserId() {
+          const raw = (document.getElementById('sms-user-id')?.value || '').trim();
+          return /^\d+$/.test(raw) ? raw : '';
+      }
+
+      function setSmsFeedback(text, isError = false) {
+          const el = document.getElementById('sms-settings-feedback');
+          if (!el) return;
+          el.textContent = text || '';
+          el.style.color = isError ? 'var(--danger,#f44336)' : 'var(--muted)';
+      }
+
+      function renderSmsStatus(data) {
+          const el = document.getElementById('sms-status-content');
+          if (!el) return;
+          if (!data || data.needs_user_id) {
+              el.innerHTML = '<p class="muted-text">Set a Discord user ID to load SMS status.</p>';
+              return;
+          }
+          if (!data.configured) {
+              el.innerHTML = `<p class="muted-text">SMS is not configured for user <code>${esc(String(data.user_id || ''))}</code>.</p>`;
+              return;
+          }
+          const verifyLabel = data.is_verified ? '✅ Verified' : '⚠️ Not verified';
+          const twilioLabel = data.twilio_enabled ? 'Enabled' : 'Disabled';
+          el.innerHTML = '<div class="memory-item">' +
+              `<div><strong>Phone:</strong> <code>${esc(data.masked_phone || 'not set')}</code></div>` +
+              `<div><strong>Verification:</strong> ${verifyLabel} (${esc(data.verification_status || 'unknown')})</div>` +
+              `<div><strong>Send budget:</strong> ${esc(String(data.remaining_sends || 0))} remaining in 10m</div>` +
+              `<div><strong>Twilio:</strong> ${esc(twilioLabel)}</div>` +
+              '</div>';
+      }
+
+      function renderSmsHistory(data) {
+          const el = document.getElementById('sms-history-content');
+          if (!el) return;
+          if (!data || data.needs_user_id) {
+              el.innerHTML = '<p class="muted-text">Set a Discord user ID to view history.</p>';
+              return;
+          }
+          const sends = data.sends || [];
+          if (sends.length === 0) {
+              el.innerHTML = '<p class="muted-text">No recent SMS sends for this user.</p>';
+              return;
+          }
+          el.innerHTML = sends.map(s => {
+              const ts = s.sent_at ? new Date(s.sent_at * 1000).toLocaleString() : 'Unknown time';
+              return `<div class="memory-item"><strong>${esc(ts)}</strong><div style="color:var(--muted);font-size:0.78rem">${esc(s.provider || 'sms')} · ${esc(s.status || 'unknown')} · <code>${esc(s.sid || '')}</code></div><div>${esc(s.preview || '')}</div></div>`;
+          }).join('');
+      }
+
+      async function loadSmsPanel() {
+          const userId = getSmsUserId();
+          if (!userId) {
+              renderSmsStatus({ needs_user_id: true });
+              renderSmsHistory({ needs_user_id: true });
+              setSmsFeedback('Enter a Discord user ID to load SMS data.');
+              return;
+          }
+          localStorage.setItem('openclaw_sms_user_id', userId);
+          try {
+              const [settingsResp, statusResp, historyResp] = await Promise.all([
+                  fetch(`/api/sms/settings?user_id=${encodeURIComponent(userId)}`),
+                  fetch(`/api/sms/status?user_id=${encodeURIComponent(userId)}`),
+                  fetch(`/api/sms/history?user_id=${encodeURIComponent(userId)}&limit=10`),
+              ]);
+              const settingsData = await settingsResp.json();
+              const statusData = await statusResp.json();
+              const historyData = await historyResp.json();
+              document.getElementById('sms-phone-number').value = settingsData.phone_number || '';
+              renderSmsStatus(statusData);
+              renderSmsHistory(historyData);
+              setSmsFeedback('');
+          } catch {
+              setSmsFeedback('Failed to load SMS dashboard data.', true);
+              renderSmsStatus({ needs_user_id: true });
+              renderSmsHistory({ sends: [] });
+          }
+      }
+
+      async function saveSmsSettings(event) {
+          event.preventDefault();
+          const userId = getSmsUserId();
+          if (!userId) {
+              setSmsFeedback('Discord user ID is required.', true);
+              return;
+          }
+          const phone = (document.getElementById('sms-phone-number')?.value || '').trim();
+          try {
+              const resp = await fetch('/api/sms/settings', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ user_id: Number(userId), phone_number: phone }),
+              });
+              const data = await resp.json();
+              if (!resp.ok) {
+                  setSmsFeedback(data.error || 'Failed to save SMS preferences.', true);
+                  return;
+              }
+              setSmsFeedback(phone ? 'SMS preferences saved.' : 'SMS preferences cleared.');
+              await loadSmsPanel();
+          } catch {
+              setSmsFeedback('Failed to save SMS preferences.', true);
+          }
+      }
+
       // Init
       (async () => {
         try {
+          const savedSmsUserId = localStorage.getItem('openclaw_sms_user_id') || '';
+          if (savedSmsUserId && document.getElementById('sms-user-id')) {
+            document.getElementById('sms-user-id').value = savedSmsUserId;
+          }
+          const smsForm = document.getElementById('sms-settings-form');
+          if (smsForm) smsForm.addEventListener('submit', saveSmsSettings);
           const d = await loadData();
           render(d);
           document.getElementById("loading").style.display = "none";
@@ -2867,6 +3004,7 @@
           loadQuotaStatus();
           loadSkillStats();
           loadConfigStatus();
+          loadSmsPanel();
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -2875,7 +3013,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadApprovals(); loadRunTimeline(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadApprovals(); loadRunTimeline(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {

@@ -17,6 +17,9 @@ from .api_handlers import (
     api_schedules_handler,
     api_search_stats_handler,
     api_skill_stats_handler,
+    api_sms_history_handler,
+    api_sms_settings_handler,
+    api_sms_status_handler,
     api_status_handler,
     api_threads_handler,
     api_topology_handler,
@@ -48,3 +51,7 @@ def setup_dashboard(app: web.Application) -> None:
     app.router.add_get("/api/skill-stats", api_skill_stats_handler)
     app.router.add_get("/api/knowledge-graph", api_knowledge_graph_handler)
     app.router.add_get("/api/topology", api_topology_handler)
+    app.router.add_get("/api/sms/settings", api_sms_settings_handler)
+    app.router.add_post("/api/sms/settings", api_sms_settings_handler)
+    app.router.add_get("/api/sms/status", api_sms_status_handler)
+    app.router.add_get("/api/sms/history", api_sms_history_handler)

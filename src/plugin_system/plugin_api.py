@@ -1,0 +1,297 @@
+"""
+Plugin API - Interface for plugins to interact with OpenClaw.
+
+Provides a safe, versioned API for plugins to:
+- Register skills and commands
+- Access configuration
+- Store persistent data
+- Emit and listen to events
+- Log messages
+"""
+
+import logging
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+log = logging.getLogger("openclaw.plugin_system.api")
+
+
+class PluginAPI:
+    """
+    API interface provided to plugins for interacting with OpenClaw.
+
+    This class provides a stable interface that plugins can depend on,
+    isolating them from internal OpenClaw implementation changes.
+    """
+
+    def __init__(
+        self,
+        plugin_name: str,
+        data_dir: Path,
+        skills_registry: dict[str, Any],
+        config: dict[str, Any] | None = None,
+        event_emitter: Any | None = None,
+    ):
+        """
+        Initialize the PluginAPI.
+
+        Args:
+            plugin_name: Name of the plugin using this API
+            data_dir: Directory for plugin data storage
+            skills_registry: Global skills registry
+            config: Bot configuration (read-only)
+            event_emitter: Event system for plugin hooks
+        """
+        self.plugin_name = plugin_name
+        self.data_dir = data_dir
+        self._skills_registry = skills_registry
+        self._config = config or {}
+        self._event_emitter = event_emitter
+        self._plugin_skills: dict[str, Callable] = {}
+        self._plugin_commands: list[dict[str, Any]] = []
+        self._storage: dict[str, Any] = {}
+        self.logger = logging.getLogger(f"openclaw.plugin.{plugin_name}")
+
+        # Create plugin data directory
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+
+    # -------------------------------------------------------------------------
+    # Skill Registration
+    # -------------------------------------------------------------------------
+
+    def register_skill(
+        self,
+        name: str,
+        function: Callable,
+        description: str = "",
+        category: str = "Plugin Skills",
+    ) -> None:
+        """
+        Register a new skill with OpenClaw.
+
+        Args:
+            name: Unique skill name (will be prefixed with plugin name)
+            function: Async function implementing the skill
+            description: Human-readable description
+            category: Skill category for organization
+
+        Raises:
+            ValueError: If skill name already exists
+        """
+        full_name = f"{self.plugin_name}.{name}"
+
+        if full_name in self._skills_registry:
+            raise ValueError(f"Skill '{full_name}' already registered")
+
+        # Set docstring if not present
+        if description and not function.__doc__:
+            function.__doc__ = description
+
+        self._skills_registry[full_name] = function
+        self._plugin_skills[full_name] = function
+
+        self.logger.info(f"Registered skill: {full_name}")
+
+    def unregister_skill(self, name: str) -> None:
+        """
+        Unregister a skill.
+
+        Args:
+            name: Skill name (with or without plugin prefix)
+        """
+        full_name = name if "." in name else f"{self.plugin_name}.{name}"
+
+        if full_name in self._skills_registry:
+            del self._skills_registry[full_name]
+            self._plugin_skills.pop(full_name, None)
+            self.logger.info(f"Unregistered skill: {full_name}")
+
+    def get_registered_skills(self) -> list[str]:
+        """Get list of skills registered by this plugin."""
+        return list(self._plugin_skills.keys())
+
+    # -------------------------------------------------------------------------
+    # Command Registration
+    # -------------------------------------------------------------------------
+
+    def register_command(
+        self,
+        name: str,
+        callback: Callable,
+        description: str = "",
+        options: list[dict[str, Any]] | None = None,
+    ) -> None:
+        """
+        Register a Discord slash command.
+
+        Args:
+            name: Command name
+            callback: Async function to handle command
+            description: Command description
+            options: Command options/parameters
+
+        Note:
+            Commands are currently logged but not automatically registered
+            with Discord. Full Discord integration coming in future version.
+        """
+        command = {
+            "name": name,
+            "callback": callback,
+            "description": description,
+            "options": options or [],
+            "plugin": self.plugin_name,
+        }
+        self._plugin_commands.append(command)
+        self.logger.info(f"Registered command: /{name}")
+
+    def get_registered_commands(self) -> list[dict[str, Any]]:
+        """Get list of commands registered by this plugin."""
+        return self._plugin_commands.copy()
+
+    # -------------------------------------------------------------------------
+    # Configuration Access
+    # -------------------------------------------------------------------------
+
+    def get_config(self, key: str, default: Any = None) -> Any:
+        """
+        Get configuration value from bot config.
+
+        Args:
+            key: Configuration key (supports dot notation)
+            default: Default value if key not found
+
+        Returns:
+            Configuration value or default
+        """
+        parts = key.split(".")
+        value = self._config
+
+        for part in parts:
+            if isinstance(value, dict):
+                value = value.get(part)
+            else:
+                return default
+
+            if value is None:
+                return default
+
+        return value
+
+    # -------------------------------------------------------------------------
+    # Plugin Storage
+    # -------------------------------------------------------------------------
+
+    def store_data(self, key: str, value: Any) -> None:
+        """
+        Store data in plugin's persistent storage.
+
+        Args:
+            key: Storage key
+            value: Value to store (must be JSON serializable)
+        """
+        self._storage[key] = value
+        self.logger.debug(f"Stored data: {key}")
+
+    def get_data(self, key: str, default: Any = None) -> Any:
+        """
+        Retrieve data from plugin storage.
+
+        Args:
+            key: Storage key
+            default: Default value if key not found
+
+        Returns:
+            Stored value or default
+        """
+        return self._storage.get(key, default)
+
+    def delete_data(self, key: str) -> None:
+        """
+        Delete data from plugin storage.
+
+        Args:
+            key: Storage key
+        """
+        self._storage.pop(key, None)
+        self.logger.debug(f"Deleted data: {key}")
+
+    def get_data_file(self, filename: str) -> Path:
+        """
+        Get path to a file in plugin's data directory.
+
+        Args:
+            filename: Name of the file
+
+        Returns:
+            Path object for the file
+        """
+        return self.data_dir / filename
+
+    # -------------------------------------------------------------------------
+    # Event System
+    # -------------------------------------------------------------------------
+
+    def emit_event(self, event: str, **kwargs: Any) -> None:
+        """
+        Emit an event that other plugins can listen to.
+
+        Args:
+            event: Event name
+            **kwargs: Event data
+        """
+        if self._event_emitter:
+            self._event_emitter.emit(event, plugin=self.plugin_name, **kwargs)
+        self.logger.debug(f"Emitted event: {event}")
+
+    def on_event(self, event: str, callback: Callable) -> None:
+        """
+        Register a callback for an event.
+
+        Args:
+            event: Event name to listen for
+            callback: Function to call when event occurs
+        """
+        if self._event_emitter:
+            self._event_emitter.on(event, callback)
+        self.logger.debug(f"Registered event listener: {event}")
+
+    # -------------------------------------------------------------------------
+    # Logging
+    # -------------------------------------------------------------------------
+
+    def log(self, message: str, level: str = "info") -> None:
+        """
+        Log a message.
+
+        Args:
+            message: Message to log
+            level: Log level (debug, info, warning, error, critical)
+        """
+        log_func = getattr(self.logger, level.lower(), self.logger.info)
+        log_func(message)
+
+    # -------------------------------------------------------------------------
+    # Utility Methods
+    # -------------------------------------------------------------------------
+
+    def get_version(self) -> str:
+        """Get OpenClaw version."""
+        return self.get_config("version", "unknown")
+
+    def has_permission(self, permission: str) -> bool:
+        """
+        Check if plugin has a specific permission.
+
+        Args:
+            permission: Permission name (e.g., 'network', 'storage')
+
+        Returns:
+            True if permission granted
+
+        Note:
+            Permissions are currently not enforced. This is a placeholder
+            for future sandboxing implementation.
+        """
+        # TODO: Implement actual permission checking
+        return True

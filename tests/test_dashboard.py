@@ -63,10 +63,19 @@ finally:
         pass
 
 
-def _fake_request(app_data: dict | None = None) -> MagicMock:
+def _fake_request(
+    app_data: dict | None = None,
+    *,
+    method: str = "GET",
+    query: dict | None = None,
+    json_payload: dict | None = None,
+) -> MagicMock:
     """Build a minimal mock aiohttp.web.Request."""
     req = MagicMock()
     req.app = app_data or {}
+    req.method = method
+    req.query = query or {}
+    req.json = AsyncMock(return_value=json_payload or {})
     return req
 
 
@@ -153,3 +162,61 @@ class TestApiDashboard:
             resp = await mod.api_dashboard_handler(req)
 
         assert resp.content_type == "application/json"
+
+
+class TestSmsDashboardApi:
+    @pytest.mark.asyncio
+    async def test_sms_settings_get_requires_user_id(self):
+        req = _fake_request(query={})
+        resp = await mod.api_sms_settings_handler(req)
+        assert resp.content_type == "application/json"
+        assert "needs_user_id" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_sms_settings_post_updates_phone(self, monkeypatch, tmp_path):
+        import sms_ux
+
+        monkeypatch.setattr(sms_ux, "sms_prefs", sms_ux.SMSPrefsStore(tmp_path / "sms_prefs.json"))
+        req = _fake_request(
+            method="POST",
+            json_payload={"user_id": 12345, "phone_number": "+15551234567"},
+        )
+
+        resp = await mod.api_sms_settings_handler(req)
+
+        assert resp.content_type == "application/json"
+        assert "ok" in resp.text
+        assert "+15551234567" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_sms_status_and_history_returns_data(self, monkeypatch, tmp_path):
+        import sms_ux
+
+        monkeypatch.setattr(sms_ux, "sms_prefs", sms_ux.SMSPrefsStore(tmp_path / "sms_prefs.json"))
+        prefs = sms_ux.UserSMSPrefs(
+            user_id=333,
+            phone_number="+15550001111",
+            is_verified=True,
+            recent_sends=[
+                {
+                    "sent_at": 1_700_000_000.0,
+                    "provider": "twilio",
+                    "sid": "SM123",
+                    "status": "queued",
+                    "preview": "hello",
+                    "to": "+15550001111",
+                }
+            ],
+        )
+        await sms_ux.sms_prefs.update(prefs)
+
+        status_req = _fake_request(query={"user_id": "333"})
+        status_resp = await mod.api_sms_status_handler(status_req)
+        assert status_resp.content_type == "application/json"
+        assert "configured" in status_resp.text
+        assert "true" in status_resp.text.lower()
+
+        history_req = _fake_request(query={"user_id": "333", "limit": "5"})
+        history_resp = await mod.api_sms_history_handler(history_req)
+        assert history_resp.content_type == "application/json"
+        assert "SM123" in history_resp.text

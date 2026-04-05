@@ -242,7 +242,7 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 **Phase 20 — Discord UX Enhancements** ✅
 
 - **Dynamic autocomplete** — `/restart`, `/status`, `/logs` suggest live container names from `docker ps` as you type
-- **Right-click context menus** — "Analyze with AI", "Save to Memory", "Research This" on any Discord message
+- **Right-click context menus** — "Analyze with AI", "Save to Memory", "Research This", and "Send to SMS" on any Discord message
 - **Pagination buttons** — ◀️/▶️ on `/rules` and other long lists (was truncating at 20 items)
 - **Choice selectors** — `/search` media type (TV/Movie/All) and `/rules` action (List/Search/Delete) as clickable options
 - **Auto-threading** — long `/ask` conversations (3+ exchanges) auto-create a Discord thread to keep channels clean
@@ -361,6 +361,14 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - `/ntfy send <message>` — Send phone push notifications via ntfy.sh (or self-hosted)
 - `/ntfy test` — Verify ntfy configuration
 - `push_notification()` utility exported for other cogs to send alerts
+
+**Phase 42 — Discord One-Tap SMS UX** ✅
+
+- `/sms config phone:+15551234567` — Save your target phone and optionally send a verification code
+- `/sms test` / `/sms test code:<code>` — start or complete verification flow
+- `/sms status` — show configured number, verification state, and send budget
+- `/sms send <message>` — confirmation-based SMS send with cooldown + rate limiting
+- Context menu: right-click any message → **Send to SMS**
 
 **Phase 36 — Movie & TV Lookup** ✅
 

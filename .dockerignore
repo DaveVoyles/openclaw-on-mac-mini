@@ -1,0 +1,83 @@
+# Git and version control
+.git
+.gitignore
+.github
+
+# Python cache and environments
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info
+dist
+build
+.venv
+.env
+venv
+env
+ENV
+
+# Testing and coverage
+.pytest_cache
+.coverage
+.hypothesis
+htmlcov
+.tox
+.mypy_cache
+.ruff_cache
+coverage.xml
+*.cover
+test-report.*
+bandit-report.json
+safety-report.json
+
+# Documentation and markdown
+*.md
+docs
+!README.md
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Data and logs (use volumes instead)
+data
+logs
+*.log
+
+# Benchmarks and temp files
+.benchmarks
+.clawhub
+
+# Development tools
+.pre-commit-config.yaml
+Makefile
+docker-compose*.yml
+Dockerfile*
+
+# Examples and tests
+examples
+tests
+test_*.py
+verify_*.py
+
+# Workspace files
+*.code-workspace
+
+# Large files
+*.db
+*.sqlite
+*.sqlite3
+
+# Config (mounted as volume)
+config
+
+# Templates (will be copied separately)
+# templates
