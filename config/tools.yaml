@@ -1581,3 +1581,37 @@
         description: The question or search query to compare across providers
     required:
       - query
+- name: get_available_templates
+  description: >-
+    Get list of all available recap templates. Returns template names and details
+    including sections, format, and description. Templates available: entertainment
+    (box office, streaming, studio stocks), sports (NBA scores, standings, upcoming
+    games), tech (headlines, FAANG+ stocks, product launches), finance (market
+    indices, top movers, sector sentiment), and everything (condensed summary of all).
+  parameters:
+    type: object
+    properties: {}
+- name: generate_recap_from_template
+  description: >-
+    Generate a topic-specific weekly recap using a predefined template. Automatically
+    fetches relevant news, sports data, and financial information based on the template
+    type. Returns structured recap with sections, summary, and metadata. Templates:
+    'entertainment', 'sports', 'tech', 'finance', 'everything'.
+  parameters:
+    type: object
+    properties:
+      template_name:
+        type: string
+        description: "Template to use: 'entertainment', 'sports', 'tech', 'finance', or 'everything'"
+        enum:
+          - entertainment
+          - sports
+          - tech
+          - finance
+          - everything
+      date_range:
+        type: string
+        description: "Time range in format: '7d' (7 days), '2w' (2 weeks), '1m' (1 month), or numeric days"
+        default: "7d"
+    required:
+      - template_name

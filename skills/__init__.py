@@ -689,6 +689,9 @@ SKILL_CATEGORIES = {
     "🔬 Analysis & Reports": [
         "analyze_logs", "suggest_fixes", "create_status_report",
     ],
+    "📊 Weekly Recaps": [
+        "get_available_templates", "generate_recap_from_template",
+    ],
     "💰 Spending & Budget": [
         "get_spending", "get_daily_spending",
     ],
@@ -712,3 +715,14 @@ if _uncategorized:
 from research_agent import run_scheduled_research
 
 SKILLS["run_scheduled_research"] = run_scheduled_research
+
+# Recap templates — topic-specific weekly recap generation
+from skills.recap_templates import (
+    generate_recap_from_template,
+    get_available_templates,
+)
+
+SKILLS.update({
+    "get_available_templates": get_available_templates,
+    "generate_recap_from_template": generate_recap_from_template,
+})
