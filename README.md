@@ -19,7 +19,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Local LLM**    | Ollama (`gemma4:e4b`) — free, with native tool calling support         |
 | **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
 | **Natural Language** | `/ask` auto-shortlists the most relevant skills and tools per request |
-| **Status**       | **Phase 41 — Scheduled Recap Automation** ✅                           |
+| **Status**       | **Phase 42 — Patreon/MonsterVision Monitoring** ✅                     |
 
 ## Features
 
@@ -446,6 +446,16 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - LLM skills: `configure_recap`, `list_recap_configs`, `disable_recap`, `test_recap`
 - Discord-friendly formatting with auto-splitting
 - Integration with existing scheduler system
+
+**Phase 42 — Patreon/MonsterVision Monitoring** ✅
+
+- Automated health monitoring for MonsterVision Patreon downloader with 30-minute health checks
+- Cookie freshness tracking with proactive alerts (WARNING at 3 days, CRITICAL at 5 days)
+- Discord commands: `/patreon status` for diagnostics, `/patreon refresh-cookies` for step-by-step refresh guide
+- Auto-recovery: container restarts, cookie detection, download retry logic
+- Dashboard integration: real-time cookie age, download progress, next check countdown
+- Alert deduplication with 24-hour cooldown per issue
+- LLM skills for natural language queries ("Check Patreon health", "How old are my cookies?")
 
 **Planned**
 
