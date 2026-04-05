@@ -16,9 +16,11 @@ from llm_client import (
     MODEL_NAME,
     OLLAMA_MODEL,
     TEMPERATURE,
+    _build_model_for_tools,
     _client,
     _get_model,
     _get_thinking_model,
+    _get_tool_declarations,
     _load_system_prompt,
     _ModelConfig,
     _record_usage,
@@ -33,6 +35,7 @@ from llm_patterns import (
 from llm_ratelimit import rate_limiter as _rate_limiter
 from llm_tools import _extract_final_text, _extract_history, _run_tool_loop
 from skills import SKILLS
+from tool_router import route_tool_declarations
 from trace_context import get_trace_id
 
 from .context import (
@@ -98,12 +101,39 @@ async def _gemini_chat(
     return text, updated_history, model_name
 
 
+async def _select_model_for_message(
+    user_message: str,
+    *,
+    tool_declarations: list[dict[str, Any]] | None = None,
+    label: str = "LLM",
+) -> tuple[_ModelConfig, dict[str, Any]]:
+    """Return a model configured with the best-fit tool declarations."""
+    if tool_declarations is not None:
+        route_info = {
+            "strategy": "no-tools" if not tool_declarations else "caller-supplied",
+            "selected": [str(d.get("name", "")) for d in tool_declarations],
+            "top_score": None,
+        }
+        return _build_model_for_tools(tool_declarations), route_info
+
+    declarations = _get_tool_declarations()
+    routed_declarations, route_info = route_tool_declarations(user_message, declarations)
+    if route_info.get("strategy") == "fallback-full":
+        log.debug("%s tool routing fell back to the full declaration set", label)
+        return await _get_model(), route_info
+
+    selected_names = ", ".join(route_info.get("selected", [])[:8])
+    log.info("%s tool shortlist: %s", label, selected_names)
+    return _build_model_for_tools(routed_declarations), route_info
+
+
 async def chat_stream(
     user_message: str,
     history: list[dict] | None = None,
     user_name: str = "User",
     on_tool_call: Any | None = None,
     model_preference: str = "auto",
+    tool_declarations: list[dict[str, Any]] | None = None,
 ):
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
     log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
@@ -245,7 +275,17 @@ async def chat_stream(
         yield msg, True, {"model_used": MODEL_NAME, "updated_history": history, "needs_tools": False}
         return
 
-    model = await _get_model()
+    model, route_info = await _select_model_for_message(
+        user_message,
+        tool_declarations=tool_declarations,
+        label="LLM",
+    )
+    if route_info.get("strategy") == "shortlist":
+        _routing_notes.append(
+            "Tool shortlist: " + ", ".join(route_info.get("selected", [])[:6])
+        )
+    elif route_info.get("strategy") == "no-tools":
+        _routing_notes.append("Tool use disabled for this internal request")
     model_name = model.model_name if hasattr(model, "model_name") else "unknown"
 
     text, updated_history, model_name = await _gemini_chat(
@@ -354,6 +394,7 @@ async def chat(
     user_name: str = "User",
     on_tool_call: Any | None = None,
     model_preference: str = "auto",
+    tool_declarations: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[dict], str]:
     """
     Send a message and return (response_text, updated_history, model_used).
@@ -475,7 +516,11 @@ async def chat(
                 history,
                 MODEL_NAME,
             )
-        model = await _get_model()
+        model, _ = await _select_model_for_message(
+            user_message,
+            tool_declarations=tool_declarations,
+            label="LLM",
+        )
         text, updated_history, model_name = await _gemini_chat(
             model_message, history, model,
             on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
@@ -511,7 +556,11 @@ async def chat(
             MODEL_NAME,
         )
 
-    model = await _get_model()
+    model, _ = await _select_model_for_message(
+        user_message,
+        tool_declarations=tool_declarations,
+        label="LLM",
+    )
     text, updated_history, model_name = await _gemini_chat(
         model_message,
         history,

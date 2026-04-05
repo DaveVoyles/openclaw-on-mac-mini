@@ -18,6 +18,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
 | **Local LLM**    | Ollama (`gemma4:e4b`) — free, with native tool calling support         |
 | **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
+| **Natural Language** | `/ask` auto-shortlists the most relevant skills and tools per request |
 | **Status**       | **Phase 23 — Personal Assistant** ✅                           |
 
 ## Features
@@ -41,6 +42,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 - `/ask <question>` — AI-powered natural language queries
 - **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
+- **Intent-based tool shortlisting**: `/ask` narrows the skill set per prompt, so you can describe what you want in plain English instead of memorizing command names
 - **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
 - Conversation memory — multi-turn context per user/channel (30 min TTL)
@@ -325,6 +327,7 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - `/sports upcoming` — generate a sports watch guide with matchup tables, game times, and where-to-watch details based on live web research
 - Both commands can optionally **save to the Obsidian vault** and **schedule a Monday-morning recurring report**
 - New context menu action: **Create recap from thread** for one-click thread summaries
+- Both workflows are also reachable through plain-English `/ask` prompts like "give me a recap of this channel from the last week" or "make a watch table for this week's D1 lacrosse games"
 
 - `/imagine generate <prompt>` — Stable Diffusion txt2img with size and negative prompt options
 - `/imagine status` — Check SD availability and list loaded models
@@ -770,9 +773,11 @@ Instead of memorizing individual commands, just describe what you want:
 /ask "why isn't my new show showing up in plex?"
 /ask "give me a full health report"
 /ask "which services aren't running?"
+/ask "give me a recap of this channel from the last week"
+/ask "look at this week's upcoming men's division 1 college lacrosse games and make a watch table"
 ```
 
-The LLM will call the right skills, chain multiple tool calls if needed, and give you a synthesized answer.
+OpenClaw now shortlists the most relevant skills for each request, chains tool calls when needed, and gives you a synthesized answer.
 
 #### 2. Schedule your health checks
 

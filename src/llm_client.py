@@ -124,15 +124,16 @@ def _convert_schema(schema: dict) -> dict:
     return result
 
 
-def _build_tools() -> list:
+def _build_tools(tool_declarations: list[dict[str, Any]] | None = None) -> list:
     """Build the Gemini tools list from declarations."""
+    declarations = tool_declarations if tool_declarations is not None else _TOOL_DECLARATIONS
     return [genai.types.Tool(function_declarations=[
         genai.types.FunctionDeclaration(
             name=d["name"],
             description=d["description"],
             parameters=genai.types.Schema(**_convert_schema(d["parameters"])),
         )
-        for d in _TOOL_DECLARATIONS
+        for d in declarations
     ])]
 
 
@@ -160,6 +161,7 @@ def _init_gemini_model(
     max_tokens: int = MAX_TOKENS,
     thinking_budget: int | None = None,
     with_tools: bool = True,
+    tool_declarations: list[dict[str, Any]] | None = None,
 ) -> _ModelConfig:
     """Create a _ModelConfig holding model name + generation config."""
     if not GOOGLE_API_KEY:
@@ -171,8 +173,8 @@ def _init_gemini_model(
         "temperature": temperature,
     }
 
-    if with_tools:
-        config_kwargs["tools"] = _build_tools()
+    if with_tools and tool_declarations != []:
+        config_kwargs["tools"] = _build_tools(tool_declarations)
 
     if thinking_budget is not None:
         config_kwargs["thinking_config"] = genai.types.ThinkingConfig(
@@ -200,6 +202,22 @@ async def _get_model() -> _ModelConfig:
         _model_system_prompt = system_prompt
         log.info("Gemini model initialized: %s (temp=%.1f, max_tokens=%d)", MODEL_NAME, TEMPERATURE, MAX_TOKENS)
         return _model
+
+
+def _get_tool_declarations() -> list[dict[str, Any]]:
+    """Return the raw tool declarations currently exposed to Gemini."""
+    return list(_TOOL_DECLARATIONS)
+
+
+def _build_model_for_tools(tool_declarations: list[dict[str, Any]]) -> _ModelConfig:
+    """Build an uncached Gemini model config for a routed tool shortlist."""
+    return _init_gemini_model(
+        MODEL_NAME,
+        temperature=TEMPERATURE,
+        max_tokens=MAX_TOKENS,
+        with_tools=bool(tool_declarations),
+        tool_declarations=tool_declarations,
+    )
 
 
 # ---------------------------------------------------------------------------

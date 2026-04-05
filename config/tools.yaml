@@ -94,16 +94,59 @@
         description: Optional service name to filter results (e.g. 'sonarr', 'plex'). Leave empty for all services.
 - name: check_arr_health
   description: Check health status of all *arr services (Sonarr, Radarr, Lidarr, Prowlarr).
+  category: Media Health
+  aliases:
+    - arr health
+    - check sonarr and radarr
+    - media stack health
+  keywords:
+    - sonarr
+    - radarr
+    - lidarr
+    - prowlarr
+    - health
+    - issues
+  examples:
+    - Check whether any of the *arr apps are unhealthy
+    - Is anything wrong with Sonarr or Radarr?
   parameters:
     type: object
     properties: {}
 - name: check_download_clients
   description: Check connectivity of download clients (SABnzbd and qBittorrent).
+  category: Media Health
+  aliases:
+    - are downloads working
+    - check sabnzbd
+    - check qbittorrent
+    - download client status
+  keywords:
+    - sabnzbd
+    - qbittorrent
+    - downloads
+    - torrents
+    - usenet
+  examples:
+    - Are the download clients connected?
+    - Check whether SABnzbd or qBittorrent is down
   parameters:
     type: object
     properties: {}
 - name: check_plex_status
   description: Check Plex server status and version via Tautulli.
+  category: Plex
+  aliases:
+    - is plex up
+    - plex server status
+    - plex health
+  keywords:
+    - plex
+    - tautulli
+    - status
+    - server
+  examples:
+    - Is Plex running right now?
+    - Check the Plex server health
   parameters:
     type: object
     properties: {}
@@ -112,11 +155,41 @@
     "Get real-time Plex activity: who is currently watching, what they're watching, playback progress, video quality,
     and whether the stream is direct play or transcode. Use this when the user asks 'what's playing on Plex', 'is anyone
     watching?', 'who's using Plex right now', or similar."
+  category: Plex
+  aliases:
+    - what's playing on plex
+    - who is watching plex
+    - plex now playing
+  keywords:
+    - plex
+    - now playing
+    - watching
+    - transcode
+    - streams
+  examples:
+    - Who is watching Plex right now?
+    - What's currently playing on Plex?
   parameters:
     type: object
     properties: {}
 - name: search_media
   description: Search for TV shows or movies across Sonarr and Radarr catalogs.
+  category: Media Discovery
+  aliases:
+    - find this movie
+    - find this show
+    - search the library
+  keywords:
+    - movie
+    - movies
+    - show
+    - shows
+    - tv
+    - film
+    - series
+  examples:
+    - Do we already have Severance in the library?
+    - Find the movie Arrival across Sonarr and Radarr
   parameters:
     type: object
     properties:
@@ -184,6 +257,21 @@
     properties: {}
 - name: create_status_report
   description: Generate a comprehensive system status report covering all services, downloads, and Plex.
+  category: Monitoring
+  aliases:
+    - health check
+    - overall status
+    - anything broken
+    - check the stack
+  keywords:
+    - status
+    - health
+    - broken
+    - stack
+    - services
+  examples:
+    - Give me a health report for the media stack
+    - Is anything broken right now?
   parameters:
     type: object
     properties: {}
@@ -202,6 +290,14 @@
       - service
 - name: remember_fact
   description: Store a fact or piece of information in the long-term memory (QMD).
+  category: Memory
+  aliases:
+    - remember this
+    - save this fact
+    - note this down
+  examples:
+    - Remember that I prefer weekly recaps in table format
+  always_available: true
   parameters:
     type: object
     properties:
@@ -215,6 +311,14 @@
       - content
 - name: recall_fact
   description: Search long-term memory (QMD) for a specific fact or information.
+  category: Memory
+  aliases:
+    - what do you remember
+    - look this up in memory
+    - recall this fact
+  examples:
+    - What do you remember about my favorite teams?
+  always_available: true
   parameters:
     type: object
     properties:
@@ -326,6 +430,19 @@
     properties: {}
 - name: read_inbox
   description: Read the most recent emails from a Gmail or Outlook inbox.
+  category: Email
+  aliases:
+    - check my inbox
+    - read my recent emails
+    - show recent mail
+  keywords:
+    - email
+    - inbox
+    - mail
+    - recent
+  examples:
+    - Check my inbox for the latest messages
+    - Show my recent Gmail messages
   parameters:
     type: object
     properties:
@@ -337,6 +454,19 @@
         description: Number of recent messages to return (1-25, default 10)
 - name: search_emails
   description: Search for emails by keyword in the Gmail or Outlook inbox.
+  category: Email
+  aliases:
+    - search my inbox
+    - find that email
+    - look through my mail
+  keywords:
+    - email
+    - inbox
+    - mail
+    - search
+  examples:
+    - Search my inbox for messages from ESPN
+    - Find the email about lacrosse tickets
   parameters:
     type: object
     properties:
@@ -350,6 +480,20 @@
       - query
 - name: send_email
   description: Send an email via Gmail or Outlook.
+  category: Email
+  aliases:
+    - send an email
+    - email this to
+    - draft and send mail
+  keywords:
+    - email
+    - send
+    - message
+    - gmail
+    - outlook
+  examples:
+    - Email this recap to me
+    - Send an email to Dave with the watch guide
   parameters:
     type: object
     properties:
@@ -371,6 +515,20 @@
       - body
 - name: get_upcoming_events
   description: Get Google Calendar events scheduled in the next N days.
+  category: Calendar
+  aliases:
+    - upcoming events
+    - what's on my calendar this week
+    - what do i have tomorrow
+  keywords:
+    - calendar
+    - schedule
+    - events
+    - tomorrow
+    - week
+  examples:
+    - What's on my calendar this week?
+    - What events do I have tomorrow?
   parameters:
     type: object
     properties:
@@ -379,6 +537,20 @@
         description: Number of days ahead to look (1-30, default 7)
 - name: create_calendar_event
   description: Create a Google Calendar event with a title, start/end time, and optional description.
+  category: Calendar
+  aliases:
+    - add this to my calendar
+    - put this on my calendar
+    - schedule a meeting
+  keywords:
+    - calendar
+    - event
+    - schedule
+    - meeting
+    - reminder
+  examples:
+    - Put dinner with Sarah on my calendar tomorrow at 7pm
+    - Create a calendar event for the Notre Dame game on Saturday
   parameters:
     type: object
     properties:
@@ -400,6 +572,19 @@
       - end_time
 - name: get_todays_events
   description: Get all Google Calendar events scheduled for today.
+  category: Calendar
+  aliases:
+    - what's on my calendar today
+    - today's schedule
+    - agenda for today
+  keywords:
+    - calendar
+    - today
+    - schedule
+    - agenda
+  examples:
+    - What's on my calendar today?
+    - Show my agenda for today
   parameters:
     type: object
     properties: {}
@@ -410,6 +595,16 @@
     You can force a specific provider with the 'provider' parameter — use 'perplexity' for AI-synthesized
     answers with citations (best for recaps, summaries), 'serper' for raw Google results, 'firecrawl' for
     search + full page content, or leave empty for auto cascade.
+  category: Web Research
+  aliases:
+    - search the web
+    - look this up online
+    - find current information
+    - check the latest
+  examples:
+    - Find this week's upcoming men's division 1 college lacrosse games and where to watch
+    - Search for the latest Sonarr v4 migration notes
+  always_available: true
   parameters:
     type: object
     properties:
@@ -443,6 +638,12 @@
   description:
     Fetch and read the content of a specific web page or URL. Use when the user provides a URL to read, or after
     a web search when you want to get the full content of a result.
+  category: Web Research
+  aliases:
+    - read this page
+    - open this link
+    - browse this URL
+  always_available: true
   parameters:
     type: object
     properties:
@@ -1240,6 +1441,76 @@
         description: "Cron schedule, e.g. '0 8 * * 0' for Sunday 8am, '0 18 * * 5' for Friday 6pm"
     required:
       - topic
+- name: generate_channel_recap_report
+  description: >-
+    Summarize recent Discord channel or thread activity into highlights, action
+    items, or a markdown table. Use when the user asks for a weekly recap,
+    meeting notes, a channel summary, or a thread wrap-up.
+  category: Recaps & Reports
+  aliases:
+    - weekly recap
+    - channel recap
+    - summarize this thread
+    - summarize this channel
+    - meeting recap
+    - weekly wrap-up
+  examples:
+    - Give me a recap of this channel from the last week
+    - Summarize this Discord thread into action items
+  parameters:
+    type: object
+    properties:
+      channel_id:
+        type: string
+        description: Optional Discord channel or thread ID. Leave empty to use the current channel context.
+      days:
+        type: integer
+        description: Number of days to look back (1-30, default 7)
+      focus:
+        type: string
+        description: Optional topic or focus area for the recap
+      style:
+        type: string
+        description: "Output style: 'highlights', 'action-items', or 'table'"
+      max_messages:
+        type: integer
+        description: Maximum Discord messages to review (25-300, default 200)
+- name: generate_sports_watch_report
+  description: >-
+    Create a structured sports watch guide with upcoming matchups, ET start
+    times, and where-to-watch details. Use when the user asks for games this
+    week, a watch table, streaming info, or where they can watch a sport/team.
+  category: Recaps & Reports
+  aliases:
+    - sports watch guide
+    - games this week
+    - where to watch
+    - sports schedule
+    - college lacrosse schedule
+  examples:
+    - Look at this week's upcoming men's division 1 college lacrosse games and make a watch table
+    - What games does Maryland have in the next five days and how can I watch them?
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: Optional freeform sports request
+      sport:
+        type: string
+        description: Sport name such as lacrosse, basketball, or soccer
+      league:
+        type: string
+        description: League name such as NCAA Division 1 or NBA
+      team:
+        type: string
+        description: Optional team name to narrow the watch guide
+      days:
+        type: integer
+        description: Number of days to look ahead (1-14, default 7)
+      include_watch_info:
+        type: boolean
+        description: Include TV or streaming details when available (default true)
 - name: dream_now
   description: >-
     Run a cognitive dream cycle to consolidate memories, score importance, and
@@ -1276,4 +1547,3 @@
         description: The question or search query to compare across providers
     required:
       - query
-

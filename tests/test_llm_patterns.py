@@ -28,6 +28,9 @@ class TestNeedsTools:
         "approve request id 42",
         "send email to dave",
         "schedule a weekly backup report",
+        "what's on my calendar tomorrow",
+        "search my inbox for receipts",
+        "is anything broken in the media stack",
     ])
     def test_tool_queries_detected(self, query):
         assert mod._needs_tools(query) is True, f"Expected True for: {query}"

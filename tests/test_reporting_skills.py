@@ -68,3 +68,18 @@ async def test_generate_channel_recap_report_requires_live_bot(monkeypatch):
     monkeypatch.setattr(mod, "get_bot", lambda: None)
     result = await mod.generate_channel_recap_report(channel_id=1234)
     assert "not available yet" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_channel_recap_report_uses_bound_channel_context(monkeypatch):
+    monkeypatch.setattr(mod, "get_bot", lambda: None)
+    monkeypatch.setattr(mod, "get_current_channel_id", lambda: 4321)
+    result = await mod.generate_channel_recap_report(channel_id=None)
+    assert "not available yet" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_channel_recap_report_without_context_guides_user(monkeypatch):
+    monkeypatch.setattr(mod, "get_current_channel_id", lambda: None)
+    result = await mod.generate_channel_recap_report(channel_id=None)
+    assert "No Discord channel context" in result

@@ -45,9 +45,17 @@ _LIVE_ACTION_PATTERN = re.compile(
     r"|\bsend\b.{0,20}\b(email|mail)\b"
     r"|\bcreate\b.{0,30}\b(task|event|entity|connection|calendar)\b"
     r"|\bschedule\b.{0,30}\b(task|report|research|job|recurring|weekly|daily|monthly)\b"
+    # Calendar and inbox retrieval in plain English
+    r"|\b(what'?s\s+on|what\s+is\s+on|show|list|check|review)\b.{0,40}\b(calendar|schedule|agenda|events?)\b"
+    r"|\b(read|check|search|scan|look\s+through|find)\b.{0,40}\b(inbox|email|emails|mail)\b"
+    # Recaps / summaries over live Discord history
+    r"|\b(recap|summari[sz]e|summary|wrap[\s-]?up)\b.{0,40}\b(channel|thread|discord|conversation|meeting|week)\b"
+    # Sports schedules / watch guides / current game listings
+    r"|\b(game|games|matchup|matchups|watch|stream(?:ing)?|tv\s+schedule)\b.{0,60}\b(upcoming|this\s+week|today|tomorrow|weekend|espn|ncaa|lacrosse|where\s+to\s+watch)\b"
     # Diagnostics / jobs
     r"|\brun\b.{0,20}\b(speed\s+test|status\s+report|ping|backup|diagnostic)\b"
     r"|\bping\s+[\w.]+"
+    r"|\b(anything|what'?s|what\s+is)\b.{0,20}\b(broken|wrong|down)\b.{0,40}\b(stack|media|service|services|plex|sonarr|radarr|lidarr|prowlarr|nas)\b"
     # URLs always need browse_url
     r"|https?://"
     r"|\b\w+\.(com|org|net|io|edu)\b",

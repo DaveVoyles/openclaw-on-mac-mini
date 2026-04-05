@@ -47,7 +47,7 @@ from permissions import (  # noqa: F401 — re-exported for backward compat
     require_auth,
 )
 from qmd import remember_fact
-from runtime_state import set_bot
+from runtime_state import request_context, set_bot
 from scheduler import scheduler
 from skills import SKILLS
 from trace_context import setup_trace_logging
@@ -456,11 +456,12 @@ class ResponseActions(discord.ui.View):
         if len(conv.history) >= 2:
             conv.history = conv.history[:-2]
         try:
-            response_text, updated_history, model_used = await llm_chat(
-                user_message=self._question,
-                history=conv.history,
-                user_name=str(interaction.user.display_name),
-            )
+            with request_context(channel_id=self._channel_id):
+                response_text, updated_history, model_used = await llm_chat(
+                    user_message=self._question,
+                    history=conv.history,
+                    user_name=str(interaction.user.display_name),
+                )
             conv.update_from_llm(updated_history)
             embed = discord.Embed(description=response_text[:_EMBED_LIMIT], color=discord.Color.purple())
             embed.set_footer(text=f"🔄 Regenerated | via {model_used}")
@@ -497,11 +498,12 @@ class ResponseActions(discord.ui.View):
                 user_name=str(interaction.user.display_name),
             )
             try:
-                response_text, updated_history, model_used = await llm_chat(
-                    user_message=follow_up_question,
-                    history=conv.history,
-                    user_name=str(interaction.user.display_name),
-                )
+                with request_context(channel_id=self._channel_id):
+                    response_text, updated_history, model_used = await llm_chat(
+                        user_message=follow_up_question,
+                        history=conv.history,
+                        user_name=str(interaction.user.display_name),
+                    )
                 conv.update_from_llm(updated_history)
                 embed = discord.Embed(
                     description=response_text[:_EMBED_LIMIT],
@@ -531,11 +533,12 @@ class ResponseActions(discord.ui.View):
             user_name=str(interaction.user.display_name),
         )
         try:
-            response_text, updated_history, model_used = await llm_chat(
-                user_message=deeper_q,
-                history=conv.history,
-                user_name=str(interaction.user.display_name),
-            )
+            with request_context(channel_id=self._channel_id):
+                response_text, updated_history, model_used = await llm_chat(
+                    user_message=deeper_q,
+                    history=conv.history,
+                    user_name=str(interaction.user.display_name),
+                )
             conv.update_from_llm(updated_history)
             embed = discord.Embed(
                 description=response_text[:_EMBED_LIMIT],
@@ -811,39 +814,40 @@ async def ask_cmd(
         _DISCORD_TIMEOUT = 840
 
         try:
-          async for chunk_text, is_final, meta in llm_chat_stream(
-            user_message=question,
-            history=conv.history,
-            user_name=str(interaction.user.display_name),
-            on_tool_call=_on_tool_call,
-            model_preference=model_pref,
-        ):
-            model_used = meta.get("model_used", "unknown")
+            with request_context(channel_id=interaction.channel_id):
+                async for chunk_text, is_final, meta in llm_chat_stream(
+                    user_message=question,
+                    history=conv.history,
+                    user_name=str(interaction.user.display_name),
+                    on_tool_call=_on_tool_call,
+                    model_preference=model_pref,
+                ):
+                    model_used = meta.get("model_used", "unknown")
 
-            if is_final:
-                response_text = chunk_text
-                _routing_notes.extend(meta.get("routing_notes", []))
-                if "updated_history" in meta:
-                    conv.update_from_llm(meta["updated_history"])
-                    conversation_store.auto_save_thread(
-                        interaction.user.id, interaction.channel_id, str(interaction.user.display_name)
-                    )
-                log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
-                break
+                    if is_final:
+                        response_text = chunk_text
+                        _routing_notes.extend(meta.get("routing_notes", []))
+                        if "updated_history" in meta:
+                            conv.update_from_llm(meta["updated_history"])
+                            conversation_store.auto_save_thread(
+                                interaction.user.id, interaction.channel_id, str(interaction.user.display_name)
+                            )
+                        log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
+                        break
 
-            now = time.monotonic()
-            if now - last_edit >= _STREAM_EDIT_INTERVAL and chunk_text:
-                try:
-                    preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
-                    embed = discord.Embed(description=preview, color=discord.Color.purple())
-                    embed.set_author(
-                        name=f"Replying to: {display_question}",
-                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                    )
-                    await interaction.edit_original_response(content=None, embed=embed)
-                    last_edit = now
-                except Exception as exc:
-                    log.debug("Stream edit failed: %s", exc)
+                    now = time.monotonic()
+                    if now - last_edit >= _STREAM_EDIT_INTERVAL and chunk_text:
+                        try:
+                            preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
+                            embed = discord.Embed(description=preview, color=discord.Color.purple())
+                            embed.set_author(
+                                name=f"Replying to: {display_question}",
+                                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                            )
+                            await interaction.edit_original_response(content=None, embed=embed)
+                            last_edit = now
+                        except Exception as exc:
+                            log.debug("Stream edit failed: %s", exc)
 
         except asyncio.TimeoutError:
             elapsed = time.monotonic() - _progress_start
@@ -1220,20 +1224,21 @@ async def on_message(message: discord.Message) -> None:
         response_text = ""
 
         try:
-            async for chunk_text, is_final, meta in llm_chat_stream(
-                user_message=user_question,
-                history=conv.history,
-                user_name=str(message.author.display_name),
-                model_preference=model_pref,
-            ):
-                if is_final:
-                    response_text = chunk_text
-                    if "updated_history" in meta:
-                        conv.update_from_llm(meta["updated_history"])
-                        conversation_store.auto_save_thread(
-                            message.author.id, message.channel.id, str(message.author.display_name)
-                        )
-                    break
+            with request_context(channel_id=message.channel.id):
+                async for chunk_text, is_final, meta in llm_chat_stream(
+                    user_message=user_question,
+                    history=conv.history,
+                    user_name=str(message.author.display_name),
+                    model_preference=model_pref,
+                ):
+                    if is_final:
+                        response_text = chunk_text
+                        if "updated_history" in meta:
+                            conv.update_from_llm(meta["updated_history"])
+                            conversation_store.auto_save_thread(
+                                message.author.id, message.channel.id, str(message.author.display_name)
+                            )
+                        break
         except Exception as e:
             log.error("Thread follow-up LLM error: %s", e)
             response_text = f"❌ **Error:** {e}"

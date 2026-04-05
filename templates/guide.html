@@ -434,9 +434,18 @@ You get a Discord embed with your active downloads</code></pre>
       <p>
         The most powerful command. Uses <strong>hybrid routing</strong>:
         conversational queries go to local Ollama (free, fast), tool-requiring
-        queries go to Gemini 2.5 Flash with function calling.
-        You can override routing per-message or set a sticky default.
+        queries go to Gemini 2.5 Flash with function calling. OpenClaw also
+        shortlists the most relevant tools for each request, so you can ask in
+        plain English instead of remembering specific skill names. You can
+        override routing per-message or set a sticky default.
       </p>
+
+      <div class="tip">
+        <strong>&#128161; Plain-English first:</strong> You usually do not need
+        to remember individual skill names. Ask naturally with
+        <code>/ask</code> and OpenClaw will route to the most relevant tools,
+        such as recaps, sports watch guides, health checks, or web research.
+      </div>
 
       <h3>Example Queries</h3>
       <div class="card">
@@ -448,9 +457,18 @@ You get a Discord embed with your active downloads</code></pre>
 /ask What's my Gemini spending so far?
 /ask Check all services and give me a status report
 /ask Search for "The Bear" on Sonarr
+/ask Give me a recap of this channel from the last week
+/ask Look at this week's upcoming men's Division 1 college lacrosse games and make a watch table with where to watch
 /ask How much disk space is left?
 /ask Remember that the NAS IP is 192.168.1.8
 /ask What do you remember about the NAS?</code></pre>
+      </div>
+
+      <div class="tip">
+        <strong>&#128161; Skills are reference, not a requirement:</strong>
+        <code>/skills</code> is still useful for browsing capabilities, but the
+        default workflow is to ask naturally with <code>/ask</code> and let
+        OpenClaw choose the right tools.
       </div>
 
       <h3>Model Selection</h3>
@@ -1353,6 +1371,10 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
         OpenClaw now includes dedicated Discord workflows for weekly recaps and
         structured sports watch guides, so repeatable research tasks do not
         need to start from a blank prompt every time.
+      </p>
+      <p>
+        You can use the slash commands directly, or ask for the same outcome in
+        plain English via <code>/ask</code>.
       </p>
 
       <div class="card">

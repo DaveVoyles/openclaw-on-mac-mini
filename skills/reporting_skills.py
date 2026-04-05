@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 import discord
 
-from runtime_state import get_bot
+from runtime_state import get_bot, get_current_channel_id
 
 log = logging.getLogger("openclaw.reporting_skills")
 
@@ -101,17 +101,23 @@ async def _resolve_channel(channel_id: int) -> discord.abc.Messageable | None:
 
 
 async def generate_channel_recap_report(
-    channel_id: int | str,
+    channel_id: int | str | None = None,
     days: int = 7,
     focus: str = "",
     style: str = "highlights",
     max_messages: int = 200,
 ) -> str:
     """Summarize the recent activity in a Discord channel or thread."""
+    if channel_id in (None, "", 0, "0"):
+        channel_id = get_current_channel_id()
+
     try:
         channel_int = int(channel_id)
     except (TypeError, ValueError):
-        return "❌ Invalid channel ID for recap generation."
+        return (
+            "❌ No Discord channel context is available for recap generation. "
+            "Run this from the channel you want to summarize or use `/recap weekly`."
+        )
 
     channel = await _resolve_channel(channel_int)
     if channel is None:
@@ -159,7 +165,11 @@ async def generate_channel_recap_report(
         from llm import chat as llm_chat
 
         response, _, model_used = await asyncio.wait_for(
-            llm_chat(user_message=prompt, model_preference="gemini"),
+            llm_chat(
+                user_message=prompt,
+                model_preference="gemini",
+                tool_declarations=[],
+            ),
             timeout=90,
         )
     except asyncio.TimeoutError:
@@ -252,7 +262,11 @@ async def generate_sports_watch_report(
         from llm import chat as llm_chat
 
         response, _, model_used = await asyncio.wait_for(
-            llm_chat(user_message=prompt, model_preference="gemini"),
+            llm_chat(
+                user_message=prompt,
+                model_preference="gemini",
+                tool_declarations=[],
+            ),
             timeout=90,
         )
     except asyncio.TimeoutError:
