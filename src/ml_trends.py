@@ -13,6 +13,7 @@ Uses scikit-learn and statsmodels for analysis.
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -26,12 +27,10 @@ from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.seasonal import seasonal_decompose
 
-from config import cfg
-
 log = logging.getLogger("openclaw.ml_trends")
 
 # Database path
-DB_PATH = Path("/memory/openclaw.db")
+DB_PATH = Path(os.getenv("THREAD_DB_PATH", "/memory/openclaw.db"))
 
 
 @dataclass
@@ -80,7 +79,29 @@ class MLTrendAnalyzer:
     def _ensure_tables(self) -> None:
         """Ensure required database tables exist."""
         # Reuse existing trend_data table from trend_tracker.py
-        pass
+        # Only create if database exists
+        if not self.db_path.parent.exists():
+            log.warning("Database directory %s does not exist", self.db_path.parent)
+            return
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                # Table may already exist - that's OK
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS trend_data (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp REAL NOT NULL,
+                        topic TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        volume INTEGER NOT NULL,
+                        sentiment REAL NOT NULL,
+                        sources TEXT NOT NULL,
+                        metadata TEXT
+                    )
+                """)
+                conn.commit()
+        except Exception as e:
+            log.warning("Could not ensure tables: %s", e)
 
     def _get_time_series_data(
         self, 
@@ -99,26 +120,34 @@ class MLTrendAnalyzer:
         Returns:
             DataFrame with columns: timestamp, volume, sentiment
         """
+        if not self.db_path.exists():
+            log.warning("Database %s does not exist", self.db_path)
+            return pd.DataFrame()
+        
         cutoff = (datetime.now() - timedelta(days=days)).timestamp()
         
-        with sqlite3.connect(self.db_path) as conn:
-            query = """
-                SELECT timestamp, volume, sentiment
-                FROM trend_data
-                WHERE topic = ? AND category = ? AND timestamp >= ?
-                ORDER BY timestamp ASC
-            """
-            df = pd.read_sql_query(
-                query, 
-                conn, 
-                params=(topic, category, cutoff)
-            )
-            
-            if not df.empty:
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
-                df.set_index('timestamp', inplace=True)
-            
-            return df
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                query = """
+                    SELECT timestamp, volume, sentiment
+                    FROM trend_data
+                    WHERE topic = ? AND category = ? AND timestamp >= ?
+                    ORDER BY timestamp ASC
+                """
+                df = pd.read_sql_query(
+                    query, 
+                    conn, 
+                    params=(topic, category, cutoff)
+                )
+                
+                if not df.empty:
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+                    df.set_index('timestamp', inplace=True)
+                
+                return df
+        except Exception as e:
+            log.error("Error fetching time series data: %s", e)
+            return pd.DataFrame()
 
     async def forecast_trend(
         self,

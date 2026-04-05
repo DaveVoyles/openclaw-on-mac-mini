@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Financial Report - {{ period|capitalize }}</title>
+    <style>
+        @page {
+            size: letter;
+            margin: 0.75in;
+        }
+        
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #333;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #00D9FF;
+            padding-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: #00D9FF;
+            margin: 0 0 10px 0;
+            font-size: 28px;
+        }
+        
+        .header .subtitle {
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .info-box {
+            background-color: #f5f5f5;
+            border-left: 4px solid #00D9FF;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .info-box table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .info-box td {
+            padding: 8px;
+        }
+        
+        .info-box td:first-child {
+            font-weight: bold;
+            color: #00D9FF;
+            width: 30%;
+        }
+        
+        .summary-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        
+        .summary-box h2 {
+            margin: 0 0 15px 0;
+            font-size: 18px;
+        }
+        
+        .summary-box .metric {
+            display: inline-block;
+            margin: 10px 20px 10px 0;
+        }
+        
+        .summary-box .metric-label {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+        
+        .summary-box .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .data-table thead {
+            background-color: #00D9FF;
+            color: white;
+        }
+        
+        .data-table th,
+        .data-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .data-table tbody tr:hover {
+            background-color: #f5f5f5;
+        }
+        
+        .data-table .positive {
+            color: #10b981;
+            font-weight: bold;
+        }
+        
+        .data-table .negative {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        
+        .chart {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .chart img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .insights {
+            background-color: #fff8e1;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .insights h3 {
+            color: #f57c00;
+            margin-top: 0;
+        }
+        
+        .insights ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .insights li {
+            margin: 8px 0;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #999;
+            font-size: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{{ period|capitalize }} Financial Report</h1>
+        <div class="subtitle">Generated on {{ generated_at }}</div>
+    </div>
+    
+    <div class="info-box">
+        <table>
+            <tr>
+                <td>User ID:</td>
+                <td>{{ user_id }}</td>
+            </tr>
+            <tr>
+                <td>Report Period:</td>
+                <td>{{ period|capitalize }}</td>
+            </tr>
+            <tr>
+                <td>Date Range:</td>
+                <td>{{ start_date }} to {{ end_date }}</td>
+            </tr>
+            <tr>
+                <td>Bot Version:</td>
+                <td>{{ bot_version }}</td>
+            </tr>
+        </table>
+    </div>
+    
+    {% if summary %}
+    <div class="summary-box">
+        <h2>Portfolio Summary</h2>
+        <div class="metric">
+            <div class="metric-label">Total Value</div>
+            <div class="metric-value">${{ "%.2f"|format(summary.total_value) }}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Gain/Loss</div>
+            <div class="metric-value">${{ "%.2f"|format(summary.total_gain_loss) }}</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">Return</div>
+            <div class="metric-value">{{ "%+.2f"|format(summary.gain_loss_percent) }}%</div>
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if portfolio %}
+    <h2>Portfolio Holdings</h2>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Ticker</th>
+                <th>Shares</th>
+                <th>Price</th>
+                <th>Value</th>
+                <th>Cost Basis</th>
+                <th>Gain/Loss</th>
+                <th>G/L %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for holding in portfolio %}
+            <tr>
+                <td><strong>{{ holding.ticker }}</strong></td>
+                <td>{{ holding.shares }}</td>
+                <td>${{ "%.2f"|format(holding.current_price) }}</td>
+                <td>${{ "%.2f"|format(holding.shares * holding.current_price) }}</td>
+                <td>${{ "%.2f"|format(holding.cost_basis) }}</td>
+                <td class="{{ 'positive' if holding.gain_loss >= 0 else 'negative' }}">
+                    ${{ "%.2f"|format(holding.gain_loss) }}
+                </td>
+                <td class="{{ 'positive' if holding.gain_loss >= 0 else 'negative' }}">
+                    {{ "%+.2f"|format((holding.gain_loss / (holding.shares * holding.cost_basis)) * 100 if holding.cost_basis > 0 else 0) }}%
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    {% if chart_paths %}
+        {% for chart_path in chart_paths %}
+        <div class="chart">
+            <img src="file://{{ chart_path }}" alt="Financial Chart">
+        </div>
+        {% endfor %}
+    {% endif %}
+    
+    {% if insights %}
+    <div class="insights">
+        <h3>Market Insights</h3>
+        <ul>
+            {% for insight in insights %}
+            <li>{{ insight }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    <div class="footer">
+        Generated by OpenClaw v{{ bot_version }} • Not financial advice • For informational purposes only
+    </div>
+</body>
+</html>

@@ -85,6 +85,13 @@ async def _export_conversations(days: int | None, filters: dict[str, Any]) -> pd
 
     conn = sqlite3.connect(str(db_path))
     try:
+        # Check if table exists
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='threads'"
+        )
+        if not cursor.fetchone():
+            return pd.DataFrame()
+
         query = "SELECT * FROM threads WHERE 1=1"
         params = []
 
@@ -119,6 +126,13 @@ async def _export_trends(days: int | None, filters: dict[str, Any]) -> pd.DataFr
 
     conn = sqlite3.connect(str(db_path))
     try:
+        # Check if table exists
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='trend_data'"
+        )
+        if not cursor.fetchone():
+            return pd.DataFrame()
+
         query = "SELECT * FROM trend_data WHERE 1=1"
         params = []
 

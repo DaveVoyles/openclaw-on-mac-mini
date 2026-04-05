@@ -13,6 +13,8 @@ from report_generator import (
     generate_weekly_report,
     generate_api_usage_report,
     generate_performance_report,
+    generate_financial_report,
+    generate_cost_report,
 )
 
 
@@ -44,7 +46,7 @@ def templates_dir(tmp_path):
     </html>
     """
     
-    for template_name in ["weekly_summary.html", "api_usage.html", "performance.html"]:
+    for template_name in ["weekly_summary.html", "api_usage.html", "performance.html", "financial.html", "cost_analysis.html"]:
         (templates_path / template_name).write_text(template_content)
     
     return templates_path
@@ -193,3 +195,65 @@ async def test_report_metadata(report_dir, templates_dir):
         assert "path" in result
         assert "size_bytes" in result
         assert "report_type" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_financial_report(report_dir, templates_dir):
+    """Test financial report generation."""
+    gen = ReportGenerator(templates_dir)
+    output_file = report_dir / "financial.pdf"
+    
+    stock_data = {
+        "portfolio": [
+            {
+                "ticker": "AAPL",
+                "shares": 10,
+                "current_price": 175.43,
+                "cost_basis": 170.00,
+                "gain_loss": 54.30,
+            },
+        ],
+        "summary": {
+            "total_value": 1754.30,
+            "total_gain_loss": 54.30,
+            "gain_loss_percent": 3.19,
+        }
+    }
+    
+    result = await generate_financial_report(
+        output_path=output_file,
+        user_id="test_user",
+        period="weekly",
+        stock_data=stock_data,
+    )
+    
+    if result["success"]:
+        assert output_file.exists()
+        assert result["size_bytes"] > 0
+
+
+@pytest.mark.asyncio
+async def test_generate_cost_report(report_dir, templates_dir):
+    """Test cost analysis report generation."""
+    gen = ReportGenerator(templates_dir)
+    output_file = report_dir / "cost_analysis.pdf"
+    
+    api_usage = {
+        "apis": [
+            {"name": "Polygon.io", "calls": 1234, "cost": 0.00, "tier": "Free"},
+            {"name": "Gemini API", "calls": 5432, "cost": 12.34, "tier": "Paid"},
+        ],
+        "total_cost": 12.34,
+        "budget_limit": 30.00,
+        "budget_used_percent": 41.13,
+    }
+    
+    result = await generate_cost_report(
+        output_path=output_file,
+        api_usage=api_usage,
+        period="monthly",
+    )
+    
+    if result["success"]:
+        assert output_file.exists()
+        assert result["size_bytes"] > 0

@@ -12,6 +12,7 @@ Generates insights and visualizations from cross-API data.
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -25,7 +26,7 @@ from scipy.stats import pearsonr, spearmanr
 log = logging.getLogger("openclaw.correlation_engine")
 
 # Database path
-DB_PATH = Path("/memory/openclaw.db")
+DB_PATH = Path(os.getenv("THREAD_DB_PATH", "/memory/openclaw.db"))
 
 
 @dataclass
@@ -52,23 +53,30 @@ class CorrelationEngine:
 
     def _ensure_tables(self) -> None:
         """Ensure correlation cache table exists."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS correlation_cache (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    metric_a TEXT NOT NULL,
-                    metric_b TEXT NOT NULL,
-                    correlation REAL NOT NULL,
-                    p_value REAL NOT NULL,
-                    strength TEXT NOT NULL,
-                    direction TEXT NOT NULL,
-                    sample_size INTEGER NOT NULL,
-                    insight TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    UNIQUE(metric_a, metric_b)
-                )
-            """)
-            conn.commit()
+        if not self.db_path.parent.exists():
+            log.warning("Database directory %s does not exist", self.db_path.parent)
+            return
+        
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS correlation_cache (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        metric_a TEXT NOT NULL,
+                        metric_b TEXT NOT NULL,
+                        correlation REAL NOT NULL,
+                        p_value REAL NOT NULL,
+                        strength TEXT NOT NULL,
+                        direction TEXT NOT NULL,
+                        sample_size INTEGER NOT NULL,
+                        insight TEXT NOT NULL,
+                        created_at REAL NOT NULL,
+                        UNIQUE(metric_a, metric_b)
+                    )
+                """)
+                conn.commit()
+        except Exception as e:
+            log.warning("Could not ensure tables: %s", e)
 
     def _get_metric_data(
         self,
@@ -85,29 +93,36 @@ class CorrelationEngine:
         Returns:
             Pandas Series indexed by date
         """
+        if not self.db_path.exists():
+            log.warning("Database %s does not exist", self.db_path)
+            return pd.Series(dtype=float)
+        
         # Try trend_data table first
         parts = metric.split("/", 1)
         if len(parts) == 2:
             category, topic = parts
             cutoff = (datetime.now() - timedelta(days=days)).timestamp()
             
-            with sqlite3.connect(self.db_path) as conn:
-                query = """
-                    SELECT timestamp, volume
-                    FROM trend_data
-                    WHERE category = ? AND topic = ? AND timestamp >= ?
-                    ORDER BY timestamp ASC
-                """
-                df = pd.read_sql_query(
-                    query,
-                    conn,
-                    params=(category, topic, cutoff)
-                )
-                
-                if not df.empty:
-                    df['date'] = pd.to_datetime(df['timestamp'], unit='s').dt.date
-                    df = df.groupby('date')['volume'].sum()
-                    return df
+            try:
+                with sqlite3.connect(self.db_path) as conn:
+                    query = """
+                        SELECT timestamp, volume
+                        FROM trend_data
+                        WHERE category = ? AND topic = ? AND timestamp >= ?
+                        ORDER BY timestamp ASC
+                    """
+                    df = pd.read_sql_query(
+                        query,
+                        conn,
+                        params=(category, topic, cutoff)
+                    )
+                    
+                    if not df.empty:
+                        df['date'] = pd.to_datetime(df['timestamp'], unit='s').dt.date
+                        df = df.groupby('date')['volume'].sum()
+                        return df
+            except Exception as e:
+                log.error("Error fetching metric data: %s", e)
         
         # Could extend to support other metric sources (weather, stocks, etc.)
         return pd.Series(dtype=float)

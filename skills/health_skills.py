@@ -32,7 +32,6 @@ OPENFOODFACTS_BASE_URL = "https://world.openfoodfacts.org/api/v2"
 # Fitbit API Skills (OAuth2 required)
 # ============================================================================
 
-@tool_health.monitor("get_daily_steps")
 async def get_daily_steps(date: str | None = None) -> dict[str, Any]:
     """
     Get daily step count from Fitbit.
@@ -113,7 +112,6 @@ async def get_daily_steps(date: str | None = None) -> dict[str, Any]:
         return {"status": "error", "message": str(e)}
 
 
-@tool_health.monitor("get_sleep_data")
 async def get_sleep_data(date: str | None = None) -> dict[str, Any]:
     """
     Get sleep analysis from Fitbit.
@@ -207,7 +205,6 @@ async def get_sleep_data(date: str | None = None) -> dict[str, Any]:
         return {"status": "error", "message": str(e)}
 
 
-@tool_health.monitor("get_workout_summary")
 async def get_workout_summary(days: int = 7) -> dict[str, Any]:
     """
     Get workout summary for the past N days from Fitbit.
@@ -310,7 +307,6 @@ async def get_workout_summary(days: int = 7) -> dict[str, Any]:
 # Open Food Facts API Skills (No auth required)
 # ============================================================================
 
-@tool_health.monitor("get_nutrition_info")
 async def get_nutrition_info(food: str) -> dict[str, Any]:
     """
     Get nutrition information for a food item from Open Food Facts.

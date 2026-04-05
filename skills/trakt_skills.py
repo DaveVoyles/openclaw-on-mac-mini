@@ -39,7 +39,6 @@ def _get_headers(include_auth: bool = False) -> dict[str, str]:
     return headers
 
 
-@tool_health.monitor("get_trending_shows")
 async def get_trending_shows(limit: int = 10, extended: bool = True) -> dict[str, Any]:
     """
     Get trending TV shows on Trakt.
@@ -105,7 +104,6 @@ async def get_trending_shows(limit: int = 10, extended: bool = True) -> dict[str
         return {"status": "error", "message": str(e)}
 
 
-@tool_health.monitor("get_trending_movies")
 async def get_trending_movies(limit: int = 10, extended: bool = True) -> dict[str, Any]:
     """
     Get trending movies on Trakt.
@@ -171,7 +169,6 @@ async def get_trending_movies(limit: int = 10, extended: bool = True) -> dict[st
         return {"status": "error", "message": str(e)}
 
 
-@tool_health.monitor("sync_watchlist")
 async def sync_watchlist(user_id: str = "me", media_type: str = "all") -> dict[str, Any]:
     """
     Sync user's Trakt watchlist.
@@ -237,7 +234,6 @@ async def sync_watchlist(user_id: str = "me", media_type: str = "all") -> dict[s
         return {"status": "error", "message": str(e)}
 
 
-@tool_health.monitor("get_watch_history")
 async def get_watch_history(
     user_id: str = "me", 
     media_type: str = "all",
@@ -321,7 +317,6 @@ async def get_watch_history(
         return {"status": "error", "message": str(e)}
 
 
-@tool_health.monitor("add_to_watchlist")
 async def add_to_watchlist(
     item_id: str,
     item_type: str = "movie",
@@ -398,7 +393,6 @@ async def add_to_watchlist(
         return {"status": "error", "message": str(e)}
 
 
-@tool_health.monitor("search_trakt")
 async def search_trakt(
     query: str,
     search_type: str = "multi",

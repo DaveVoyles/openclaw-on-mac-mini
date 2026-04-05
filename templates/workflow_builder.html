@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw Workflow Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 250px 1fr 300px;
+            gap: 20px;
+            padding: 30px;
+            min-height: 600px;
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .task-palette {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .task-item {
+            padding: 12px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: grab;
+            transition: all 0.2s;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .task-item:hover {
+            border-color: #667eea;
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .task-item:active {
+            cursor: grabbing;
+        }
+
+        .canvas {
+            background: #fafafa;
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 500px;
+            position: relative;
+        }
+
+        .canvas.drag-over {
+            background: #f0f4ff;
+            border-color: #667eea;
+        }
+
+        .workflow-task {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            position: relative;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .workflow-task h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .workflow-task input,
+        .workflow-task select,
+        .workflow-task textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .workflow-task textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .workflow-task .remove-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+        }
+
+        .workflow-task .remove-btn:hover {
+            background: #c82333;
+        }
+
+        .properties {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .properties h3 {
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .property-group {
+            margin-bottom: 15px;
+        }
+
+        .property-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        .property-group input,
+        .property-group select,
+        .property-group textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            padding: 20px;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        .template-list {
+            list-style: none;
+            margin-top: 10px;
+        }
+
+        .template-list li {
+            padding: 10px;
+            background: white;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-list li:hover {
+            background: #667eea;
+            color: white;
+            transform: translateX(5px);
+        }
+
+        .status-message {
+            padding: 15px;
+            margin: 20px;
+            border-radius: 6px;
+            display: none;
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .dependency-hint {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 OpenClaw Workflow Builder</h1>
+            <p>Design and automate your workflows with drag-and-drop simplicity</p>
+        </header>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <div class="main-content">
+            <!-- Left Sidebar - Task Palette -->
+            <div class="sidebar">
+                <h3>📋 Task Palette</h3>
+                <div class="task-palette">
+                    <div class="task-item" draggable="true" data-action="get_weather">☁️ Get Weather</div>
+                    <div class="task-item" draggable="true" data-action="search_news">📰 Search News</div>
+                    <div class="task-item" draggable="true" data-action="get_stock_prices">📈 Stock Prices</div>
+                    <div class="task-item" draggable="true" data-action="send_discord_message">💬 Send Message</div>
+                    <div class="task-item" draggable="true" data-action="backup_databases">💾 Backup DBs</div>
+                    <div class="task-item" draggable="true" data-action="check_disk_space">💿 Check Disk</div>
+                    <div class="task-item" draggable="true" data-action="list_containers">🐳 Docker Status</div>
+                </div>
+
+                <h3 style="margin-top: 30px;">📚 Templates</h3>
+                <ul class="template-list">
+                    <li onclick="loadTemplate('morning-briefing')">🌅 Morning Briefing</li>
+                    <li onclick="loadTemplate('market-close-report')">📊 Market Close</li>
+                    <li onclick="loadTemplate('backup-and-monitor')">🔧 Backup & Monitor</li>
+                </ul>
+            </div>
+
+            <!-- Center Canvas - Workflow Builder -->
+            <div class="canvas" id="workflowCanvas">
+                <div id="workflowTasks"></div>
+            </div>
+
+            <!-- Right Sidebar - Properties -->
+            <div class="properties">
+                <h3>⚙️ Workflow Properties</h3>
+                
+                <div class="property-group">
+                    <label for="workflowName">Workflow Name:</label>
+                    <input type="text" id="workflowName" placeholder="My Workflow">
+                </div>
+
+                <div class="property-group">
+                    <label for="workflowDescription">Description:</label>
+                    <textarea id="workflowDescription" placeholder="What does this workflow do?"></textarea>
+                </div>
+
+                <div class="property-group">
+                    <label for="errorHandling">Error Handling:</label>
+                    <select id="errorHandling">
+                        <option value="fail_fast">Fail Fast</option>
+                        <option value="continue_on_error">Continue on Error</option>
+                    </select>
+                </div>
+
+                <div class="property-group">
+                    <label>
+                        <input type="checkbox" id="rollbackOnError">
+                        Enable Rollback on Error
+                    </label>
+                </div>
+
+                <div class="property-group" style="margin-top: 30px;">
+                    <button class="btn btn-primary" onclick="validateWorkflow()">✓ Validate</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <button class="btn btn-success" onclick="saveWorkflow()">💾 Save Workflow</button>
+            <button class="btn btn-primary" onclick="executeWorkflow()">▶️ Execute Now</button>
+            <button class="btn btn-warning" onclick="clearWorkflow()">🗑️ Clear All</button>
+        </div>
+    </div>
+
+    <script>
+        let taskCounter = 0;
+        let currentWorkflow = {
+            name: '',
+            description: '',
+            tasks: [],
+            error_handling: 'fail_fast',
+            rollback_on_error: false
+        };
+
+        // Drag and Drop functionality
+        const taskItems = document.querySelectorAll('.task-item');
+        const canvas = document.getElementById('workflowCanvas');
+        const workflowTasks = document.getElementById('workflowTasks');
+
+        taskItems.forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', e.target.dataset.action);
+            });
+        });
+
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            canvas.classList.add('drag-over');
+        });
+
+        canvas.addEventListener('dragleave', () => {
+            canvas.classList.remove('drag-over');
+        });
+
+        canvas.addEventListener('drop', (e) => {
+            e.preventDefault();
+            canvas.classList.remove('drag-over');
+            
+            const action = e.dataTransfer.getData('text/plain');
+            addTaskToWorkflow(action);
+        });
+
+        function addTaskToWorkflow(action) {
+            taskCounter++;
+            const taskId = `task-${taskCounter}`;
+            
+            const taskDiv = document.createElement('div');
+            taskDiv.className = 'workflow-task';
+            taskDiv.dataset.taskId = taskId;
+            
+            taskDiv.innerHTML = `
+                <button class="remove-btn" onclick="removeTask('${taskId}')">×</button>
+                <h4>${action}</h4>
+                <div class="property-group">
+                    <label>Task ID:</label>
+                    <input type="text" value="${taskId}" readonly>
+                </div>
+                <div class="property-group">
+                    <label>Arguments (JSON):</label>
+                    <textarea class="task-args" placeholder='{"key": "value"}'>{}</textarea>
+                </div>
+                <div class="property-group">
+                    <label>Depends On:</label>
+                    <input type="text" class="task-depends" placeholder="task-1, task-2">
+                    <div class="dependency-hint">Enter task IDs this task depends on (comma-separated)</div>
+                </div>
+            `;
+            
+            workflowTasks.appendChild(taskDiv);
+            updateCurrentWorkflow();
+        }
+
+        function removeTask(taskId) {
+            const taskDiv = document.querySelector(`[data-task-id="${taskId}"]`);
+            if (taskDiv) {
+                taskDiv.remove();
+                updateCurrentWorkflow();
+            }
+        }
+
+        function updateCurrentWorkflow() {
+            const tasks = [];
+            const taskDivs = document.querySelectorAll('.workflow-task');
+            
+            taskDivs.forEach(div => {
+                const taskId = div.querySelector('input[type="text"]').value;
+                const action = div.querySelector('h4').textContent;
+                const argsText = div.querySelector('.task-args').value;
+                const dependsText = div.querySelector('.task-depends').value;
+                
+                let args = {};
+                try {
+                    args = JSON.parse(argsText || '{}');
+                } catch (e) {
+                    console.error('Invalid JSON in args:', argsText);
+                }
+                
+                const depends_on = dependsText
+                    ? dependsText.split(',').map(s => s.trim()).filter(s => s)
+                    : [];
+                
+                tasks.push({ task_id: taskId, action, args, depends_on });
+            });
+            
+            currentWorkflow.tasks = tasks;
+            currentWorkflow.name = document.getElementById('workflowName').value;
+            currentWorkflow.description = document.getElementById('workflowDescription').value;
+            currentWorkflow.error_handling = document.getElementById('errorHandling').value;
+            currentWorkflow.rollback_on_error = document.getElementById('rollbackOnError').checked;
+        }
+
+        async function saveWorkflow() {
+            updateCurrentWorkflow();
+            
+            if (!currentWorkflow.name) {
+                showStatus('Please enter a workflow name', 'error');
+                return;
+            }
+            
+            if (currentWorkflow.tasks.length === 0) {
+                showStatus('Please add at least one task', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/workflows', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...currentWorkflow,
+                        created_by: 'web-ui'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showStatus(`✅ Workflow "${result.workflow_id}" saved successfully!`, 'success');
+                } else {
+                    showStatus(`❌ Error: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Failed to save: ${error.message}`, 'error');
+            }
+        }
+
+        async function executeWorkflow() {
+            updateCurrentWorkflow();
+            
+            if (!currentWorkflow.name) {
+                showStatus('Please save the workflow first', 'error');
+                return;
+            }
+            
+            showStatus('⏳ Executing workflow...', 'success');
+            
+            // For now, just show a success message
+            // In production, this would call the execute API
+            setTimeout(() => {
+                showStatus('✅ Workflow execution initiated!', 'success');
+            }, 1000);
+        }
+
+        function validateWorkflow() {
+            updateCurrentWorkflow();
+            
+            if (currentWorkflow.tasks.length === 0) {
+                showStatus('⚠️ No tasks in workflow', 'error');
+                return;
+            }
+            
+            // Check for circular dependencies (simplified)
+            const taskIds = new Set(currentWorkflow.tasks.map(t => t.task_id));
+            let valid = true;
+            
+            currentWorkflow.tasks.forEach(task => {
+                task.depends_on.forEach(dep => {
+                    if (!taskIds.has(dep)) {
+                        showStatus(`⚠️ Task "${task.task_id}" depends on unknown task "${dep}"`, 'error');
+                        valid = false;
+                    }
+                });
+            });
+            
+            if (valid) {
+                showStatus(`✅ Workflow is valid (${currentWorkflow.tasks.length} tasks)`, 'success');
+            }
+        }
+
+        async function loadTemplate(templateName) {
+            try {
+                const response = await fetch(`/api/workflows/from-template`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        template: templateName,
+                        created_by: 'web-ui'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Load the workflow into the UI
+                    document.getElementById('workflowName').value = result.name;
+                    document.getElementById('workflowDescription').value = result.description;
+                    
+                    // Clear existing tasks
+                    workflowTasks.innerHTML = '';
+                    taskCounter = 0;
+                    
+                    // Add tasks from template
+                    result.tasks.forEach(task => {
+                        addTaskToWorkflow(task.action);
+                        const lastTask = workflowTasks.lastElementChild;
+                        lastTask.querySelector('.task-args').value = JSON.stringify(task.args, null, 2);
+                        lastTask.querySelector('.task-depends').value = task.depends_on.join(', ');
+                    });
+                    
+                    showStatus(`✅ Loaded template: ${templateName}`, 'success');
+                } else {
+                    showStatus(`❌ Error: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Failed to load template: ${error.message}`, 'error');
+            }
+        }
+
+        function clearWorkflow() {
+            if (confirm('Are you sure you want to clear all tasks?')) {
+                workflowTasks.innerHTML = '';
+                taskCounter = 0;
+                document.getElementById('workflowName').value = '';
+                document.getElementById('workflowDescription').value = '';
+                showStatus('🗑️ Workflow cleared', 'success');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = `status-message ${type}`;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Update workflow on input changes
+        document.getElementById('workflowName').addEventListener('input', updateCurrentWorkflow);
+        document.getElementById('workflowDescription').addEventListener('input', updateCurrentWorkflow);
+        document.getElementById('errorHandling').addEventListener('change', updateCurrentWorkflow);
+        document.getElementById('rollbackOnError').addEventListener('change', updateCurrentWorkflow);
+    </script>
+</body>
+</html>

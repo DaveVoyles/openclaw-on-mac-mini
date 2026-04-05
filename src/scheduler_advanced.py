@@ -567,5 +567,12 @@ class AdvancedScheduler:
         return self.db.get_execution_history(task_id, limit)
 
 
-# Global instance
-advanced_scheduler = AdvancedScheduler()
+# Global instance (lazy initialization to avoid issues at import time)
+_advanced_scheduler = None
+
+def get_advanced_scheduler():
+    """Get or create the global advanced scheduler instance."""
+    global _advanced_scheduler
+    if _advanced_scheduler is None:
+        _advanced_scheduler = AdvancedScheduler()
+    return _advanced_scheduler
