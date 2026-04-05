@@ -9,8 +9,10 @@ from datetime import datetime
 from typing import Any
 
 from config import cfg
-from src.http_session import SessionManager
-from src.tool_health import circuit_breaker, tool_health
+from http_session import SessionManager
+from tool_health import circuit_breaker, tool_health
+
+_sessions = SessionManager(timeout=30, name="sports_skills")
 
 APISPORTS_BASE_URL = "https://v3.api-sports.io"
 
@@ -60,8 +62,8 @@ async def get_nba_scores(date: str | None = None, team_id: int | None = None) ->
     url = f"{APISPORTS_BASE_URL}/basketball/games"
     headers = {"x-apisports-key": cfg.apisports_key}
 
-    async with SessionManager.get_session() as session:
-        async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+    session = await _sessions.get()
+    async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
                 tool_health.record("apisports", success=False)
                 return {
@@ -139,8 +141,8 @@ async def get_nfl_scores(date: str | None = None, team_id: int | None = None) ->
     url = f"{APISPORTS_BASE_URL}/american-football/games"
     headers = {"x-apisports-key": cfg.apisports_key}
 
-    async with SessionManager.get_session() as session:
-        async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+    session = await _sessions.get()
+    async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
                 tool_health.record("apisports", success=False)
                 return {
@@ -246,8 +248,8 @@ async def get_team_standings(sport: str = "nba", league_id: int | None = None, s
     url = f"{APISPORTS_BASE_URL}/{config['endpoint']}/standings"
     headers = {"x-apisports-key": cfg.apisports_key}
 
-    async with SessionManager.get_session() as session:
-        async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+    session = await _sessions.get()
+    async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
                 tool_health.record("apisports", success=False)
                 return {
@@ -354,8 +356,8 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
     url = f"{APISPORTS_BASE_URL}/{config['endpoint']}/games"
     headers = {"x-apisports-key": cfg.apisports_key}
 
-    async with SessionManager.get_session() as session:
-        async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+    session = await _sessions.get()
+    async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
                 tool_health.record("apisports", success=False)
                 return {

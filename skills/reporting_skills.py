@@ -11,6 +11,7 @@ from typing import Any, Iterable
 import discord
 
 from runtime_state import get_bot, get_current_channel_id
+from skills import news_skills, sports_skills, finance_skills
 
 log = logging.getLogger("openclaw.reporting_skills")
 
@@ -633,8 +634,356 @@ async def generate_box_office_report(
     return f"{report}\n\n_via {model_used}_"
 
 
+async def generate_weekly_recap(
+    topics: list[str] | None = None,
+    date_range: str = "last_week",
+    from_date: str | None = None,
+    to_date: str | None = None,
+) -> str:
+    """
+    Generate a unified weekly recap aggregating data from multiple premium APIs.
+    
+    Combines NewsAPI, API-Sports (NBA), and Alpha Vantage (stocks/sentiment) into
+    a comprehensive Discord-ready markdown report.
+    
+    Args:
+        topics: List of topics to include. Options: ["entertainment", "sports", "tech", "finance", "general"]
+                If None, includes all available topics.
+        date_range: Preset range - "last_week" (7 days), "last_3_days", "last_month" (30 days), "custom"
+        from_date: Custom start date in YYYY-MM-DD format (required if date_range="custom")
+        to_date: Custom end date in YYYY-MM-DD format (optional, defaults to today)
+    
+    Returns:
+        Markdown-formatted report with sections:
+        - News Highlights (by topic)
+        - Sports Recap (NBA scores/standings if "sports" in topics)
+        - Financial Summary (stocks/sentiment if "finance" or "entertainment" in topics)
+        - Key Trends (notable patterns)
+        - Sources (API citations)
+    
+    Rate limits:
+        - NewsAPI: 100 req/day (uses ~1-5 per call depending on topics)
+        - API-Sports: 100 req/day (uses ~2 if sports enabled)
+        - Alpha Vantage: 25 req/day (uses ~1-3 if finance enabled)
+    
+    Example:
+        >>> recap = await generate_weekly_recap(
+        ...     topics=["tech", "sports", "finance"],
+        ...     date_range="last_3_days"
+        ... )
+    """
+    # Default to all topics if none specified
+    if topics is None:
+        topics = ["entertainment", "sports", "tech", "finance", "general"]
+    
+    # Normalize topics to lowercase
+    topics = [t.lower() for t in topics]
+    
+    # Calculate date range
+    today = dt.datetime.now()
+    if date_range == "custom":
+        if not from_date:
+            return "❌ Error: from_date required when date_range='custom'"
+        start_date_str = from_date
+        end_date_str = to_date or today.strftime("%Y-%m-%d")
+    elif date_range == "last_3_days":
+        start_date_str = (today - dt.timedelta(days=3)).strftime("%Y-%m-%d")
+        end_date_str = today.strftime("%Y-%m-%d")
+        range_label = "Last 3 Days"
+    elif date_range == "last_month":
+        start_date_str = (today - dt.timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date_str = today.strftime("%Y-%m-%d")
+        range_label = "Last 30 Days"
+    else:  # last_week (default)
+        start_date_str = (today - dt.timedelta(days=7)).strftime("%Y-%m-%d")
+        end_date_str = today.strftime("%Y-%m-%d")
+        range_label = "Last 7 Days"
+    
+    if date_range == "custom":
+        range_label = f"{from_date} to {end_date_str}"
+    
+    # Track which sources succeeded/failed
+    sources_used = []
+    sources_failed = []
+    
+    # Initialize report sections
+    report_sections = []
+    report_sections.append(f"# 📊 Weekly Recap: {range_label}\n")
+    report_sections.append(f"*Generated {today.strftime('%B %d, %Y at %I:%M %p')}*\n")
+    
+    # ========== NEWS HIGHLIGHTS SECTION ==========
+    news_articles_by_topic = {}
+    news_total_count = 0
+    
+    for topic in topics:
+        if topic in ["entertainment", "tech", "finance", "general", "sports"]:
+            try:
+                # Map topic to NewsAPI category
+                category_map = {
+                    "entertainment": "entertainment",
+                    "tech": "technology",
+                    "finance": "business",
+                    "sports": "sports",
+                    "general": "general",
+                }
+                
+                category = category_map.get(topic, "general")
+                
+                # Use top_headlines for better relevance
+                news_result = await asyncio.wait_for(
+                    news_skills.top_headlines(
+                        category=category,
+                        page_size=5,
+                    ),
+                    timeout=15,
+                )
+                
+                if news_result.get("status") == "ok" and news_result.get("articles"):
+                    news_articles_by_topic[topic] = news_result["articles"]
+                    news_total_count += len(news_result["articles"])
+                    sources_used.append(f"NewsAPI ({category})")
+                elif "rate limit" in news_result.get("message", "").lower():
+                    sources_failed.append(f"NewsAPI ({category}) - rate limit")
+                    log.warning(f"NewsAPI rate limit hit for {category}")
+                else:
+                    log.debug(f"No news articles for {category}")
+                    
+            except asyncio.TimeoutError:
+                sources_failed.append(f"NewsAPI ({topic}) - timeout")
+                log.error(f"NewsAPI timeout for {topic}")
+            except Exception as e:
+                sources_failed.append(f"NewsAPI ({topic}) - {str(e)[:50]}")
+                log.error(f"NewsAPI error for {topic}: {e}")
+    
+    # Format news section
+    if news_articles_by_topic:
+        report_sections.append("## 🗞️ News Highlights\n")
+        
+        for topic, articles in news_articles_by_topic.items():
+            if articles:
+                topic_emoji = {
+                    "entertainment": "🎬",
+                    "tech": "💻",
+                    "finance": "💰",
+                    "sports": "⚽",
+                    "general": "📰",
+                }.get(topic, "📌")
+                
+                report_sections.append(f"### {topic_emoji} {topic.title()}\n")
+                
+                for article in articles[:3]:  # Top 3 per topic
+                    title = article.get("title", "Untitled")
+                    source = article.get("source", {}).get("name", "Unknown")
+                    url = article.get("url", "")
+                    description = (article.get("description") or "")[:150]
+                    
+                    # Format: - **Title** - Source
+                    #         Description... [Read more](url)
+                    report_sections.append(f"- **{title}** - *{source}*\n")
+                    if description:
+                        report_sections.append(f"  {description}... [Read more]({url})\n")
+                
+                report_sections.append("\n")
+    
+    # ========== SPORTS RECAP SECTION ==========
+    if "sports" in topics:
+        report_sections.append("## 🏀 Sports Recap\n")
+        
+        # Get NBA scores from yesterday
+        yesterday = (today - dt.timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            nba_scores = await asyncio.wait_for(
+                sports_skills.get_nba_scores(date=yesterday),
+                timeout=15,
+            )
+            
+            if nba_scores.get("status") == "ok" and nba_scores.get("games"):
+                report_sections.append(f"### NBA Scores ({yesterday})\n")
+                
+                for game in nba_scores["games"][:5]:  # Top 5 games
+                    home = game["teams"]["home"]
+                    away = game["teams"]["away"]
+                    status = game.get("status", "Unknown")
+                    
+                    report_sections.append(
+                        f"- **{away['name']}** {away['score']} @ "
+                        f"**{home['name']}** {home['score']} - *{status}*\n"
+                    )
+                
+                report_sections.append("\n")
+                sources_used.append("API-Sports (NBA Scores)")
+            elif "rate limit" in nba_scores.get("message", "").lower():
+                sources_failed.append("API-Sports (NBA) - rate limit")
+                report_sections.append("*NBA scores unavailable (rate limit)*\n\n")
+        except asyncio.TimeoutError:
+            sources_failed.append("API-Sports (NBA) - timeout")
+            report_sections.append("*NBA scores unavailable (timeout)*\n\n")
+        except Exception as e:
+            sources_failed.append(f"API-Sports (NBA) - {str(e)[:50]}")
+            log.error(f"Sports API error: {e}")
+        
+        # Get NBA standings
+        try:
+            standings = await asyncio.wait_for(
+                sports_skills.get_team_standings(sport="nba"),
+                timeout=15,
+            )
+            
+            if standings.get("status") == "ok" and standings.get("standings"):
+                report_sections.append("### NBA Standings (Top 5)\n")
+                
+                for team in standings["standings"][:5]:
+                    rank = team.get("rank", "?")
+                    name = team.get("team", "Unknown")
+                    wins = team.get("wins", 0)
+                    losses = team.get("losses", 0)
+                    
+                    report_sections.append(f"{rank}. **{name}** - {wins}W-{losses}L\n")
+                
+                report_sections.append("\n")
+                sources_used.append("API-Sports (NBA Standings)")
+            elif "rate limit" not in standings.get("message", "").lower():
+                log.debug("No NBA standings available")
+        except asyncio.TimeoutError:
+            log.error("NBA standings timeout")
+        except Exception as e:
+            log.error(f"NBA standings error: {e}")
+    
+    # ========== FINANCIAL SUMMARY SECTION ==========
+    if "finance" in topics or "entertainment" in topics:
+        report_sections.append("## 💰 Financial Summary\n")
+        
+        # Get entertainment stocks if entertainment topic included
+        if "entertainment" in topics:
+            try:
+                box_office_stocks = await asyncio.wait_for(
+                    finance_skills.get_box_office_stocks(),
+                    timeout=20,
+                )
+                
+                if box_office_stocks.get("status") == "ok" and box_office_stocks.get("studios"):
+                    report_sections.append("### 🎬 Entertainment Stocks\n")
+                    
+                    for studio, data in box_office_stocks["studios"].items():
+                        if "error" not in data:
+                            symbol = data.get("symbol", "")
+                            price = data.get("price", 0)
+                            change = data.get("change", "N/A")
+                            
+                            # Format with color indicator
+                            indicator = "🟢" if "+" in str(change) else "🔴" if "-" in str(change) else "⚪"
+                            report_sections.append(f"- {indicator} **{studio}** ({symbol}): ${price:.2f} ({change})\n")
+                    
+                    report_sections.append("\n")
+                    sources_used.append("Alpha Vantage (Entertainment Stocks)")
+                elif "rate limit" in box_office_stocks.get("message", "").lower():
+                    sources_failed.append("Alpha Vantage (Stocks) - rate limit")
+                    report_sections.append("*Stock data unavailable (rate limit)*\n\n")
+            except asyncio.TimeoutError:
+                sources_failed.append("Alpha Vantage (Stocks) - timeout")
+                report_sections.append("*Stock data unavailable (timeout)*\n\n")
+            except Exception as e:
+                sources_failed.append(f"Alpha Vantage (Stocks) - {str(e)[:50]}")
+                log.error(f"Finance API error: {e}")
+        
+        # Get market news with sentiment
+        if "finance" in topics:
+            try:
+                market_news = await asyncio.wait_for(
+                    finance_skills.get_market_news(
+                        topics="financial_markets,technology",
+                        limit=3,
+                    ),
+                    timeout=15,
+                )
+                
+                if market_news.get("status") == "ok" and market_news.get("feed"):
+                    report_sections.append("### 📈 Market News & Sentiment\n")
+                    
+                    for article in market_news["feed"][:3]:
+                        title = article.get("title", "Untitled")
+                        sentiment = article.get("sentiment", {})
+                        sentiment_label = sentiment.get("label", "Neutral")
+                        sentiment_score = sentiment.get("score", 0)
+                        source = article.get("source", "Unknown")
+                        
+                        # Sentiment emoji
+                        sent_emoji = "🟢" if sentiment_score > 0.15 else "🔴" if sentiment_score < -0.15 else "⚪"
+                        
+                        report_sections.append(
+                            f"- {sent_emoji} **{title}** - *{source}*\n"
+                            f"  Sentiment: {sentiment_label} ({sentiment_score:.2f})\n"
+                        )
+                    
+                    report_sections.append("\n")
+                    sources_used.append("Alpha Vantage (Market News)")
+                elif "rate limit" not in market_news.get("message", "").lower():
+                    log.debug("No market news available")
+            except asyncio.TimeoutError:
+                log.error("Market news timeout")
+            except Exception as e:
+                log.error(f"Market news error: {e}")
+    
+    # ========== KEY TRENDS SECTION ==========
+    report_sections.append("## 📊 Key Trends\n")
+    
+    # Generate brief insights
+    insights = []
+    
+    if news_total_count > 0:
+        insights.append(f"- Collected **{news_total_count}** news articles across {len(news_articles_by_topic)} categories")
+    
+    if sources_failed:
+        insights.append(f"- ⚠️ **{len(sources_failed)}** data sources unavailable (see below)")
+    
+    if not insights:
+        insights.append("- All requested data sources processed successfully")
+    
+    report_sections.extend([f"{insight}\n" for insight in insights])
+    report_sections.append("\n")
+    
+    # ========== SOURCES SECTION ==========
+    report_sections.append("## 📚 Data Sources\n")
+    
+    if sources_used:
+        report_sections.append("**Active:**\n")
+        for source in set(sources_used):
+            report_sections.append(f"- ✅ {source}\n")
+        report_sections.append("\n")
+    
+    if sources_failed:
+        report_sections.append("**Unavailable:**\n")
+        for source in sources_failed:
+            report_sections.append(f"- ❌ {source}\n")
+        report_sections.append("\n")
+    
+    # Add rate limit info
+    report_sections.append(
+        "**Rate Limits:**\n"
+        "- NewsAPI: 100 req/day\n"
+        "- API-Sports: 100 req/day\n"
+        "- Alpha Vantage: 25 req/day\n\n"
+    )
+    
+    # ========== FOOTER ==========
+    report_sections.append("---\n")
+    report_sections.append("*Generated by OpenClaw Weekly Recap Engine*\n")
+    
+    # Combine all sections
+    full_report = "".join(report_sections)
+    
+    # Check Discord embed limits (2000 chars per field recommended, 6000 total)
+    # Split into multiple messages if needed
+    if len(full_report) > 5500:
+        log.warning(f"Report length ({len(full_report)} chars) exceeds Discord optimal length")
+        full_report += "\n*⚠️ Note: Report may need to be split across multiple Discord messages*\n"
+    
+    return full_report
+
+
 REPORTING_SKILLS = {
     "generate_channel_recap_report": generate_channel_recap_report,
     "generate_sports_watch_report": generate_sports_watch_report,
     "generate_box_office_report": generate_box_office_report,
+    "generate_weekly_recap": generate_weekly_recap,
 }

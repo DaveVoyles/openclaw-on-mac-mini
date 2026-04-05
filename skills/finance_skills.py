@@ -8,8 +8,10 @@ Covers: stock data, market news, sentiment analysis, financial indicators
 from typing import Any
 
 from config import cfg
-from src.http_session import SessionManager
-from src.tool_health import circuit_breaker, tool_health
+from http_session import SessionManager
+from tool_health import circuit_breaker, tool_health
+
+_sessions = SessionManager(timeout=30, name="finance_skills")
 
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co/query"
 
@@ -60,54 +62,54 @@ async def get_stock_info(symbol: str) -> dict[str, Any]:
         "apikey": cfg.alphavantage_key,
     }
 
-    async with SessionManager.get_session() as session:
-        async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
-            if resp.status == 429:
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
-                }
-
-            if resp.status != 200:
-                error_text = await resp.text()
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": f"Alpha Vantage error: {error_text}",
-                }
-
-            data = await resp.json()
-
-            # Check for API limit message
-            if "Note" in data or "Information" in data:
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day. Try again tomorrow.",
-                }
-
-            quote = data.get("Global Quote", {})
-            if not quote:
-                return {
-                    "status": "error",
-                    "message": f"No data found for symbol: {symbol}",
-                }
-
-            tool_health.record("alphavantage", success=True)
-
+    session = await _sessions.get()
+    async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
+        if resp.status == 429:
+            tool_health.record("alphavantage", success=False)
             return {
-                "status": "ok",
-                "symbol": quote.get("01. symbol", symbol),
-                "price": float(quote.get("05. price", 0)),
-                "change": quote.get("09. change", "N/A"),
-                "change_percent": quote.get("10. change percent", "N/A"),
-                "volume": quote.get("06. volume", "N/A"),
-                "latest_trading_day": quote.get("07. latest trading day", "N/A"),
-                "previous_close": float(quote.get("08. previous close", 0)),
-                "high": float(quote.get("03. high", 0)),
-                "low": float(quote.get("04. low", 0)),
+                "status": "error",
+                "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
             }
+
+        if resp.status != 200:
+            error_text = await resp.text()
+            tool_health.record("alphavantage", success=False)
+            return {
+                "status": "error",
+                "message": f"Alpha Vantage error: {error_text}",
+            }
+
+        data = await resp.json()
+
+        # Check for API limit message
+        if "Note" in data or "Information" in data:
+            tool_health.record("alphavantage", success=False)
+            return {
+                "status": "error",
+                "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day. Try again tomorrow.",
+            }
+
+        quote = data.get("Global Quote", {})
+        if not quote:
+            return {
+                "status": "error",
+                "message": f"No data found for symbol: {symbol}",
+            }
+
+        tool_health.record("alphavantage", success=True)
+
+        return {
+            "status": "ok",
+            "symbol": quote.get("01. symbol", symbol),
+            "price": float(quote.get("05. price", 0)),
+            "change": quote.get("09. change", "N/A"),
+            "change_percent": quote.get("10. change percent", "N/A"),
+            "volume": quote.get("06. volume", "N/A"),
+            "latest_trading_day": quote.get("07. latest trading day", "N/A"),
+            "previous_close": float(quote.get("08. previous close", 0)),
+            "high": float(quote.get("03. high", 0)),
+            "low": float(quote.get("04. low", 0)),
+        }
 
 
 async def get_market_news(topics: str | None = None, tickers: str | None = None, limit: int = 10) -> dict[str, Any]:
@@ -164,63 +166,63 @@ async def get_market_news(topics: str | None = None, tickers: str | None = None,
     if tickers:
         params["tickers"] = tickers
 
-    async with SessionManager.get_session() as session:
-        async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
-            if resp.status == 429:
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
-                    "feed": [],
-                }
-
-            if resp.status != 200:
-                error_text = await resp.text()
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": f"Alpha Vantage error: {error_text}",
-                    "feed": [],
-                }
-
-            data = await resp.json()
-
-            if "Note" in data or "Information" in data:
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day.",
-                    "feed": [],
-                }
-
-            tool_health.record("alphavantage", success=True)
-
-            articles = []
-            for item in data.get("feed", []):
-                # Get overall sentiment
-                sentiment_score = float(item.get("overall_sentiment_score", 0))
-                sentiment_label = item.get("overall_sentiment_label", "Neutral")
-
-                articles.append({
-                    "title": item.get("title", ""),
-                    "url": item.get("url", ""),
-                    "summary": item.get("summary", "")[:300],  # Truncate
-                    "source": item.get("source", ""),
-                    "published": item.get("time_published", ""),
-                    "sentiment": {
-                        "score": sentiment_score,
-                        "label": sentiment_label,
-                    },
-                    "topics": [t["topic"] for t in item.get("topics", [])],
-                    "tickers": [t["ticker"] for t in item.get("ticker_sentiment", [])],
-                })
-
+    session = await _sessions.get()
+    async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
+        if resp.status == 429:
+            tool_health.record("alphavantage", success=False)
             return {
-                "status": "ok",
-                "items": data.get("items", "0"),
-                "sentiment_score_definition": data.get("sentiment_score_definition", ""),
-                "feed": articles,
+                "status": "error",
+                "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
+                "feed": [],
             }
+
+        if resp.status != 200:
+            error_text = await resp.text()
+            tool_health.record("alphavantage", success=False)
+            return {
+                "status": "error",
+                "message": f"Alpha Vantage error: {error_text}",
+                "feed": [],
+            }
+
+        data = await resp.json()
+
+        if "Note" in data or "Information" in data:
+            tool_health.record("alphavantage", success=False)
+            return {
+                "status": "error",
+                "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day.",
+                "feed": [],
+            }
+
+        tool_health.record("alphavantage", success=True)
+
+        articles = []
+        for item in data.get("feed", []):
+            # Get overall sentiment
+            sentiment_score = float(item.get("overall_sentiment_score", 0))
+            sentiment_label = item.get("overall_sentiment_label", "Neutral")
+
+            articles.append({
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "summary": item.get("summary", "")[:300],  # Truncate
+                "source": item.get("source", ""),
+                "published": item.get("time_published", ""),
+                "sentiment": {
+                    "score": sentiment_score,
+                    "label": sentiment_label,
+                },
+                "topics": [t["topic"] for t in item.get("topics", [])],
+                "tickers": [t["ticker"] for t in item.get("ticker_sentiment", [])],
+            })
+
+        return {
+            "status": "ok",
+            "items": data.get("items", "0"),
+            "sentiment_score_definition": data.get("sentiment_score_definition", ""),
+            "feed": articles,
+        }
 
 
 async def get_sentiment_analysis(tickers: str) -> dict[str, Any]:
@@ -269,68 +271,68 @@ async def get_sentiment_analysis(tickers: str) -> dict[str, Any]:
         "apikey": cfg.alphavantage_key,
     }
 
-    async with SessionManager.get_session() as session:
-        async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
-            if resp.status == 429:
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
-                }
-
-            if resp.status != 200:
-                error_text = await resp.text()
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": f"Alpha Vantage error: {error_text}",
-                }
-
-            data = await resp.json()
-
-            if "Note" in data or "Information" in data:
-                tool_health.record("alphavantage", success=False)
-                return {
-                    "status": "error",
-                    "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day.",
-                }
-
-            tool_health.record("alphavantage", success=True)
-
-            # Aggregate sentiment by ticker
-            ticker_list = [t.strip() for t in tickers.split(",")]
-            sentiment_map = {ticker: {"scores": [], "count": 0} for ticker in ticker_list}
-
-            for article in data.get("feed", []):
-                for ticker_sentiment in article.get("ticker_sentiment", []):
-                    ticker = ticker_sentiment.get("ticker", "")
-                    if ticker in sentiment_map:
-                        score = float(ticker_sentiment.get("ticker_sentiment_score", 0))
-                        sentiment_map[ticker]["scores"].append(score)
-                        sentiment_map[ticker]["count"] += 1
-
-            # Calculate average sentiment
-            result_sentiment = {}
-            for ticker, info in sentiment_map.items():
-                if info["count"] > 0:
-                    avg_score = sum(info["scores"]) / info["count"]
-                    result_sentiment[ticker] = {
-                        "score": round(avg_score, 3),
-                        "label": _get_sentiment_label(avg_score),
-                        "recent_news": info["count"],
-                    }
-                else:
-                    result_sentiment[ticker] = {
-                        "score": 0.0,
-                        "label": "No Recent News",
-                        "recent_news": 0,
-                    }
-
+    session = await _sessions.get()
+    async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
+        if resp.status == 429:
+            tool_health.record("alphavantage", success=False)
             return {
-                "status": "ok",
-                "tickers": ticker_list,
-                "sentiment": result_sentiment,
+                "status": "error",
+                "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
             }
+
+        if resp.status != 200:
+            error_text = await resp.text()
+            tool_health.record("alphavantage", success=False)
+            return {
+                "status": "error",
+                "message": f"Alpha Vantage error: {error_text}",
+            }
+
+        data = await resp.json()
+
+        if "Note" in data or "Information" in data:
+            tool_health.record("alphavantage", success=False)
+            return {
+                "status": "error",
+                "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day.",
+            }
+
+        tool_health.record("alphavantage", success=True)
+
+        # Aggregate sentiment by ticker
+        ticker_list = [t.strip() for t in tickers.split(",")]
+        sentiment_map = {ticker: {"scores": [], "count": 0} for ticker in ticker_list}
+
+        for article in data.get("feed", []):
+            for ticker_sentiment in article.get("ticker_sentiment", []):
+                ticker = ticker_sentiment.get("ticker", "")
+                if ticker in sentiment_map:
+                    score = float(ticker_sentiment.get("ticker_sentiment_score", 0))
+                    sentiment_map[ticker]["scores"].append(score)
+                    sentiment_map[ticker]["count"] += 1
+
+        # Calculate average sentiment
+        result_sentiment = {}
+        for ticker, info in sentiment_map.items():
+            if info["count"] > 0:
+                avg_score = sum(info["scores"]) / info["count"]
+                result_sentiment[ticker] = {
+                    "score": round(avg_score, 3),
+                    "label": _get_sentiment_label(avg_score),
+                    "recent_news": info["count"],
+                }
+            else:
+                result_sentiment[ticker] = {
+                    "score": 0.0,
+                    "label": "No Recent News",
+                    "recent_news": 0,
+                }
+
+        return {
+            "status": "ok",
+            "tickers": ticker_list,
+            "sentiment": result_sentiment,
+        }
 
 
 def _get_sentiment_label(score: float) -> str:
