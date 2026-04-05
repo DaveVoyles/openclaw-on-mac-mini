@@ -5,6 +5,7 @@ DAG-based task execution with parallel processing, error handling, and workflow 
 
 import asyncio
 import datetime
+import inspect
 import json
 import logging
 import os
@@ -397,7 +398,21 @@ class WorkflowEngine:
         try:
             # Merge task args with context
             exec_args = {**context, **task.args}
-            result = await asyncio.wait_for(skill_fn(**exec_args), timeout=300)
+            signature = inspect.signature(skill_fn)
+            accepts_var_kwargs = any(
+                param.kind == inspect.Parameter.VAR_KEYWORD
+                for param in signature.parameters.values()
+            )
+            if accepts_var_kwargs:
+                call_args = exec_args
+            else:
+                call_args = {
+                    key: value
+                    for key, value in exec_args.items()
+                    if key in signature.parameters
+                }
+
+            result = await asyncio.wait_for(skill_fn(**call_args), timeout=300)
 
             task.end_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
             task.duration_ms = int(
