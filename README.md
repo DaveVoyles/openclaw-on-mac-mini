@@ -49,7 +49,8 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - **Semantic fallback retrieval**: when lexical matching is weak, `/ask` can semantically shortlist likely tools instead of exposing the full tool set
 - **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
-- Conversation memory — multi-turn context per user/channel (30 min TTL)
+- Conversation memory — multi-turn context is isolated per user + channel/thread scope (TTL/history are configurable; defaults: 30 min + 50 turns)
+- Markdown table handling — tables are reformatted for Discord embeds; large/complex tables can include an attached `table.png` fallback image
 - `/clear` — reset conversation history
 - `/model show` / `/model set` — view or change your default LLM routing preference
 - `/save <name>` / `/resume <name>` — persist conversations to disk; resume later
@@ -364,11 +365,12 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 
 **Phase 42 — Discord One-Tap SMS UX** ✅
 
-- `/sms config phone:+15551234567` — Save your target phone and optionally send a verification code
-- `/sms test` / `/sms test code:<code>` — start or complete verification flow
+- `/sms config phone:+15551234567 [send_verification:true|false]` — Save your target phone; verification send is on by default
+- `/sms test` / `/sms test code:<code>` — start or complete verification flow (when Twilio Verify is unavailable, test sends a real SMS and marks verified)
 - `/sms status` — show configured number, verification state, and send budget
 - `/sms send <message>` — confirmation-based SMS send with cooldown + rate limiting
 - Context menu: right-click any message → **Send to SMS**
+- Quick flow: `/sms config` → `/sms test` → `/sms test code:<code>` → `/sms send`
 
 **Phase 36 — Movie & TV Lookup** ✅
 
@@ -560,6 +562,10 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 | `/tailscale`                  | Tailscale VPN status and device IP                              | 6     |
 | `/speedtest`                  | Cloudflare download speed + DNS latency                         | 6     |
 | `/model set <pref>`           | Set default model: auto/local/gemini/openai/anthropic           | 15    |
+| `/sms config <phone> [send_verification]` | Configure one-tap SMS phone + optional verification send          | 42    |
+| `/sms test [code]`            | Send verification code or submit code to approve                 | 42    |
+| `/sms status`                 | Show masked phone, verification state, and remaining send budget | 42    |
+| `/sms send <message>`         | Confirm + send SMS to your configured phone                      | 42    |
 | `/run <code>`                 | Execute Python code in sandboxed Docker container               | 15    |
 | `/dream`                      | Run a cognitive dream cycle (memory consolidation)              | 16    |
 | `/memory-health`              | Show memory health score and 5 metrics                          | 16    |
@@ -741,7 +747,7 @@ Uptime Kuma (:3001)              Grafana dashboard
 │   ├── dream_cycle.py     # Auto-Dream cognitive memory consolidation (916 lines)
 │   ├── agent_loop.py      # Plan management — observe/think/act engine (658 lines)
 │   ├── research_agent.py  # Autonomous multi-step research with synthesis (632 lines)
-│   ├── memory.py          # Per-user conversation memory (30 min TTL)
+│   ├── memory.py          # Per-user+channel conversation memory (TTL/history configurable)
 │   ├── vector_store.py    # ChromaDB semantic memory — 3 collections
 │   ├── thread_store.py    # SQLite-backed persistent thread storage (WAL mode)
 │   ├── dashboard.py       # Web dashboard (served at /dashboard, self-contained HTML)
@@ -757,7 +763,7 @@ Uptime Kuma (:3001)              Grafana dashboard
 │   ├── search_provider.py # Search provider retry/fallback logic (91 lines)
 │   ├── code_sandbox.py    # Sandboxed Python execution (113 lines)
 │   ├── tool_health.py     # Tool health monitoring and reporting (180 lines)
-│   ├── table_renderer.py  # Discord-formatted table rendering (166 lines)
+│   ├── table_renderer.py  # Markdown table extraction + optional image fallback (166 lines)
 │   ├── image_gen.py       # Image generation utilities (91 lines)
 │   ├── goal_tracker.py    # Auto-tracked goals from conversations (188 lines)
 │   ├── memory_manager.py  # Memory lifecycle management (199 lines)

@@ -28,7 +28,20 @@ Thank you for your interest in contributing to OpenClaw! This guide will help yo
    pip install -r requirements.txt -r requirements-test.txt
    ```
 
-4. **Configure environment**
+4. **Setup pre-commit hooks**
+   ```bash
+   ./scripts/pre-commit-setup.sh
+   ```
+   
+   This will install:
+   - Ruff (linting + formatting)
+   - MyPy (type checking)
+   - Bandit (security scanning)
+   - Pytest (tests on pre-push)
+   - Conventional commits checker
+   - Standard file checks
+
+5. **Configure environment**
    ```bash
    cp .env.example .env
    # Edit .env with your API keys and configuration
@@ -122,15 +135,25 @@ pytest tests/ --durations=0
 
 ## Code Quality
 
-### Linting
+### Pre-Commit Hooks
 
-We use Ruff for fast linting and formatting, and pre-commit hooks to ensure code quality.
+We use comprehensive pre-commit hooks to maintain code quality. Run the setup script:
 
 ```bash
-# Install pre-commit hooks (one-time setup)
-pip install pre-commit
-pre-commit install
+./scripts/pre-commit-setup.sh
+```
 
+This configures:
+- **Ruff** - Fast linting and formatting
+- **MyPy** - Static type checking
+- **Bandit** - Security vulnerability scanning
+- **Pytest** - Run tests before pushing
+- **Conventional Commits** - Enforce commit message format
+- **Standard Checks** - Trailing whitespace, file endings, etc.
+
+### Linting
+
+```bash
 # Check for issues
 ruff check src/ tests/
 
@@ -142,12 +165,20 @@ ruff format src/ tests/
 
 # Run all pre-commit hooks manually
 pre-commit run --all-files
+
+# Skip hooks (not recommended)
+git commit --no-verify
 ```
 
 **Pre-commit hooks automatically run on every commit:**
 - Ruff linting and formatting
 - MyPy type checking (on configured files)
-- Trailing whitespace removal
+- Bandit security scanning
+- File format checks
+- Conventional commit message validation
+
+**Pre-push hooks:**
+- Pytest test suite (on changed files)
 - YAML/JSON/TOML validation
 - Large file detection
 - Private key detection
@@ -303,13 +334,38 @@ safety check
    ```
 
 4. **Commit with conventional commits**
+   
+   We enforce conventional commit format:
+   
    ```
-   feat: Add new digest scheduling feature
-   fix: Resolve timezone handling in scheduler
-   docs: Update API documentation
-   test: Add integration tests for LLM gateway
-   refactor: Simplify digest manager logic
+   <type>: <description>
+   
+   [optional body]
+   [optional footer]
    ```
+   
+   **Types:**
+   - `feat`: New feature
+   - `fix`: Bug fix
+   - `docs`: Documentation changes
+   - `test`: Test updates
+   - `refactor`: Code refactoring
+   - `perf`: Performance improvements
+   - `chore`: Maintenance tasks
+   - `ci`: CI/CD changes
+   - `build`: Build system changes
+   
+   **Examples:**
+   ```
+   feat: add real-time trend detection
+   fix: resolve timezone handling in scheduler
+   docs: update API documentation
+   test: add integration tests for LLM gateway
+   refactor: simplify digest manager logic
+   perf: optimize ChromaDB query performance
+   ```
+   
+   The commit message hook will enforce this format automatically.
 
 5. **Push and create PR**
    ```bash

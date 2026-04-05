@@ -1,0 +1,9 @@
+name: hello-world
+version: 1.0.0
+author: OpenClaw Team <team@openclaw.dev>
+description: Minimal example plugin demonstrating the basics
+dependencies: []
+permissions:
+  - storage
+min_openclaw_version: 0.1.0
+homepage: https://github.com/openclaw/plugins/hello-world

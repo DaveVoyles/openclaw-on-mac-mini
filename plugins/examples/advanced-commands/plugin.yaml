@@ -1,0 +1,10 @@
+name: advanced-commands
+version: 1.0.0
+author: OpenClaw Team <team@openclaw.dev>
+description: Example plugin with Discord commands
+dependencies: []
+permissions:
+  - commands
+  - storage
+min_openclaw_version: 0.1.0
+homepage: https://github.com/openclaw/plugins/advanced-commands

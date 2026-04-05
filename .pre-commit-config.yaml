@@ -29,6 +29,14 @@ repos:
         pass_filenames: false
         always_run: true
 
+  # Bandit - Security linting
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml, -r, src/]
+        additional_dependencies: ["bandit[toml]"]
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -46,6 +54,13 @@ repos:
       - id: check-merge-conflict
       - id: detect-private-key
         exclude: ^\.env\.example$
+      - id: check-ast
+      - id: check-docstring-first
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: debug-statements
+      - id: mixed-line-ending
+        args: [--fix=lf]
 
   # YAML formatting
   - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
@@ -61,6 +76,25 @@ repos:
     hooks:
       - id: markdownlint
         args: [--fix, --disable, MD013, MD033, MD041]
+
+  # Conventional commits
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [--force]
+
+  # Pytest - Run tests on changed files
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: pytest (changed files)
+        entry: bash -c 'if git diff --cached --name-only | grep -q "^src/\|^tests/"; then pytest tests/ -x -q --tb=short --ignore=tests/test_llm_chat.py --ignore=tests/test_llm_ratelimiter.py --ignore=tests/test_model_selection.py -k "not test_gateway_successful_request and not test_returns_json_response" || exit 1; fi'
+        language: system
+        pass_filenames: false
+        always_run: false
+        stages: [pre-push]
 
   # Security scanning (optional - can be slow)
   # Uncomment to enable Trivy in pre-commit (primarily runs in CI)

@@ -532,10 +532,22 @@ You get a Discord embed with your active downloads</code></pre>
 
       <div class="tip">
         <strong>&#128161; Context is per-channel:</strong>
-        <code>/ask</code> automatically remembers the last 20 messages in a
-        channel for 30 minutes. No need to reply-thread &mdash; just keep using
-        <code>/ask</code>. Use <code>/clear</code> to reset, or
-        <code>/save</code> to keep it permanently.
+        <code>/ask</code> history is scoped to your user + channel/thread. Work
+        in two channels (or a parent channel + thread) and each keeps separate
+        context. TTL/history are configurable (defaults: 30 minutes, 50 turns).
+        Use <code>/clear</code> to reset, or <code>/save</code> to persist.
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top: 0">One-Tap SMS Quick Flow</h3>
+        <pre><code>/sms config phone:+15551234567
+/sms test
+/sms test code:123456
+/sms send message:"Running 15 minutes late."</code></pre>
+        <p style="margin-top: 0.5rem">
+          You can also right-click any message and choose
+          <strong>Send to SMS</strong> for a confirmation-based send.
+        </p>
       </div>
 
       <div class="tip">
@@ -1433,6 +1445,11 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
 |------|---------|-----------|-------|-------|
 | Sat  | Maryland vs Army | 1:00 PM | ESPN+ | Ranked matchup |
 | Sun  | Notre Dame vs Duke | 4:00 PM | ACCN | Stream confirmed |</code></pre>
+        <p style="margin-top: 0.5rem">
+          Table behavior: markdown tables are reformatted for Discord embeds. If
+          a table is large/complex, OpenClaw can attach a rendered
+          <code>table.png</code> image for readability.
+        </p>
       </div>
 
       <div class="tip">
@@ -3609,6 +3626,10 @@ Division 1 men's lacrosse games this week and post a table.
           <tr>
             <td><strong>Research This</strong></td>
             <td>Runs a research query using the message content as the topic. Results are posted publicly in the channel.</td>
+          </tr>
+          <tr>
+            <td><strong>Send to SMS</strong></td>
+            <td>Sends the selected message to your configured phone after confirmation. Requires <code>/sms config</code> and verification.</td>
           </tr>
         </tbody>
       </table>

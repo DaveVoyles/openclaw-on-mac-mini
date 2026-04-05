@@ -953,7 +953,8 @@
               <div style="color: var(--muted); font-size: 0.8rem">
                 Build a live sports watch guide with a markdown table for
                 matchups, times, and where to watch. Ideal for weekly lacrosse or
-                weekend watch lists.
+                weekend watch lists. Markdown tables are reformatted for Discord;
+                larger/complex tables may include a rendered image attachment.
               </div>
             </div>
             <div
@@ -1007,6 +1008,7 @@
           <ul style="margin-top:0.75rem;padding-left:1.25rem;font-size:0.82rem;color:var(--muted);line-height:1.7">
             <li>🗓️ <strong>/recap weekly</strong> — Turn the current Discord channel or thread into highlights, action items, or a summary table</li>
             <li>🥍 <strong>/sports upcoming</strong> — Generate a live sports watch guide with teams, ET times, and where to watch</li>
+            <li>📊 <strong>Table rendering</strong> — Markdown tables are converted to Discord-friendly fixed-width blocks; big tables can also include <code>table.png</code></li>
             <li>🖱️ <strong>Create recap from thread</strong> — Right-click a message to create a quick thread recap without retyping the prompt</li>
             <li>📋 <strong>/review</strong> — Upload or paste any document for structured AI critique (writing, technical, or quick mode)</li>
             <li>🎤 <strong>/interview</strong> — Bot asks you 3–5 questions via modals, then generates personalized output</li>
@@ -1292,7 +1294,11 @@
 
         <div class="card">
           <h2>📲 SMS Preferences</h2>
-          <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.6rem">View/update SMS phone preferences and recent sends for a Discord user ID.</p>
+          <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.4rem">View/update SMS phone preferences and recent sends for a Discord user ID.</p>
+          <p style="color:var(--muted);font-size:0.78rem;margin-bottom:0.6rem">
+            Dashboard settings call <code>/api/sms/settings</code> (phone only). Verification and sending stay in Discord:
+            <code>/sms test</code>, <code>/sms test code:&lt;code&gt;</code>, and <code>/sms send</code>.
+          </p>
           <form id="sms-settings-form" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.8rem">
             <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
               Discord User ID
@@ -1305,6 +1311,9 @@
             <button type="submit" style="background:var(--spirit-blue);color:white;border:none;border-radius:6px;padding:0.45rem 0.9rem;cursor:pointer">Save</button>
             <button type="button" onclick="loadSmsPanel()" style="background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:0.45rem 0.9rem;cursor:pointer">Reload</button>
           </form>
+          <p style="color:var(--muted);font-size:0.78rem;margin:0 0 0.6rem 0">
+            One-tap flow: <code>/sms config</code> → <code>/sms test</code> → <code>/sms test code:&lt;code&gt;</code> → <code>/sms send</code> (or right-click message → <strong>Send to SMS</strong>).
+          </p>
           <div id="sms-settings-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.6rem"></div>
           <div id="sms-status-content" class="scrollable-list" style="max-height:130px">
             <p class="muted-text">Set a Discord user ID to load SMS status.</p>
@@ -2234,6 +2243,13 @@
           { category: "📱 Push Notifications", commands: [
             { name: "/ntfy send <message> [title] [priority]", desc: "Send phone push notification via ntfy" },
             { name: "/ntfy test", desc: "Send test notification to verify setup" },
+          ]},
+          { category: "📲 SMS One-Tap", commands: [
+            { name: "/sms config <phone> [send_verification]", desc: "Save phone number for one-tap SMS; can trigger verification send" },
+            { name: "/sms test [code]", desc: "Start verification or submit code from SMS" },
+            { name: "/sms status", desc: "Show masked phone, verification state, and remaining send budget" },
+            { name: "/sms send <message>", desc: "Confirmation-based SMS send to configured phone" },
+            { name: "Context menu: Send to SMS", desc: "Right-click a Discord message and forward it via SMS with confirmation" },
           ]},
           { category: "🎬 Movie & TV", commands: [
             { name: "/media movie <title>", desc: "Look up a movie with poster and ratings" },

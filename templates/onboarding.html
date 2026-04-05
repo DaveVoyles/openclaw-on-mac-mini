@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw Tutorial</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .tutorial-container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .tutorial-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .tutorial-header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .tutorial-header p {
+            font-size: 1.2em;
+            opacity: 0.95;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.3);
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #10b981;
+            transition: width 0.5s ease;
+        }
+
+        .tutorial-content {
+            padding: 40px;
+        }
+
+        .step {
+            display: none;
+        }
+
+        .step.active {
+            display: block;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        .step p {
+            color: #333;
+            line-height: 1.8;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
+        }
+
+        .feature-card {
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .feature-card .icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .feature-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .feature-card p {
+            color: #666;
+            font-size: 0.9em;
+            margin: 0;
+        }
+
+        .command-example {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .tip-box {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .tip-box strong {
+            color: #92400e;
+        }
+
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+            padding-top: 30px;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .step-indicator {
+            text-align: center;
+            color: #9ca3af;
+            margin-top: 20px;
+            font-size: 0.9em;
+        }
+
+        .completion-badge {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .completion-badge .icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+        }
+
+        .completion-badge h2 {
+            color: #10b981;
+            margin-bottom: 20px;
+        }
+
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        .quick-link {
+            background: #f9fafb;
+            padding: 20px;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .quick-link:hover {
+            border-color: #667eea;
+            transform: translateY(-3px);
+        }
+
+        .quick-link h4 {
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+
+        .quick-link p {
+            margin: 0;
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="tutorial-container">
+        <div class="tutorial-header">
+            <h1>🤖 Welcome to OpenClaw!</h1>
+            <p>Your AI-powered automation assistant</p>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+        </div>
+
+        <div class="tutorial-content">
+            <!-- Step 1: Welcome -->
+            <div class="step active" data-step="1">
+                <h2>👋 Let's Get Started!</h2>
+                <p>
+                    OpenClaw is your autonomous AI assistant for home automation, 
+                    system management, and productivity. This quick tutorial will 
+                    show you the key features in just a few minutes.
+                </p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="icon">🤖</div>
+                        <h3>AI Conversations</h3>
+                        <p>Natural language interactions powered by Google Gemini</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">📅</div>
+                        <h3>Automation</h3>
+                        <p>Schedule tasks and create workflows</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">🌐</div>
+                        <h3>Web Access</h3>
+                        <p>Browse and analyze web content</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">📊</div>
+                        <h3>Monitoring</h3>
+                        <p>Track systems and services</p>
+                    </div>
+                </div>
+
+                <div class="tip-box">
+                    <strong>💡 Pro Tip:</strong> OpenClaw runs in Discord, making it easy 
+                    to access from your phone, computer, or any device!
+                </div>
+            </div>
+
+            <!-- Step 2: Basic Commands -->
+            <div class="step" data-step="2">
+                <h2>🎯 Basic Commands</h2>
+                <p>Start with these essential commands:</p>
+
+                <div class="command-example">
+                    /ask question:What is the weather like today?
+                </div>
+                <p>Ask me anything! I can answer questions, help with research, or chat about any topic.</p>
+
+                <div class="command-example">
+                    /help
+                </div>
+                <p>See all available commands and what they do.</p>
+
+                <div class="command-example">
+                    /analyze-file [attach file]
+                </div>
+                <p>Upload a PDF, image, or document for AI-powered analysis.</p>
+
+                <div class="tip-box">
+                    <strong>💡 Pro Tip:</strong> I support follow-up questions! 
+                    Just continue the conversation naturally.
+                </div>
+            </div>
+
+            <!-- Step 3: Scheduled Tasks -->
+            <div class="step" data-step="3">
+                <h2>⏰ Scheduled Tasks</h2>
+                <p>Automate recurring tasks with the scheduler:</p>
+
+                <div class="command-example">
+                    /schedule-task name:Daily Weather cron:0 8 * * *
+                </div>
+                <p>Create tasks that run automatically on a schedule (using cron syntax).</p>
+
+                <div class="command-example">
+                    /list-tasks
+                </div>
+                <p>View all your scheduled tasks and their status.</p>
+
+                <div class="command-example">
+                    /set-reminder time:tomorrow at 2pm message:Call dentist
+                </div>
+                <p>Set one-time reminders for important events.</p>
+
+                <div class="tip-box">
+                    <strong>💡 Pro Tip:</strong> Use scheduled tasks for daily digests, 
+                    weekly reports, or any recurring automation!
+                </div>
+            </div>
+
+            <!-- Step 4: API Integrations -->
+            <div class="step" data-step="4">
+                <h2>🔌 API Integrations</h2>
+                <p>I integrate with many external services:</p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="icon">🌤️</div>
+                        <h3>Weather</h3>
+                        <p>Get forecasts and alerts</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">📧</div>
+                        <h3>Email</h3>
+                        <p>Send emails via Gmail/SMTP</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">🐳</div>
+                        <h3>Docker</h3>
+                        <p>Manage containers</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">💾</div>
+                        <h3>NAS</h3>
+                        <p>File operations</p>
+                    </div>
+                </div>
+
+                <div class="tip-box">
+                    <strong>💡 Pro Tip:</strong> Check API_SETUP_COMPLETE.md for 
+                    detailed setup guides for each integration.
+                </div>
+            </div>
+
+            <!-- Step 5: Dashboard -->
+            <div class="step" data-step="5">
+                <h2>📊 Web Dashboard</h2>
+                <p>Access advanced features through the web dashboard:</p>
+
+                <div class="command-example">
+                    http://localhost:8080/dashboard
+                </div>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="icon">📈</div>
+                        <h3>Metrics</h3>
+                        <p>Real-time performance data</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">💬</div>
+                        <h3>History</h3>
+                        <p>Browse conversations</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">⚙️</div>
+                        <h3>Config</h3>
+                        <p>Manage settings</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">🔍</div>
+                        <h3>Search</h3>
+                        <p>Find anything quickly</p>
+                    </div>
+                </div>
+
+                <div class="tip-box">
+                    <strong>💡 Pro Tip:</strong> The dashboard updates in real-time 
+                    and works great on mobile!
+                </div>
+            </div>
+
+            <!-- Step 6: Advanced Features -->
+            <div class="step" data-step="6">
+                <h2>🚀 Advanced Features</h2>
+                <p>Power user features for serious automation:</p>
+
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                        🧠 <strong>Long-term Memory:</strong> I remember facts and preferences
+                    </li>
+                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                        📊 <strong>Goal Tracking:</strong> Monitor habits and achievements
+                    </li>
+                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                        💰 <strong>Expense Tracking:</strong> Budget and financial monitoring
+                    </li>
+                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                        🎯 <strong>Decision Workflows:</strong> If-this-then-that automations
+                    </li>
+                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                        🚨 <strong>Incident Management:</strong> Alert handling and escalation
+                    </li>
+                    <li style="padding: 10px 0;">
+                        🔄 <strong>Agent Loops:</strong> Autonomous multi-step tasks
+                    </li>
+                </ul>
+
+                <div class="tip-box">
+                    <strong>💡 Pro Tip:</strong> Use /fact to teach me about your 
+                    preferences and I'll remember them!
+                </div>
+            </div>
+
+            <!-- Step 7: Completion -->
+            <div class="step" data-step="7">
+                <div class="completion-badge">
+                    <div class="icon">🎉</div>
+                    <h2>Tutorial Complete!</h2>
+                    <p>You're ready to start using OpenClaw. Here are some quick links to help you continue:</p>
+                </div>
+
+                <div class="quick-links">
+                    <a href="/dashboard" class="quick-link">
+                        <h4>📊 Dashboard</h4>
+                        <p>View metrics and analytics</p>
+                    </a>
+                    <a href="/guide" class="quick-link">
+                        <h4>📖 User Guide</h4>
+                        <p>Full documentation</p>
+                    </a>
+                    <div class="quick-link" style="cursor: default;">
+                        <h4>💬 Discord</h4>
+                        <p>Type /help to see commands</p>
+                    </div>
+                    <div class="quick-link" style="cursor: default;">
+                        <h4>🤖 Ask Me</h4>
+                        <p>I'm here to help anytime!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="navigation">
+                <button class="btn btn-secondary" id="prevBtn" onclick="changeStep(-1)" disabled>
+                    ← Previous
+                </button>
+                <div class="step-indicator" id="stepIndicator">
+                    Step 1 of 7
+                </div>
+                <button class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">
+                    Next →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 7;
+
+        function updateStep() {
+            // Hide all steps
+            document.querySelectorAll('.step').forEach(step => {
+                step.classList.remove('active');
+            });
+
+            // Show current step
+            document.querySelector(`.step[data-step="${currentStep}"]`).classList.add('active');
+
+            // Update progress bar
+            const progress = (currentStep / totalSteps) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+
+            // Update step indicator
+            document.getElementById('stepIndicator').textContent = `Step ${currentStep} of ${totalSteps}`;
+
+            // Update buttons
+            document.getElementById('prevBtn').disabled = currentStep === 1;
+            
+            const nextBtn = document.getElementById('nextBtn');
+            if (currentStep === totalSteps) {
+                nextBtn.textContent = 'Get Started! 🚀';
+                nextBtn.onclick = () => {
+                    window.location.href = '/dashboard';
+                };
+            } else {
+                nextBtn.textContent = 'Next →';
+                nextBtn.onclick = () => changeStep(1);
+            }
+        }
+
+        function changeStep(delta) {
+            const newStep = currentStep + delta;
+            if (newStep >= 1 && newStep <= totalSteps) {
+                currentStep = newStep;
+                updateStep();
+            }
+        }
+
+        // Initialize
+        updateStep();
+    </script>
+</body>
+</html>
