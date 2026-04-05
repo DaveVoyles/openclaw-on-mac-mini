@@ -545,17 +545,22 @@ You get a Discord embed with your active downloads</code></pre>
         in two channels (or a parent channel + thread) and each keeps separate
         context. TTL/history are configurable (defaults: 30 minutes, 50 turns).
         Use <code>/clear</code> to reset, or <code>/save</code> to persist.
+        Copy exports (<code>/recap copy-latest</code>,
+        <code>/recap copy-thread</code>) stay locked to the current
+        channel/thread.
       </div>
 
       <div class="card">
-        <h3 style="margin-top: 0">One-Tap SMS Quick Flow</h3>
-        <pre><code>/sms config phone:+15551234567
-/sms test
-/sms test code:123456
-/sms send message:"Running 15 minutes late."</code></pre>
+        <h3 style="margin-top: 0">Copy/Paste Quick Flow</h3>
+        <pre><code>/recap copy-latest
+/recap copy-thread days:7 style:action-items</code></pre>
         <p style="margin-top: 0.5rem">
           You can also right-click any message and choose
-          <strong>Send to SMS</strong> for a confirmation-based send.
+          <strong>Copy Workflow Context</strong> for a mobile-friendly copy block.
+        </p>
+        <p style="margin-top: 0.5rem; color: var(--muted)">
+          Optional SMS remains available via <code>/sms config</code>,
+          <code>/sms test</code>, and <code>/sms send</code>.
         </p>
       </div>
 
@@ -1434,6 +1439,16 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
           <code>save_to_vault:true</code> writes the recap into the Obsidian
           vault, and <code>schedule_weekly:true</code> creates a Monday-morning
           recurring report automatically.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Copy-ready recap exports</h3>
+        <pre><code>/recap copy-latest
+/recap copy-thread days:7 style:action-items</code></pre>
+        <p style="margin-top: 0.5rem">
+          Use these when you want a clean copy/paste payload. They are locked to
+          your current channel/thread context.
         </p>
       </div>
 
@@ -3638,7 +3653,11 @@ Division 1 men's lacrosse games this week and post a table.
           </tr>
           <tr>
             <td><strong>Send to SMS</strong></td>
-            <td>Sends the selected message to your configured phone after confirmation. Requires <code>/sms config</code> and verification.</td>
+            <td>Optional: sends the selected message to your configured phone after confirmation. Requires <code>/sms config</code> and verification.</td>
+          </tr>
+          <tr>
+            <td><strong>Copy Workflow Context</strong></td>
+            <td>Exports selected message text as a mobile-friendly copy block for paste-first workflows.</td>
           </tr>
         </tbody>
       </table>

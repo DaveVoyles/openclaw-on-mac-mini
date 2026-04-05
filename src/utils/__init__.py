@@ -1,8 +1,12 @@
 """Utils package - organized utility functions."""
 
 # Re-export commonly used functions from the old utils.py for backward compatibility
+import asyncio
+import logging
 import os
 from pathlib import Path
+
+log = logging.getLogger("openclaw.utils")
 
 
 def atomic_write(path: Path, data: str) -> None:
@@ -18,6 +22,38 @@ def atomic_write(path: Path, data: str) -> None:
         f.flush()
         os.fsync(f.fileno())
     tmp.replace(path)
+
+
+async def safe_call(
+    coro,
+    *,
+    timeout: int = 20,
+    fallback: str | None = None,
+    label: str = "operation",
+) -> str:
+    """Await *coro* with a timeout; return *fallback* on timeout or error.
+
+    Parameters
+    ----------
+    coro
+        Coroutine to await
+    timeout
+        Seconds before cancelling
+    fallback
+        Message to return on timeout/error (default: error description)
+    label
+        Operation name for logging
+    """
+    if fallback is None:
+        fallback = f"{label} timed out or failed"
+    try:
+        return await asyncio.wait_for(coro, timeout=timeout)
+    except asyncio.TimeoutError:
+        log.warning(f"{label} timed out after {timeout}s")
+        return fallback
+    except Exception as e:
+        log.warning(f"{label} failed: {e}")
+        return fallback
 
 
 # Re-export functions from submodules for convenience
@@ -56,6 +92,7 @@ except ImportError:
 __all__ = [
     # File operations
     "atomic_write",
+    "safe_call",
     # Text utilities
     "truncate",
     "split_by_length",

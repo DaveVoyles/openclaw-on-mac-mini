@@ -928,8 +928,9 @@
               </div>
               <div style="color: var(--muted); font-size: 0.8rem">
                 Summarize the current Discord channel or thread into highlights,
-                action items, or a table. Can also save the recap to the vault or
-                schedule a Monday morning rerun.
+                action items, or a table. For copy/paste workflows, use
+                <code>/recap copy-latest</code> or
+                <code>/recap copy-thread</code> in the same channel/thread.
               </div>
             </div>
             <div
@@ -1007,9 +1008,12 @@
           </div>
           <ul style="margin-top:0.75rem;padding-left:1.25rem;font-size:0.82rem;color:var(--muted);line-height:1.7">
             <li>🗓️ <strong>/recap weekly</strong> — Turn the current Discord channel or thread into highlights, action items, or a summary table</li>
+            <li>📋 <strong>/recap copy-latest</strong> — Export your latest OpenClaw response as copy-ready text from the current channel/thread</li>
+            <li>📋 <strong>/recap copy-thread</strong> — Generate + export a copy-ready recap from the current channel/thread</li>
             <li>🥍 <strong>/sports upcoming</strong> — Generate a live sports watch guide with teams, ET times, and where to watch</li>
             <li>📊 <strong>Table rendering</strong> — Markdown tables are converted to Discord-friendly fixed-width blocks; big tables can also include <code>table.png</code></li>
             <li>🖱️ <strong>Create recap from thread</strong> — Right-click a message to create a quick thread recap without retyping the prompt</li>
+            <li>🖱️ <strong>Copy Workflow Context</strong> — Right-click a message for a mobile-friendly copy block</li>
             <li>📋 <strong>/review</strong> — Upload or paste any document for structured AI critique (writing, technical, or quick mode)</li>
             <li>🎤 <strong>/interview</strong> — Bot asks you 3–5 questions via modals, then generates personalized output</li>
             <li>💬 <strong>Follow-up buttons</strong> — Every /ask response now has 2 AI-suggested follow-up questions + 🔁 Go Deeper</li>
@@ -1542,7 +1546,7 @@
 
         <div class="card">
           <h2>📲 SMS Preferences</h2>
-          <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.4rem">View/update SMS phone preferences and recent sends for a Discord user ID.</p>
+          <p style="color:var(--muted);font-size:0.82rem;margin-bottom:0.4rem">Optional SMS: view/update phone preferences and recent sends for a Discord user ID.</p>
           <p style="color:var(--muted);font-size:0.78rem;margin-bottom:0.6rem">
             Dashboard settings call <code>/api/sms/settings</code> (phone only). Verification and sending stay in Discord:
             <code>/sms test</code>, <code>/sms test code:&lt;code&gt;</code>, and <code>/sms send</code>.
@@ -2442,6 +2446,11 @@
         // Commands
         _allCmds = d.commands;
         const _extraCmdGroups = [
+          { category: "📋 Copy/Paste Workflow", commands: [
+            { name: "/recap copy-latest", desc: "Copy-ready export of your latest OpenClaw response in the current channel/thread" },
+            { name: "/recap copy-thread [days] [style]", desc: "Generate and export a copy-ready recap for the current channel/thread" },
+            { name: "Context menu: Copy Workflow Context", desc: "Right-click any message to export a mobile-friendly copy block" },
+          ]},
           { category: "Document Review & Interview", commands: [
             { name: "/review text [mode]", desc: "Paste text for structured critique (writing/technical/quick)" },
             { name: "/review file [mode]", desc: "Upload DOCX/PDF/TXT/etc for structured critique" },

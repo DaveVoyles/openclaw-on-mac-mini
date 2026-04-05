@@ -342,11 +342,15 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 **Phase 32 — Recaps & Sports Watch Guides** ✅
 
 - `/recap weekly` — summarize the current Discord channel or thread over the last 1-30 days, with styles for highlights, action items, or a compact table
+- `/recap copy-latest` — copy-ready export of your latest OpenClaw response in the current channel/thread
+- `/recap copy-thread` — generate a fresh channel/thread recap and return a copy-ready export
 - `/sports upcoming` — generate a sports watch guide with matchup tables, game times, and where-to-watch details based on live web research
 - Report outputs now append concise citation metadata/footnotes when source URLs are available
 - Both commands can optionally **save to the Obsidian vault** and **schedule a Monday-morning recurring report**
 - New context menu action: **Create recap from thread** for one-click thread summaries
+- New context menu action: **Copy Workflow Context** for right-click copy/paste-friendly exports
 - Both workflows are also reachable through plain-English `/ask` prompts like "give me a recap of this channel from the last week" or "make a watch table for this week's D1 lacrosse games"
+- Copy exports are channel/thread-locked to avoid pulling context from other conversations
 
 - `/imagine generate <prompt>` — Stable Diffusion txt2img with size and negative prompt options
 - `/imagine status` — Check SD availability and list loaded models
@@ -376,14 +380,14 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - `/ntfy test` — Verify ntfy configuration
 - `push_notification()` utility exported for other cogs to send alerts
 
-**Phase 42 — Discord One-Tap SMS UX** ✅
+**Phase 42 — Optional Discord One-Tap SMS UX** ✅
 
 - `/sms config phone:+15551234567 [send_verification:true|false]` — Save your target phone; verification send is on by default
 - `/sms test` / `/sms test code:<code>` — start or complete verification flow (when Twilio Verify is unavailable, test sends a real SMS and marks verified)
 - `/sms status` — show configured number, verification state, and send budget
 - `/sms send <message>` — confirmation-based SMS send with cooldown + rate limiting
 - Context menu: right-click any message → **Send to SMS**
-- Quick flow: `/sms config` → `/sms test` → `/sms test code:<code>` → `/sms send`
+- Optional quick flow: `/sms config` → `/sms test` → `/sms test code:<code>` → `/sms send`
 
 **Phase 36 — Movie & TV Lookup** ✅
 
@@ -575,6 +579,10 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 | `/tailscale`                  | Tailscale VPN status and device IP                              | 6     |
 | `/speedtest`                  | Cloudflare download speed + DNS latency                         | 6     |
 | `/model set <pref>`           | Set default model: auto/local/gemini/openai/anthropic           | 15    |
+| `/recap weekly [days] [style]` | Summarize current channel/thread (highlights, action-items, or table) | 32 |
+| `/recap copy-latest`          | Copy-ready export of the latest OpenClaw response in this channel/thread | 32 |
+| `/recap copy-thread [days] [style]` | Generate + export a copy-ready recap for this channel/thread | 32 |
+| `Context menu: Copy Workflow Context` | Right-click export of selected message as mobile-friendly copy payload | 32 |
 | `/sms config <phone> [send_verification]` | Configure one-tap SMS phone + optional verification send          | 42    |
 | `/sms test [code]`            | Send verification code or submit code to approve                 | 42    |
 | `/sms status`                 | Show masked phone, verification state, and remaining send budget | 42    |
