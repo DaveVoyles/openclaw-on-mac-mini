@@ -228,6 +228,9 @@ async def list_backups_handler(request: web.Request) -> web.Response:
     if not api_key:
         return web.json_response({"error": "Invalid API key"}, status=401)
 
+    if not check_rate_limit(api_key):
+        return web.json_response({"error": "Rate limit exceeded"}, status=429)
+
     try:
         from backup_manager import BackupManager
 
