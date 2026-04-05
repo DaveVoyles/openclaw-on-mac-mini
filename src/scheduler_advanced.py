@@ -4,8 +4,17 @@ Enhanced scheduling with event triggers, conditional execution, retry policies,
 and SQLite-backed execution history.
 """
 
+import ast
 import asyncio
 import datetime
+
+
+def _parse_utc(dt_str):
+    dt = datetime.datetime.fromisoformat(dt_str)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
 import json
 import logging
 import os
@@ -15,7 +24,57 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional
 
+from metrics_collector import get_collector
+from trace_context import trace_context
+
 log = logging.getLogger("openclaw.scheduler_advanced")
+
+_ALLOWED_CONDITION_NODES: tuple[type[ast.AST], ...] = (
+    ast.Expression,
+    ast.BoolOp,
+    ast.UnaryOp,
+    ast.Compare,
+    ast.BinOp,
+    ast.Name,
+    ast.Load,
+    ast.Constant,
+    ast.And,
+    ast.Or,
+    ast.Not,
+    ast.Eq,
+    ast.NotEq,
+    ast.Gt,
+    ast.GtE,
+    ast.Lt,
+    ast.LtE,
+    ast.In,
+    ast.NotIn,
+    ast.Is,
+    ast.IsNot,
+    ast.Add,
+    ast.Sub,
+    ast.Mult,
+    ast.Div,
+    ast.Mod,
+    ast.List,
+    ast.Tuple,
+    ast.Set,
+)
+
+
+def _safe_condition_eval(expression: str, context: dict[str, Any]) -> bool:
+    expr = expression.strip()
+    if not expr or len(expr) > 500:
+        return False
+    tree = ast.parse(expr, mode="eval")
+    for node in ast.walk(tree):
+        if not isinstance(node, _ALLOWED_CONDITION_NODES):
+            raise ValueError(f"Unsupported expression node: {type(node).__name__}")
+        if isinstance(node, ast.Name) and node.id not in context:
+            raise ValueError(f"Unknown variable in expression: {node.id}")
+    result = eval(compile(tree, "<condition>", "eval"), {"__builtins__": {}}, context)
+    return bool(result)
+
 
 # Database path for advanced scheduler
 SCHEDULER_DB = Path(os.getenv("MEMORY_DIR", "/memory")) / "scheduler_advanced.db"
@@ -425,11 +484,8 @@ class AdvancedScheduler:
             return True
 
         try:
-            # Safe eval with limited context
-            safe_globals = {"__builtins__": {}}
             eval_context = {**context, **(task.condition.variables or {})}
-            result = eval(task.condition.condition_script, safe_globals, eval_context)
-            return bool(result)
+            return _safe_condition_eval(task.condition.condition_script, eval_context)
         except Exception as e:
             log.warning("Condition evaluation failed for %s: %s", task.task_id, e)
             return False
@@ -440,7 +496,7 @@ class AdvancedScheduler:
         context: dict[str, Any] | None = None,
     ) -> tuple[str, int]:
         """Execute a task and return (result, duration_ms)."""
-        start_time = datetime.datetime.now()
+        start_time = datetime.datetime.now(datetime.timezone.utc)
 
         # Check condition
         if not await self._evaluate_condition(task, context or {}):
@@ -454,13 +510,13 @@ class AdvancedScheduler:
 
         try:
             result = await asyncio.wait_for(skill_fn(**task.args), timeout=300)
-            duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
+            duration_ms = int((datetime.datetime.now(datetime.timezone.utc) - start_time).total_seconds() * 1000)
             return result or "OK", duration_ms
         except asyncio.TimeoutError:
-            duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
+            duration_ms = int((datetime.datetime.now(datetime.timezone.utc) - start_time).total_seconds() * 1000)
             return "Error: Task timed out", duration_ms
         except Exception as e:
-            duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
+            duration_ms = int((datetime.datetime.now(datetime.timezone.utc) - start_time).total_seconds() * 1000)
             return f"Error: {e}", duration_ms
 
     async def _execute_with_retry(self, task: AdvancedTask, context: dict[str, Any] | None = None):
@@ -471,8 +527,17 @@ class AdvancedScheduler:
         is_success = not result.startswith("Error:")
         status = "success" if is_success else "failure"
 
-        # Log execution
-        self.db.log_execution(task.task_id, status, result, duration_ms, task.retry_count)
+        # Log execution and metrics with trace context
+        with trace_context(command=task.action, user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0):
+            self.db.log_execution(task.task_id, status, result, duration_ms, task.retry_count)
+            get_collector().record_command(
+                command=task.action,
+                user=str(task.created_by or "scheduler_advanced"),
+                workspace="scheduler_advanced",
+                duration=duration_ms / 1000.0,
+                success=(status == "success"),
+                error_type=None if status == "success" else status,
+            )
 
         # Update task metadata
         task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -518,7 +583,7 @@ class AdvancedScheduler:
         """Check and execute cron-based tasks."""
         while True:
             try:
-                now = datetime.datetime.now()
+                now = datetime.datetime.now(datetime.timezone.utc)
 
                 for task in self._tasks.values():
                     if not task.enabled:
