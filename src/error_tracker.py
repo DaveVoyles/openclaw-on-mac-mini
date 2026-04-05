@@ -6,6 +6,7 @@ Records every /ask outcome for pattern detection and auto-diagnosis.
 import json
 import logging
 import os
+import subprocess
 import time
 from pathlib import Path
 
@@ -250,8 +251,10 @@ async def diagnose_error_pattern(
         )
         if result.returncode == 0:
             container_context = f"\nContainer status:\n{result.stdout[:500]}"
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        log.warning("Docker ps timed out while getting container context")
+    except Exception as e:
+        log.warning("Failed to get docker container context: %s", e)
 
     prompt = (
         "You are an error diagnosis system for OpenClaw, a Discord bot running on a Mac Mini.\n"
@@ -440,5 +443,9 @@ def get_past_incidents(pattern_type: str = "", limit: int = 5) -> list[dict]:
                 if any(p.get("type") == pattern_type for p in i.get("patterns", []))
             ]
         return incidents[-limit:]
-    except Exception:
+    except (OSError, json.JSONDecodeError) as e:
+        log.warning("Failed to load error incidents: %s", e)
+        return []
+    except Exception as e:
+        log.exception("Unexpected error loading error incidents")
         return []

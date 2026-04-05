@@ -409,8 +409,8 @@ async def _gather_system_signals():
                 _hh_record(svc_name, "degraded", result[:200])
             elif isinstance(result, str):
                 _hh_record(svc_name, "ok", result[:200])
-    except Exception:
-        pass  # health history is best-effort
+    except Exception as e:
+        log.debug("Failed to record health check to history: %s", e)
 
     # Record disk usage for trend prediction
     try:
@@ -419,8 +419,8 @@ async def _gather_system_signals():
         from health_history import record_disk as _hh_record_disk
         usage = shutil.disk_usage("/")
         _hh_record_disk("/", usage.total / 1e9, usage.used / 1e9, usage.free / 1e9, usage.used / usage.total * 100)
-    except Exception:
-        pass  # disk history is best-effort
+    except Exception as e:
+        log.debug("Failed to record disk usage to history: %s", e)
 
     key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
     log_snippets: dict[str, str] = {}
@@ -559,8 +559,10 @@ class _CopilotFixView(discord.ui.View):
             # Try to update the message so buttons appear disabled in Discord
             if hasattr(self, "message") and self.message:
                 await self.message.edit(content="⏱️ Copilot fix approval expired.", view=self)
-        except Exception:
-            pass
+        except discord.HTTPException as e:
+            log.debug("Failed to edit expired approval message: %s", e)
+        except Exception as e:
+            log.warning("Unexpected error disabling expired approval buttons: %s", e)
         log.debug("_CopilotFixView timed out after 1 hour")
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -591,8 +593,10 @@ class _CopilotFixView(discord.ui.View):
             # Last-resort acknowledgment — sends an ephemeral so Discord doesn't mark as failed
             try:
                 await interaction.response.defer_update()
-            except Exception:
-                pass
+            except discord.HTTPException as e:
+                log.debug("Failed to defer interaction update: %s", e)
+            except Exception as e:
+                log.warning("Unexpected error in last-resort interaction acknowledgment: %s", e)
 
     @discord.ui.button(label="✅ Approve Fix", style=discord.ButtonStyle.green, custom_id="copilot_approve")
     async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -631,7 +635,11 @@ class _CopilotFixView(discord.ui.View):
         )
         try:
             await status_msg.edit(content=final)
-        except Exception:
+        except discord.HTTPException as e:
+            log.warning("Failed to edit status message, sending new message: %s", e)
+            await interaction.channel.send(final)
+        except Exception as e:
+            log.exception("Unexpected error sending approval result")
             await interaction.channel.send(final)
 
         self.stop()
@@ -959,8 +967,8 @@ async def _check_container_health(bot):
                 _hh_record(name, "down" if status_lower.startswith("exited") else "degraded", status)
             else:
                 _hh_record(name, "ok", status)
-        except Exception:
-            pass  # health history is best-effort
+        except Exception as e:
+            log.debug("Failed to record container health to history: %s", e)
 
         prev = _container_prev_state.get(name)
         if is_bad:
