@@ -540,6 +540,7 @@ SKILLS.update(GIT_SKILLS)
 from skills.finance_skills import FINANCE_SKILLS
 from skills.news_skills import NEWS_SKILLS
 from skills.sports_skills import SPORTS_SKILLS
+from skills.weather_skills import WEATHER_SKILLS
 
 for skill in NEWS_SKILLS:
     SKILLS[skill["name"]] = skill["function"]
@@ -548,6 +549,9 @@ for skill in SPORTS_SKILLS:
     SKILLS[skill["name"]] = skill["function"]
 
 for skill in FINANCE_SKILLS:
+    SKILLS[skill["name"]] = skill["function"]
+
+for skill in WEATHER_SKILLS:
     SKILLS[skill["name"]] = skill["function"]
 
 # Worker sub-agent (autonomous task delegation)
