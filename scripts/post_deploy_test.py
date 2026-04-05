@@ -13,14 +13,13 @@ Requires: DISCORD_BOT_TOKEN in .env (or environment)
 Zero external dependencies — uses only stdlib.
 """
 
-import asyncio
 import json
 import os
 import subprocess
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 # Load .env if available (override existing env vars for testing)

@@ -7,12 +7,15 @@ Single source of truth for all config values. Loads from:
 
 Usage:
     from config import cfg
-    print(cfg.discord_token)
-    print(cfg.llm_model)
+    log.debug("Discord token configured: %s", "***" if cfg.discord_token else "missing")
+    log.debug("LLM model: %s", cfg.llm_model)
 """
+
+from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -24,33 +27,38 @@ CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 _CONFIG_YAML_PATH = CONFIG_DIR / "config.yaml"
 
 
-def _load_yaml() -> dict:
+def _load_yaml() -> dict[str, Any]:
+    """Load configuration from YAML file.
+
+    Returns:
+        Configuration dictionary, or empty dict if file doesn't exist.
+    """
     if _CONFIG_YAML_PATH.exists():
         with open(_CONFIG_YAML_PATH) as f:
             return yaml.safe_load(f) or {}
     return {}
 
 
-_yaml = _load_yaml()
-_bot = _yaml.get("bot", {})
-_llm = _yaml.get("llm", {})
-_local_llm = _yaml.get("local_llm", {})
-_security = _yaml.get("security", {})
-_rate_limits = _llm.get("rate_limits", {})
-_conversation = _llm.get("conversation", {})
-_network = _yaml.get("network", {})
-_threads = _yaml.get("threads", {})
+_yaml: dict[str, Any] = _load_yaml()
+_bot: dict[str, Any] = _yaml.get("bot", {})
+_llm: dict[str, Any] = _yaml.get("llm", {})
+_local_llm: dict[str, Any] = _yaml.get("local_llm", {})
+_security: dict[str, Any] = _yaml.get("security", {})
+_rate_limits: dict[str, Any] = _llm.get("rate_limits", {})
+_conversation: dict[str, Any] = _llm.get("conversation", {})
+_network: dict[str, Any] = _yaml.get("network", {})
+_threads: dict[str, Any] = _yaml.get("threads", {})
 
 # ---------------------------------------------------------------------------
 # Timeout constants (seconds)
 #   from config import TIMEOUT_FAST, TIMEOUT_DEFAULT, TIMEOUT_SLOW, TIMEOUT_LONG
 # ---------------------------------------------------------------------------
 
-TIMEOUT_FAST = 5         # Health checks, quick status
-TIMEOUT_DEFAULT = 15     # Standard API calls
-TIMEOUT_SLOW = 30        # Web scraping, search APIs
-TIMEOUT_LONG = 60        # Container operations, LLM calls
-TIMEOUT_EXTENDED = 120   # Image generation, research
+TIMEOUT_FAST: int = 5         # Health checks, quick status
+TIMEOUT_DEFAULT: int = 15     # Standard API calls
+TIMEOUT_SLOW: int = 30        # Web scraping, search APIs
+TIMEOUT_LONG: int = 60        # Container operations, LLM calls
+TIMEOUT_EXTENDED: int = 120   # Image generation, research
 
 # ---------------------------------------------------------------------------
 # Config namespace — env vars take precedence over YAML
@@ -206,6 +214,7 @@ class _Config:
     google_oauth_refresh_token: str = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN", "")
 
     # -- Weather ---------------------------------------------------------------
+    openweather_api_key: str = os.getenv("OPENWEATHER_API_KEY", "")
     weather_default_location: str = os.getenv("WEATHER_DEFAULT_LOCATION", "Philadelphia, PA")
 
     # -- Network testing -------------------------------------------------------
@@ -289,11 +298,16 @@ class _Config:
 
         return issues
 
-    def config_status(self) -> list[dict]:
-        """Return a list of {name, status, detail} dicts for every key API/service."""
-        entries = []
+    def config_status(self) -> list[dict[str, str | bool]]:
+        """Return a list of {name, status, detail} dicts for every key API/service.
 
-        def _add(name: str, configured: bool, detail: str = ""):
+        Returns:
+            List of configuration status dictionaries with name, status, and detail fields.
+        """
+        entries: list[dict[str, str | bool]] = []
+
+        def _add(name: str, configured: bool, detail: str = "") -> None:
+            """Add a configuration status entry."""
             entries.append({
                 "name": name,
                 "status": "configured" if configured else "missing",

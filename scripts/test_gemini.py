@@ -1,5 +1,6 @@
 import os
 import warnings
+
 warnings.filterwarnings("ignore")
 from pathlib import Path
 
@@ -13,6 +14,7 @@ key = os.environ.get("GOOGLE_API_KEY", "")
 print(f"API key present: {bool(key)} | length: {len(key)}")
 
 from google import genai
+
 client = genai.Client(api_key=key)
 resp = client.models.generate_content(
     model="gemini-2.5-flash",

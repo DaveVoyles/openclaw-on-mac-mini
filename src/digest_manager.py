@@ -23,7 +23,7 @@ log = logging.getLogger("openclaw.digest_manager")
 
 DIGEST_PREFS_DIR = Path("/memory/preferences/digests")
 
-def _ensure_digest_dir():
+def _ensure_digest_dir() -> None:
     """Ensure digest preferences directory exists."""
     try:
         DIGEST_PREFS_DIR.mkdir(parents=True, exist_ok=True)
@@ -60,7 +60,7 @@ DEFAULT_DIGEST_PREFERENCES: dict[str, Any] = {
 class DigestManager:
     """Manages user digest preferences and generation."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the digest manager."""
         pass
 
@@ -272,7 +272,14 @@ class DigestManager:
         return "\n".join(sections)
 
     async def _generate_news_section(self, prefs: dict[str, Any]) -> str:
-        """Generate news section based on topics and keywords."""
+        """Generate news section based on topics and keywords.
+
+        Args:
+            prefs: User digest preferences
+
+        Returns:
+            Formatted news section markdown
+        """
         topics = prefs.get("topics", [])
         keywords = prefs.get("keywords", [])
         exclude = prefs.get("exclude", [])
@@ -339,7 +346,14 @@ class DigestManager:
             return ""
 
     async def _generate_stocks_section(self, prefs: dict[str, Any]) -> str:
-        """Generate stocks section based on watchlist."""
+        """Generate stocks section based on watchlist.
+
+        Args:
+            prefs: User digest preferences
+
+        Returns:
+            Formatted stocks section markdown
+        """
         stocks = prefs.get("stocks", [])
 
         if not stocks:
@@ -381,7 +395,14 @@ class DigestManager:
             return ""
 
     async def _generate_sports_section(self, prefs: dict[str, Any]) -> str:
-        """Generate sports section based on teams."""
+        """Generate sports section based on teams.
+
+        Args:
+            prefs: User digest preferences
+
+        Returns:
+            Formatted sports section markdown
+        """
         teams = prefs.get("teams", [])
 
         if not teams:

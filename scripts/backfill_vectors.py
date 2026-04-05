@@ -77,7 +77,7 @@ async def backfill_summaries():
 
 async def backfill_threads():
     """Index saved thread content into the conversations collection."""
-    from vector_store import add_document, CONVERSATIONS_COLLECTION
+    from vector_store import CONVERSATIONS_COLLECTION, add_document
 
     threads_dir = Path("/memory/threads")
     if not threads_dir.exists():

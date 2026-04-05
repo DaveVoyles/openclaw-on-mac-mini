@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/skills/digest_skills.py
+# hypothesis_version: 6.151.10
+
+['add_digest_stock', 'add_digest_team', 'add_digest_topic', 'configure_digest', 'enabled', 'exclude', 'get_digest_config', 'get_my_digest', 'keywords', 'preview_digest', 'remove_digest_stock', 'remove_digest_team', 'remove_digest_topic', 'schedule', 'stocks', 'teams', 'topics', 'weekly', '⏸️ Disabled', '✅ Enabled']

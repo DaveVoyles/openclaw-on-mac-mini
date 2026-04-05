@@ -9,7 +9,7 @@ from typing import Any
 
 from config import cfg
 from http_session import SessionManager
-from tool_health import circuit_breaker, tool_health
+from tool_health import tool_health
 
 _sessions = SessionManager(timeout=30, name="finance_skills")
 

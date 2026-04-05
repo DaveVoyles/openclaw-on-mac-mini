@@ -7,7 +7,6 @@ Includes rate limiting, configurable thresholds, and alert formatting.
 
 import logging
 from datetime import datetime
-from typing import Optional
 
 import discord
 

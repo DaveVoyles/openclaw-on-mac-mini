@@ -25,7 +25,6 @@ import logging
 import os
 import socketserver
 import subprocess
-import sys
 from urllib.parse import urlparse
 
 logging.basicConfig(
@@ -130,7 +129,7 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 def main():
-    parsed = urlparse(NAS_TARGET)
+    urlparse(NAS_TARGET)
     log.info("NAS Proxy starting — listening on %s:%d → %s", PROXY_HOST, PROXY_PORT, NAS_TARGET)
     log.info("Set NAS_URL=http://%s:%d in .env (or docker-compose environment)", "192.168.1.93", PROXY_PORT)
 

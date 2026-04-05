@@ -13,8 +13,7 @@ Tests cover:
 """
 
 import asyncio
-from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -377,10 +376,10 @@ class TestMarketOverviewSynthesis:
     async def test_market_overview_aggregates_sentiment(self):
         """Test that market overview correctly aggregates sector sentiment."""
         from skills.synthesis_skills import _synthesis_cache
-        
+
         # Clear cache to ensure fresh results
         _synthesis_cache.clear()
-        
+
         with patch("skills.synthesis_skills.news_skills.top_headlines") as mock_news, \
              patch("skills.synthesis_skills.finance_skills.get_market_news") as mock_market_news:
 
@@ -416,7 +415,7 @@ class TestMarketOverviewSynthesis:
             # Should aggregate technology sector sentiment
             assert "technology" in result["sector_sentiment"]
             tech_sentiment = result["sector_sentiment"]["technology"]
-            
+
             # Should count all 3 articles
             assert tech_sentiment["news_count"] == 3
             assert tech_sentiment["label"] == "Bullish"
@@ -499,10 +498,10 @@ class TestCorrelationDetection:
     async def test_correlations_caching(self):
         """Test that correlations are cached."""
         from skills.synthesis_skills import _synthesis_cache
-        
+
         # Clear cache first
         _synthesis_cache.clear()
-        
+
         with patch("skills.synthesis_skills.synthesize_company_report") as mock_report:
             mock_report.return_value = {
                 "status": "ok",
@@ -516,7 +515,7 @@ class TestCorrelationDetection:
 
             # First call
             result1 = await find_correlations("MSFT")
-            
+
             # Second call (should use correlation cache, not company report cache)
             result2 = await find_correlations("MSFT")
 
@@ -524,7 +523,7 @@ class TestCorrelationDetection:
             date1 = result1["timestamp"].split("T")[0]
             date2 = result2["timestamp"].split("T")[0]
             assert date1 == date2
-            
+
             # Since correlations are cached by day, company_report is called twice
             # (once per find_correlations call, each hitting company report's hourly cache)
             # OR company_report should be called once if we're in same hour
@@ -634,6 +633,6 @@ def test_module_coverage():
         "synthesize_market_overview",
         "find_correlations",
     }
-    
+
     for func_name in tested_functions:
         assert func_name in SYNTHESIS_SKILLS, f"{func_name} not in SYNTHESIS_SKILLS"

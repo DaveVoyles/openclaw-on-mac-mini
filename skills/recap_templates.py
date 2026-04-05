@@ -255,7 +255,7 @@ async def generate_recap_from_template(
 
 async def _generate_entertainment_recap(config: dict, params: dict) -> dict[str, Any]:
     """Generate entertainment industry recap."""
-    from skills.finance_skills import get_box_office_stocks, get_stock_info
+    from skills.finance_skills import get_box_office_stocks
     from skills.news_skills import search_news, top_headlines
 
     sections = {}

@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/incident_workflows.py
+# hypothesis_version: 6.151.10
+
+[120, 180, 200, 300, 2000, 2500, 4000, '/memory/incidents.db', 'INCIDENT_DB_PATH', '[\\n;]+', '^\\s*[-*\\d.)]+\\s*', 'action_items', 'action_items_json', 'created', 'critical', 'data/incidents.db', 'high', 'investigating', 'low', 'medium', 'monitoring', 'open', 'postmortem', 'postmortem_notes', 'resolved', 'status', 'status_update']

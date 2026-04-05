@@ -66,6 +66,6 @@ with sqlite3.connect(DB, timeout=10) as con:
     con.commit()
     print(f"[+] Inserted monitor '{MONITOR_NAME}' with id={monitor_id}")
     print(f"    URL: {MONITOR_URL}")
-    print(f"    Interval: 60s")
+    print("    Interval: 60s")
 
 print("[+] Done. Restart Uptime Kuma or wait for its auto-reload to see the new monitor.")

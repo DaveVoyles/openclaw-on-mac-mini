@@ -6,7 +6,6 @@ Records every /ask outcome for pattern detection and auto-diagnosis.
 import json
 import logging
 import os
-import subprocess
 import time
 from pathlib import Path
 
@@ -446,6 +445,6 @@ def get_past_incidents(pattern_type: str = "", limit: int = 5) -> list[dict]:
     except (OSError, json.JSONDecodeError) as e:
         log.warning("Failed to load error incidents: %s", e)
         return []
-    except Exception as e:
+    except Exception:
         log.exception("Unexpected error loading error incidents")
         return []

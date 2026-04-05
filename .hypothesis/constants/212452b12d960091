@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/skills/sports_skills.py
+# hypothesis_version: 6.151.10
+
+[200, 429, '%Y-%m-%d', '1', '12', '2024', '2024-2025', 'End date YYYY-MM-DD', 'N/A', 'Sport league', 'TBD', 'Unknown', 'all', 'american-football', 'apisports', 'away', 'baseball', 'basketball', 'date', 'date_from', 'date_to', 'default', 'description', 'endpoint', 'enum', 'error', 'form', 'from', 'function', 'games', 'get_nba_scores', 'get_nfl_scores', 'get_schedule', 'get_team_standings', 'hockey', 'home', 'id', 'integer', 'league', 'league_id', 'long', 'lose', 'losses', 'message', 'mlb', 'name', 'nba', 'nfl', 'nhl', 'object', 'ok', 'parameters', 'points', 'position', 'properties', 'quarter', 'rank', 'required', 'response', 'results', 'score', 'scores', 'season', 'short', 'sport', 'sports_skills', 'standings', 'status', 'string', 'team', 'team_id', 'team_name', 'teams', 'to', 'total', 'type', 'venue', 'win', 'win_pct', 'wins', 'x-apisports-key']

@@ -20,7 +20,6 @@ Endpoints:
 import io
 import logging
 import os
-import sys
 import time
 
 from flask import Flask, jsonify, request, send_file

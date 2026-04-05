@@ -35,7 +35,7 @@ async def _service_autocomplete(
     """Autocomplete for service names - combines common services with user's blocked services."""
     prefs = notif_prefs.get(interaction.user.id)
     all_services = set(COMMON_SERVICES + prefs.blocked_services)
-    
+
     return [
         app_commands.Choice(name=s, value=s)
         for s in sorted(all_services)

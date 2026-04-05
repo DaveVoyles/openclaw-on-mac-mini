@@ -198,7 +198,7 @@ async def chat_ollama_with_tools(
                 return data.get("message", {}).get("content", ""), tool_calls_made
     except aiohttp.ClientError as e:
         log.warning("Ollama HTTP error in chat_with_tools: %s", e)
-    except Exception as e:
+    except Exception:
         log.exception("Unexpected error in Ollama chat_with_tools")
 
     return None, tool_calls_made

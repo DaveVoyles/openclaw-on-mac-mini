@@ -736,12 +736,12 @@ SKILLS.update({
 
 # Trend tracking skills
 from skills.trend_skills import (
-    track_topic,
-    untrack_topic,
-    get_trending_topics,
     detect_breaking_news,
     get_topic_trajectory,
+    get_trending_topics,
     list_tracked_topics,
+    track_topic,
+    untrack_topic,
     update_all_tracked_trends,
 )
 

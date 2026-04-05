@@ -127,6 +127,56 @@ url = "https://v1.basketball.api-sports.io/games"
 
 ---
 
+### OpenWeatherMap
+
+- **Purpose:** Weather data, forecasts, and air quality information
+- **Endpoint:** `https://api.openweathermap.org/data/2.5`
+- **Authentication:** API key via query parameter (`appid=xxx`)
+- **Rate Limits:**
+  - Free tier: 1,000 calls/day, 60 calls/minute
+  - Generous free tier for personal/small projects
+- **Cost:**
+  - Free: 1,000 req/day
+  - Startup: $40/mo (100,000 calls/mo)
+  - Developer: $125/mo (1,000,000 calls/mo)
+  - Professional: $600+/mo (custom limits)
+- **Skills Using It:**
+  - `get_current_weather()` in `skills/weather_skills.py`
+  - `get_forecast()` in `skills/weather_skills.py`
+  - `get_air_quality()` in `skills/weather_skills.py`
+- **Configuration:**
+  ```bash
+  OPENWEATHER_API_KEY=your_key_here
+  ```
+- **Status:** ✅ Active
+- **Documentation:** https://openweathermap.org/api
+
+**Features:**
+- Current weather conditions (temperature, humidity, wind, pressure)
+- 5-day forecast with 3-hour intervals (40 data points)
+- Air quality index (AQI) and pollutant levels
+- Supports city names, country codes, ZIP codes, and coordinates
+- Multiple unit systems (metric, imperial, standard)
+- Sunrise/sunset times
+
+**Example Response (Current Weather):**
+```json
+{
+  "status": "ok",
+  "location": "Seattle",
+  "country": "US",
+  "temperature": 15.3,
+  "feels_like": 14.2,
+  "conditions": "Clouds",
+  "description": "scattered clouds",
+  "humidity": 72,
+  "wind_speed": 5.2,
+  "units": "metric"
+}
+```
+
+---
+
 ## Search APIs
 
 ### Perplexity AI

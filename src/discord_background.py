@@ -638,7 +638,7 @@ class _CopilotFixView(discord.ui.View):
         except discord.HTTPException as e:
             log.warning("Failed to edit status message, sending new message: %s", e)
             await interaction.channel.send(final)
-        except Exception as e:
+        except Exception:
             log.exception("Unexpected error sending approval result")
             await interaction.channel.send(final)
 

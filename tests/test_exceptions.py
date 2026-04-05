@@ -1,6 +1,7 @@
 """Tests for custom exception types."""
 
 import pytest
+
 from exceptions import (
     APIConnectionError,
     AuthenticationError,
@@ -19,7 +20,7 @@ from exceptions import (
 class TestOpenClawError:
     def test_base_exception_is_exception(self):
         assert issubclass(OpenClawError, Exception)
-    
+
     def test_can_raise_and_catch(self):
         with pytest.raises(OpenClawError):
             raise OpenClawError("test error")
@@ -28,7 +29,7 @@ class TestOpenClawError:
 class TestConfigurationError:
     def test_inherits_from_openclaw_error(self):
         assert issubclass(ConfigurationError, OpenClawError)
-    
+
     def test_message_preserved(self):
         err = ConfigurationError("Missing API key")
         assert str(err) == "Missing API key"
@@ -48,7 +49,7 @@ class TestRateLimitError:
         err = RateLimitError(60)
         assert err.retry_after == 60
         assert "60s" in str(err)
-    
+
     def test_includes_api_name_when_provided(self):
         err = RateLimitError(30, "github")
         assert err.api_name == "github"
@@ -60,7 +61,7 @@ class TestAuthenticationError:
         err = AuthenticationError("slack")
         assert err.api_name == "slack"
         assert "slack" in str(err)
-    
+
     def test_includes_detail_when_provided(self):
         err = AuthenticationError("slack", "Invalid token")
         assert err.detail == "Invalid token"
@@ -72,7 +73,7 @@ class TestInvalidRequestError:
         err = InvalidRequestError("Body too large")
         assert err.reason == "Body too large"
         assert "Body too large" in str(err)
-    
+
     def test_includes_parameter_when_provided(self):
         err = InvalidRequestError("Must be positive", "timeout")
         assert err.parameter == "timeout"
@@ -128,7 +129,7 @@ class TestValidationError:
 
 class TestExceptionHierarchy:
     """Ensure all custom exceptions inherit from OpenClawError."""
-    
+
     def test_all_inherit_from_base(self):
         exceptions = [
             ConfigurationError,
@@ -144,14 +145,14 @@ class TestExceptionHierarchy:
         ]
         for exc_class in exceptions:
             assert issubclass(exc_class, OpenClawError)
-    
+
     def test_can_catch_all_with_base(self):
         """Verify we can catch any custom exception with OpenClawError."""
         with pytest.raises(OpenClawError):
             raise RateLimitError(60, "test")
-        
+
         with pytest.raises(OpenClawError):
             raise APIConnectionError("test", "failed")
-        
+
         with pytest.raises(OpenClawError):
             raise ValidationError("field", "bad")

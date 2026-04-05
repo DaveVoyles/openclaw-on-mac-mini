@@ -16,7 +16,7 @@ class ConfigurationError(OpenClawError):
 
 class APIConnectionError(OpenClawError):
     """Raised when API connection fails."""
-    
+
     def __init__(self, api_name: str, reason: str):
         self.api_name = api_name
         self.reason = reason
@@ -25,7 +25,7 @@ class APIConnectionError(OpenClawError):
 
 class RateLimitError(OpenClawError):
     """Raised when API rate limit is exceeded."""
-    
+
     def __init__(self, retry_after: int, api_name: str = ""):
         self.retry_after = retry_after
         self.api_name = api_name
@@ -37,7 +37,7 @@ class RateLimitError(OpenClawError):
 
 class AuthenticationError(OpenClawError):
     """Raised when authentication fails (missing or invalid API key)."""
-    
+
     def __init__(self, api_name: str, detail: str = ""):
         self.api_name = api_name
         self.detail = detail
@@ -49,7 +49,7 @@ class AuthenticationError(OpenClawError):
 
 class InvalidRequestError(OpenClawError):
     """Raised when request parameters are invalid."""
-    
+
     def __init__(self, reason: str, parameter: str = ""):
         self.reason = reason
         self.parameter = parameter
@@ -61,7 +61,7 @@ class InvalidRequestError(OpenClawError):
 
 class ResourceNotFoundError(OpenClawError):
     """Raised when a requested resource is not found."""
-    
+
     def __init__(self, resource_type: str, resource_id: str):
         self.resource_type = resource_type
         self.resource_id = resource_id
@@ -70,7 +70,7 @@ class ResourceNotFoundError(OpenClawError):
 
 class TimeoutError(OpenClawError):
     """Raised when an operation times out."""
-    
+
     def __init__(self, operation: str, timeout_seconds: int):
         self.operation = operation
         self.timeout_seconds = timeout_seconds
@@ -79,7 +79,7 @@ class TimeoutError(OpenClawError):
 
 class PermissionError(OpenClawError):
     """Raised when user lacks permission for an operation."""
-    
+
     def __init__(self, user_id: int, operation: str):
         self.user_id = user_id
         self.operation = operation
@@ -88,7 +88,7 @@ class PermissionError(OpenClawError):
 
 class StorageError(OpenClawError):
     """Raised when storage operations fail (read/write)."""
-    
+
     def __init__(self, operation: str, path: str, reason: str):
         self.operation = operation
         self.path = path
@@ -98,7 +98,7 @@ class StorageError(OpenClawError):
 
 class ValidationError(OpenClawError):
     """Raised when data validation fails."""
-    
+
     def __init__(self, field: str, reason: str):
         self.field = field
         self.reason = reason

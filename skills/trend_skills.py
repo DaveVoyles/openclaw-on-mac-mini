@@ -10,17 +10,16 @@ Skills:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from alert_manager import render_text_chart
 from config import cfg
 from http_session import SessionManager
-from tool_health import circuit_breaker, tool_health
-from trend_tracker import get_tracker
 
 # Import news and finance skills for data collection
-from skills import news_skills, finance_skills, sports_skills
+from skills import finance_skills, news_skills, sports_skills
+from trend_tracker import get_tracker
 
 log = logging.getLogger("openclaw.trend_skills")
 

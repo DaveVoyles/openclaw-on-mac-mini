@@ -25,7 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 SCOPES = [
     "https://www.googleapis.com/auth/calendar",
@@ -102,7 +102,7 @@ def main() -> None:
     server_thread = threading.Thread(target=server.handle_request, daemon=True)
     server_thread.start()
 
-    print(f"\nOpening the authorization URL in your browser...")
+    print("\nOpening the authorization URL in your browser...")
     print(f"(Listening for callback on localhost:{REDIRECT_PORT})")
     print("If it does not open automatically, paste this URL manually:\n")
     print(auth_url)

@@ -1,12 +1,12 @@
 """Trend tracking commands: !track, !trending, !untrack, !trends."""
 
 import discord
-from discord.ext import commands
-
-from audit import audit_log
 
 # Import skills
 import trend_skills
+from discord.ext import commands
+
+from audit import audit_log
 
 
 def _register_trend_commands(bot: commands.Bot) -> None:

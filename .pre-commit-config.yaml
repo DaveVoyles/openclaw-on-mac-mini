@@ -1,0 +1,68 @@
+# Pre-commit hooks for OpenClaw
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Ruff - Fast Python linter (replaces flake8, isort, etc.)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix]
+      # Run the formatter
+      - id: ruff-format
+
+  # MyPy - Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.20.0
+    hooks:
+      - id: mypy
+        name: mypy type checking
+        args: [--config-file=pyproject.toml, --follow-imports=silent]
+        additional_dependencies:
+          - types-aiofiles
+          - types-PyYAML
+          - types-requests
+        # Only check files explicitly configured in pyproject.toml
+        files: ^src/(config|digest_manager|trend_tracker|openclaw_types)\.py$
+        pass_filenames: false
+        always_run: true
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^tests/fixtures/
+      - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
+      - id: check-yaml
+        exclude: ^templates/
+      - id: check-added-large-files
+        args: [--maxkb=10000]
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: detect-private-key
+        exclude: ^\.env\.example$
+
+  # YAML formatting
+  - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+    rev: v2.15.0
+    hooks:
+      - id: pretty-format-yaml
+        args: [--autofix, --indent, "2"]
+        exclude: ^(\.github/|docker-compose\.yml)
+
+  # Markdown linting
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.43.0
+    hooks:
+      - id: markdownlint
+        args: [--fix, --disable, MD013, MD033, MD041]
+
+# CI mode: Fail fast and don't modify files
+ci:
+  autofix_prs: false
+  autoupdate_schedule: quarterly

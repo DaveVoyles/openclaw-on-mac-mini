@@ -12,16 +12,17 @@ Features:
   - Rolling window comparisons (24h, 7d, 30d)
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import sqlite3
 import statistics
 import time
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 log = logging.getLogger("openclaw.trend_tracker")
 
@@ -67,10 +68,11 @@ class TrendAnalysis:
     is_breakout: bool
     trend_direction: str  # "up", "down", "stable"
     z_score: float
-    peak_time: Optional[float] = None
-    sources: list[str] = None
+    peak_time: float | None = None
+    sources: list[str] | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
+        """Initialize mutable default values."""
         if self.sources is None:
             self.sources = []
 
@@ -78,9 +80,14 @@ class TrendAnalysis:
 class TrendTracker:
     """Manages time-series data storage and trend analysis."""
 
-    def __init__(self, db_path: Path = DB_PATH):
+    def __init__(self, db_path: Path = DB_PATH) -> None:
+        """Initialize trend tracker with database path.
+
+        Args:
+            db_path: Path to SQLite database file
+        """
         self.db_path = db_path
-        self._db: Optional[sqlite3.Connection] = None
+        self._db: sqlite3.Connection | None = None
         self._ensure_tables()
 
     def _get_db(self) -> sqlite3.Connection:
@@ -92,7 +99,7 @@ class TrendTracker:
             self._db.execute("PRAGMA journal_mode=WAL")
         return self._db
 
-    def _ensure_tables(self):
+    def _ensure_tables(self) -> None:
         """Create tables if they don't exist."""
         db = self._get_db()
         db.executescript("""
@@ -134,8 +141,8 @@ class TrendTracker:
         category: str,
         volume: int = 1,
         sentiment: float = 0.0,
-        sources: list[str] = None,
-        metadata: dict = None,
+        sources: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         """
         Record a data point for a topic.
@@ -548,7 +555,7 @@ class TrendTracker:
             log.error("Failed to disable tracking for %s: %s", topic, e)
             return False
 
-    def get_tracked_topics(self, enabled_only: bool = True) -> list[dict]:
+    def get_tracked_topics(self, enabled_only: bool = True) -> list[dict[str, Any]]:
         """
         Get list of topics being tracked.
 
@@ -592,7 +599,7 @@ class TrendTracker:
         if not row:
             return True
 
-        last_alert = row["last_alert"]
+        last_alert: float = row["last_alert"]
         return (time.time() - last_alert) >= cooldown_seconds
 
     def record_alert(self, topic: str) -> bool:
@@ -619,7 +626,7 @@ class TrendTracker:
 
 
 # Global singleton
-_tracker: Optional[TrendTracker] = None
+_tracker: TrendTracker | None = None
 
 
 def get_tracker() -> TrendTracker:

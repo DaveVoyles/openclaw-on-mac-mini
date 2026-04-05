@@ -6,6 +6,20 @@ import discord
 from discord import ui
 
 # ---------------------------------------------------------------------------
+# Standardized Embed Colors
+# ---------------------------------------------------------------------------
+
+
+class EmbedColors:
+    """Consistent color palette for all embeds across the bot."""
+    SUCCESS = 0x00FF00  # Green - successful operations
+    INFO = 0x3498DB     # Blue - informational messages
+    WARNING = 0xFF9900  # Orange - warnings and cautions
+    ERROR = 0xFF0000    # Red - errors and failures
+    AI = 0x9B59B6       # Purple - AI-generated content
+
+
+# ---------------------------------------------------------------------------
 # Pagination View — reusable ◀️/▶️ buttons for any list of embeds
 # ---------------------------------------------------------------------------
 
@@ -45,7 +59,7 @@ def paginate_items(
     items: list[str],
     *,
     title: str = "Results",
-    color: discord.Color = discord.Color.blue(),
+    color: int = EmbedColors.INFO,
     per_page: int = 10,
     footer: str = "",
 ) -> list[discord.Embed]:
@@ -75,7 +89,7 @@ def build_embed(
     title: str,
     description: str = "",
     *,
-    color: discord.Color = discord.Color.blue(),
+    color: int = EmbedColors.INFO,
     footer: str = "",
     model: str = "",
     thumbnail_url: str = "",
@@ -105,6 +119,6 @@ def error_embed(message: str, *, title: str = "❌ Error") -> discord.Embed:
     return discord.Embed(
         title=title,
         description=message[:4096],
-        color=discord.Color.red(),
+        color=EmbedColors.ERROR,
         timestamp=datetime.datetime.now(datetime.timezone.utc),
     )
