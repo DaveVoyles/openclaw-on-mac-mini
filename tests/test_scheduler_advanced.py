@@ -42,12 +42,10 @@ def scheduler_db(temp_db):
 
 
 @pytest.fixture
-def scheduler(temp_db, monkeypatch):
+def scheduler(temp_db):
     """AdvancedScheduler instance with temp storage."""
-    monkeypatch.setattr("scheduler_advanced.SCHEDULER_DB", temp_db)
-    # Also need to ensure parent directory exists
     temp_db.parent.mkdir(parents=True, exist_ok=True)
-    sched = AdvancedScheduler()
+    sched = AdvancedScheduler(db_path=temp_db)
     yield sched
 
 

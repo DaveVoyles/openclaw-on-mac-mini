@@ -317,8 +317,8 @@ class SchedulerDatabase:
 class AdvancedScheduler:
     """Advanced task scheduler with event triggers and retry logic."""
     
-    def __init__(self):
-        self.db = SchedulerDatabase()
+    def __init__(self, db_path: Path | None = None):
+        self.db = SchedulerDatabase(db_path=db_path or SCHEDULER_DB)
         self._tasks: dict[str, AdvancedTask] = {}
         self._counter = 0
         self._skill_registry: dict[str, Callable[..., Awaitable[str]]] = {}
