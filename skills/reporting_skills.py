@@ -9,9 +9,7 @@ from typing import Any, Iterable
 
 import discord
 
-from llm import chat as llm_chat
 from runtime_state import get_bot
-from skills.search_skills import search_web
 
 log = logging.getLogger("openclaw.reporting_skills")
 
@@ -158,6 +156,8 @@ async def generate_channel_recap_report(
     )
 
     try:
+        from llm import chat as llm_chat
+
         response, _, model_used = await asyncio.wait_for(
             llm_chat(user_message=prompt, model_preference="gemini"),
             timeout=90,
@@ -217,6 +217,8 @@ async def generate_sports_watch_report(
         search_query += " TV schedule where to watch streaming ESPN NCAA"
 
     try:
+        from skills.search_skills import search_web
+
         search_results = await asyncio.wait_for(search_web(search_query, num_results=8), timeout=45)
     except asyncio.TimeoutError:
         return "❌ Sports search timed out."
@@ -247,6 +249,8 @@ async def generate_sports_watch_report(
     )
 
     try:
+        from llm import chat as llm_chat
+
         response, _, model_used = await asyncio.wait_for(
             llm_chat(user_message=prompt, model_preference="gemini"),
             timeout=90,

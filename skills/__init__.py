@@ -506,7 +506,7 @@ from calendar_skills import CALENDAR_SKILLS
 from email_skills import EMAIL_SKILLS
 from nas import NAS_SKILLS
 from overseerr import OVERSEERR_SKILLS
-from reporting_skills import REPORTING_SKILLS
+from skills.reporting_skills import REPORTING_SKILLS
 
 SKILLS.update(OVERSEERR_SKILLS)
 SKILLS.update(NAS_SKILLS)

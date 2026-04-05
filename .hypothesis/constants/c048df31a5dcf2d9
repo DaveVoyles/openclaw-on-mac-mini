@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/agentmail.py
+# hypothesis_version: 6.151.10
+
+[200, '@', 'AgentMail error: %s', 'Authorization', 'Content-Type', 'agentmail', 'application/json', 'openclaw.agentmail', 'subject', 'text', 'to']

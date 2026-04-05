@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/calendar_skills.py
+# hypothesis_version: 6.151.10
+
+[0.0, 200, 201, 204, 300, 3600, '%A, %B %d %Y', '%H:%M UTC', '%Y-%m-%dT%H:%M:%SZ', '%b %d %H:%M UTC', '(no title)', '+00:00', '15', '20', '?', 'All day', 'Authorization', 'Content-Type', 'T', 'UTC', 'Z', 'access_token', 'application/json', 'calendar', 'client_id', 'client_secret', 'date', 'dateTime', 'description', 'end', 'expires_in', 'get_todays_events', 'get_upcoming_events', 'grant_type', 'htmlLink', 'id', 'items', 'maxResults', 'openclaw.calendar', 'orderBy', 'refresh_token', 'singleEvents', 'start', 'startTime', 'summary', 'timeMax', 'timeMin', 'timeZone', 'true']

@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/memory_manager.py
+# hypothesis_version: 6.151.10
+
+[0.8, 1.0, ',', 'Memory is empty.', 'QMD stats failed: %s', 'QMD store failed: %s', 'collection', 'confidence', 'count', 'duplicate', 'exists', 'id', 'memory', 'metadata', 'profile', 'qmd', 'rule', 'rules', 'similarity', 'source', 'stored', 'text', 'type', 'unknown', 'user-explicit', 'vector_store']

@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/email_skills.py
+# hypothesis_version: 6.151.10
+
+[587, 993, '"', '"Sent Items"', '"[Gmail]/Sent Mail"', '(RFC822)', '(no subject)', '?', 'ALL', 'Content-Disposition', 'Date', 'From', 'INBOX', 'Sent', 'Subject', 'To', '\\', '\\"', '\\\\', 'date', 'from', 'gmail', 'hotmail', 'imap.gmail.com', 'microsoft', 'ms365', 'office365', 'outlook', 'plain', 'read_email_by_id', 'read_inbox', 'replace', 'search_emails', 'send_email', 'smtp.gmail.com', 'smtp.office365.com', 'subject', 'text/plain', 'utf-8']
