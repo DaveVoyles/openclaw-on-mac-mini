@@ -14,6 +14,7 @@ from constants import EMBED_DESC_LIMIT, EMBED_SPLIT_LIMIT
 _IMAGE_LINK_RE = re.compile(r'!\[.*?\]\((https?://[^\s)]+)\)')
 _BARE_IMAGE_RE = re.compile(r'\b(https?://[^\s]+\.(?:png|jpg|jpeg|gif|webp))\b', re.IGNORECASE)
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]+?)```")
+_FENCED_BLOCK_RE = re.compile(r"```[^\n]*\n[\s\S]*?```")
 
 # Discord embed split limit shared with bot.py so helper behavior stays consistent.
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
@@ -68,16 +69,16 @@ def format_markdown_for_discord(text: str) -> str:
 
 
 def format_tables_for_discord(text: str) -> str:
-    """Convert markdown tables to clean, padded ANSI code blocks for Discord."""
+    """Convert markdown tables to clean, padded text code blocks for Discord."""
     lines = text.split("\n")
     result: list[str] = []
     table_lines: list[str] = []
     in_table = False
+    in_code_block = False
 
     def _flush_table(tlines: list[str]) -> None:
         rows: list[list[str]] = []
-        separator_indices: list[int] = []
-        for i, tl in enumerate(tlines):
+        for tl in tlines:
             cells = [c.strip() for c in tl.strip().strip("|").split("|")]
             cleaned = []
             for c in cells:
@@ -87,9 +88,7 @@ def format_tables_for_discord(text: str) -> str:
             cells = cleaned
             stripped = tl.strip()
             is_sep = stripped.startswith("|") and all(c in "|-: " for c in stripped.replace("|", ""))
-            if is_sep:
-                separator_indices.append(i)
-            else:
+            if not is_sep:
                 rows.append(cells)
 
         if not rows:
@@ -103,30 +102,34 @@ def format_tables_for_discord(text: str) -> str:
                 if j < num_cols:
                     col_widths[j] = max(col_widths[j], len(cell))
 
-        result.append("```ansi")
-
-        row_idx = 0
-        for i, tl in enumerate(tlines):
-            if i in separator_indices:
-                sep = "┼".join("─" * (w + 2) for w in col_widths)
-                result.append(f"┼{sep}┼")
-            else:
-                if row_idx < len(rows):
-                    cells = rows[row_idx]
-                    padded = []
-                    for j in range(num_cols):
-                        cell = cells[j] if j < len(cells) else ""
-                        padded.append(f" {cell:<{col_widths[j]}} ")
-                    line_text = "│" + "│".join(padded) + "│"
-                    if row_idx == 0:
-                        line_text = f"\u001b[1;37m{line_text}\u001b[0m"
-                    result.append(line_text)
-                    row_idx += 1
-
+        border = "+" + "+".join("-" * (w + 2) for w in col_widths) + "+"
+        result.append("```text")
+        result.append(border)
+        for idx, cells in enumerate(rows):
+            padded = []
+            for j in range(num_cols):
+                cell = cells[j] if j < len(cells) else ""
+                padded.append(f" {cell:<{col_widths[j]}} ")
+            result.append("|" + "|".join(padded) + "|")
+            if idx == 0:
+                result.append(border)
+        result.append(border)
         result.append("```")
 
     for line in lines:
         stripped = line.strip()
+        if stripped.startswith("```"):
+            if in_table:
+                _flush_table(table_lines)
+                in_table = False
+                table_lines = []
+            in_code_block = not in_code_block
+            result.append(line)
+            continue
+        if in_code_block:
+            result.append(line)
+            continue
+
         is_table_row = stripped.startswith("|") and stripped.endswith("|")
         is_separator = is_table_row and all(c in "|-: " for c in stripped.replace("|", ""))
 
@@ -148,24 +151,91 @@ def format_tables_for_discord(text: str) -> str:
     return "\n".join(result)
 
 
-def split_response(text: str) -> list[str]:
-    """Split a long response into chunks that fit within Discord's embed limit."""
-    if len(text) <= _EMBED_LIMIT:
+def _split_plain_segment(text: str, limit: int) -> list[str]:
+    if len(text) <= limit:
         return [text]
 
-    chunks = []
-    while text:
-        if len(text) <= _EMBED_LIMIT:
-            chunks.append(text)
-            break
-        split_at = text.rfind("\n", 0, _EMBED_LIMIT)
-        if split_at <= 0:
-            split_at = _EMBED_LIMIT
-            chunks.append(text[:split_at] + "…")
-            text = "…" + text[split_at:].lstrip("\n")
+    chunks: list[str] = []
+    current = ""
+    lines = text.splitlines(keepends=True)
+    for line in lines:
+        if len(line) > limit:
+            if current:
+                chunks.append(current.rstrip("\n"))
+                current = ""
+            start = 0
+            while start < len(line):
+                piece = line[start:start + limit]
+                start += limit
+                if start < len(line):
+                    piece = piece[:-1] + "…"
+                chunks.append(piece.rstrip("\n"))
+            continue
+        if len(current) + len(line) > limit:
+            chunks.append(current.rstrip("\n"))
+            current = line
+            continue
+        current += line
+    if current or not chunks:
+        chunks.append(current.rstrip("\n"))
+    return chunks
+
+
+def _split_code_block_segment(block: str, limit: int) -> list[str]:
+    if len(block) <= limit:
+        return [block]
+
+    first_newline = block.find("\n")
+    if first_newline == -1:
+        return _split_plain_segment(block, limit)
+
+    opener = block[:first_newline + 1]
+    inner_and_close = block[first_newline + 1:]
+    if not inner_and_close.endswith("```"):
+        return _split_plain_segment(block, limit)
+
+    inner = inner_and_close[:-3]
+    payload_limit = limit - len(opener) - 4
+    if payload_limit < 40:
+        return _split_plain_segment(block, limit)
+
+    payload_chunks = _split_plain_segment(inner, payload_limit)
+    wrapped: list[str] = []
+    for chunk in payload_chunks:
+        payload = chunk.rstrip("\n")
+        wrapped.append(f"{opener}{payload}\n```")
+    return wrapped
+
+
+def split_response(text: str, limit: int = _EMBED_LIMIT) -> list[str]:
+    """Split a long response into chunks that fit within Discord's embed limit."""
+    if len(text) <= limit:
+        return [text]
+
+    pieces: list[str] = []
+    cursor = 0
+    for match in _FENCED_BLOCK_RE.finditer(text):
+        if match.start() > cursor:
+            pieces.extend(_split_plain_segment(text[cursor:match.start()], limit))
+        pieces.extend(_split_code_block_segment(match.group(0), limit))
+        cursor = match.end()
+    if cursor < len(text):
+        pieces.extend(_split_plain_segment(text[cursor:], limit))
+
+    chunks: list[str] = []
+    for piece in pieces:
+        if not piece:
+            continue
+        if not chunks:
+            chunks.append(piece)
+            continue
+        candidate = chunks[-1] + piece
+        if len(candidate) <= limit:
+            chunks[-1] = candidate
         else:
-            chunks.append(text[:split_at])
-            text = text[split_at:].lstrip("\n")
+            chunks.append(piece)
+    if not chunks:
+        return [""]
     return chunks
 
 

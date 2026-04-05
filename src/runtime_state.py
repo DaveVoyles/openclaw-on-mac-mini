@@ -12,6 +12,10 @@ _CURRENT_CHANNEL_ID: ContextVar[int | None] = ContextVar(
     "openclaw_current_channel_id",
     default=None,
 )
+_CURRENT_THREAD_ID: ContextVar[int | None] = ContextVar(
+    "openclaw_current_thread_id",
+    default=None,
+)
 _CURRENT_USER_ID: ContextVar[str | None] = ContextVar(
     "openclaw_current_user_id",
     default=None,
@@ -30,12 +34,20 @@ def get_bot() -> commands.Bot | None:
 
 
 @contextmanager
-def request_context(*, channel_id: int | None = None, user_id: str | None = None):
+def request_context(
+    *,
+    channel_id: int | None = None,
+    thread_id: int | None = None,
+    user_id: str | None = None,
+):
     """Bind the active Discord channel and user for the current request/tool call."""
     channel_token = None
+    thread_token = None
     user_token = None
     if channel_id is not None:
         channel_token = _CURRENT_CHANNEL_ID.set(channel_id)
+    if thread_id is not None:
+        thread_token = _CURRENT_THREAD_ID.set(thread_id)
     if user_id is not None:
         user_token = _CURRENT_USER_ID.set(user_id)
     try:
@@ -43,6 +55,8 @@ def request_context(*, channel_id: int | None = None, user_id: str | None = None
     finally:
         if channel_token is not None:
             _CURRENT_CHANNEL_ID.reset(channel_token)
+        if thread_token is not None:
+            _CURRENT_THREAD_ID.reset(thread_token)
         if user_token is not None:
             _CURRENT_USER_ID.reset(user_token)
 
@@ -50,6 +64,11 @@ def request_context(*, channel_id: int | None = None, user_id: str | None = None
 def get_current_channel_id() -> int | None:
     """Return the active Discord channel bound to the current request, if any."""
     return _CURRENT_CHANNEL_ID.get()
+
+
+def get_current_thread_id() -> int | None:
+    """Return the active Discord thread bound to the current request, if any."""
+    return _CURRENT_THREAD_ID.get()
 
 
 def set_current_user_id(user_id: str) -> None:

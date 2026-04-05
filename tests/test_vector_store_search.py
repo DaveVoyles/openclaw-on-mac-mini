@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 import vector_store as mod
+from runtime_state import request_context
 
 
 class TestSearchSafe:
@@ -55,3 +56,87 @@ class TestSearchSafeEdgeCases:
         with patch.object(mod, "search", new_callable=AsyncMock, side_effect=ImportError("no chromadb")):
             result = await mod.search_safe("memories", "anything")
         assert result == []
+
+
+class _FakeCollection:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.query_calls = []
+        self.upsert_calls = []
+
+    def count(self):
+        return 50
+
+    def query(self, **kwargs):
+        self.query_calls.append(kwargs)
+        if self.responses:
+            return self.responses.pop(0)
+        return {"ids": [[]], "documents": [[]], "metadatas": [[]], "distances": [[]]}
+
+    def upsert(self, **kwargs):
+        self.upsert_calls.append(kwargs)
+
+
+def _chroma_result(items):
+    return {
+        "ids": [[item["id"] for item in items]],
+        "documents": [[item["text"] for item in items]],
+        "metadatas": [[item.get("metadata", {}) for item in items]],
+        "distances": [[item.get("distance", 0.1) for item in items]],
+    }
+
+
+class TestChannelScopedIsolation:
+    @pytest.mark.asyncio
+    async def test_add_document_persists_channel_and_thread_metadata(self):
+        fake = _FakeCollection([])
+        with patch.object(mod, "_get_collection", return_value=fake):
+            with request_context(channel_id=111, thread_id=222):
+                await mod.add_document(
+                    mod.MEMORIES_COLLECTION,
+                    doc_id="doc1",
+                    text="remember this",
+                    metadata={"source": "test"},
+                )
+
+        metadata = fake.upsert_calls[0]["metadatas"][0]
+        assert metadata["channel_id"] == "111"
+        assert metadata["thread_id"] == "222"
+
+    @pytest.mark.asyncio
+    async def test_search_applies_channel_thread_scope_where(self):
+        fake = _FakeCollection([
+            _chroma_result([
+                {"id": "doc1", "text": "same thread", "metadata": {"channel_id": "10", "thread_id": "20"}},
+            ]),
+        ])
+
+        with patch.object(mod, "_get_collection", return_value=fake):
+            with request_context(channel_id=10, thread_id=20):
+                results = await mod.search(mod.MEMORIES_COLLECTION, "hello", top_k=1, track_access=False)
+
+        assert len(results) == 1
+        where = fake.query_calls[0]["where"]
+        assert {"channel_id": "10"} in where["$and"]
+        assert {"thread_id": "20"} in where["$and"]
+
+    @pytest.mark.asyncio
+    async def test_search_fallback_keeps_same_channel_and_legacy_only(self):
+        fake = _FakeCollection([
+            _chroma_result([]),
+            _chroma_result([
+                {"id": "same", "text": "same channel", "metadata": {"channel_id": "10", "thread_id": "20"}},
+                {"id": "legacy", "text": "legacy entry", "metadata": {"source": "old"}},
+                {"id": "other", "text": "other channel", "metadata": {"channel_id": "99", "thread_id": "20"}},
+            ]),
+        ])
+
+        with patch.object(mod, "_get_collection", return_value=fake):
+            with request_context(channel_id=10, thread_id=20):
+                results = await mod.search(mod.MEMORIES_COLLECTION, "hello", top_k=5, track_access=False)
+
+        assert len(fake.query_calls) == 2
+        ids = [item["id"] for item in results]
+        assert "same" in ids
+        assert "legacy" in ids
+        assert "other" not in ids

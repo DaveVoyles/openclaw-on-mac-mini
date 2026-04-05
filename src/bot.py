@@ -74,6 +74,17 @@ _CHANNEL_ROLES: dict[int, str] = {}
 _CHANNEL_PROMPTS: dict[str, str] = {}
 
 
+def _resolve_channel_thread_scope(channel: Any, channel_id: int | None) -> tuple[int | None, int | None]:
+    """Normalize Discord channel/thread into (channel_id, thread_id) scope."""
+    resolved_channel_id = channel_id
+    resolved_thread_id = None
+    if isinstance(channel, discord.Thread):
+        resolved_thread_id = channel.id
+        if channel.parent_id:
+            resolved_channel_id = channel.parent_id
+    return resolved_channel_id, resolved_thread_id
+
+
 async def _load_channel_config() -> None:
     """Load channel roles from config.yaml and map them to env-provided IDs."""
     global _CHANNEL_ROLES, _CHANNEL_PROMPTS
@@ -458,7 +469,11 @@ class ResponseActions(discord.ui.View):
         if len(conv.history) >= 2:
             conv.history = conv.history[:-2]
         try:
-            with request_context(channel_id=self._channel_id):
+            scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+                interaction.channel,
+                self._channel_id,
+            )
+            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
                 response_text, updated_history, model_used = await llm_chat(
                     user_message=self._question,
                     history=conv.history,
@@ -500,7 +515,11 @@ class ResponseActions(discord.ui.View):
                 user_name=str(interaction.user.display_name),
             )
             try:
-                with request_context(channel_id=self._channel_id):
+                scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+                    interaction.channel,
+                    self._channel_id,
+                )
+                with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
                     response_text, updated_history, model_used = await llm_chat(
                         user_message=follow_up_question,
                         history=conv.history,
@@ -535,7 +554,11 @@ class ResponseActions(discord.ui.View):
             user_name=str(interaction.user.display_name),
         )
         try:
-            with request_context(channel_id=self._channel_id):
+            scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+                interaction.channel,
+                self._channel_id,
+            )
+            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
                 response_text, updated_history, model_used = await llm_chat(
                     user_message=deeper_q,
                     history=conv.history,
@@ -643,6 +666,10 @@ async def ask_cmd(
                           channel_id=interaction.channel_id)
     _trace_token = _current_trace.set(_trace)
     log.info("ask_cmd start question=%.80s", question)
+    context_channel_id, context_thread_id = _resolve_channel_thread_scope(
+        interaction.channel,
+        interaction.channel_id,
+    )
 
     _progress_lines: list[str] = []
     _progress_start = time.monotonic()
@@ -728,7 +755,12 @@ async def ask_cmd(
         try:
             import vector_store
             hits = await vector_store.search(
-                vector_store.CONVERSATIONS_COLLECTION, question, top_k=1, threshold=0.75
+                vector_store.CONVERSATIONS_COLLECTION,
+                question,
+                top_k=1,
+                threshold=0.75,
+                channel_id=context_channel_id,
+                thread_id=context_thread_id,
             )
             if hits:
                 meta = hits[0].get("metadata", {})
@@ -771,7 +803,12 @@ async def ask_cmd(
         await _think("Recalling relevant memories…")
         try:
             import vector_store
-            context_hits = await vector_store.recall(question, top_k=3)
+            context_hits = await vector_store.recall(
+                question,
+                top_k=3,
+                channel_id=context_channel_id,
+                thread_id=context_thread_id,
+            )
             if context_hits:
                 conv.history.append({
                     "role": "model",
@@ -816,7 +853,7 @@ async def ask_cmd(
         _DISCORD_TIMEOUT = 840
 
         try:
-            with request_context(channel_id=interaction.channel_id):
+            with request_context(channel_id=context_channel_id, thread_id=context_thread_id):
                 async for chunk_text, is_final, meta in llm_chat_stream(
                     user_message=question,
                     history=conv.history,
@@ -894,12 +931,16 @@ async def ask_cmd(
     if thread_hint:
         response_text += thread_hint
 
-    # Render markdown tables as images
+    # Optional image fallback for large/complex tables
     table_image_file = None
     try:
-        from table_renderer import extract_table_text, render_table_image
+        from table_renderer import (
+            extract_table_text,
+            render_table_image,
+            should_render_table_image,
+        )
         table_text = extract_table_text(response_text)
-        if table_text:
+        if table_text and should_render_table_image(table_text):
             img_bytes = render_table_image(table_text)
             if img_bytes:
                 table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
@@ -1104,54 +1145,55 @@ async def ask_cmd(
 
     # Fire-and-forget: correction detection & profile learning (Phase 14)
     async def _post_response_learning():
-        try:
-            from rules_engine import add_rule, detect_correction, extract_rule
-            if detect_correction(question):
-                prev_bot_msg = ""
-                for msg in reversed(conv.history[:-1]):
-                    if msg.get("role") == "model":
-                        parts = msg.get("parts", [])
-                        prev_bot_msg = " ".join(p for p in parts if isinstance(p, str))[:500]
-                        break
-                if prev_bot_msg:
-                    rule = await extract_rule(question, prev_bot_msg)
-                    if rule:
-                        await add_rule(rule, question[:300])
+        with request_context(channel_id=context_channel_id, thread_id=context_thread_id):
+            try:
+                from rules_engine import add_rule, detect_correction, extract_rule
+                if detect_correction(question):
+                    prev_bot_msg = ""
+                    for msg in reversed(conv.history[:-1]):
+                        if msg.get("role") == "model":
+                            parts = msg.get("parts", [])
+                            prev_bot_msg = " ".join(p for p in parts if isinstance(p, str))[:500]
+                            break
+                    if prev_bot_msg:
+                        rule = await extract_rule(question, prev_bot_msg)
+                        if rule:
+                            await add_rule(rule, question[:300])
+                            try:
+                                await interaction.followup.send(
+                                    f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
+                                )
+                            except Exception as exc:
+                                log.debug("Correction followup send failed: %s", exc)
+            except Exception as e:
+                log.debug("Correction detection failed (non-critical): %s", e)
+
+            try:
+                from user_profile import learn_from_message
+                await learn_from_message(question, response_text)
+            except Exception as e:
+                log.debug("Profile learning failed (non-critical): %s", e)
+
+            try:
+                from fact_extractor import extract_and_store_facts, should_extract
+                if should_extract(interaction.user.id, question):
+                    await extract_and_store_facts(question, response_text, interaction.user.id)
+            except Exception as e:
+                log.debug("Fact extraction failed (non-critical): %s", e)
+
+            try:
+                from goal_tracker import detect_goal, extract_and_store_goal
+                if detect_goal(question):
+                    goal = await extract_and_store_goal(question, interaction.user.id)
+                    if goal:
                         try:
                             await interaction.followup.send(
-                                f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
+                                f"🎯 Tracking goal: *{goal}*", ephemeral=True
                             )
                         except Exception as exc:
-                            log.debug("Correction followup send failed: %s", exc)
-        except Exception as e:
-            log.debug("Correction detection failed (non-critical): %s", e)
-
-        try:
-            from user_profile import learn_from_message
-            await learn_from_message(question, response_text)
-        except Exception as e:
-            log.debug("Profile learning failed (non-critical): %s", e)
-
-        try:
-            from fact_extractor import extract_and_store_facts, should_extract
-            if should_extract(interaction.user.id, question):
-                await extract_and_store_facts(question, response_text, interaction.user.id)
-        except Exception as e:
-            log.debug("Fact extraction failed (non-critical): %s", e)
-
-        try:
-            from goal_tracker import detect_goal, extract_and_store_goal
-            if detect_goal(question):
-                goal = await extract_and_store_goal(question, interaction.user.id)
-                if goal:
-                    try:
-                        await interaction.followup.send(
-                            f"🎯 Tracking goal: *{goal}*", ephemeral=True
-                        )
-                    except Exception as exc:
-                        log.debug("Goal followup send failed: %s", exc)
-        except Exception as e:
-            log.debug("Goal tracking failed (non-critical): %s", e)
+                            log.debug("Goal followup send failed: %s", exc)
+            except Exception as e:
+                log.debug("Goal tracking failed (non-critical): %s", e)
 
     asyncio.get_running_loop().create_task(_post_response_learning())
 
@@ -1226,7 +1268,11 @@ async def on_message(message: discord.Message) -> None:
         response_text = ""
 
         try:
-            with request_context(channel_id=message.channel.id):
+            scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+                message.channel,
+                message.channel.id,
+            )
+            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
                 async for chunk_text, is_final, meta in llm_chat_stream(
                     user_message=user_question,
                     history=conv.history,
@@ -1248,6 +1294,22 @@ async def on_message(message: discord.Message) -> None:
         if not response_text or len(response_text.strip()) < 5:
             response_text = "⚠️ I wasn't able to generate a useful response. Try rephrasing your question."
 
+        # Optional image fallback for large/complex tables in thread follow-ups
+        table_image_file = None
+        try:
+            from table_renderer import (
+                extract_table_text,
+                render_table_image,
+                should_render_table_image,
+            )
+            table_text = extract_table_text(response_text)
+            if table_text and should_render_table_image(table_text):
+                img_bytes = render_table_image(table_text)
+                if img_bytes:
+                    table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
+        except Exception as e:
+            log.debug("Thread table image rendering failed: %s", e)
+
         response_text = _format_markdown_for_discord(response_text)
         response_text = _format_tables_for_discord(response_text)
         chunks = _split_response(response_text)
@@ -1255,6 +1317,8 @@ async def on_message(message: discord.Message) -> None:
         for chunk in chunks:
             embed = discord.Embed(description=chunk, color=discord.Color.purple())
             await message.channel.send(embed=embed)
+        if table_image_file:
+            await message.channel.send(file=table_image_file)
 
     audit_log(message.author, "thread_followup", detail=user_question[:200])
     conversation_store.cleanup_expired()

@@ -81,3 +81,22 @@ class TestAllowedUserIds:
             tmp_path=tmp_path,
         )
         assert cfg.allowed_user_ids == []
+
+
+class TestTwilioConfigValidation:
+    def test_twilio_missing_creds_flags_validation_errors(self, monkeypatch, tmp_path):
+        cfg = _reload_config(
+            monkeypatch,
+            env_overrides={
+                "TWILIO_ENABLED": "true",
+                "TWILIO_ACCOUNT_SID": "",
+                "TWILIO_AUTH_TOKEN": "",
+                "TWILIO_FROM_NUMBER": "",
+                "TWILIO_MESSAGING_SERVICE_SID": "",
+            },
+            tmp_path=tmp_path,
+        )
+        issues = cfg.validate()
+        assert any("TWILIO_ACCOUNT_SID" in i for i in issues)
+        assert any("TWILIO_AUTH_TOKEN" in i for i in issues)
+        assert any("TWILIO_FROM_NUMBER" in i for i in issues)

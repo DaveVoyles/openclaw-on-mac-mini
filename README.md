@@ -452,6 +452,7 @@ Edit `.env` and fill in:
 - `DISCORD_BOT_TOKEN` — from step 1
 - `DISCORD_GUILD_ID` — right-click your Discord server → Copy Server ID
 - `ALLOWED_USER_IDS` — right-click your profile → Copy User ID
+- Optional one-tap SMS (Twilio): set `TWILIO_ENABLED=true`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and either `TWILIO_FROM_NUMBER` or `TWILIO_MESSAGING_SERVICE_SID`
 
 ### 3. Deploy
 

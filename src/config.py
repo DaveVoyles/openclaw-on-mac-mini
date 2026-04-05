@@ -150,6 +150,15 @@ class _Config:
     outlook_user: str = os.getenv("OUTLOOK_USER", "")
     outlook_app_password: str = os.getenv("OUTLOOK_APP_PASSWORD", "")
 
+    # -- SMS (Twilio provider layer) -------------------------------------------
+    sms_provider: str = os.getenv("SMS_PROVIDER", "twilio")
+    twilio_enabled: bool = os.getenv("TWILIO_ENABLED", "false").lower() == "true"
+    twilio_account_sid: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    twilio_auth_token: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    twilio_from_number: str = os.getenv("TWILIO_FROM_NUMBER", "")
+    twilio_messaging_service_sid: str = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
+    twilio_verify_service_sid: str = os.getenv("TWILIO_VERIFY_SERVICE_SID", "")
+
     # -- *arr services ---------------------------------------------------------
     sonarr_url: str = os.getenv("SONARR_URL", f"http://{docker_host_ip}:8989")
     sonarr_api_key: str = os.getenv("SONARR_API_KEY", "")
@@ -295,6 +304,13 @@ class _Config:
             issues.append("ℹ️ FIRECRAWL_API_KEY not set — Firecrawl search unavailable")
         if not self.nas_url or not self.nas_password:
             issues.append("ℹ️ NAS_URL/NAS_PASSWORD not set — NAS features unavailable")
+        if self.twilio_enabled:
+            if not self.twilio_account_sid:
+                issues.append("❌ TWILIO_ACCOUNT_SID not set — Twilio SMS cannot send")
+            if not self.twilio_auth_token:
+                issues.append("❌ TWILIO_AUTH_TOKEN not set — Twilio SMS cannot authenticate")
+            if not self.twilio_from_number and not self.twilio_messaging_service_sid:
+                issues.append("❌ TWILIO_FROM_NUMBER or TWILIO_MESSAGING_SERVICE_SID required for Twilio SMS")
 
         return issues
 
@@ -327,6 +343,16 @@ class _Config:
         _add("Radarr API Key", bool(self.radarr_api_key), "Movie management")
         _add("Tautulli API Key", bool(self.tautulli_api_key), "Plex monitoring")
         _add("Gmail Credentials", bool(self.gmail_user and self.gmail_app_password), "Email")
+        _add(
+            "Twilio SMS",
+            bool(
+                self.twilio_enabled
+                and self.twilio_account_sid
+                and self.twilio_auth_token
+                and (self.twilio_from_number or self.twilio_messaging_service_sid)
+            ),
+            "One-tap Discord→SMS",
+        )
         _add("Google OAuth", bool(self.google_oauth_client_id and self.google_oauth_refresh_token), "Calendar")
         _add("Copilot Proxy", self.copilot_proxy_enabled, self.copilot_proxy_url or "not set")
         _add("AdGuard Home", bool(self.adguard_url), f"DNS ad blocker — {self.adguard_url}")

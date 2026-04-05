@@ -146,8 +146,18 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
         semantic_lines = []
         try:
             import vector_store
+            scoped_channel_id = interaction.channel_id
+            scoped_thread_id = None
+            if isinstance(interaction.channel, discord.Thread):
+                scoped_thread_id = interaction.channel.id
+                if interaction.channel.parent_id:
+                    scoped_channel_id = interaction.channel.parent_id
             vec_results = await vector_store.search(
-                vector_store.CONVERSATIONS_COLLECTION, query, top_k=5
+                vector_store.CONVERSATIONS_COLLECTION,
+                query,
+                top_k=5,
+                channel_id=scoped_channel_id,
+                thread_id=scoped_thread_id,
             )
             for r in vec_results:
                 meta = r.get("metadata", {})

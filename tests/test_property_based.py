@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from table_renderer import _parse_markdown_table
+from table_renderer import _parse_markdown_table, should_render_table_image
 
 
 class TestMarkdownTableParser:
@@ -50,6 +50,18 @@ class TestMarkdownTableParser:
         result = _parse_markdown_table(table)
         # Should either parse or return None, not crash
         assert result is None or isinstance(result, tuple)
+
+    def test_should_render_table_image_for_complex_table(self):
+        table = (
+            "| Col1 | Col2 | Col3 | Col4 | Col5 | Col6 |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| 1 | 2 | 3 | 4 | 5 | 6 |\n"
+        )
+        assert should_render_table_image(table) is True
+
+    def test_should_not_render_table_image_for_small_table(self):
+        table = "| Name | Status |\n| --- | --- |\n| Sonarr | OK |\n"
+        assert should_render_table_image(table) is False
 
 
 class TestWebhookFormatter:

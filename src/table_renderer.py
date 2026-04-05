@@ -147,6 +147,31 @@ def render_table_image(text: str) -> Optional[bytes]:
     return buf.getvalue()
 
 
+def should_render_table_image(
+    table_text: str,
+    *,
+    min_rows_for_image: int = 8,
+    min_cols_for_image: int = 6,
+    min_cell_chars_for_image: int = 48,
+) -> bool:
+    """Return True when a table is large/complex enough to benefit from image fallback."""
+    parsed = _parse_markdown_table(table_text)
+    if not parsed:
+        return False
+    headers, rows = parsed
+    cols = len(headers)
+    row_count = len(rows)
+    longest_cell = max(
+        [len(cell) for cell in headers] + [len(cell) for row in rows for cell in row],
+        default=0,
+    )
+    return (
+        row_count >= min_rows_for_image
+        or cols >= min_cols_for_image
+        or longest_cell >= min_cell_chars_for_image
+    )
+
+
 def extract_table_text(text: str) -> Optional[str]:
     """Extract the first markdown table from text (for image rendering)."""
     lines = text.split("\n")

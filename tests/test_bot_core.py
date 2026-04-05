@@ -110,7 +110,7 @@ class TestFormatTablesForDiscord:
     def test_simple_table_gets_ansi_block(self):
         table = "| Name | Status |\n|------|--------|\n| Sonarr | OK |"
         result = mod._format_tables_for_discord(table)
-        assert "```ansi" in result
+        assert "```text" in result
         assert "```" in result
 
     def test_no_table_text_unchanged(self):

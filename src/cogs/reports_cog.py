@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+import io
 import logging
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
-from cog_helpers import audit_log, require_auth, split_response
+from bot_formatting import (
+    format_markdown_for_discord,
+    format_tables_for_discord,
+    split_response,
+)
+from cog_helpers import audit_log, require_auth
 from permissions import is_allowed
 from scheduler import scheduler
 from ui_components import EmbedColors
@@ -53,15 +59,35 @@ class ReportsCog(commands.Cog, name="Reports"):
         title: str,
         body: str,
         color: discord.Color,
+        ephemeral: bool = False,
     ) -> None:
-        chunks = split_response(body)
+        table_image_file = None
+        try:
+            from table_renderer import (
+                extract_table_text,
+                render_table_image,
+                should_render_table_image,
+            )
+            table_text = extract_table_text(body)
+            if table_text and should_render_table_image(table_text):
+                img_bytes = render_table_image(table_text)
+                if img_bytes:
+                    table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
+        except Exception as exc:
+            log.debug("Report table image fallback unavailable: %s", exc)
+
+        formatted_body = format_markdown_for_discord(body)
+        formatted_body = format_tables_for_discord(formatted_body)
+        chunks = split_response(formatted_body)
         for idx, chunk in enumerate(chunks):
             embed = discord.Embed(
                 title=title if idx == 0 else f"{title} (cont.)",
                 description=chunk,
                 color=color,
             )
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, ephemeral=ephemeral)
+        if table_image_file:
+            await interaction.followup.send(file=table_image_file, ephemeral=ephemeral)
 
     async def _recap_from_message(
         self,
@@ -89,12 +115,13 @@ class ReportsCog(commands.Cog, name="Reports"):
             focus=focus,
             style="action-items",
         )
-        embed = discord.Embed(
+        await self._send_chunks(
+            interaction,
             title="📝 Thread Recap",
-            description=report[:4000],
+            body=report,
             color=EmbedColors.INFO,
+            ephemeral=True,
         )
-        await interaction.followup.send(embed=embed, ephemeral=True)
         audit_log(interaction.user, "context_recap", detail=f"channel={message.channel.id}")
 
     @recap.command(name="weekly", description="Summarize the current channel or thread for the last few days")

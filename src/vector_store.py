@@ -17,7 +17,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 log = logging.getLogger("openclaw.vector_store")
 
@@ -87,6 +87,83 @@ _collections: dict = {}
 _lock = asyncio.Lock()
 
 
+def _normalize_scope_id(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _resolve_scope(
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
+) -> tuple[str | None, str | None]:
+    if channel_id is None or thread_id is None:
+        from runtime_state import get_current_channel_id, get_current_thread_id
+
+        if channel_id is None:
+            channel_id = get_current_channel_id()
+        if thread_id is None:
+            thread_id = get_current_thread_id()
+    return _normalize_scope_id(channel_id), _normalize_scope_id(thread_id)
+
+
+def _inject_scope_metadata(
+    metadata: Optional[dict],
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
+) -> dict:
+    meta = dict(metadata or {})
+    resolved_channel_id, resolved_thread_id = _resolve_scope(channel_id=channel_id, thread_id=thread_id)
+    if resolved_channel_id and not _normalize_scope_id(meta.get("channel_id")):
+        meta["channel_id"] = resolved_channel_id
+    if resolved_thread_id and not _normalize_scope_id(meta.get("thread_id")):
+        meta["thread_id"] = resolved_thread_id
+    return meta
+
+
+def _combine_scope_where(
+    base_where: Optional[dict],
+    *,
+    channel_id: str | None,
+    thread_id: str | None,
+) -> Optional[dict]:
+    scope_filters: list[dict] = []
+    if channel_id:
+        scope_filters.append({"channel_id": channel_id})
+    if thread_id:
+        scope_filters.append({"thread_id": thread_id})
+    if not scope_filters:
+        return base_where
+    if base_where:
+        return {"$and": [base_where, *scope_filters]}
+    if len(scope_filters) == 1:
+        return scope_filters[0]
+    return {"$and": scope_filters}
+
+
+def _is_legacy_metadata(meta: dict) -> bool:
+    return not _normalize_scope_id(meta.get("channel_id")) and not _normalize_scope_id(meta.get("thread_id"))
+
+
+def _allow_fallback_result(
+    meta: dict,
+    *,
+    channel_id: str,
+    thread_id: str | None,
+) -> bool:
+    doc_channel_id = _normalize_scope_id(meta.get("channel_id"))
+    doc_thread_id = _normalize_scope_id(meta.get("thread_id"))
+    if thread_id:
+        return (
+            (doc_channel_id == channel_id and doc_thread_id == thread_id)
+            or (doc_channel_id == channel_id and doc_thread_id is None)
+            or _is_legacy_metadata(meta)
+        )
+    return doc_channel_id == channel_id or _is_legacy_metadata(meta)
+
+
 def _get_client():
     """Return the ChromaDB PersistentClient, creating it on first call."""
     global _client
@@ -125,6 +202,9 @@ async def add_document(
     doc_id: str,
     text: str,
     metadata: Optional[dict] = None,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> None:
     """Embed and store a document in the specified collection.
 
@@ -134,7 +214,11 @@ async def add_document(
     if not text or not text.strip():
         return
 
-    meta = metadata or {}
+    meta = _inject_scope_metadata(
+        metadata,
+        channel_id=channel_id,
+        thread_id=thread_id,
+    )
     meta["added_at"] = time.time()
     meta.setdefault("access_count", 0)
     meta.setdefault("last_accessed", 0.0)
@@ -159,6 +243,10 @@ async def search(
     where: Optional[dict] = None,
     threshold: Optional[float] = None,
     track_access: bool = True,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
+    enable_scope_fallback: bool = True,
 ) -> list[dict]:
     """Semantic search across a collection.
 
@@ -174,54 +262,100 @@ async def search(
     # Fetch extra results so we can still fill top_k after filtering decayed
     fetch_k = top_k + 5
 
-    def _query():
-        col = _get_collection(collection_name)
-        if col.count() == 0:
+    async def _query_once(query_where: Optional[dict]) -> list[dict]:
+        def _query():
+            col = _get_collection(collection_name)
+            if col.count() == 0:
+                return []
+            kwargs = {
+                "query_texts": [query],
+                "n_results": min(fetch_k, col.count()),
+            }
+            if query_where:
+                kwargs["where"] = query_where
+            return col.query(**kwargs)
+
+        loop = asyncio.get_running_loop()
+        results = await loop.run_in_executor(None, _query)
+        if not results or not results.get("ids") or not results["ids"][0]:
             return []
-        kwargs = {
-            "query_texts": [query],
-            "n_results": min(fetch_k, col.count()),
-        }
-        if where:
-            kwargs["where"] = where
-        return col.query(**kwargs)
 
-    loop = asyncio.get_running_loop()
-    results = await loop.run_in_executor(None, _query)
+        output = []
+        for i, doc_id in enumerate(results["ids"][0]):
+            distance = results["distances"][0][i] if results.get("distances") else 1.0
+            # ChromaDB cosine distance: 0 = identical, 2 = opposite
+            # Convert to similarity: 1 - (distance / 2)
+            similarity = 1 - (distance / 2)
+            meta = results["metadatas"][0][i] if results.get("metadatas") else {}
+            # Deprioritize decayed documents (10% penalty)
+            if meta.get("decayed"):
+                similarity *= 0.9
+            # Boost high-confidence facts (source tracking)
+            confidence = meta.get("confidence")
+            if confidence is not None:
+                try:
+                    # Scale: 0.5 confidence → 0.95x, 0.7 → 0.97x, 1.0 → 1.0x (no change)
+                    similarity *= 0.9 + (float(confidence) * 0.1)
+                except (ValueError, TypeError):
+                    pass
+            if similarity < threshold:
+                continue
+            output.append({
+                "id": doc_id,
+                "text": results["documents"][0][i] if results.get("documents") else "",
+                "metadata": meta,
+                "distance": distance,
+                "similarity": round(similarity, 3),
+            })
 
-    if not results or not results.get("ids") or not results["ids"][0]:
-        return []
+        return output[:top_k]
 
-    # Flatten ChromaDB's nested response format
-    output = []
-    for i, doc_id in enumerate(results["ids"][0]):
-        distance = results["distances"][0][i] if results.get("distances") else 1.0
-        # ChromaDB cosine distance: 0 = identical, 2 = opposite
-        # Convert to similarity: 1 - (distance / 2)
-        similarity = 1 - (distance / 2)
-        meta = results["metadatas"][0][i] if results.get("metadatas") else {}
-        # Deprioritize decayed documents (10% penalty)
-        if meta.get("decayed"):
-            similarity *= 0.9
-        # Boost high-confidence facts (source tracking)
-        confidence = meta.get("confidence")
-        if confidence is not None:
+    resolved_channel_id, resolved_thread_id = _resolve_scope(
+        channel_id=channel_id,
+        thread_id=thread_id,
+    )
+    scoped_where = _combine_scope_where(
+        where,
+        channel_id=resolved_channel_id,
+        thread_id=resolved_thread_id,
+    )
+
+    output = await _query_once(scoped_where)
+    if output:
+        if track_access:
             try:
-                # Scale: 0.5 confidence → 0.95x, 0.7 → 0.97x, 1.0 → 1.0x (no change)
-                similarity *= 0.9 + (float(confidence) * 0.1)
-            except (ValueError, TypeError):
-                pass
-        if similarity < threshold:
-            continue
-        output.append({
-            "id": doc_id,
-            "text": results["documents"][0][i] if results.get("documents") else "",
-            "metadata": meta,
-            "distance": distance,
-            "similarity": round(similarity, 3),
-        })
+                asyncio.get_running_loop().create_task(
+                    bump_access(collection_name, [r["id"] for r in output])
+                )
+            except Exception as exc:
+                log.debug("Access tracking dispatch failed: %s", exc)
+        return output
 
-    output = output[:top_k]
+    if (
+        not resolved_channel_id
+        or not enable_scope_fallback
+        or scoped_where == where
+    ):
+        return output
+
+    fallback_results = await _query_once(where)
+    output = [
+        item for item in fallback_results
+        if _allow_fallback_result(
+            item.get("metadata", {}),
+            channel_id=resolved_channel_id,
+            thread_id=resolved_thread_id,
+        )
+    ][:top_k]
+
+    if output:
+        log.debug(
+            "Scoped vector fallback used for %s (channel=%s thread=%s, hits=%d)",
+            collection_name,
+            resolved_channel_id,
+            resolved_thread_id or "-",
+            len(output),
+        )
 
     # Fire-and-forget access tracking
     if track_access and output:
@@ -253,6 +387,9 @@ async def search_all(
     query: str,
     top_k: int = DEFAULT_TOP_K,
     threshold: Optional[float] = None,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> list[dict]:
     """Search across ALL collections and return merged, ranked results.
 
@@ -260,7 +397,14 @@ async def search_all(
     """
     collections = [MEMORIES_COLLECTION, CONVERSATIONS_COLLECTION, RESEARCH_COLLECTION]
     tasks = [
-        search(col, query, top_k=top_k, threshold=threshold)
+        search(
+            col,
+            query,
+            top_k=top_k,
+            threshold=threshold,
+            channel_id=channel_id,
+            thread_id=thread_id,
+        )
         for col in collections
     ]
     all_results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -423,6 +567,9 @@ async def add_memory(
     tags: Optional[list[str]] = None,
     source: str = "user-explicit",
     confidence: float = 1.0,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> None:
     """Store a fact/memory in the memories collection."""
     await add_document(
@@ -435,6 +582,8 @@ async def add_memory(
             "source": source,
             "confidence": confidence,
         },
+        channel_id=channel_id,
+        thread_id=thread_id,
     )
 
 
@@ -444,6 +593,9 @@ async def add_memory_deduped(
     tags: Optional[list[str]] = None,
     metadata: Optional[dict] = None,
     dedup_threshold: float = 0.9,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> bool:
     """Store a fact with deduplication — returns True if stored, False if duplicate found."""
     # Check for near-duplicates
@@ -454,6 +606,8 @@ async def add_memory_deduped(
             top_k=1,
             threshold=dedup_threshold,
             track_access=False,
+            channel_id=channel_id,
+            thread_id=thread_id,
         )
         if existing:
             log.debug("Dedup: skipped near-duplicate (%.0f%% similar to '%s')",
@@ -473,12 +627,19 @@ async def add_memory_deduped(
         doc_id=f"mem_{fact_id}",
         text=content,
         metadata=meta,
+        channel_id=channel_id,
+        thread_id=thread_id,
     )
     return True
 
 
 async def add_conversation_summary(
-    user_id: int, thread_name: str, summary: str
+    user_id: int,
+    thread_name: str,
+    summary: str,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> None:
     """Store a conversation summary in the conversations collection."""
     await add_document(
@@ -490,11 +651,18 @@ async def add_conversation_summary(
             "user_id": str(user_id),
             "thread_name": thread_name,
         },
+        channel_id=channel_id,
+        thread_id=thread_id,
     )
 
 
 async def add_research_report(
-    query: str, report: str, sources: Optional[list[str]] = None
+    query: str,
+    report: str,
+    sources: Optional[list[str]] = None,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> None:
     """Store a research report in the research collection."""
     report_id = f"research_{int(time.time())}_{hash(query) % 10000}"
@@ -507,12 +675,25 @@ async def add_research_report(
             "query": query[:500],
             "sources": ",".join(sources or [])[:2000],
         },
+        channel_id=channel_id,
+        thread_id=thread_id,
     )
 
 
-async def recall(query: str, top_k: int = 5) -> str:
+async def recall(
+    query: str,
+    top_k: int = 5,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
+) -> str:
     """Semantic recall across all collections. Returns formatted text."""
-    results = await search_all(query, top_k=top_k)
+    results = await search_all(
+        query,
+        top_k=top_k,
+        channel_id=channel_id,
+        thread_id=thread_id,
+    )
     if not results:
         return ""
 
@@ -526,7 +707,13 @@ async def recall(query: str, top_k: int = 5) -> str:
     return "\n".join(lines)
 
 
-async def recall_for_context(query: str, top_k: int | None = None) -> str:
+async def recall_for_context(
+    query: str,
+    top_k: int | None = None,
+    *,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
+) -> str:
     """Recall relevant context for Auto-RAG injection.
 
     Searches all collections and formats results as a concise context block
@@ -537,7 +724,12 @@ async def recall_for_context(query: str, top_k: int | None = None) -> str:
 
     top_k = top_k or cfg.auto_recall_top_k
 
-    results = await search_all(query, top_k=top_k)
+    results = await search_all(
+        query,
+        top_k=top_k,
+        channel_id=channel_id,
+        thread_id=thread_id,
+    )
     if not results:
         return ""
 

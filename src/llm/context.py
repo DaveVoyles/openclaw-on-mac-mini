@@ -146,10 +146,18 @@ async def _auto_recall_context(user_message: str) -> str:
         return ""
 
     parts = []
+    from runtime_state import get_current_channel_id, get_current_thread_id
+
+    channel_id = get_current_channel_id()
+    thread_id = get_current_thread_id()
 
     try:
         import vector_store
-        context = await vector_store.recall_for_context(user_message)
+        context = await vector_store.recall_for_context(
+            user_message,
+            channel_id=channel_id,
+            thread_id=thread_id,
+        )
         if context:
             parts.append(context)
     except Exception as e:

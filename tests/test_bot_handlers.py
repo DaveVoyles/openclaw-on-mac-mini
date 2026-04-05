@@ -59,8 +59,8 @@ class TestFormatting:
     def test_format_tables_simple(self):
         text = "| A | B |\n|---|---|\n| 1 | 2 |"
         result = format_tables_for_discord(text)
-        assert "```ansi" in result
-        assert "│" in result
+        assert "```text" in result
+        assert "+---+---+" in result
 
     def test_split_response_short(self):
         text = "Short text"
@@ -71,6 +71,29 @@ class TestFormatting:
         chunks = split_response(text)
         assert len(chunks) > 1
         assert all(len(c) <= 4000 for c in chunks)
+
+    def test_split_response_does_not_break_table_rows(self):
+        table = (
+            "```text\n"
+            "| Date | Matchup | Time |\n"
+            "| 2026-04-01 | Team A vs Team B | 7:00 PM |\n"
+            "| 2026-04-02 | Team C vs Team D | 8:00 PM |\n"
+            "| 2026-04-03 | Team E vs Team F | 9:00 PM |\n"
+            "```"
+        )
+        chunks = split_response(table, limit=110)
+        assert len(chunks) > 1
+        assert all(len(c) <= 110 for c in chunks)
+        assert any("Team A vs Team B" in chunk for chunk in chunks)
+        assert any("Team C vs Team D" in chunk for chunk in chunks)
+        assert any("Team E vs Team F" in chunk for chunk in chunks)
+
+    def test_split_response_keeps_code_fences_balanced(self):
+        text = "```python\n" + "\n".join(f"print({i})" for i in range(50)) + "\n```"
+        chunks = split_response(text, limit=120)
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert chunk.count("```") % 2 == 0
 
     def test_extract_file_attachment_small_code(self):
         text = "```python\nprint('hi')\n```"

@@ -17,6 +17,8 @@ async def store(
     confidence: float = 1.0,
     tags: list[str] | None = None,
     dedup: bool = True,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> dict:
     """Store a fact/memory across all backends.
 
@@ -43,6 +45,8 @@ async def store(
                 content=content,
                 tags=tags,
                 metadata={"source": source, "confidence": confidence},
+                channel_id=channel_id,
+                thread_id=thread_id,
             )
             if not stored:
                 result["duplicate"] = True
@@ -54,6 +58,8 @@ async def store(
                 tags=tags,
                 source=source,
                 confidence=confidence,
+                channel_id=channel_id,
+                thread_id=thread_id,
             )
         result["stored"] = True
         result["id"] = f"mem_{fact_id}"
@@ -75,6 +81,8 @@ async def recall(
     top_k: int = 5,
     include_rules: bool = True,
     include_profile: bool = True,
+    channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
 ) -> list[dict]:
     """Recall relevant memories from all sources.
 
@@ -87,7 +95,12 @@ async def recall(
     try:
         import vector_store
 
-        vs_results = await vector_store.search_all(query, top_k=top_k)
+        vs_results = await vector_store.search_all(
+            query,
+            top_k=top_k,
+            channel_id=channel_id,
+            thread_id=thread_id,
+        )
         for r in vs_results:
             results.append({
                 "text": r["text"],
