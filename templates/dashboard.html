@@ -657,6 +657,58 @@
           <span>🎭 Patreon: <span id="st-patreon" class="status-dot">…</span></span>
         </div>
 
+        <!-- Patreon/MonsterVision Status Card -->
+        <div class="card" id="patreon-card" style="margin-bottom:1rem">
+          <h2 style="display:flex;align-items:center;justify-content:space-between">
+            <span>🎭 Patreon/MonsterVision Monitor</span>
+            <button class="btn" onclick="showCookieRefreshModal()" style="font-size:0.75rem;padding:0.3rem 0.7rem">
+              🔄 Refresh Cookies
+            </button>
+          </h2>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.8rem;margin-top:0.75rem">
+            <div class="stat-item">
+              <div class="stat-label">Cookie Status</div>
+              <div class="stat-value" id="patreon-cookie-status">…</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Downloads</div>
+              <div class="stat-value" id="patreon-downloads">…</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Last Download</div>
+              <div class="stat-value" id="patreon-last-dl">…</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label">Next Check</div>
+              <div class="stat-value" id="patreon-next-check">…</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cookie Refresh Modal -->
+        <div id="cookie-refresh-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:var(--bg);border:2px solid var(--border);border-radius:12px;padding:2rem;max-width:600px;max-height:80vh;overflow-y:auto">
+            <h2 style="margin-bottom:1rem;color:var(--gold)">🔄 Refresh Patreon Cookies</h2>
+            <p style="margin-bottom:1rem;color:var(--text)">Follow these steps to refresh your Patreon session cookies:</p>
+            <ol style="line-height:1.8;color:var(--text);margin-left:1.5rem">
+              <li>Open <strong>Chrome</strong> and navigate to <a href="https://patreon.com" target="_blank" style="color:var(--spirit-blue)">patreon.com</a></li>
+              <li>Log in to your Patreon account</li>
+              <li>Install the <strong>EditThisCookie</strong> extension (if not already installed)</li>
+              <li>Click the <strong>EditThisCookie</strong> icon → <strong>Export</strong></li>
+              <li>Copy the exported JSON</li>
+              <li>Save to <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px">~/Downloads/cookies.txt</code></li>
+              <li>Run: <code style="background:var(--surface);padding:0.2rem 0.4rem;border-radius:4px;display:block;margin:0.5rem 0">docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code></li>
+              <li>Downloads will resume automatically within <strong>30 minutes</strong></li>
+            </ol>
+            <div style="margin-top:1.5rem;padding:1rem;background:rgba(241,196,0,0.1);border-left:3px solid var(--gold);border-radius:4px">
+              <strong style="color:var(--gold)">💡 Tip:</strong> Cookies typically last 3-7 days. Refresh when you see yellow/red status.
+            </div>
+            <div style="margin-top:1.5rem;text-align:right">
+              <button class="btn" onclick="hideCookieRefreshModal()" style="padding:0.5rem 1.5rem">Close</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Container Health Matrix -->
         <div class="card">
           <h2>&#128173; Recent Features (v0.11.0)</h2>
@@ -2008,6 +2060,33 @@
           </details>
         </div>
 
+        <div class="card" id="channel-memory-inspector-card">
+          <h2>🧪 Channel Memory Inspector</h2>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
+            Inspect vector memory visibility for a specific Discord channel/thread scope, then clear or retrain in one click.
+          </p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.6rem">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
+              Channel ID
+              <input id="inspector-channel-id" type="text" placeholder="123456789012345678" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
+              Thread ID (optional)
+              <input id="inspector-thread-id" type="text" placeholder="987654321098765432" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+            </label>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.6rem">
+            <button type="button" onclick="loadChannelMemoryInspector()" style="background:var(--spirit-blue);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer">Inspect</button>
+            <button type="button" onclick="runChannelMemoryAction('clear')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer">Clear Scope</button>
+            <button type="button" onclick="runChannelMemoryAction('retrain')" style="background:var(--surface);color:var(--gold);border:1px solid rgba(241,196,0,0.3);border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer">Retrain / Reindex</button>
+          </div>
+          <div id="inspector-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.6rem">Enter a channel ID to inspect scoped memory.</div>
+          <div id="inspector-summary" class="memory-stats-bar">
+            <span class="stat-chip"><span class="stat-chip-label">No scope selected</span></span>
+          </div>
+          <div id="inspector-latest" class="scrollable-list" style="max-height:260px"></div>
+        </div>
+
         <!-- Research History -->
         <div class="card">
           <h2>📊 Research History</h2>
@@ -2873,6 +2952,128 @@
           });
       }
 
+      function _inspectorScope() {
+        const channelId = (document.getElementById('inspector-channel-id')?.value || '').trim();
+        const threadId = (document.getElementById('inspector-thread-id')?.value || '').trim();
+        return { channelId, threadId };
+      }
+
+      function setInspectorFeedback(message, isError = false) {
+        const el = document.getElementById('inspector-feedback');
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = isError ? 'var(--danger,#f85149)' : 'var(--muted)';
+      }
+
+      function renderChannelMemoryInspector(data) {
+        const summaryEl = document.getElementById('inspector-summary');
+        const latestEl = document.getElementById('inspector-latest');
+        if (!summaryEl || !latestEl) return;
+
+        const scope = data.scope || {};
+        const collections = data.collections || {};
+        const totalCount = data.total_count || 0;
+        const anchor = data.anchor || {};
+        const alerts = data.alerts || {};
+        const warningCount = alerts.count || 0;
+        summaryEl.innerHTML = [
+          `<span class="stat-chip"><span class="stat-chip-label">Channel:</span> <code>${esc(scope.channel_id || '—')}</code></span>`,
+          `<span class="stat-chip"><span class="stat-chip-label">Thread:</span> <code>${esc(scope.thread_id || 'none')}</code></span>`,
+          `<span class="stat-chip"><span class="stat-chip-label">Total:</span> ${totalCount}</span>`,
+          `<span class="stat-chip"><span class="stat-chip-label">Anchor:</span> ${anchor.present ? 'yes' : 'no'}</span>`,
+          `<span class="stat-chip"><span class="stat-chip-label">Alerts:</span> ${warningCount}</span>`,
+        ].join('');
+
+        const collectionBlocks = Object.entries(collections).map(([name, info]) => {
+          const latest = (info.latest || []);
+          const latestHtml = latest.length
+            ? latest.map(item => {
+              const date = item.added_at ? new Date(item.added_at * 1000).toLocaleString() : 'unknown time';
+              return `<div class="memory-item"><span class="memory-text"><strong>${esc(item.type || 'entry')}</strong> · ${esc(item.excerpt || '')}</span><span class="memory-date">${esc(date)}</span></div>`;
+            }).join('')
+            : '<p class="muted-text">No scoped entries.</p>';
+          return `<details style="margin-bottom:0.5rem" open>
+              <summary style="cursor:pointer;color:var(--spirit-blue);font-weight:600">${esc(name)} (${info.count || 0})</summary>
+              <div style="margin-top:0.3rem">${latestHtml}</div>
+            </details>`;
+        });
+        const alertHtml = warningCount
+          ? `<details style="margin-bottom:0.5rem" open>
+              <summary style="cursor:pointer;color:#f39c12;font-weight:600">Scoped Recall Alerts (${warningCount})</summary>
+              <div style="margin-top:0.3rem">${(alerts.items || []).map(item => {
+                const date = item.timestamp ? new Date(item.timestamp * 1000).toLocaleString() : 'unknown time';
+                return `<div class="memory-item"><span class="memory-text"><strong>${esc(item.category || 'alert')}</strong> · ${esc(item.message || '')}</span><span class="memory-date">${esc(date)}</span></div>`;
+              }).join('') || '<p class="muted-text">No alert details.</p>'}</div>
+            </details>`
+          : '';
+        latestEl.innerHTML = alertHtml + (collectionBlocks.join('') || '<p class="muted-text">No collection data.</p>');
+      }
+
+      async function loadChannelMemoryInspector(options = {}) {
+        const { quietIfMissing = false } = options;
+        const { channelId, threadId } = _inspectorScope();
+        if (!channelId) {
+          if (!quietIfMissing) setInspectorFeedback('Channel ID is required.', true);
+          return;
+        }
+        localStorage.setItem('openclaw_inspector_channel_id', channelId);
+        localStorage.setItem('openclaw_inspector_thread_id', threadId || '');
+        setInspectorFeedback('Loading scoped memory…');
+        try {
+          const qs = new URLSearchParams({ channel_id: channelId, include_anchor: '1', limit: '5' });
+          if (threadId) qs.set('thread_id', threadId);
+          const resp = await fetch(`/api/channel-memory/inspect?${qs.toString()}`);
+          const data = await resp.json();
+          if (!resp.ok) {
+            setInspectorFeedback(data.error || 'Failed to inspect scope.', true);
+            return;
+          }
+          renderChannelMemoryInspector(data);
+          setInspectorFeedback('Scope loaded.');
+        } catch {
+          setInspectorFeedback('Failed to inspect scoped memory.', true);
+        }
+      }
+
+      async function runChannelMemoryAction(action) {
+        const { channelId, threadId } = _inspectorScope();
+        if (!channelId) {
+          setInspectorFeedback('Channel ID is required.', true);
+          return;
+        }
+        if (action === 'clear' && !confirm('Clear vector memory for this scope? This cannot be undone.')) {
+          return;
+        }
+        setInspectorFeedback(`Running ${action}…`);
+        try {
+          const resp = await fetch('/api/channel-memory/action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action,
+              channel_id: channelId,
+              thread_id: threadId || null,
+              actor: 'dashboard-ui',
+            }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            setInspectorFeedback(data.error || `Failed to run ${action}.`, true);
+            return;
+          }
+          if (action === 'clear') {
+            const deleted = data.clear?.total_deleted ?? 0;
+            setInspectorFeedback(`Cleared ${deleted} scoped vector entries.`);
+          } else {
+            setInspectorFeedback('Retrain/reindex flow triggered.');
+          }
+          loadChannelMemoryInspector({ quietIfMissing: true });
+          loadMemories();
+        } catch {
+          setInspectorFeedback(`Failed to run ${action}.`, true);
+        }
+      }
+
       // =========================================================================
       // Active Goals
       // =========================================================================
@@ -3256,6 +3457,14 @@
           if (savedSmsUserId && document.getElementById('sms-user-id')) {
             document.getElementById('sms-user-id').value = savedSmsUserId;
           }
+          const savedInspectorChannel = localStorage.getItem('openclaw_inspector_channel_id') || '';
+          const savedInspectorThread = localStorage.getItem('openclaw_inspector_thread_id') || '';
+          if (savedInspectorChannel && document.getElementById('inspector-channel-id')) {
+            document.getElementById('inspector-channel-id').value = savedInspectorChannel;
+          }
+          if (savedInspectorThread && document.getElementById('inspector-thread-id')) {
+            document.getElementById('inspector-thread-id').value = savedInspectorThread;
+          }
           const smsForm = document.getElementById('sms-settings-form');
           if (smsForm) smsForm.addEventListener('submit', saveSmsSettings);
           const d = await loadData();
@@ -3278,6 +3487,7 @@
           loadSkillStats();
           loadConfigStatus();
           loadSmsPanel();
+          loadChannelMemoryInspector({ quietIfMissing: true });
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -3286,7 +3496,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadApprovals(); loadRunTimeline(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadApprovals(); loadRunTimeline(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -3304,7 +3514,73 @@
                       el.className = 'status-dot ' + cls;
                   }
               }
+
+              // Update detailed Patreon widget
+              if (s.patreon) {
+                  updatePatreonWidget(s.patreon);
+              }
           }).catch(() => {});
+      }
+
+      function updatePatreonWidget(data) {
+          // Cookie status with color indicator
+          const cookieAge = data.cookie_age_hours || 0;
+          const cookieAgeDays = (cookieAge / 24).toFixed(1);
+          let cookieStatus = '';
+          let cookieColor = 'var(--mint-green)';
+          
+          if (cookieAge < 0) {
+              cookieStatus = '⚪ Unknown';
+              cookieColor = 'var(--muted)';
+          } else if (cookieAge < 72) { // < 3 days
+              cookieStatus = `🟢 Fresh (${cookieAgeDays}d)`;
+              cookieColor = 'var(--mint-green)';
+          } else if (cookieAge < 120) { // 3-5 days
+              cookieStatus = `🟡 Aging (${cookieAgeDays}d)`;
+              cookieColor = '#ff9800';
+          } else { // > 5 days
+              cookieStatus = `🔴 Stale (${cookieAgeDays}d)`;
+              cookieColor = '#f44336';
+          }
+          
+          document.getElementById('patreon-cookie-status').innerHTML = 
+              `<span style="color:${cookieColor}">${cookieStatus}</span>`;
+
+          // Downloads
+          const downloaded = data.downloaded_count || 0;
+          const total = data.total_count || 0;
+          const pending = data.pending_count || 0;
+          document.getElementById('patreon-downloads').textContent = 
+              `${downloaded}/${total} (${pending} pending)`;
+
+          // Last download
+          const hoursSince = data.hours_since_download || 0;
+          let lastDl = '';
+          if (hoursSince < 0) {
+              lastDl = 'Unknown';
+          } else if (hoursSince < 1) {
+              lastDl = '< 1h ago';
+          } else if (hoursSince < 24) {
+              lastDl = `${Math.floor(hoursSince)}h ago`;
+          } else {
+              lastDl = `${Math.floor(hoursSince / 24)}d ago`;
+          }
+          document.getElementById('patreon-last-dl').textContent = lastDl;
+
+          // Next check (30-minute intervals)
+          const now = new Date();
+          const nextCheck = new Date(Math.ceil(now.getTime() / (30*60*1000)) * (30*60*1000));
+          const minsUntil = Math.round((nextCheck - now) / (60*1000));
+          document.getElementById('patreon-next-check').textContent = 
+              minsUntil <= 1 ? '< 1 min' : `${minsUntil} mins`;
+      }
+
+      function showCookieRefreshModal() {
+          document.getElementById('cookie-refresh-modal').style.display = 'flex';
+      }
+
+      function hideCookieRefreshModal() {
+          document.getElementById('cookie-refresh-modal').style.display = 'none';
       }
 
       // E7: Error Monitor

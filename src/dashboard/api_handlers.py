@@ -149,17 +149,33 @@ async def api_status_handler(request):
         # Map status to dashboard format
         from patreon_monitor import PatreonHealthStatus
 
+        # Base status response
+        patreon_data = {
+            "cookie_age_hours": health.cookie_age_hours if health.cookie_age_hours is not None else -1,
+            "hours_since_download": health.hours_since_download if health.hours_since_download is not None else -1,
+            "downloaded_count": health.downloaded_count,
+            "total_count": health.total_count,
+            "pending_count": health.pending_count,
+            "auto_recovery_active": health.auto_recovery_active,
+        }
+
         if health.status == PatreonHealthStatus.OK:
-            checks["patreon"] = {"status": "ok", "detail": "healthy"}
+            patreon_data["status"] = "ok"
+            patreon_data["detail"] = "healthy"
         elif health.status == PatreonHealthStatus.WARNING:
             # Use the primary issue as detail
             detail = health.issues[0] if health.issues else "attention needed"
-            checks["patreon"] = {"status": "no_key", "detail": detail[:50]}
+            patreon_data["status"] = "no_key"
+            patreon_data["detail"] = detail[:50]
         elif health.status == PatreonHealthStatus.CRITICAL:
             detail = health.issues[0] if health.issues else "critical"
-            checks["patreon"] = {"status": "down", "detail": detail[:50]}
+            patreon_data["status"] = "down"
+            patreon_data["detail"] = detail[:50]
         else:
-            checks["patreon"] = {"status": "down", "detail": "unknown"}
+            patreon_data["status"] = "down"
+            patreon_data["detail"] = "unknown"
+
+        checks["patreon"] = patreon_data
 
     except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         log.debug("Patreon health check failed: %s", exc)
@@ -595,6 +611,12 @@ async def api_channel_memory_inspect_handler(request: web.Request) -> web.Respon
             latest_limit=latest_limit,
             include_anchor=include_anchor,
         )
+        alerts = summary.get("alerts", {}) if isinstance(summary, dict) else {}
+        if isinstance(alerts, dict) and alerts.get("count", 0):
+            summary["warnings"] = {
+                "scoped_recall_alerts": alerts.get("count", 0),
+                "message": "Potential cross-channel/thread recall leakage was blocked recently.",
+            }
         return web.json_response(summary)
     except Exception as exc:
         log.debug("Channel memory inspect failed: %s", exc)
