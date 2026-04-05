@@ -1052,3 +1052,40 @@ Things you need to do by hand before OpenClaw is fully operational. Complete the
 - [ ] **Add to Uptime Kuma**: run `scripts/add-uptime-kuma-monitor.py` to add the monitor
 - [ ] **Traefik route** (optional): `openclaw.davevoyles.synology.me` → configured in NAS `mac-mini.yml`
 - [ ] **AgentMail** (optional): set `AGENTMAIL_API_KEY` in `.env` for `/mail` and email-via-AI
+
+## 📊 Weekly Recap Engine
+
+OpenClaw now includes a unified weekly recap generation engine that aggregates data from multiple premium APIs:
+
+### Quick Start
+
+```python
+from skills.reporting_skills import generate_weekly_recap
+
+# Generate a comprehensive weekly report
+recap = await generate_weekly_recap(
+    topics=["entertainment", "sports", "tech", "finance"],
+    date_range="last_week"
+)
+
+# Returns Discord-ready markdown with:
+# - Top news stories by category
+# - NBA scores and standings
+# - Entertainment stock updates
+# - Market sentiment analysis
+```
+
+### Features
+- **Multi-API Aggregation**: NewsAPI (80K+ sources), API-Sports (NBA), Alpha Vantage (stocks)
+- **Intelligent Error Handling**: Graceful degradation when APIs hit rate limits
+- **Discord Optimized**: Formatted for 2000 char field limits with section emojis
+- **Flexible Filtering**: Choose topics and date ranges
+
+📖 **[Full Documentation](docs/WEEKLY_RECAP_ENGINE.md)**
+
+### API Integration Status
+- ✅ NewsAPI.org - 100 req/day
+- ✅ API-Sports - 100 req/day (NBA)
+- ✅ Alpha Vantage - 25 req/day
+- ⏳ NFL/NHL/MLB - Coming soon
+
