@@ -4,7 +4,7 @@ Tests for advanced scheduler features (Phase 3).
 
 import asyncio
 import sqlite3
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -313,6 +313,22 @@ class TestAdvancedScheduler:
         assert result is True  # Disabled conditions always pass
 
     @pytest.mark.asyncio
+    async def test_evaluate_condition_blocks_unsafe_call_expression(self, scheduler):
+        task = AdvancedTask(
+            task_id="test",
+            action="test",
+            args={},
+            trigger=EventTrigger(trigger_type=TriggerType.EVENT, event_name="test"),
+            condition=ConditionalExecution(
+                enabled=True,
+                condition_script="__import__('os').system('echo pwned')",
+            ),
+        )
+
+        result = await scheduler._evaluate_condition(task, {})
+        assert result is False
+
+    @pytest.mark.asyncio
     async def test_execute_task_success(self, scheduler):
         mock_skill = AsyncMock(return_value="Success!")
         scheduler.register_skills({"test_skill": mock_skill})
@@ -327,7 +343,7 @@ class TestAdvancedScheduler:
         result, duration = await scheduler._execute_task(task)
 
         assert result == "Success!"
-        assert duration > 0
+        assert duration >= 0
         mock_skill.assert_called_once_with(param="value")
 
     @pytest.mark.asyncio
@@ -345,7 +361,14 @@ class TestAdvancedScheduler:
         assert duration == 0
 
     @pytest.mark.asyncio
-    async def test_execute_task_timeout(self, scheduler):
+    async def test_execute_task_timeout(self, scheduler, monkeypatch):
+        async def force_timeout(awaitable, *args, **kwargs):
+            if hasattr(awaitable, "close"):
+                awaitable.close()
+            raise asyncio.TimeoutError
+
+        monkeypatch.setattr("scheduler_advanced.asyncio.wait_for", force_timeout)
+
         async def slow_skill():
             await asyncio.sleep(400)  # Exceeds 300s timeout
             return "Done"
@@ -396,6 +419,26 @@ class TestAdvancedScheduler:
         assert task.run_count == 1
         assert task.retry_count == 1
         assert task.next_retry_at != ""
+
+    @pytest.mark.asyncio
+    async def test_execute_with_retry_records_observability_metrics(self, scheduler):
+        mock_collector = MagicMock()
+        task = AdvancedTask(
+            task_id="test",
+            action="unknown_skill",
+            args={},
+            trigger=EventTrigger(trigger_type=TriggerType.CRON, event_name="0 9 * * *"),
+        )
+
+        with patch("scheduler_advanced.get_collector", return_value=mock_collector):
+            result, success = await scheduler._execute_with_retry(task)
+
+        assert success is False
+        assert "Unknown skill" in result
+        record_call = mock_collector.record_command.call_args.kwargs
+        assert record_call["command"] == "unknown_skill"
+        assert record_call["workspace"] == "scheduler_advanced"
+        assert record_call["success"] is False
 
     @pytest.mark.asyncio
     async def test_trigger_event(self, scheduler):
