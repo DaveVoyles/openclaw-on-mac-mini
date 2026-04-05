@@ -722,6 +722,10 @@ SKILL_CATEGORIES = {
         "detect_breaking_news", "get_topic_trajectory", "list_tracked_topics",
         "update_all_tracked_trends",
     ],
+    "🎬 Patreon Monitoring": [
+        "check_patreon_health", "get_patreon_status", "diagnose_patreon_downloads",
+        "refresh_patreon_cookies_guide", "attempt_patreon_recovery",
+    ],
 }
 
 # Auto-populate: any skill NOT in a category goes to "📦 Other"
@@ -767,4 +771,21 @@ SKILLS.update({
     "get_topic_trajectory": get_topic_trajectory,
     "list_tracked_topics": list_tracked_topics,
     "update_all_tracked_trends": update_all_tracked_trends,
+})
+
+# Patreon monitoring skills
+from skills.patreon_skills import (
+    attempt_patreon_recovery,
+    check_patreon_health,
+    diagnose_patreon_downloads,
+    get_patreon_status,
+    refresh_patreon_cookies_guide,
+)
+
+SKILLS.update({
+    "check_patreon_health": check_patreon_health,
+    "get_patreon_status": get_patreon_status,
+    "refresh_patreon_cookies_guide": refresh_patreon_cookies_guide,
+    "diagnose_patreon_downloads": diagnose_patreon_downloads,
+    "attempt_patreon_recovery": attempt_patreon_recovery,
 })
