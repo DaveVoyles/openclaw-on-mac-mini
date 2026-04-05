@@ -4,7 +4,6 @@ Generates PDF reports with charts, tables, and custom branding.
 Supports weekly summaries, API usage, performance reports, and financial reports.
 """
 
-import io
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -123,11 +122,11 @@ class ReportGenerator:
         self, start_date: datetime, end_date: datetime, custom_data: dict[str, Any]
     ) -> dict[str, Any]:
         """Gather data for weekly summary report."""
-        import sqlite3
         import os
+        import sqlite3
 
         db_path = Path(os.getenv("THREAD_DB_PATH", "data/memory/openclaw.db"))
-        
+
         data = {
             "title": "Weekly Summary Report",
             "news_highlights": [],
@@ -143,8 +142,8 @@ class ReportGenerator:
             try:
                 # Get trending topics
                 cursor = conn.execute(
-                    """SELECT topic, category, volume, sentiment 
-                       FROM trend_data 
+                    """SELECT topic, category, volume, sentiment
+                       FROM trend_data
                        WHERE timestamp >= ? AND timestamp <= ?
                        ORDER BY volume DESC LIMIT 10""",
                     (start_date.timestamp(), end_date.timestamp()),
@@ -156,7 +155,7 @@ class ReportGenerator:
 
                 # Get message count
                 cursor = conn.execute(
-                    """SELECT COUNT(*) FROM threads 
+                    """SELECT COUNT(*) FROM threads
                        WHERE created_at >= ? AND created_at <= ?""",
                     (start_date.isoformat(), end_date.isoformat()),
                 )
@@ -209,7 +208,7 @@ class ReportGenerator:
     ) -> dict[str, Any]:
         """Gather data for financial report."""
         from config import cfg
-        
+
         data = {
             "title": "Financial Report",
             "user_id": custom_data.get("user_id", "Unknown"),
@@ -223,18 +222,18 @@ class ReportGenerator:
             "chart_paths": custom_data.get("chart_paths", []),
             "bot_version": cfg.version,
         }
-        
+
         # Add insights
         portfolio_count = len(data["portfolio"])
         gain_loss_pct = data["summary"].get("gain_loss_percent", 0)
-        
+
         data["insights"] = [
             f"Portfolio contains {portfolio_count} different assets",
             f"{'+' if gain_loss_pct >= 0 else ''}{gain_loss_pct:.2f}% return this period",
             "Risk Level: Moderate (based on asset allocation)",
             "Recommendation: Continue monitoring and rebalance as needed"
         ]
-        
+
         return data
 
     async def _gather_cost_analysis(
@@ -242,7 +241,7 @@ class ReportGenerator:
     ) -> dict[str, Any]:
         """Gather data for API cost analysis report."""
         from config import cfg
-        
+
         data = {
             "title": "API Cost Analysis",
             "period": custom_data.get("period", "monthly"),
@@ -251,7 +250,7 @@ class ReportGenerator:
             "budget_limit": custom_data.get("budget_limit", cfg.gemini_budget_limit),
             "budget_used_percent": custom_data.get("budget_used_percent", 0),
         }
-        
+
         # Add recommendations
         data["recommendations"] = [
             "All premium APIs are within free tier limits",
@@ -260,7 +259,7 @@ class ReportGenerator:
             "Set up alerts when approaching budget limits",
             "Review API call patterns monthly"
         ]
-        
+
         return data
 
 
@@ -276,7 +275,7 @@ async def generate_api_usage_report(
 ) -> dict[str, Any]:
     """Generate API usage report for a specific month."""
     gen = ReportGenerator()
-    
+
     if month:
         # Parse month (e.g., "march" or "2026-03")
         end_date = datetime.now()
@@ -332,7 +331,7 @@ async def generate_financial_report(
         }
     """
     gen = ReportGenerator()
-    
+
     data = {
         "user_id": user_id,
         "period": period,
@@ -340,12 +339,12 @@ async def generate_financial_report(
         "summary": stock_data.get("summary", {}) if stock_data else {},
         "chart_paths": [str(p) for p in (chart_paths or [])],
     }
-    
+
     # Calculate date range
     period_days = {"daily": 1, "weekly": 7, "monthly": 30}.get(period, 7)
     end_date = datetime.now()
     start_date = end_date - timedelta(days=period_days)
-    
+
     return await gen.generate_report(
         "financial",
         output_path,
@@ -384,7 +383,7 @@ async def generate_cost_report(
         }
     """
     gen = ReportGenerator()
-    
+
     data = {
         "period": period,
         "apis": api_usage.get("apis", []) if api_usage else [],
@@ -392,11 +391,11 @@ async def generate_cost_report(
         "budget_limit": api_usage.get("budget_limit", 30.00) if api_usage else 30.00,
         "budget_used_percent": api_usage.get("budget_used_percent", 0) if api_usage else 0,
     }
-    
+
     period_days = {"daily": 1, "weekly": 7, "monthly": 30}.get(period, 30)
     end_date = datetime.now()
     start_date = end_date - timedelta(days=period_days)
-    
+
     return await gen.generate_report(
         "cost_analysis",
         output_path,

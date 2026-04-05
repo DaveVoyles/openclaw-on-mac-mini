@@ -80,7 +80,7 @@ class Workflow:
     run_count: int = 0
     error_handling: str = "fail_fast"  # fail_fast, continue_on_error
     rollback_on_error: bool = False
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -96,7 +96,7 @@ class Workflow:
             "error_handling": self.error_handling,
             "rollback_on_error": self.rollback_on_error,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> "Workflow":
         """Create workflow from dictionary."""
@@ -126,7 +126,7 @@ class WorkflowExecution:
     status: WorkflowStatus = WorkflowStatus.RUNNING
     task_results: dict[str, str] = None  # task_id -> result
     errors: list[str] = None
-    
+
     def __post_init__(self):
         if self.task_results is None:
             self.task_results = {}
@@ -234,25 +234,25 @@ WORKFLOW_TEMPLATES = {
 
 class WorkflowEngine:
     """Executes workflows with DAG-based task scheduling."""
-    
+
     def __init__(self):
         self._workflows: dict[str, Workflow] = {}
         self._skill_registry: dict[str, Callable[..., Awaitable[str]]] = {}
         self._counter = 0
         self._execution_counter = 0
         self._load_workflows()
-    
+
     def _load_workflows(self):
         """Load workflows from disk."""
         if not WORKFLOW_DIR.exists():
             return
-        
+
         for workflow_file in WORKFLOW_DIR.glob("*.json"):
             try:
                 data = json.loads(workflow_file.read_text())
                 workflow = Workflow.from_dict(data)
                 self._workflows[workflow.workflow_id] = workflow
-                
+
                 # Update counter
                 try:
                     num = int(workflow.workflow_id.replace("wf-", ""))
@@ -261,18 +261,18 @@ class WorkflowEngine:
                     pass
             except Exception as e:
                 log.error("Failed to load workflow from %s: %s", workflow_file, e)
-        
+
         log.info("Loaded %d workflows from disk", len(self._workflows))
-    
+
     def _save_workflow(self, workflow: Workflow):
         """Persist workflow to disk."""
         workflow_file = WORKFLOW_DIR / f"{workflow.workflow_id}.json"
         workflow_file.write_text(json.dumps(workflow.to_dict(), indent=2))
-    
+
     def register_skills(self, skills: dict[str, Callable[..., Awaitable[str]]]) -> None:
         """Register callable skills."""
         self._skill_registry.update(skills)
-    
+
     def create_workflow(
         self,
         name: str,
@@ -285,7 +285,7 @@ class WorkflowEngine:
         """Create a new workflow."""
         self._counter += 1
         workflow_id = f"wf-{self._counter}"
-        
+
         workflow_tasks = []
         if tasks:
             for task_data in tasks:
@@ -296,7 +296,7 @@ class WorkflowEngine:
                     depends_on=task_data.get("depends_on", []),
                 )
                 workflow_tasks.append(task)
-        
+
         workflow = Workflow(
             workflow_id=workflow_id,
             name=name,
@@ -307,30 +307,30 @@ class WorkflowEngine:
             created_by=created_by,
             created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
-        
+
         self._workflows[workflow_id] = workflow
         self._save_workflow(workflow)
         log.info("Created workflow %s: %s", workflow_id, name)
         return workflow
-    
+
     def create_from_template(self, template_name: str, created_by: str = "") -> Optional[Workflow]:
         """Create workflow from template."""
         template = WORKFLOW_TEMPLATES.get(template_name)
         if not template:
             log.warning("Unknown template: %s", template_name)
             return None
-        
+
         return self.create_workflow(
             name=template["name"],
             description=template["description"],
             tasks=template["tasks"],
             created_by=created_by,
         )
-    
+
     def create_from_yaml(self, yaml_content: str, created_by: str = "") -> Workflow:
         """Create workflow from YAML definition."""
         data = yaml.safe_load(yaml_content)
-        
+
         return self.create_workflow(
             name=data["workflow"],
             description=data.get("description", ""),
@@ -339,45 +339,45 @@ class WorkflowEngine:
             rollback_on_error=data.get("rollback_on_error", False),
             created_by=created_by,
         )
-    
+
     def get_workflow(self, workflow_id: str) -> Optional[Workflow]:
         """Get workflow by ID."""
         return self._workflows.get(workflow_id)
-    
+
     def list_workflows(self) -> list[Workflow]:
         """List all workflows."""
         return sorted(self._workflows.values(), key=lambda w: w.workflow_id)
-    
+
     def delete_workflow(self, workflow_id: str) -> bool:
         """Delete workflow."""
         if workflow_id not in self._workflows:
             return False
-        
+
         del self._workflows[workflow_id]
         workflow_file = WORKFLOW_DIR / f"{workflow_id}.json"
         if workflow_file.exists():
             workflow_file.unlink()
         return True
-    
+
     def _build_dag(self, workflow: Workflow) -> nx.DiGraph:
         """Build directed acyclic graph from workflow tasks."""
         G = nx.DiGraph()
-        
+
         # Add nodes
         for task in workflow.tasks:
             G.add_node(task.task_id, task=task)
-        
+
         # Add edges (dependencies)
         for task in workflow.tasks:
             for dep in task.depends_on:
                 G.add_edge(dep, task.task_id)
-        
+
         # Validate DAG
         if not nx.is_directed_acyclic_graph(G):
             raise ValueError("Workflow contains cycles - not a valid DAG")
-        
+
         return G
-    
+
     async def _execute_task(
         self,
         task: WorkflowTask,
@@ -387,37 +387,37 @@ class WorkflowEngine:
         skill_fn = self._skill_registry.get(task.action)
         if not skill_fn:
             return f"Error: Unknown skill '{task.action}'", False
-        
+
         task.status = TaskStatus.RUNNING
         task.start_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        
+
         try:
             # Merge task args with context
             exec_args = {**context, **task.args}
             result = await asyncio.wait_for(skill_fn(**exec_args), timeout=300)
-            
+
             task.end_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
             task.duration_ms = int(
-                (datetime.datetime.fromisoformat(task.end_time) - 
+                (datetime.datetime.fromisoformat(task.end_time) -
                  datetime.datetime.fromisoformat(task.start_time)).total_seconds() * 1000
             )
             task.result = result or "OK"
             task.status = TaskStatus.SUCCESS
             return result, True
-            
+
         except asyncio.TimeoutError:
             task.end_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
             task.status = TaskStatus.FAILED
             task.error = "Task timed out after 5 minutes"
             return task.error, False
-            
+
         except Exception as e:
             task.end_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
             task.status = TaskStatus.FAILED
             task.error = str(e)
             log.error("Task %s failed: %s", task.task_id, e)
             return str(e), False
-    
+
     async def execute_workflow(
         self,
         workflow_id: str,
@@ -427,21 +427,21 @@ class WorkflowEngine:
         workflow = self._workflows.get(workflow_id)
         if not workflow:
             raise ValueError(f"Workflow {workflow_id} not found")
-        
+
         self._execution_counter += 1
         execution_id = f"exec-{self._execution_counter}"
-        
+
         execution = WorkflowExecution(
             execution_id=execution_id,
             workflow_id=workflow_id,
             started_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         )
-        
+
         # Update workflow metadata
         workflow.status = WorkflowStatus.RUNNING
         workflow.run_count += 1
         workflow.last_run = execution.started_at
-        
+
         # Build DAG
         try:
             dag = self._build_dag(workflow)
@@ -451,19 +451,19 @@ class WorkflowEngine:
             workflow.status = WorkflowStatus.FAILED
             self._save_workflow(workflow)
             return execution
-        
+
         # Execute tasks in topological order
         task_results: dict[str, str] = {}
         exec_context = context or {}
-        
+
         try:
             # Get execution order
             execution_order = list(nx.topological_sort(dag))
-            
+
             # Group tasks by level for parallel execution
             levels: list[list[str]] = []
             remaining = set(execution_order)
-            
+
             while remaining:
                 # Find tasks with no remaining dependencies
                 ready = []
@@ -471,31 +471,31 @@ class WorkflowEngine:
                     deps = dag.predecessors(task_id)
                     if all(d not in remaining for d in deps):
                         ready.append(task_id)
-                
+
                 if not ready:
                     break  # Shouldn't happen with valid DAG
-                
+
                 levels.append(ready)
                 remaining -= set(ready)
-            
+
             # Execute levels in order, tasks within level in parallel
             for level in levels:
                 # Get task objects
                 level_tasks = [dag.nodes[tid]["task"] for tid in level]
-                
+
                 # Execute in parallel
                 results = await asyncio.gather(
                     *[self._execute_task(task, exec_context) for task in level_tasks],
                     return_exceptions=True,
                 )
-                
+
                 # Process results
                 for task, result in zip(level_tasks, results):
                     if isinstance(result, Exception):
                         task.status = TaskStatus.FAILED
                         task.error = str(result)
                         execution.errors.append(f"{task.task_id}: {result}")
-                        
+
                         if workflow.error_handling == "fail_fast":
                             # Stop execution
                             raise result
@@ -503,10 +503,10 @@ class WorkflowEngine:
                         result_text, success = result
                         task_results[task.task_id] = result_text
                         exec_context[f"{task.task_id}_result"] = result_text
-                        
+
                         if not success and workflow.error_handling == "fail_fast":
                             raise RuntimeError(f"Task {task.task_id} failed: {result_text}")
-            
+
             # Determine final status
             failed_tasks = [t for t in workflow.tasks if t.status == TaskStatus.FAILED]
             if failed_tasks:
@@ -515,21 +515,21 @@ class WorkflowEngine:
             else:
                 execution.status = WorkflowStatus.SUCCESS
                 workflow.status = WorkflowStatus.SUCCESS
-            
+
         except Exception as e:
             log.error("Workflow %s execution failed: %s", workflow_id, e)
             execution.status = WorkflowStatus.FAILED
             workflow.status = WorkflowStatus.FAILED
             execution.errors.append(str(e))
-        
+
         execution.completed_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         execution.task_results = task_results
-        
+
         # Save updated workflow
         self._save_workflow(workflow)
-        
+
         return execution
-    
+
     def get_templates(self) -> list[str]:
         """Get list of available templates."""
         return list(WORKFLOW_TEMPLATES.keys())
@@ -549,11 +549,11 @@ async def create_workflow_from_template(template_name: str) -> str:
     if template_name not in WORKFLOW_TEMPLATES:
         available = ", ".join(workflow_engine.get_templates())
         return f"❌ Unknown template '{template_name}'. Available: {available}"
-    
+
     workflow = workflow_engine.create_from_template(template_name, created_by="llm")
     if not workflow:
         return f"❌ Failed to create workflow from template '{template_name}'"
-    
+
     return f"✅ Created workflow `{workflow.workflow_id}`: {workflow.name}"
 
 
@@ -564,17 +564,17 @@ async def run_workflow(workflow_id: str) -> str:
         workflows = [w.workflow_id for w in workflow_engine.list_workflows()]
         hint = f" Available: {workflows}" if workflows else " No workflows available."
         return f"❌ Workflow '{workflow_id}' not found.{hint}"
-    
+
     try:
         execution = await workflow_engine.execute_workflow(workflow_id)
-        
+
         if execution.status == WorkflowStatus.SUCCESS:
             return f"✅ Workflow `{workflow_id}` completed successfully. Execution: {execution.execution_id}"
         elif execution.status == WorkflowStatus.PARTIAL:
             return f"⚠️ Workflow `{workflow_id}` completed with errors: {', '.join(execution.errors)}"
         else:
             return f"❌ Workflow `{workflow_id}` failed: {', '.join(execution.errors)}"
-            
+
     except Exception as e:
         return f"❌ Failed to execute workflow: {e}"
 
@@ -584,7 +584,7 @@ async def list_workflows_skill() -> str:
     workflows = workflow_engine.list_workflows()
     if not workflows:
         return "No workflows defined."
-    
+
     lines = []
     for wf in workflows:
         status_emoji = {
@@ -594,12 +594,12 @@ async def list_workflows_skill() -> str:
             WorkflowStatus.FAILED: "❌",
             WorkflowStatus.PARTIAL: "⚠️",
         }.get(wf.status, "❓")
-        
+
         lines.append(
             f"{status_emoji} `{wf.workflow_id}` — **{wf.name}** "
             f"({len(wf.tasks)} tasks) · runs: {wf.run_count}"
         )
-    
+
     return "\n".join(lines)
 
 

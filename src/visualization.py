@@ -50,14 +50,14 @@ def _get_cached_chart(cache_key: str) -> Path | None:
 def _save_chart(fig: go.Figure, cache_key: str, format: str = "png") -> Path:
     """Save chart to disk and cache the path."""
     chart_path = CHART_CACHE_DIR / f"{cache_key}.{format}"
-    
+
     if format == "png":
         fig.write_image(str(chart_path), width=1200, height=600)
     elif format == "svg":
         fig.write_image(str(chart_path), format="svg", width=1200, height=600)
     elif format == "html":
         fig.write_html(str(chart_path))
-    
+
     _chart_cache[cache_key] = (chart_path, datetime.now())
     return chart_path
 
@@ -156,7 +156,7 @@ def create_stock_chart(
             )
 
         # Add volume bars
-        colors = ['red' if closes[i] < opens[i] else 'green' 
+        colors = ['red' if closes[i] < opens[i] else 'green'
                   for i in range(len(closes))]
         fig.add_trace(
             go.Bar(
@@ -257,10 +257,10 @@ def create_trend_chart(
             x_vals = list(range(n))
             x_mean = sum(x_vals) / n
             y_mean = sum(values) / n
-            
+
             numerator = sum((x_vals[i] - x_mean) * (values[i] - y_mean) for i in range(n))
             denominator = sum((x_vals[i] - x_mean) ** 2 for i in range(n))
-            
+
             if denominator != 0:
                 slope = numerator / denominator
                 intercept = y_mean - slope * x_mean
@@ -389,13 +389,13 @@ def create_comparison_chart(
         for i, asset in enumerate(assets):
             ticker = asset["ticker"]
             history = asset["data"]
-            
+
             if not history:
                 continue
-                
+
             dates = [item["date"] for item in history]
             values = [item.get("value") or item.get("close", 0) for item in history]
-            
+
             # Normalize to percentage change from first value
             if values and values[0] != 0:
                 first_value = values[0]
@@ -468,9 +468,9 @@ def clear_chart_cache() -> dict[str, Any]:
             if chart_path.exists():
                 chart_path.unlink()
                 count += 1
-        
+
         _chart_cache.clear()
-        
+
         return {
             "status": "ok",
             "cleared": count,

@@ -200,13 +200,13 @@ class _Config:
     newsapi_key: str = os.getenv("NEWSAPI_KEY", "")  # Free: 100 req/day
     apisports_key: str = os.getenv("APISPORTS_KEY", "")  # Free: 100 req/day
     alphavantage_key: str = os.getenv("ALPHAVANTAGE_KEY", "")  # Free: 25 req/day
-    
+
     # -- Trakt.tv (TV & Movie tracking) ----------------------------------------
     trakt_client_id: str = os.getenv("TRAKT_CLIENT_ID", "")
     trakt_client_secret: str = os.getenv("TRAKT_CLIENT_SECRET", "")
     trakt_access_token: str = os.getenv("TRAKT_ACCESS_TOKEN", "")
     trakt_refresh_token: str = os.getenv("TRAKT_REFRESH_TOKEN", "")
-    
+
     # -- Health & Fitness APIs -------------------------------------------------
     fitbit_client_id: str = os.getenv("FITBIT_CLIENT_ID", "")
     fitbit_client_secret: str = os.getenv("FITBIT_CLIENT_SECRET", "")

@@ -57,7 +57,7 @@ async def export_to_csv(
 
         # Write to CSV
         df.to_csv(output_path, index=False)
-        
+
         log.info(f"✅ Exported {len(df)} rows to {output_path}")
         return {
             "success": True,
@@ -74,7 +74,7 @@ async def export_to_csv(
 async def _export_conversations(days: int | None, filters: dict[str, Any]) -> pd.DataFrame:
     """Export conversation history from thread store."""
     import os
-    
+
     db_path = Path(os.getenv("THREAD_DB_PATH", "data/memory/openclaw.db"))
     if not db_path.exists():
         return pd.DataFrame()
@@ -104,7 +104,7 @@ async def _export_conversations(days: int | None, filters: dict[str, Any]) -> pd
             params.append(filters["channel_id"])
 
         query += " ORDER BY created_at DESC"
-        
+
         df = pd.read_sql_query(query, conn, params=params)
         return df
 
@@ -115,7 +115,7 @@ async def _export_conversations(days: int | None, filters: dict[str, Any]) -> pd
 async def _export_trends(days: int | None, filters: dict[str, Any]) -> pd.DataFrame:
     """Export trend data from trend_tracker."""
     import os
-    
+
     db_path = Path(os.getenv("THREAD_DB_PATH", "data/memory/openclaw.db"))
     if not db_path.exists():
         return pd.DataFrame()
@@ -149,13 +149,13 @@ async def _export_trends(days: int | None, filters: dict[str, Any]) -> pd.DataFr
             params.append(filters["category"])
 
         query += " ORDER BY timestamp DESC"
-        
+
         df = pd.read_sql_query(query, conn, params=params)
-        
+
         # Convert timestamp to readable datetime
         if not df.empty and "timestamp" in df.columns:
             df["datetime"] = pd.to_datetime(df["timestamp"], unit="s")
-        
+
         return df
 
     finally:
@@ -164,9 +164,8 @@ async def _export_trends(days: int | None, filters: dict[str, Any]) -> pd.DataFr
 
 async def _export_tasks(days: int | None, filters: dict[str, Any]) -> pd.DataFrame:
     """Export scheduled task execution logs."""
-    import os
     from scheduler import SCHEDULE_FILE
-    
+
     # For now, read from schedule file (future: add execution log table)
     if not SCHEDULE_FILE.exists():
         return pd.DataFrame()
@@ -176,12 +175,12 @@ async def _export_tasks(days: int | None, filters: dict[str, Any]) -> pd.DataFra
         tasks_data = json.load(f)
 
     tasks = tasks_data.get("tasks", [])
-    
+
     if not tasks:
         return pd.DataFrame()
 
     df = pd.DataFrame(tasks)
-    
+
     # Filter by date if specified
     if days and "last_run" in df.columns:
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
@@ -194,7 +193,7 @@ async def _export_costs(days: int | None, filters: dict[str, Any]) -> pd.DataFra
     """Export API cost tracking data."""
     # Note: This will use llm_ratelimit or audit data when available
     import os
-    
+
     db_path = Path(os.getenv("THREAD_DB_PATH", "data/memory/openclaw.db"))
     if not db_path.exists():
         return pd.DataFrame()
@@ -217,7 +216,7 @@ async def _export_costs(days: int | None, filters: dict[str, Any]) -> pd.DataFra
             params.append(cutoff)
 
         query += " ORDER BY timestamp DESC"
-        
+
         df = pd.read_sql_query(query, conn, params=params)
         return df
 
@@ -228,9 +227,9 @@ async def _export_costs(days: int | None, filters: dict[str, Any]) -> pd.DataFra
 async def _export_api_usage(days: int | None, filters: dict[str, Any]) -> pd.DataFrame:
     """Export API usage statistics from audit logs."""
     import os
-    
-    audit_dir = Path(os.getenv("AUDIT_DIR", "data/audit"))
-    
+
+    Path(os.getenv("AUDIT_DIR", "data/audit"))
+
     # Read audit logs and aggregate
     # For now, return placeholder (to be enhanced with actual audit data)
     return pd.DataFrame({

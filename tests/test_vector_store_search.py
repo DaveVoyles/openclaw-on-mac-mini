@@ -202,3 +202,41 @@ class TestChannelScopedIsolation:
 
         assert results == []
         assert len(fake.query_calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_search_cross_channel_opt_in_disables_scope_filter(self):
+        fake = _FakeCollection([
+            _chroma_result([
+                {"id": "other", "text": "other channel", "metadata": {"channel_id": "99", "thread_id": "88"}},
+            ]),
+        ])
+
+        with patch.object(mod, "_get_collection", return_value=fake):
+            with request_context(channel_id=10, thread_id=20):
+                results = await mod.search(
+                    mod.MEMORIES_COLLECTION,
+                    "hello",
+                    top_k=1,
+                    track_access=False,
+                    cross_channel=True,
+                )
+
+        assert len(results) == 1
+        assert "where" not in fake.query_calls[0]
+
+    @pytest.mark.asyncio
+    async def test_recall_for_context_cross_channel_opt_in_passed_to_search_all(self):
+        mock_search_all = AsyncMock(return_value=[])
+        with patch.object(mod, "search_all", mock_search_all):
+            await mod.recall_for_context(
+                "hello",
+                channel_id=10,
+                thread_id=20,
+                cross_channel=True,
+            )
+        assert mock_search_all.await_count == 1
+        args, kwargs = mock_search_all.await_args
+        assert args == ("hello",)
+        assert kwargs["channel_id"] == 10
+        assert kwargs["thread_id"] == 20
+        assert kwargs["cross_channel"] is True

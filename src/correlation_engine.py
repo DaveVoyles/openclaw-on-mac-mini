@@ -19,7 +19,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 
@@ -32,7 +31,7 @@ DB_PATH = Path(os.getenv("THREAD_DB_PATH", "/memory/openclaw.db"))
 @dataclass
 class CorrelationInsight:
     """Correlation analysis result."""
-    
+
     metric_a: str
     metric_b: str
     correlation: float
@@ -56,7 +55,7 @@ class CorrelationEngine:
         if not self.db_path.parent.exists():
             log.warning("Database directory %s does not exist", self.db_path.parent)
             return
-        
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
@@ -96,13 +95,13 @@ class CorrelationEngine:
         if not self.db_path.exists():
             log.warning("Database %s does not exist", self.db_path)
             return pd.Series(dtype=float)
-        
+
         # Try trend_data table first
         parts = metric.split("/", 1)
         if len(parts) == 2:
             category, topic = parts
             cutoff = (datetime.now() - timedelta(days=days)).timestamp()
-            
+
             try:
                 with sqlite3.connect(self.db_path) as conn:
                     query = """
@@ -116,14 +115,14 @@ class CorrelationEngine:
                         conn,
                         params=(category, topic, cutoff)
                     )
-                    
+
                     if not df.empty:
                         df['date'] = pd.to_datetime(df['timestamp'], unit='s').dt.date
                         df = df.groupby('date')['volume'].sum()
                         return df
             except Exception as e:
                 log.error("Error fetching metric data: %s", e)
-        
+
         # Could extend to support other metric sources (weather, stocks, etc.)
         return pd.Series(dtype=float)
 
@@ -143,11 +142,11 @@ class CorrelationEngine:
             (strength, direction) tuple
         """
         abs_corr = abs(correlation)
-        
+
         # Not statistically significant
         if p_value >= 0.05:
             return "none", "none"
-        
+
         # Classify strength
         if abs_corr >= 0.7:
             strength = "strong"
@@ -157,7 +156,7 @@ class CorrelationEngine:
             strength = "weak"
         else:
             strength = "none"
-        
+
         # Classify direction
         if correlation > 0.05:
             direction = "positive"
@@ -165,7 +164,7 @@ class CorrelationEngine:
             direction = "negative"
         else:
             direction = "none"
-        
+
         return strength, direction
 
     def _generate_insight(
@@ -191,9 +190,9 @@ class CorrelationEngine:
         """
         if strength == "none":
             return f"No significant correlation between {metric_a} and {metric_b}."
-        
+
         percentage = abs(correlation) * 100
-        
+
         if direction == "positive":
             return (
                 f"{strength.capitalize()} positive correlation ({percentage:.0f}%): "
@@ -230,13 +229,13 @@ class CorrelationEngine:
             # Get data for both metrics
             data_a = self._get_metric_data(metric_a, days)
             data_b = self._get_metric_data(metric_b, days)
-            
+
             # Align data by date (inner join)
             df = pd.DataFrame({
                 'a': data_a,
                 'b': data_b,
             }).dropna()
-            
+
             if len(df) < 10:
                 return CorrelationInsight(
                     metric_a=metric_a,
@@ -248,16 +247,16 @@ class CorrelationEngine:
                     sample_size=len(df),
                     insight=f"Insufficient overlapping data ({len(df)} points).",
                 )
-            
+
             # Calculate correlation
             if method == "pearson":
                 corr, p_val = pearsonr(df['a'], df['b'])
             else:
                 corr, p_val = spearmanr(df['a'], df['b'])
-            
+
             strength, direction = self._classify_correlation(corr, p_val)
             insight = self._generate_insight(metric_a, metric_b, corr, strength, direction)
-            
+
             result = CorrelationInsight(
                 metric_a=metric_a,
                 metric_b=metric_b,
@@ -268,10 +267,10 @@ class CorrelationEngine:
                 sample_size=len(df),
                 insight=insight,
             )
-            
+
             # Cache result
             self._cache_correlation(result)
-            
+
             return result
 
         except Exception as e:
@@ -293,7 +292,7 @@ class CorrelationEngine:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
                     INSERT OR REPLACE INTO correlation_cache
-                    (metric_a, metric_b, correlation, p_value, strength, 
+                    (metric_a, metric_b, correlation, p_value, strength,
                      direction, sample_size, insight, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -329,18 +328,18 @@ class CorrelationEngine:
             List of CorrelationInsight objects for significant correlations
         """
         results = []
-        
+
         # Compare all pairs
         for i, metric_a in enumerate(metrics):
             for metric_b in metrics[i + 1:]:
                 result = await self.find_correlations(metric_a, metric_b, days)
-                
+
                 if abs(result.correlation) >= threshold and result.p_value < 0.05:
                     results.append(result)
-        
+
         # Sort by absolute correlation (strongest first)
         results.sort(key=lambda r: abs(r.correlation), reverse=True)
-        
+
         return results
 
     async def explain_correlation(
@@ -371,16 +370,16 @@ class CorrelationEngine:
             }
         """
         result = await self.find_correlations(metric_a, metric_b)
-        
+
         # Get data for visualization
         data_a = self._get_metric_data(metric_a)
         data_b = self._get_metric_data(metric_b)
-        
+
         df = pd.DataFrame({
             'a': data_a,
             'b': data_b,
         }).dropna()
-        
+
         return {
             "status": "success",
             "metric_a": metric_a,
@@ -437,9 +436,9 @@ async def find_correlations(metrics: list[str], days: int = 30) -> dict[str, Any
                 "status": "error",
                 "message": "Need at least 2 metrics to find correlations",
             }
-        
+
         results = await _correlation_engine.discover_correlations(metrics, days)
-        
+
         return {
             "status": "success",
             "count": len(results),

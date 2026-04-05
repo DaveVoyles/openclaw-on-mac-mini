@@ -247,6 +247,7 @@ async def search(
     channel_id: int | str | None = None,
     thread_id: int | str | None = None,
     enable_scope_fallback: bool = True,
+    cross_channel: bool = False,
 ) -> list[dict]:
     """Semantic search across a collection.
 
@@ -310,15 +311,20 @@ async def search(
 
         return output[:top_k]
 
-    resolved_channel_id, resolved_thread_id = _resolve_scope(
-        channel_id=channel_id,
-        thread_id=thread_id,
-    )
-    scoped_where = _combine_scope_where(
-        where,
-        channel_id=resolved_channel_id,
-        thread_id=resolved_thread_id,
-    )
+    if cross_channel:
+        resolved_channel_id = None
+        resolved_thread_id = None
+        scoped_where = where
+    else:
+        resolved_channel_id, resolved_thread_id = _resolve_scope(
+            channel_id=channel_id,
+            thread_id=thread_id,
+        )
+        scoped_where = _combine_scope_where(
+            where,
+            channel_id=resolved_channel_id,
+            thread_id=resolved_thread_id,
+        )
 
     output = await _query_once(scoped_where)
     if output:
@@ -390,6 +396,7 @@ async def search_all(
     *,
     channel_id: int | str | None = None,
     thread_id: int | str | None = None,
+    cross_channel: bool = False,
 ) -> list[dict]:
     """Search across ALL collections and return merged, ranked results.
 
@@ -404,6 +411,7 @@ async def search_all(
             threshold=threshold,
             channel_id=channel_id,
             thread_id=thread_id,
+            cross_channel=cross_channel,
         )
         for col in collections
     ]
@@ -686,6 +694,7 @@ async def recall(
     *,
     channel_id: int | str | None = None,
     thread_id: int | str | None = None,
+    cross_channel: bool = False,
 ) -> str:
     """Semantic recall across all collections. Returns formatted text."""
     results = await search_all(
@@ -693,6 +702,7 @@ async def recall(
         top_k=top_k,
         channel_id=channel_id,
         thread_id=thread_id,
+        cross_channel=cross_channel,
     )
     if not results:
         return ""
@@ -713,6 +723,7 @@ async def recall_for_context(
     *,
     channel_id: int | str | None = None,
     thread_id: int | str | None = None,
+    cross_channel: bool = False,
 ) -> str:
     """Recall relevant context for Auto-RAG injection.
 
@@ -729,6 +740,7 @@ async def recall_for_context(
         top_k=top_k,
         channel_id=channel_id,
         thread_id=thread_id,
+        cross_channel=cross_channel,
     )
     if not results:
         return ""

@@ -5,7 +5,6 @@ Multi-user support with registration, authentication, profiles, and roles.
 Uses SQLite for persistence with Discord user ID mapping.
 """
 
-import hashlib
 import json
 import logging
 import secrets
@@ -15,8 +14,6 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
-
-from utils import atomic_write
 
 log = logging.getLogger("openclaw.user_manager")
 
@@ -31,15 +28,15 @@ class UserRole(Enum):
     ADMIN = "admin"
     MEMBER = "member"
     VIEWER = "viewer"
-    
+
     @property
     def level(self) -> int:
         """Numeric level for comparison (higher = more privileges)"""
         return {"admin": 3, "member": 2, "viewer": 1}[self.value]
-    
+
     def __ge__(self, other: "UserRole") -> bool:
         return self.level >= other.level
-    
+
     def __gt__(self, other: "UserRole") -> bool:
         return self.level > other.level
 
@@ -63,13 +60,13 @@ class User:
     quota_reset_at: float = 0.0      # When quota resets
     is_active: bool = True           # Account active/suspended
     session_token: Optional[str] = None  # Current session token
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         d = asdict(self)
         d["role"] = self.role.value
         return d
-    
+
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "User":
         """Create User from database row"""
@@ -112,17 +109,17 @@ def _init_db(conn: sqlite3.Connection) -> None:
             session_token TEXT
         )
     """)
-    
+
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_users_discord_id 
+        CREATE INDEX IF NOT EXISTS idx_users_discord_id
         ON users(discord_id)
     """)
-    
+
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_users_session_token 
+        CREATE INDEX IF NOT EXISTS idx_users_session_token
         ON users(session_token)
     """)
-    
+
     # User activity log
     conn.execute("""
         CREATE TABLE IF NOT EXISTS user_activity (
@@ -134,12 +131,12 @@ def _init_db(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
-    
+
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_activity_user_timestamp 
+        CREATE INDEX IF NOT EXISTS idx_activity_user_timestamp
         ON user_activity(user_id, timestamp)
     """)
-    
+
     conn.commit()
 
 
@@ -149,7 +146,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
 
 class UserManager:
     """Manages user accounts, authentication, and profiles"""
-    
+
     def __init__(self, db_path: Path = DB_PATH):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -157,11 +154,11 @@ class UserManager:
         self.conn.row_factory = sqlite3.Row
         _init_db(self.conn)
         log.info("UserManager initialized with database: %s", db_path)
-    
+
     # -----------------------------------------------------------------------
     # User registration & retrieval
     # -----------------------------------------------------------------------
-    
+
     def register_user(
         self,
         discord_id: int,
@@ -169,17 +166,17 @@ class UserManager:
         role: UserRole = UserRole.MEMBER,
     ) -> User:
         """Register a new user or update existing username
-        
+
         Args:
             discord_id: Discord user ID
             username: Discord username
             role: Initial role (default: MEMBER)
-        
+
         Returns:
             User object
         """
         now = time.time()
-        
+
         # Check if user already exists
         existing = self.get_user_by_discord_id(discord_id)
         if existing:
@@ -194,7 +191,7 @@ class UserManager:
                 existing.last_active = now
                 log.info("Updated username for user %d: %s", discord_id, username)
             return existing
-        
+
         # Create new user
         cursor = self.conn.execute(
             """
@@ -204,20 +201,20 @@ class UserManager:
             (discord_id, username, role.value, now, now, "{}"),
         )
         self.conn.commit()
-        
+
         user = self.get_user(cursor.lastrowid)
         if not user:
             raise RuntimeError(f"Failed to create user {discord_id}")
-        
+
         self._log_activity(user.id, "registration", f"User {username} registered")
         log.info("Registered new user: %s (discord_id=%d, role=%s)", username, discord_id, role.value)
         return user
-    
+
     def get_user(self, user_id: int) -> Optional[User]:
         """Get user by internal ID"""
         row = self.conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return User.from_row(row) if row else None
-    
+
     def get_user_by_discord_id(self, discord_id: int) -> Optional[User]:
         """Get user by Discord ID"""
         row = self.conn.execute(
@@ -225,7 +222,7 @@ class UserManager:
             (discord_id,),
         ).fetchone()
         return User.from_row(row) if row else None
-    
+
     def get_user_by_session_token(self, token: str) -> Optional[User]:
         """Get user by session token"""
         row = self.conn.execute(
@@ -233,7 +230,7 @@ class UserManager:
             (token,),
         ).fetchone()
         return User.from_row(row) if row else None
-    
+
     def list_users(self, role: Optional[UserRole] = None) -> list[User]:
         """List all users, optionally filtered by role"""
         if role:
@@ -245,34 +242,34 @@ class UserManager:
             rows = self.conn.execute(
                 "SELECT * FROM users ORDER BY created_at DESC"
             ).fetchall()
-        
+
         return [User.from_row(row) for row in rows]
-    
+
     # -----------------------------------------------------------------------
     # Profile & settings
     # -----------------------------------------------------------------------
-    
+
     def update_settings(self, user_id: int, settings: dict[str, Any]) -> None:
         """Update user settings (merge with existing)"""
         user = self.get_user(user_id)
         if not user:
             raise ValueError(f"User {user_id} not found")
-        
+
         # Merge settings
         user.settings.update(settings)
-        
+
         self.conn.execute(
             "UPDATE users SET settings_json = ? WHERE id = ?",
             (json.dumps(user.settings), user_id),
         )
         self.conn.commit()
         log.info("Updated settings for user %d", user_id)
-    
+
     def get_settings(self, user_id: int) -> dict[str, Any]:
         """Get user settings"""
         user = self.get_user(user_id)
         return user.settings if user else {}
-    
+
     def update_role(self, user_id: int, new_role: UserRole) -> None:
         """Update user role (admin operation)"""
         self.conn.execute(
@@ -282,25 +279,25 @@ class UserManager:
         self.conn.commit()
         self._log_activity(user_id, "role_change", f"Role changed to {new_role.value}")
         log.info("Updated role for user %d to %s", user_id, new_role.value)
-    
+
     # -----------------------------------------------------------------------
     # Session management
     # -----------------------------------------------------------------------
-    
+
     def create_session(self, user_id: int) -> str:
         """Create a new session token for user"""
         token = secrets.token_urlsafe(32)
-        
+
         self.conn.execute(
             "UPDATE users SET session_token = ?, last_active = ? WHERE id = ?",
             (token, time.time(), user_id),
         )
         self.conn.commit()
-        
+
         self._log_activity(user_id, "login", "Session created")
         log.info("Created session for user %d", user_id)
         return token
-    
+
     def invalidate_session(self, user_id: int) -> None:
         """Invalidate user session (logout)"""
         self.conn.execute(
@@ -310,7 +307,7 @@ class UserManager:
         self.conn.commit()
         self._log_activity(user_id, "logout", "Session invalidated")
         log.info("Invalidated session for user %d", user_id)
-    
+
     def update_activity(self, user_id: int) -> None:
         """Update last active timestamp"""
         self.conn.execute(
@@ -318,49 +315,49 @@ class UserManager:
             (time.time(), user_id),
         )
         self.conn.commit()
-    
+
     # -----------------------------------------------------------------------
     # API quota management
     # -----------------------------------------------------------------------
-    
+
     def check_quota(self, user_id: int) -> bool:
         """Check if user has remaining API quota
-        
+
         Returns:
             True if quota available, False if exceeded
         """
         user = self.get_user(user_id)
         if not user:
             return False
-        
+
         # Reset quota if it's a new day
         now = time.time()
         if now >= user.quota_reset_at:
             self._reset_quota(user_id)
             return True
-        
+
         return user.api_quota_used < user.api_quota_daily
-    
+
     def consume_quota(self, user_id: int, amount: int = 1) -> bool:
         """Consume API quota
-        
+
         Args:
             user_id: User ID
             amount: Quota units to consume
-        
+
         Returns:
             True if quota consumed successfully, False if exceeded
         """
         if not self.check_quota(user_id):
             return False
-        
+
         self.conn.execute(
             "UPDATE users SET api_quota_used = api_quota_used + ? WHERE id = ?",
             (amount, user_id),
         )
         self.conn.commit()
         return True
-    
+
     def _reset_quota(self, user_id: int) -> None:
         """Reset daily quota for user"""
         # Reset at midnight tomorrow
@@ -368,14 +365,14 @@ class UserManager:
         now = datetime.datetime.now()
         tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
         reset_at = tomorrow.timestamp()
-        
+
         self.conn.execute(
             "UPDATE users SET api_quota_used = 0, quota_reset_at = ? WHERE id = ?",
             (reset_at, user_id),
         )
         self.conn.commit()
         log.debug("Reset quota for user %d", user_id)
-    
+
     def set_quota(self, user_id: int, daily_limit: int) -> None:
         """Set custom daily quota for user"""
         self.conn.execute(
@@ -384,11 +381,11 @@ class UserManager:
         )
         self.conn.commit()
         log.info("Set daily quota for user %d to %d", user_id, daily_limit)
-    
+
     # -----------------------------------------------------------------------
     # User status
     # -----------------------------------------------------------------------
-    
+
     def suspend_user(self, user_id: int) -> None:
         """Suspend user account"""
         self.conn.execute(
@@ -398,7 +395,7 @@ class UserManager:
         self.conn.commit()
         self._log_activity(user_id, "suspension", "Account suspended")
         log.warning("Suspended user %d", user_id)
-    
+
     def activate_user(self, user_id: int) -> None:
         """Activate user account"""
         self.conn.execute(
@@ -408,11 +405,11 @@ class UserManager:
         self.conn.commit()
         self._log_activity(user_id, "activation", "Account activated")
         log.info("Activated user %d", user_id)
-    
+
     # -----------------------------------------------------------------------
     # Activity logging
     # -----------------------------------------------------------------------
-    
+
     def _log_activity(self, user_id: int, activity_type: str, details: str = "") -> None:
         """Log user activity"""
         self.conn.execute(
@@ -420,7 +417,7 @@ class UserManager:
             (user_id, activity_type, details, time.time()),
         )
         self.conn.commit()
-    
+
     def get_user_activity(
         self,
         user_id: int,
@@ -437,7 +434,7 @@ class UserManager:
             """,
             (user_id, limit),
         ).fetchall()
-        
+
         return [
             {
                 "type": row["activity_type"],
@@ -446,16 +443,16 @@ class UserManager:
             }
             for row in rows
         ]
-    
+
     # -----------------------------------------------------------------------
     # Admin utilities
     # -----------------------------------------------------------------------
-    
+
     def get_stats(self) -> dict[str, Any]:
         """Get user statistics"""
         total = self.conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         active = self.conn.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0]
-        
+
         roles = {}
         for role in UserRole:
             count = self.conn.execute(
@@ -463,14 +460,14 @@ class UserManager:
                 (role.value,),
             ).fetchone()[0]
             roles[role.value] = count
-        
+
         return {
             "total_users": total,
             "active_users": active,
             "suspended_users": total - active,
             "by_role": roles,
         }
-    
+
     def close(self) -> None:
         """Close database connection"""
         self.conn.close()

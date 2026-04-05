@@ -36,7 +36,7 @@ DB_PATH = Path(os.getenv("THREAD_DB_PATH", "/memory/openclaw.db"))
 @dataclass
 class ForecastResult:
     """Results from time series forecasting."""
-    
+
     metric: str
     forecast_days: int
     predictions: list[float]
@@ -48,7 +48,7 @@ class ForecastResult:
 @dataclass
 class AnomalyResult:
     """Results from anomaly detection."""
-    
+
     metric: str
     anomalies: list[dict[str, Any]]
     total_points: int
@@ -59,7 +59,7 @@ class AnomalyResult:
 @dataclass
 class CorrelationResult:
     """Results from correlation analysis."""
-    
+
     metric_a: str
     metric_b: str
     correlation: float
@@ -83,7 +83,7 @@ class MLTrendAnalyzer:
         if not self.db_path.parent.exists():
             log.warning("Database directory %s does not exist", self.db_path.parent)
             return
-        
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 # Table may already exist - that's OK
@@ -104,7 +104,7 @@ class MLTrendAnalyzer:
             log.warning("Could not ensure tables: %s", e)
 
     def _get_time_series_data(
-        self, 
+        self,
         topic: str,
         category: str,
         days: int = 30
@@ -123,9 +123,9 @@ class MLTrendAnalyzer:
         if not self.db_path.exists():
             log.warning("Database %s does not exist", self.db_path)
             return pd.DataFrame()
-        
+
         cutoff = (datetime.now() - timedelta(days=days)).timestamp()
-        
+
         try:
             with sqlite3.connect(self.db_path) as conn:
                 query = """
@@ -135,15 +135,15 @@ class MLTrendAnalyzer:
                     ORDER BY timestamp ASC
                 """
                 df = pd.read_sql_query(
-                    query, 
-                    conn, 
+                    query,
+                    conn,
                     params=(topic, category, cutoff)
                 )
-                
+
                 if not df.empty:
                     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
                     df.set_index('timestamp', inplace=True)
-                
+
                 return df
         except Exception as e:
             log.error("Error fetching time series data: %s", e)
@@ -170,7 +170,7 @@ class MLTrendAnalyzer:
         """
         try:
             df = self._get_time_series_data(topic, category, history_days)
-            
+
             if df.empty or len(df) < 10:
                 return ForecastResult(
                     metric=f"{category}/{topic}",
@@ -180,21 +180,21 @@ class MLTrendAnalyzer:
                     trend_direction="insufficient_data",
                     forecast_date=datetime.now().isoformat(),
                 )
-            
+
             # Use volume for forecasting
             series = df['volume'].asfreq('D', fill_value=0)
-            
+
             # Fit ARIMA model (p=1, d=1, q=1 as default)
             # p: autoregressive order
             # d: differencing order
             # q: moving average order
             model = ARIMA(series, order=(1, 1, 1))
             fitted = model.fit()
-            
+
             # Forecast
             forecast_result = fitted.forecast(steps=forecast_days)
             predictions = forecast_result.tolist()
-            
+
             # Get confidence intervals (95%)
             forecast_conf = fitted.get_forecast(steps=forecast_days)
             conf_int = forecast_conf.conf_int()
@@ -202,7 +202,7 @@ class MLTrendAnalyzer:
                 (float(conf_int.iloc[i, 0]), float(conf_int.iloc[i, 1]))
                 for i in range(len(conf_int))
             ]
-            
+
             # Determine trend direction
             if len(predictions) >= 2:
                 slope = (predictions[-1] - predictions[0]) / len(predictions)
@@ -214,7 +214,7 @@ class MLTrendAnalyzer:
                     trend = "stable"
             else:
                 trend = "stable"
-            
+
             return ForecastResult(
                 metric=f"{category}/{topic}",
                 forecast_days=forecast_days,
@@ -256,7 +256,7 @@ class MLTrendAnalyzer:
         """
         try:
             df = self._get_time_series_data(topic, category, days)
-            
+
             if df.empty or len(df) < 10:
                 return AnomalyResult(
                     metric=f"{category}/{topic}",
@@ -265,24 +265,24 @@ class MLTrendAnalyzer:
                     anomaly_count=0,
                     anomaly_rate=0.0,
                 )
-            
+
             # Prepare features: volume and sentiment
             X = df[['volume', 'sentiment']].values
-            
+
             # Standardize features
             scaler = StandardScaler()
             X_scaled = scaler.fit_transform(X)
-            
+
             # Fit Isolation Forest
             iso_forest = IsolationForest(
                 contamination=contamination,
                 random_state=42
             )
             predictions = iso_forest.fit_predict(X_scaled)
-            
+
             # Extract anomalies (predictions == -1)
             anomaly_indices = np.where(predictions == -1)[0]
-            
+
             anomalies = []
             for idx in anomaly_indices:
                 row = df.iloc[idx]
@@ -292,7 +292,7 @@ class MLTrendAnalyzer:
                     "sentiment": float(row['sentiment']),
                     "anomaly_score": float(iso_forest.score_samples(X_scaled)[idx]),
                 })
-            
+
             return AnomalyResult(
                 metric=f"{category}/{topic}",
                 anomalies=anomalies,
@@ -343,16 +343,16 @@ class MLTrendAnalyzer:
         """
         try:
             df = self._get_time_series_data(topic, category, days)
-            
+
             if df.empty or len(df) < period * 2:
                 return {
                     "status": "error",
                     "message": f"Insufficient data (need at least {period * 2} points)",
                 }
-            
+
             # Use volume for decomposition
             series = df['volume'].asfreq('D', fill_value=0)
-            
+
             # Perform seasonal decomposition
             decomposition = seasonal_decompose(
                 series,
@@ -360,7 +360,7 @@ class MLTrendAnalyzer:
                 period=period,
                 extrapolate_trend='freq'
             )
-            
+
             return {
                 "status": "success",
                 "metric": f"{category}/{topic}",
@@ -414,10 +414,10 @@ async def forecast_trend(
                 "status": "error",
                 "message": "Metric must be in format 'category/topic'",
             }
-        
+
         category, topic = parts
         result = await _ml_analyzer.forecast_trend(topic, category, days)
-        
+
         return {
             "status": "success" if result.predictions else "error",
             "metric": result.metric,
@@ -466,10 +466,10 @@ async def detect_anomalies(metric: str, days: int = 30) -> dict[str, Any]:
                 "status": "error",
                 "message": "Metric must be in format 'category/topic'",
             }
-        
+
         category, topic = parts
         result = await _ml_analyzer.detect_anomalies(topic, category, days)
-        
+
         return {
             "status": "success",
             "metric": result.metric,

@@ -69,7 +69,7 @@ async def test_context_menu_send_to_sms_registers_and_prompts(monkeypatch):
     context_mod._register_context_menus(bot)
     assert captured, "context menu command should be registered"
 
-    cmd = captured[0]
+    cmd = next(command for command in captured if command.name == "Send to SMS")
     interaction = _mock_interaction()
     message = SimpleNamespace(content="selected message text")
 
@@ -80,6 +80,50 @@ async def test_context_menu_send_to_sms_registers_and_prompts(monkeypatch):
     assert kwargs["ephemeral"] is True
     assert kwargs["embed"].title == "📲 Send Selected Message to SMS?"
     assert isinstance(kwargs["view"], sms_mod.SMSSendConfirmView)
+
+
+def test_build_copy_workflow_payload_strips_markdown_and_formats_bullets():
+    raw = (
+        "**Project Update**\n"
+        "- Fixed `context menu` flow\n"
+        "- Added [docs](https://example.com/docs)\n"
+        "> ~~old blocker~~ resolved\n"
+        "<@12345> confirm in <#98765>\n"
+    )
+
+    payload = context_mod._build_copy_workflow_payload(raw)
+
+    assert payload.startswith("Project Update")
+    assert "• Fixed context menu flow" in payload
+    assert "• Added docs" in payload
+    assert "• old blocker resolved" in payload
+    assert "@user" in payload
+    assert "#channel" in payload
+    assert "**" not in payload
+    assert "`" not in payload
+
+
+@pytest.mark.asyncio
+async def test_context_menu_copy_workflow_context_returns_ephemeral_copy_block():
+    captured: list = []
+    bot = SimpleNamespace(tree=SimpleNamespace(add_command=lambda cmd: captured.append(cmd)))
+    context_mod._register_context_menus(bot)
+
+    cmd = next(command for command in captured if command.name == "Copy Workflow Context")
+    interaction = _mock_interaction()
+    message = SimpleNamespace(
+        content="Workflow status\n- Ship v1 today\n- Validate permissions and tests"
+    )
+
+    await cmd.callback(interaction, message)
+
+    interaction.response.send_message.assert_awaited_once()
+    args = interaction.response.send_message.await_args.args
+    kwargs = interaction.response.send_message.await_args.kwargs
+    assert kwargs["ephemeral"] is True
+    assert "Copy-ready export" in args[0]
+    assert "```text" in args[0]
+    assert "• Ship v1 today" in args[0]
 
 
 @pytest.mark.asyncio

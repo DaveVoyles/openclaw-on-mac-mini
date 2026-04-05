@@ -4,7 +4,6 @@ REST API endpoints for workflow management and automation.
 """
 
 import logging
-from typing import Any
 
 from aiohttp import web
 
@@ -22,20 +21,20 @@ async def create_workflow_handler(request: web.Request) -> web.Response:
     """POST /api/workflows - Create a new workflow."""
     try:
         data = await request.json()
-        
+
         name = data.get("name")
         if not name:
             return web.json_response(
                 {"error": "Missing required field: name"},
                 status=400,
             )
-        
+
         description = data.get("description", "")
         tasks = data.get("tasks", [])
         error_handling = data.get("error_handling", "fail_fast")
         rollback_on_error = data.get("rollback_on_error", False)
         created_by = data.get("created_by", "api")
-        
+
         workflow = workflow_engine.create_workflow(
             name=name,
             description=description,
@@ -44,9 +43,9 @@ async def create_workflow_handler(request: web.Request) -> web.Response:
             rollback_on_error=rollback_on_error,
             created_by=created_by,
         )
-        
+
         return web.json_response(workflow.to_dict(), status=201)
-        
+
     except Exception as e:
         log.error("Failed to create workflow: %s", e)
         return web.json_response(
@@ -59,12 +58,12 @@ async def list_workflows_handler(request: web.Request) -> web.Response:
     """GET /api/workflows - List all workflows."""
     try:
         workflows = workflow_engine.list_workflows()
-        
+
         return web.json_response({
             "workflows": [w.to_dict() for w in workflows],
             "count": len(workflows),
         })
-        
+
     except Exception as e:
         log.error("Failed to list workflows: %s", e)
         return web.json_response(
@@ -78,15 +77,15 @@ async def get_workflow_handler(request: web.Request) -> web.Response:
     try:
         workflow_id = request.match_info["id"]
         workflow = workflow_engine.get_workflow(workflow_id)
-        
+
         if not workflow:
             return web.json_response(
                 {"error": f"Workflow {workflow_id} not found"},
                 status=404,
             )
-        
+
         return web.json_response(workflow.to_dict())
-        
+
     except Exception as e:
         log.error("Failed to get workflow: %s", e)
         return web.json_response(
@@ -100,15 +99,15 @@ async def update_workflow_handler(request: web.Request) -> web.Response:
     try:
         workflow_id = request.match_info["id"]
         workflow = workflow_engine.get_workflow(workflow_id)
-        
+
         if not workflow:
             return web.json_response(
                 {"error": f"Workflow {workflow_id} not found"},
                 status=404,
             )
-        
+
         data = await request.json()
-        
+
         # Update fields
         if "name" in data:
             workflow.name = data["name"]
@@ -118,12 +117,12 @@ async def update_workflow_handler(request: web.Request) -> web.Response:
             workflow.error_handling = data["error_handling"]
         if "rollback_on_error" in data:
             workflow.rollback_on_error = data["rollback_on_error"]
-        
+
         # Save changes
         workflow_engine._save_workflow(workflow)
-        
+
         return web.json_response(workflow.to_dict())
-        
+
     except Exception as e:
         log.error("Failed to update workflow: %s", e)
         return web.json_response(
@@ -136,17 +135,17 @@ async def delete_workflow_handler(request: web.Request) -> web.Response:
     """DELETE /api/workflows/{id} - Delete workflow."""
     try:
         workflow_id = request.match_info["id"]
-        
+
         result = workflow_engine.delete_workflow(workflow_id)
-        
+
         if not result:
             return web.json_response(
                 {"error": f"Workflow {workflow_id} not found"},
                 status=404,
             )
-        
+
         return web.json_response({"message": "Workflow deleted"})
-        
+
     except Exception as e:
         log.error("Failed to delete workflow: %s", e)
         return web.json_response(
@@ -160,23 +159,23 @@ async def execute_workflow_handler(request: web.Request) -> web.Response:
     try:
         workflow_id = request.match_info["id"]
         workflow = workflow_engine.get_workflow(workflow_id)
-        
+
         if not workflow:
             return web.json_response(
                 {"error": f"Workflow {workflow_id} not found"},
                 status=404,
             )
-        
+
         # Get optional context from request body
         try:
             data = await request.json()
             context = data.get("context", {})
-        except:
+        except Exception:
             context = {}
-        
+
         # Execute workflow
         execution = await workflow_engine.execute_workflow(workflow_id, context)
-        
+
         return web.json_response({
             "execution_id": execution.execution_id,
             "workflow_id": execution.workflow_id,
@@ -186,7 +185,7 @@ async def execute_workflow_handler(request: web.Request) -> web.Response:
             "task_results": execution.task_results,
             "errors": execution.errors,
         })
-        
+
     except Exception as e:
         log.error("Failed to execute workflow: %s", e)
         return web.json_response(
@@ -199,12 +198,12 @@ async def get_templates_handler(request: web.Request) -> web.Response:
     """GET /api/workflows/templates - List available workflow templates."""
     try:
         templates = workflow_engine.get_templates()
-        
+
         return web.json_response({
             "templates": templates,
             "count": len(templates),
         })
-        
+
     except Exception as e:
         log.error("Failed to get templates: %s", e)
         return web.json_response(
@@ -217,26 +216,26 @@ async def create_from_template_handler(request: web.Request) -> web.Response:
     """POST /api/workflows/from-template - Create workflow from template."""
     try:
         data = await request.json()
-        
+
         template_name = data.get("template")
         if not template_name:
             return web.json_response(
                 {"error": "Missing required field: template"},
                 status=400,
             )
-        
+
         created_by = data.get("created_by", "api")
-        
+
         workflow = workflow_engine.create_from_template(template_name, created_by)
-        
+
         if not workflow:
             return web.json_response(
                 {"error": f"Template '{template_name}' not found"},
                 status=404,
             )
-        
+
         return web.json_response(workflow.to_dict(), status=201)
-        
+
     except Exception as e:
         log.error("Failed to create workflow from template: %s", e)
         return web.json_response(
@@ -260,5 +259,5 @@ def setup_workflow_routes(app: web.Application) -> None:
     app.router.add_put("/api/workflows/{id}", update_workflow_handler)
     app.router.add_delete("/api/workflows/{id}", delete_workflow_handler)
     app.router.add_post("/api/workflows/{id}/execute", execute_workflow_handler)
-    
+
     log.info("Workflow API routes registered")

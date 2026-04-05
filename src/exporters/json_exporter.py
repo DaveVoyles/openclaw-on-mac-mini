@@ -5,8 +5,6 @@ Supports both nested and flat JSON structures.
 
 import json
 import logging
-import sqlite3
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -45,11 +43,11 @@ async def export_to_json(
     try:
         # Reuse CSV export logic but convert to JSON
         from .csv_exporter import (
-            _export_conversations,
-            _export_trends,
-            _export_tasks,
-            _export_costs,
             _export_api_usage,
+            _export_conversations,
+            _export_costs,
+            _export_tasks,
+            _export_trends,
         )
 
         if export_type == "conversations":

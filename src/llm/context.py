@@ -4,6 +4,7 @@ Context management — history trimming, auto-RAG injection, content conversion.
 
 import asyncio
 import logging
+import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -15,6 +16,10 @@ from config import cfg
 from llm_client import GOOGLE_API_KEY, MODEL_NAME, _client
 
 log = logging.getLogger("openclaw.llm")
+
+_CROSS_CHANNEL_OPT_IN_RE = re.compile(
+    r"(?i)(--cross-channel|#cross-channel|\[cross-channel\]|\bcross-channel search\b|\bsearch across channels\b)"
+)
 
 
 def _to_content(msg: dict) -> dict:
@@ -140,7 +145,7 @@ async def _generate_context_summary(turns: list[dict]) -> str:
     return response.text.strip()
 
 
-async def _auto_recall_context(user_message: str) -> str:
+async def _auto_recall_context(user_message: str, *, cross_channel: bool = False) -> str:
     """Fetch recalled context from the vector store for Auto-RAG injection."""
     if not cfg.auto_recall_enabled:
         return ""
@@ -157,6 +162,7 @@ async def _auto_recall_context(user_message: str) -> str:
             user_message,
             channel_id=channel_id,
             thread_id=thread_id,
+            cross_channel=cross_channel,
         )
         if context:
             parts.append(context)
@@ -191,6 +197,18 @@ async def _auto_recall_context(user_message: str) -> str:
         return combined
 
     return ""
+
+
+def _extract_cross_channel_opt_in(user_message: str) -> tuple[str, bool]:
+    """Extract explicit cross-channel retrieval opt-in markers from a user prompt."""
+    if not user_message:
+        return "", False
+    matched = _CROSS_CHANNEL_OPT_IN_RE.search(user_message) is not None
+    if not matched:
+        return user_message, False
+    cleaned = _CROSS_CHANNEL_OPT_IN_RE.sub(" ", user_message)
+    cleaned = " ".join(cleaned.split())
+    return (cleaned or user_message), True
 
 
 def _strip_recalled_prefix(history: list[dict], original: str, augmented: str) -> list[dict]:

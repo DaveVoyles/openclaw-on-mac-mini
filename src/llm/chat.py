@@ -40,6 +40,7 @@ from trace_context import get_trace_id
 
 from .context import (
     _auto_recall_context,
+    _extract_cross_channel_opt_in,
     _strip_recalled_prefix,
     _to_content,
     _trim_history,
@@ -193,11 +194,12 @@ async def chat_stream(
 
     _routing_notes: list[str] = []
 
-    recalled_context = await _auto_recall_context(user_message)
+    cleaned_user_message, cross_channel = _extract_cross_channel_opt_in(user_message)
+    recalled_context = await _auto_recall_context(cleaned_user_message, cross_channel=cross_channel)
     if recalled_context:
-        model_message = f"{recalled_context}\n\n---\nUser's question: {user_message}"
+        model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
-        model_message = user_message
+        model_message = cleaned_user_message
 
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
@@ -207,10 +209,10 @@ async def chat_stream(
             from model_router import chat_anthropic, chat_openai, classify_query, is_ollama_alive
             _ollama_up = await is_ollama_alive()
             route = classify_query(
-                user_message,
+                cleaned_user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
                 has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
-                needs_tools=_needs_tools(user_message),
+                needs_tools=_needs_tools(cleaned_user_message),
                 ollama_alive=_ollama_up,
             )
 
@@ -220,7 +222,7 @@ async def chat_stream(
                                           temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
                 if reply:
                     updated = history + [
-                        {"role": "user", "parts": [user_message]},
+                        {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
                     yield reply, True, {"model_used": f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False}
@@ -232,7 +234,7 @@ async def chat_stream(
                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
                 if reply:
                     updated = history + [
-                        {"role": "user", "parts": [user_message]},
+                        {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
                     yield reply, True, {"model_used": f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}", "updated_history": updated, "needs_tools": False}
@@ -257,7 +259,7 @@ async def chat_stream(
                 model_label = f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
             if reply:
                 updated = history + [
-                    {"role": "user", "parts": [user_message]},
+                    {"role": "user", "parts": [cleaned_user_message]},
                     {"role": "model", "parts": [reply]},
                 ]
                 yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False}
@@ -277,7 +279,7 @@ async def chat_stream(
         gemma_reply = await _try_local_model(model_message, history, force=True)
         if gemma_reply is not None:
             updated = history + [
-                {"role": "user", "parts": [user_message]},
+                {"role": "user", "parts": [cleaned_user_message]},
                 {"role": "model", "parts": [gemma_reply]},
             ]
             yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
@@ -303,7 +305,7 @@ async def chat_stream(
                 if reply and _gemma_response_seems_valid(reply):
                     import os
                     updated = history + [
-                        {"role": "user", "parts": [user_message]},
+                        {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
                     _routing_notes.append("Gemini rate-limited → used Copilot proxy")
@@ -321,7 +323,7 @@ async def chat_stream(
         return
 
     model, route_info = await _select_model_for_message(
-        user_message,
+        cleaned_user_message,
         tool_declarations=tool_declarations,
         label="LLM",
     )
@@ -346,7 +348,7 @@ async def chat_stream(
         parallel_tools=True,
         label="LLM",
     )
-    updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
+    updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
 
     if not _gemma_response_seems_valid(text):
         log.warning("Post-response hallucination detected, retrying with explicit tool instruction")
@@ -362,18 +364,18 @@ async def chat_stream(
             parallel_tools=True,
             label="LLM-retry",
         )
-        updated_history = _strip_recalled_prefix(updated_history, user_message, retry_msg)
+        updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, retry_msg)
 
     # Auto-escalate vague responses to web search
     if (
         _VAGUE_RESPONSE_RE.search(text)
-        and _FACTUAL_QUESTION_RE.search(user_message.strip())
+        and _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip())
     ):
-        log.info("Auto-escalating to web search for: %s", user_message)
+        log.info("Auto-escalating to web search for: %s", cleaned_user_message)
         search_fn = SKILLS.get("search_web")
         if search_fn is not None:
             try:
-                search_results = await search_fn(user_message)
+                search_results = await search_fn(cleaned_user_message)
                 if search_results and search_results.strip():
                     enhanced_msg = (
                         f"{model_message}\n\n"
@@ -388,7 +390,7 @@ async def chat_stream(
                         label="LLM-escalate",
                     )
                     updated_history = _strip_recalled_prefix(
-                        updated_history, user_message, enhanced_msg,
+                        updated_history, cleaned_user_message, enhanced_msg,
                     )
             except Exception as exc:
                 log.warning("Auto-escalation web search failed: %s", exc)
@@ -436,7 +438,7 @@ async def chat_stream(
             log.debug("Stream usage recording failed: %s", exc)
 
     updated_history = _extract_history(chat_session)
-    updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
+    updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
     yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False, "routing_notes": _routing_notes}
 
 
@@ -469,11 +471,12 @@ async def chat(
         _model_hint = "gemini"
     history = await _trim_history(history or [], model_hint=_model_hint)
 
-    recalled_context = await _auto_recall_context(user_message)
+    cleaned_user_message, cross_channel = _extract_cross_channel_opt_in(user_message)
+    recalled_context = await _auto_recall_context(cleaned_user_message, cross_channel=cross_channel)
     if recalled_context:
-        model_message = f"{recalled_context}\n\n---\nUser's question: {user_message}"
+        model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
-        model_message = user_message
+        model_message = cleaned_user_message
 
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
@@ -483,10 +486,10 @@ async def chat(
             from model_router import chat_anthropic, chat_openai, classify_query, is_ollama_alive
             _ollama_up = await is_ollama_alive()
             route = classify_query(
-                user_message,
+                cleaned_user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
                 has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
-                needs_tools=_needs_tools(user_message),
+                needs_tools=_needs_tools(cleaned_user_message),
                 ollama_alive=_ollama_up,
             )
             log.debug("Model router: %s", route)
@@ -497,7 +500,7 @@ async def chat(
                                           temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
                 if reply:
                     updated = history + [
-                        {"role": "user", "parts": [user_message]},
+                        {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
                     return reply, updated, f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
@@ -509,7 +512,7 @@ async def chat(
                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
                 if reply:
                     updated = history + [
-                        {"role": "user", "parts": [user_message]},
+                        {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
                     return reply, updated, f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
@@ -534,7 +537,7 @@ async def chat(
                 model_label = f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
             if reply:
                 updated = history + [
-                    {"role": "user", "parts": [user_message]},
+                    {"role": "user", "parts": [cleaned_user_message]},
                     {"role": "model", "parts": [reply]},
                 ]
                 return reply, updated, model_label
@@ -551,7 +554,7 @@ async def chat(
         gemma_reply = await _try_local_model(model_message, history, force=True)
         if gemma_reply is not None:
             updated = history + [
-                {"role": "user", "parts": [user_message]},
+                {"role": "user", "parts": [cleaned_user_message]},
                 {"role": "model", "parts": [gemma_reply]},
             ]
             return gemma_reply, updated, OLLAMA_MODEL
@@ -569,7 +572,7 @@ async def chat(
                 MODEL_NAME,
             )
         model, route_info = await _select_model_for_message(
-            user_message,
+            cleaned_user_message,
             tool_declarations=tool_declarations,
             label="LLM",
         )
@@ -578,11 +581,11 @@ async def chat(
             model_message, history, model,
             on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
         )
-        updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
+        updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
         return text, updated_history, model_name
 
     # Auto mode: Copilot for simple queries, Gemini for tool queries
-    if not _needs_tools(user_message):
+    if not _needs_tools(cleaned_user_message):
         try:
             from model_router import COPILOT_PROXY_ENABLED, chat_openai
             if COPILOT_PROXY_ENABLED:
@@ -592,7 +595,7 @@ async def chat(
                 if reply:
                     import os
                     updated = history + [
-                        {"role": "user", "parts": [user_message]},
+                        {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
                     return reply, updated, f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
@@ -610,7 +613,7 @@ async def chat(
         )
 
     model, route_info = await _select_model_for_message(
-        user_message,
+        cleaned_user_message,
         tool_declarations=tool_declarations,
         label="LLM",
     )
@@ -623,7 +626,7 @@ async def chat(
         parallel_tools=True,
         label="LLM",
     )
-    updated_history = _strip_recalled_prefix(updated_history, user_message, model_message)
+    updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
     return text, updated_history, model_name
 
 

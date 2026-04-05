@@ -21,7 +21,7 @@ from audit import audit_log as legacy_audit_log
 # Configure structured JSON logging
 class JSONFormatter(logging.Formatter):
     """Custom formatter that outputs JSON."""
-    
+
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record as JSON."""
         log_data = {
@@ -33,11 +33,11 @@ class JSONFormatter(logging.Formatter):
             "function": record.funcName,
             "line": record.lineno,
         }
-        
+
         # Add exception info if present
         if record.exc_info:
             log_data["exception"] = self.formatException(record.exc_info)
-        
+
         # Add extra fields
         if hasattr(record, "user_id"):
             log_data["user_id"] = record.user_id
@@ -47,7 +47,7 @@ class JSONFormatter(logging.Formatter):
             log_data["command"] = record.command
         if hasattr(record, "metadata"):
             log_data["metadata"] = record.metadata
-        
+
         return json.dumps(log_data)
 
 
@@ -60,14 +60,14 @@ def setup_logging(
 ):
     """Configure logging with rotation and structured output."""
     log_dir.mkdir(exist_ok=True)
-    
+
     # Root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
-    
+
     # Clear existing handlers
     root_logger.handlers.clear()
-    
+
     # Console handler (human-readable)
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
@@ -77,7 +77,7 @@ def setup_logging(
     )
     console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
-    
+
     # File handler with rotation
     file_handler = logging.handlers.RotatingFileHandler(
         log_dir / "openclaw.log",
@@ -85,7 +85,7 @@ def setup_logging(
         backupCount=backup_count,
     )
     file_handler.setLevel(log_level)
-    
+
     if enable_json:
         file_formatter = JSONFormatter()
     else:
@@ -93,10 +93,10 @@ def setup_logging(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
-    
+
     file_handler.setFormatter(file_formatter)
     root_logger.addHandler(file_handler)
-    
+
     # Separate error log
     error_handler = logging.handlers.RotatingFileHandler(
         log_dir / "errors.log",
@@ -106,7 +106,7 @@ def setup_logging(
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(file_formatter)
     root_logger.addHandler(error_handler)
-    
+
     # Audit log (always JSON)
     audit_handler = logging.handlers.RotatingFileHandler(
         log_dir / "audit.log",
@@ -115,21 +115,21 @@ def setup_logging(
     )
     audit_handler.setLevel(logging.INFO)
     audit_handler.setFormatter(JSONFormatter())
-    
+
     audit_logger = logging.getLogger("audit")
     audit_logger.setLevel(logging.INFO)
     audit_logger.addHandler(audit_handler)
     audit_logger.propagate = False  # Don't send to root logger
-    
+
     logging.info("Logging configured successfully")
 
 
 class AuditLogger:
     """Enhanced audit logging with categories."""
-    
+
     def __init__(self):
         self.logger = logging.getLogger("audit")
-    
+
     def log_user_action(
         self,
         user_id: str,
@@ -147,7 +147,7 @@ class AuditLogger:
             "result": result,
             "metadata": metadata or {},
         }
-        
+
         self.logger.info(
             f"User action: {action}",
             extra={
@@ -155,7 +155,7 @@ class AuditLogger:
                 "metadata": log_data,
             },
         )
-        
+
         # Also log to legacy audit system
         legacy_audit_log(
             user=None,  # We don't have the user object here
@@ -163,7 +163,7 @@ class AuditLogger:
             detail=detail,
             result=result,
         )
-    
+
     def log_command_execution(
         self,
         user_id: str,
@@ -181,7 +181,7 @@ class AuditLogger:
             "result": result,
             "error": error,
         }
-        
+
         level = logging.ERROR if result == "error" else logging.INFO
         self.logger.log(
             level,
@@ -192,7 +192,7 @@ class AuditLogger:
                 "metadata": log_data,
             },
         )
-    
+
     def log_permission_change(
         self,
         admin_user_id: str,
@@ -208,7 +208,7 @@ class AuditLogger:
             "action": action,
             "detail": detail,
         }
-        
+
         self.logger.warning(
             f"Permission change: {action}",
             extra={
@@ -216,7 +216,7 @@ class AuditLogger:
                 "metadata": log_data,
             },
         )
-    
+
     def log_config_change(
         self,
         user_id: str,
@@ -232,7 +232,7 @@ class AuditLogger:
             "old_value": str(old_value),
             "new_value": str(new_value),
         }
-        
+
         self.logger.warning(
             f"Config changed: {config_key}",
             extra={
@@ -240,7 +240,7 @@ class AuditLogger:
                 "metadata": log_data,
             },
         )
-    
+
     def log_security_event(
         self,
         event_type: str,
@@ -256,7 +256,7 @@ class AuditLogger:
             "detail": detail,
             "severity": severity,
         }
-        
+
         level_map = {
             "info": logging.INFO,
             "warning": logging.WARNING,
@@ -264,7 +264,7 @@ class AuditLogger:
             "critical": logging.CRITICAL,
         }
         level = level_map.get(severity, logging.WARNING)
-        
+
         self.logger.log(
             level,
             f"Security event: {event_type}",
@@ -273,7 +273,7 @@ class AuditLogger:
                 "metadata": log_data,
             },
         )
-    
+
     def log_failed_auth(self, user_id: str, reason: str):
         """Log a failed authentication attempt."""
         self.log_security_event(
@@ -282,7 +282,7 @@ class AuditLogger:
             detail=reason,
             severity="warning",
         )
-    
+
     def log_suspicious_activity(self, user_id: str, detail: str):
         """Log suspicious activity."""
         self.log_security_event(
@@ -291,7 +291,7 @@ class AuditLogger:
             detail=detail,
             severity="error",
         )
-    
+
     def get_audit_logs(
         self,
         user_id: Optional[str] = None,
@@ -301,26 +301,26 @@ class AuditLogger:
         """Get audit logs (read from file)."""
         logs = []
         audit_file = Path("logs/audit.log")
-        
+
         if not audit_file.exists():
             return logs
-        
+
         try:
             with open(audit_file, "r") as f:
                 for line in f:
                     try:
                         log_entry = json.loads(line)
-                        
+
                         # Filter by user_id if provided
                         if user_id and log_entry.get("user_id") != user_id:
                             continue
-                        
+
                         # Filter by category if provided
                         if category:
                             metadata = log_entry.get("metadata", {})
                             if metadata.get("category") != category:
                                 continue
-                        
+
                         # Filter by days
                         timestamp = datetime.fromisoformat(
                             log_entry["timestamp"].rstrip("Z")
@@ -328,13 +328,13 @@ class AuditLogger:
                         age_days = (datetime.utcnow() - timestamp).days
                         if age_days > days:
                             continue
-                        
+
                         logs.append(log_entry)
                     except json.JSONDecodeError:
                         continue
         except Exception as e:
             logging.error(f"Error reading audit logs: {e}")
-        
+
         return logs
 
 

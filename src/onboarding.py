@@ -8,7 +8,6 @@ Provides:
 - Progress tracking
 """
 
-import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -25,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class TutorialStep(Enum):
     """Tutorial step definitions."""
-    
+
     WELCOME = "welcome"
     BASIC_COMMANDS = "basic_commands"
     SCHEDULED_TASKS = "scheduled_tasks"
@@ -38,7 +37,7 @@ class TutorialStep(Enum):
 @dataclass
 class UserProgress:
     """Track user onboarding progress."""
-    
+
     user_id: str
     started_at: datetime
     current_step: TutorialStep = TutorialStep.WELCOME
@@ -49,14 +48,14 @@ class UserProgress:
 
 class OnboardingManager:
     """Manage user onboarding and tutorials."""
-    
+
     def __init__(self, data_dir: Path = Path("data")):
         self.data_dir = data_dir
         self.data_dir.mkdir(exist_ok=True)
         self.progress_file = self.data_dir / "onboarding_progress.json"
         self._user_progress: Dict[str, UserProgress] = {}
         self._load_progress()
-    
+
     def _load_progress(self):
         """Load user progress from disk."""
         if self.progress_file.exists():
@@ -76,7 +75,7 @@ class OnboardingManager:
                         )
             except Exception as e:
                 logger.error(f"Error loading onboarding progress: {e}")
-    
+
     def _save_progress(self):
         """Save user progress to disk."""
         data = {}
@@ -91,41 +90,41 @@ class OnboardingManager:
                 if progress.completed_at
                 else None,
             }
-        
+
         with open(self.progress_file, "w") as f:
             json.dump(data, f, indent=2)
-    
+
     def is_new_user(self, user_id: str) -> bool:
         """Check if user is new (no onboarding started)."""
         return user_id not in self._user_progress
-    
+
     def start_onboarding(self, user_id: str) -> UserProgress:
         """Start onboarding for a user."""
         if user_id in self._user_progress:
             return self._user_progress[user_id]
-        
+
         progress = UserProgress(
             user_id=user_id,
             started_at=datetime.now(),
         )
         self._user_progress[user_id] = progress
         self._save_progress()
-        
+
         logger.info(f"Started onboarding for user {user_id}")
         return progress
-    
+
     def skip_tutorial(self, user_id: str):
         """Skip tutorial for a user."""
         if user_id not in self._user_progress:
             self.start_onboarding(user_id)
-        
+
         progress = self._user_progress[user_id]
         progress.skipped = True
         progress.completed_at = datetime.now()
         self._save_progress()
-        
+
         logger.info(f"User {user_id} skipped tutorial")
-    
+
     def restart_tutorial(self, user_id: str) -> UserProgress:
         """Restart tutorial for a user."""
         progress = UserProgress(
@@ -134,36 +133,36 @@ class OnboardingManager:
         )
         self._user_progress[user_id] = progress
         self._save_progress()
-        
+
         logger.info(f"Restarted tutorial for user {user_id}")
         return progress
-    
+
     def complete_step(self, user_id: str, step: TutorialStep):
         """Mark a tutorial step as completed."""
         if user_id not in self._user_progress:
             self.start_onboarding(user_id)
-        
+
         progress = self._user_progress[user_id]
-        
+
         if step.value not in progress.completed_steps:
             progress.completed_steps.append(step.value)
-        
+
         # Move to next step
         steps = list(TutorialStep)
         current_index = steps.index(step)
-        
+
         if current_index < len(steps) - 1:
             progress.current_step = steps[current_index + 1]
         else:
             # Tutorial completed
             progress.completed_at = datetime.now()
-        
+
         self._save_progress()
-    
+
     def get_progress(self, user_id: str) -> Optional[UserProgress]:
         """Get user's onboarding progress."""
         return self._user_progress.get(user_id)
-    
+
     async def send_welcome_message(
         self, user: discord.User, channel: discord.TextChannel
     ):
@@ -177,7 +176,7 @@ class OnboardingManager:
             ),
             color=0x667EEA,
         )
-        
+
         embed.add_field(
             name="What I Can Do",
             value=(
@@ -191,7 +190,7 @@ class OnboardingManager:
             ),
             inline=False,
         )
-        
+
         embed.add_field(
             name="Getting Started",
             value=(
@@ -201,52 +200,52 @@ class OnboardingManager:
             ),
             inline=False,
         )
-        
+
         embed.set_footer(text="Type /tutorial start to begin!")
-        
+
         await channel.send(embed=embed)
-        
+
         # Start onboarding
         self.start_onboarding(str(user.id))
-    
+
     async def send_step_message(
         self, user: discord.User, channel: discord.TextChannel, step: TutorialStep
     ) -> Embed:
         """Send tutorial step message."""
         step_content = self._get_step_content(step)
-        
+
         embed = Embed(
             title=f"📚 Tutorial: {step_content['title']}",
             description=step_content["description"],
             color=0x667EEA,
         )
-        
+
         if "example" in step_content:
             embed.add_field(
                 name="Try It Out",
                 value=step_content["example"],
                 inline=False,
             )
-        
+
         if "tips" in step_content:
             embed.add_field(
                 name="💡 Tips",
                 value=step_content["tips"],
                 inline=False,
             )
-        
+
         # Progress indicator
         steps = list(TutorialStep)
         current_index = steps.index(step) + 1
         total_steps = len(steps)
-        
+
         embed.set_footer(
             text=f"Step {current_index}/{total_steps} • Type 'next' to continue or '/tutorial skip' to exit"
         )
-        
+
         await channel.send(embed=embed)
         return embed
-    
+
     def _get_step_content(self, step: TutorialStep) -> Dict[str, str]:
         """Get content for a tutorial step."""
         content_map = {
@@ -371,7 +370,7 @@ class OnboardingManager:
                 ),
             },
         }
-        
+
         return content_map.get(step, {})
 
 

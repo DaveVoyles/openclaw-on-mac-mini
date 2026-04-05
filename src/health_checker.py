@@ -10,7 +10,6 @@ Provides:
 
 import asyncio
 import logging
-import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -25,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class HealthStatus(Enum):
     """Health status levels."""
-    
+
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -33,7 +32,7 @@ class HealthStatus(Enum):
 
 class CheckType(Enum):
     """Types of health checks."""
-    
+
     LIVENESS = "liveness"  # Is app running?
     READINESS = "readiness"  # Can app serve requests?
     STARTUP = "startup"  # Is app initialized?
@@ -42,7 +41,7 @@ class CheckType(Enum):
 @dataclass
 class HealthCheckResult:
     """Result of a health check."""
-    
+
     name: str
     status: HealthStatus
     message: str
@@ -53,18 +52,18 @@ class HealthCheckResult:
 
 class HealthChecker:
     """Centralized health checking system."""
-    
+
     def __init__(self):
         self._checks: Dict[str, Callable] = {}
         self._last_results: Dict[str, HealthCheckResult] = {}
         self._startup_complete = False
         self._ready = False
-    
+
     def register_check(self, name: str, check_fn: Callable):
         """Register a health check function."""
         self._checks[name] = check_fn
         logger.info(f"Registered health check: {name}")
-    
+
     async def check_liveness(self) -> HealthCheckResult:
         """Check if application is alive."""
         return HealthCheckResult(
@@ -72,7 +71,7 @@ class HealthChecker:
             status=HealthStatus.HEALTHY,
             message="Application is running",
         )
-    
+
     async def check_readiness(self) -> Dict[str, HealthCheckResult]:
         """Check if application is ready to serve requests."""
         if not self._ready:
@@ -83,7 +82,7 @@ class HealthChecker:
                     message="Application not yet ready",
                 )
             }
-        
+
         # Run all registered checks
         results = {}
         for name, check_fn in self._checks.items():
@@ -91,7 +90,7 @@ class HealthChecker:
                 start = datetime.now()
                 result = await check_fn()
                 duration = (datetime.now() - start).total_seconds() * 1000
-                
+
                 if isinstance(result, HealthCheckResult):
                     result.duration_ms = duration
                     results[name] = result
@@ -109,10 +108,10 @@ class HealthChecker:
                     status=HealthStatus.UNHEALTHY,
                     message=f"Check failed: {str(e)}",
                 )
-        
+
         self._last_results = results
         return results
-    
+
     async def check_startup(self) -> HealthCheckResult:
         """Check if application startup is complete."""
         if self._startup_complete:
@@ -127,35 +126,35 @@ class HealthChecker:
                 status=HealthStatus.DEGRADED,
                 message="Startup in progress",
             )
-    
+
     def mark_startup_complete(self):
         """Mark startup as complete."""
         self._startup_complete = True
         logger.info("Application startup complete")
-    
+
     def mark_ready(self):
         """Mark application as ready."""
         self._ready = True
         logger.info("Application ready to serve requests")
-    
+
     def get_overall_status(self) -> HealthStatus:
         """Get overall health status."""
         if not self._last_results:
             return HealthStatus.DEGRADED
-        
+
         statuses = [result.status for result in self._last_results.values()]
-        
+
         if all(s == HealthStatus.HEALTHY for s in statuses):
             return HealthStatus.HEALTHY
         elif any(s == HealthStatus.UNHEALTHY for s in statuses):
             return HealthStatus.UNHEALTHY
         else:
             return HealthStatus.DEGRADED
-    
+
     async def self_heal(self) -> List[str]:
         """Attempt to self-heal degraded services."""
         actions = []
-        
+
         # Check each unhealthy component
         for name, result in self._last_results.items():
             if result.status == HealthStatus.UNHEALTHY:
@@ -165,16 +164,16 @@ class HealthChecker:
                         actions.append(f"Attempted to reconnect {name}")
                         # Reconnection logic would go here
                     elif "disk" in name.lower():
-                        actions.append(f"Cleaned up temporary files")
+                        actions.append("Cleaned up temporary files")
                         # Cleanup logic would go here
                     elif "memory" in name.lower():
-                        actions.append(f"Triggered garbage collection")
+                        actions.append("Triggered garbage collection")
                         import gc
                         gc.collect()
                 except Exception as e:
                     logger.error(f"Failed to heal {name}: {e}")
                     actions.append(f"Failed to heal {name}: {str(e)}")
-        
+
         return actions
 
 
@@ -185,7 +184,7 @@ async def check_disk_space(threshold_percent: float = 90.0) -> HealthCheckResult
     try:
         disk = psutil.disk_usage("/")
         used_percent = disk.percent
-        
+
         if used_percent >= threshold_percent:
             return HealthCheckResult(
                 name="disk_space",
@@ -220,7 +219,7 @@ async def check_memory(threshold_percent: float = 90.0) -> HealthCheckResult:
     try:
         memory = psutil.virtual_memory()
         used_percent = memory.percent
-        
+
         if used_percent >= threshold_percent:
             return HealthCheckResult(
                 name="memory",
@@ -254,21 +253,21 @@ async def check_database(db_path: Path = Path("data/conversations.db")) -> Healt
     """Check database connectivity."""
     try:
         import sqlite3
-        
+
         if not db_path.exists():
             return HealthCheckResult(
                 name="database",
                 status=HealthStatus.UNHEALTHY,
                 message=f"Database file not found: {db_path}",
             )
-        
+
         # Try to connect and query
         conn = sqlite3.connect(str(db_path))
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM sqlite_master WHERE type='table'")
         table_count = cursor.fetchone()[0]
         conn.close()
-        
+
         return HealthCheckResult(
             name="database",
             status=HealthStatus.HEALTHY,
@@ -292,7 +291,7 @@ async def check_api_endpoint(
             start = datetime.now()
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
                 duration_ms = (datetime.now() - start).total_seconds() * 1000
-                
+
                 if response.status == 200:
                     return HealthCheckResult(
                         name=f"api_{name}",
@@ -334,10 +333,10 @@ def get_health_checker() -> HealthChecker:
     global _health_checker
     if _health_checker is None:
         _health_checker = HealthChecker()
-        
+
         # Register default checks
         _health_checker.register_check("disk_space", check_disk_space)
         _health_checker.register_check("memory", check_memory)
         _health_checker.register_check("database", check_database)
-    
+
     return _health_checker

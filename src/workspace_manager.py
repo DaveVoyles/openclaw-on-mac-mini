@@ -8,12 +8,12 @@ import json
 import logging
 import sqlite3
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
-from user_manager import User, UserRole, get_user_manager
+from user_manager import User, get_user_manager
 
 log = logging.getLogger("openclaw.workspace_manager")
 
@@ -30,16 +30,16 @@ class WorkspaceRole(Enum):
     ADMIN = "admin"  # Admin within workspace
     MEMBER = "member"  # Standard member
     VIEWER = "viewer"  # Read-only access
-    
+
     @property
     def level(self) -> int:
         """Numeric level for comparison"""
         levels = {"owner": 4, "admin": 3, "member": 2, "viewer": 1}
         return levels.get(self.value, 0)
-    
+
     def __ge__(self, other: "WorkspaceRole") -> bool:
         return self.level >= other.level
-    
+
     def __gt__(self, other: "WorkspaceRole") -> bool:
         return self.level > other.level
 
@@ -61,11 +61,11 @@ class Workspace:
     api_quota_used: int = 0          # Quota used today
     quota_reset_at: float = 0.0      # When quota resets
     is_active: bool = True           # Workspace active/archived
-    
+
     def __post_init__(self):
         if self.settings is None:
             self.settings = {}
-    
+
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "Workspace":
         """Create Workspace from database row"""
@@ -91,7 +91,7 @@ class WorkspaceMember:
     user_id: int
     role: WorkspaceRole
     joined_at: float
-    
+
     @classmethod
     def from_row(cls, row: sqlite3.Row) -> "WorkspaceMember":
         """Create WorkspaceMember from database row"""
@@ -124,17 +124,17 @@ def _init_db(conn: sqlite3.Connection) -> None:
             is_active INTEGER DEFAULT 1
         )
     """)
-    
+
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_workspaces_name 
+        CREATE INDEX IF NOT EXISTS idx_workspaces_name
         ON workspaces(name)
     """)
-    
+
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_workspaces_owner 
+        CREATE INDEX IF NOT EXISTS idx_workspaces_owner
         ON workspaces(owner_id)
     """)
-    
+
     # Workspace members table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS workspace_members (
@@ -145,12 +145,12 @@ def _init_db(conn: sqlite3.Connection) -> None:
             PRIMARY KEY (workspace_id, user_id)
         )
     """)
-    
+
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_members_user 
+        CREATE INDEX IF NOT EXISTS idx_members_user
         ON workspace_members(user_id)
     """)
-    
+
     # Shared resources table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS workspace_resources (
@@ -164,12 +164,12 @@ def _init_db(conn: sqlite3.Connection) -> None:
             updated_at REAL NOT NULL
         )
     """)
-    
+
     conn.execute("""
-        CREATE INDEX IF NOT EXISTS idx_resources_workspace 
+        CREATE INDEX IF NOT EXISTS idx_resources_workspace
         ON workspace_resources(workspace_id, resource_type)
     """)
-    
+
     conn.commit()
 
 
@@ -179,7 +179,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
 
 class WorkspaceManager:
     """Manages team workspaces and membership"""
-    
+
     def __init__(self, db_path: Path = DB_PATH):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -189,11 +189,11 @@ class WorkspaceManager:
         self.conn.execute("PRAGMA foreign_keys = ON")
         _init_db(self.conn)
         log.info("WorkspaceManager initialized with database: %s", db_path)
-    
+
     # -----------------------------------------------------------------------
     # Workspace creation & management
     # -----------------------------------------------------------------------
-    
+
     def create_workspace(
         self,
         name: str,
@@ -201,15 +201,15 @@ class WorkspaceManager:
         description: str = "",
     ) -> Workspace:
         """Create a new workspace
-        
+
         Args:
             name: Workspace name (must be unique)
             owner_id: User ID of workspace owner
             description: Optional workspace description
-        
+
         Returns:
             Workspace object
-        
+
         Raises:
             ValueError: If workspace name already exists
         """
@@ -217,7 +217,7 @@ class WorkspaceManager:
         existing = self.get_workspace_by_name(name)
         if existing:
             raise ValueError(f"Workspace '{name}' already exists")
-        
+
         now = time.time()
         cursor = self.conn.execute(
             """
@@ -227,19 +227,19 @@ class WorkspaceManager:
             (name, owner_id, now, description, "{}"),
         )
         self.conn.commit()
-        
+
         workspace_id = cursor.lastrowid
-        
+
         # Add owner as member with OWNER role
         self.add_member(workspace_id, owner_id, WorkspaceRole.OWNER)
-        
+
         workspace = self.get_workspace(workspace_id)
         if not workspace:
             raise RuntimeError(f"Failed to create workspace {name}")
-        
+
         log.info("Created workspace: %s (id=%d, owner=%d)", name, workspace_id, owner_id)
         return workspace
-    
+
     def get_workspace(self, workspace_id: int) -> Optional[Workspace]:
         """Get workspace by ID"""
         row = self.conn.execute(
@@ -247,7 +247,7 @@ class WorkspaceManager:
             (workspace_id,),
         ).fetchone()
         return Workspace.from_row(row) if row else None
-    
+
     def get_workspace_by_name(self, name: str) -> Optional[Workspace]:
         """Get workspace by name"""
         row = self.conn.execute(
@@ -255,7 +255,7 @@ class WorkspaceManager:
             (name,),
         ).fetchone()
         return Workspace.from_row(row) if row else None
-    
+
     def list_workspaces(self, user_id: Optional[int] = None) -> list[Workspace]:
         """List all workspaces, optionally filtered by user membership"""
         if user_id:
@@ -272,9 +272,9 @@ class WorkspaceManager:
             rows = self.conn.execute(
                 "SELECT * FROM workspaces WHERE is_active = 1 ORDER BY created_at DESC"
             ).fetchall()
-        
+
         return [Workspace.from_row(row) for row in rows]
-    
+
     def update_workspace(
         self,
         workspace_id: int,
@@ -285,29 +285,29 @@ class WorkspaceManager:
         """Update workspace details"""
         updates = []
         params = []
-        
+
         if name is not None:
             updates.append("name = ?")
             params.append(name)
-        
+
         if description is not None:
             updates.append("description = ?")
             params.append(description)
-        
+
         if settings is not None:
             updates.append("settings_json = ?")
             params.append(json.dumps(settings))
-        
+
         if not updates:
             return
-        
+
         params.append(workspace_id)
         query = f"UPDATE workspaces SET {', '.join(updates)} WHERE id = ?"
-        
+
         self.conn.execute(query, params)
         self.conn.commit()
         log.info("Updated workspace %d", workspace_id)
-    
+
     def archive_workspace(self, workspace_id: int) -> None:
         """Archive workspace (soft delete)"""
         self.conn.execute(
@@ -316,11 +316,11 @@ class WorkspaceManager:
         )
         self.conn.commit()
         log.info("Archived workspace %d", workspace_id)
-    
+
     # -----------------------------------------------------------------------
     # Member management
     # -----------------------------------------------------------------------
-    
+
     def add_member(
         self,
         workspace_id: int,
@@ -328,14 +328,14 @@ class WorkspaceManager:
         role: WorkspaceRole = WorkspaceRole.MEMBER,
     ) -> None:
         """Add user to workspace
-        
+
         Args:
             workspace_id: Workspace ID
             user_id: User ID to add
             role: Workspace role (default: MEMBER)
         """
         now = time.time()
-        
+
         try:
             self.conn.execute(
                 """
@@ -354,21 +354,21 @@ class WorkspaceManager:
             )
             self.conn.commit()
             log.info("Updated role for user %d in workspace %d to %s", user_id, workspace_id, role.value)
-    
+
     def remove_member(self, workspace_id: int, user_id: int) -> None:
         """Remove user from workspace"""
         # Don't allow removing the owner
         workspace = self.get_workspace(workspace_id)
         if workspace and workspace.owner_id == user_id:
             raise ValueError("Cannot remove workspace owner")
-        
+
         self.conn.execute(
             "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?",
             (workspace_id, user_id),
         )
         self.conn.commit()
         log.info("Removed user %d from workspace %d", user_id, workspace_id)
-    
+
     def get_member_role(self, workspace_id: int, user_id: int) -> Optional[WorkspaceRole]:
         """Get user's role in workspace"""
         row = self.conn.execute(
@@ -376,7 +376,7 @@ class WorkspaceManager:
             (workspace_id, user_id),
         ).fetchone()
         return WorkspaceRole(row["role"]) if row else None
-    
+
     def list_members(self, workspace_id: int) -> list[tuple[User, WorkspaceRole]]:
         """List all members of workspace with their roles"""
         rows = self.conn.execute(
@@ -389,7 +389,7 @@ class WorkspaceManager:
             """,
             (workspace_id,),
         ).fetchall()
-        
+
         user_manager = get_user_manager()
         members = []
         for row in rows:
@@ -397,57 +397,57 @@ class WorkspaceManager:
             if user:
                 role = WorkspaceRole(row["role"])
                 members.append((user, role))
-        
+
         return members
-    
+
     def is_member(self, workspace_id: int, user_id: int) -> bool:
         """Check if user is a member of workspace"""
         return self.get_member_role(workspace_id, user_id) is not None
-    
+
     # -----------------------------------------------------------------------
     # API quota management
     # -----------------------------------------------------------------------
-    
+
     def check_quota(self, workspace_id: int) -> bool:
         """Check if workspace has remaining API quota"""
         workspace = self.get_workspace(workspace_id)
         if not workspace:
             return False
-        
+
         # Reset quota if it's a new day
         now = time.time()
         if now >= workspace.quota_reset_at:
             self._reset_quota(workspace_id)
             return True
-        
+
         return workspace.api_quota_used < workspace.api_quota_daily
-    
+
     def consume_quota(self, workspace_id: int, amount: int = 1) -> bool:
         """Consume workspace API quota"""
         if not self.check_quota(workspace_id):
             return False
-        
+
         self.conn.execute(
             "UPDATE workspaces SET api_quota_used = api_quota_used + ? WHERE id = ?",
             (amount, workspace_id),
         )
         self.conn.commit()
         return True
-    
+
     def _reset_quota(self, workspace_id: int) -> None:
         """Reset daily quota for workspace"""
         import datetime
         now = datetime.datetime.now()
         tomorrow = now.replace(hour=0, minute=0, second=0, microsecond=0) + datetime.timedelta(days=1)
         reset_at = tomorrow.timestamp()
-        
+
         self.conn.execute(
             "UPDATE workspaces SET api_quota_used = 0, quota_reset_at = ? WHERE id = ?",
             (reset_at, workspace_id),
         )
         self.conn.commit()
         log.debug("Reset quota for workspace %d", workspace_id)
-    
+
     def set_quota(self, workspace_id: int, daily_limit: int) -> None:
         """Set custom daily quota for workspace"""
         self.conn.execute(
@@ -456,11 +456,11 @@ class WorkspaceManager:
         )
         self.conn.commit()
         log.info("Set daily quota for workspace %d to %d", workspace_id, daily_limit)
-    
+
     # -----------------------------------------------------------------------
     # Shared resources
     # -----------------------------------------------------------------------
-    
+
     def save_resource(
         self,
         workspace_id: int,
@@ -470,44 +470,44 @@ class WorkspaceManager:
         created_by: int,
     ) -> int:
         """Save a shared resource to workspace
-        
+
         Args:
             workspace_id: Workspace ID
             resource_type: Type of resource (query, dashboard, schedule, etc.)
             resource_name: Resource name
             resource_data: Resource data (will be JSON serialized)
             created_by: User ID who created the resource
-        
+
         Returns:
             Resource ID
         """
         now = time.time()
         cursor = self.conn.execute(
             """
-            INSERT INTO workspace_resources 
+            INSERT INTO workspace_resources
             (workspace_id, resource_type, resource_name, resource_data, created_by, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (workspace_id, resource_type, resource_name, json.dumps(resource_data), created_by, now, now),
         )
         self.conn.commit()
-        
+
         log.info(
             "Saved resource '%s' (type=%s) to workspace %d",
             resource_name, resource_type, workspace_id,
         )
         return cursor.lastrowid
-    
+
     def get_resource(self, resource_id: int) -> Optional[dict[str, Any]]:
         """Get shared resource by ID"""
         row = self.conn.execute(
             "SELECT * FROM workspace_resources WHERE id = ?",
             (resource_id,),
         ).fetchone()
-        
+
         if not row:
             return None
-        
+
         return {
             "id": row["id"],
             "workspace_id": row["workspace_id"],
@@ -518,7 +518,7 @@ class WorkspaceManager:
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
         }
-    
+
     def list_resources(
         self,
         workspace_id: int,
@@ -528,7 +528,7 @@ class WorkspaceManager:
         if resource_type:
             rows = self.conn.execute(
                 """
-                SELECT * FROM workspace_resources 
+                SELECT * FROM workspace_resources
                 WHERE workspace_id = ? AND resource_type = ?
                 ORDER BY updated_at DESC
                 """,
@@ -537,13 +537,13 @@ class WorkspaceManager:
         else:
             rows = self.conn.execute(
                 """
-                SELECT * FROM workspace_resources 
+                SELECT * FROM workspace_resources
                 WHERE workspace_id = ?
                 ORDER BY updated_at DESC
                 """,
                 (workspace_id,),
             ).fetchall()
-        
+
         resources = []
         for row in rows:
             resources.append({
@@ -556,9 +556,9 @@ class WorkspaceManager:
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
             })
-        
+
         return resources
-    
+
     def delete_resource(self, resource_id: int) -> None:
         """Delete shared resource"""
         self.conn.execute(
@@ -567,25 +567,25 @@ class WorkspaceManager:
         )
         self.conn.commit()
         log.info("Deleted resource %d", resource_id)
-    
+
     # -----------------------------------------------------------------------
     # Utilities
     # -----------------------------------------------------------------------
-    
+
     def get_stats(self, workspace_id: int) -> dict[str, Any]:
         """Get workspace statistics"""
         member_count = self.conn.execute(
             "SELECT COUNT(*) FROM workspace_members WHERE workspace_id = ?",
             (workspace_id,),
         ).fetchone()[0]
-        
+
         resource_count = self.conn.execute(
             "SELECT COUNT(*) FROM workspace_resources WHERE workspace_id = ?",
             (workspace_id,),
         ).fetchone()[0]
-        
+
         workspace = self.get_workspace(workspace_id)
-        
+
         return {
             "member_count": member_count,
             "resource_count": resource_count,
@@ -593,7 +593,7 @@ class WorkspaceManager:
             "quota_daily": workspace.api_quota_daily if workspace else 0,
             "quota_remaining": (workspace.api_quota_daily - workspace.api_quota_used) if workspace else 0,
         }
-    
+
     def close(self) -> None:
         """Close database connection"""
         self.conn.close()

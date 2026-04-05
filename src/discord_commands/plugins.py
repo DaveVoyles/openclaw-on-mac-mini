@@ -1,15 +1,15 @@
 """Plugin management commands: /plugin."""
 
+from pathlib import Path
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-from pathlib import Path
 
 from audit import audit_log
 from plugin_system import PluginRegistry
 
 from ._helpers import require_auth
-
 
 # Global plugin registry instance (initialized in bot.py)
 _plugin_registry: PluginRegistry | None = None

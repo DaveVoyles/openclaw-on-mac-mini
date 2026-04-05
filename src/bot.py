@@ -721,6 +721,9 @@ async def ask_cmd(
         else:
             question = await _handle_doc_attachment(attachment, question)
 
+    from llm.context import _extract_cross_channel_opt_in
+    retrieval_question, cross_channel_retrieval = _extract_cross_channel_opt_in(question)
+
     # Get or create conversation context
     conv = conversation_store.get(
         user_id=interaction.user.id,
@@ -756,11 +759,12 @@ async def ask_cmd(
             import vector_store
             hits = await vector_store.search(
                 vector_store.CONVERSATIONS_COLLECTION,
-                question,
+                retrieval_question,
                 top_k=1,
                 threshold=0.75,
                 channel_id=context_channel_id,
                 thread_id=context_thread_id,
+                cross_channel=cross_channel_retrieval,
             )
             if hits:
                 meta = hits[0].get("metadata", {})
@@ -804,10 +808,11 @@ async def ask_cmd(
         try:
             import vector_store
             context_hits = await vector_store.recall(
-                question,
+                retrieval_question,
                 top_k=3,
                 channel_id=context_channel_id,
                 thread_id=context_thread_id,
+                cross_channel=cross_channel_retrieval,
             )
             if context_hits:
                 conv.history.append({
