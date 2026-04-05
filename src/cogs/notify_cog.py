@@ -14,9 +14,33 @@ from discord import app_commands
 from discord.ext import commands
 
 from notification_prefs import notif_prefs
+from ui_components import EmbedColors
 
 DURATION_RE = re.compile(r"^(\d+)\s*(m|min|h|hr|hours?|minutes?)$", re.IGNORECASE)
 DURATION_MULTIPLIERS = {"m": 60, "min": 60, "minutes": 60, "h": 3600, "hr": 3600, "hour": 3600, "hours": 3600}
+
+
+# Common service names for autocomplete
+COMMON_SERVICES = [
+    "sonarr", "radarr", "sabnzbd", "overseerr", "plex",
+    "tautulli", "prowlarr", "lidarr", "readarr", "transmission",
+    "qbittorrent", "jackett", "nzbget", "jellyfin", "emby"
+]
+
+
+async def _service_autocomplete(
+    interaction: discord.Interaction,
+    current: str,
+) -> list[app_commands.Choice[str]]:
+    """Autocomplete for service names - combines common services with user's blocked services."""
+    prefs = notif_prefs.get(interaction.user.id)
+    all_services = set(COMMON_SERVICES + prefs.blocked_services)
+    
+    return [
+        app_commands.Choice(name=s, value=s)
+        for s in sorted(all_services)
+        if current.lower() in s.lower()
+    ][:25]
 
 
 def _parse_duration(text: str) -> int | None:
@@ -51,7 +75,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
         blocked = ", ".join(prefs.blocked_services) or "None"
         embed = discord.Embed(
             title="🔔 Notification Preferences",
-            colour=discord.Colour.blurple(),
+            colour=EmbedColors.INFO,
         )
         embed.add_field(name="Enabled", value="✅" if prefs.enabled else "❌", inline=True)
         embed.add_field(name="DM Alerts", value="✅" if prefs.dm_alerts else "❌", inline=True)
@@ -109,6 +133,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
 
     @app_commands.command(name="block", description="Block alerts from a service")
     @app_commands.describe(service="Service name to block, e.g. sonarr, sabnzbd")
+    @app_commands.autocomplete(service=_service_autocomplete)
     async def block(self, interaction: discord.Interaction, service: str):
         prefs = notif_prefs.get(interaction.user.id)
         svc = service.strip().lower()
@@ -127,6 +152,7 @@ class NotifyCog(commands.GroupCog, group_name="notify"):
 
     @app_commands.command(name="unblock", description="Unblock alerts from a service")
     @app_commands.describe(service="Service name to unblock")
+    @app_commands.autocomplete(service=_service_autocomplete)
     async def unblock(self, interaction: discord.Interaction, service: str):
         prefs = notif_prefs.get(interaction.user.id)
         svc = service.strip().lower()

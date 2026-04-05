@@ -12,6 +12,7 @@ from discord.ext import commands
 
 from cog_helpers import audit_log, require_auth, split_response, truncate_for_embed
 from constants import MEMORY_SNIPPET_MAX_CHARS
+from ui_components import EmbedColors
 
 log = logging.getLogger("openclaw")
 
@@ -96,13 +97,13 @@ class ResearchCog(commands.Cog, name="Research"):
     async def websearch_cmd(self, interaction: discord.Interaction, query: str, results: int = 5):
         from skills.advanced_skills import search_web
 
-        await interaction.response.defer()
+        await interaction.response.defer(thinking=True)  # Progress indicator
         result = await search_web(query, num_results=results)
         result = truncate_for_embed(result)
         embed = discord.Embed(
             title=f"🔍 Web Search: {query[:80]}",
             description=result,
-            color=discord.Color.blue(),
+            color=EmbedColors.INFO,
         )
         embed.set_footer(text="via Tavily AI Search (with DuckDuckGo fallback)")
         await interaction.followup.send(embed=embed)
@@ -118,10 +119,12 @@ class ResearchCog(commands.Cog, name="Research"):
 
         if not url.startswith(("http://", "https://")):
             await interaction.response.send_message(
-                "❌ URL must start with `http://` or `https://`", ephemeral=True
+                "❌ URL must start with `http://` or `https://`\n"
+                "💡 Example: `/browse url:https://example.com`",
+                ephemeral=True
             )
             return
-        await interaction.response.defer()
+        await interaction.response.defer(thinking=True)  # Progress indicator
         page_text = await browse_url(url)
         if question and not page_text.startswith("❌") and not page_text.startswith("⚠️"):
             answer = await llm_analyze_document(
@@ -135,7 +138,7 @@ class ResearchCog(commands.Cog, name="Research"):
         embed = discord.Embed(
             title=f"🌐 Browse: {url[:80]}",
             description=result,
-            color=discord.Color.teal(),
+            color=EmbedColors.INFO,
         )
         await interaction.followup.send(embed=embed)
         audit_log(interaction.user, "browse", detail=url)

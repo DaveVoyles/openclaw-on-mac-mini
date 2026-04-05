@@ -16,17 +16,18 @@ from nas import (
     get_nas_storage_health,
     nas_list_folder,
 )
+from ui_components import EmbedColors
 
 log = logging.getLogger("openclaw.nas_cog")
 
 
-def _severity_color(text: str) -> discord.Color:
+def _severity_color(text: str) -> int:
     """Pick embed color based on status indicators in the response text."""
     if "❌" in text:
-        return discord.Color.red()
+        return EmbedColors.ERROR
     if "⚠️" in text:
-        return discord.Color.gold()
-    return discord.Color.green()
+        return EmbedColors.WARNING
+    return EmbedColors.SUCCESS
 
 
 def _severity_label(text: str) -> str:
@@ -67,7 +68,7 @@ class NasCog(commands.Cog, name="NAS"):
                 embed=discord.Embed(
                     title="🔴 NAS Unreachable",
                     description=f"Could not connect to the NAS.\n```{exc}```",
-                    color=discord.Color.red(),
+                    color=EmbedColors.ERROR,
                 )
             )
             return
@@ -94,7 +95,7 @@ class NasCog(commands.Cog, name="NAS"):
                 embed=discord.Embed(
                     title="🔴 NAS Unreachable",
                     description=f"Could not connect to the NAS.\n```{exc}```",
-                    color=discord.Color.red(),
+                    color=EmbedColors.ERROR,
                 )
             )
             return
@@ -121,7 +122,7 @@ class NasCog(commands.Cog, name="NAS"):
                 embed=discord.Embed(
                     title="🔴 NAS Unreachable",
                     description=f"Could not connect to the NAS.\n```{exc}```",
-                    color=discord.Color.red(),
+                    color=EmbedColors.ERROR,
                 )
             )
             return
@@ -149,7 +150,7 @@ class NasCog(commands.Cog, name="NAS"):
                 embed=discord.Embed(
                     title="🔴 NAS Unreachable",
                     description=f"Could not connect to the NAS.\n```{exc}```",
-                    color=discord.Color.red(),
+                    color=EmbedColors.ERROR,
                 )
             )
             return

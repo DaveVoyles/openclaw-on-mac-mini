@@ -11,6 +11,7 @@ from discord.ext import commands
 from cog_helpers import audit_log, require_auth, split_response
 from permissions import is_allowed
 from scheduler import scheduler
+from ui_components import EmbedColors
 
 log = logging.getLogger("openclaw.reports_cog")
 
@@ -91,7 +92,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         embed = discord.Embed(
             title="📝 Thread Recap",
             description=report[:4000],
-            color=discord.Color.blurple(),
+            color=EmbedColors.INFO,
         )
         await interaction.followup.send(embed=embed, ephemeral=True)
         audit_log(interaction.user, "context_recap", detail=f"channel={message.channel.id}")
@@ -124,7 +125,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         from obsidian_writer import save_to_vault as save_report_to_vault
         from skills.reporting_skills import generate_channel_recap_report
 
-        await interaction.response.defer()
+        await interaction.response.defer(thinking=True)  # Progress indicator
 
         report = await generate_channel_recap_report(
             channel_id=interaction.channel_id,
@@ -136,7 +137,7 @@ class ReportsCog(commands.Cog, name="Reports"):
             interaction,
             title="🗓️ Weekly Recap",
             body=report,
-            color=discord.Color.blurple(),
+            color=EmbedColors.INFO,
         )
 
         if save_to_vault:

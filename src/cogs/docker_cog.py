@@ -33,6 +33,7 @@ from skills import (
     stop_container,
 )
 from subprocess_utils import run as _run
+from ui_components import EmbedColors
 
 log = logging.getLogger("openclaw.docker_cog")
 
@@ -86,7 +87,7 @@ def _build_container_embed(container: dict) -> discord.Embed:
     ports = container.get("Ports", "none")
 
     running = state.lower() == "running"
-    color = discord.Color.green() if running else discord.Color.red()
+    color = EmbedColors.SUCCESS if running else EmbedColors.ERROR
     emoji = "🟢" if running else "🔴"
 
     embed = discord.Embed(
