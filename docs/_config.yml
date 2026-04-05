@@ -1,0 +1,56 @@
+theme: jekyll-theme-cayman
+title: OpenClaw Documentation
+description: Autonomous AI agent with Discord interface - Production-ready infrastructure
+show_downloads: true
+github:
+  is_project_page: true
+  repository_name: DaveVoyles/openclaw-on-mac-mini
+  repository_url: https://github.com/DaveVoyles/openclaw-on-mac-mini
+  owner_name: DaveVoyles
+
+# Navigation
+navigation:
+  - title: Home
+    url: /
+  - title: Commands
+    url: /COMMANDS
+  - title: Architecture
+    url: /ARCHITECTURE
+  - title: API Reference
+    url: /API_REFERENCE
+  - title: Contributing
+    url: /CONTRIBUTING
+
+# Features
+features:
+  highlight_theme: monokai
+
+# Social
+author: Dave Voyles
+twitter_username: DaveVoyles
+github_username: DaveVoyles
+
+# Build settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Exclude from build
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .github
+  - tests
+
+# Plugins
+plugins:
+  - jekyll-relative-links
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+relative_links:
+  enabled: true
+  collections: true

@@ -1,0 +1,223 @@
+---
+layout: default
+title: OpenClaw - Autonomous AI Agent
+---
+
+# 🦅 OpenClaw
+
+> **Autonomous AI agent with Discord interface - Production-ready infrastructure**
+
+[![CI](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/ci.yml/badge.svg)](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/ci.yml)
+[![Security](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/security.yml/badge.svg)](https://github.com/DaveVoyles/openclaw-on-mac-mini/actions/workflows/security.yml)
+[![codecov](https://codecov.io/gh/DaveVoyles/openclaw-on-mac-mini/branch/main/graph/badge.svg)](https://codecov.io/gh/DaveVoyles/openclaw-on-mac-mini)
+
+## 🚀 Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/DaveVoyles/openclaw-on-mac-mini.git
+cd openclaw-on-mac-mini
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your API keys
+
+# Run with Docker Compose
+docker-compose up -d
+
+# Or run in production mode
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+## ✨ Features
+
+- **101+ AI-Powered Commands** - Research, analytics, bookmarks, real estate, and more
+- **Multi-Modal AI** - Text, vision, and document analysis with Google Gemini
+- **Semantic Memory** - ChromaDB vector store for intelligent context recall
+- **Task Scheduling** - Cron-based automated tasks and reminders
+- **Health Monitoring** - Self-healing with alerts and backup systems
+- **Discord Integration** - Rich UI with buttons, dropdowns, and interactive modals
+- **Production-Ready** - Multi-stage Docker, security scanning, automated releases
+
+## 📚 Documentation
+
+<div class="docs-grid">
+  <div class="doc-card">
+    <h3>📖 <a href="COMMANDS.html">Commands Reference</a></h3>
+    <p>Complete guide to all 101+ available commands</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🏗️ <a href="ARCHITECTURE.html">Architecture</a></h3>
+    <p>System design, components, and data flow</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🔧 <a href="API_REFERENCE.html">API Reference</a></h3>
+    <p>Developer API documentation and integration guides</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🤝 <a href="CONTRIBUTING.html">Contributing</a></h3>
+    <p>Guidelines for contributing to OpenClaw</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🔒 <a href="API_SETUP.html">API Setup</a></h3>
+    <p>Configure external service integrations</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>📊 <a href="SERVICES.html">Services</a></h3>
+    <p>Backend services and infrastructure</p>
+  </div>
+</div>
+
+## 📊 Statistics
+
+<div class="stats-grid">
+  <div class="stat-card">
+    <h3>101+</h3>
+    <p>AI Commands</p>
+  </div>
+
+  <div class="stat-card">
+    <h3>30+</h3>
+    <p>API Integrations</p>
+  </div>
+
+  <div class="stat-card">
+    <h3>80%</h3>
+    <p>Test Coverage</p>
+  </div>
+
+  <div class="stat-card">
+    <h3>24/7</h3>
+    <p>Uptime</p>
+  </div>
+</div>
+
+## 🛠️ Technology Stack
+
+- **Language**: Python 3.12
+- **Framework**: discord.py 2.7+
+- **AI**: Google Gemini (Flash 2.0, Pro 1.5)
+- **Memory**: ChromaDB vector store
+- **Infrastructure**: Docker, Docker Compose
+- **CI/CD**: GitHub Actions
+- **Security**: Trivy, Bandit, Safety
+
+## 📈 Recent Updates
+
+- ✅ Multi-stage Docker builds (<500MB)
+- ✅ Trivy security scanning in CI/CD
+- ✅ GitHub Pages documentation site
+- ✅ Enhanced pre-commit hooks
+- ✅ Automated release workflow
+
+## 🎯 Use Cases
+
+### 📚 Research Assistant
+Autonomous web research with citations, summaries, and Obsidian vault storage.
+
+### 📊 Analytics & Insights
+Track trends, generate reports, and visualize data from multiple sources.
+
+### 🏠 Real Estate Monitoring
+Automated property searches with Zillow integration and alert notifications.
+
+### 📖 Content Curation
+Bookmark management, article summarization, and knowledge base building.
+
+### 🎬 Media Management
+Track movies/TV shows with Trakt.tv, manage audiobooks, and monitor downloads.
+
+## 🔗 Quick Links
+
+- [GitHub Repository](https://github.com/DaveVoyles/openclaw-on-mac-mini)
+- [Issue Tracker](https://github.com/DaveVoyles/openclaw-on-mac-mini/issues)
+- [Changelog](https://github.com/DaveVoyles/openclaw-on-mac-mini/releases)
+- [Docker Hub](https://hub.docker.com/r/davevoyles/openclaw)
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) for details
+
+---
+
+<div class="footer">
+  <p>Built with ❤️ by <a href="https://github.com/DaveVoyles">Dave Voyles</a></p>
+  <p>Powered by Google Gemini AI</p>
+</div>
+
+<style>
+.docs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+}
+
+.doc-card {
+  background: #f6f8fa;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.doc-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.doc-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.doc-card p {
+  margin: 0;
+  color: #57606a;
+  font-size: 0.9rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin: 2rem 0;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.stat-card h3 {
+  margin: 0;
+  font-size: 2.5rem;
+  font-weight: bold;
+}
+
+.stat-card p {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.footer {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid #d0d7de;
+  text-align: center;
+  color: #57606a;
+}
+
+.footer p {
+  margin: 0.5rem 0;
+}
+</style>
