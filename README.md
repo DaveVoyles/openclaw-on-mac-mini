@@ -58,7 +58,20 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Long responses auto-split across multiple embeds (no truncation)
 - Rate limiting — 60 RPM / 500 RPH (Gemini only; Ollama is unlimited)
 
-**Phase 4 — Security & Approvals** ✅
+**Phase 4 — Extensible Plugin Architecture** ✅
+
+- **Plugin system** — modular third-party extension framework with hot-reload support
+- **Dynamic loading** — install/unload/reload plugins without restarting the bot
+- **Plugin API** — comprehensive interface for skill/command registration, storage, config access, events, logging
+- **Dependency management** — automatic validation of Python package dependencies and version compatibility
+- **Plugin commands** — `/plugin list/info/enable/disable/reload/install/uninstall` for runtime management
+- **Example plugins** — `hello-world` (minimal), `custom-api` (HTTP integration), `advanced-commands` (Discord commands)
+- **Plugin generator** — `scripts/create_plugin.py` scaffolds new plugins with interactive prompts
+- **Documentation** — comprehensive guides (`docs/PLUGIN_API.md`, `docs/PLUGIN_DEVELOPMENT.md`)
+- **Test coverage** — 54 tests covering base classes, loader, registry, and API (100% passing)
+- See `plugins/examples/` for working examples and `docs/PLUGIN_DEVELOPMENT.md` for development guide
+
+**Phase 5 — Security & Approvals** ✅
 
 - `/restart` now requires explicit approval before executing
 - Discord approval UI — click buttons or react with ✅ / ❌ (5-minute timeout)
@@ -69,7 +82,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Risk classification system (LOW/MEDIUM/HIGH/CRITICAL)
 - Emergency stop blocks `/ask` and `/restart` when active
 
-**Phase 5 — Advanced Skills** ✅
+**Phase 6 — Advanced Skills** ✅
 
 - `/search` — search TV shows/movies across Sonarr & Radarr
 - `/queue` — view active downloads from SABnzbd + qBittorrent
@@ -85,7 +98,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - 25 Gemini function-calling tools for natural language queries
 - Persistent scheduled task system with JSON storage and `croniter`-based cron scheduling
 
-**Phase 6 — Remote Access & Monitoring** ✅
+**Phase 7 — Remote Access & Monitoring** ✅
 
 - `/network` — LAN + internet + DNS + Tailscale + OpenClaw health summary
 - `/tailscale` — Tailscale VPN status and device IP
@@ -94,7 +107,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Traefik reverse proxy route: `openclaw.davevoyles.synology.me`
 - Uptime Kuma monitor: polls `/health` every 60s with alerting
 
-**Phase 7 — Local LLM & Production Hardening** ✅
+**Phase 8 — Local LLM & Production Hardening** ✅
 
 - Ollama integration — `gemma4:e4b` running natively on Mac Mini M4 (9.6 GB, multimodal text/image/audio)
 - Hybrid routing in `llm.py` — keyword heuristic routes simple queries to Ollama, tool-calling queries to Gemini

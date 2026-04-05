@@ -121,8 +121,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
             api_quota_daily INTEGER DEFAULT 500,
             api_quota_used INTEGER DEFAULT 0,
             quota_reset_at REAL DEFAULT 0,
-            is_active INTEGER DEFAULT 1,
-            FOREIGN KEY (owner_id) REFERENCES users(id)
+            is_active INTEGER DEFAULT 1
         )
     """)
     
@@ -143,9 +142,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
             user_id INTEGER NOT NULL,
             role TEXT NOT NULL DEFAULT 'member',
             joined_at REAL NOT NULL,
-            PRIMARY KEY (workspace_id, user_id),
-            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            PRIMARY KEY (workspace_id, user_id)
         )
     """)
     
@@ -164,9 +161,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
             resource_data TEXT NOT NULL,
             created_by INTEGER NOT NULL,
             created_at REAL NOT NULL,
-            updated_at REAL NOT NULL,
-            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-            FOREIGN KEY (created_by) REFERENCES users(id)
+            updated_at REAL NOT NULL
         )
     """)
     

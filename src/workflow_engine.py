@@ -19,7 +19,13 @@ import yaml
 log = logging.getLogger("openclaw.workflow_engine")
 
 WORKFLOW_DIR = Path(os.getenv("MEMORY_DIR", "/memory")) / "workflows"
-WORKFLOW_DIR.mkdir(parents=True, exist_ok=True)
+
+# Only create directory if it doesn't exist and parent is writable
+try:
+    WORKFLOW_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError):
+    # In tests or when /memory is not accessible, skip directory creation
+    pass
 
 
 # ---------------------------------------------------------------------------

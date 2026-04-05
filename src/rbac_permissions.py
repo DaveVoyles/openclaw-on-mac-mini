@@ -111,9 +111,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
             granted INTEGER NOT NULL,
             granted_by INTEGER,
             granted_at REAL NOT NULL,
-            PRIMARY KEY (user_id, permission),
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (granted_by) REFERENCES users(id)
+            PRIMARY KEY (user_id, permission)
         )
     """)
     
@@ -126,10 +124,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
             granted INTEGER NOT NULL,
             granted_by INTEGER,
             granted_at REAL NOT NULL,
-            PRIMARY KEY (workspace_id, user_id, permission),
-            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (granted_by) REFERENCES users(id)
+            PRIMARY KEY (workspace_id, user_id, permission)
         )
     """)
     
@@ -142,9 +137,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
             permission TEXT,
             target_user_id INTEGER,
             details TEXT,
-            timestamp REAL NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (target_user_id) REFERENCES users(id)
+            timestamp REAL NOT NULL
         )
     """)
     

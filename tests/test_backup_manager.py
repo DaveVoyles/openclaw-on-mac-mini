@@ -2,11 +2,16 @@
 Tests for backup manager.
 """
 
+import sys
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 import asyncio
 import json
 import shutil
 import sqlite3
-from pathlib import Path
 
 import pytest
 
