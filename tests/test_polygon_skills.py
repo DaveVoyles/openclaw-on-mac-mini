@@ -19,6 +19,7 @@ from skills.polygon_skills import (
     _record_success,
     _circuit_breaker,
     _cache,
+    _sessions,
 )
 
 
@@ -140,16 +141,16 @@ class TestGetStockQuote:
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
             
-            with patch("skills.polygon_skills._sessions.get") as mock_get_session:
-                mock_session = AsyncMock()
-                mock_response = AsyncMock()
-                mock_response.status = 200
-                mock_response.json = AsyncMock(return_value=mock_response_data)
-                mock_session.get = AsyncMock(return_value=mock_response)
-                mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-                mock_session.__aexit__ = AsyncMock(return_value=None)
-                mock_get_session.return_value = mock_session
-
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=mock_response_data)
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
+            
+            mock_session = AsyncMock()
+            mock_session.get = MagicMock(return_value=mock_response)
+            
+            with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_stock_quote("AAPL")
                 
                 assert result["status"] == "ok"
@@ -166,15 +167,15 @@ class TestGetStockQuote:
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
             
-            with patch("skills.polygon_skills._sessions.get") as mock_get_session:
-                mock_session = AsyncMock()
-                mock_response = AsyncMock()
-                mock_response.status = 429
-                mock_session.get = AsyncMock(return_value=mock_response)
-                mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-                mock_session.__aexit__ = AsyncMock(return_value=None)
-                mock_get_session.return_value = mock_session
-
+            mock_response = AsyncMock()
+            mock_response.status = 429
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
+            
+            mock_session = AsyncMock()
+            mock_session.get = MagicMock(return_value=mock_response)
+            
+            with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_stock_quote("AAPL")
                 
                 assert result["status"] == "error"
@@ -199,16 +200,16 @@ class TestGetStockQuote:
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
             
-            with patch("skills.polygon_skills._sessions.get") as mock_get_session:
-                mock_session = AsyncMock()
-                mock_response = AsyncMock()
-                mock_response.status = 200
-                mock_response.json = AsyncMock(return_value=mock_response_data)
-                mock_session.get = AsyncMock(return_value=mock_response)
-                mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-                mock_session.__aexit__ = AsyncMock(return_value=None)
-                mock_get_session.return_value = mock_session
-
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=mock_response_data)
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
+            
+            mock_session = AsyncMock()
+            mock_session.get = MagicMock(return_value=mock_response)
+            
+            with patch.object(type(_sessions), 'get', return_value=mock_session):
                 # First call - should hit API
                 result1 = await get_stock_quote("AAPL")
                 assert result1["status"] == "ok"
@@ -243,16 +244,16 @@ class TestGetMarketStatus:
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
             
-            with patch("skills.polygon_skills._sessions.get") as mock_get_session:
-                mock_session = AsyncMock()
-                mock_response = AsyncMock()
-                mock_response.status = 200
-                mock_response.json = AsyncMock(return_value=mock_response_data)
-                mock_session.get = AsyncMock(return_value=mock_response)
-                mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-                mock_session.__aexit__ = AsyncMock(return_value=None)
-                mock_get_session.return_value = mock_session
-
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=mock_response_data)
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
+            
+            mock_session = AsyncMock()
+            mock_session.get = MagicMock(return_value=mock_response)
+            
+            with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_market_status()
                 
                 assert result["status"] == "ok"
@@ -291,16 +292,16 @@ class TestGetStockHistory:
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
             
-            with patch("skills.polygon_skills._sessions.get") as mock_get_session:
-                mock_session = AsyncMock()
-                mock_response = AsyncMock()
-                mock_response.status = 200
-                mock_response.json = AsyncMock(return_value=mock_response_data)
-                mock_session.get = AsyncMock(return_value=mock_response)
-                mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-                mock_session.__aexit__ = AsyncMock(return_value=None)
-                mock_get_session.return_value = mock_session
-
+            mock_response = AsyncMock()
+            mock_response.status = 200
+            mock_response.json = AsyncMock(return_value=mock_response_data)
+            mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+            mock_response.__aexit__ = AsyncMock(return_value=None)
+            
+            mock_session = AsyncMock()
+            mock_session.get = MagicMock(return_value=mock_response)
+            
+            with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_stock_history("AAPL", days=30)
                 
                 assert result["status"] == "ok"
