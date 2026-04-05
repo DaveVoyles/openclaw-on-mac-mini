@@ -179,6 +179,11 @@ class _Config:
     serper_api_key: str = os.getenv("SERPER_API_KEY", "")
     tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
 
+    # -- News & Data APIs (Free Tiers) -----------------------------------------
+    newsapi_key: str = os.getenv("NEWSAPI_KEY", "")  # Free: 100 req/day
+    apisports_key: str = os.getenv("APISPORTS_KEY", "")  # Free: 100 req/day
+    alphavantage_key: str = os.getenv("ALPHAVANTAGE_KEY", "")  # Free: 25 req/day
+
     # -- Image generation (Stable Diffusion) -----------------------------------
     sd_url: str = os.getenv("SD_URL", "http://host.docker.internal:7861")
     sd_timeout: int = int(os.getenv("SD_TIMEOUT", str(TIMEOUT_EXTENDED)))
