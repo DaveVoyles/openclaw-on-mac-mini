@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/error_aggregator.py
+# hypothesis_version: 6.151.10
+
+[300, 3600, 'ID', 'N', '[0-9a-f]{8,}', '\\d{2,}', 'openclaw']

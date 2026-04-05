@@ -355,7 +355,19 @@ _BARE_IMAGE_RE = re.compile(
 )
 
 
-def _extract_image_url(text: str) -> str | None:
+# ---------------------------------------------------------------------------
+# Message formatting (extracted to bot_formatting.py)
+# ---------------------------------------------------------------------------
+
+from bot_formatting import (
+    extract_file_attachment as _extract_file_attachment,
+    extract_image_url as _extract_image_url,
+    format_markdown_for_discord as _format_markdown_for_discord,
+    format_tables_for_discord as _format_tables_for_discord,
+    split_response as _split_response,
+)
+
+_STREAM_EDIT_INTERVAL = 3.0
     """Return the first image URL found in the response text, or None."""
     m = _IMAGE_LINK_RE.search(text)
     if m:
@@ -395,13 +407,6 @@ def _format_markdown_for_discord(text: str) -> str:
 
     return "\n".join(result)
 
-
-def _format_tables_for_discord(text: str) -> str:
-    """Convert markdown tables to clean, padded ANSI code blocks for Discord."""
-    lines = text.split("\n")
-    result: list[str] = []
-    table_lines: list[str] = []
-    in_table = False
 
     def _flush_table(tlines: list[str]) -> None:
         rows: list[list[str]] = []
@@ -477,57 +482,11 @@ def _format_tables_for_discord(text: str) -> str:
     return "\n".join(result)
 
 
-def _split_response(text: str) -> list[str]:
-    """Split a long response into chunks that fit within Discord's embed limit."""
-    if len(text) <= _EMBED_LIMIT:
-        return [text]
-
-    chunks = []
-    while text:
-        if len(text) <= _EMBED_LIMIT:
-            chunks.append(text)
-            break
-        split_at = text.rfind("\n", 0, _EMBED_LIMIT)
-        if split_at <= 0:
-            split_at = _EMBED_LIMIT
-            chunks.append(text[:split_at] + "…")
-            text = "…" + text[split_at:].lstrip("\n")
-        else:
-            chunks.append(text[:split_at])
-            text = text[split_at:].lstrip("\n")
-    return chunks
-
-
 _STREAM_EDIT_INTERVAL = 3.0
 
 _CODE_BLOCK_RE = re.compile(
     r"```(\w+)?\n([\s\S]+?)```",
 )
-
-
-def _extract_file_attachment(text: str) -> tuple[discord.File, str] | None:
-    """If the response contains a large code block (>500 chars), extract it as a discord.File."""
-    matches = list(_CODE_BLOCK_RE.finditer(text))
-    if not matches:
-        return None
-
-    best = max(matches, key=lambda m: len(m.group(2)))
-    code = best.group(2).strip()
-    lang = (best.group(1) or "txt").lower()
-
-    if len(code) < 500:
-        return None
-
-    ext_map = {
-        "python": "py", "py": "py", "javascript": "js", "js": "js",
-        "typescript": "ts", "ts": "ts", "json": "json", "yaml": "yaml",
-        "yml": "yaml", "html": "html", "css": "css", "sql": "sql",
-        "bash": "sh", "sh": "sh", "csv": "csv", "markdown": "md", "md": "md",
-    }
-    ext = ext_map.get(lang, "txt")
-
-    buffer = io.BytesIO(code.encode("utf-8"))
-    return discord.File(buffer, filename=f"openclaw_output.{ext}"), lang
 
 
 # ---------------------------------------------------------------------------

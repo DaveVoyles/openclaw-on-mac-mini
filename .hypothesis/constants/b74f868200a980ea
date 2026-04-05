@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/dashboard/routes.py
+# hypothesis_version: 6.151.10
+
+['/', '/api/config-status', '/api/dashboard', '/api/dream-health', '/api/errors', '/api/goals', '/api/knowledge-graph', '/api/memories', '/api/quota-status', '/api/research', '/api/response-stats', '/api/schedules', '/api/search-stats', '/api/skill-stats', '/api/status', '/api/threads', '/api/topology', '/dashboard', '/guide', '/terminal']

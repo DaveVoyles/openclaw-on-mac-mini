@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/discord_commands/code.py
+# hypothesis_version: 6.151.10
+
+[200, 10000, '*(no output)*', '```', 'attachments', 'content', 'diff', 'embed', 'output.txt', 'run-code', 'run_code', '✅', '❌', '❌ No code provided.', '🔀 Git Changes']

@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/approvals.py
+# hypothesis_version: 6.151.10
+
+[300, 'ACTIVATED', 'CRITICAL', 'Details', 'Emergency stop %s', 'HIGH', 'LOW', 'MEDIUM', 'approve', 'deactivated', 'deny', 'message', 'openclaw.approvals', '⚪', '✅ Approve', '❌ Deny', '🔴', '🟠', '🟡', '🟢']

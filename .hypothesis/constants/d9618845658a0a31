@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/discord_commands/system.py
+# hypothesis_version: 6.151.10
+
+['analyze', 'ports', 'report', '📊 System Report', '🔌 Port Status']

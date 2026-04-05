@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/audit.py
+# hypothesis_version: 6.151.10
+
+[10000, '0', 'action', 'detail', 'id', 'result', 'success', 'system', 'ts', 'user', 'user_id']

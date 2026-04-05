@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/discord_commands/comms.py
+# hypothesis_version: 6.151.10
+
+['Email subject', 'Message body', 'Recipient email', 'mail']

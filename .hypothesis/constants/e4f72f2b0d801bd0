@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/permissions.py
+# hypothesis_version: 6.151.10
+
+[0.0, '/config', 'CONFIG_DIR', 'allowed_services', 'commands', 'denied_services', 'openclaw.permissions', 'permissions.yaml']
