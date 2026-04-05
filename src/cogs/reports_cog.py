@@ -122,7 +122,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         schedule_weekly: bool = False,
     ):
         from obsidian_writer import save_to_vault as save_report_to_vault
-        from reporting_skills import generate_channel_recap_report
+        from skills.reporting_skills import generate_channel_recap_report
 
         await interaction.response.defer()
 
@@ -199,7 +199,10 @@ class ReportsCog(commands.Cog, name="Reports"):
         schedule_weekly: bool = False,
     ):
         from obsidian_writer import save_to_vault as save_report_to_vault
-        from reporting_skills import build_sports_watch_query, generate_sports_watch_report
+        from skills.reporting_skills import (
+            build_sports_watch_query,
+            generate_sports_watch_report,
+        )
 
         await interaction.response.defer()
 
