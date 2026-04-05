@@ -386,13 +386,15 @@ class TestSmartMediaIntegration:
     @pytest.mark.asyncio
     async def test_full_workflow_storage_to_quality(self):
         """Test workflow: check storage -> recommend quality -> apply."""
+        from skills import smart_media_skills as smart_media
+
         # Mock low storage
         with patch("skills.smart_media_skills.get_storage_info", AsyncMock(return_value={
             "free_gb": 180.0,
             "total_gb": 1000.0,
             "percent_free": 18.0,
         })):
-            storage = await get_storage_info("sonarr")
+            storage = await smart_media.get_storage_info("sonarr")
             assert storage["free_gb"] == 180.0
 
             # Determine quality
