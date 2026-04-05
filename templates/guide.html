@@ -316,6 +316,17 @@
           <li><a href="#ask-followups">48. Smart Follow-ups (/ask)</a></li>
           <li><a href="#calendar-email">49. Calendar &amp; Email</a></li>
           <li><a href="#journal-github">50. Journal &amp; GitHub</a></li>
+          <li><a href="#image-gen">51. Image Generation (/imagine)</a></li>
+          <li><a href="#dns">52. DNS Management (/dns)</a></li>
+          <li><a href="#notion">53. Notion Integration (/notion)</a></li>
+          <li><a href="#gdoc">54. Google Docs (/gdoc)</a></li>
+          <li><a href="#perf">55. System Performance (/perf)</a></li>
+          <li><a href="#ntfy">56. Push Notifications (/ntfy)</a></li>
+          <li><a href="#imdb">57. Movie &amp; TV Lookup (/media)</a></li>
+          <li><a href="#sentry">58. Error Monitoring (/sentry)</a></li>
+          <li><a href="#digest">59. Personalized Digests (/digest)</a></li>
+          <li><a href="#trends">60. Trend Detection &amp; Tracking (/track, /trending, /trends, /breaking)</a></li>
+          <li><a href="#premium-skills">61. Premium API Skills Reference</a></li>
         </ul>
       </div>
 
@@ -3845,6 +3856,234 @@ Division 1 men's lacrosse games this week and post a table.
         <li><code>/sentry stats [project]</code> — Hourly error rate graph for the past 24 hours.</li>
       </ul>
       <p><strong>Setup:</strong> Create a Sentry internal integration token with <em>Issues &amp; Events: Read &amp; Write</em> scope, then set <code>SENTRY_AUTH_TOKEN</code>, <code>SENTRY_ORG</code> (your org slug), and optionally <code>SENTRY_URL</code> (default: <code>https://sentry.io</code>) in <code>.env</code>.</p>
+
+      <!-- 59. Personalized Digests -->
+      <h2 id="digest">59. Personalized Digests (<code>/digest</code>)</h2>
+      <p>Get AI-curated news digests tailored to your interests, stocks, and sports teams. Configure topics, delivery schedule, and instantly generate personalized summaries.</p>
+      
+      <h3>Core Commands</h3>
+      <ul>
+        <li><code>/digest now</code> — Generate an instant personalized digest based on your current preferences.</li>
+        <li><code>/digest preview</code> — Preview what your next scheduled digest will contain without delivering it.</li>
+        <li><code>/digest config</code> — View all your current digest preferences and settings.</li>
+      </ul>
+
+      <h3>Topic Management</h3>
+      <ul>
+        <li><code>/digest topic add &lt;topic&gt;</code> — Add a topic of interest (e.g., "Artificial Intelligence", "Climate Change", "Space Exploration").</li>
+        <li><code>/digest topic remove &lt;topic&gt;</code> — Remove a topic from your interests.</li>
+        <li><code>/digest topics</code> — List all your tracked topics.</li>
+      </ul>
+
+      <h3>Stock Watchlist</h3>
+      <ul>
+        <li><code>/digest stock add &lt;ticker&gt;</code> — Add a stock ticker to your watchlist (e.g., "NVDA", "TSLA", "AAPL").</li>
+        <li><code>/digest stock remove &lt;ticker&gt;</code> — Remove a stock from your watchlist.</li>
+        <li><code>/digest stocks</code> — View all stocks you're tracking.</li>
+      </ul>
+
+      <h3>Sports Teams</h3>
+      <ul>
+        <li><code>/digest team add &lt;team&gt;</code> — Add a sports team to follow (e.g., "Lakers", "Patriots", "Yankees").</li>
+        <li><code>/digest team remove &lt;team&gt;</code> — Remove a team from your digest.</li>
+        <li><code>/digest teams</code> — List all your tracked teams.</li>
+      </ul>
+
+      <h3>Schedule &amp; Delivery</h3>
+      <ul>
+        <li><code>/digest schedule &lt;frequency&gt;</code> — Set delivery schedule. Options: <code>daily</code> (8:00 AM), <code>weekly</code> (Monday 8:00 AM), <code>custom</code> (specify time).</li>
+        <li><code>/digest enable</code> — Enable automatic scheduled delivery of your digest.</li>
+        <li><code>/digest disable</code> — Disable scheduled delivery (you can still use <code>/digest now</code>).</li>
+      </ul>
+
+      <h3>Example Workflows</h3>
+      <pre><code>// Create a tech-focused morning digest
+/digest topic add "Artificial Intelligence"
+/digest topic add "Cryptocurrency"
+/digest stock add NVDA
+/digest stock add COIN
+/digest schedule daily time:08:00
+/digest enable
+/digest preview
+
+// Sports fan weekend digest
+/digest team add "Philadelphia Eagles"
+/digest team add "76ers"
+/digest schedule weekly day:sunday time:09:00
+/digest now
+
+// Investor's market digest
+/digest stock add AAPL
+/digest stock add TSLA
+/digest stock add NVDA
+/digest topic add "Federal Reserve"
+/digest topic add "Stock Market"
+/digest now</code></pre>
+
+      <p><strong>💡 Pro Tip:</strong> Combine digest with <code>/ask</code> for follow-up questions like <em>"Tell me more about that NVDA news"</em> or <em>"What's the market sentiment on AI stocks?"</em></p>
+
+      <!-- 60. Trend Detection & Tracking -->
+      <h2 id="trends">60. Trend Detection &amp; Tracking (<code>/track</code>, <code>/trending</code>, <code>/trends</code>, <code>/breaking</code>)</h2>
+      <p>Track topics across news sources, detect emerging trends, identify breaking stories, and visualize topic momentum with AI-powered trend analysis.</p>
+      
+      <h3>Tracking Topics</h3>
+      <ul>
+        <li><code>/track &lt;topic&gt; [category]</code> — Start tracking a topic for trend detection. Category examples: <code>Tech</code>, <code>Finance</code>, <code>Sports</code>, <code>Politics</code>.</li>
+        <li><code>/untrack &lt;topic&gt;</code> — Stop tracking a topic.</li>
+        <li><code>/tracked</code> — List all your currently tracked topics with their categories.</li>
+      </ul>
+
+      <h3>Viewing Trends</h3>
+      <ul>
+        <li><code>/trending [category] [timeframe]</code> — Show currently trending topics. Timeframe options: <code>1h</code>, <code>6h</code>, <code>24h</code>, <code>7d</code>. Defaults to 24 hours.</li>
+        <li><code>/trends &lt;topic&gt;</code> — Show detailed trend trajectory for a specific topic with momentum chart and key events.</li>
+        <li><code>/breaking [category] [threshold]</code> — Detect breaking news based on sudden topic velocity. Threshold: <code>1.5</code> (default) to <code>5.0</code> (high sensitivity).</li>
+      </ul>
+
+      <h3>Advanced Features</h3>
+      <ul>
+        <li><strong>Momentum Scoring:</strong> Topics are scored based on mention frequency, velocity (rate of increase), and source diversity.</li>
+        <li><strong>Smart Categorization:</strong> AI automatically categorizes topics if not specified.</li>
+        <li><strong>Correlation Detection:</strong> See which topics trend together (e.g., "Bitcoin" and "Federal Reserve").</li>
+        <li><strong>Visual Charts:</strong> Trend trajectories displayed with ASCII charts showing 24-hour momentum.</li>
+      </ul>
+
+      <h3>Example Workflows</h3>
+      <pre><code>// Track tech industry trends
+/track "OpenAI" category:Tech
+/track "NVIDIA GPUs" category:Tech
+/track "AI Regulation" category:Tech
+/trending category:Tech timeframe:24h
+/trends "OpenAI"
+
+// Financial market monitoring
+/track "Bitcoin" category:Finance
+/track "Federal Reserve" category:Finance
+/track "Inflation" category:Finance
+/breaking category:Finance threshold:2.5
+
+// Sports news tracking
+/track "NBA Playoffs" category:Sports
+/track "LeBron James" category:Sports
+/trending category:Sports timeframe:6h
+
+// Breaking news detection
+/breaking threshold:3.0
+/trends "Election 2024"</code></pre>
+
+      <h3>Trend Visualization Example</h3>
+      <pre><code>📊 Trend Trajectory: "Artificial Intelligence"
+
+Momentum Score: 8.7/10 ⚡️
+Status: 🔥 SURGING
+
+24h Chart:
+     ▁▂▃▅▆▇█
+Hour  0  4  8 12 16 20 24
+Mentions: 234 → 891 (+280%)
+
+Key Events:
+• Major AI announcement from Google
+• New ChatGPT features released
+• Senate hearing on AI regulation
+
+Related Trends:
+• "Machine Learning" (correlation: 0.89)
+• "GPT-4" (correlation: 0.76)</code></pre>
+
+      <p><strong>💡 Pro Tip:</strong> Use <code>/track</code> with scheduled research (<code>/schedule add</code>) to automatically monitor topics and receive daily trend reports.</p>
+
+      <!-- 61. Premium API Skills Reference -->
+      <h2 id="premium-skills">61. Premium API Skills Reference</h2>
+      <p>When using <code>/ask</code>, the AI can automatically invoke these premium skills to fetch real-time data. You don't need to call them manually—just ask naturally!</p>
+
+      <h3>🗞️ News Skills</h3>
+      <ul>
+        <li><code>search_news(query, from_date, to_date)</code> — Search news articles by keyword and date range.</li>
+        <li><code>top_headlines(category, country)</code> — Get breaking headlines. Categories: <code>business</code>, <code>technology</code>, <code>sports</code>, <code>entertainment</code>, etc.</li>
+        <li><code>news_by_source(source_id)</code> — Fetch latest news from specific sources (e.g., "bbc-news", "techcrunch").</li>
+      </ul>
+      <pre><code>// Example questions that trigger news skills:
+"What's the latest news about SpaceX?"
+"Show me top tech headlines from the past week"
+"Any breaking business news today?"</code></pre>
+
+      <h3>🏀 Sports Skills</h3>
+      <ul>
+        <li><code>get_nba_scores(date)</code> — NBA game scores for a specific date.</li>
+        <li><code>get_team_standings(league, season)</code> — Current standings for NBA, NFL, MLB, NHL.</li>
+        <li><code>get_player_stats(player_name, season)</code> — Individual player statistics.</li>
+        <li><code>get_game_summary(game_id)</code> — Detailed game recap with play-by-play.</li>
+      </ul>
+      <pre><code>// Example questions:
+"How did the Lakers do last night?"
+"Show me NBA standings"
+"What are LeBron's stats this season?"</code></pre>
+
+      <h3>💰 Finance Skills</h3>
+      <ul>
+        <li><code>get_stock_info(ticker)</code> — Real-time stock price, market cap, P/E ratio, 52-week range.</li>
+        <li><code>get_market_news(category)</code> — Latest financial news by category (stocks, crypto, forex).</li>
+        <li><code>get_sentiment_analysis(ticker)</code> — AI sentiment analysis of recent news about a stock.</li>
+        <li><code>get_box_office_stocks()</code> — Stock performance of major entertainment companies with box office correlation.</li>
+        <li><code>get_crypto_price(symbol)</code> — Cryptocurrency prices and 24h change.</li>
+      </ul>
+      <pre><code>// Example questions:
+"What's Tesla's stock price and news sentiment?"
+"Show me box office stocks performance"
+"How is Bitcoin doing?"
+"Get me market news about tech stocks"</code></pre>
+
+      <h3>🔬 Synthesis Skills (Advanced AI Analysis)</h3>
+      <ul>
+        <li><code>synthesize_company_report(ticker)</code> — Comprehensive company analysis combining stock data, news, sentiment, and financials.</li>
+        <li><code>synthesize_entertainment_report(topic)</code> — Entertainment industry analysis with box office data, streaming trends, and stock impact.</li>
+        <li><code>synthesize_market_overview()</code> — Overall market summary with sector performance, top movers, and news.</li>
+        <li><code>find_correlations(entity)</code> — Discover correlations between stocks, news topics, and market events.</li>
+      </ul>
+      <pre><code>// Example questions:
+"Give me a full company report for Disney including box office data"
+"What's the correlation between Tesla stock and Elon Musk news?"
+"Synthesize the current market overview"
+"How do Marvel movies affect Disney stock?"</code></pre>
+
+      <h3>📰 Digest Skills</h3>
+      <ul>
+        <li><code>configure_digest(preferences)</code> — Programmatically set digest preferences (topics, stocks, teams, schedule).</li>
+        <li><code>get_my_digest()</code> — Generate a personalized digest based on your profile.</li>
+        <li><code>preview_digest()</code> — Preview next scheduled digest without delivering.</li>
+      </ul>
+      <pre><code>// Example questions:
+"Show me my personalized digest"
+"Configure my digest to include AI and crypto news"
+"What will my next digest contain?"</code></pre>
+
+      <h3>📈 Trend Skills</h3>
+      <ul>
+        <li><code>track_topic(topic, category)</code> — Start tracking a topic for trend analysis.</li>
+        <li><code>get_trending_topics(category, timeframe)</code> — Get currently trending topics with momentum scores.</li>
+        <li><code>detect_breaking_news()</code> — Identify breaking stories based on sudden topic velocity.</li>
+        <li><code>get_topic_trajectory(topic)</code> — Detailed trend analysis with historical data and predictions.</li>
+      </ul>
+      <pre><code>// Example questions:
+"What topics are trending in tech right now?"
+"Track 'Quantum Computing' for me"
+"Is there any breaking news?"
+"Show me the trend trajectory for Bitcoin"</code></pre>
+
+      <h3>🎯 Using Skills Naturally</h3>
+      <p>The AI automatically selects the best skills based on your question. You don't need to know the skill names—just ask!</p>
+      <pre><code>// Instead of calling skills manually, just ask:
+"What's happening with NVIDIA stock and AI news today?"
+→ AI uses: get_stock_info(), search_news(), get_sentiment_analysis()
+
+"Give me a complete report on Disney including movies and stock"
+→ AI uses: synthesize_company_report(), get_box_office_stocks()
+
+"Are there any trending topics about climate change?"
+→ AI uses: get_trending_topics(), get_topic_trajectory()</code></pre>
+
+      <p><strong>💡 Pro Tip:</strong> For complex analysis, ask multi-part questions. The AI can chain multiple skills together: <em>"Compare Tesla and Ford stock performance, recent news, and market sentiment"</em></p>
 
       <div
         style="
