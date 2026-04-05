@@ -42,7 +42,8 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 - `/ask <question>` — AI-powered natural language queries
 - **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
-- **Intent-based tool shortlisting + request hints**: `/ask` narrows the skill set per prompt and now infers cues like services, time windows, sports/watch-guide intent, calendar asks, and inbox requests from plain English
+- **Intent-based tool shortlisting + request hints**: `/ask` narrows the skill set per prompt and infers cues like services, time windows, sports/watch-guide intent, calendar asks, and inbox requests from plain English
+- **Semantic fallback retrieval**: when lexical matching is weak, `/ask` can semantically shortlist likely tools instead of exposing the full tool set
 - **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
 - Conversation memory — multi-turn context per user/channel (30 min TTL)
@@ -1006,8 +1007,14 @@ print(f\"Calls: {d['calls']}\")
 
 ## Related Documentation
 
+### Architecture & Planning
 - [Implementation Plan](docs/IMPLEMENTATION-PLAN.md) — Full 7-phase roadmap
 - [Docker Stack](https://github.com/DaveVoyles/docker-on-mac-mini) — The infrastructure OpenClaw manages
+
+### API Documentation
+- [API Reference](docs/API_REFERENCE.md) — Complete reference for all external APIs
+- [API Setup Guide](docs/API_SETUP.md) — Step-by-step setup instructions
+- [API Costs & Budgeting](docs/API_COSTS.md) — Cost breakdown and optimization strategies
 
 ---
 
