@@ -246,6 +246,25 @@ class OpenClawBot(commands.Bot):
             )
             log.info("Registered 3:50 AM vault indexer cron job")
 
+        # Register Patreon monitoring (every 30 minutes)
+        patreon_tasks = [t for t in scheduler.list_tasks() if "patreon" in t.action.lower()]
+        if not patreon_tasks:
+            # Import and register the monitoring function
+            from patreon_scheduled import scheduled_patreon_health_check
+            scheduler.register_skills({"patreon_health_check": scheduled_patreon_health_check})
+            scheduler.create(
+                action="patreon_health_check",
+                args={
+                    "discord_client": self,
+                    "alert_channel_id": ALERT_CHANNEL_ID,
+                },
+                interval_minutes=30,
+                created_by="system",
+                notify_channel_id=0,  # Don't notify - alerts handled internally
+                alert_only=False,
+            )
+            log.info("Registered Patreon health monitoring (every 30 minutes)")
+
         # Wire scheduler -> Discord notification callback
         async def _scheduler_notify(task_id: str, action: str, result: str, is_alert: bool) -> None:
             task = scheduler.get(task_id)
@@ -379,10 +398,7 @@ from bot_formatting import (
     format_markdown_for_discord as _format_markdown_for_discord,
 )
 from bot_formatting import (
-    format_tables_for_copy as _format_tables_for_copy,
-)
-from bot_formatting import (
-    format_tables_for_discord as _format_tables_for_discord,
+    format_tables_for_context as _format_tables_for_context,
 )
 from bot_formatting import (
     split_response as _split_response,
@@ -956,7 +972,11 @@ async def ask_cmd(
         log.debug("Table image rendering failed: %s", e)
 
     response_text = _format_markdown_for_discord(response_text)
-    response_text = _format_tables_for_discord(response_text)
+    response_text = _format_tables_for_context(
+        response_text,
+        channel_id=context_channel_id,
+        thread_id=context_thread_id,
+    )
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
     file_attachment = _extract_file_attachment(response_text)
@@ -1319,7 +1339,11 @@ async def on_message(message: discord.Message) -> None:
             log.debug("Thread table image rendering failed: %s", e)
 
         response_text = _format_markdown_for_discord(response_text)
-        response_text = _format_tables_for_copy(response_text)
+        response_text = _format_tables_for_context(
+            response_text,
+            channel_id=scoped_channel_id,
+            thread_id=scoped_thread_id,
+        )
         chunks = _split_response(response_text)
 
         for chunk in chunks:

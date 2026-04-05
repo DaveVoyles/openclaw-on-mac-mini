@@ -328,6 +328,38 @@ async def check_api_endpoint(
 _health_checker: Optional[HealthChecker] = None
 
 
+async def check_patreon_health() -> HealthCheckResult:
+    """Check Patreon/MonsterVision health."""
+    try:
+        from patreon_monitor import get_patreon_checker
+
+        checker = get_patreon_checker()
+        result = await checker.check_health()
+
+        # Map PatreonHealthStatus to HealthStatus
+        from patreon_monitor import PatreonHealthStatus
+
+        status_map = {
+            PatreonHealthStatus.OK: HealthStatus.HEALTHY,
+            PatreonHealthStatus.WARNING: HealthStatus.DEGRADED,
+            PatreonHealthStatus.CRITICAL: HealthStatus.UNHEALTHY,
+            PatreonHealthStatus.UNKNOWN: HealthStatus.DEGRADED,
+        }
+
+        return HealthCheckResult(
+            name="patreon",
+            status=status_map.get(result.status, HealthStatus.DEGRADED),
+            message=result.message,
+            metadata=result.metadata,
+        )
+    except Exception as e:
+        return HealthCheckResult(
+            name="patreon",
+            status=HealthStatus.UNHEALTHY,
+            message=f"Patreon health check failed: {str(e)}",
+        )
+
+
 def get_health_checker() -> HealthChecker:
     """Get or create the global health checker."""
     global _health_checker
@@ -338,5 +370,6 @@ def get_health_checker() -> HealthChecker:
         _health_checker.register_check("disk_space", check_disk_space)
         _health_checker.register_check("memory", check_memory)
         _health_checker.register_check("database", check_database)
+        _health_checker.register_check("patreon", check_patreon_health)
 
     return _health_checker

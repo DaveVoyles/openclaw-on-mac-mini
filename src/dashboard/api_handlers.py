@@ -21,6 +21,41 @@ from .helpers import GITHUB_REPO, VERSION, _command_list, _cron_to_human, _load_
 _dashboard_sessions = _SessionManager(timeout=10, name="dashboard")
 
 
+def _parse_scope_id(raw_value: str | int | None, *, field: str, required: bool = False) -> str | None:
+    if raw_value in (None, ""):
+        if required:
+            raise ValueError(f"{field} is required")
+        return None
+    value = str(raw_value).strip()
+    if not value:
+        if required:
+            raise ValueError(f"{field} is required")
+        return None
+    if not value.isdigit():
+        raise ValueError(f"{field} must be a numeric Discord ID")
+    return value
+
+
+def _audit_scope_action(
+    actor: str,
+    action: str,
+    *,
+    channel_id: str,
+    thread_id: str | None,
+    detail: dict | None = None,
+) -> None:
+    try:
+        from audit import audit_log
+
+        payload = {
+            "scope": {"channel_id": channel_id, "thread_id": thread_id},
+            **(detail or {}),
+        }
+        audit_log(actor or "dashboard", action, detail=json.dumps(payload, separators=(",", ":")))
+    except Exception as exc:
+        log.debug("Audit log write failed for %s: %s", action, exc)
+
+
 def _parse_sms_user_id(raw_value: str | int | None) -> int | None:
     if raw_value in (None, ""):
         return None
@@ -104,44 +139,33 @@ async def api_status_handler(request):
     else:
         checks["copilot_proxy"] = {"status": "not_configured"}
 
-    # Patreon (MonsterVision) — cookie health
+    # Patreon (MonsterVision) — enhanced health check
     try:
-        session = await _dashboard_sessions.get()
-        monstervision_url = f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status"
-        async with session.get(monstervision_url, timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST)) as resp:
-            if resp.status == 200:
-                mv_data = await resp.json()
-                failed = mv_data.get("failed", 0)
-                status = mv_data.get("status", "unknown")
-                cookie_info = mv_data.get("cookie_status", {})
-                cookie_ok = cookie_info.get("label") == "ok"
+        from patreon_monitor import get_patreon_checker
 
-                # Only scrape cron log when the API doesn't report cookies OK
-                cookie_warning = False
-                if not cookie_ok:
-                    try:
-                        from subprocess_utils import run as _run
-                        rc, log_out, _ = await _run(
-                            ["docker", "exec", "monstervision", "tail", "-20", "/app/state/cron.log"],
-                            timeout=5,
-                        )
-                        if rc == 0 and log_out:
-                            cookie_warning = "cookies have expired" in log_out.lower() or "403" in log_out
-                    except (OSError, asyncio.TimeoutError) as exc:
-                        log.debug("Patreon cookie cron-log check failed: %s", exc)
+        checker = get_patreon_checker()
+        health = await checker.check_health()
 
-                if failed > 0:
-                    checks["patreon"] = {"status": "down", "detail": f"{failed} failed downloads"}
-                elif cookie_warning:
-                    checks["patreon"] = {"status": "no_key", "detail": "Cookie expired — re-export needed"}
-                elif status in ("downloading", "sleeping", "idle"):
-                    checks["patreon"] = {"status": "ok", "detail": status}
-                else:
-                    checks["patreon"] = {"status": "no_key", "detail": status}
-            else:
-                checks["patreon"] = {"status": "down"}
+        # Map status to dashboard format
+        from patreon_monitor import PatreonHealthStatus
+
+        if health.status == PatreonHealthStatus.OK:
+            checks["patreon"] = {"status": "ok", "detail": "healthy"}
+        elif health.status == PatreonHealthStatus.WARNING:
+            # Use the primary issue as detail
+            detail = health.issues[0] if health.issues else "attention needed"
+            checks["patreon"] = {"status": "no_key", "detail": detail[:50]}
+        elif health.status == PatreonHealthStatus.CRITICAL:
+            detail = health.issues[0] if health.issues else "critical"
+            checks["patreon"] = {"status": "down", "detail": detail[:50]}
+        else:
+            checks["patreon"] = {"status": "down", "detail": "unknown"}
+
     except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-        log.debug("Patreon/MonsterVision status check failed: %s", exc)
+        log.debug("Patreon health check failed: %s", exc)
+        checks["patreon"] = {"status": "down", "detail": "unreachable"}
+    except Exception as exc:
+        log.debug("Patreon check error: %s", exc)
         checks["patreon"] = {"status": "down"}
 
     return web.json_response(checks)
@@ -537,6 +561,107 @@ async def api_memories_handler(request: web.Request) -> web.Response:
         log.debug("Vector store stats failed: %s", exc)
 
     return web.json_response(data)
+
+
+async def api_channel_memory_inspect_handler(request: web.Request) -> web.Response:
+    """Inspect vector memory visibility for a channel/thread scope."""
+    try:
+        channel_id = _parse_scope_id(
+            request.query.get("channel_id"),
+            field="channel_id",
+            required=True,
+        )
+        thread_id = _parse_scope_id(
+            request.query.get("thread_id"),
+            field="thread_id",
+            required=False,
+        )
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+
+    include_anchor = str(request.query.get("include_anchor", "1")).lower() not in {"0", "false", "no"}
+    limit_raw = request.query.get("limit", "5")
+    try:
+        latest_limit = max(1, min(int(limit_raw), 20))
+    except ValueError:
+        latest_limit = 5
+
+    try:
+        import vector_store
+
+        summary = await vector_store.get_scoped_memory_summary(
+            channel_id=channel_id,
+            thread_id=thread_id,
+            latest_limit=latest_limit,
+            include_anchor=include_anchor,
+        )
+        return web.json_response(summary)
+    except Exception as exc:
+        log.debug("Channel memory inspect failed: %s", exc)
+        return web.json_response({"error": str(exc)}, status=500)
+
+
+async def api_channel_memory_action_handler(request: web.Request) -> web.Response:
+    """Run scoped channel-memory actions (clear/retrain)."""
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        return web.json_response({"error": "Invalid JSON payload"}, status=400)
+
+    action = str(payload.get("action", "")).strip().lower()
+    actor = str(payload.get("actor") or request.headers.get("X-OpenClaw-Actor") or "dashboard").strip()[:120]
+    try:
+        channel_id = _parse_scope_id(payload.get("channel_id"), field="channel_id", required=True)
+        thread_id = _parse_scope_id(payload.get("thread_id"), field="thread_id", required=False)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+
+    if action not in {"clear", "retrain", "clear_retrain"}:
+        return web.json_response({"error": "Unsupported action. Use clear, retrain, or clear_retrain."}, status=400)
+
+    response: dict = {
+        "ok": True,
+        "action": action,
+        "scope": {"channel_id": channel_id, "thread_id": thread_id},
+    }
+    try:
+        if action in {"clear", "clear_retrain"}:
+            import vector_store
+
+            cleared = await vector_store.clear_scoped_memory(
+                channel_id=channel_id,
+                thread_id=thread_id,
+            )
+            response["clear"] = cleared
+            _audit_scope_action(
+                actor,
+                "channel_memory_clear",
+                channel_id=channel_id,
+                thread_id=thread_id,
+                detail={"deleted": cleared.get("deleted", {}), "total_deleted": cleared.get("total_deleted", 0)},
+            )
+
+        if action in {"retrain", "clear_retrain"}:
+            from dream_cycle import DreamCycle
+
+            cycle = DreamCycle()
+            report = await cycle.run()
+            response["retrain"] = {
+                "triggered": True,
+                "report_excerpt": report[:220],
+            }
+            _audit_scope_action(
+                actor,
+                "channel_memory_retrain",
+                channel_id=channel_id,
+                thread_id=thread_id,
+                detail={"report_chars": len(report)},
+            )
+
+        return web.json_response(response)
+    except Exception as exc:
+        log.debug("Channel memory action failed: %s", exc)
+        return web.json_response({"error": str(exc)}, status=500)
 
 
 async def api_goals_handler(request):
