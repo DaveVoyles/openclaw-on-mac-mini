@@ -62,6 +62,17 @@ repos:
       - id: markdownlint
         args: [--fix, --disable, MD013, MD033, MD041]
 
+  # Security scanning (optional - can be slow)
+  # Uncomment to enable Trivy in pre-commit (primarily runs in CI)
+  # - repo: local
+  #   hooks:
+  #     - id: trivy-fs
+  #       name: trivy filesystem scan
+  #       entry: bash -c 'docker run --rm -v "$(pwd):/scan" aquasec/trivy fs --severity HIGH,CRITICAL --exit-code 1 /scan'
+  #       language: system
+  #       pass_filenames: false
+  #       stages: [push]
+
 # CI mode: Fail fast and don't modify files
 ci:
   autofix_prs: false
