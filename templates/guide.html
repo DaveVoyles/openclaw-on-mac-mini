@@ -4534,6 +4534,112 @@ git tag v0.13.0
 git push --tags
 # Automated deployment begins</code></pre>
 
+      <h2 id="patreon-monitoring">71. Patreon/MonsterVision Monitoring</h2>
+      <p>Automated health monitoring for the MonsterVision Patreon downloader with cookie management, auto-recovery, and Discord alerts.</p>
+
+      <h3>Discord Commands</h3>
+      
+      <h4><code>/patreon status</code></h4>
+      <p>Get comprehensive health diagnostics for the Patreon/MonsterVision system including:</p>
+      <ul>
+        <li>Cookie freshness (days since last refresh)</li>
+        <li>Download progress (completed/total/pending)</li>
+        <li>Container health status</li>
+        <li>Last successful download timestamp</li>
+        <li>Auto-recovery status</li>
+      </ul>
+      <pre><code>/patreon status</code></pre>
+
+      <h4><code>/patreon refresh-cookies</code></h4>
+      <p>Display step-by-step instructions for refreshing your Patreon session cookies:</p>
+      <pre><code>/patreon refresh-cookies</code></pre>
+      <p>You'll receive detailed instructions for:</p>
+      <ol>
+        <li>Opening Chrome and logging into Patreon</li>
+        <li>Exporting cookies with EditThisCookie extension</li>
+        <li>Copying cookies to the MonsterVision container</li>
+        <li>Verifying automatic resumption</li>
+      </ol>
+
+      <h3>Cookie Management</h3>
+      
+      <h4>Cookie Lifespan</h4>
+      <p>Patreon session cookies typically last <strong>3-7 days</strong> before expiring. The monitoring system tracks cookie age and alerts you proactively.</p>
+      
+      <div class="tip">
+        <strong>&#128161; Alert Thresholds:</strong>
+        <ul style="margin-top:0.5rem">
+          <li><strong>🟢 OK:</strong> Cookie age &lt; 3 days, downloads active</li>
+          <li><strong>🟡 WARNING:</strong> Cookie age 3-5 days, or no downloads in 48h</li>
+          <li><strong>🔴 CRITICAL:</strong> Cookie age &gt; 5 days, container down, or failed downloads</li>
+        </ul>
+      </div>
+
+      <h4>Cookie Refresh Workflow</h4>
+      <p>When you receive a cookie expiration warning:</p>
+      <ol>
+        <li>Run <code>/patreon refresh-cookies</code> to get instructions</li>
+        <li>Open Chrome and navigate to <a href="https://patreon.com" target="_blank">patreon.com</a></li>
+        <li>Log in to your Patreon account</li>
+        <li>Click the EditThisCookie extension icon → <strong>Export</strong></li>
+        <li>Copy the exported JSON to <code>~/Downloads/cookies.txt</code></li>
+        <li>Run: <code>docker cp ~/Downloads/cookies.txt monstervision:/app/cookies/cookies.txt</code></li>
+        <li>Downloads resume automatically within 30 minutes</li>
+      </ol>
+
+      <h4>Troubleshooting Cookie Issues</h4>
+      <ul>
+        <li><strong>Cookies not working after refresh?</strong> Verify you're logged into Patreon before exporting</li>
+        <li><strong>Container restart needed?</strong> No — the monitor detects new cookies automatically</li>
+        <li><strong>Wrong file format?</strong> Ensure EditThisCookie exports as JSON (Netscape format won't work)</li>
+        <li><strong>Permission denied?</strong> Check that the cookies file is readable: <code>chmod 644 ~/Downloads/cookies.txt</code></li>
+      </ul>
+
+      <h3>Automated Monitoring</h3>
+      
+      <h4>Health Checks</h4>
+      <p>The system runs comprehensive health checks every <strong>30 minutes</strong>:</p>
+      <ul>
+        <li>Cookie file age and validity</li>
+        <li>Download progress tracking</li>
+        <li>Container availability</li>
+        <li>Recent download activity (48-hour window)</li>
+        <li>Disk space and resource usage</li>
+      </ul>
+
+      <h4>Discord Alerts</h4>
+      <p>Automatic notifications are sent to the configured alert channel when:</p>
+      <ul>
+        <li><strong>WARNING:</strong> Cookies aging (3-5 days old)</li>
+        <li><strong>WARNING:</strong> No downloads in 48 hours</li>
+        <li><strong>CRITICAL:</strong> Cookies expired (&gt;5 days)</li>
+        <li><strong>CRITICAL:</strong> Container unreachable or crashed</li>
+        <li><strong>CRITICAL:</strong> Download failures detected</li>
+      </ul>
+
+      <h4>Auto-Recovery Features</h4>
+      <p>The monitoring system includes intelligent auto-recovery:</p>
+      <ul>
+        <li><strong>Container restarts:</strong> Automatic restart on crash detection</li>
+        <li><strong>Cookie detection:</strong> Monitors for cookie file updates and triggers refresh</li>
+        <li><strong>Download retry:</strong> Retries failed downloads after container recovery</li>
+        <li><strong>Alert deduplication:</strong> Prevents alert spam (24-hour cooldown per issue)</li>
+      </ul>
+
+      <div class="tip">
+        <strong>&#128161; Dashboard Integration:</strong> View real-time Patreon status on the <a href="/dashboard">Dashboard</a> including cookie freshness, download progress, and next health check countdown.
+      </div>
+
+      <h3>LLM Skills</h3>
+      <p>Ask the bot naturally about Patreon/MonsterVision status using <code>/ask</code>:</p>
+      <ul>
+        <li>"Check Patreon health" → Full diagnostics</li>
+        <li>"How old are my Patreon cookies?" → Cookie age check</li>
+        <li>"Show MonsterVision downloads" → Download progress</li>
+        <li>"Is MonsterVision running?" → Container status</li>
+        <li>"Patreon alerts today" → Recent alert history</li>
+      </ul>
+
       <h3>GitHub Pages Documentation</h3>
       <ul>
         <li><strong>Live Docs:</strong> <a href="https://davevoyles.github.io/openclaw" target="_blank">davevoyles.github.io/openclaw</a></li>
