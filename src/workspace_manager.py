@@ -23,15 +23,24 @@ log = logging.getLogger("openclaw.workspace_manager")
 DB_PATH = Path("/memory/workspaces.db")
 
 
-class WorkspaceRole(UserRole):
-    """Workspace-specific role (inherits from UserRole)"""
+class WorkspaceRole(Enum):
+    """Workspace-specific role"""
     OWNER = "owner"  # Workspace owner (all permissions)
+    ADMIN = "admin"  # Admin within workspace
+    MEMBER = "member"  # Standard member
+    VIEWER = "viewer"  # Read-only access
     
     @property
     def level(self) -> int:
         """Numeric level for comparison"""
         levels = {"owner": 4, "admin": 3, "member": 2, "viewer": 1}
         return levels.get(self.value, 0)
+    
+    def __ge__(self, other: "WorkspaceRole") -> bool:
+        return self.level >= other.level
+    
+    def __gt__(self, other: "WorkspaceRole") -> bool:
+        return self.level > other.level
 
 
 # ---------------------------------------------------------------------------

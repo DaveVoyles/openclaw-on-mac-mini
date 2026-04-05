@@ -35,9 +35,10 @@ def temp_workflow_dir(tmp_path):
 @pytest.fixture
 def engine(temp_workflow_dir, monkeypatch):
     """WorkflowEngine instance with temp storage."""
-    with patch("workflow_engine.WORKFLOW_DIR", temp_workflow_dir):
-        engine = WorkflowEngine()
-        yield engine
+    temp_workflow_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("workflow_engine.WORKFLOW_DIR", temp_workflow_dir)
+    engine = WorkflowEngine()
+    yield engine
 
 
 # ---------------------------------------------------------------------------

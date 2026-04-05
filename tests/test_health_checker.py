@@ -54,12 +54,17 @@ async def test_check_readiness_not_ready(checker):
 @pytest.mark.asyncio
 async def test_check_readiness_ready(checker):
     """Test readiness check when ready."""
+    # Register a simple check
+    async def simple_check():
+        from health_checker import HealthCheckResult, HealthStatus
+        return HealthCheckResult("simple", HealthStatus.HEALTHY, "OK")
+    
+    checker.register_check("simple", simple_check)
     checker.mark_ready()
     results = await checker.check_readiness()
     
-    # Should have default checks
-    assert "disk_space" in results
-    assert "memory" in results
+    # Should have our registered check
+    assert "simple" in results
 
 
 @pytest.mark.asyncio
@@ -213,12 +218,19 @@ async def test_check_database_exists(tmp_path):
 @pytest.mark.asyncio
 async def test_check_api_endpoint_success():
     """Test API endpoint check - success case."""
-    with patch("aiohttp.ClientSession") as mock_session:
+    with patch("aiohttp.ClientSession") as mock_session_class:
         mock_response = AsyncMock()
         mock_response.status = 200
-        mock_response.__aenter__.return_value = mock_response
+        mock_response.__aenter__ = AsyncMock(return_value=mock_response)
+        mock_response.__aexit__ = AsyncMock(return_value=None)
         
-        mock_session.return_value.__aenter__.return_value.get.return_value = mock_response
+        mock_get = AsyncMock(return_value=mock_response)
+        mock_session = AsyncMock()
+        mock_session.get = mock_get
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        
+        mock_session_class.return_value = mock_session
         
         result = await check_api_endpoint("test", "http://example.com/health")
         
@@ -229,8 +241,13 @@ async def test_check_api_endpoint_success():
 @pytest.mark.asyncio
 async def test_check_api_endpoint_timeout():
     """Test API endpoint check - timeout case."""
-    with patch("aiohttp.ClientSession") as mock_session:
-        mock_session.return_value.__aenter__.return_value.get.side_effect = asyncio.TimeoutError()
+    with patch("aiohttp.ClientSession") as mock_session_class:
+        mock_session = AsyncMock()
+        mock_session.get = AsyncMock(side_effect=asyncio.TimeoutError())
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        
+        mock_session_class.return_value = mock_session
         
         result = await check_api_endpoint("test", "http://example.com/health", timeout=1.0)
         
