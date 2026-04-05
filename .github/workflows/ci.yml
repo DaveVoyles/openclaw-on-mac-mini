@@ -106,30 +106,10 @@ jobs:
       - name: Python syntax check
         run: |
           if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            python -c "
-            import ast, pathlib
-            errors = []
-            for f in pathlib.Path('src').glob('**/*.py'):
-                try: ast.parse(f.read_text())
-                except SyntaxError as e: errors.append(f'{f}: {e}')
-            if errors:
-                for e in errors: print(e)
-                raise SystemExit(1)
-            print(f'All {len(list(pathlib.Path(\"src\").glob(\"**/*.py\")))} files OK')
-            "
+            python scripts/syntax_check.py
           else
             source .venv/bin/activate
-            python3 -c "
-            import ast, pathlib
-            errors = []
-            for f in pathlib.Path('src').glob('**/*.py'):
-                try: ast.parse(f.read_text())
-                except SyntaxError as e: errors.append(f'{f}: {e}')
-            if errors:
-                for e in errors: print(e)
-                raise SystemExit(1)
-            print(f'All {len(list(pathlib.Path(\"src\").glob(\"**/*.py\")))} files OK')
-            "
+            python3 scripts/syntax_check.py
           fi
 
       - name: Run tests (Ubuntu)
