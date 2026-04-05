@@ -507,12 +507,14 @@ from email_skills import EMAIL_SKILLS
 from nas import NAS_SKILLS
 from overseerr import OVERSEERR_SKILLS
 from skills.reporting_skills import REPORTING_SKILLS
+from skills.synthesis_skills import SYNTHESIS_SKILLS
 
 SKILLS.update(OVERSEERR_SKILLS)
 SKILLS.update(NAS_SKILLS)
 SKILLS.update(EMAIL_SKILLS)
 SKILLS.update(CALENDAR_SKILLS)
 SKILLS.update(REPORTING_SKILLS)
+SKILLS.update(SYNTHESIS_SKILLS)
 
 # Add Maton API Gateway skill (managed OAuth proxy to 100+ APIs)
 from gateway import GATEWAY_SKILLS
@@ -701,6 +703,11 @@ SKILL_CATEGORIES = {
     "🛠️ Maintenance": [
         "run_maintenance", "update_skills", "restart_gateway",
     ],
+    "📊 Trend Tracking": [
+        "track_topic", "untrack_topic", "get_trending_topics",
+        "detect_breaking_news", "get_topic_trajectory", "list_tracked_topics",
+        "update_all_tracked_trends",
+    ],
 }
 
 # Auto-populate: any skill NOT in a category goes to "📦 Other"
@@ -725,4 +732,25 @@ from skills.recap_templates import (
 SKILLS.update({
     "get_available_templates": get_available_templates,
     "generate_recap_from_template": generate_recap_from_template,
+})
+
+# Trend tracking skills
+from skills.trend_skills import (
+    track_topic,
+    untrack_topic,
+    get_trending_topics,
+    detect_breaking_news,
+    get_topic_trajectory,
+    list_tracked_topics,
+    update_all_tracked_trends,
+)
+
+SKILLS.update({
+    "track_topic": track_topic,
+    "untrack_topic": untrack_topic,
+    "get_trending_topics": get_trending_topics,
+    "detect_breaking_news": detect_breaking_news,
+    "get_topic_trajectory": get_topic_trajectory,
+    "list_tracked_topics": list_tracked_topics,
+    "update_all_tracked_trends": update_all_tracked_trends,
 })
