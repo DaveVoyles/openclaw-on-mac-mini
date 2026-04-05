@@ -1,0 +1,20 @@
+coverage:
+  status:
+    project:
+      default:
+        target: 50%  # Incremental target
+        threshold: 2%  # Allow 2% drop
+    patch:
+      default:
+        target: 80%  # New code should be well-tested
+
+comment:
+  layout: "reach, diff, flags, files"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "tests/**"
+  - "examples/**"
+  - "scripts/**"
+  - "**/__pycache__/**"
