@@ -260,7 +260,8 @@ class OpenClawBot(commands.Bot):
             from skills import list_containers
             result = await list_containers()
             container_count = len([ln for ln in result.split("\n") if ln.strip() and not ln.startswith("NAMES")])
-        except Exception:
+        except (ImportError, RuntimeError, ConnectionError):
+            # list_containers may fail if Docker socket unavailable; use guild count as fallback
             pass
         await self.change_presence(
             activity=discord.Activity(
@@ -715,7 +716,8 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
         text, _, _ = await chat(prompt, model_preference="gemini")
         lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
         return lines[:2]
-    except Exception:
+    except (ImportError, RuntimeError, TimeoutError):
+        # LLM may be unavailable; return empty list to skip follow-ups
         return []
 
 

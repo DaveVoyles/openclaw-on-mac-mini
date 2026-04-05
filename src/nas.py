@@ -141,7 +141,8 @@ async def _raw_logout(session: aiohttp.ClientSession, sid: str) -> None:
             f"{NAS_URL}/webapi/auth.cgi", params=params, ssl=_SSL_CTX
         ):
             pass
-    except Exception:
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        # Logout failure is non-critical; session will expire naturally
         pass
 
 
