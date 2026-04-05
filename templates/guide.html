@@ -327,6 +327,15 @@
           <li><a href="#digest">59. Personalized Digests (/digest)</a></li>
           <li><a href="#trends">60. Trend Detection &amp; Tracking (/track, /trending, /trends, /breaking)</a></li>
           <li><a href="#premium-skills">61. Premium API Skills Reference</a></li>
+          <li><a href="#phase3-financial">62. Financial Data (Polygon.io) - Phase 3</a></li>
+          <li><a href="#phase3-workflows">63. Workflow Automation &amp; Scheduling - Phase 3</a></li>
+          <li><a href="#phase3-apis">64. Trakt.tv &amp; Fitbit Integration - Phase 3</a></li>
+          <li><a href="#phase3-ml">65. ML Trends &amp; Correlations - Phase 3</a></li>
+          <li><a href="#phase3-export">66. Multi-Format Export &amp; REST API - Phase 3</a></li>
+          <li><a href="#phase4-multiuser">67. Multi-User Support &amp; Workspaces - Phase 4</a></li>
+          <li><a href="#phase4-plugins">68. Plugin System &amp; Extensibility - Phase 4</a></li>
+          <li><a href="#phase4-observability">69. Observability &amp; Performance - Phase 4</a></li>
+          <li><a href="#phase4-infrastructure">70. Production Infrastructure - Phase 4</a></li>
         </ul>
       </div>
 
@@ -4106,6 +4115,413 @@ Related Trends:
 
       <p><strong>💡 Pro Tip:</strong> For complex analysis, ask multi-part questions. The AI can chain multiple skills together: <em>"Compare Tesla and Ford stock performance, recent news, and market sentiment"</em></p>
 
+      <!-- 62. Phase 3: Financial Data (Polygon.io) -->
+      <h2 id="phase3-financial">62. Financial Data with Polygon.io (<code>/stock</code>, <code>/chart</code>)</h2>
+      <p>Phase 3 adds real-time stock market data via Polygon.io. Get quotes, historical charts, and automated PDF reports for stocks, crypto, and forex.</p>
+      
+      <h3>Commands</h3>
+      <ul>
+        <li><code>/stock &lt;ticker&gt;</code> — Get real-time quote for a stock (e.g., <code>/stock AAPL</code>).</li>
+        <li><code>/chart &lt;ticker&gt; [timeframe]</code> — Generate price chart. Timeframes: <code>1d</code>, <code>1w</code>, <code>1m</code>, <code>3m</code>, <code>1y</code>.</li>
+        <li><code>/report financial [ticker]</code> — Generate comprehensive PDF financial report.</li>
+        <li><code>/crypto &lt;symbol&gt;</code> — Get cryptocurrency quote (e.g., <code>/crypto BTC</code>).</li>
+        <li><code>/forex &lt;pair&gt;</code> — Get foreign exchange rate (e.g., <code>/forex USD/EUR</code>).</li>
+      </ul>
+
+      <h3>Skills for LLM</h3>
+      <ul>
+        <li><code>get_stock_quote(ticker)</code> — Real-time price, volume, market cap, 52-week range.</li>
+        <li><code>get_stock_history(ticker, from_date, to_date)</code> — Historical price data.</li>
+        <li><code>get_stock_news(ticker)</code> — Recent news articles about a stock.</li>
+        <li><code>generate_stock_chart(ticker, period)</code> — Visual chart generation.</li>
+        <li><code>get_market_status()</code> — Market open/close status and hours.</li>
+      </ul>
+
+      <h3>Example Workflows</h3>
+      <pre><code>// Quick stock check
+/stock NVDA
+/chart NVDA 1m
+
+// Investment research
+/ask "Give me a detailed analysis of Apple stock including recent news and price trends"
+→ Uses get_stock_quote(), get_stock_history(), get_stock_news()
+
+// Generate investor report
+/report financial TSLA
+
+// Track portfolio
+/ask "Show me quotes for AAPL, MSFT, GOOGL, and NVDA with 1-month performance"</code></pre>
+
+      <p><strong>💡 Pro Tip:</strong> Combine with digest: <code>/digest stock add NVDA</code> to include NVIDIA in your daily digest.</p>
+
+      <!-- 63. Phase 3: Workflow Automation -->
+      <h2 id="phase3-workflows">63. Workflow Automation & Scheduling</h2>
+      <p>Phase 3 introduces a visual workflow builder and advanced event scheduler with cron expressions for automating complex tasks.</p>
+      
+      <h3>Workflow Commands</h3>
+      <ul>
+        <li><code>/workflow create &lt;name&gt;</code> — Create new workflow using visual builder.</li>
+        <li><code>/workflow run &lt;name&gt;</code> — Execute a workflow immediately.</li>
+        <li><code>/workflow list</code> — Show all configured workflows.</li>
+        <li><code>/workflow edit &lt;name&gt;</code> — Open workflow in visual editor.</li>
+        <li><code>/workflow delete &lt;name&gt;</code> — Remove a workflow.</li>
+        <li><strong><a href="/workflow_builder">Workflow Builder UI →</a></strong></li>
+      </ul>
+
+      <h3>Scheduling Commands</h3>
+      <ul>
+        <li><code>/schedule add &lt;cron&gt; &lt;task&gt;</code> — Schedule recurring task (e.g., <code>/schedule add "0 8 * * *" /digest now</code>).</li>
+        <li><code>/schedule list</code> — View all scheduled tasks.</li>
+        <li><code>/schedule remove &lt;id&gt;</code> — Cancel scheduled task.</li>
+        <li><code>/schedule pause &lt;id&gt;</code> — Temporarily disable a schedule.</li>
+        <li><code>/schedule resume &lt;id&gt;</code> — Re-enable paused schedule.</li>
+      </ul>
+
+      <h3>Workflow Skills</h3>
+      <ul>
+        <li><code>create_workflow(name, steps)</code> — Programmatically create workflow.</li>
+        <li><code>execute_workflow(name, params)</code> — Run workflow with parameters.</li>
+        <li><code>schedule_workflow(name, cron_expr)</code> — Schedule workflow execution.</li>
+        <li><code>get_workflow_status(name)</code> — Check workflow execution status.</li>
+      </ul>
+
+      <h3>Example Workflows</h3>
+      <pre><code>// Daily morning routine workflow
+1. Fetch weather forecast
+2. Get stock quotes for watchlist
+3. Generate personalized digest
+4. Send summary to Discord
+
+Schedule: "0 7 * * *" (every day at 7 AM)
+
+// Weekly investment report
+1. Fetch all watchlist stocks
+2. Generate charts for each
+3. Compile PDF report
+4. Backup to NAS
+
+Schedule: "0 9 * * SUN" (Sundays at 9 AM)
+
+// Smart media management
+1. Monitor downloads folder
+2. Identify media type (movie/TV/music)
+3. Rename with proper format
+4. Move to correct Plex folder
+5. Update Plex library
+
+Trigger: File system event</code></pre>
+
+      <p><strong>💡 Pro Tip:</strong> Use the visual <a href="/workflow_builder">Workflow Builder</a> to design complex automations with drag-and-drop nodes.</p>
+
+      <!-- 64. Phase 3: API Expansion (Trakt.tv & Fitbit) -->
+      <h2 id="phase3-apis">64. Trakt.tv & Fitbit Integration</h2>
+      <p>Phase 3 adds entertainment tracking via Trakt.tv and health data via Fitbit for comprehensive lifestyle monitoring.</p>
+      
+      <h3>🎬 Trakt.tv Skills</h3>
+      <ul>
+        <li><code>get_trending_shows(limit)</code> — Currently trending TV shows.</li>
+        <li><code>get_trending_movies(limit)</code> — Currently trending movies.</li>
+        <li><code>get_show_info(show_id)</code> — Detailed show information, ratings, cast.</li>
+        <li><code>get_movie_info(movie_id)</code> — Movie details, ratings, box office.</li>
+        <li><code>search_trakt(query)</code> — Search for shows/movies.</li>
+        <li><code>get_recommendations(type)</code> — Personalized recommendations.</li>
+      </ul>
+
+      <h3>💪 Fitbit Skills</h3>
+      <ul>
+        <li><code>get_daily_steps(date)</code> — Step count for specific date.</li>
+        <li><code>get_heart_rate(date)</code> — Heart rate data and zones.</li>
+        <li><code>get_sleep_summary(date)</code> — Sleep duration and quality metrics.</li>
+        <li><code>get_activity_summary(date)</code> — Daily activity summary (calories, distance, active minutes).</li>
+        <li><code>get_weight_log()</code> — Recent weight measurements.</li>
+      </ul>
+
+      <h3>Example Questions</h3>
+      <pre><code>// Entertainment queries
+"What shows are trending on Trakt right now?"
+"Tell me about the new season of The Last of Us"
+"Give me movie recommendations based on my watch history"
+
+// Health & fitness queries
+"How many steps did I walk yesterday?"
+"Show me my sleep quality for the past week"
+"What was my average heart rate during today's workout?"
+"Compare my activity this week vs last week"</code></pre>
+
+      <!-- 65. Phase 3: ML Trends & Correlations -->
+      <h2 id="phase3-ml">65. Machine Learning Trends & Correlations</h2>
+      <p>Phase 3 adds ML-powered trend forecasting, anomaly detection, and correlation analysis across all data sources.</p>
+      
+      <h3>ML Skills</h3>
+      <ul>
+        <li><code>forecast_trend(metric, periods)</code> — Predict future values using time-series analysis.</li>
+        <li><code>detect_anomalies(dataset)</code> — Identify unusual patterns or outliers.</li>
+        <li><code>find_correlations(entities)</code> — Discover relationships between metrics.</li>
+        <li><code>cluster_similar(items)</code> — Group related items using ML clustering.</li>
+        <li><code>sentiment_trend(topic, period)</code> — Track sentiment changes over time.</li>
+      </ul>
+
+      <h3>Use Cases</h3>
+      <pre><code>// Stock market forecasting
+"Forecast NVIDIA stock price for next 30 days based on historical data"
+
+// Health anomalies
+"Detect any unusual patterns in my sleep data this month"
+
+// Cross-domain correlations
+"Is there a correlation between my step count and sleep quality?"
+"How do market events correlate with tech stock sentiment?"
+
+// Trend analysis
+"Show me sentiment trend for 'Artificial Intelligence' over the past week"
+"Cluster my tracked topics by similarity"</code></pre>
+
+      <!-- 66. Phase 3: Export & Reporting -->
+      <h2 id="phase3-export">66. Multi-Format Export & REST API</h2>
+      <p>Phase 3 adds comprehensive data export in multiple formats and REST API endpoints for external integrations.</p>
+      
+      <h3>Export Commands</h3>
+      <ul>
+        <li><code>/export csv &lt;data&gt;</code> — Export data to CSV file.</li>
+        <li><code>/export json &lt;data&gt;</code> — Export as JSON.</li>
+        <li><code>/export parquet &lt;data&gt;</code> — Export as Parquet (for data science).</li>
+        <li><code>/export pdf &lt;report_type&gt;</code> — Generate PDF report.</li>
+        <li><code>/backup &lt;destination&gt;</code> — Backup all data to NAS or cloud.</li>
+      </ul>
+
+      <h3>REST API Endpoints</h3>
+      <ul>
+        <li><code>GET /api/stocks/{ticker}</code> — Stock quote data.</li>
+        <li><code>GET /api/digest</code> — Your personalized digest.</li>
+        <li><code>GET /api/trends</code> — Trending topics.</li>
+        <li><code>GET /api/skills</code> — Available skills list.</li>
+        <li><code>GET /api/workflows</code> — Configured workflows.</li>
+        <li><code>POST /api/workflow/{name}/run</code> — Execute workflow.</li>
+        <li><a href="/api-docs"><strong>Full API Documentation →</strong></a></li>
+      </ul>
+
+      <h3>Example Workflows</h3>
+      <pre><code>// Export portfolio data for Excel analysis
+/export csv stocks watchlist=true
+
+// Backup everything to NAS
+/backup nas://192.168.1.8/openclaw/backups/
+
+// Generate investor report PDF
+/export pdf financial portfolio
+
+// Use REST API in Python
+import requests
+response = requests.get('http://localhost:5000/api/stocks/AAPL')
+print(response.json())</code></pre>
+
+      <!-- 67. Phase 4: Multi-User & Workspaces -->
+      <h2 id="phase4-multiuser">67. Multi-User Support & Workspaces</h2>
+      <p>Phase 4 introduces user management, workspaces, role-based access control (RBAC), and dashboard sharing for team collaboration.</p>
+      
+      <h3>User Management Commands</h3>
+      <ul>
+        <li><code>/user create &lt;username&gt;</code> — Create new user account.</li>
+        <li><code>/user list</code> — Show all users and their roles.</li>
+        <li><code>/user delete &lt;username&gt;</code> — Remove user account.</li>
+        <li><code>/user role &lt;username&gt; &lt;role&gt;</code> — Assign role (admin, editor, viewer).</li>
+        <li><code>/user profile [username]</code> — View user profile and preferences.</li>
+      </ul>
+
+      <h3>Workspace Commands</h3>
+      <ul>
+        <li><code>/workspace create &lt;name&gt;</code> — Create new workspace for team collaboration.</li>
+        <li><code>/workspace switch &lt;name&gt;</code> — Switch to different workspace.</li>
+        <li><code>/workspace invite &lt;username&gt;</code> — Invite user to workspace.</li>
+        <li><code>/workspace share dashboard</code> — Generate shareable dashboard link.</li>
+        <li><code>/workspace list</code> — Show all workspaces you have access to.</li>
+      </ul>
+
+      <h3>Permissions Commands</h3>
+      <ul>
+        <li><code>/permissions grant &lt;user&gt; &lt;resource&gt; &lt;level&gt;</code> — Grant access (read, write, admin).</li>
+        <li><code>/permissions revoke &lt;user&gt; &lt;resource&gt;</code> — Remove access.</li>
+        <li><code>/permissions list [user]</code> — View all permissions.</li>
+      </ul>
+
+      <h3>Roles & Access Levels</h3>
+      <ul>
+        <li><strong>Admin:</strong> Full system access, user management, workspace creation.</li>
+        <li><strong>Editor:</strong> Create/modify content, workflows, schedules. No user management.</li>
+        <li><strong>Viewer:</strong> Read-only access to dashboards and reports.</li>
+        <li><strong>Custom Roles:</strong> Define granular permissions per resource.</li>
+      </ul>
+
+      <h3>Example Workflows</h3>
+      <pre><code>// Set up team workspace
+/workspace create "Investment Team"
+/workspace invite alice
+/workspace invite bob
+/user role alice editor
+/user role bob viewer
+
+// Share dashboard with team
+/workspace switch "Investment Team"
+/workspace share dashboard
+→ Generates: https://openclaw.local/shared/inv-team-dashboard
+
+// Manage permissions
+/permissions grant alice workflows write
+/permissions grant bob reports read
+/permissions list alice</code></pre>
+
+      <!-- 68. Phase 4: Plugin Architecture -->
+      <h2 id="phase4-plugins">68. Plugin System & Extensibility</h2>
+      <p>Phase 4 adds a hot-reload plugin architecture with CLI generator for building custom skills, commands, and integrations.</p>
+      
+      <h3>Plugin Commands</h3>
+      <ul>
+        <li><code>/plugin list</code> — Show all installed plugins.</li>
+        <li><code>/plugin install &lt;name&gt;</code> — Install plugin from marketplace.</li>
+        <li><code>/plugin uninstall &lt;name&gt;</code> — Remove plugin.</li>
+        <li><code>/plugin enable &lt;name&gt;</code> — Activate plugin.</li>
+        <li><code>/plugin disable &lt;name&gt;</code> — Deactivate without uninstalling.</li>
+        <li><code>/plugin info &lt;name&gt;</code> — View plugin details and configuration.</li>
+        <li><code>/plugin create &lt;name&gt;</code> — Generate plugin boilerplate using CLI.</li>
+      </ul>
+
+      <h3>Plugin Development</h3>
+      <pre><code>// Create new plugin
+/plugin create weather-alerts
+
+// Plugin structure generated:
+plugins/
+  weather_alerts/
+    __init__.py       # Plugin metadata
+    skills.py         # Custom skills
+    commands.py       # Slash commands
+    config.yaml       # Configuration
+    README.md         # Documentation
+
+// Hot-reload during development
+# Edit skills.py
+# Changes apply immediately, no restart needed!</code></pre>
+
+      <h3>Example Plugins</h3>
+      <ul>
+        <li><strong>Weather Plugin:</strong> Custom weather alerts and forecasts.</li>
+        <li><strong>Calculator Plugin:</strong> Advanced math and unit conversion.</li>
+        <li><strong>GitHub Plugin:</strong> Repository monitoring and PR notifications.</li>
+        <li><strong>Custom Skills Plugin:</strong> Company-specific skills and knowledge.</li>
+      </ul>
+
+      <p><strong>💡 Pro Tip:</strong> Use <code>/plugin create</code> to scaffold new plugins with best practices built-in. Plugin marketplace coming soon!</p>
+
+      <!-- 69. Phase 4: Observability & Metrics -->
+      <h2 id="phase4-observability">69. Observability & Performance Monitoring</h2>
+      <p>Phase 4 adds Prometheus metrics, performance monitoring, health checks, and guided onboarding for production deployments.</p>
+      
+      <h3>Metrics Commands</h3>
+      <ul>
+        <li><code>/metrics</code> — Display key performance metrics.</li>
+        <li><code>/health</code> — System health check and status.</li>
+        <li><code>/perf [component]</code> — Performance statistics for specific component.</li>
+        <li><code>/onboarding</code> — Launch guided onboarding flow.</li>
+        <li><strong><a href="/metrics_dashboard">Metrics Dashboard →</a></strong></li>
+      </ul>
+
+      <h3>Available Metrics</h3>
+      <ul>
+        <li><strong>Request Metrics:</strong> Total requests, success rate, error rate, latency (p50, p95, p99).</li>
+        <li><strong>Skill Metrics:</strong> Skill execution count, success/failure by skill, average duration.</li>
+        <li><strong>API Metrics:</strong> Quota usage, rate limits, errors by API provider.</li>
+        <li><strong>Resource Metrics:</strong> Memory usage, CPU usage, disk space, database size.</li>
+        <li><strong>Business Metrics:</strong> Active users, daily active workflows, export count.</li>
+      </ul>
+
+      <h3>Prometheus Integration</h3>
+      <pre><code># Metrics endpoint
+curl http://localhost:5000/metrics
+
+# Example metrics exposed:
+openclaw_requests_total{method="GET",endpoint="/api/stocks"}
+openclaw_skill_executions_total{skill="get_stock_quote",status="success"}
+openclaw_api_quota_used{provider="polygon",quota="daily_requests"}
+openclaw_response_latency_seconds_bucket{le="0.1"}
+
+# Grafana dashboard configuration included</code></pre>
+
+      <h3>Health Checks</h3>
+      <pre><code># System health check
+/health
+→ Returns:
+✅ Database: Connected
+✅ Redis: Connected  
+✅ ChromaDB: Healthy
+⚠️  Polygon API: 4/5 quota used
+✅ Discord Bot: Online
+Overall Status: HEALTHY (4/5 checks passed)</code></pre>
+
+      <h3>Performance Monitoring</h3>
+      <pre><code># Check specific component performance
+/perf skills
+→ Shows:
+- Top 10 slowest skills
+- Skills with highest error rate
+- Skill usage frequency
+
+/perf apis
+→ Shows:
+- API latency by provider
+- Quota usage trends
+- Rate limit violations</code></pre>
+
+      <p><strong>💡 Pro Tip:</strong> Use <code>/onboarding</code> to set up monitoring alerts and configure Grafana dashboards for your deployment.</p>
+
+      <!-- 70. Phase 4: Infrastructure & CI/CD -->
+      <h2 id="phase4-infrastructure">70. Production Infrastructure</h2>
+      <p>Phase 4 adds multi-stage Docker builds, security scanning, GitHub Pages docs, and automated releases for production-ready deployments.</p>
+      
+      <h3>Docker Deployment</h3>
+      <pre><code># Multi-stage optimized build
+docker build -t openclaw:latest .
+
+# Production compose with all services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Services included:
+- OpenClaw bot (main application)
+- PostgreSQL (user data, workspaces)
+- Redis (caching, rate limiting)
+- ChromaDB (vector embeddings)
+- Prometheus (metrics collection)
+- Grafana (visualization)</code></pre>
+
+      <h3>Security Scanning</h3>
+      <ul>
+        <li><strong>Trivy:</strong> Container vulnerability scanning integrated into CI/CD.</li>
+        <li><strong>Dependency Scanning:</strong> Automated checks for vulnerable dependencies.</li>
+        <li><strong>Secret Detection:</strong> Pre-commit hooks prevent credential leaks.</li>
+        <li><strong>RBAC Enforcement:</strong> Role-based access control in production.</li>
+      </ul>
+
+      <h3>Automated Releases</h3>
+      <pre><code># GitHub Actions workflow:
+1. Run all tests (1,167+ tests)
+2. Trivy security scan
+3. Build Docker image
+4. Tag with version
+5. Push to registry
+6. Deploy to GitHub Pages
+7. Create GitHub release with changelog
+
+# Trigger release
+git tag v0.13.0
+git push --tags
+# Automated deployment begins</code></pre>
+
+      <h3>GitHub Pages Documentation</h3>
+      <ul>
+        <li><strong>Live Docs:</strong> <a href="https://davevoyles.github.io/openclaw" target="_blank">davevoyles.github.io/openclaw</a></li>
+        <li><strong>Auto-Generated:</strong> API docs, skill reference, examples updated on every release.</li>
+        <li><strong>Searchable:</strong> Full-text search across all documentation.</li>
+      </ul>
+
       <div
         style="
           text-align: center;
@@ -4116,7 +4532,7 @@ Related Trends:
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.11.0 &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.13.0 (Phase 3 & 4 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"
