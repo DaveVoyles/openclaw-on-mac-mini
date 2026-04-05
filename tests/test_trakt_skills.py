@@ -8,13 +8,13 @@ import pytest
 
 from skills.trakt_skills import (
     TRAKT_SKILLS,
-    get_trending_shows,
-    get_trending_movies,
-    sync_watchlist,
-    get_watch_history,
     add_to_watchlist,
-    search_trakt,
     get_oauth_url,
+    get_trending_movies,
+    get_trending_shows,
+    get_watch_history,
+    search_trakt,
+    sync_watchlist,
 )
 
 
@@ -38,11 +38,11 @@ def test_skills_are_callables():
 async def test_get_trending_shows_no_key():
     """Test trending shows without API key."""
     result = await get_trending_shows(limit=5)
-    
+
     # Should return error dict without crashing
     assert isinstance(result, dict)
     assert "status" in result
-    
+
     # Without TRAKT_CLIENT_ID, should error gracefully
     if result["status"] == "error":
         assert "message" in result
@@ -53,7 +53,7 @@ async def test_get_trending_shows_no_key():
 async def test_get_trending_movies_no_key():
     """Test trending movies without API key."""
     result = await get_trending_movies(limit=5)
-    
+
     assert isinstance(result, dict)
     assert "status" in result
 
@@ -62,7 +62,7 @@ async def test_get_trending_movies_no_key():
 async def test_sync_watchlist_no_token():
     """Test watchlist sync without access token."""
     result = await sync_watchlist()
-    
+
     assert isinstance(result, dict)
     assert result["status"] == "error"
     assert "token" in result["message"].lower()
@@ -72,7 +72,7 @@ async def test_sync_watchlist_no_token():
 async def test_get_watch_history_no_token():
     """Test watch history without access token."""
     result = await get_watch_history()
-    
+
     assert isinstance(result, dict)
     assert result["status"] == "error"
     assert "token" in result["message"].lower()
@@ -82,7 +82,7 @@ async def test_get_watch_history_no_token():
 async def test_add_to_watchlist_no_token():
     """Test adding to watchlist without access token."""
     result = await add_to_watchlist(item_id="12345", item_type="movie")
-    
+
     assert isinstance(result, dict)
     assert result["status"] == "error"
     assert "token" in result["message"].lower()
@@ -92,7 +92,7 @@ async def test_add_to_watchlist_no_token():
 async def test_search_trakt_no_key():
     """Test Trakt search without API key."""
     result = await search_trakt(query="Breaking Bad", search_type="show")
-    
+
     assert isinstance(result, dict)
     assert "status" in result
 
@@ -115,10 +115,10 @@ async def test_trending_movies_extended_param():
 def test_oauth_url_generation():
     """Test OAuth URL generation."""
     url = get_oauth_url()
-    
+
     # Should return a string (even if error message)
     assert isinstance(url, str)
-    
+
     # If client ID is configured, URL should be valid
     if not url.startswith("Error"):
         assert "trakt.tv/oauth/authorize" in url
@@ -130,7 +130,7 @@ def test_oauth_url_generation():
 async def test_search_types():
     """Test different search types are accepted."""
     search_types = ["multi", "movie", "show", "person"]
-    
+
     for search_type in search_types:
         result = await search_trakt(query="test", search_type=search_type)
         assert isinstance(result, dict)
@@ -140,7 +140,7 @@ async def test_search_types():
 async def test_watchlist_media_types():
     """Test different media types for watchlist."""
     media_types = ["all", "shows", "movies", "seasons", "episodes"]
-    
+
     for media_type in media_types:
         result = await sync_watchlist(media_type=media_type)
         assert isinstance(result, dict)
@@ -152,7 +152,7 @@ async def test_watchlist_media_types():
 async def test_add_to_watchlist_types():
     """Test adding different item types to watchlist."""
     item_types = ["movie", "show", "season", "episode"]
-    
+
     for item_type in item_types:
         result = await add_to_watchlist(
             item_id="12345",
@@ -170,7 +170,7 @@ async def test_response_structure():
     # Trending shows should have specific fields when successful
     result = await get_trending_shows(limit=1)
     assert "status" in result
-    
+
     if result["status"] == "success":
         assert "count" in result
         assert "shows" in result

@@ -2,9 +2,11 @@
 Tests for plugin loader.
 """
 
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
+
 from plugin_system import PluginLoader, PluginMetadata
 
 

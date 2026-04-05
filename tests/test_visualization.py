@@ -3,19 +3,17 @@ Tests for data visualization module
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from src.visualization import (
+    _chart_cache,
+    _get_cache_key,
+    clear_chart_cache,
+    create_comparison_chart,
     create_stock_chart,
     create_trend_chart,
-    create_comparison_chart,
-    clear_chart_cache,
-    _get_cache_key,
-    _get_cached_chart,
-    _chart_cache,
-    CHART_CACHE_DIR,
 )
 
 
@@ -87,20 +85,20 @@ class TestCacheKey:
         """Test that cache keys are generated consistently."""
         data1 = {"ticker": "AAPL", "data": [{"date": "2024-01-10", "value": 170}]}
         data2 = {"ticker": "AAPL", "data": [{"date": "2024-01-10", "value": 170}]}
-        
+
         key1 = _get_cache_key(data1, "candlestick_png")
         key2 = _get_cache_key(data2, "candlestick_png")
-        
+
         assert key1 == key2
 
     def test_different_data_different_keys(self):
         """Test that different data produces different keys."""
         data1 = {"ticker": "AAPL", "data": [{"date": "2024-01-10", "value": 170}]}
         data2 = {"ticker": "MSFT", "data": [{"date": "2024-01-10", "value": 380}]}
-        
+
         key1 = _get_cache_key(data1, "candlestick_png")
         key2 = _get_cache_key(data2, "candlestick_png")
-        
+
         assert key1 != key2
 
 
@@ -137,9 +135,9 @@ class TestCreateStockChart:
     def test_empty_data_error(self):
         """Test error handling for empty data."""
         empty_data = {"ticker": "AAPL", "data": []}
-        
+
         result = create_stock_chart(empty_data)
-        
+
         assert result["status"] == "error"
         assert "No data" in result["message"]
 
@@ -190,16 +188,16 @@ class TestCreateTrendChart:
         with patch("src.visualization._save_chart") as mock_save:
             mock_save.return_value = Path("data/charts/trend456.png")
             result = create_trend_chart(data)
-            
+
             assert result["status"] == "ok"
             assert result["ticker"] == "TSLA"
 
     def test_empty_trend_data(self):
         """Test error handling for empty trend data."""
         empty_data = {"ticker": "AAPL", "data": []}
-        
+
         result = create_trend_chart(empty_data)
-        
+
         assert result["status"] == "error"
         assert "No data" in result["message"]
 
@@ -224,9 +222,9 @@ class TestCreateComparisonChart:
     def test_empty_assets_error(self):
         """Test error handling for no assets."""
         empty_data = {"assets": []}
-        
+
         result = create_comparison_chart(empty_data)
-        
+
         assert result["status"] == "error"
         assert "No assets" in result["message"]
 
@@ -263,7 +261,7 @@ class TestClearCache:
     def test_clear_empty_cache(self):
         """Test clearing an empty cache."""
         result = clear_chart_cache()
-        
+
         assert result["status"] == "ok"
         assert result["cleared"] == 0
 
@@ -275,11 +273,11 @@ class TestClearCache:
         from datetime import datetime
         _chart_cache["key1"] = (Path("data/charts/test1.png"), datetime.now())
         _chart_cache["key2"] = (Path("data/charts/test2.png"), datetime.now())
-        
+
         mock_exists.return_value = True
-        
+
         result = clear_chart_cache()
-        
+
         assert result["status"] == "ok"
         assert result["cleared"] == 2
         assert len(_chart_cache) == 0

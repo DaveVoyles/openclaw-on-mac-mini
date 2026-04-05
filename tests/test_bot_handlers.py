@@ -10,6 +10,7 @@ from bot_formatting import (
     extract_file_attachment,
     extract_image_url,
     format_markdown_for_discord,
+    format_tables_for_copy,
     format_tables_for_discord,
     split_response,
     truncate_for_embed,
@@ -62,6 +63,27 @@ class TestFormatting:
         assert "```text" in result
         assert "+---+---+" in result
 
+    def test_format_tables_copy_safe_preserves_following_bullets(self):
+        text = (
+            "| Team | Record |\n"
+            "| --- | --- |\n"
+            "| Wolves | 10-2 |\n\n"
+            "- ✅ Keep this summary\n"
+            "- 📌 Next step"
+        )
+        result = format_tables_for_copy(text)
+        assert "📋 Table" in result
+        assert "  - Team: Wolves" in result
+        assert "  - Record: 10-2" in result
+        assert "- ✅ Keep this summary" in result
+        assert "- 📌 Next step" in result
+
+    def test_format_tables_copy_safe_handles_extra_columns(self):
+        text = "| Team |\n| --- |\n| Wolves | 10-2 |"
+        result = format_tables_for_copy(text)
+        assert "  - Team: Wolves" in result
+        assert "  - Column 2: 10-2" in result
+
     def test_split_response_short(self):
         text = "Short text"
         assert split_response(text) == [text]
@@ -94,6 +116,16 @@ class TestFormatting:
         assert len(chunks) > 1
         for chunk in chunks:
             assert chunk.count("```") % 2 == 0
+
+    def test_split_response_keeps_copy_safe_table_rows_readable(self):
+        table_text = format_tables_for_copy(
+            "| Team | Record |\n| --- | --- |\n" + "\n".join(f"| Team {i} | {10 + i}-{i} |" for i in range(16))
+        )
+        chunks = split_response(table_text, limit=180)
+        assert len(chunks) > 1
+        assert all(len(chunk) <= 180 for chunk in chunks)
+        assert "Team 0" in "".join(chunks)
+        assert "Team 15" in "".join(chunks)
 
     def test_extract_file_attachment_small_code(self):
         text = "```python\nprint('hi')\n```"

@@ -2,24 +2,24 @@
 Tests for Polygon.io financial data skills
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from skills.polygon_skills import (
-    get_stock_quote,
-    get_market_status,
-    get_stock_history,
-    get_market_movers,
-    _get_cached,
-    _set_cache,
+    _cache,
     _check_circuit_breaker,
+    _circuit_breaker,
+    _get_cached,
     _record_failure,
     _record_success,
-    _circuit_breaker,
-    _cache,
     _sessions,
+    _set_cache,
+    get_market_movers,
+    get_market_status,
+    get_stock_history,
+    get_stock_quote,
 )
 
 
@@ -56,10 +56,10 @@ class TestCaching:
         """Test that expired cache entries return None."""
         test_data = {"status": "ok", "value": 123}
         _set_cache("test_key", test_data)
-        
+
         # Manually expire the cache entry
         _cache["test_key"] = (test_data, datetime(2020, 1, 1))
-        
+
         result = _get_cached("test_key")
         assert result is None
         assert "test_key" not in _cache
@@ -78,7 +78,7 @@ class TestCircuitBreaker:
         _record_failure()
         _record_failure()
         assert _check_circuit_breaker() is None
-        
+
         _record_failure()
         result = _check_circuit_breaker()
         assert result is not None
@@ -90,7 +90,7 @@ class TestCircuitBreaker:
         _record_failure()
         _record_failure()
         assert _circuit_breaker["failures"] == 2
-        
+
         _record_success()
         assert _circuit_breaker["failures"] == 1
 
@@ -100,10 +100,10 @@ class TestCircuitBreaker:
         _record_failure()
         _record_failure()
         assert _circuit_breaker["is_open"] is True
-        
+
         # Manually set last_failure to 61 seconds ago
         _circuit_breaker["last_failure"] = datetime(2020, 1, 1)
-        
+
         result = _check_circuit_breaker()
         assert result is None
         assert _circuit_breaker["is_open"] is False
@@ -140,19 +140,19 @@ class TestGetStockQuote:
 
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
-            
+
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.json = AsyncMock(return_value=mock_response_data)
             mock_response.__aenter__ = AsyncMock(return_value=mock_response)
             mock_response.__aexit__ = AsyncMock(return_value=None)
-            
+
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
-            
+
             with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_stock_quote("AAPL")
-                
+
                 assert result["status"] == "ok"
                 assert result["ticker"] == "AAPL"
                 assert result["price"] == 175.43
@@ -166,18 +166,18 @@ class TestGetStockQuote:
         """Test rate limit error handling."""
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
-            
+
             mock_response = AsyncMock()
             mock_response.status = 429
             mock_response.__aenter__ = AsyncMock(return_value=mock_response)
             mock_response.__aexit__ = AsyncMock(return_value=None)
-            
+
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
-            
+
             with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_stock_quote("AAPL")
-                
+
                 assert result["status"] == "error"
                 assert "rate limit" in result["message"].lower()
 
@@ -199,16 +199,16 @@ class TestGetStockQuote:
 
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
-            
+
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.json = AsyncMock(return_value=mock_response_data)
             mock_response.__aenter__ = AsyncMock(return_value=mock_response)
             mock_response.__aexit__ = AsyncMock(return_value=None)
-            
+
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
-            
+
             with patch.object(type(_sessions), 'get', return_value=mock_session):
                 # First call - should hit API
                 result1 = await get_stock_quote("AAPL")
@@ -243,19 +243,19 @@ class TestGetMarketStatus:
 
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
-            
+
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.json = AsyncMock(return_value=mock_response_data)
             mock_response.__aenter__ = AsyncMock(return_value=mock_response)
             mock_response.__aexit__ = AsyncMock(return_value=None)
-            
+
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
-            
+
             with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_market_status()
-                
+
                 assert result["status"] == "ok"
                 assert result["market"] == "open"
                 assert result["exchanges"]["nyse"] == "open"
@@ -291,19 +291,19 @@ class TestGetStockHistory:
 
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
-            
+
             mock_response = AsyncMock()
             mock_response.status = 200
             mock_response.json = AsyncMock(return_value=mock_response_data)
             mock_response.__aenter__ = AsyncMock(return_value=mock_response)
             mock_response.__aexit__ = AsyncMock(return_value=None)
-            
+
             mock_session = AsyncMock()
             mock_session.get = MagicMock(return_value=mock_response)
-            
+
             with patch.object(type(_sessions), 'get', return_value=mock_session):
                 result = await get_stock_history("AAPL", days=30)
-                
+
                 assert result["status"] == "ok"
                 assert result["ticker"] == "AAPL"
                 assert result["days"] == 30
@@ -320,7 +320,7 @@ class TestGetMarketMovers:
         """Test market gainers retrieval."""
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
-            
+
             with patch("skills.polygon_skills.get_stock_quote") as mock_quote:
                 # Mock responses with different change percentages
                 mock_quote.side_effect = [
@@ -335,7 +335,7 @@ class TestGetMarketMovers:
                 ]
 
                 result = await get_market_movers("gainers")
-                
+
                 assert result["status"] == "ok"
                 assert result["direction"] == "gainers"
                 assert result["count"] == 5
@@ -348,7 +348,7 @@ class TestGetMarketMovers:
         """Test market losers retrieval."""
         with patch("skills.polygon_skills.cfg") as mock_cfg:
             mock_cfg.polygon_api_key = "test_key"
-            
+
             with patch("skills.polygon_skills.get_stock_quote") as mock_quote:
                 mock_quote.side_effect = [
                     {"status": "ok", "ticker": "AAPL", "price": 175, "change_percent": 2.5, "volume": 1000000},
@@ -362,7 +362,7 @@ class TestGetMarketMovers:
                 ]
 
                 result = await get_market_movers("losers")
-                
+
                 assert result["status"] == "ok"
                 assert result["direction"] == "losers"
                 # Check that TSLA (-2.8%) is first

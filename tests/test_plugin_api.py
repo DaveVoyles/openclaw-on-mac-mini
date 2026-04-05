@@ -2,8 +2,10 @@
 Tests for plugin API.
 """
 
-import pytest
 from pathlib import Path
+
+import pytest
+
 from plugin_system import PluginAPI
 
 
@@ -234,7 +236,7 @@ class TestPluginAPIStorage:
         """Test that data directory is created."""
         data_dir = tmp_path / "plugin_data" / "test"
 
-        api = PluginAPI(
+        PluginAPI(
             plugin_name="test",
             data_dir=data_dir,
             skills_registry={},

@@ -2,9 +2,11 @@
 Tests for plugin system core components.
 """
 
-import pytest
 from pathlib import Path
-from plugin_system import Plugin, PluginMetadata, PluginAPI
+
+import pytest
+
+from plugin_system import Plugin, PluginAPI, PluginMetadata
 
 
 class TestPluginMetadata:
@@ -115,7 +117,7 @@ class TestPluginBase:
             class IncompletePlugin(Plugin):
                 pass
 
-            plugin = IncompletePlugin(plugin_api)
+            IncompletePlugin(plugin_api)
 
 
 class TestPluginAPI:

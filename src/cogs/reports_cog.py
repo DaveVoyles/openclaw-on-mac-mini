@@ -11,10 +11,12 @@ from discord.ext import commands
 
 from bot_formatting import (
     format_markdown_for_discord,
-    format_tables_for_discord,
+    format_tables_for_copy,
     split_response,
 )
 from cog_helpers import audit_log, require_auth
+from copy_workflow_formatter import build_copy_workflow_payload
+from memory import store as conversation_store
 from permissions import is_allowed
 from scheduler import scheduler
 from ui_components import EmbedColors
@@ -77,7 +79,7 @@ class ReportsCog(commands.Cog, name="Reports"):
             log.debug("Report table image fallback unavailable: %s", exc)
 
         formatted_body = format_markdown_for_discord(body)
-        formatted_body = format_tables_for_discord(formatted_body)
+        formatted_body = format_tables_for_copy(formatted_body)
         chunks = split_response(formatted_body)
         for idx, chunk in enumerate(chunks):
             embed = discord.Embed(
@@ -123,6 +125,95 @@ class ReportsCog(commands.Cog, name="Reports"):
             ephemeral=True,
         )
         audit_log(interaction.user, "context_recap", detail=f"channel={message.channel.id}")
+
+    @recap.command(name="copy-latest", description="Copy-ready export of your latest OpenClaw response")
+    @require_auth()
+    async def recap_copy_latest(self, interaction: discord.Interaction):
+        conv = conversation_store.get(
+            user_id=interaction.user.id,
+            channel_id=interaction.channel_id,
+            user_name=str(interaction.user.display_name),
+        )
+
+        latest_response = ""
+        for message in reversed(conv.history):
+            if message.get("role") != "model":
+                continue
+            parts = [part for part in message.get("parts", []) if isinstance(part, str)]
+            if parts:
+                latest_response = "\n".join(part.strip() for part in parts if part.strip()).strip()
+            if latest_response:
+                break
+
+        if not latest_response:
+            await interaction.response.send_message(
+                "❌ No recent OpenClaw response found in this channel/thread.",
+                ephemeral=True,
+            )
+            return
+
+        payload = build_copy_workflow_payload(latest_response)
+        if not payload:
+            await interaction.response.send_message(
+                "❌ Latest response has no text content to export.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.send_message(
+            f"📋 Copy-ready export (latest response):\n```text\n{payload}\n```",
+            ephemeral=True,
+        )
+        audit_log(interaction.user, "recap_copy_latest", detail=f"channel={interaction.channel_id}")
+
+    @recap.command(name="copy-thread", description="Generate and export a copy-ready recap for this channel/thread")
+    @app_commands.describe(
+        days="How many days to include (1-30, default 7)",
+        focus="Optional topic or angle to emphasize",
+        style="Highlights, action items, or a short table",
+    )
+    @app_commands.choices(
+        style=[
+            app_commands.Choice(name="Highlights", value="highlights"),
+            app_commands.Choice(name="Action Items", value="action-items"),
+            app_commands.Choice(name="Table", value="table"),
+        ]
+    )
+    @require_auth()
+    async def recap_copy_thread(
+        self,
+        interaction: discord.Interaction,
+        days: app_commands.Range[int, 1, 30] = 7,
+        focus: str = "",
+        style: str = "action-items",
+    ):
+        from skills.reporting_skills import generate_channel_recap_report
+
+        await interaction.response.defer(ephemeral=True)
+        report = await generate_channel_recap_report(
+            channel_id=interaction.channel_id,
+            days=days,
+            focus=focus,
+            style=style,
+        )
+
+        payload = build_copy_workflow_payload(report)
+        if not payload:
+            await interaction.followup.send(
+                "❌ Recap had no text content to export.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.followup.send(
+            f"📋 Copy-ready export (thread recap):\n```text\n{payload}\n```",
+            ephemeral=True,
+        )
+        audit_log(
+            interaction.user,
+            "recap_copy_thread",
+            detail=f"channel={interaction.channel_id} days={days} style={style}",
+        )
 
     @recap.command(name="weekly", description="Summarize the current channel or thread for the last few days")
     @app_commands.describe(

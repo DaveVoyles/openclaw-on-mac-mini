@@ -9,9 +9,9 @@ import pytest
 from skills.health_skills import (
     HEALTH_SKILLS,
     get_daily_steps,
+    get_nutrition_info,
     get_sleep_data,
     get_workout_summary,
-    get_nutrition_info,
 )
 
 
@@ -37,7 +37,7 @@ def test_skills_are_callables():
 async def test_get_daily_steps_no_token():
     """Test daily steps without access token."""
     result = await get_daily_steps()
-    
+
     assert isinstance(result, dict)
     assert result["status"] == "error"
     assert "token" in result["message"].lower() or "fitbit" in result["message"].lower()
@@ -47,7 +47,7 @@ async def test_get_daily_steps_no_token():
 async def test_get_daily_steps_with_date():
     """Test daily steps with specific date."""
     result = await get_daily_steps(date="2024-01-15")
-    
+
     assert isinstance(result, dict)
     assert result["status"] == "error"  # No token configured
 
@@ -56,7 +56,7 @@ async def test_get_daily_steps_with_date():
 async def test_get_sleep_data_no_token():
     """Test sleep data without access token."""
     result = await get_sleep_data()
-    
+
     assert isinstance(result, dict)
     assert result["status"] == "error"
     assert "token" in result["message"].lower()
@@ -66,7 +66,7 @@ async def test_get_sleep_data_no_token():
 async def test_get_sleep_data_with_date():
     """Test sleep data with specific date."""
     result = await get_sleep_data(date="2024-01-15")
-    
+
     assert isinstance(result, dict)
     # Should accept date parameter even without token
     assert result["status"] == "error"
@@ -76,7 +76,7 @@ async def test_get_sleep_data_with_date():
 async def test_get_workout_summary_no_token():
     """Test workout summary without access token."""
     result = await get_workout_summary()
-    
+
     assert isinstance(result, dict)
     assert result["status"] == "error"
     assert "token" in result["message"].lower()
@@ -104,9 +104,9 @@ async def test_get_workout_summary_max_days():
 async def test_daily_steps_response_structure():
     """Test expected response structure for daily steps."""
     result = await get_daily_steps()
-    
+
     assert "status" in result
-    
+
     if result["status"] == "success":
         assert "date" in result
         assert "steps" in result
@@ -122,9 +122,9 @@ async def test_daily_steps_response_structure():
 async def test_sleep_data_response_structure():
     """Test expected response structure for sleep data."""
     result = await get_sleep_data()
-    
+
     assert "status" in result
-    
+
     if result["status"] == "success":
         assert "date" in result
         # May have "message" if no data, or full structure
@@ -138,9 +138,9 @@ async def test_sleep_data_response_structure():
 async def test_workout_summary_response_structure():
     """Test expected response structure for workout summary."""
     result = await get_workout_summary(days=7)
-    
+
     assert "status" in result
-    
+
     if result["status"] == "success":
         assert "period" in result
         assert "total_workouts" in result
@@ -157,10 +157,10 @@ async def test_workout_summary_response_structure():
 async def test_get_nutrition_info_basic():
     """Test nutrition info lookup."""
     result = await get_nutrition_info(food="banana")
-    
+
     assert isinstance(result, dict)
     assert "status" in result
-    
+
     # Open Food Facts doesn't require auth, so might succeed
     if result["status"] == "success":
         assert "count" in result
@@ -172,9 +172,9 @@ async def test_get_nutrition_info_basic():
 async def test_get_nutrition_info_response_structure():
     """Test nutrition info response structure."""
     result = await get_nutrition_info(food="apple")
-    
+
     assert isinstance(result, dict)
-    
+
     if result["status"] == "success" and result.get("count", 0) > 0:
         product = result["products"][0]
         assert "name" in product
@@ -182,7 +182,7 @@ async def test_get_nutrition_info_response_structure():
         assert "nutrition_grade" in product
         assert "per_100g" in product
         assert isinstance(product["per_100g"], dict)
-        
+
         # Check nutrition fields
         nutrition = product["per_100g"]
         assert "calories" in nutrition
@@ -195,7 +195,7 @@ async def test_get_nutrition_info_response_structure():
 async def test_nutrition_info_empty_query():
     """Test nutrition lookup with empty query."""
     result = await get_nutrition_info(food="")
-    
+
     assert isinstance(result, dict)
     # Should handle gracefully (empty results or error)
     assert "status" in result
@@ -205,7 +205,7 @@ async def test_nutrition_info_empty_query():
 async def test_nutrition_info_special_characters():
     """Test nutrition lookup with special characters."""
     result = await get_nutrition_info(food="peanut butter & jelly")
-    
+
     assert isinstance(result, dict)
     assert "status" in result
 
@@ -215,7 +215,7 @@ async def test_nutrition_info_barcode():
     """Test nutrition lookup with barcode format."""
     # Barcodes are numeric strings
     result = await get_nutrition_info(food="012345678905")
-    
+
     assert isinstance(result, dict)
     assert "status" in result
 
@@ -228,7 +228,7 @@ async def test_all_fitbit_skills_without_auth():
         (get_sleep_data, {}),
         (get_workout_summary, {"days": 7}),
     ]
-    
+
     for skill_func, kwargs in fitbit_skills:
         result = await skill_func(**kwargs)
         assert isinstance(result, dict)
@@ -242,7 +242,7 @@ async def test_all_fitbit_skills_without_auth():
 async def test_nutrition_ingredients_allergens():
     """Test that nutrition data includes ingredients and allergens."""
     result = await get_nutrition_info(food="peanut butter")
-    
+
     if result.get("status") == "success" and result.get("count", 0) > 0:
         product = result["products"][0]
         # Should have these fields (may be empty)
@@ -257,7 +257,7 @@ async def test_date_format_validation():
     # Valid date format
     result = await get_daily_steps(date="2024-01-15")
     assert isinstance(result, dict)
-    
+
     # None (should use today)
     result = await get_daily_steps(date=None)
     assert isinstance(result, dict)

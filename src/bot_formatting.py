@@ -5,6 +5,7 @@ Handles markdown conversion, table rendering, and message splitting for Discord 
 
 import io
 import re
+from typing import Literal
 
 import discord
 
@@ -15,6 +16,7 @@ _IMAGE_LINK_RE = re.compile(r'!\[.*?\]\((https?://[^\s)]+)\)')
 _BARE_IMAGE_RE = re.compile(r'\b(https?://[^\s]+\.(?:png|jpg|jpeg|gif|webp))\b', re.IGNORECASE)
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]+?)```")
 _FENCED_BLOCK_RE = re.compile(r"```[^\n]*\n[\s\S]*?```")
+TableFormatMode = Literal["discord", "copy-safe"]
 
 # Discord embed split limit shared with bot.py so helper behavior stays consistent.
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
@@ -68,8 +70,71 @@ def format_markdown_for_discord(text: str) -> str:
     return "\n".join(result)
 
 
-def format_tables_for_discord(text: str) -> str:
-    """Convert markdown tables to clean, padded text code blocks for Discord."""
+def _is_markdown_table_separator(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("|") and all(c in "|-: " for c in stripped.replace("|", ""))
+
+
+def _parse_markdown_table_rows(table_lines: list[str]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for line in table_lines:
+        stripped = line.strip()
+        if _is_markdown_table_separator(stripped):
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        cleaned = []
+        for cell in cells:
+            cell = cell.strip("*")
+            cell = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', cell)
+            cleaned.append(cell)
+        rows.append(cleaned)
+    return rows
+
+
+def _render_discord_table(rows: list[list[str]]) -> list[str]:
+    num_cols = max(len(r) for r in rows)
+    col_widths = [0] * num_cols
+    for row in rows:
+        for j, cell in enumerate(row):
+            if j < num_cols:
+                col_widths[j] = max(col_widths[j], len(cell))
+
+    border = "+" + "+".join("-" * (w + 2) for w in col_widths) + "+"
+    rendered = ["```text", border]
+    for idx, cells in enumerate(rows):
+        padded = []
+        for j in range(num_cols):
+            cell = cells[j] if j < len(cells) else ""
+            padded.append(f" {cell:<{col_widths[j]}} ")
+        rendered.append("|" + "|".join(padded) + "|")
+        if idx == 0:
+            rendered.append(border)
+    rendered.extend([border, "```"])
+    return rendered
+
+
+def _render_copy_safe_table(rows: list[list[str]]) -> list[str]:
+    if not rows:
+        return []
+    header = rows[0]
+    body = rows[1:] if len(rows) > 1 else []
+    rendered = ["📋 Table"]
+    if not body:
+        rendered.append("• " + " | ".join(cell or "—" for cell in header))
+        return rendered
+
+    for idx, row in enumerate(body, start=1):
+        rendered.append(f"• Row {idx}")
+        max_cols = max(len(header), len(row))
+        for col in range(max_cols):
+            label = header[col] if col < len(header) and header[col] else f"Column {col + 1}"
+            value = row[col] if col < len(row) and row[col] else "—"
+            rendered.append(f"  - {label}: {value}")
+    return rendered
+
+
+def format_tables(text: str, mode: TableFormatMode = "discord") -> str:
+    """Convert markdown tables to formatted blocks optimized for the requested mode."""
     lines = text.split("\n")
     result: list[str] = []
     table_lines: list[str] = []
@@ -77,44 +142,15 @@ def format_tables_for_discord(text: str) -> str:
     in_code_block = False
 
     def _flush_table(tlines: list[str]) -> None:
-        rows: list[list[str]] = []
-        for tl in tlines:
-            cells = [c.strip() for c in tl.strip().strip("|").split("|")]
-            cleaned = []
-            for c in cells:
-                c = c.strip("*")
-                c = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', c)
-                cleaned.append(c)
-            cells = cleaned
-            stripped = tl.strip()
-            is_sep = stripped.startswith("|") and all(c in "|-: " for c in stripped.replace("|", ""))
-            if not is_sep:
-                rows.append(cells)
-
+        rows = _parse_markdown_table_rows(tlines)
         if not rows:
             result.extend(tlines)
             return
 
-        num_cols = max(len(r) for r in rows)
-        col_widths = [0] * num_cols
-        for row in rows:
-            for j, cell in enumerate(row):
-                if j < num_cols:
-                    col_widths[j] = max(col_widths[j], len(cell))
-
-        border = "+" + "+".join("-" * (w + 2) for w in col_widths) + "+"
-        result.append("```text")
-        result.append(border)
-        for idx, cells in enumerate(rows):
-            padded = []
-            for j in range(num_cols):
-                cell = cells[j] if j < len(cells) else ""
-                padded.append(f" {cell:<{col_widths[j]}} ")
-            result.append("|" + "|".join(padded) + "|")
-            if idx == 0:
-                result.append(border)
-        result.append(border)
-        result.append("```")
+        if mode == "copy-safe":
+            result.extend(_render_copy_safe_table(rows))
+        else:
+            result.extend(_render_discord_table(rows))
 
     for line in lines:
         stripped = line.strip()
@@ -131,7 +167,7 @@ def format_tables_for_discord(text: str) -> str:
             continue
 
         is_table_row = stripped.startswith("|") and stripped.endswith("|")
-        is_separator = is_table_row and all(c in "|-: " for c in stripped.replace("|", ""))
+        is_separator = is_table_row and _is_markdown_table_separator(stripped)
 
         if is_table_row or is_separator:
             if not in_table:
@@ -149,6 +185,16 @@ def format_tables_for_discord(text: str) -> str:
         _flush_table(table_lines)
 
     return "\n".join(result)
+
+
+def format_tables_for_discord(text: str) -> str:
+    """Convert markdown tables to clean, padded text code blocks for Discord."""
+    return format_tables(text, mode="discord")
+
+
+def format_tables_for_copy(text: str) -> str:
+    """Convert markdown tables into copy-safe text blocks for thread/detail responses."""
+    return format_tables(text, mode="copy-safe")
 
 
 def _split_plain_segment(text: str, limit: int) -> list[str]:

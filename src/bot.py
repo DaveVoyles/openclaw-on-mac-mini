@@ -379,6 +379,9 @@ from bot_formatting import (
     format_markdown_for_discord as _format_markdown_for_discord,
 )
 from bot_formatting import (
+    format_tables_for_copy as _format_tables_for_copy,
+)
+from bot_formatting import (
     format_tables_for_discord as _format_tables_for_discord,
 )
 from bot_formatting import (
@@ -1316,7 +1319,7 @@ async def on_message(message: discord.Message) -> None:
             log.debug("Thread table image rendering failed: %s", e)
 
         response_text = _format_markdown_for_discord(response_text)
-        response_text = _format_tables_for_discord(response_text)
+        response_text = _format_tables_for_copy(response_text)
         chunks = _split_response(response_text)
 
         for chunk in chunks:

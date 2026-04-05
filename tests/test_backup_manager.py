@@ -8,9 +8,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import asyncio
 import json
-import shutil
 import sqlite3
 
 import pytest
@@ -50,13 +48,13 @@ async def test_backup_manager_init(backup_dir):
 async def test_create_full_backup(backup_dir, monkeypatch):
     """Test creating a full backup."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     # Don't upload to NAS in tests
     result = await manager.create_backup(
         backup_type="full",
         upload_to_nas=False,
     )
-    
+
     if result["success"]:
         assert "path" in result
         assert "size_bytes" in result
@@ -67,12 +65,12 @@ async def test_create_full_backup(backup_dir, monkeypatch):
 async def test_create_incremental_backup(backup_dir):
     """Test creating an incremental backup."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     result = await manager.create_backup(
         backup_type="incremental",
         upload_to_nas=False,
     )
-    
+
     if result["success"]:
         assert "manifest" in result
 
@@ -81,21 +79,21 @@ async def test_create_incremental_backup(backup_dir):
 async def test_backup_manifest(backup_dir):
     """Test that backup manifest is created."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     result = await manager.create_backup(
         backup_type="full",
         upload_to_nas=False,
         compression="none",
     )
-    
+
     if result["success"]:
         backup_path = Path(result["path"])
         manifest_file = backup_path / "manifest.json"
-        
+
         if manifest_file.exists():
             with open(manifest_file) as f:
                 manifest = json.load(f)
-            
+
             assert "timestamp" in manifest
             assert "type" in manifest
             assert manifest["type"] == "full"
@@ -105,13 +103,13 @@ async def test_backup_manifest(backup_dir):
 async def test_backup_compression(backup_dir):
     """Test backup compression."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     result = await manager.create_backup(
         backup_type="full",
         compression="gzip",
         upload_to_nas=False,
     )
-    
+
     if result["success"]:
         backup_path = Path(result["path"])
         # Compressed backups should have .tar.gz extension
@@ -122,13 +120,13 @@ async def test_backup_compression(backup_dir):
 async def test_backup_status(backup_dir):
     """Test getting backup status."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     # Create a backup first
     await manager.create_backup(backup_type="full", upload_to_nas=False)
-    
+
     # Get status
     status = await manager.get_backup_status()
-    
+
     assert "total_backups" in status
     if status["total_backups"] > 0:
         assert "last_backup" in status
@@ -140,15 +138,15 @@ async def test_cleanup_old_backups(backup_dir):
     """Test cleanup of old backups."""
     manager = BackupManager(backup_dir=backup_dir)
     manager.retention_days = 0  # Clean up everything
-    
+
     # Create a test backup directory
     old_backup = backup_dir / "openclaw_backup_full_20200101_120000"
     old_backup.mkdir()
     (old_backup / "test.txt").write_text("test")
-    
+
     # Run cleanup
     await manager._cleanup_old_backups()
-    
+
     # Old backup should be removed
     # (may not work if timestamp parsing fails, which is okay)
 
@@ -157,17 +155,17 @@ async def test_cleanup_old_backups(backup_dir):
 async def test_restore_backup(backup_dir, tmp_path):
     """Test restoring from a backup."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     # Create a simple backup directory
     backup_path = backup_dir / "test_backup"
     backup_path.mkdir()
-    
+
     # Create test files
     db_dir = backup_path / "databases"
     db_dir.mkdir()
     test_db = db_dir / "test.db"
     test_db.write_text("fake database")
-    
+
     # Create manifest
     manifest = {
         "timestamp": "20260405_120000",
@@ -175,11 +173,11 @@ async def test_restore_backup(backup_dir, tmp_path):
         "files": {"databases": str(db_dir)},
     }
     (backup_path / "manifest.json").write_text(json.dumps(manifest))
-    
+
     # Restore
     restore_dir = tmp_path / "restore"
     result = await manager.restore_backup(backup_path, restore_to=restore_dir)
-    
+
     if result["success"]:
         assert "restored_files" in result
         assert len(result["restored_files"]) > 0
@@ -189,15 +187,15 @@ async def test_restore_backup(backup_dir, tmp_path):
 async def test_backup_databases(backup_dir, test_database, monkeypatch):
     """Test database backup."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     # Set up test database path
     monkeypatch.setenv("THREAD_DB_PATH", str(test_database))
-    
+
     backup_path = backup_dir / "test_backup"
     backup_path.mkdir()
-    
+
     result = await manager._backup_databases(backup_path)
-    
+
     # Should create databases directory
     if result:
         assert result.exists()
@@ -207,11 +205,11 @@ async def test_backup_databases(backup_dir, test_database, monkeypatch):
 async def test_convenience_functions(backup_dir, monkeypatch):
     """Test convenience functions."""
     monkeypatch.setenv("BACKUP_DIR", str(backup_dir))
-    
+
     # Test backup_now
     result = await backup_now(upload_to_nas=False)
     assert "success" in result
-    
+
     # Test get_backup_status
     status = await get_backup_status()
     assert "total_backups" in status
@@ -221,11 +219,11 @@ async def test_convenience_functions(backup_dir, monkeypatch):
 async def test_nas_upload_disabled(backup_dir):
     """Test that NAS upload can be disabled."""
     manager = BackupManager(backup_dir=backup_dir)
-    
+
     result = await manager.create_backup(
         backup_type="full",
         upload_to_nas=False,
     )
-    
+
     if result["success"]:
         assert result["uploaded"] is False
