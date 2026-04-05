@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+import user_manager as user_manager_module
+import workspace_manager as workspace_manager_module
 from rbac_permissions import DEFAULT_PERMISSIONS, Permission, PermissionManager
 from user_manager import UserManager, UserRole
 from workspace_manager import WorkspaceManager
@@ -36,6 +38,10 @@ def managers(temp_dbs):
 
     user_manager = UserManager(db_path=users_db)
     workspace_manager = WorkspaceManager(db_path=workspaces_db)
+    previous_global_user_manager = user_manager_module._user_manager
+    previous_global_workspace_manager = workspace_manager_module._workspace_manager
+    user_manager_module._user_manager = user_manager
+    workspace_manager_module._workspace_manager = workspace_manager
     perm_manager = PermissionManager(db_path=permissions_db)
 
     yield user_manager, workspace_manager, perm_manager
@@ -43,6 +49,8 @@ def managers(temp_dbs):
     user_manager.close()
     workspace_manager.close()
     perm_manager.close()
+    user_manager_module._user_manager = previous_global_user_manager
+    workspace_manager_module._workspace_manager = previous_global_workspace_manager
 
 
 @pytest.fixture
