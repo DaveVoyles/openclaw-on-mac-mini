@@ -623,16 +623,19 @@ def _parse_date_range(date_range: str) -> int:
     """Parse date range string to number of days."""
     date_range = date_range.lower().strip()
 
-    if date_range.endswith("d"):
-        return int(date_range[:-1])
-    elif date_range.endswith("w"):
-        return int(date_range[:-1]) * 7
-    elif date_range.endswith("m"):
-        return int(date_range[:-1]) * 30
-    elif date_range.isdigit():
-        return int(date_range)
-    else:
-        return 7  # Default to 7 days
+    try:
+        if date_range.endswith("d"):
+            return int(date_range[:-1])
+        elif date_range.endswith("w"):
+            return int(date_range[:-1]) * 7
+        elif date_range.endswith("m"):
+            return int(date_range[:-1]) * 30
+        elif date_range.isdigit():
+            return int(date_range)
+        else:
+            return 7  # Default to 7 days
+    except (ValueError, IndexError):
+        return 7  # Fallback for any parsing errors
 
 
 def _extract_articles(news_response: dict, limit: int = 10) -> list[dict]:
