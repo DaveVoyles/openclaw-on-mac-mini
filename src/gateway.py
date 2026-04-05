@@ -206,7 +206,11 @@ async def gateway_list_connections(app: str = "") -> str:
         log.warning("Unexpected gateway_list_connections error: %s", e)
         return f"❌ Unexpected error: {e}"
 
-    connections: list[dict[str, Any]] = result.get("connections", [])  # type: ignore[union-attr]
+    # _http_request returns dict | list; we expect dict with "connections" key
+    if not isinstance(result, dict):
+        return "❌ Unexpected response format from gateway"
+    
+    connections: list[dict[str, Any]] = result.get("connections", [])
     if not connections:
         filter_note = f" for `{app}`" if app else ""
         return f"ℹ️ No active connections found{filter_note}. Use `gateway_create_connection` to add one."
@@ -247,7 +251,14 @@ async def gateway_create_connection(app: str) -> str:
         log.warning("Unexpected gateway_create_connection error: %s", e)
         return f"❌ Unexpected error: {e}"
 
-    conn = result.get("connection", result)  # type: ignore[union-attr]
+    # _http_request returns dict | list; we expect dict
+    if not isinstance(result, dict):
+        return "❌ Unexpected response format from gateway"
+    
+    conn = result.get("connection", result)
+    if not isinstance(conn, dict):
+        return "❌ Invalid connection data from gateway"
+    
     auth_url = conn.get("url", "")
     cid = conn.get("connection_id", "?")
 
@@ -281,7 +292,10 @@ async def create_google_doc(title: str, content: str) -> str:
     except RuntimeError as e:
         return f"❌ Could not create Google Doc: {e}"
 
-    doc_id = doc.get("documentId")  # type: ignore[union-attr]
+    if not isinstance(doc, dict):
+        return "❌ Unexpected response format from Google Docs API"
+    
+    doc_id = doc.get("documentId")
     if not doc_id:
         return "❌ Google Docs API did not return a document ID. Is 'google-docs' connected via Maton?"
 

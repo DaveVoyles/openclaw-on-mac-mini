@@ -200,7 +200,8 @@ class ApprovalView(discord.ui.View):
 
         # Disable buttons after resolution
         for child in self.children:
-            child.disabled = True  # type: ignore
+            if isinstance(child, (discord.ui.Button, discord.ui.Select)):
+                child.disabled = True
 
         if approved:
             await interaction.response.edit_message(
@@ -231,7 +232,8 @@ class ApprovalView(discord.ui.View):
         if hasattr(self, "message") and self.message:
             try:
                 for child in self.children:
-                    child.disabled = True  # type: ignore
+                    if isinstance(child, (discord.ui.Button, discord.ui.Select)):
+                        child.disabled = True
                 await self.message.edit(
                     content="⏱️ **Approval request expired** — no action was taken.",
                     view=self,

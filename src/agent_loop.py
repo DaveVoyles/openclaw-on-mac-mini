@@ -248,7 +248,7 @@ def save_plan(plan: Plan, _retries: int = 3, _backoff: float = 0.5) -> None:
     plan.updated_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     md = plan_to_markdown(plan)
     path = _plan_path(plan.plan_id)
-    last_exc: Exception | None = None
+    last_exc: Exception = RuntimeError("save_plan failed without exception")
     for attempt in range(_retries):
         tmp = path.with_suffix(".tmp")
         try:
@@ -268,7 +268,7 @@ def save_plan(plan: Plan, _retries: int = 3, _backoff: float = 0.5) -> None:
                 time.sleep(min(_backoff * (2 ** attempt), 1.0))  # short sync sleep; only on write failure
                 log.warning("save_plan retry %d/%d for %s: %s", attempt + 1, _retries, plan.plan_id, exc)
     log.error("save_plan failed after %d attempts for %s: %s", _retries, plan.plan_id, last_exc)
-    raise last_exc  # type: ignore[misc]
+    raise last_exc
 
 
 def load_plan(plan_id: str) -> Plan | None:

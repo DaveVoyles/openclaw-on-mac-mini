@@ -282,7 +282,8 @@ class ContainerActionView(discord.ui.View):
 
     async def on_timeout(self):
         for child in self.children:
-            child.disabled = True  # type: ignore
+            if isinstance(child, (discord.ui.Button, discord.ui.Select)):
+                child.disabled = True
         if hasattr(self, "message") and self.message:
             try:
                 await self.message.edit(view=self)
@@ -352,7 +353,8 @@ class ContainerSelectView(discord.ui.View):
 
     async def on_timeout(self):
         for child in self.children:
-            child.disabled = True  # type: ignore
+            if isinstance(child, (discord.ui.Button, discord.ui.Select)):
+                child.disabled = True
         if hasattr(self, "message") and self.message:
             try:
                 await self.message.edit(view=self)

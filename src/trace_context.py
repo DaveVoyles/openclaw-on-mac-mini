@@ -48,9 +48,10 @@ class TraceLogFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         trace = _current_trace.get()
-        record.trace_id = trace.trace_id if trace else "-"  # type: ignore[attr-defined]
-        record.trace_cmd = trace.command if trace else "-"  # type: ignore[attr-defined]
-        record.trace_user = trace.user_id if trace else 0  # type: ignore[attr-defined]
+        # Extend LogRecord with trace context attributes
+        setattr(record, "trace_id", trace.trace_id if trace else "-")
+        setattr(record, "trace_cmd", trace.command if trace else "-")
+        setattr(record, "trace_user", trace.user_id if trace else 0)
         return True
 
 
