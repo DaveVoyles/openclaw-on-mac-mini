@@ -13,6 +13,16 @@ __pycache__/
 venv/
 .venv/
 
+# Testing artifacts
+.pytest_cache/
+.hypothesis/
+htmlcov/
+.coverage
+coverage.xml
+test-report.html
+test-report.json
+.ruff_cache/
+
 # Data directories (persist locally, don't track)
 data/logs/
 data/audit/
