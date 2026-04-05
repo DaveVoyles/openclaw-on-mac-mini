@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import aiofiles
 import discord
 import yaml
 from discord import app_commands
@@ -73,14 +74,15 @@ _CHANNEL_ROLES: dict[int, str] = {}
 _CHANNEL_PROMPTS: dict[str, str] = {}
 
 
-def _load_channel_config() -> None:
+async def _load_channel_config() -> None:
     """Load channel roles from config.yaml and map them to env-provided IDs."""
     global _CHANNEL_ROLES, _CHANNEL_PROMPTS
     config_file = CONFIG_DIR / "config.yaml"
     if config_file.exists():
         try:
-            with open(config_file) as f:
-                cfg_yaml = yaml.safe_load(f) or {}
+            async with aiofiles.open(config_file) as f:
+                content = await f.read()
+                cfg_yaml = yaml.safe_load(content) or {}
             roles = cfg_yaml.get("channels", {}).get("roles", {})
             for role_name, role_cfg in roles.items():
                 prompt = role_cfg.get("prompt_override", "")
@@ -212,7 +214,7 @@ class OpenClawBot(commands.Bot):
         audit_log(None, "bot_ready", f"Logged in as {self.user}")
         set_bot(self)
 
-        _load_channel_config()
+        await _load_channel_config()
 
         scheduler.register_skills(SKILLS)
         scheduler.start()
@@ -303,9 +305,9 @@ class OpenClawBot(commands.Bot):
             today = datetime.date.today().isoformat()
             audit_file = AUDIT_DIR / f"{today}.jsonl"
             try:
-                with open(audit_file, "a") as f:
+                async with aiofiles.open(audit_file, "a") as f:
                     for e in entries:
-                        f.write(json.dumps(e) + "\n")
+                        await f.write(json.dumps(e) + "\n")
             except Exception as exc:
                 log.warning("Failed to flush audit buffer on shutdown: %s", exc)
 
@@ -561,8 +563,8 @@ class ResponseActions(discord.ui.View):
                 "rating": rating,
             }
             feedback_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(feedback_file, "a") as f:
-                f.write(json.dumps(entry) + "\n")
+            async with aiofiles.open(feedback_file, "a") as f:
+                await f.write(json.dumps(entry) + "\n")
             emoji = "👍" if rating == "positive" else "👎"
             await interaction.response.send_message(
                 f"{emoji} Feedback recorded — thanks!", ephemeral=True,

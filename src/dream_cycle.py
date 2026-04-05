@@ -16,6 +16,8 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
+import aiofiles
+
 from utils import atomic_write
 
 log = logging.getLogger("openclaw.dream")
@@ -82,7 +84,7 @@ class DreamCycle:
         report = await self._evaluate(index, changes)
 
         _save_index(self.index_path, index)
-        self._append_dream_log(report)
+        await self._append_dream_log(report)
 
         log.info("Dream cycle complete in %.1fs", time.monotonic() - start)
         return report
@@ -298,7 +300,7 @@ class DreamCycle:
 
             # Procedural items → procedures.md
             if _is_procedural(text):
-                self._append_procedure(text)
+                await self._append_procedure(text)
                 changes["procedures"] += 1
                 continue
 
@@ -338,13 +340,13 @@ class DreamCycle:
                 "relations": [],
             }
             index["entries"].append(entry)
-            self._append_memory_md(entry)
+            await self._append_memory_md(entry)
             changes["added"] += 1
 
         _build_relations(index)
         return changes
 
-    def _append_procedure(self, text: str) -> None:
+    async def _append_procedure(self, text: str) -> None:
         """Append a procedural item to procedures.md if not already present."""
         self.procedures_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.procedures_path.exists():
@@ -354,10 +356,10 @@ class DreamCycle:
         existing = self.procedures_path.read_text()
         if text[:80] in existing:
             return
-        with open(self.procedures_path, "a") as f:
-            f.write(f"\n- {text[:300]}\n")
+        async with aiofiles.open(self.procedures_path, "a") as f:
+            await f.write(f"\n- {text[:300]}\n")
 
-    def _append_memory_md(self, entry: dict) -> None:
+    async def _append_memory_md(self, entry: dict) -> None:
         """Append a new entry to MEMORY.md."""
         self.memory_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.memory_path.exists():
@@ -370,11 +372,11 @@ class DreamCycle:
             "threads": "🌊",
         }.get(entry.get("category", ""), "📝")
 
-        with open(self.memory_path, "a") as f:
-            f.write(f"\n### {emoji} {entry['id']} — {entry['category']}\n")
-            f.write(f"- {entry['text'][:300]}\n")
+        async with aiofiles.open(self.memory_path, "a") as f:
+            await f.write(f"\n### {emoji} {entry['id']} — {entry['category']}\n")
+            await f.write(f"- {entry['text'][:300]}\n")
             tags = ", ".join(entry.get("tags", [])) or "none"
-            f.write(f"- _Added: {entry['created']} | Tags: {tags}_\n")
+            await f.write(f"- _Added: {entry['created']} | Tags: {tags}_\n")
 
     # ------------------------------------------------------------------
     # Phase 3: Evaluate
@@ -430,7 +432,7 @@ class DreamCycle:
 
         return _build_report(index, changes, health, insights, archived_count)
 
-    def _archive_entry(self, entry: dict) -> None:
+    async def _archive_entry(self, entry: dict) -> None:
         """Compress entry to one line and append to archive.md."""
         self.archive_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.archive_path.exists():
@@ -443,18 +445,18 @@ class DreamCycle:
             f"{entry['text'][:120].replace(chr(10), ' ')} "
             f"[imp={entry.get('importance', 0):.2f}, refs={entry.get('referenceCount', 0)}]\n"
         )
-        with open(self.archive_path, "a") as f:
-            f.write(line)
+        async with aiofiles.open(self.archive_path, "a") as f:
+            await f.write(line)
 
-    def _append_dream_log(self, report: str) -> None:
+    async def _append_dream_log(self, report: str) -> None:
         """Append a dream report to dream-log.md."""
         self.dream_log_path.parent.mkdir(parents=True, exist_ok=True)
         if not self.dream_log_path.exists():
             self.dream_log_path.write_text(
                 "# Dream Log\n\n_Auto-Dream consolidation reports. Append-only._\n\n---\n\n"
             )
-        with open(self.dream_log_path, "a") as f:
-            f.write(f"\n{report}\n")
+        async with aiofiles.open(self.dream_log_path, "a") as f:
+            await f.write(f"\n{report}\n")
 
 
 # ---------------------------------------------------------------------------
