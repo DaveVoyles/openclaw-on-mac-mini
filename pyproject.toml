@@ -27,11 +27,24 @@ pythonpath = ["src", "."]
 asyncio_mode = "auto"
 
 # Short output, stop on first failure (-x), show extra summary
-addopts = "-v --tb=short --timeout=30"
+# Parallel execution with pytest-xdist, flaky test handling
+addopts = [
+    "-v",
+    "--tb=short",
+    "--timeout=30",
+    "-n", "auto",  # Parallel execution (auto-detect cores)
+    "--dist", "loadfile",  # Distribute by file for better parallelization
+    "--reruns", "2",  # Retry flaky tests 2 times
+    "--reruns-delay", "1",  # 1 second delay between retries
+]
 
 # Custom markers
 markers = [
     "requires_python312: test requires Python 3.12 (run via ./run_tests.sh)",
+    "slow: marks tests as slow (>2s)",
+    "integration: marks tests as integration tests",
+    "requires_secrets: marks tests that need API keys",
+    "requires_docker: marks tests that need Docker",
 ]
 
 [tool.ruff]
@@ -49,4 +62,30 @@ known-first-party = ["skills"]
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+strict_equality = true
+
+# Start strict on new/updated files
+files = [
+    "src/openclaw_types.py",
+    "src/digest_manager.py",
+    "src/trend_tracker.py",
+    "src/config.py",
+]
+
+# Gradually enable strict mode (currently permissive for legacy code)
+# disallow_untyped_defs = true  # Uncomment when ready to require all type hints
+
+# Third-party libraries without type stubs
+[[tool.mypy.overrides]]
+module = [
+    "discord.*",
+    "aiohttp.*",
+    "google.generativeai.*",
+    "yaml.*",
+]
 ignore_missing_imports = true
