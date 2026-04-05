@@ -43,6 +43,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/ask <question>` — AI-powered natural language queries
 - **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
 - **Intent-based tool shortlisting + request hints**: `/ask` narrows the skill set per prompt and infers cues like services, time windows, sports/watch-guide intent, calendar asks, and inbox requests from plain English
+- **Domain packs + personas**: prefix `/ask` prompts with `use:finance`, `use:sports`, `use:wwe`, or `use:gaming` to apply persona-aware tool filtering while keeping normal fallback behavior when omitted
 - **Semantic fallback retrieval**: when lexical matching is weak, `/ask` can semantically shortlist likely tools instead of exposing the full tool set
 - **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
@@ -1088,4 +1089,3 @@ recap = await generate_weekly_recap(
 - ✅ API-Sports - 100 req/day (NBA)
 - ✅ Alpha Vantage - 25 req/day
 - ⏳ NFL/NHL/MLB - Coming soon
-

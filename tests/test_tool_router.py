@@ -76,3 +76,62 @@ def test_route_tool_declarations_falls_back_to_full_set_for_low_confidence():
     selected, info = route_tool_declarations("hello there", all_declarations)
     assert info["strategy"] == "fallback-full"
     assert len(selected) == len(all_declarations)
+
+
+def test_route_tool_declarations_filters_finance_pack_from_use_prefix():
+    declarations = [
+        {
+            "name": "search_web",
+            "description": "Search the web",
+            "always_available": True,
+        },
+        {
+            "name": "finance_brief",
+            "description": "Generate finance market updates",
+            "keywords": ["finance", "markets", "stocks"],
+        },
+        {
+            "name": "sports_watch",
+            "description": "Build sports watch guide",
+            "keywords": ["sports", "watch"],
+        },
+    ]
+    selected, info = route_tool_declarations(
+        "/ask use:finance summarize market movers this week",
+        declarations,
+    )
+    names = {str(declaration.get("name", "")) for declaration in selected}
+    assert info["pack"] == "finance"
+    assert info["persona"] == "finance-analyst"
+    assert "finance_brief" in names
+    assert "sports_watch" not in names
+    assert "search_web" in names
+
+
+def test_route_tool_declarations_supports_plain_english_pack_and_persona_metadata():
+    declarations = [
+        {
+            "name": "search_web",
+            "description": "Search the web",
+            "always_available": True,
+        },
+        {
+            "name": "wwe_recap",
+            "description": "Generate pro wrestling recap",
+            "personas": ["wwe-reporter"],
+        },
+        {
+            "name": "gaming_news",
+            "description": "Get gaming headlines",
+            "domains": ["gaming"],
+        },
+    ]
+    selected, info = route_tool_declarations(
+        "Use wwe pack and give me this week's RAW and SmackDown recap.",
+        declarations,
+    )
+    names = {str(declaration.get("name", "")) for declaration in selected}
+    assert info["pack"] == "wwe"
+    assert info["persona"] == "wwe-reporter"
+    assert "wwe_recap" in names
+    assert "gaming_news" not in names

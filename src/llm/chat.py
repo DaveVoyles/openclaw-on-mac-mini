@@ -128,7 +128,7 @@ async def _select_model_for_message(
 
 
 def _apply_route_hints(model_message: str, route_info: dict[str, Any]) -> str:
-    if route_info.get("strategy") != "shortlist":
+    if route_info.get("strategy") not in {"shortlist", "pack-filter"}:
         return model_message
 
     bundles = [str(item) for item in (route_info.get("bundles") or []) if item]
@@ -151,6 +151,8 @@ def _apply_route_hints(model_message: str, route_info: dict[str, Any]) -> str:
         "output_style",
         "emoji_level",
         "detail_level",
+        "pack",
+        "persona",
     ):
         value = hints.get(key)
         if not value:
@@ -323,12 +325,16 @@ async def chat_stream(
         tool_declarations=tool_declarations,
         label="LLM",
     )
-    if route_info.get("strategy") == "shortlist":
+    if route_info.get("strategy") in {"shortlist", "pack-filter"}:
         _routing_notes.append(
             "Tool shortlist: " + ", ".join(route_info.get("selected", [])[:6])
         )
         if route_info.get("bundles"):
             _routing_notes.append("Intent bundle: " + ", ".join(route_info.get("bundles", [])[:3]))
+        if route_info.get("pack"):
+            _routing_notes.append(f"Domain pack: {route_info.get('pack')}")
+        if route_info.get("persona"):
+            _routing_notes.append(f"Persona: {route_info.get('persona')}")
     elif route_info.get("strategy") == "no-tools":
         _routing_notes.append("Tool use disabled for this internal request")
     model_message = _apply_route_hints(model_message, route_info)

@@ -10,6 +10,8 @@ log = logging.getLogger("openclaw.tool_router")
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9+._-]*")
 _DAY_WINDOW_RE = re.compile(r"\b(?:last|past|next)\s+(\d{1,2})\s+days?\b")
+_PACK_DIRECTIVE_RE = re.compile(r"\buse\s*:\s*([a-z0-9_-]+)\b", re.IGNORECASE)
+_PACK_PLAIN_RE = re.compile(r"\buse\s+(finance|sports|wwe|gaming)\s*(?:pack|persona|tools?)?\b", re.IGNORECASE)
 
 _ALWAYS_AVAILABLE = {
     "search_web",
@@ -191,6 +193,47 @@ _SERVICE_NAMES = (
 _SPORT_TERMS = ("lacrosse", "basketball", "baseball", "football", "soccer", "hockey")
 _LEAGUE_TERMS = ("ncaa division 1", "division 1", "ncaa", "nba", "wnba", "nfl", "mlb", "nhl", "mls")
 
+_PACK_PROFILES: dict[str, dict[str, Any]] = {
+    "finance": {
+        "persona": "finance-analyst",
+        "aliases": ("markets", "stocks", "investing"),
+        "terms": (
+            "finance", "financial", "market", "markets", "stock", "stocks", "invest",
+            "investing", "portfolio", "etf", "earnings", "economic", "economy", "indices",
+        ),
+    },
+    "sports": {
+        "persona": "sports-analyst",
+        "aliases": ("sportsbook",),
+        "terms": (
+            "sports", "game", "games", "matchup", "watch", "schedule", "scores", "team",
+            "teams", "league", "espn", "ncaa", "nba", "nfl", "mlb", "nhl", "mls", "lacrosse",
+        ),
+    },
+    "wwe": {
+        "persona": "wwe-reporter",
+        "aliases": ("wrestling", "pro-wrestling"),
+        "terms": (
+            "wwe", "wrestling", "raw", "smackdown", "nxt", "wrestlemania",
+            "pay-per-view", "ppv", "premium live event", "sports entertainment",
+        ),
+    },
+    "gaming": {
+        "persona": "gaming-scout",
+        "aliases": ("videogames", "video-games"),
+        "terms": (
+            "gaming", "game", "games", "steam", "xbox", "playstation", "nintendo",
+            "pc", "esports", "patch", "release notes", "multiplayer", "twitch",
+        ),
+    },
+}
+
+_PACK_ALIAS_LOOKUP: dict[str, str] = {}
+for _pack_name, _profile in _PACK_PROFILES.items():
+    _PACK_ALIAS_LOOKUP[_pack_name] = _pack_name
+    for _alias in _profile.get("aliases", ()):
+        _PACK_ALIAS_LOOKUP[str(_alias).lower()] = _pack_name
+
 
 def _tokenize(text: str) -> set[str]:
     return {tok for tok in _TOKEN_RE.findall((text or "").lower()) if len(tok) > 1}
@@ -202,13 +245,65 @@ def _iter_metadata_values(declaration: dict[str, Any]) -> list[str]:
         str(declaration.get("description", "")),
         str(declaration.get("category", "")),
     ]
-    for key in ("aliases", "examples", "keywords"):
+    for key in ("aliases", "examples", "keywords", "domains", "packs", "personas"):
         raw = declaration.get(key)
         if isinstance(raw, str):
             values.append(raw)
         elif isinstance(raw, list):
             values.extend(str(item) for item in raw)
     return values
+
+
+def _extract_pack_directive(message: str) -> tuple[str | None, str | None, str]:
+    """Extract `use:<pack>` or plain-English `use <pack> pack` directives."""
+    pack_name: str | None = None
+
+    directive_match = _PACK_DIRECTIVE_RE.search(message)
+    plain_match = _PACK_PLAIN_RE.search(message) if directive_match is None else None
+
+    if directive_match:
+        raw = str(directive_match.group(1)).lower().strip()
+        pack_name = _PACK_ALIAS_LOOKUP.get(raw, raw if raw in _PACK_PROFILES else None)
+    elif plain_match:
+        raw = str(plain_match.group(1)).lower().strip()
+        pack_name = _PACK_ALIAS_LOOKUP.get(raw, raw if raw in _PACK_PROFILES else None)
+
+    cleaned = _PACK_DIRECTIVE_RE.sub(" ", message)
+    cleaned = _PACK_PLAIN_RE.sub(" ", cleaned)
+    cleaned = " ".join(cleaned.split())
+
+    persona = None
+    if pack_name:
+        persona = str(_PACK_PROFILES.get(pack_name, {}).get("persona") or "")
+    return pack_name, persona or None, cleaned
+
+
+def _declaration_matches_pack(declaration: dict[str, Any], pack_name: str) -> bool:
+    if declaration.get("always_available") or str(declaration.get("name", "")) in _ALWAYS_AVAILABLE:
+        return True
+
+    profile = _PACK_PROFILES.get(pack_name)
+    if not profile:
+        return True
+
+    metadata_text = " ".join(_iter_metadata_values(declaration)).lower()
+    metadata_tokens = _tokenize(metadata_text)
+    explicit_values: set[str] = set()
+    for key in ("domains", "packs", "personas"):
+        raw = declaration.get(key)
+        if isinstance(raw, str):
+            explicit_values.add(raw.lower())
+        elif isinstance(raw, list):
+            explicit_values.update(str(item).lower() for item in raw)
+
+    persona_name = str(profile.get("persona", "")).lower()
+    if pack_name in explicit_values or persona_name in explicit_values:
+        return True
+
+    pack_terms = {str(item).lower() for item in profile.get("terms", ())}
+    if metadata_tokens & pack_terms:
+        return True
+    return False
 
 
 def _score_declaration(message_lower: str, message_tokens: set[str], declaration: dict[str, Any]) -> int:
@@ -345,13 +440,29 @@ def route_tool_declarations(
     if not declarations:
         return [], {"strategy": "empty", "selected": [], "top_score": 0}
 
-    message_lower = (message or "").lower()
+    pack_name, persona_name, cleaned_message = _extract_pack_directive(message or "")
+    route_message = cleaned_message or (message or "")
+    message_lower = route_message.lower()
     if not message_lower.strip():
         return declarations, {"strategy": "fallback-full", "selected": [], "top_score": 0}
 
+    candidate_declarations = declarations
+    if pack_name:
+        filtered_declarations = [
+            declaration
+            for declaration in declarations
+            if _declaration_matches_pack(declaration, pack_name)
+        ]
+        if filtered_declarations:
+            candidate_declarations = filtered_declarations
+
     message_tokens = _tokenize(message_lower)
     matched_bundles = _matching_workflow_bundles(message_lower, message_tokens)
-    request_hints = _extract_request_hints(message, message_lower, message_tokens)
+    request_hints = _extract_request_hints(route_message, message_lower, message_tokens)
+    if pack_name:
+        request_hints["pack"] = pack_name
+    if persona_name:
+        request_hints["persona"] = persona_name
     bundled_tool_names = {
         str(tool_name)
         for bundle in matched_bundles
@@ -360,7 +471,7 @@ def route_tool_declarations(
     scored: list[tuple[int, str, dict[str, Any]]] = []
     always_on: list[dict[str, Any]] = []
 
-    for declaration in declarations:
+    for declaration in candidate_declarations:
         name = str(declaration.get("name", ""))
         if declaration.get("always_available") or name in _ALWAYS_AVAILABLE:
             always_on.append(declaration)
@@ -373,12 +484,24 @@ def route_tool_declarations(
     top_score = scored[0][0] if scored else 0
 
     if top_score < 4:
+        if pack_name and candidate_declarations is not declarations:
+            return candidate_declarations, {
+                "strategy": "pack-filter",
+                "selected": [name for _, name, _ in scored[: min(12, len(scored))]],
+                "top_score": top_score,
+                "bundles": [str(bundle.get("name", "")) for bundle in matched_bundles],
+                "hints": request_hints,
+                "pack": pack_name,
+                "persona": persona_name,
+            }
         return declarations, {
             "strategy": "fallback-full",
             "selected": [name for _, name, _ in scored[: min(12, len(scored))]],
             "top_score": top_score,
             "bundles": [str(bundle.get("name", "")) for bundle in matched_bundles],
             "hints": request_hints,
+            "pack": pack_name,
+            "persona": persona_name,
         }
 
     selected: list[dict[str, Any]] = []
@@ -412,4 +535,6 @@ def route_tool_declarations(
         "top_score": top_score,
         "bundles": [str(bundle.get("name", "")) for bundle in matched_bundles],
         "hints": request_hints,
+        "pack": pack_name,
+        "persona": persona_name,
     }
