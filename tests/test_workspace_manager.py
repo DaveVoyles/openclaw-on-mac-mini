@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import user_manager as user_manager_module
 from user_manager import UserManager, UserRole
 from workspace_manager import WorkspaceManager, WorkspaceRole
 
@@ -31,12 +32,15 @@ def managers(temp_dbs):
     users_db, workspaces_db = temp_dbs
 
     user_manager = UserManager(db_path=users_db)
+    previous_global_user_manager = user_manager_module._user_manager
+    user_manager_module._user_manager = user_manager
     workspace_manager = WorkspaceManager(db_path=workspaces_db)
 
     yield user_manager, workspace_manager
 
     user_manager.close()
     workspace_manager.close()
+    user_manager_module._user_manager = previous_global_user_manager
 
 
 @pytest.fixture

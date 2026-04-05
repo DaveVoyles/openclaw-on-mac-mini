@@ -381,9 +381,8 @@ class WorkspaceManager:
         """List all members of workspace with their roles"""
         rows = self.conn.execute(
             """
-            SELECT u.*, wm.role, wm.joined_at
+            SELECT wm.user_id, wm.role, wm.joined_at
             FROM workspace_members wm
-            JOIN users u ON wm.user_id = u.id
             WHERE wm.workspace_id = ?
             ORDER BY wm.joined_at
             """,
@@ -393,7 +392,7 @@ class WorkspaceManager:
         user_manager = get_user_manager()
         members = []
         for row in rows:
-            user = user_manager.get_user(row["id"])
+            user = user_manager.get_user(row["user_id"])
             if user:
                 role = WorkspaceRole(row["role"])
                 members.append((user, role))
