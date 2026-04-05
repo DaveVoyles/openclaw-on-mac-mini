@@ -5,52 +5,223 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:  # Manual trigger
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.12"
+            memory-dir: /home/runner/openclaw-test
+          - os: [self-hosted, macOS]
+            python-version: "3.12"
+            memory-dir: /tmp/openclaw-test
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            .venv
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-test.txt
 
-      - name: Lint with ruff
-        run: ruff check src/ tests/ --output-format=github
+      - name: Set up virtualenv (macOS)
+        if: contains(matrix.os, 'self-hosted')
+        run: |
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python3 -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
 
-      - name: Run tests
+      - name: Lint with ruff
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            ruff check src/ tests/ --output-format=github
+          else
+            source .venv/bin/activate
+            ruff check src/ tests/ --output-format=github
+          fi
+
+      - name: Type check with mypy
+        continue-on-error: true  # Warn only for now
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            pip install mypy
+            mypy src/ --ignore-missing-imports || true
+          else
+            source .venv/bin/activate
+            pip install mypy
+            mypy src/ --ignore-missing-imports || true
+          fi
+
+      - name: Security scan with bandit
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true  # Warn only for now
+        run: |
+          pip install bandit
+          bandit -r src/ -f json -o bandit-report.json || true
+          if [ -f bandit-report.json ]; then
+            echo "Security scan completed. Check artifacts for details."
+          fi
+
+      - name: Dependency vulnerability scan
+        if: matrix.os == 'ubuntu-latest'
+        continue-on-error: true  # Warn only for now
+        run: |
+          pip install safety
+          safety check --json > safety-report.json || true
+          if [ -f safety-report.json ]; then
+            echo "Dependency scan completed. Check artifacts for details."
+          fi
+
+      - name: Python syntax check
+        run: |
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            python -c "
+            import ast, pathlib
+            errors = []
+            for f in pathlib.Path('src').glob('**/*.py'):
+                try: ast.parse(f.read_text())
+                except SyntaxError as e: errors.append(f'{f}: {e}')
+            if errors:
+                for e in errors: print(e)
+                raise SystemExit(1)
+            print(f'All {len(list(pathlib.Path(\"src\").glob(\"**/*.py\")))} files OK')
+            "
+          else
+            source .venv/bin/activate
+            python3 -c "
+            import ast, pathlib
+            errors = []
+            for f in pathlib.Path('src').glob('**/*.py'):
+                try: ast.parse(f.read_text())
+                except SyntaxError as e: errors.append(f'{f}: {e}')
+            if errors:
+                for e in errors: print(e)
+                raise SystemExit(1)
+            print(f'All {len(list(pathlib.Path(\"src\").glob(\"**/*.py\")))} files OK')
+            "
+          fi
+
+      - name: Run tests (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
         env:
           GOOGLE_API_KEY: ""
           LOCAL_LLM_ENABLED: "false"
           AGENTMAIL_API_KEY: ""
           AGENTMAIL_INBOX: ""
-          MEMORY_DIR: /home/runner/openclaw-test
-          QMD_MEMORY_FILE: /home/runner/openclaw-test/qmd.json
-          SPENDING_FILE: /home/runner/openclaw-test/spending.json
+          MEMORY_DIR: ${{ matrix.memory-dir }}
+          QMD_MEMORY_FILE: ${{ matrix.memory-dir }}/qmd.json
+          SPENDING_FILE: ${{ matrix.memory-dir }}/spending.json
           CONFIG_DIR: ${{ github.workspace }}/config
         run: |
-          mkdir -p /home/runner/openclaw-test
-          python -m pytest tests/ -x -q --tb=short --ignore=tests/test_llm_chat.py --ignore=tests/test_llm_ratelimiter.py --ignore=tests/test_model_selection.py -k 'not test_gateway_successful_request and not test_returns_json_response'
+          mkdir -p ${{ matrix.memory-dir }}
+          python -m pytest tests/ \
+            -x -q --tb=short \
+            --ignore=tests/test_llm_chat.py \
+            --ignore=tests/test_llm_ratelimiter.py \
+            --ignore=tests/test_model_selection.py \
+            -k 'not test_gateway_successful_request and not test_returns_json_response' \
+            --cov=src --cov-report=xml --cov-report=term-missing:skip-covered \
+            --html=test-report.html --self-contained-html \
+            --json-report --json-report-file=test-report.json \
+            --durations=10
 
-      - name: Syntax check
+      - name: Run tests with coverage (macOS)
+        if: contains(matrix.os, 'self-hosted')
+        env:
+          GOOGLE_API_KEY: ""
+          LOCAL_LLM_ENABLED: "false"
+          AGENTMAIL_API_KEY: ""
+          AGENTMAIL_INBOX: ""
+          MEMORY_DIR: ${{ matrix.memory-dir }}
+          QMD_MEMORY_FILE: ${{ matrix.memory-dir }}/qmd.json
+          SPENDING_FILE: ${{ matrix.memory-dir }}/spending.json
+          CONFIG_DIR: ${{ github.workspace }}/config
         run: |
-          python -c "
-          import ast, pathlib
-          errors = []
-          for f in pathlib.Path('src').glob('**/*.py'):
-              try: ast.parse(f.read_text())
-              except SyntaxError as e: errors.append(f'{f}: {e}')
-          if errors:
-              for e in errors: print(e)
-              raise SystemExit(1)
-          print(f'All {len(list(pathlib.Path(\"src\").glob(\"**/*.py\")))} files OK')
-          "
+          source .venv/bin/activate
+          python3 -m pytest tests/ -v --tb=short \
+            --ignore=tests/test_llm_chat.py \
+            --ignore=tests/test_llm_ratelimiter.py \
+            --ignore=tests/test_model_selection.py \
+            -k 'not test_gateway_successful_request' \
+            --cov=src --cov-report=xml --cov-report=term-missing:skip-covered
+
+      - name: Upload to codecov
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload test reports (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-ubuntu
+          path: |
+            test-report.html
+            test-report.json
+            coverage.xml
+          retention-days: 30
+
+      - name: Check coverage threshold (macOS)
+        if: contains(matrix.os, 'self-hosted') && always()
+        run: |
+          source .venv/bin/activate
+          python3 -m pytest tests/ -q \
+            --ignore=tests/test_llm_chat.py \
+            --ignore=tests/test_llm_ratelimiter.py \
+            --ignore=tests/test_model_selection.py \
+            -k 'not test_gateway_successful_request' \
+            --cov=src --cov-fail-under=30 2>/dev/null || echo "⚠️ Coverage below 30% threshold"
+
+      - name: Upload coverage report (macOS)
+        if: contains(matrix.os, 'self-hosted')
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-macOS
+          path: coverage.xml
+          retention-days: 30
+
+      - name: Upload security scan results
+        if: matrix.os == 'ubuntu-latest' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+          retention-days: 30
+          if-no-files-found: ignore

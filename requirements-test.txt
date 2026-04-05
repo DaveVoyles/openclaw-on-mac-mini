@@ -7,3 +7,9 @@ pytest-cov==7.1.0
 pytest-timeout==2.4.0
 ruff>=0.4.0
 hypothesis>=6.100.0
+
+# Type checking
+mypy>=1.20.0
+types-aiofiles
+types-PyYAML
+types-requests
