@@ -122,8 +122,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
             view_count INTEGER DEFAULT 0,
             last_accessed REAL,
             is_active INTEGER DEFAULT 1,
-            metadata_json TEXT,
-            FOREIGN KEY (created_by) REFERENCES users(id)
+            metadata_json TEXT
         )
     """)
     

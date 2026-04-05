@@ -461,7 +461,7 @@ async def search_trakt(
         return {"status": "error", "message": str(e)}
 
 
-async def get_oauth_url() -> str:
+def get_oauth_url() -> str:
     """
     Generate Trakt OAuth2 authorization URL.
 
