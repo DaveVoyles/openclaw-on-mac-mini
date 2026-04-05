@@ -4,6 +4,7 @@ Not testing actual API calls (would hit rate limits), just structure.
 """
 
 import pytest
+
 from skills import SKILLS
 
 
