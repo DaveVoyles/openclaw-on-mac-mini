@@ -89,18 +89,18 @@ def _register_utility_commands(bot: commands.Bot) -> None:
     @bot.tree.command(name="help", description="List available OpenClaw commands")
     @require_auth
     async def help_cmd(interaction: discord.Interaction):
-    """Display comprehensive help for all OpenClaw commands and features.
-    
-    Shows:
-    - Core commands (/ask, /research, /plan)
-    - Utility commands (help, logs, config, estop)
-    - Docker/NAS management
-    - Conversation/memory management
-    - Calendar, email, media features
-    """
+        """Display comprehensive help for all OpenClaw commands and features.
+
+        Shows:
+        - Core commands (/ask, /research, /plan)
+        - Utility commands (help, logs, config, estop)
+        - Docker/NAS management
+        - Conversation/memory management
+        - Calendar, email, media features
+        """
         categories = {
             "🤖 AI & Chat": [
-                ("`/ask <question>`", "Ask OpenClaw anything (AI-powered)"),
+                ("`/ask <question>`", "Ask naturally in plain English - OpenClaw can choose tools and skills for you"),
                 ("`/clear`", "Clear your conversation history"),
                 ("`/websearch <query>`", "Search the live web"),
                 ("`/browse <url>`", "Fetch and read a web page"),
