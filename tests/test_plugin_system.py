@@ -107,18 +107,15 @@ class TestPluginBase:
         await plugin.on_enable()
         assert plugin.is_enabled()
 
-    @pytest.mark.asyncio
-    async def test_plugin_must_implement_on_load(self, plugin_api):
+    def test_plugin_must_implement_on_load(self, plugin_api):
         """Test that plugins must implement on_load."""
 
-        class IncompletePlugin(Plugin):
-            pass
+        with pytest.raises(TypeError, match="abstract"):
+            # Cannot instantiate abstract class without on_load
+            class IncompletePlugin(Plugin):
+                pass
 
-        plugin = IncompletePlugin(plugin_api)
-
-        with pytest.raises(TypeError):
-            # Cannot instantiate abstract class
-            pass
+            plugin = IncompletePlugin(plugin_api)
 
 
 class TestPluginAPI:
