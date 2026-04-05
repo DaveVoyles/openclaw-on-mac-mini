@@ -5,7 +5,6 @@ and intelligent scheduling.
 """
 
 import asyncio
-import datetime
 import json
 import logging
 from typing import Any
@@ -85,7 +84,7 @@ async def _api_post(url: str, json_data: dict, headers: dict | None = None, time
                 except json.JSONDecodeError:
                     msg = body[:300]
                 return f"HTTP {resp.status}: {msg}"
-            
+
             if resp.content_type and "json" in resp.content_type:
                 return json.loads(body)
             return body
@@ -112,7 +111,7 @@ async def _api_put(url: str, json_data: dict, headers: dict | None = None, timeo
                 except json.JSONDecodeError:
                     msg = body[:300]
                 return f"HTTP {resp.status}: {msg}"
-            
+
             if resp.content_type and "json" in resp.content_type:
                 return json.loads(body)
             return body
@@ -136,12 +135,12 @@ async def get_storage_info(service: str = "sonarr") -> dict[str, Any]:
         headers = {"X-Api-Key": RADARR_API_KEY}
     else:
         return {"error": f"Unknown service: {service}"}
-    
+
     result = await _api_get(url, headers=headers)
-    
+
     if isinstance(result, str):
         return {"error": result}
-    
+
     if isinstance(result, list) and len(result) > 0:
         disk = result[0]
         free_gb = disk.get("freeSpace", 0) / (1024**3)
@@ -152,19 +151,19 @@ async def get_storage_info(service: str = "sonarr") -> dict[str, Any]:
             "used_gb": round(total_gb - free_gb, 2),
             "percent_free": round((free_gb / total_gb * 100), 1) if total_gb > 0 else 0,
         }
-    
+
     return {"error": "No disk info available"}
 
 
 async def determine_quality_profile(service: str = "sonarr") -> dict[str, Any]:
     """Determine optimal quality profile based on available storage."""
     storage = await get_storage_info(service)
-    
+
     if "error" in storage:
         return {"error": storage["error"], "recommended_profile": "medium"}
-    
+
     free_gb = storage["free_gb"]
-    
+
     if free_gb >= STORAGE_HIGH_QUALITY_MIN:
         return {
             "free_gb": free_gb,
@@ -196,17 +195,17 @@ async def determine_quality_profile(service: str = "sonarr") -> dict[str, Any]:
 async def sync_trakt_watchlist(username: str = "", list_type: str = "watchlist") -> str:
     """
     Sync Trakt.tv watchlist to Sonarr/Radarr.
-    
+
     Note: Requires Trakt integration to be configured in Sonarr/Radarr.
     This is a placeholder - actual implementation would require Trakt API keys.
     """
     if not username:
         return "❌ Please provide a Trakt username"
-    
+
     # This would normally call Trakt API and add items to Sonarr/Radarr
     # For now, return a placeholder response
     log.info("Trakt watchlist sync requested for user %s (list: %s)", username, list_type)
-    
+
     return (
         f"🔄 Trakt watchlist sync initiated for user: {username}\n"
         f"Note: Ensure Trakt integration is configured in Sonarr/Radarr settings.\n"
@@ -217,38 +216,38 @@ async def sync_trakt_watchlist(username: str = "", list_type: str = "watchlist")
 async def sync_imdb_list(list_id: str) -> str:
     """
     Sync IMDb list to Radarr.
-    
+
     Note: Requires IMDb list integration in Radarr.
     """
     if not list_id:
         return "❌ Please provide an IMDb list ID"
-    
+
     try:
         # Check if Radarr has import list feature
         url = f"{RADARR_URL}/api/v3/importlist"
         headers = {"X-Api-Key": RADARR_API_KEY}
-        
+
         result = await _api_get(url, headers=headers)
-        
+
         if isinstance(result, str):
             return f"❌ Failed to access Radarr import lists: {result}"
-        
+
         # Check if IMDb list already exists
         imdb_lists = [lst for lst in result if lst.get("implementation") == "IMDbListImport"]
-        
+
         if not imdb_lists:
             return (
                 f"💡 IMDb list sync available but not configured.\n"
                 f"Add an IMDb List import in Radarr settings → Import Lists.\n"
                 f"List ID: {list_id}"
             )
-        
+
         # Trigger sync
         sync_url = f"{RADARR_URL}/api/v3/importlist/action/sync"
-        sync_result = await _api_post(sync_url, {}, headers=headers)
-        
+        _sync_result = await _api_post(sync_url, {}, headers=headers)
+
         return f"✅ Triggered IMDb list sync for list: {list_id}"
-        
+
     except Exception as e:
         log.error("IMDb list sync failed: %s", e)
         return f"❌ IMDb list sync failed: {e}"
@@ -262,7 +261,7 @@ async def sync_imdb_list(list_id: str) -> str:
 async def optimize_quality_profiles() -> str:
     """Automatically adjust quality profiles based on available storage."""
     results = []
-    
+
     # Check Sonarr
     sonarr_rec = await determine_quality_profile("sonarr")
     if "error" not in sonarr_rec:
@@ -272,7 +271,7 @@ async def optimize_quality_profiles() -> str:
         )
     else:
         results.append(f"📺 **Sonarr**: {sonarr_rec['error']}")
-    
+
     # Check Radarr
     radarr_rec = await determine_quality_profile("radarr")
     if "error" not in radarr_rec:
@@ -282,7 +281,7 @@ async def optimize_quality_profiles() -> str:
         )
     else:
         results.append(f"🎬 **Radarr**: {radarr_rec['error']}")
-    
+
     return "\n\n".join(results)
 
 
@@ -290,7 +289,7 @@ async def apply_quality_profile(service: str, profile_name: str) -> str:
     """Apply a quality profile to all monitored items in a service."""
     if service not in ("sonarr", "radarr"):
         return f"❌ Unknown service: {service}. Use 'sonarr' or 'radarr'."
-    
+
     # Get quality profiles
     if service == "sonarr":
         url = f"{SONARR_URL}/api/v3/qualityprofile"
@@ -298,25 +297,25 @@ async def apply_quality_profile(service: str, profile_name: str) -> str:
     else:
         url = f"{RADARR_URL}/api/v3/qualityprofile"
         headers = {"X-Api-Key": RADARR_API_KEY}
-    
+
     profiles = await _api_get(url, headers=headers)
-    
+
     if isinstance(profiles, str):
         return f"❌ Failed to fetch quality profiles: {profiles}"
-    
+
     # Find matching profile
     target_profile = None
     for profile in profiles:
         if profile_name.lower() in profile.get("name", "").lower():
             target_profile = profile
             break
-    
+
     if not target_profile:
         available = [p.get("name") for p in profiles]
         return f"❌ Profile '{profile_name}' not found. Available: {', '.join(available)}"
-    
+
     profile_id = target_profile["id"]
-    
+
     # This would update all series/movies - simplified for now
     return (
         f"✅ Quality profile '{target_profile['name']}' (ID: {profile_id}) selected for {service}.\n"
@@ -332,22 +331,22 @@ async def apply_quality_profile(service: str, profile_name: str) -> str:
 async def schedule_downloads(hours: list[int] | None = None) -> str:
     """
     Configure download scheduling for off-peak hours.
-    
+
     Args:
         hours: List of hours (0-23) when downloads are allowed
     """
     if not hours:
         hours = [2, 3, 4, 5]  # Default: 2 AM - 6 AM
-    
+
     if not all(0 <= h <= 23 for h in hours):
         return "❌ Hours must be between 0 and 23"
-    
+
     # Format hours for display
     hour_ranges = []
     sorted_hours = sorted(hours)
     start = sorted_hours[0]
     end = sorted_hours[0]
-    
+
     for h in sorted_hours[1:]:
         if h == end + 1:
             end = h
@@ -356,7 +355,7 @@ async def schedule_downloads(hours: list[int] | None = None) -> str:
             start = h
             end = h
     hour_ranges.append(f"{start:02d}:00-{end:02d}:59")
-    
+
     return (
         f"⏰ Download scheduling configured:\n"
         f"**Allowed hours**: {', '.join(hour_ranges)}\n\n"
@@ -381,12 +380,12 @@ async def find_duplicates(service: str = "radarr") -> str:
         media_type = "movies"
     else:
         return f"❌ Unknown service: {service}"
-    
+
     items = await _api_get(url, headers=headers)
-    
+
     if isinstance(items, str):
         return f"❌ Failed to fetch {media_type}: {items}"
-    
+
     # Group by title
     title_groups: dict[str, list] = {}
     for item in items:
@@ -395,25 +394,25 @@ async def find_duplicates(service: str = "radarr") -> str:
             if title not in title_groups:
                 title_groups[title] = []
             title_groups[title].append(item)
-    
+
     # Find duplicates
     duplicates = {title: items for title, items in title_groups.items() if len(items) > 1}
-    
+
     if not duplicates:
         return f"✅ No duplicates found in {service} ({len(items)} {media_type} checked)"
-    
+
     result_lines = [f"⚠️ Found {len(duplicates)} potential duplicates in {service}:\n"]
-    
+
     for title, dup_items in list(duplicates.items())[:10]:  # Limit to 10 for readability
         result_lines.append(f"**{title.title()}**: {len(dup_items)} copies")
         for item in dup_items:
             item_id = item.get("id")
             year = item.get("year", "")
             result_lines.append(f"  - ID {item_id} ({year})")
-    
+
     if len(duplicates) > 10:
         result_lines.append(f"\n... and {len(duplicates) - 10} more duplicates")
-    
+
     return "\n".join(result_lines)
 
 
@@ -422,7 +421,7 @@ async def cleanup_duplicates(service: str = "radarr", dry_run: bool = True) -> s
     if dry_run:
         result = await find_duplicates(service)
         return f"🔍 **Dry run mode** - showing duplicates without removing:\n\n{result}"
-    
+
     # Actual cleanup would be implemented here
     return "⚠️ Automatic duplicate cleanup not yet implemented. Manual review recommended."
 
@@ -435,7 +434,7 @@ async def cleanup_duplicates(service: str = "radarr", dry_run: bool = True) -> s
 async def sync_watchlist(source: str = "trakt", username: str = "", list_id: str = "") -> str:
     """
     Sync external watchlist to Sonarr/Radarr.
-    
+
     Args:
         source: 'trakt' or 'imdb'
         username: Trakt username (for Trakt sync)
@@ -457,7 +456,7 @@ async def optimize_quality() -> str:
 async def schedule_downloads_skill(hours: str = "2,3,4,5") -> str:
     """
     Schedule downloads for off-peak hours.
-    
+
     Args:
         hours: Comma-separated list of hours (0-23), e.g., "2,3,4,5"
     """
@@ -477,9 +476,9 @@ async def get_media_storage() -> str:
     """Get storage information for media services."""
     sonarr_storage = await get_storage_info("sonarr")
     radarr_storage = await get_storage_info("radarr")
-    
+
     lines = []
-    
+
     if "error" not in sonarr_storage:
         lines.append(
             f"📺 **Sonarr Storage**:\n"
@@ -488,7 +487,7 @@ async def get_media_storage() -> str:
         )
     else:
         lines.append(f"📺 **Sonarr**: {sonarr_storage['error']}")
-    
+
     if "error" not in radarr_storage:
         lines.append(
             f"🎬 **Radarr Storage**:\n"
@@ -497,7 +496,7 @@ async def get_media_storage() -> str:
         )
     else:
         lines.append(f"🎬 **Radarr**: {radarr_storage['error']}")
-    
+
     return "\n\n".join(lines)
 
 

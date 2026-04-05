@@ -6,6 +6,8 @@ Re-exports all public symbols for backward compatibility so that
 """
 
 from .api_handlers import (  # noqa: F401
+    api_channel_memory_action_handler,
+    api_channel_memory_inspect_handler,
     api_config_status_handler,
     api_dashboard_handler,
     api_dream_health_handler,
@@ -38,6 +40,8 @@ __all__ = [
     "setup_dashboard",
     # API handlers
     "api_config_status_handler",
+    "api_channel_memory_action_handler",
+    "api_channel_memory_inspect_handler",
     "api_dashboard_handler",
     "api_dream_health_handler",
     "api_errors_handler",

@@ -10,6 +10,7 @@ instead of <repo>/src/templates/, so we patch the module-level constants
 before importing.
 """
 
+import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -69,12 +70,14 @@ def _fake_request(
     method: str = "GET",
     query: dict | None = None,
     json_payload: dict | None = None,
+    headers: dict | None = None,
 ) -> MagicMock:
     """Build a minimal mock aiohttp.web.Request."""
     req = MagicMock()
     req.app = app_data or {}
     req.method = method
     req.query = query or {}
+    req.headers = headers or {}
     req.json = AsyncMock(return_value=json_payload or {})
     return req
 
@@ -220,3 +223,113 @@ class TestSmsDashboardApi:
         history_resp = await mod.api_sms_history_handler(history_req)
         assert history_resp.content_type == "application/json"
         assert "SM123" in history_resp.text
+
+
+class TestChannelMemoryInspectorApi:
+    @pytest.mark.asyncio
+    async def test_inspect_requires_channel_id(self):
+        req = _fake_request(query={})
+        resp = await mod.api_channel_memory_inspect_handler(req)
+        assert resp.status == 400
+        payload = json.loads(resp.text)
+        assert "channel_id" in payload["error"]
+
+    @pytest.mark.asyncio
+    async def test_inspect_returns_scoped_summary(self):
+        req = _fake_request(query={"channel_id": "123", "thread_id": "456", "limit": "3", "include_anchor": "1"})
+        vector_store_mock = MagicMock(
+            get_scoped_memory_summary=AsyncMock(
+                return_value={
+                    "scope": {"channel_id": "123", "thread_id": "456"},
+                    "collections": {"memories": {"count": 1, "latest": [{"id": "mem_1"}]}},
+                    "total_count": 1,
+                    "anchor": {"present": False},
+                    "alerts": {"count": 1, "items": [{"category": "scope_guard_block", "message": "blocked"}]},
+                }
+            )
+        )
+        with patch.dict("sys.modules", {"vector_store": vector_store_mock}):
+            resp = await mod.api_channel_memory_inspect_handler(req)
+
+        assert resp.status == 200
+        payload = json.loads(resp.text)
+        assert payload["scope"]["channel_id"] == "123"
+        assert payload["warnings"]["scoped_recall_alerts"] == 1
+        vector_store_mock.get_scoped_memory_summary.assert_awaited_once_with(
+            channel_id="123",
+            thread_id="456",
+            latest_limit=3,
+            include_anchor=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_action_clear_runs_clear_and_audit(self):
+        req = _fake_request(
+            method="POST",
+            json_payload={
+                "action": "clear",
+                "channel_id": "123",
+                "thread_id": "456",
+                "actor": "dashboard-ui",
+            },
+        )
+        vector_store_mock = MagicMock(
+            clear_scoped_memory=AsyncMock(
+                return_value={
+                    "scope": {"channel_id": "123", "thread_id": "456"},
+                    "deleted": {"memories": 2, "conversations": 1, "research": 0},
+                    "total_deleted": 3,
+                }
+            )
+        )
+        audit_mock = MagicMock(audit_log=MagicMock())
+
+        with patch.dict("sys.modules", {"vector_store": vector_store_mock, "audit": audit_mock}):
+            resp = await mod.api_channel_memory_action_handler(req)
+
+        assert resp.status == 200
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        assert payload["clear"]["total_deleted"] == 3
+        vector_store_mock.clear_scoped_memory.assert_awaited_once_with(channel_id="123", thread_id="456")
+        assert audit_mock.audit_log.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_action_retrain_runs_dream_cycle(self):
+        req = _fake_request(
+            method="POST",
+            json_payload={
+                "action": "retrain",
+                "channel_id": "123",
+                "actor": "dashboard-ui",
+            },
+        )
+
+        class _FakeCycle:
+            def __init__(self):
+                self.run = AsyncMock(return_value="dream report")
+
+        dream_cycle_mock = MagicMock(DreamCycle=_FakeCycle)
+        audit_mock = MagicMock(audit_log=MagicMock())
+        with patch.dict("sys.modules", {"dream_cycle": dream_cycle_mock, "audit": audit_mock}):
+            resp = await mod.api_channel_memory_action_handler(req)
+
+        assert resp.status == 200
+        payload = json.loads(resp.text)
+        assert payload["retrain"]["triggered"] is True
+        assert payload["scope"]["thread_id"] is None
+        assert audit_mock.audit_log.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_action_rejects_invalid_scope_id(self):
+        req = _fake_request(
+            method="POST",
+            json_payload={
+                "action": "clear",
+                "channel_id": "chan-1",
+            },
+        )
+        resp = await mod.api_channel_memory_action_handler(req)
+        assert resp.status == 400
+        payload = json.loads(resp.text)
+        assert "numeric" in payload["error"]

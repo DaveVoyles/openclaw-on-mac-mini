@@ -116,7 +116,7 @@ def _create_status_embed(health) -> discord.Embed:
         if failed > 0:
             status_parts.append(f"❌ **Failed Downloads:** {failed}")
         else:
-            status_parts.append(f"✅ **Downloads:** No failures")
+            status_parts.append("✅ **Downloads:** No failures")
 
     if status_parts:
         embed.add_field(name="Health Status", value="\n".join(status_parts), inline=False)

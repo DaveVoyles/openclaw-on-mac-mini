@@ -5,11 +5,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import discord
 import pytest
 
+import runtime_state as runtime_state_mod
 from bot_attachments import handle_doc_attachment, handle_image_attachment
 from bot_formatting import (
     extract_file_attachment,
     extract_image_url,
     format_markdown_for_discord,
+    format_tables_for_context,
     format_tables_for_copy,
     format_tables_for_discord,
     split_response,
@@ -83,6 +85,21 @@ class TestFormatting:
         result = format_tables_for_copy(text)
         assert "  - Team: Wolves" in result
         assert "  - Column 2: 10-2" in result
+
+    def test_format_tables_for_context_uses_channel_profile(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("THREAD_DB_PATH", str(tmp_path / "openclaw-format-test.db"))
+        runtime_state_mod._reset_channel_profile_store_for_tests()
+
+        runtime_state_mod.set_channel_profile(42, table_style="copy-safe")
+        table = "| Team | Record |\n| --- | --- |\n| Wolves | 10-2 |"
+
+        copy_safe = format_tables_for_context(table, channel_id=42)
+        discord_style = format_tables_for_context(table, channel_id=43)
+
+        assert "📋 Table" in copy_safe
+        assert "```text" in discord_style
+
+        runtime_state_mod._reset_channel_profile_store_for_tests()
 
     def test_split_response_short(self):
         text = "Short text"

@@ -156,12 +156,8 @@ def _allow_fallback_result(
     doc_channel_id = _normalize_scope_id(meta.get("channel_id"))
     doc_thread_id = _normalize_scope_id(meta.get("thread_id"))
     if thread_id:
-        return (
-            (doc_channel_id == channel_id and doc_thread_id == thread_id)
-            or (doc_channel_id == channel_id and doc_thread_id is None)
-            or _is_legacy_metadata(meta)
-        )
-    return doc_channel_id == channel_id or _is_legacy_metadata(meta)
+        return doc_channel_id == channel_id and doc_thread_id == thread_id
+    return doc_channel_id == channel_id
 
 
 def _get_client():
@@ -345,14 +341,48 @@ async def search(
         return output
 
     fallback_results = await _query_once(where)
-    output = [
-        item for item in fallback_results
+    blocked_cross_channel = 0
+    blocked_cross_thread = 0
+    blocked_unscoped = 0
+    filtered_output: list[dict] = []
+    for item in fallback_results:
+        meta = item.get("metadata", {}) or {}
+        doc_channel_id = _normalize_scope_id(meta.get("channel_id"))
+        doc_thread_id = _normalize_scope_id(meta.get("thread_id"))
         if _allow_fallback_result(
-            item.get("metadata", {}),
+            meta,
             channel_id=resolved_channel_id,
             thread_id=resolved_thread_id,
-        )
-    ][:top_k]
+        ):
+            filtered_output.append(item)
+            continue
+        if not doc_channel_id:
+            blocked_unscoped += 1
+        elif doc_channel_id != resolved_channel_id:
+            blocked_cross_channel += 1
+        elif resolved_thread_id and doc_thread_id != resolved_thread_id:
+            blocked_cross_thread += 1
+
+    output = filtered_output[:top_k]
+    if (blocked_cross_channel or blocked_cross_thread or blocked_unscoped) and resolved_channel_id:
+        try:
+            from runtime_state import record_scoped_recall_alert
+
+            record_scoped_recall_alert(
+                category="scope_guard_block",
+                message="Scoped recall blocked out-of-scope fallback candidates.",
+                channel_id=resolved_channel_id,
+                thread_id=resolved_thread_id,
+                metadata={
+                    "collection": collection_name,
+                    "blocked_cross_channel": blocked_cross_channel,
+                    "blocked_cross_thread": blocked_cross_thread,
+                    "blocked_unscoped": blocked_unscoped,
+                    "query": query[:200],
+                },
+            )
+        except Exception:
+            pass
 
     if output:
         log.debug(
@@ -393,6 +423,7 @@ async def search_all(
     query: str,
     top_k: int = DEFAULT_TOP_K,
     threshold: Optional[float] = None,
+    where: Optional[dict] = None,
     *,
     channel_id: int | str | None = None,
     thread_id: int | str | None = None,
@@ -409,6 +440,7 @@ async def search_all(
             query,
             top_k=top_k,
             threshold=threshold,
+            where=where,
             channel_id=channel_id,
             thread_id=thread_id,
             cross_channel=cross_channel,
@@ -564,6 +596,151 @@ async def get_stats() -> dict:
     return await loop.run_in_executor(None, _stats)
 
 
+async def get_scoped_memory_summary(
+    *,
+    channel_id: int | str,
+    thread_id: int | str | None = None,
+    latest_limit: int = 5,
+    include_anchor: bool = False,
+) -> dict:
+    """Return per-collection scoped memory stats and latest entries."""
+    resolved_channel_id, resolved_thread_id = _resolve_scope(
+        channel_id=channel_id,
+        thread_id=thread_id,
+    )
+    if not resolved_channel_id:
+        raise ValueError("channel_id is required")
+    latest_limit = max(1, min(int(latest_limit), 20))
+
+    def _inspect_scope() -> dict:
+        collections = [MEMORIES_COLLECTION, CONVERSATIONS_COLLECTION, RESEARCH_COLLECTION]
+        payload: dict[str, Any] = {
+            "scope": {
+                "channel_id": resolved_channel_id,
+                "thread_id": resolved_thread_id,
+            },
+            "collections": {},
+            "total_count": 0,
+        }
+        for name in collections:
+            col = _get_collection(name)
+            where = _combine_scope_where(
+                None,
+                channel_id=resolved_channel_id,
+                thread_id=resolved_thread_id,
+            )
+            if col.count() == 0:
+                payload["collections"][name] = {"count": 0, "latest": []}
+                continue
+            results = col.get(where=where, include=["metadatas", "documents"])
+            rows = []
+            for i, doc_id in enumerate(results.get("ids", [])):
+                meta = results["metadatas"][i] if results.get("metadatas") else {}
+                doc = results["documents"][i] if results.get("documents") else ""
+                rows.append({
+                    "id": doc_id,
+                    "added_at": float(meta.get("added_at", 0) or 0),
+                    "type": meta.get("type", "unknown"),
+                    "excerpt": (doc or "")[:180],
+                    "channel_id": _normalize_scope_id(meta.get("channel_id")),
+                    "thread_id": _normalize_scope_id(meta.get("thread_id")),
+                })
+            rows.sort(key=lambda r: r.get("added_at", 0), reverse=True)
+            payload["collections"][name] = {
+                "count": len(rows),
+                "latest": rows[:latest_limit],
+            }
+            payload["total_count"] += len(rows)
+        return payload
+
+    loop = asyncio.get_running_loop()
+    payload = await loop.run_in_executor(None, _inspect_scope)
+    if include_anchor:
+        try:
+            from runtime_state import get_anchor_state
+
+            anchor_state = get_anchor_state()
+            if anchor_state:
+                anchor_channel = _normalize_scope_id(anchor_state.get("channel_id"))
+                anchor_thread = _normalize_scope_id(anchor_state.get("thread_id"))
+                payload["anchor"] = {
+                    "present": (
+                        anchor_channel == resolved_channel_id
+                        and anchor_thread == resolved_thread_id
+                    ),
+                    "anchor_id": anchor_state.get("anchor_id"),
+                    "timestamp": anchor_state.get("timestamp"),
+                    "channel_id": anchor_channel,
+                    "thread_id": anchor_thread,
+                }
+            else:
+                payload["anchor"] = {"present": False}
+        except Exception:
+            payload["anchor"] = {"present": False}
+    try:
+        from runtime_state import get_scoped_recall_alerts
+
+        alerts = get_scoped_recall_alerts(
+            channel_id=resolved_channel_id,
+            thread_id=resolved_thread_id,
+            limit=5,
+        )
+        payload["alerts"] = {
+            "count": len(alerts),
+            "items": alerts,
+        }
+    except Exception:
+        payload["alerts"] = {"count": 0, "items": []}
+    return payload
+
+
+async def clear_scoped_memory(
+    *,
+    channel_id: int | str,
+    thread_id: int | str | None = None,
+) -> dict:
+    """Delete scoped documents across all vector collections."""
+    resolved_channel_id, resolved_thread_id = _resolve_scope(
+        channel_id=channel_id,
+        thread_id=thread_id,
+    )
+    if not resolved_channel_id:
+        raise ValueError("channel_id is required")
+
+    def _clear_scope() -> dict:
+        collections = [MEMORIES_COLLECTION, CONVERSATIONS_COLLECTION, RESEARCH_COLLECTION]
+        deleted_by_collection: dict[str, int] = {}
+        total_deleted = 0
+        for name in collections:
+            col = _get_collection(name)
+            where = _combine_scope_where(
+                None,
+                channel_id=resolved_channel_id,
+                thread_id=resolved_thread_id,
+            )
+            if col.count() == 0:
+                deleted_by_collection[name] = 0
+                continue
+            results = col.get(where=where, include=[])
+            ids = results.get("ids", [])
+            if ids:
+                col.delete(ids=ids)
+            count = len(ids)
+            deleted_by_collection[name] = count
+            total_deleted += count
+        return {
+            "scope": {
+                "channel_id": resolved_channel_id,
+                "thread_id": resolved_thread_id,
+            },
+            "deleted": deleted_by_collection,
+            "total_deleted": total_deleted,
+        }
+
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _clear_scope)
+
+
 # ---------------------------------------------------------------------------
 # Convenience helpers for specific domains
 # ---------------------------------------------------------------------------
@@ -671,7 +848,7 @@ async def add_research_report(
     *,
     channel_id: int | str | None = None,
     thread_id: int | str | None = None,
-) -> None:
+) -> str:
     """Store a research report in the research collection."""
     report_id = f"research_{int(time.time())}_{hash(query) % 10000}"
     await add_document(
@@ -682,10 +859,24 @@ async def add_research_report(
             "type": "report",
             "query": query[:500],
             "sources": ",".join(sources or [])[:2000],
+            "anchor_id": report_id,
         },
         channel_id=channel_id,
         thread_id=thread_id,
     )
+    try:
+        resolved_channel_id, resolved_thread_id = _resolve_scope(channel_id=channel_id, thread_id=thread_id)
+        if resolved_channel_id:
+            from runtime_state import set_anchor_state
+
+            set_anchor_state(
+                int(resolved_channel_id),
+                int(resolved_thread_id) if resolved_thread_id is not None else None,
+                report_id,
+            )
+    except Exception:
+        pass
+    return report_id
 
 
 async def recall(
@@ -724,6 +915,7 @@ async def recall_for_context(
     channel_id: int | str | None = None,
     thread_id: int | str | None = None,
     cross_channel: bool = False,
+    anchor_id: str | None = None,
 ) -> str:
     """Recall relevant context for Auto-RAG injection.
 
@@ -735,13 +927,23 @@ async def recall_for_context(
 
     top_k = top_k or cfg.auto_recall_top_k
 
+    where = {"anchor_id": anchor_id} if anchor_id else None
     results = await search_all(
         query,
         top_k=top_k,
+        where=where,
         channel_id=channel_id,
         thread_id=thread_id,
         cross_channel=cross_channel,
     )
+    if anchor_id and not results:
+        results = await search_all(
+            query,
+            top_k=top_k,
+            channel_id=channel_id,
+            thread_id=thread_id,
+            cross_channel=cross_channel,
+        )
     if not results:
         return ""
 

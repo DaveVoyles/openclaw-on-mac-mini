@@ -8,8 +8,6 @@ Usage:
 Interactive prompts guide you through plugin creation.
 """
 
-import os
-import sys
 from pathlib import Path
 
 
@@ -214,11 +212,11 @@ async def test_example_skill(plugin):
 
     print(f"\n✅ Plugin '{name}' created successfully!")
     print(f"📁 Location: {plugin_dir}")
-    print(f"\n📝 Next steps:")
+    print("\n📝 Next steps:")
     print(f"1. Edit {plugin_dir / 'main.py'} to implement your plugin")
     print(f"2. Test your plugin: pytest {plugin_dir / 'test_plugin.py'}")
     print(f"3. Install: /plugin install {name}")
-    print(f"\n📚 See docs/PLUGIN_DEVELOPMENT.md for more information")
+    print("\n📚 See docs/PLUGIN_DEVELOPMENT.md for more information")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from discord.ext import commands
 
 from bot_formatting import (
     format_markdown_for_discord,
+    format_tables_for_context,
     format_tables_for_copy,
     split_response,
 )
@@ -79,7 +80,21 @@ class ReportsCog(commands.Cog, name="Reports"):
             log.debug("Report table image fallback unavailable: %s", exc)
 
         formatted_body = format_markdown_for_discord(body)
-        formatted_body = format_tables_for_copy(formatted_body)
+        channel_obj = getattr(interaction, "channel", None)
+        thread_id = channel_obj.id if isinstance(channel_obj, discord.Thread) else None
+        channel_id = getattr(interaction, "channel_id", None)
+        if channel_id is None and channel_obj is not None:
+            channel_id = getattr(channel_obj, "id", None)
+        if isinstance(channel_obj, discord.Thread) and channel_obj.parent_id:
+            channel_id = channel_obj.parent_id
+        if channel_id is None and thread_id is None:
+            formatted_body = format_tables_for_copy(formatted_body)
+        else:
+            formatted_body = format_tables_for_context(
+                formatted_body,
+                channel_id=channel_id,
+                thread_id=thread_id,
+            )
         chunks = split_response(formatted_body)
         for idx, chunk in enumerate(chunks):
             embed = discord.Embed(

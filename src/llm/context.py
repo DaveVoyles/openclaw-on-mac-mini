@@ -18,8 +18,12 @@ from llm_client import GOOGLE_API_KEY, MODEL_NAME, _client
 log = logging.getLogger("openclaw.llm")
 
 _CROSS_CHANNEL_OPT_IN_RE = re.compile(
-    r"(?i)(--cross-channel|#cross-channel|\[cross-channel\]|\bcross-channel search\b|\bsearch across channels\b)"
+    r"(?i)(--cross-channel\b|#cross-channel\b|\[cross-channel\])"
 )
+_RESET_CONTEXT_RE = re.compile(r"(?i)(--reset-context\b|#reset-context\b|\[reset-context\])")
+_USE_PRIOR_REPORT_RE = re.compile(r"(?i)(--use-prior-report\b|#use-prior-report\b|\[use-prior-report\])")
+_NO_ANCHOR_RE = re.compile(r"(?i)(--no-anchor\b|#no-anchor\b|\[no-anchor\])")
+_ANCHOR_OVERRIDE_RE = re.compile(r"(?i)--anchor(?:=|\s+)([A-Za-z0-9_.:\-]+)")
 
 
 def _to_content(msg: dict) -> dict:
@@ -145,7 +149,26 @@ async def _generate_context_summary(turns: list[dict]) -> str:
     return response.text.strip()
 
 
-async def _auto_recall_context(user_message: str, *, cross_channel: bool = False) -> str:
+from runtime_state import (
+    anchor_matches,
+    get_anchor_state,
+    get_context_lock,
+    get_current_user_id,
+    record_scoped_recall_alert,
+    reset_anchor_state,
+)
+
+
+async def _auto_recall_context(
+    user_message: str,
+    *,
+    cross_channel: bool = False,
+    followup: bool = False,
+    reset_context: bool = False,
+    use_prior_report: bool = False,
+    anchor_override: str | None = None,
+    disable_anchor: bool = False,
+) -> str:
     """Fetch recalled context from the vector store for Auto-RAG injection."""
     if not cfg.auto_recall_enabled:
         return ""
@@ -156,6 +179,22 @@ async def _auto_recall_context(user_message: str, *, cross_channel: bool = False
     channel_id = get_current_channel_id()
     thread_id = get_current_thread_id()
 
+    # Anchor follow-up mode: if followup and anchor matches, use anchor's report/job id
+    if reset_context:
+        reset_anchor_state(channel_id=channel_id, thread_id=thread_id)
+
+    anchor = get_anchor_state(channel_id=channel_id, thread_id=thread_id)
+    anchor_id = None
+    lock = get_context_lock(get_current_user_id())
+    if lock and lock.get("mode") == "prior_report" and lock.get("anchor_id"):
+        use_prior_report = True
+        if not anchor_override:
+            anchor_override = str(lock.get("anchor_id"))
+    if not disable_anchor and anchor_override:
+        anchor_id = anchor_override
+    elif not disable_anchor and (use_prior_report or followup) and anchor and channel_id is not None and anchor_matches(channel_id, thread_id):
+        anchor_id = anchor.get("anchor_id")
+
     try:
         import vector_store
         context = await vector_store.recall_for_context(
@@ -163,7 +202,16 @@ async def _auto_recall_context(user_message: str, *, cross_channel: bool = False
             channel_id=channel_id,
             thread_id=thread_id,
             cross_channel=cross_channel,
+            anchor_id=anchor_id,
         )
+        if cross_channel and channel_id is not None:
+            record_scoped_recall_alert(
+                category="cross_channel_opt_in",
+                message="Cross-channel recall opt-in used.",
+                channel_id=channel_id,
+                thread_id=thread_id,
+                metadata={"anchor_id": anchor_id},
+            )
         if context:
             parts.append(context)
     except Exception as e:
@@ -209,6 +257,33 @@ def _extract_cross_channel_opt_in(user_message: str) -> tuple[str, bool]:
     cleaned = _CROSS_CHANNEL_OPT_IN_RE.sub(" ", user_message)
     cleaned = " ".join(cleaned.split())
     return (cleaned or user_message), True
+
+
+def _extract_context_controls(user_message: str) -> tuple[str, dict[str, str | bool | None]]:
+    """Extract explicit context-control markers from a user prompt."""
+    if not user_message:
+        return "", {
+            "reset_context": False,
+            "use_prior_report": False,
+            "disable_anchor": False,
+            "anchor_override": None,
+        }
+
+    cleaned = user_message
+    controls: dict[str, str | bool | None] = {
+        "reset_context": _RESET_CONTEXT_RE.search(user_message) is not None,
+        "use_prior_report": _USE_PRIOR_REPORT_RE.search(user_message) is not None,
+        "disable_anchor": _NO_ANCHOR_RE.search(user_message) is not None,
+        "anchor_override": None,
+    }
+    match = _ANCHOR_OVERRIDE_RE.search(user_message)
+    if match:
+        controls["anchor_override"] = match.group(1).strip()
+
+    for rx in (_RESET_CONTEXT_RE, _USE_PRIOR_REPORT_RE, _NO_ANCHOR_RE, _ANCHOR_OVERRIDE_RE):
+        cleaned = rx.sub(" ", cleaned)
+    cleaned = " ".join(cleaned.split())
+    return (cleaned or user_message), controls
 
 
 def _strip_recalled_prefix(history: list[dict], original: str, augmented: str) -> list[dict]:

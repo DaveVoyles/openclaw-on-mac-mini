@@ -48,7 +48,16 @@ from permissions import (  # noqa: F401 — re-exported for backward compat
     require_auth,
 )
 from qmd import remember_fact
-from runtime_state import request_context, set_bot
+from runtime_state import (
+    get_anchor_state,
+    get_context_lock,
+    request_context,
+    reset_anchor_state,
+    reset_context_lock,
+    set_anchor_state,
+    set_bot,
+    set_context_lock,
+)
 from scheduler import scheduler
 from skills import SKILLS
 from trace_context import setup_trace_logging
@@ -74,7 +83,12 @@ _CHANNEL_ROLES: dict[int, str] = {}
 _CHANNEL_PROMPTS: dict[str, str] = {}
 
 
-def _resolve_channel_thread_scope(channel: Any, channel_id: int | None) -> tuple[int | None, int | None]:
+def _resolve_channel_thread_scope(
+    channel: Any,
+    channel_id: int | None,
+    *,
+    user_id: int | str | None = None,
+) -> tuple[int | None, int | None]:
     """Normalize Discord channel/thread into (channel_id, thread_id) scope."""
     resolved_channel_id = channel_id
     resolved_thread_id = None
@@ -82,6 +96,14 @@ def _resolve_channel_thread_scope(channel: Any, channel_id: int | None) -> tuple
         resolved_thread_id = channel.id
         if channel.parent_id:
             resolved_channel_id = channel.parent_id
+    lock = get_context_lock(user_id)
+    if lock and lock.get("mode") in {"channel", "thread", "prior_report"}:
+        if lock.get("channel_id"):
+            resolved_channel_id = int(lock["channel_id"])
+        if lock.get("mode") in {"thread", "prior_report"}:
+            resolved_thread_id = int(lock["thread_id"]) if lock.get("thread_id") is not None else None
+        elif lock.get("mode") == "channel":
+            resolved_thread_id = None
     return resolved_channel_id, resolved_thread_id
 
 
@@ -429,6 +451,7 @@ class ResponseActions(discord.ui.View):
         question: str,
         user_id: int,
         channel_id: int,
+        thread_id: int | None = None,
         timeout: float = 300,
         follow_ups: list[str] | None = None,
         bot=None,
@@ -438,6 +461,7 @@ class ResponseActions(discord.ui.View):
         self._question = question
         self._user_id = user_id
         self._channel_id = channel_id
+        self._thread_id = thread_id
         self._bot = bot
         # Add follow-up buttons dynamically on row 1
         for i, fq in enumerate(follow_ups or []):
@@ -491,8 +515,9 @@ class ResponseActions(discord.ui.View):
             scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
                 interaction.channel,
                 self._channel_id,
+                user_id=self._user_id,
             )
-            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
+            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)):
                 response_text, updated_history, model_used = await llm_chat(
                     user_message=self._question,
                     history=conv.history,
@@ -525,6 +550,72 @@ class ResponseActions(discord.ui.View):
     async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await self._record_feedback(interaction, "negative")
 
+    @discord.ui.button(label="🔒 Lock to Channel", style=discord.ButtonStyle.secondary, row=2)
+    async def lock_channel_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        set_context_lock(
+            user_id=self._user_id,
+            mode="channel",
+            channel_id=self._channel_id,
+            thread_id=None,
+        )
+        await interaction.response.send_message("🔒 Context locked to this channel.", ephemeral=True)
+
+    @discord.ui.button(label="🧵 Lock to Thread", style=discord.ButtonStyle.secondary, row=2)
+    async def lock_thread_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+            interaction.channel,
+            self._channel_id,
+            user_id=self._user_id,
+        )
+        set_context_lock(
+            user_id=self._user_id,
+            mode="thread",
+            channel_id=scoped_channel_id or self._channel_id,
+            thread_id=scoped_thread_id,
+        )
+        await interaction.response.send_message(
+            "🧵 Context locked to this thread." if scoped_thread_id else "ℹ️ Not in a thread. Locked to channel instead.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="📎 Use Prior Report", style=discord.ButtonStyle.secondary, row=2)
+    async def use_prior_report_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+            interaction.channel,
+            self._channel_id,
+            user_id=self._user_id,
+        )
+        anchor = get_anchor_state(channel_id=scoped_channel_id, thread_id=scoped_thread_id)
+        if not anchor:
+            await interaction.response.send_message(
+                "⚠️ No prior report/job anchor found for this scope yet.",
+                ephemeral=True,
+            )
+            return
+        set_context_lock(
+            user_id=self._user_id,
+            mode="prior_report",
+            channel_id=scoped_channel_id or self._channel_id,
+            thread_id=scoped_thread_id,
+            anchor_id=anchor.get("anchor_id"),
+        )
+        await interaction.response.send_message(
+            f"📎 Follow-ups will use prior report anchor `{anchor.get('anchor_id')}`.",
+            ephemeral=True,
+        )
+
+    @discord.ui.button(label="♻️ Reset Context", style=discord.ButtonStyle.secondary, row=2)
+    async def reset_context_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+            interaction.channel,
+            self._channel_id,
+            user_id=self._user_id,
+        )
+        reset_context_lock(self._user_id)
+        if scoped_channel_id is not None:
+            reset_anchor_state(channel_id=scoped_channel_id, thread_id=scoped_thread_id)
+        await interaction.response.send_message("♻️ Context lock and anchor reset for this scope.", ephemeral=True)
+
     def _make_followup_callback(self, follow_up_question: str):
         async def callback(interaction: discord.Interaction):
             await interaction.response.defer()
@@ -537,8 +628,9 @@ class ResponseActions(discord.ui.View):
                 scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
                     interaction.channel,
                     self._channel_id,
+                    user_id=self._user_id,
                 )
-                with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
+                with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)):
                     response_text, updated_history, model_used = await llm_chat(
                         user_message=follow_up_question,
                         history=conv.history,
@@ -556,6 +648,7 @@ class ResponseActions(discord.ui.View):
                     question=follow_up_question,
                     user_id=self._user_id,
                     channel_id=self._channel_id,
+                    thread_id=scoped_thread_id,
                     follow_ups=new_follow_ups,
                     bot=self._bot,
                 )
@@ -576,8 +669,9 @@ class ResponseActions(discord.ui.View):
             scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
                 interaction.channel,
                 self._channel_id,
+                user_id=self._user_id,
             )
-            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
+            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)):
                 response_text, updated_history, model_used = await llm_chat(
                     user_message=deeper_q,
                     history=conv.history,
@@ -688,6 +782,7 @@ async def ask_cmd(
     context_channel_id, context_thread_id = _resolve_channel_thread_scope(
         interaction.channel,
         interaction.channel_id,
+        user_id=interaction.user.id,
     )
 
     _progress_lines: list[str] = []
@@ -877,7 +972,8 @@ async def ask_cmd(
         _DISCORD_TIMEOUT = 840
 
         try:
-            with request_context(channel_id=context_channel_id, thread_id=context_thread_id):
+            _context_badges: list[str] = []
+            with request_context(channel_id=context_channel_id, thread_id=context_thread_id, user_id=str(interaction.user.id)):
                 async for chunk_text, is_final, meta in llm_chat_stream(
                     user_message=question,
                     history=conv.history,
@@ -886,10 +982,14 @@ async def ask_cmd(
                     model_preference=model_pref,
                 ):
                     model_used = meta.get("model_used", "unknown")
+                    badge = meta.get("context_badge")
+                    if isinstance(badge, str) and badge and badge not in _context_badges:
+                        _context_badges.append(badge)
 
                     if is_final:
                         response_text = chunk_text
                         _routing_notes.extend(meta.get("routing_notes", []))
+                        _routing_notes.extend(_context_badges)
                         if "updated_history" in meta:
                             conv.update_from_llm(meta["updated_history"])
                             conversation_store.auto_save_thread(
@@ -977,6 +1077,13 @@ async def ask_cmd(
         channel_id=context_channel_id,
         thread_id=context_thread_id,
     )
+    if context_channel_id is not None and response_text.strip():
+        anchor_id = f"ask_{int(time.time())}_{interaction.id}"
+        set_anchor_state(
+            int(context_channel_id),
+            int(context_thread_id) if context_thread_id is not None else None,
+            anchor_id,
+        )
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
     file_attachment = _extract_file_attachment(response_text)
@@ -988,6 +1095,7 @@ async def ask_cmd(
         question=question,
         user_id=interaction.user.id,
         channel_id=interaction.channel_id,
+        thread_id=context_thread_id,
         follow_ups=follow_ups,
         bot=None,
     )
@@ -1299,8 +1407,9 @@ async def on_message(message: discord.Message) -> None:
             scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
                 message.channel,
                 message.channel.id,
+                user_id=message.author.id,
             )
-            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id):
+            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(message.author.id)):
                 async for chunk_text, is_final, meta in llm_chat_stream(
                     user_message=user_question,
                     history=conv.history,

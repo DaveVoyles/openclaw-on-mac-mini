@@ -16,7 +16,6 @@ from typing import Any
 
 from config import cfg
 from http_session import SessionManager
-from tool_health import tool_health
 
 log = logging.getLogger("openclaw.trakt_skills")
 _sessions = SessionManager(timeout=30, name="trakt_skills")
@@ -32,10 +31,10 @@ def _get_headers(include_auth: bool = False) -> dict[str, str]:
         "trakt-api-version": TRAKT_API_VERSION,
         "trakt-api-key": cfg.trakt_client_id,
     }
-    
+
     if include_auth and cfg.trakt_access_token:
         headers["Authorization"] = f"Bearer {cfg.trakt_access_token}"
-    
+
     return headers
 
 
@@ -235,7 +234,7 @@ async def sync_watchlist(user_id: str = "me", media_type: str = "all") -> dict[s
 
 
 async def get_watch_history(
-    user_id: str = "me", 
+    user_id: str = "me",
     media_type: str = "all",
     limit: int = 50
 ) -> dict[str, Any]:
@@ -283,11 +282,11 @@ async def get_watch_history(
 
     try:
         params = {"limit": limit}
-        
+
         async with _sessions.get() as session:
             url = f"{TRAKT_BASE_URL}/users/{user_id}/history/{media_type}"
             async with session.get(
-                url, 
+                url,
                 headers=_get_headers(include_auth=True),
                 params=params
             ) as resp:
@@ -360,7 +359,7 @@ async def add_to_watchlist(
                 }
             ]
         }
-        
+
         async with _sessions.get() as session:
             url = f"{TRAKT_BASE_URL}/sync/watchlist"
             async with session.post(
@@ -437,7 +436,7 @@ async def search_trakt(
             "query": query,
             "limit": limit,
         }
-        
+
         async with _sessions.get() as session:
             url = f"{TRAKT_BASE_URL}/search/{search_type}"
             async with session.get(url, headers=_get_headers(), params=params) as resp:
@@ -470,7 +469,7 @@ def get_oauth_url() -> str:
     """
     if not cfg.trakt_client_id:
         return "Error: TRAKT_CLIENT_ID not configured"
-    
+
     redirect_uri = "urn:ietf:wg:oauth:2.0:oob"  # Out-of-band for CLI apps
     return (
         f"https://trakt.tv/oauth/authorize?"

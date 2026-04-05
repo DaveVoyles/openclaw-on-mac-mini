@@ -6,7 +6,7 @@ when users ask about video downloads.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from patreon_monitor import PatreonHealthStatus, get_patreon_checker
 from patreon_recovery import get_recovery_manager
@@ -66,7 +66,7 @@ async def get_patreon_status() -> str:
     if health_data["status"] == "ok":
         return (
             "✅ Patreon downloads are working normally. "
-            f"Container is running, cookies are fresh, and no download failures detected."
+            "Container is running, cookies are fresh, and no download failures detected."
         )
 
     # Build status message

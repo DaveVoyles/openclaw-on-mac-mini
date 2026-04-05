@@ -21,6 +21,8 @@ from aiohttp import web
 
 from constants import EMBED_FIELD_LIMIT
 from dashboard import (
+    api_channel_memory_action_handler,
+    api_channel_memory_inspect_handler,
     api_config_status_handler,
     api_dashboard_handler,
     api_dream_health_handler,
@@ -444,6 +446,8 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_get("/dashboard", dashboard_handler)
     app.router.add_get("/api/dashboard", api_dashboard_handler)
     app.router.add_get("/api/memories", api_memories_handler)
+    app.router.add_get("/api/channel-memory/inspect", api_channel_memory_inspect_handler)
+    app.router.add_post("/api/channel-memory/action", api_channel_memory_action_handler)
     app.router.add_get("/api/threads", api_threads_handler)
     app.router.add_get("/api/goals", api_goals_handler)
     app.router.add_get("/api/research", api_research_handler)

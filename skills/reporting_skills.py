@@ -10,7 +10,13 @@ from typing import Any, Iterable
 
 import discord
 
-from runtime_state import get_bot, get_current_channel_id
+from runtime_state import (
+    get_bot,
+    get_current_channel_id,
+    get_current_thread_id,
+    get_effective_channel_profile,
+    set_anchor_state,
+)
 from skills import finance_skills, news_skills, sports_skills
 
 log = logging.getLogger("openclaw.reporting_skills")
@@ -294,14 +300,17 @@ async def _resolve_channel(channel_id: int) -> discord.abc.Messageable | None:
 
 async def generate_channel_recap_report(
     channel_id: int | str | None = None,
+    thread_id: int | str | None = None,
     days: int = 7,
     focus: str = "",
-    style: str = "highlights",
+    style: str | None = None,
     max_messages: int = 200,
 ) -> str:
     """Summarize the recent activity in a Discord channel or thread."""
     if channel_id in (None, "", 0, "0"):
         channel_id = get_current_channel_id()
+    if thread_id in (None, "", 0, "0"):
+        thread_id = get_current_thread_id()
 
     try:
         channel_int = int(channel_id)
@@ -316,6 +325,21 @@ async def generate_channel_recap_report(
         return "❌ Discord channel not available yet. Try again once the bot is fully online."
 
     window_days = max(1, min(int(days), 30))
+    try:
+        thread_int = int(thread_id) if thread_id not in (None, "", 0, "0") else None
+    except (TypeError, ValueError):
+        thread_int = None
+
+    profile = get_effective_channel_profile(channel_id=channel_int, thread_id=thread_int)
+    if style is None:
+        profile_depth = profile.get("report_depth", "standard")
+        profile_table_style = profile.get("table_style", "discord")
+        if profile_depth == "detailed" or profile_table_style == "copy-safe":
+            style = "table"
+        elif profile_depth == "brief":
+            style = "highlights"
+        else:
+            style = "action-items"
     style_key = _normalize_style(style)
     cutoff = discord.utils.utcnow() - dt.timedelta(days=window_days)
     history_limit = max(25, min(int(max_messages), 300))
@@ -341,6 +365,20 @@ async def generate_channel_recap_report(
     channel_name = getattr(channel, "name", f"channel-{channel_int}")
     focus_text = focus.strip() or "general updates, decisions, blockers, and follow-ups"
     style_instructions = _RECAP_STYLES[style_key]
+    tone_instruction = {
+        "concise": "Keep sentences short and direct.",
+        "analytical": "Emphasize patterns, root causes, and implications.",
+        "friendly": "Use a warm, approachable voice while staying professional.",
+    }.get(profile.get("tone", "neutral"), "Use a neutral, professional tone.")
+    depth_instruction = {
+        "brief": "Limit output to the most important points and keep sections short.",
+        "detailed": "Add richer context, rationale, and concrete follow-up details.",
+    }.get(profile.get("report_depth", "standard"), "Balance brevity with useful detail.")
+    source_instruction = (
+        "Only include facts directly grounded in the transcript. Mark uncertain claims as 'Unverified'."
+        if profile.get("source_strictness") == "strict"
+        else "Avoid speculation and stay grounded in the transcript."
+    )
 
     prompt = (
         f"You are writing a weekly Discord recap for #{channel_name}.\n"
@@ -348,6 +386,10 @@ async def generate_channel_recap_report(
         f"Focus: {focus_text}\n"
         f"Style: {style_key}\n\n"
         f"{style_instructions}\n"
+        f"{tone_instruction}\n"
+        f"{depth_instruction}\n"
+        f"Emoji level: {profile.get('emoji_level', 'light')}.\n"
+        f"{source_instruction}\n"
         "Use GitHub-flavored Markdown. Be specific, concise, and do not invent details.\n"
         "If there are no decisions or action items, say so explicitly.\n\n"
         f"Discord transcript:\n{transcript}"
@@ -370,11 +412,33 @@ async def generate_channel_recap_report(
         log.error("Weekly recap generation failed: %s", exc)
         return f"❌ Weekly recap failed: {exc}"
 
-    return (
+    recap_output = (
         f"## Weekly recap for #{channel_name}\n\n"
         f"{response.strip()}\n\n"
         f"_Reviewed {len(messages)} messages from the last {window_days} day(s) via {model_used}_"
     )
+    try:
+        import vector_store
+
+        recap_anchor_id = f"recap_{int(dt.datetime.now(dt.timezone.utc).timestamp())}_{channel_int}"
+        await vector_store.add_document(
+            vector_store.RESEARCH_COLLECTION,
+            doc_id=recap_anchor_id,
+            text=recap_output,
+            metadata={
+                "type": "report",
+                "query": f"weekly recap {channel_name}",
+                "anchor_id": recap_anchor_id,
+                "source": "generate_channel_recap_report",
+            },
+            channel_id=channel_int,
+            thread_id=thread_int,
+        )
+        set_anchor_state(channel_int, thread_int, recap_anchor_id)
+    except Exception as exc:
+        log.debug("Recap anchoring failed: %s", exc)
+
+    return recap_output
 
 
 def build_sports_watch_query(

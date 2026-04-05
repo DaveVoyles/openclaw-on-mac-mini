@@ -10,6 +10,7 @@ from typing import Literal
 import discord
 
 from constants import EMBED_DESC_LIMIT, EMBED_SPLIT_LIMIT
+from runtime_state import get_effective_channel_profile
 
 # Regex patterns for formatting
 _IMAGE_LINK_RE = re.compile(r'!\[.*?\]\((https?://[^\s)]+)\)')
@@ -195,6 +196,19 @@ def format_tables_for_discord(text: str) -> str:
 def format_tables_for_copy(text: str) -> str:
     """Convert markdown tables into copy-safe text blocks for thread/detail responses."""
     return format_tables(text, mode="copy-safe")
+
+
+def format_tables_for_context(
+    text: str,
+    *,
+    channel_id: int | None = None,
+    thread_id: int | None = None,
+) -> str:
+    """Format tables using channel/thread profile defaults."""
+    profile = get_effective_channel_profile(channel_id=channel_id, thread_id=thread_id)
+    table_style = profile.get("table_style", "discord")
+    mode: TableFormatMode = "copy-safe" if table_style == "copy-safe" else "discord"
+    return format_tables(text, mode=mode)
 
 
 def _split_plain_segment(text: str, limit: int) -> list[str]:

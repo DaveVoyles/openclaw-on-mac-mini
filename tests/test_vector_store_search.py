@@ -121,7 +121,7 @@ class TestChannelScopedIsolation:
         assert {"thread_id": "20"} in where["$and"]
 
     @pytest.mark.asyncio
-    async def test_search_fallback_keeps_same_channel_and_legacy_only(self):
+    async def test_search_fallback_blocks_legacy_and_cross_scope_results(self):
         fake = _FakeCollection([
             _chroma_result([]),
             _chroma_result([
@@ -138,11 +138,11 @@ class TestChannelScopedIsolation:
         assert len(fake.query_calls) == 2
         ids = [item["id"] for item in results]
         assert "same" in ids
-        assert "legacy" in ids
+        assert "legacy" not in ids
         assert "other" not in ids
 
     @pytest.mark.asyncio
-    async def test_search_fallback_channel_scope_excludes_other_channels(self):
+    async def test_search_fallback_channel_scope_excludes_other_and_legacy_channels(self):
         fake = _FakeCollection([
             _chroma_result([]),
             _chroma_result([
@@ -159,7 +159,7 @@ class TestChannelScopedIsolation:
         assert len(fake.query_calls) == 2
         ids = [item["id"] for item in results]
         assert "same-channel" in ids
-        assert "legacy" in ids
+        assert "legacy" not in ids
         assert "other-channel" not in ids
 
     @pytest.mark.asyncio
@@ -240,3 +240,18 @@ class TestChannelScopedIsolation:
         assert kwargs["channel_id"] == 10
         assert kwargs["thread_id"] == 20
         assert kwargs["cross_channel"] is True
+        assert kwargs["where"] is None
+
+    @pytest.mark.asyncio
+    async def test_recall_for_context_anchor_id_sets_where_filter(self):
+        mock_search_all = AsyncMock(return_value=[])
+        with patch.object(mod, "search_all", mock_search_all):
+            await mod.recall_for_context(
+                "hello",
+                channel_id=10,
+                thread_id=20,
+                anchor_id="report_42",
+            )
+        assert mock_search_all.await_count == 2
+        _, first_kwargs = mock_search_all.await_args_list[0]
+        assert first_kwargs["where"] == {"anchor_id": "report_42"}

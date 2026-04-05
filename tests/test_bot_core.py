@@ -102,17 +102,17 @@ class TestSplitResponse:
 
 
 # ---------------------------------------------------------------------------
-# _format_tables_for_discord
+# _format_tables_for_context
 # ---------------------------------------------------------------------------
 
 
-class TestFormatTablesForDiscord:
+class TestFormatTablesForContext:
     def test_simple_table_gets_ansi_block(self):
         table = "| Name | Status |\n|------|--------|\n| Sonarr | OK |"
-        result = mod._format_tables_for_discord(table)
+        result = mod._format_tables_for_context(table)
         assert "```text" in result
         assert "```" in result
 
     def test_no_table_text_unchanged(self):
         text = "No tables here"
-        assert mod._format_tables_for_discord(text) == text
+        assert mod._format_tables_for_context(text) == text

@@ -19,7 +19,6 @@ from typing import Any
 
 from config import cfg
 from http_session import SessionManager
-from tool_health import tool_health
 
 log = logging.getLogger("openclaw.health_skills")
 _sessions = SessionManager(timeout=30, name="health_skills")
@@ -78,7 +77,7 @@ async def get_daily_steps(date: str | None = None) -> dict[str, Any]:
                     data = await resp.json()
                     summary = data.get("summary", {})
                     goals = data.get("goals", {})
-                    
+
                     return {
                         "status": "success",
                         "date": date,
@@ -86,7 +85,7 @@ async def get_daily_steps(date: str | None = None) -> dict[str, Any]:
                         "distance": summary.get("distances", [{}])[0].get("distance", 0),
                         "floors": summary.get("floors", 0),
                         "calories": summary.get("caloriesOut", 0),
-                        "active_minutes": summary.get("fairlyActiveMinutes", 0) + 
+                        "active_minutes": summary.get("fairlyActiveMinutes", 0) +
                                         summary.get("veryActiveMinutes", 0),
                         "goals": {
                             "steps": goals.get("steps", 0),
@@ -158,20 +157,20 @@ async def get_sleep_data(date: str | None = None) -> dict[str, Any]:
                 if resp.status == 200:
                     data = await resp.json()
                     sleep = data.get("sleep", [])
-                    
+
                     if not sleep:
                         return {
                             "status": "success",
                             "date": date,
                             "message": "No sleep data recorded for this date",
                         }
-                    
+
                     main_sleep = sleep[0]  # Primary sleep session
                     duration_ms = main_sleep.get("duration", 0)
                     duration_hours = duration_ms / (1000 * 60 * 60)
-                    
+
                     stages = main_sleep.get("levels", {}).get("summary", {})
-                    
+
                     return {
                         "status": "success",
                         "date": date,
@@ -243,7 +242,7 @@ async def get_workout_summary(days: int = 7) -> dict[str, Any]:
     try:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=min(days, 30))
-        
+
         headers = {
             "Authorization": f"Bearer {cfg.fitbit_access_token}",
         }
@@ -257,19 +256,19 @@ async def get_workout_summary(days: int = 7) -> dict[str, Any]:
                 "limit": 100,
                 "offset": 0,
             }
-            
+
             async with session.get(url, headers=headers, params=params) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     activities = data.get("activities", [])
-                    
+
                     workouts = []
                     total_active_minutes = 0
-                    
+
                     for activity in activities:
                         duration = activity.get("duration", 0) / (1000 * 60)  # ms to minutes
                         total_active_minutes += duration
-                        
+
                         workouts.append({
                             "date": activity.get("startDate", "").split("T")[0],
                             "type": activity.get("activityName", "Unknown"),
@@ -277,7 +276,7 @@ async def get_workout_summary(days: int = 7) -> dict[str, Any]:
                             "calories": activity.get("calories", 0),
                             "distance": activity.get("distance", 0),
                         })
-                    
+
                     return {
                         "status": "success",
                         "period": f"{days} days",
@@ -347,7 +346,7 @@ async def get_nutrition_info(food: str) -> dict[str, Any]:
             "page_size": 5,
             "json": 1,
         }
-        
+
         headers = {
             "User-Agent": cfg.openfoodfacts_user_agent,
         }
@@ -358,11 +357,11 @@ async def get_nutrition_info(food: str) -> dict[str, Any]:
                 if resp.status == 200:
                     data = await resp.json()
                     products = data.get("products", [])
-                    
+
                     results = []
                     for product in products:
                         nutriments = product.get("nutriments", {})
-                        
+
                         results.append({
                             "name": product.get("product_name", "Unknown"),
                             "brand": product.get("brands", "Unknown"),
@@ -379,7 +378,7 @@ async def get_nutrition_info(food: str) -> dict[str, Any]:
                             "ingredients": product.get("ingredients_text", ""),
                             "allergens": product.get("allergens_tags", []),
                         })
-                    
+
                     return {
                         "status": "success",
                         "count": len(results),

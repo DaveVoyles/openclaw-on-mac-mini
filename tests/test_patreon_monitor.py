@@ -9,7 +9,6 @@ Tests:
 """
 
 import asyncio
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -17,7 +16,6 @@ import pytest
 from patreon_monitor import (
     PatreonHealthChecker,
     PatreonHealthStatus,
-    get_patreon_checker,
 )
 
 
@@ -391,7 +389,7 @@ async def test_integration_check_and_recover():
     """Integration test: check health and attempt recovery."""
     with patch("asyncio.create_subprocess_exec") as mock_docker, patch(
         "aiohttp.ClientSession"
-    ) as mock_aiohttp:
+    ):  # noqa: F841 - mock needed for context but not used directly
 
         # Mock container stopped
         mock_proc_inspect = AsyncMock()

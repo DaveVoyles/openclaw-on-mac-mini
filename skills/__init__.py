@@ -538,13 +538,13 @@ SKILLS.update(GIT_SKILLS)
 
 # News & Data APIs (Phase: NLP Enhancement)
 from skills.finance_skills import FINANCE_SKILLS
+from skills.health_skills import HEALTH_SKILLS
 from skills.news_skills import NEWS_SKILLS
 from skills.sports_skills import SPORTS_SKILLS
-from skills.weather_skills import WEATHER_SKILLS
 from skills.trakt_skills import TRAKT_SKILLS
-from skills.health_skills import HEALTH_SKILLS
-from src.ml_trends import ML_TREND_SKILLS
+from skills.weather_skills import WEATHER_SKILLS
 from src.correlation_engine import CORRELATION_SKILLS
+from src.ml_trends import ML_TREND_SKILLS
 
 for skill in NEWS_SKILLS:
     SKILLS[skill["name"]] = skill["function"]

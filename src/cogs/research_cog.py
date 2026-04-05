@@ -194,7 +194,18 @@ class ResearchCog(commands.Cog, name="Research"):
         agent = ResearchAgent(max_searches=4, browse_top_n=2, timeout_seconds=300 if deep else 180)
 
         try:
-            report = await agent.run(query, on_progress=on_progress, deep=deep)
+            from runtime_state import request_context
+
+            scoped_channel_id = interaction.channel_id
+            scoped_thread_id = interaction.channel.id if isinstance(interaction.channel, discord.Thread) else None
+            if isinstance(interaction.channel, discord.Thread) and interaction.channel.parent_id:
+                scoped_channel_id = interaction.channel.parent_id
+            with request_context(
+                channel_id=scoped_channel_id,
+                thread_id=scoped_thread_id,
+                user_id=str(interaction.user.id),
+            ):
+                report = await agent.run(query, on_progress=on_progress, deep=deep)
         except Exception as e:
             log.error("Research command failed: %s", e)
             report = f"❌ Research failed: {e}"

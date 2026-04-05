@@ -40,6 +40,7 @@ from trace_context import get_trace_id
 
 from .context import (
     _auto_recall_context,
+    _extract_context_controls,
     _extract_cross_channel_opt_in,
     _strip_recalled_prefix,
     _to_content,
@@ -195,11 +196,37 @@ async def chat_stream(
     _routing_notes: list[str] = []
 
     cleaned_user_message, cross_channel = _extract_cross_channel_opt_in(user_message)
-    recalled_context = await _auto_recall_context(cleaned_user_message, cross_channel=cross_channel)
+    cleaned_user_message, context_controls = _extract_context_controls(cleaned_user_message)
+    # --- hard-context-boundaries and followup-anchor-mode ---
+    followup = False
+    followup_phrases = ("follow up", "what about", "and ", "also ", "more on ", "next ", "continue ")
+    if len(cleaned_user_message.split()) < 10 or any(cleaned_user_message.lower().startswith(p) for p in followup_phrases):
+        followup = True
+    followup = followup or bool(context_controls.get("use_prior_report"))
+    recalled_context = await _auto_recall_context(
+        cleaned_user_message,
+        cross_channel=cross_channel,
+        followup=followup,
+        reset_context=bool(context_controls.get("reset_context")),
+        use_prior_report=bool(context_controls.get("use_prior_report")),
+        anchor_override=context_controls.get("anchor_override"),  # type: ignore[arg-type]
+        disable_anchor=bool(context_controls.get("disable_anchor")),
+    )
     if recalled_context:
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
         model_message = cleaned_user_message
+    # Add metadata for cross-channel or anchor mode
+    metadata = {}
+    if cross_channel:
+        metadata["context_mode"] = "cross-channel"
+        metadata["context_badge"] = "🌐 Cross-channel"
+    elif context_controls.get("reset_context"):
+        metadata["context_mode"] = "context-reset"
+        metadata["context_badge"] = "♻️ Context reset"
+    elif followup:
+        metadata["context_mode"] = "followup-anchor"
+        metadata["context_badge"] = "🧷 Follow-up anchor"
 
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
@@ -225,7 +252,7 @@ async def chat_stream(
                         {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    yield reply, True, {"model_used": f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False}
+                    yield reply, True, {"model_used": f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, **metadata}
                     return
 
             elif route.model_type == "anthropic":
@@ -237,7 +264,7 @@ async def chat_stream(
                         {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    yield reply, True, {"model_used": f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}", "updated_history": updated, "needs_tools": False}
+                    yield reply, True, {"model_used": f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}", "updated_history": updated, "needs_tools": False, **metadata}
                     return
         except Exception as e:
             log.debug("Multi-model routing failed (non-fatal, stream): %s", e)
@@ -262,7 +289,7 @@ async def chat_stream(
                     {"role": "user", "parts": [cleaned_user_message]},
                     {"role": "model", "parts": [reply]},
                 ]
-                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False}
+                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                 return
             log.info("%s call failed, falling back to Gemini", model_preference)
         except Exception as e:
@@ -271,10 +298,10 @@ async def chat_stream(
     # Forced local mode
     if model_preference == "local":
         if not LOCAL_LLM_ENABLED:
-            yield "⚠️ Local LLM is disabled (`LOCAL_LLM_ENABLED=false`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
+            yield "⚠️ Local LLM is disabled (`LOCAL_LLM_ENABLED=false`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata}
             return
         if not await _ollama_available():
-            yield "⚠️ Ollama is not reachable. Check that the service is running.", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
+            yield "⚠️ Ollama is not reachable. Check that the service is running.", True, {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata}
             return
         gemma_reply = await _try_local_model(model_message, history, force=True)
         if gemma_reply is not None:
@@ -282,14 +309,14 @@ async def chat_stream(
                 {"role": "user", "parts": [cleaned_user_message]},
                 {"role": "model", "parts": [gemma_reply]},
             ]
-            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False}
+            yield gemma_reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, **metadata}
             return
         log.info("Local model returned empty, auto-falling back to Gemini")
 
     # Forced Gemini mode
     if model_preference in ("gemini", "local"):
         if not GOOGLE_API_KEY:
-            yield "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False}
+            yield "⚠️ Gemini API key not configured (`GOOGLE_API_KEY`).", True, {"model_used": "none", "updated_history": history, "needs_tools": False, **metadata}
             return
     else:
         pass
@@ -309,7 +336,7 @@ async def chat_stream(
                         {"role": "model", "parts": [reply]},
                     ]
                     _routing_notes.append("Gemini rate-limited → used Copilot proxy")
-                    yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes}
+                    yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
                     return
         except (ImportError, KeyError) as exc:
             log.debug("Copilot proxy fallback unavailable: %s", exc)
@@ -319,7 +346,7 @@ async def chat_stream(
             "⚠️ Rate limit reached. Please wait a moment before asking again. "
             f"({_rate_limiter.remaining_minute}/min, {_rate_limiter.remaining_hour}/hr remaining)"
         )
-        yield msg, True, {"model_used": MODEL_NAME, "updated_history": history, "needs_tools": False}
+        yield msg, True, {"model_used": MODEL_NAME, "updated_history": history, "needs_tools": False, **metadata}
         return
 
     model, route_info = await _select_model_for_message(
@@ -395,7 +422,7 @@ async def chat_stream(
             except Exception as exc:
                 log.warning("Auto-escalation web search failed: %s", exc)
 
-    yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes}
+    yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes, **metadata}
     return
 
     # No-tool Gemini streaming path (dead code kept for future use)
@@ -412,7 +439,7 @@ async def chat_stream(
             None, lambda: chat_session.send_message_stream(model_message)
         )
     except Exception as e:
-        yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False, "routing_notes": _routing_notes}
+        yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
         return
 
     accumulated = ""
@@ -426,7 +453,7 @@ async def chat_stream(
                 continue
             if text:
                 accumulated += text
-                yield accumulated, False, {"model_used": model_name, "needs_tools": False}
+                yield accumulated, False, {"model_used": model_name, "needs_tools": False, **metadata}
     except Exception as e:
         if not accumulated:
             accumulated = f"❌ Streaming error: {e}"
@@ -439,7 +466,7 @@ async def chat_stream(
 
     updated_history = _extract_history(chat_session)
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
-    yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False, "routing_notes": _routing_notes}
+    yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
 
 
 async def chat(
@@ -472,7 +499,16 @@ async def chat(
     history = await _trim_history(history or [], model_hint=_model_hint)
 
     cleaned_user_message, cross_channel = _extract_cross_channel_opt_in(user_message)
-    recalled_context = await _auto_recall_context(cleaned_user_message, cross_channel=cross_channel)
+    cleaned_user_message, context_controls = _extract_context_controls(cleaned_user_message)
+    recalled_context = await _auto_recall_context(
+        cleaned_user_message,
+        cross_channel=cross_channel,
+        followup=bool(context_controls.get("use_prior_report")),
+        reset_context=bool(context_controls.get("reset_context")),
+        use_prior_report=bool(context_controls.get("use_prior_report")),
+        anchor_override=context_controls.get("anchor_override"),  # type: ignore[arg-type]
+        disable_anchor=bool(context_controls.get("disable_anchor")),
+    )
     if recalled_context:
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
