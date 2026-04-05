@@ -386,7 +386,10 @@ class WorkflowEngine:
         """Execute a single task. Returns (result, success)."""
         skill_fn = self._skill_registry.get(task.action)
         if not skill_fn:
-            return f"Error: Unknown skill '{task.action}'", False
+            task.end_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            task.status = TaskStatus.FAILED
+            task.error = f"Unknown skill '{task.action}'"
+            return f"Error: {task.error}", False
 
         task.status = TaskStatus.RUNNING
         task.start_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
