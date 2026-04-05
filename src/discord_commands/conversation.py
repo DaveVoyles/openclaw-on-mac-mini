@@ -51,7 +51,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
             "**Auto routing order:** Copilot proxy (free) → Gemini (tools) → Ollama (last resort)\n\n"
             "Use `/model set` to change.\n"
             "Use `/ask model:` to override per-message.",
-            color=discord.Color.blue(),
+            color=EmbedColors.INFO,
         )
         try:
             from model_router import COPILOT_PROXY_ENABLED
