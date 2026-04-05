@@ -9,6 +9,7 @@ from discord.ext import commands
 from audit import audit_log
 from memory import get_model_preference, set_model_preference
 from memory import store as conversation_store
+from ui_components import EmbedColors
 
 from ._helpers import require_auth
 
