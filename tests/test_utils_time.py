@@ -26,7 +26,7 @@ class TestParseDuration:
 
     def test_parse_combined(self):
         assert parse_duration("1h 30m") == 5400
-        assert parse_duration("2d 3h 15m") == 183900
+        assert parse_duration("2d 3h 15m") == 184500  # 2*86400 + 3*3600 + 15*60
 
     def test_parse_with_spaces(self):
         assert parse_duration("  5 m  ") == 300
