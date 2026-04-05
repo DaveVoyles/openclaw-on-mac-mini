@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/uptime_kuma_skills.py
+# hypothesis_version: 6.151.10
+
+[100, 200, 1900, '?', 'DOWN', 'MAINTENANCE', 'N/A', 'PENDING', 'UNKNOWN', 'UP', 'UPTIME_KUMA_PASS', 'UPTIME_KUMA_URL', 'UPTIME_KUMA_USER', 'dave', 'get_monitor_detail', 'get_monitors_down', 'get_uptime_summary', 'heartbeatList', 'main', 'msg', 'name', 'openclaw.uptime_kuma', 'ping', 'status', 'uptime_kuma', '⚪', '🔴', '🔵', '🟡', '🟢']

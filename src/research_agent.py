@@ -198,6 +198,23 @@ class ResearchAgent:
         post: Callable,
         deep: bool = False,
     ) -> str:
+        """Execute multi-stage research workflow with search, analysis, and synthesis.
+        
+        Process:
+        1. Check vector store for prior research (avoid duplicate work)
+        2. Generate research plan with 2-4 questions
+        3. Search web for each question (parallel execution)
+        4. Synthesize results into comprehensive report
+        5. Store findings in vector store for future reference
+        
+        Args:
+            query: Research topic or question
+            post: Async callback(section, content) to stream progress updates
+            deep: If True, generates more questions and deeper analysis
+            
+        Returns:
+            Final research report with sources and citations
+        """
         await post("plan", f"Planning research strategy for: *{query[:80]}*")
 
         # ── Step 0: Check for prior research on this topic ────────────────────

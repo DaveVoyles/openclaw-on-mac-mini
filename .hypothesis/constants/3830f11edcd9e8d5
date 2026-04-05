@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/git_skills.py
+# hypothesis_version: 6.151.10
+
+[8000, '\n... (truncated)', '--oneline', '--staged', '--url', '-am', 'cli.js', 'commit', 'diff', 'git', 'git_commit', 'git_diff', 'git_log', 'git_status', 'log', 'markdown', 'node', 'openclaw.git_skills', 'skills', 'status', 'success', 'webfetch-md', 'webfetch_md']

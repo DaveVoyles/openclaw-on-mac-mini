@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/rules_engine.py
+# hypothesis_version: 6.151.10
+
+[0.6, 200, 500, '"', '%Y-%m-%dT%H:%M:%SZ', "'", '(?i)\\bI prefer\\b', '(?i)\\bI said\\b', '(?i)\\bI told you\\b', '(?i)\\bincorrect\\b', '(?i)\\bstop doing\\b', '(?i)\\bwrong\\b', '(?i)\\byou forgot\\b', '(?i)\\byou should\\b', '(?i)^actually[,.\\s]', '(?i)^no[,.\\s!]', '/memory/rules.json', 'Added rule %s: %s', 'Deleted rule %s', 'Extracted rule: %s', 'Saved %d rules to %s', 'access_count', 'created_at', 'gemini', 'id', 'memories', 'rule', 'source', 'text', 'type', 'utf-8']

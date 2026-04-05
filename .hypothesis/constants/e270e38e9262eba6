@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/model_router.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.7, 200, 2000, '/', '2023-06-01', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL', 'Authorization', 'COPILOT_PROXY_TOKEN', 'COPILOT_PROXY_URL', 'Content-Type', 'OPENAI_API_KEY', 'OPENAI_MODEL', 'alive', 'anthropic', 'anthropic-version', 'application/json', 'assistant', 'auto', 'choices', 'claude-sonnet-4.5', 'content', 'gemini', 'gpt-4o', 'local', 'max_tokens', 'message', 'messages', 'model', 'model-router', 'model_type', 'ollama', 'openai', 'parts', 'reason', 'role', 'system', 'temperature', 'text', 'ts', 'type', 'user', 'x-api-key']

@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/ontology_skills.py
+# hypothesis_version: 6.151.10
+
+['(no label)', '--dir', '--from', '--graph', '--id', '--props', '--rel', '--schema', '--to', '--type', '--where', 'Entity not found', 'Graph is valid.', 'both', 'content', 'create', 'description', 'direction', 'entity', 'get', 'id', 'name', 'ontology', 'ontology.py', 'ontology_get_entity', 'ontology_get_related', 'ontology_query', 'ontology_relate', 'ontology_validate', 'openclaw.ontology', 'properties', 'query', 'relate', 'related', 'related_to', 'relation', 'scripts', 'skills', 'title', 'update', 'validate', '{}']

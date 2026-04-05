@@ -202,6 +202,15 @@ class OpenClawBot(commands.Bot):
         self._health_runner = await start_health_server(self)
 
     async def on_ready(self) -> None:
+        """Initialize bot on connection to Discord.
+        
+        Sets up:
+        - Channel configurations
+        - Skill scheduler with daily maintenance
+        - Background health monitors (container status, log scanning)
+        - Proactive monitoring loops (every 2 hours)
+        - GitHub workflow tracking for failed jobs
+        """
         log.info("OpenClaw online as %s (ID %s)", self.user, self.user.id)
         audit_log(None, "bot_ready", f"Logged in as {self.user}")
         set_bot(self)

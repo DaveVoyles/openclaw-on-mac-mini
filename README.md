@@ -319,6 +319,13 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 
 **Phase 31 — Image Generation** ✅
 
+**Phase 32 — Recaps & Sports Watch Guides** ✅
+
+- `/recap weekly` — summarize the current Discord channel or thread over the last 1-30 days, with styles for highlights, action items, or a compact table
+- `/sports upcoming` — generate a sports watch guide with matchup tables, game times, and where-to-watch details based on live web research
+- Both commands can optionally **save to the Obsidian vault** and **schedule a Monday-morning recurring report**
+- New context menu action: **Create recap from thread** for one-click thread summaries
+
 - `/imagine generate <prompt>` — Stable Diffusion txt2img with size and negative prompt options
 - `/imagine status` — Check SD availability and list loaded models
 
@@ -925,6 +932,8 @@ Or in Discord:
 /report                  # Full system snapshot
 /health                  # *arr + download health
 /spending                # How much Gemini budget used
+/recap weekly            # Summarize this channel's week
+/sports upcoming query:"men's division 1 college lacrosse this week"
 ```
 
 ### Troubleshooting

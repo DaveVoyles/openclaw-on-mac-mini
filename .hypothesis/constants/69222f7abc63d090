@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/rss_skills.py
+# hypothesis_version: 6.151.10
+
+[200, 250, 1900, 4000, '\n\n---\n\n', '%Y-%m-%d', '(no title)', '(parse error)', '**Saved RSS Feeds**', '.tmp', '<[^>]+>', 'Atom Feed', 'OpenClaw-RSS/1.0', 'RSS Feed', 'Unknown', 'User-Agent', '^https?://', 'added', 'atom', 'atom:title', 'channel', 'content', 'content:encoded', 'date', 'dc', 'dc:date', 'description', 'feed', 'fetch_rss_feed', 'get_rss_digest', 'href', 'item', 'link', 'list_rss_feeds', 'openclaw.rss', 'pubDate', 'replace', 'rss', 'rss_feeds.json', 'search_rss', 'summary', 'title', 'url', '❌']
