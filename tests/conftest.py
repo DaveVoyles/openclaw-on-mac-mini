@@ -98,11 +98,11 @@ def _mock_llm_model_init(monkeypatch):
     def mock_get_model():
         """Mock _get_model to return a MagicMock instead of real Gemini model."""
         return MagicMock()
-    
+
     def mock_init_gemini(*args, **kwargs):
         """Mock Gemini model init."""
         return MagicMock()
-    
+
     # Patch before llm module imports
     try:
         import llm_client

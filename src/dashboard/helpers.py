@@ -103,6 +103,11 @@ def _command_list() -> list[dict]:
             {"name": "/forget <name>", "desc": "Delete a saved conversation thread"},
             {"name": "/analyze <service> [lines]", "desc": "AI log analysis"},
         ]},
+        {"category": "🗓️ Recaps & Watch Guides", "commands": [
+            {"name": "/recap weekly [days] [style]", "desc": "Summarize the current Discord channel or thread with highlights, action items, or a compact table. Optional save-to-vault and Monday scheduling."},
+            {"name": "/sports upcoming [query]", "desc": "Create a sports watch guide with matchups, ET kickoff times, and where-to-watch details from live web research. Optional save-to-vault and Monday scheduling."},
+            {"name": "Create recap from thread", "desc": "Right-click a Discord message or thread to generate a recap without typing a slash command."},
+        ]},
         {"category": "🎬 Media & Downloads", "commands": [
             {"name": "/search <query> [type]", "desc": "Search Sonarr/Radarr catalogs"},
             {"name": "/queue", "desc": "Active downloads (SABnzbd + qBit)"},

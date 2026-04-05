@@ -140,8 +140,9 @@ class TestChatModelPreference:
     async def test_chat_local_preference_success(self):
         """model_preference='local' should force Ollama path."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         with (
@@ -159,8 +160,9 @@ class TestChatModelPreference:
     async def test_chat_local_preference_ollama_down(self):
         """model_preference='local' with Ollama down should return error."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         with (
@@ -175,8 +177,9 @@ class TestChatModelPreference:
     async def test_chat_local_preference_disabled(self):
         """model_preference='local' with LOCAL_LLM_ENABLED=False should return error."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         with patch.object(chat_module, "LOCAL_LLM_ENABLED", False):
@@ -188,8 +191,9 @@ class TestChatModelPreference:
     async def test_chat_gemini_preference_skips_ollama(self):
         """model_preference='gemini' should go straight to Gemini."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         mock_model = MagicMock()
@@ -211,8 +215,9 @@ class TestChatModelPreference:
     async def test_chat_gemini_preference_no_api_key(self):
         """model_preference='gemini' without API key should return error."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         with patch.object(chat_module, "GOOGLE_API_KEY", ""):
@@ -224,8 +229,9 @@ class TestChatModelPreference:
     async def test_chat_auto_preference_tries_copilot_first(self):
         """model_preference='auto' should try Copilot proxy then fall through to Gemini."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         mock_model = MagicMock()
@@ -254,8 +260,9 @@ class TestChatStreamModelPreference:
     async def test_stream_local_preference_success(self):
         """model_preference='local' in chat_stream should yield from Ollama."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         with (
@@ -275,8 +282,9 @@ class TestChatStreamModelPreference:
     async def test_stream_local_preference_ollama_down(self):
         """model_preference='local' with Ollama down should yield error."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         with (
@@ -293,8 +301,9 @@ class TestChatStreamModelPreference:
     async def test_stream_gemini_preference_skips_local(self):
         """model_preference='gemini' in chat_stream should skip local path."""
         import sys
+
         import llm
-        
+
         chat_module = sys.modules['llm.chat']
 
         mock_model = MagicMock()

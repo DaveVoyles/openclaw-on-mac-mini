@@ -99,19 +99,19 @@ class TestAttachmentHandlers:
 
         with patch("bot_attachments.llm_analyze_image") as mock_analyze:
             mock_analyze.return_value = AsyncMock(return_value="This is a cat")()
-            
+
             with patch("bot_attachments._attachment_sessions") as mock_session_mgr:
                 mock_session = MagicMock()
                 mock_response = MagicMock()
                 mock_response.status = 200
                 mock_response.read = AsyncMock(return_value=b"fake image data")
-                
+
                 # Create async context manager
                 mock_cm = AsyncMock()
                 mock_cm.__aenter__ = AsyncMock(return_value=mock_response)
                 mock_cm.__aexit__ = AsyncMock(return_value=None)
                 mock_session.get.return_value = mock_cm
-                
+
                 mock_session_mgr.get = AsyncMock(return_value=mock_session)
 
                 result = await handle_image_attachment(mock_attachment, "What's this?")
@@ -149,13 +149,13 @@ class TestAttachmentHandlers:
             mock_response = MagicMock()
             mock_response.status = 200
             mock_response.read = AsyncMock(return_value=b"Document content here")
-            
+
             # Create async context manager
             mock_cm = AsyncMock()
             mock_cm.__aenter__ = AsyncMock(return_value=mock_response)
             mock_cm.__aexit__ = AsyncMock(return_value=None)
             mock_session.get.return_value = mock_cm
-            
+
             mock_session_mgr.get = AsyncMock(return_value=mock_session)
 
             result = await handle_doc_attachment(mock_attachment, "Summarize this")

@@ -8,15 +8,15 @@ import re
 
 import discord
 
-from constants import EMBED_DESC_LIMIT
+from constants import EMBED_DESC_LIMIT, EMBED_SPLIT_LIMIT
 
 # Regex patterns for formatting
 _IMAGE_LINK_RE = re.compile(r'!\[.*?\]\((https?://[^\s)]+)\)')
 _BARE_IMAGE_RE = re.compile(r'\b(https?://[^\s]+\.(?:png|jpg|jpeg|gif|webp))\b', re.IGNORECASE)
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]+?)```")
 
-# Discord embed limit (slightly lower than 4096 for safety)
-_EMBED_LIMIT = 3900
+# Discord embed split limit shared with bot.py so helper behavior stays consistent.
+_EMBED_LIMIT = EMBED_SPLIT_LIMIT
 
 
 def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:

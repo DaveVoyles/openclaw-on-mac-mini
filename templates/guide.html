@@ -237,6 +237,7 @@
           <li><a href="#scraping">12. Web Search &amp; Git</a></li>
           <li><a href="#weather">13. Weather (/weather)</a></li>
           <li><a href="#research">14. Deep Research (/research)</a></li>
+          <li><a href="#recaps-sports">14.5 Recaps &amp; Sports Watch Guides</a></li>
           <li><a href="#session-memory">15. Session Memory &amp; Recall</a></li>
           <li><a href="#autonomy">16. Autonomous Operations</a></li>
           <li><a href="#security">17. Security &amp; Approvals</a></li>
@@ -874,6 +875,16 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         <pre><code>/ask Schedule a health check every Monday and Friday at 7 AM
 /ask Run a status report every weekday at 9 AM</code></pre>
 
+        <h3>Built-in report scheduling (new)</h3>
+        <p>
+          The recap and sports workflows also support a shortcut:
+          <code>schedule_weekly:true</code>. That creates a recurring Monday
+          morning report without you having to write the cron expression
+          manually.
+        </p>
+        <pre><code>/recap weekly days:7 style:highlights schedule_weekly:true
+/sports upcoming query:"men's division 1 college lacrosse this week" schedule_weekly:true</code></pre>
+
         <h3>Interval Schedule (legacy)</h3>
         <pre><code>/schedule action:add skill:check_download_clients interval:30
   &rarr; Checks download clients every 30 minutes
@@ -1335,6 +1346,57 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
         the research query to repeat tomorrow<br />
         &nbsp;&nbsp;<strong>&#128206; Save to Vault</strong> &mdash; writes the
         full report as a Markdown file to <code>data/vault/Research/</code>
+      </div>
+
+      <h2 id="recaps-sports">14.5 Recaps &amp; Sports Watch Guides</h2>
+      <p>
+        OpenClaw now includes dedicated Discord workflows for weekly recaps and
+        structured sports watch guides, so repeatable research tasks do not
+        need to start from a blank prompt every time.
+      </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0"><code>/recap weekly</code></h3>
+        <p>
+          Summarize the current Discord channel or thread across the last
+          1&ndash;30 days. Choose whether the output should emphasize highlights,
+          action items, or a compact table.
+        </p>
+        <pre><code>/recap weekly days:7 style:highlights
+/recap weekly days:7 style:action-items save_to_vault:true
+/recap weekly days:14 focus:"lacrosse planning + follow-ups" schedule_weekly:true</code></pre>
+        <p style="margin-top: 0.5rem">
+          Optional toggles:
+          <code>save_to_vault:true</code> writes the recap into the Obsidian
+          vault, and <code>schedule_weekly:true</code> creates a Monday-morning
+          recurring report automatically.
+        </p>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top: 0"><code>/sports upcoming</code></h3>
+        <p>
+          Create a live watch guide for an upcoming set of games with teams,
+          ET kickoff times, and where/how to watch. It is designed for prompts
+          like weekly Division 1 college lacrosse schedules.
+        </p>
+        <pre><code>/sports upcoming query:"this week's upcoming men's division 1 college lacrosse games"
+/sports upcoming sport:"college lacrosse" league:"NCAA Division 1" days:7
+/sports upcoming team:"Maryland" days:5 include_watch_info:true schedule_weekly:true</code></pre>
+        <p style="margin-top: 0.5rem">
+          Typical output is a Discord-friendly markdown table:
+        </p>
+        <pre><code>| Date | Matchup | Time (ET) | Watch | Notes |
+|------|---------|-----------|-------|-------|
+| Sat  | Maryland vs Army | 1:00 PM | ESPN+ | Ranked matchup |
+| Sun  | Notre Dame vs Duke | 4:00 PM | ACCN | Stream confirmed |</code></pre>
+      </div>
+
+      <div class="tip">
+        <strong>&#128161; Right-click shortcut:</strong> Use
+        <strong>Create recap from thread</strong> from the Discord context menu
+        on any message or thread to generate a summary without retyping the
+        command.
       </div>
 
       <!-- 15. Session Memory -->

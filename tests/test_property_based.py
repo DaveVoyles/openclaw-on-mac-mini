@@ -1,7 +1,8 @@
 """Property-based tests for parsers using Hypothesis."""
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from table_renderer import _parse_markdown_table
 
@@ -27,7 +28,7 @@ class TestMarkdownTableParser:
             # Escape pipes in cell content
             safe_cell = row.replace("|", "\\|")[:20]
             table_text += f"| {safe_cell} | {safe_cell} |\n"
-        
+
         result = _parse_markdown_table(table_text)
         if result is not None:
             parsed_headers, parsed_rows = result
