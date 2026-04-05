@@ -200,7 +200,7 @@ class OpenClawBot(commands.Bot):
 
     async def on_ready(self) -> None:
         """Initialize bot on connection to Discord.
-        
+
         Sets up:
         - Channel configurations
         - Skill scheduler with daily maintenance

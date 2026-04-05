@@ -211,12 +211,12 @@ class MediaCog(commands.Cog, name="Media"):
         watch_id: str = "",
     ):
         """Manage media watch conditions - get notified when content becomes available.
-        
+
         Supports three actions:
         - list: Show all active watches
         - add: Create new watch (runs every 2 hours, checks Sonarr/Radarr/Overseerr)
         - remove: Delete a watch by ID
-        
+
         Examples:
             /watch action:add condition:"Batman movie"
             /watch action:list
