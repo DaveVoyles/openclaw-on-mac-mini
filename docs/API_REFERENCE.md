@@ -748,6 +748,131 @@ OpenClaw includes automatic API health monitoring with circuit breakers.
 
 APIs with circuit breakers:
 - NewsAPI (`newsapi`)
+- Alpha Vantage (`alphavantage`)
+- API-Sports (`apisports`)
+- Synthesis skills (composite tracking)
+- Perplexity (`perplexity`)
+- Tavily (`tavily`)
+- Firecrawl (`firecrawl`)
+
+---
+
+## Data Synthesis APIs
+
+**NEW:** Multi-source intelligence combining APIs with LLM-powered insights.
+
+### Synthesis Skills
+
+OpenClaw now includes 4 data synthesis functions that combine multiple APIs:
+
+#### 1. Company Report (`synthesize_company_report`)
+
+**Combines:**
+- Stock data (Alpha Vantage)
+- Sentiment analysis (Alpha Vantage)
+- Recent news (NewsAPI)
+- LLM synthesis (Gemini)
+
+**Usage:**
+```python
+from skills.synthesis_skills import synthesize_company_report
+
+report = await synthesize_company_report("DIS")
+print(report["synthesis"])
+# "Disney stock rallied 5% as Moana 2 exceeded box office expectations..."
+```
+
+**API Calls:** 2 Alpha Vantage + 1 NewsAPI + 1 LLM
+
+---
+
+#### 2. Entertainment Report (`synthesize_entertainment_report`)
+
+**Combines:**
+- Entertainment stocks (Alpha Vantage)
+- Sector sentiment (Alpha Vantage)
+- Entertainment news (NewsAPI)
+- Correlation detection (LLM)
+
+**Usage:**
+```python
+report = await synthesize_entertainment_report("box office")
+for studio, data in report["studios"].items():
+    print(f"{studio}: ${data['price']} ({data['change_percent']})")
+```
+
+**API Calls:** 2-8 Alpha Vantage (depends on studio count) + 1 NewsAPI + 1 LLM
+
+---
+
+#### 3. Market Overview (`synthesize_market_overview`)
+
+**Combines:**
+- Business news (NewsAPI)
+- Market news with sentiment (Alpha Vantage)
+- Sector aggregation (computed)
+- Market summary (LLM)
+
+**Usage:**
+```python
+overview = await synthesize_market_overview()
+print(overview["market_summary"])
+for sector, sentiment in overview["sector_sentiment"].items():
+    print(f"{sector}: {sentiment['label']} ({sentiment['score']})")
+```
+
+**API Calls:** 1 NewsAPI + 1 Alpha Vantage + 1 LLM
+
+---
+
+#### 4. Correlation Finder (`find_correlations`)
+
+**Combines:**
+- Company report data
+- Pattern detection (stock-sentiment alignment/divergence)
+- Causal analysis (LLM)
+
+**Usage:**
+```python
+corr = await find_correlations("AAPL", entity_type="company")
+for c in corr["correlations"]:
+    print(f"{c['type']}: {c['description']} (confidence: {c['confidence']})")
+```
+
+**API Calls:** Uses company report (3 calls) + 1 LLM
+
+---
+
+### Synthesis Architecture
+
+```
+User Request → Parallel API Calls → Data Aggregation → LLM Synthesis → Response
+     ↓              ↓                    ↓                  ↓             ↓
+  DIS ticker    Stock Price         Combine data      Generate      Structured
+                Sentiment           Handle errors     insights         JSON
+                News articles       Detect patterns   2-3 sentences
+```
+
+**Key Features:**
+- **Parallel API calls:** 3x faster than sequential
+- **Circuit breakers:** Skip failing APIs gracefully
+- **Caching:** 15-minute TTL reduces API calls
+- **LLM fallback:** Basic synthesis if LLM unavailable
+- **Error tracking:** `sources` vs `sources_failed` transparency
+
+**Rate Limit Impact:**
+- Company report: 3 API calls (2 Alpha Vantage + 1 NewsAPI)
+- Daily capacity: ~8-12 company reports (limited by Alpha Vantage 25/day)
+- Cache extends capacity: Repeated queries within 15min use 0 API calls
+
+**Documentation:**
+- Architecture: See [DATA_SYNTHESIS.md](./DATA_SYNTHESIS.md)
+- Skills reference: `skills/synthesis_skills.py`
+- Tests: `tests/test_synthesis_skills.py`
+
+---
+
+### Health Endpoint
 - API-Sports (`apisports`)
 - Alpha Vantage (`alphavantage`)
 - Perplexity (`perplexity`)
