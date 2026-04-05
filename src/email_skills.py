@@ -218,7 +218,7 @@ async def read_inbox(provider: str = "gmail", count: int = 10) -> str:
         date_short = m["date"][:16] if m["date"] else "?"
         lines.append(f"• **{m['subject']}** — {m['from']} ({date_short})")
 
-    return _truncate("\n".join(lines))
+    return _truncate("\n".join(lines), 1900)
 
 
 async def search_emails(query: str, provider: str = "gmail") -> str:
@@ -251,7 +251,7 @@ async def search_emails(query: str, provider: str = "gmail") -> str:
         date_short = m["date"][:16] if m["date"] else "?"
         lines.append(f"• **{m['subject']}** — {m['from']} ({date_short})")
 
-    return _truncate("\n".join(lines))
+    return _truncate("\n".join(lines), 1900)
 
 
 async def send_email(
