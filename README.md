@@ -13,13 +13,13 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 88 Discord slash commands across 12 cogs (55 cog commands) + modular command system |
+| **Interface**    | 101 Discord slash commands across 12 cogs (55 cog commands) + modular command system |
 | **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 4 E4B local (Ollama) |
 | **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
 | **Local LLM**    | Ollama (`gemma4:e4b`) — free, with native tool calling support         |
 | **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
 | **Natural Language** | `/ask` auto-shortlists the most relevant skills and tools per request |
-| **Status**       | **Phase 23 — Personal Assistant** ✅                           |
+| **Status**       | **Phase 41 — Scheduled Recap Automation** ✅                           |
 
 ## Features
 
@@ -42,7 +42,9 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 - `/ask <question>` — AI-powered natural language queries
 - **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
-- **Intent-based tool shortlisting + request hints**: `/ask` narrows the skill set per prompt and infers cues like services, time windows, sports/watch-guide intent, calendar asks, and inbox requests from plain English
+- **Intent-based tool shortlisting + request hints**: `/ask` narrows the skill set per prompt and infers cues like services, time windows, sports/watch-guide intent, calendar asks, inbox requests, lightweight "this/that" disambiguation, and normalized entities (services/leagues/WWE/platforms)
+- **Follow-up correction loop (incremental)**: `/ask` detects correction language like “actually”, “no, I meant…”, “make it brief”, and “add …”, applies safe parameter-level overrides (style/detail/topic/window) when clear, and falls back safely when ambiguous
+- **Compositional ask hints (lightweight)**: chained requests in one message (e.g., recap + compare + table/emoji controls) are parsed into structured hints for routing and tool/parameter selection
 - **Domain packs + personas**: prefix `/ask` prompts with `use:finance`, `use:sports`, `use:wwe`, or `use:gaming` to apply persona-aware tool filtering while keeping normal fallback behavior when omitted
 - **Semantic fallback retrieval**: when lexical matching is weak, `/ask` can semantically shortlist likely tools instead of exposing the full tool set
 - **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
@@ -57,8 +59,8 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 **Phase 4 — Security & Approvals** ✅
 
-- `/restart` now requires button-click approval before executing
-- Discord button UI — ✅ Approve / ❌ Deny with 5-minute timeout
+- `/restart` now requires explicit approval before executing
+- Discord approval UI — click buttons or react with ✅ / ❌ (5-minute timeout)
 - `/pending` — view pending approval requests
 - `/auditlog [lines]` — view recent audit trail entries
 - `/estop` — emergency stop to halt all write actions instantly
@@ -122,7 +124,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - Dashboard published at https://davevoyles.github.io/openclaw-dashboard/ (GitHub Pages)
 - 5 Gemini tool declarations for LLM-driven task management
 - LLM routing keywords: _task_, _kanban_, _backlog_, _in progress_, _todo_, _ticket_
-- 117 registered skills
+- 141+ registered skills (was 117)
 
 **Phase 10 — Persistent Agent Plans** ✅
 
@@ -222,7 +224,7 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - **Search provider retry logic** — Perplexity and Firecrawl calls retry once on transient failures via `search_provider.retry_once`
 - **API quota dashboard** — new dashboard card + `/api/quota-status` endpoint showing real-time API usage across providers
 - **Skill module split** — `advanced_skills.py` (1,426 lines) split into `search_skills.py` (525), `media_skills.py` (480), `web_skills.py` (274), `advanced_skills.py` (280)
-- 117 registered skills (was 116)
+- 141+ registered skills (was 117)
 
 **Phase 19 — Self-Healing Infrastructure** ✅
 
@@ -327,6 +329,7 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 
 - `/recap weekly` — summarize the current Discord channel or thread over the last 1-30 days, with styles for highlights, action items, or a compact table
 - `/sports upcoming` — generate a sports watch guide with matchup tables, game times, and where-to-watch details based on live web research
+- Report outputs now append concise citation metadata/footnotes when source URLs are available
 - Both commands can optionally **save to the Obsidian vault** and **schedule a Monday-morning recurring report**
 - New context menu action: **Create recap from thread** for one-click thread summaries
 - Both workflows are also reachable through plain-English `/ask` prompts like "give me a recap of this channel from the last week" or "make a watch table for this week's D1 lacrosse games"
@@ -371,6 +374,51 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - `/sentry projects` — List Sentry org projects
 - `/sentry resolve <issue_id>` — Resolve a Sentry issue
 - `/sentry stats [project]` — Hourly error rate statistics
+
+**Phase 38 — Personalized Digests** ✅
+
+- `/digest now` — instant personalized digest based on your interests
+- `/digest config` — view your digest preferences
+- `/digest topic add/remove` — manage topics of interest
+- `/digest stock add/remove` — manage stock watchlist
+- `/digest team add/remove` — manage sports teams
+- `/digest schedule` — set daily/weekly delivery schedule
+- `/digest preview` — preview next digest
+- Smart relevance filtering with scoring algorithm
+- 11 LLM-callable digest skills
+
+**Phase 39 — Intelligent Data Synthesis** ✅
+
+- `synthesize_company_report()` — combine stock data, news, and sentiment
+- `synthesize_entertainment_report()` — link box office with studio stocks
+- `synthesize_market_overview()` — aggregate sector sentiment with economic news
+- `find_correlations()` — detect stock-sentiment patterns
+- LLM-generated 2-3 sentence insights connecting data points
+- Parallel API calls with smart caching (15-min TTL)
+- 4 synthesis skills with circuit breakers
+
+**Phase 40 — Trend Detection & Alerting** ✅
+
+- `/track <topic>` — start tracking a topic for trends
+- `/trending [category]` — show trending topics by category
+- `/trends <topic>` — detailed trajectory with ASCII chart
+- `/breaking [category]` — detect breaking news (volume spikes)
+- `/untrack <topic>` — stop tracking
+- `/tracked` — list all tracked topics
+- Time-series analysis (24h/7d/30d rolling windows)
+- Volume spike detection (3x threshold)
+- Sentiment shift alerts (±0.3 change)
+- Discord alerts with rate limiting (1/hour per topic)
+- Z-score anomaly detection
+
+**Phase 41 — Scheduled Recap Automation** ✅
+
+- Automated weekly recaps posted to Discord channels
+- Per-channel configuration (topics, schedule, date range)
+- Cron-based scheduling (default: Monday 9am)
+- LLM skills: `configure_recap`, `list_recap_configs`, `disable_recap`, `test_recap`
+- Discord-friendly formatting with auto-splitting
+- Integration with existing scheduler system
 
 **Planned**
 
@@ -693,7 +741,7 @@ Uptime Kuma (:3001)              Grafana dashboard
 │   ├── error_tracker.py   # Persistent error tracking and analysis (444 lines)
 │   ├── maintenance_skills.py # 4:00 AM automated maintenance (564 lines)
 │   ├── spending.py        # Gemini API cost tracking ($30 budget)
-│   ├── approvals.py       # Approval workflow engine + Discord button UI
+│   ├── approvals.py       # Approval workflow engine + Discord buttons/reactions
 │   ├── network.py         # Tailscale status, connectivity check, speed test
 │   ├── model_router.py    # Multi-model query classification and routing
 │   ├── permissions.py     # Role-based permission system (90 lines)
@@ -1085,7 +1133,13 @@ recap = await generate_weekly_recap(
 📖 **[Full Documentation](docs/WEEKLY_RECAP_ENGINE.md)**
 
 ### API Integration Status
-- ✅ NewsAPI.org - 100 req/day
-- ✅ API-Sports - 100 req/day (NBA)
-- ✅ Alpha Vantage - 25 req/day
-- ⏳ NFL/NHL/MLB - Coming soon
+
+OpenClaw integrates with premium APIs at **$0/month cost**:
+
+- **NewsAPI.org** (100 req/day) — 80K+ news sources, headlines, search
+- **API-Sports** (100 req/day) — Live NBA scores, standings, schedules
+- **Alpha Vantage** (25 req/day) — Stock data, sentiment analysis, market news
+
+**Total:** 225 API queries/day, **$500-700/month** equivalent value at zero cost.
+
+⏳ **Coming soon:** NFL/NHL/MLB via API-Sports
