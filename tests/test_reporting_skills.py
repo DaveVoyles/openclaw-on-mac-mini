@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import reporting_skills as mod
+from skills import reporting_skills as mod
 
 
 def _msg(
