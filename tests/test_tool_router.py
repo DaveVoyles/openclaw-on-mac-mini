@@ -52,6 +52,25 @@ def test_route_tool_declarations_prefers_email_tools():
     assert "send_email" in names
 
 
+def test_route_tool_declarations_extracts_hints_for_sports_prompts():
+    _, info = _route_names("What games does Maryland have in the next 5 days in men's division 1 lacrosse?")
+    assert info["hints"]["team"] == "Maryland"
+    assert info["hints"]["sport"] == "lacrosse"
+    assert info["hints"]["days"] == 5
+
+
+def test_route_tool_declarations_prefers_box_office_report_bundle():
+    names, info = _route_names(
+        "Give me the box office financials and new releases for the last week in a markdown table with emojis."
+    )
+    assert info["strategy"] == "shortlist"
+    assert "weekly-market-report" in info["bundles"]
+    assert "generate_box_office_report" in names
+    assert info["hints"]["report_topic"] == "box-office"
+    assert info["hints"]["output_style"] == "table"
+    assert info["hints"]["emoji_level"] in {"light", "rich"}
+
+
 def test_route_tool_declarations_falls_back_to_full_set_for_low_confidence():
     all_declarations = _get_tool_declarations()
     selected, info = route_tool_declarations("hello there", all_declarations)

@@ -26,6 +26,28 @@ _RECAP_STYLES = {
     ),
 }
 
+_REPORT_STYLE_ALIASES = {
+    "table": "discord-table-detailed",
+    "markdown table": "discord-table-detailed",
+    "detailed table": "discord-table-detailed",
+    "brief table": "discord-table-brief",
+    "brief": "discord-table-brief",
+    "summary": "discord-recap-hybrid",
+    "hybrid": "discord-recap-hybrid",
+}
+
+_EMOJI_STYLE_ALIASES = {
+    "none": "none",
+    "no emoji": "none",
+    "without emoji": "none",
+    "light": "light",
+    "few emoji": "light",
+    "some emoji": "light",
+    "rich": "rich",
+    "many emoji": "rich",
+    "with emojis": "rich",
+}
+
 _SPORT_KEYWORDS = {
     "lacrosse": "lacrosse",
     "basketball": "basketball",
@@ -96,6 +118,64 @@ def _extract_day_window(
             return max(minimum, min(30, maximum))
 
     return max(minimum, min(int(default), maximum))
+
+
+def infer_report_request(
+    request: str,
+    *,
+    days: int = 7,
+    output_style: str = "discord-table-detailed",
+    emoji_level: str = "light",
+) -> dict[str, Any]:
+    """Infer report-oriented slots from a natural-language request."""
+    text = (request or "").strip()
+    lowered = text.lower()
+
+    inferred_style = output_style
+    for key, value in _REPORT_STYLE_ALIASES.items():
+        if key in lowered:
+            inferred_style = value
+            break
+    if "table" in lowered:
+        inferred_style = "discord-table-detailed"
+
+    inferred_emoji = emoji_level
+    for key, value in _EMOJI_STYLE_ALIASES.items():
+        if key in lowered:
+            inferred_emoji = value
+            break
+    if "emoji" in lowered and inferred_emoji == "light":
+        inferred_emoji = "rich"
+
+    inferred_days = _extract_day_window(
+        lowered,
+        default=days,
+        minimum=1,
+        maximum=30,
+        direction="past",
+    )
+
+    topic = "general report"
+    if "box office" in lowered:
+        topic = "box office"
+    elif "new release" in lowered:
+        topic = "new releases"
+    elif "sports" in lowered:
+        topic = "sports"
+    elif "recap" in lowered:
+        topic = "recap"
+
+    detail_level = "brief" if "brief" in lowered or "quick" in lowered else "detailed"
+    if "deep" in lowered or "detailed" in lowered:
+        detail_level = "detailed"
+
+    return {
+        "topic": topic,
+        "days": inferred_days,
+        "output_style": inferred_style,
+        "emoji_level": inferred_emoji,
+        "detail_level": detail_level,
+    }
 
 
 def infer_sports_request(
@@ -316,6 +396,65 @@ def build_sports_watch_query(
     )
 
 
+def _report_format_instructions(style: str, emoji_level: str) -> str:
+    style_key = (style or "discord-table-detailed").strip().lower()
+    emoji_key = (emoji_level or "light").strip().lower()
+
+    if style_key == "discord-table-brief":
+        style_text = (
+            "Provide one concise markdown table followed by no more than 3 short bullet highlights."
+        )
+    elif style_key == "discord-recap-hybrid":
+        style_text = (
+            "Provide a compact markdown table first, then a short recap section with key takeaways."
+        )
+    else:
+        style_text = (
+            "Provide a detailed markdown table first, then a brief commentary section with trends."
+        )
+
+    if emoji_key == "none":
+        emoji_text = "Do not use emojis."
+    elif emoji_key == "rich":
+        emoji_text = (
+            "Use emojis to improve scanability (e.g., 🎬 releases, 💰 gross, 📈 up, 📉 down), but keep it readable."
+        )
+    else:
+        emoji_text = "Use light emojis sparingly for visual grouping."
+
+    return f"{style_text} {emoji_text}"
+
+
+def _append_report_guardrails(
+    report_text: str,
+    *,
+    timeframe_label: str,
+    require_table: bool = True,
+) -> str:
+    """Ensure the generated report includes required framing and disclosures."""
+    text = (report_text or "").strip()
+    lines: list[str] = [text] if text else []
+
+    if timeframe_label.lower() not in text.lower():
+        lines.append(f"\n_Time window: {timeframe_label}_")
+
+    has_table = "\n|" in text and "\n| ---" in text
+    if require_table and not has_table:
+        lines.append(
+            "\n| Item | Metric | Value | Notes |\n"
+            "| --- | --- | --- | --- |\n"
+            "| N/A | N/A | N/A | Source data did not include a structured table-ready result. |"
+        )
+
+    if "source" not in text.lower():
+        lines.append("\n**Sources:** Aggregated from live web search results used in this report.")
+
+    if "n/a" not in text.lower():
+        lines.append("_Missing values are marked as N/A when source data is incomplete._")
+
+    return "\n".join(part for part in lines if part).strip()
+
+
 async def generate_sports_watch_report(
     query: str = "",
     sport: str = "",
@@ -406,7 +545,96 @@ async def generate_sports_watch_report(
     return f"{response.strip()}\n\n_via {model_used}_"
 
 
+async def generate_box_office_report(
+    query: str = "",
+    days: int = 7,
+    output_style: str = "discord-table-detailed",
+    emoji_level: str = "light",
+    include_new_releases: bool = True,
+) -> str:
+    """Create a weekly box-office financial report with new-release context."""
+    inferred = infer_report_request(
+        query or "weekly box office report",
+        days=days,
+        output_style=output_style,
+        emoji_level=emoji_level,
+    )
+    window_days = max(1, min(int(inferred["days"]), 30))
+    timeframe_label = f"last {window_days} day(s)"
+
+    if query.strip():
+        search_query = query.strip()
+    else:
+        search_query = (
+            f"box office financials new releases {timeframe_label} "
+            "weekend gross domestic worldwide"
+        )
+
+    try:
+        from skills.search_skills import search_web
+
+        search_results = await asyncio.wait_for(search_web(search_query, num_results=10), timeout=45)
+    except asyncio.TimeoutError:
+        return "❌ Box-office search timed out."
+    except Exception as exc:
+        log.error("Box-office search failed for %r: %s", search_query, exc)
+        return f"❌ Box-office search failed: {exc}"
+
+    if search_results.startswith("❌"):
+        return search_results
+
+    release_requirement = (
+        "Include notable new releases from this window in either the table or a follow-up bullet section."
+        if include_new_releases
+        else "Focus on financial performance only."
+    )
+    format_instructions = _report_format_instructions(
+        str(inferred["output_style"]),
+        str(inferred["emoji_level"]),
+    )
+
+    prompt = (
+        "Create a Discord-ready weekly box-office report.\n"
+        f"Time window: {timeframe_label}.\n"
+        f"{release_requirement}\n"
+        f"{format_instructions}\n\n"
+        "Output requirements:\n"
+        "1. Use GitHub-flavored markdown.\n"
+        "2. Include at least one markdown table.\n"
+        "3. Include financial columns with available values: Weekend Gross, Domestic Total, Worldwide Total.\n"
+        "4. Use N/A explicitly for unavailable values.\n"
+        "5. Include a short section named 'Sources'.\n"
+        "6. Keep the response concise and readable in Discord.\n\n"
+        f"Search results:\n{search_results[:14000]}"
+    )
+
+    try:
+        from llm import chat as llm_chat
+
+        response, _, model_used = await asyncio.wait_for(
+            llm_chat(
+                user_message=prompt,
+                model_preference="gemini",
+                tool_declarations=[],
+            ),
+            timeout=90,
+        )
+    except asyncio.TimeoutError:
+        return "❌ Box-office report timed out while generating."
+    except Exception as exc:
+        log.error("Box-office report generation failed: %s", exc)
+        return f"❌ Box-office report failed: {exc}"
+
+    report = _append_report_guardrails(
+        response.strip(),
+        timeframe_label=timeframe_label,
+        require_table=True,
+    )
+    return f"{report}\n\n_via {model_used}_"
+
+
 REPORTING_SKILLS = {
     "generate_channel_recap_report": generate_channel_recap_report,
     "generate_sports_watch_report": generate_sports_watch_report,
+    "generate_box_office_report": generate_box_office_report,
 }

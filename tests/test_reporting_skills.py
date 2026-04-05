@@ -48,6 +48,37 @@ def test_build_sports_watch_query_assembles_structured_inputs():
     assert "next 5 days" in query
 
 
+def test_infer_sports_request_extracts_slots_from_plain_english():
+    slots = mod.infer_sports_request(
+        "What games does Maryland have in the next 5 days in men's division 1 lacrosse?"
+    )
+    assert slots["team"] == "Maryland"
+    assert slots["sport"] == "lacrosse"
+    assert slots["league"] == "NCAA Division 1"
+    assert slots["days"] == 5
+
+
+def test_infer_report_request_extracts_format_and_window_hints():
+    slots = mod.infer_report_request(
+        "Give me the box office financials and new releases for the last week in table form with emojis."
+    )
+    assert slots["topic"] == "box office"
+    assert slots["days"] == 7
+    assert slots["output_style"] == "discord-table-detailed"
+    assert slots["emoji_level"] in {"light", "rich"}
+
+
+def test_append_report_guardrails_adds_required_sections():
+    report = mod._append_report_guardrails(
+        "## Weekly box office recap\n\nTop titles moved this week.",
+        timeframe_label="last 7 day(s)",
+    )
+    assert "Time window: last 7 day(s)" in report
+    assert "| Item | Metric | Value | Notes |" in report
+    assert "Sources" in report
+    assert "N/A" in report
+
+
 def test_format_message_history_skips_bot_messages_and_keeps_attachments():
     transcript = mod._format_message_history(
         [

@@ -52,6 +52,9 @@ _LIVE_ACTION_PATTERN = re.compile(
     r"|\b(recap|summari[sz]e|summary|wrap[\s-]?up)\b.{0,40}\b(channel|thread|discord|conversation|meeting|week)\b"
     # Sports schedules / watch guides / current game listings
     r"|\b(game|games|matchup|matchups|watch|stream(?:ing)?|tv\s+schedule)\b.{0,60}\b(upcoming|this\s+week|today|tomorrow|weekend|espn|ncaa|lacrosse|where\s+to\s+watch)\b"
+    # Weekly report / box office asks
+    r"|\b(report|recap|summary)\b.{0,60}\b(box\s+office|new\s+releases?|financials?|weekend\s+gross|domestic|worldwide)\b"
+    r"|\b(box\s+office|new\s+releases?)\b.{0,60}\b(last\s+week|past\s+week|last\s+\d+\s+days|table|emoji)\b"
     # Diagnostics / jobs
     r"|\brun\b.{0,20}\b(speed\s+test|status\s+report|ping|backup|diagnostic)\b"
     r"|\bping\s+[\w.]+"

@@ -9,7 +9,7 @@ from typing import Any
 
 from config import cfg
 from src.http_session import SessionManager
-from src.tool_health import ToolHealthMonitor
+from src.tool_health import circuit_breaker, tool_health
 
 ALPHAVANTAGE_BASE_URL = "https://www.alphavantage.co/query"
 
@@ -63,7 +63,7 @@ async def get_stock_info(symbol: str) -> dict[str, Any]:
     async with SessionManager.get_session() as session:
         async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("alphavantage", "Rate limit exceeded")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
@@ -71,7 +71,7 @@ async def get_stock_info(symbol: str) -> dict[str, Any]:
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("alphavantage", f"HTTP {resp.status}")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": f"Alpha Vantage error: {error_text}",
@@ -81,7 +81,7 @@ async def get_stock_info(symbol: str) -> dict[str, Any]:
 
             # Check for API limit message
             if "Note" in data or "Information" in data:
-                ToolHealthMonitor.record_failure("alphavantage", "Rate limit reached")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day. Try again tomorrow.",
@@ -94,7 +94,7 @@ async def get_stock_info(symbol: str) -> dict[str, Any]:
                     "message": f"No data found for symbol: {symbol}",
                 }
 
-            ToolHealthMonitor.record_success("alphavantage")
+            tool_health.record("alphavantage", success=True)
 
             return {
                 "status": "ok",
@@ -167,7 +167,7 @@ async def get_market_news(topics: str | None = None, tickers: str | None = None,
     async with SessionManager.get_session() as session:
         async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("alphavantage", "Rate limit exceeded")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
@@ -176,7 +176,7 @@ async def get_market_news(topics: str | None = None, tickers: str | None = None,
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("alphavantage", f"HTTP {resp.status}")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": f"Alpha Vantage error: {error_text}",
@@ -186,14 +186,14 @@ async def get_market_news(topics: str | None = None, tickers: str | None = None,
             data = await resp.json()
 
             if "Note" in data or "Information" in data:
-                ToolHealthMonitor.record_failure("alphavantage", "Rate limit reached")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day.",
                     "feed": [],
                 }
 
-            ToolHealthMonitor.record_success("alphavantage")
+            tool_health.record("alphavantage", success=True)
 
             articles = []
             for item in data.get("feed", []):
@@ -272,7 +272,7 @@ async def get_sentiment_analysis(tickers: str) -> dict[str, Any]:
     async with SessionManager.get_session() as session:
         async with session.get(ALPHAVANTAGE_BASE_URL, params=params, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("alphavantage", "Rate limit exceeded")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": "Alpha Vantage rate limit exceeded. Free tier: 25 requests/day.",
@@ -280,7 +280,7 @@ async def get_sentiment_analysis(tickers: str) -> dict[str, Any]:
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("alphavantage", f"HTTP {resp.status}")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": f"Alpha Vantage error: {error_text}",
@@ -289,13 +289,13 @@ async def get_sentiment_analysis(tickers: str) -> dict[str, Any]:
             data = await resp.json()
 
             if "Note" in data or "Information" in data:
-                ToolHealthMonitor.record_failure("alphavantage", "Rate limit reached")
+                tool_health.record("alphavantage", success=False)
                 return {
                     "status": "error",
                     "message": "Alpha Vantage rate limit reached. Free tier: 25 requests/day.",
                 }
 
-            ToolHealthMonitor.record_success("alphavantage")
+            tool_health.record("alphavantage", success=True)
 
             # Aggregate sentiment by ticker
             ticker_list = [t.strip() for t in tickers.split(",")]

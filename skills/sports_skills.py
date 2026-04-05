@@ -10,7 +10,7 @@ from typing import Any
 
 from config import cfg
 from src.http_session import SessionManager
-from src.tool_health import ToolHealthMonitor
+from src.tool_health import circuit_breaker, tool_health
 
 APISPORTS_BASE_URL = "https://v3.api-sports.io"
 
@@ -63,7 +63,7 @@ async def get_nba_scores(date: str | None = None, team_id: int | None = None) ->
     async with SessionManager.get_session() as session:
         async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("apisports", "Rate limit exceeded")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": "API-Sports rate limit exceeded. Free tier: 100 requests/day.",
@@ -72,7 +72,7 @@ async def get_nba_scores(date: str | None = None, team_id: int | None = None) ->
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("apisports", f"HTTP {resp.status}")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": f"API-Sports error: {error_text}",
@@ -80,7 +80,7 @@ async def get_nba_scores(date: str | None = None, team_id: int | None = None) ->
                 }
 
             data = await resp.json()
-            ToolHealthMonitor.record_success("apisports")
+            tool_health.record("apisports", success=True)
 
             # Simplify response
             games = []
@@ -142,7 +142,7 @@ async def get_nfl_scores(date: str | None = None, team_id: int | None = None) ->
     async with SessionManager.get_session() as session:
         async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("apisports", "Rate limit exceeded")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": "API-Sports rate limit exceeded. Free tier: 100 requests/day.",
@@ -151,7 +151,7 @@ async def get_nfl_scores(date: str | None = None, team_id: int | None = None) ->
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("apisports", f"HTTP {resp.status}")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": f"API-Sports error: {error_text}",
@@ -159,7 +159,7 @@ async def get_nfl_scores(date: str | None = None, team_id: int | None = None) ->
                 }
 
             data = await resp.json()
-            ToolHealthMonitor.record_success("apisports")
+            tool_health.record("apisports", success=True)
 
             # Simplify response
             games = []
@@ -249,7 +249,7 @@ async def get_team_standings(sport: str = "nba", league_id: int | None = None, s
     async with SessionManager.get_session() as session:
         async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("apisports", "Rate limit exceeded")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": "API-Sports rate limit exceeded. Free tier: 100 requests/day.",
@@ -258,7 +258,7 @@ async def get_team_standings(sport: str = "nba", league_id: int | None = None, s
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("apisports", f"HTTP {resp.status}")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": f"API-Sports error: {error_text}",
@@ -266,7 +266,7 @@ async def get_team_standings(sport: str = "nba", league_id: int | None = None, s
                 }
 
             data = await resp.json()
-            ToolHealthMonitor.record_success("apisports")
+            tool_health.record("apisports", success=True)
 
             # Response format varies by sport, normalize it
             standings = []
@@ -357,7 +357,7 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
     async with SessionManager.get_session() as session:
         async with session.get(url, params=params, headers=headers, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("apisports", "Rate limit exceeded")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": "API-Sports rate limit exceeded. Free tier: 100 requests/day.",
@@ -366,7 +366,7 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("apisports", f"HTTP {resp.status}")
+                tool_health.record("apisports", success=False)
                 return {
                     "status": "error",
                     "message": f"API-Sports error: {error_text}",
@@ -374,7 +374,7 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
                 }
 
             data = await resp.json()
-            ToolHealthMonitor.record_success("apisports")
+            tool_health.record("apisports", success=True)
 
             games = []
             for game in data.get("response", []):

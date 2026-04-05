@@ -9,6 +9,7 @@ from typing import Any
 log = logging.getLogger("openclaw.tool_router")
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9+._-]*")
+_DAY_WINDOW_RE = re.compile(r"\b(?:last|past|next)\s+(\d{1,2})\s+days?\b")
 
 _ALWAYS_AVAILABLE = {
     "search_web",
@@ -72,6 +73,15 @@ _INTENT_HINTS: dict[str, tuple[str, ...]] = {
         "check my inbox",
         "read my inbox",
         "recent emails",
+    ),
+    "generate_box_office_report": (
+        "box office",
+        "new releases",
+        "film releases",
+        "movie financials",
+        "weekend gross",
+        "domestic total",
+        "worldwide total",
     ),
 }
 
@@ -146,7 +156,40 @@ _WORKFLOW_BUNDLES: tuple[dict[str, Any], ...] = (
         ),
         "tools": ("read_inbox", "search_emails", "send_email"),
     },
+    {
+        "name": "weekly-market-report",
+        "phrases": (
+            "box office",
+            "new releases",
+            "movie financials",
+            "film financials",
+            "weekend gross",
+            "domestic total",
+            "worldwide total",
+        ),
+        "token_groups": (
+            {"box", "office", "release", "releases", "movie", "film"},
+            {"gross", "financials", "financial", "revenue", "weekend", "domestic", "worldwide"},
+        ),
+        "tools": ("generate_box_office_report", "search_web", "browse_url"),
+    },
 )
+
+_SERVICE_NAMES = (
+    "plex",
+    "sonarr",
+    "radarr",
+    "lidarr",
+    "prowlarr",
+    "sabnzbd",
+    "qbittorrent",
+    "overseerr",
+    "tautulli",
+    "bazarr",
+)
+
+_SPORT_TERMS = ("lacrosse", "basketball", "baseball", "football", "soccer", "hockey")
+_LEAGUE_TERMS = ("ncaa division 1", "division 1", "ncaa", "nba", "wnba", "nfl", "mlb", "nhl", "mls")
 
 
 def _tokenize(text: str) -> set[str]:
@@ -216,6 +259,78 @@ def _matching_workflow_bundles(message_lower: str, message_tokens: set[str]) -> 
     return matches
 
 
+def _extract_request_hints(message: str, message_lower: str, message_tokens: set[str]) -> dict[str, Any]:
+    hints: dict[str, Any] = {}
+
+    services = [name for name in _SERVICE_NAMES if name in message_tokens]
+    if services:
+        hints["services"] = services
+
+    for phrase, days in (
+        ("today", 1),
+        ("tomorrow", 2),
+        ("this weekend", 3),
+        ("this week", 7),
+        ("next week", 7),
+        ("last week", 7),
+    ):
+        if phrase in message_lower:
+            hints["days"] = days
+            hints["timeframe"] = phrase
+            break
+
+    explicit_days = _DAY_WINDOW_RE.search(message_lower)
+    if explicit_days:
+        hints["days"] = max(1, min(int(explicit_days.group(1)), 30))
+        hints["timeframe"] = explicit_days.group(0)
+
+    for sport in _SPORT_TERMS:
+        if sport in message_tokens:
+            hints["sport"] = sport
+            break
+
+    for league in _LEAGUE_TERMS:
+        if league in message_lower:
+            hints["league"] = league.title()
+            break
+
+    team_match = re.search(r"\bdoes\s+([A-Z][A-Za-z0-9&.\- ]{1,30}?)\s+(?:have|play|face)\b", message)
+    if not team_match:
+        team_match = re.search(
+            r"\bfor\s+([A-Z][A-Za-z0-9&.\- ]{1,30}?)(?:\s+in\b|\s+this\b|\s+next\b|$)",
+            message,
+        )
+    if team_match:
+        hints["team"] = " ".join(team_match.group(1).split())
+
+    if "box office" in message_lower:
+        hints["report_topic"] = "box-office"
+    elif "recap" in message_lower:
+        hints["report_topic"] = "recap"
+    elif "sports" in message_lower:
+        hints["report_topic"] = "sports"
+
+    if "table" in message_lower or "markdown" in message_lower:
+        hints["output_style"] = "table"
+    elif "bullet" in message_lower:
+        hints["output_style"] = "bullet"
+
+    if "emoji" in message_lower:
+        if any(term in message_lower for term in ("more emoji", "rich emoji", "use emojis")):
+            hints["emoji_level"] = "rich"
+        elif any(term in message_lower for term in ("no emoji", "without emoji")):
+            hints["emoji_level"] = "none"
+        else:
+            hints["emoji_level"] = "light"
+
+    if any(term in message_lower for term in ("quick", "brief", "short")):
+        hints["detail_level"] = "brief"
+    elif any(term in message_lower for term in ("detailed", "deep", "comprehensive")):
+        hints["detail_level"] = "detailed"
+
+    return hints
+
+
 def route_tool_declarations(
     message: str,
     declarations: list[dict[str, Any]],
@@ -236,6 +351,7 @@ def route_tool_declarations(
 
     message_tokens = _tokenize(message_lower)
     matched_bundles = _matching_workflow_bundles(message_lower, message_tokens)
+    request_hints = _extract_request_hints(message, message_lower, message_tokens)
     bundled_tool_names = {
         str(tool_name)
         for bundle in matched_bundles
@@ -262,6 +378,7 @@ def route_tool_declarations(
             "selected": [name for _, name, _ in scored[: min(12, len(scored))]],
             "top_score": top_score,
             "bundles": [str(bundle.get("name", "")) for bundle in matched_bundles],
+            "hints": request_hints,
         }
 
     selected: list[dict[str, Any]] = []
@@ -294,4 +411,5 @@ def route_tool_declarations(
         "selected": [str(d.get("name", "")) for d in selected],
         "top_score": top_score,
         "bundles": [str(bundle.get("name", "")) for bundle in matched_bundles],
+        "hints": request_hints,
     }

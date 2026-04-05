@@ -127,6 +127,49 @@ async def _select_model_for_message(
     return _build_model_for_tools(routed_declarations), route_info
 
 
+def _apply_route_hints(model_message: str, route_info: dict[str, Any]) -> str:
+    if route_info.get("strategy") != "shortlist":
+        return model_message
+
+    bundles = [str(item) for item in (route_info.get("bundles") or []) if item]
+    hints = route_info.get("hints") or {}
+    if not bundles and not hints:
+        return model_message
+
+    lines: list[str] = []
+    if bundles:
+        lines.append(f"- Likely workflow: {', '.join(bundles)}")
+
+    for key in (
+        "services",
+        "sport",
+        "league",
+        "team",
+        "days",
+        "timeframe",
+        "report_topic",
+        "output_style",
+        "emoji_level",
+        "detail_level",
+    ):
+        value = hints.get(key)
+        if not value:
+            continue
+        if isinstance(value, list):
+            value = ", ".join(str(item) for item in value)
+        lines.append(f"- {key.replace('_', ' ').title()}: {value}")
+
+    if not lines:
+        return model_message
+
+    hint_block = (
+        "Routing hints inferred from the user's wording:\n"
+        + "\n".join(lines)
+        + "\nUse these hints when choosing tools and parameters, but do not contradict the user's actual request.\n\n"
+    )
+    return hint_block + model_message
+
+
 async def chat_stream(
     user_message: str,
     history: list[dict] | None = None,
@@ -284,8 +327,11 @@ async def chat_stream(
         _routing_notes.append(
             "Tool shortlist: " + ", ".join(route_info.get("selected", [])[:6])
         )
+        if route_info.get("bundles"):
+            _routing_notes.append("Intent bundle: " + ", ".join(route_info.get("bundles", [])[:3]))
     elif route_info.get("strategy") == "no-tools":
         _routing_notes.append("Tool use disabled for this internal request")
+    model_message = _apply_route_hints(model_message, route_info)
     model_name = model.model_name if hasattr(model, "model_name") else "unknown"
 
     text, updated_history, model_name = await _gemini_chat(
@@ -516,11 +562,12 @@ async def chat(
                 history,
                 MODEL_NAME,
             )
-        model, _ = await _select_model_for_message(
+        model, route_info = await _select_model_for_message(
             user_message,
             tool_declarations=tool_declarations,
             label="LLM",
         )
+        model_message = _apply_route_hints(model_message, route_info)
         text, updated_history, model_name = await _gemini_chat(
             model_message, history, model,
             on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
@@ -556,11 +603,12 @@ async def chat(
             MODEL_NAME,
         )
 
-    model, _ = await _select_model_for_message(
+    model, route_info = await _select_model_for_message(
         user_message,
         tool_declarations=tool_declarations,
         label="LLM",
     )
+    model_message = _apply_route_hints(model_message, route_info)
     text, updated_history, model_name = await _gemini_chat(
         model_message,
         history,

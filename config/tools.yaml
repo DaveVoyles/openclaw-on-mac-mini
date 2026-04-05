@@ -1511,6 +1511,40 @@
       include_watch_info:
         type: boolean
         description: Include TV or streaming details when available (default true)
+- name: generate_box_office_report
+  description: >-
+    Create a weekly box-office financial report with new-release context and a
+    Discord-friendly markdown table. Use when the user asks for box office
+    totals, weekend gross leaders, recent film releases, or movie financial
+    summaries over a recent time window.
+  category: Recaps & Reports
+  aliases:
+    - box office report
+    - weekly box office
+    - movie financial report
+    - new releases report
+    - weekend box office
+  examples:
+    - Give me the box office financials and a bit of information about the new releases for the last week
+    - Build a markdown table with this week's box office leaders and use emojis
+  parameters:
+    type: object
+    properties:
+      query:
+        type: string
+        description: Optional freeform request text for box office or release context
+      days:
+        type: integer
+        description: Number of days to look back (1-30, default 7)
+      output_style:
+        type: string
+        description: "Formatting profile: 'discord-table-detailed', 'discord-table-brief', or 'discord-recap-hybrid'"
+      emoji_level:
+        type: string
+        description: "Emoji intensity: 'none', 'light', or 'rich' (default light)"
+      include_new_releases:
+        type: boolean
+        description: Include new release notes along with financial table output (default true)
 - name: dream_now
   description: >-
     Run a cognitive dream cycle to consolidate memories, score importance, and

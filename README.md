@@ -42,7 +42,7 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 - `/ask <question>` — AI-powered natural language queries
 - **Hybrid routing**: simple/conversational queries → Ollama (local, free, unlimited); tool-requiring queries → Gemini 2.5 Flash
-- **Intent-based tool shortlisting**: `/ask` narrows the skill set per prompt, so you can describe what you want in plain English instead of memorizing command names
+- **Intent-based tool shortlisting + request hints**: `/ask` narrows the skill set per prompt and now infers cues like services, time windows, sports/watch-guide intent, calendar asks, and inbox requests from plain English
 - **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
 - Conversation memory — multi-turn context per user/channel (30 min TTL)
@@ -775,9 +775,12 @@ Instead of memorizing individual commands, just describe what you want:
 /ask "which services aren't running?"
 /ask "give me a recap of this channel from the last week"
 /ask "look at this week's upcoming men's division 1 college lacrosse games and make a watch table"
+/ask "give me the box office financials and new releases for the last week in table form with emojis"
+/ask "what's on my calendar tomorrow?"
+/ask "search my inbox for ESPN emails and send me a short recap"
 ```
 
-OpenClaw now shortlists the most relevant skills for each request, chains tool calls when needed, and gives you a synthesized answer.
+OpenClaw now shortlists the most relevant skills for each request, adds lightweight intent hints for things like dates and service names, chains tool calls when needed, and gives you a synthesized answer.
 
 #### 2. Schedule your health checks
 

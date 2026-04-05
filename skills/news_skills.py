@@ -10,7 +10,7 @@ from typing import Any
 
 from config import cfg
 from src.http_session import SessionManager
-from src.tool_health import ToolHealthMonitor
+from src.tool_health import circuit_breaker, tool_health
 
 NEWS_API_BASE_URL = "https://newsapi.org/v2"
 NEWS_CACHE_TTL = 3600  # 1 hour cache for free tier
@@ -84,7 +84,7 @@ async def search_news(
         async with session.get(url, params=params, timeout=30) as resp:
             if resp.status == 429:
                 # Rate limit hit
-                ToolHealthMonitor.record_failure("newsapi", "Rate limit exceeded (100 req/day)")
+                tool_health.record("newsapi", success=False)
                 return {
                     "status": "error",
                     "message": "NewsAPI rate limit exceeded. Free tier: 100 requests/day.",
@@ -93,7 +93,7 @@ async def search_news(
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("newsapi", f"HTTP {resp.status}")
+                tool_health.record("newsapi", success=False)
                 return {
                     "status": "error",
                     "message": f"NewsAPI error: {error_text}",
@@ -101,7 +101,7 @@ async def search_news(
                 }
 
             data = await resp.json()
-            ToolHealthMonitor.record_success("newsapi")
+            tool_health.record("newsapi", success=True)
             return data
 
 
@@ -156,7 +156,7 @@ async def top_headlines(
     async with SessionManager.get_session() as session:
         async with session.get(url, params=params, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("newsapi", "Rate limit exceeded")
+                tool_health.record("newsapi", success=False)
                 return {
                     "status": "error",
                     "message": "NewsAPI rate limit exceeded. Free tier: 100 requests/day.",
@@ -165,7 +165,7 @@ async def top_headlines(
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("newsapi", f"HTTP {resp.status}")
+                tool_health.record("newsapi", success=False)
                 return {
                     "status": "error",
                     "message": f"NewsAPI error: {error_text}",
@@ -173,7 +173,7 @@ async def top_headlines(
                 }
 
             data = await resp.json()
-            ToolHealthMonitor.record_success("newsapi")
+            tool_health.record("newsapi", success=True)
             return data
 
 
@@ -225,7 +225,7 @@ async def news_by_source(
     async with SessionManager.get_session() as session:
         async with session.get(url, params=params, timeout=30) as resp:
             if resp.status == 429:
-                ToolHealthMonitor.record_failure("newsapi", "Rate limit exceeded")
+                tool_health.record("newsapi", success=False)
                 return {
                     "status": "error",
                     "message": "NewsAPI rate limit exceeded. Free tier: 100 requests/day.",
@@ -234,7 +234,7 @@ async def news_by_source(
 
             if resp.status != 200:
                 error_text = await resp.text()
-                ToolHealthMonitor.record_failure("newsapi", f"HTTP {resp.status}")
+                tool_health.record("newsapi", success=False)
                 return {
                     "status": "error",
                     "message": f"NewsAPI error: {error_text}",
@@ -242,7 +242,7 @@ async def news_by_source(
                 }
 
             data = await resp.json()
-            ToolHealthMonitor.record_success("newsapi")
+            tool_health.record("newsapi", success=True)
             return data
 
 
