@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/spending.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.004, 0.005, 0.01, 0.95, 0.99, 100.0, 100, 200, 500, 1000, 1500, 1000000, '**⚡ Gemini LLM:**', '**💰 API Spending**', '**🔥 Firecrawl:**', '.tmp', '0.10', '0.40', '30.00', 'GEMINI_BUDGET_LIMIT', 'No daily data yet.', 'SPENDING_FILE', 'avg_ms', 'budget_limit', 'calls', 'cost_usd', 'count', 'daily', 'daily_limit', 'daily_pct', 'daily_remaining', 'daily_used', 'firecrawl', 'first_call', 'gemini', 'input_tokens', 'last_10', 'last_call', 'model', 'monthly', 'monthly_limit', 'monthly_pct', 'monthly_remaining', 'monthly_used', 'ms', 'openclaw.spending', 'output_tokens', 'p50_ms', 'p95_ms', 'p99_ms', 'pages', 'pages_scraped', 'perplexity', 'scrape', 'sonar', 'sonar-pro', 'tavily', 'total_cost_usd', 'total_input_tokens', 'total_output_tokens', 'ts', 'unknown', 'w', '█', '░']

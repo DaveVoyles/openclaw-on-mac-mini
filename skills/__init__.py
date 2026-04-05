@@ -506,11 +506,13 @@ from calendar_skills import CALENDAR_SKILLS
 from email_skills import EMAIL_SKILLS
 from nas import NAS_SKILLS
 from overseerr import OVERSEERR_SKILLS
+from reporting_skills import REPORTING_SKILLS
 
 SKILLS.update(OVERSEERR_SKILLS)
 SKILLS.update(NAS_SKILLS)
 SKILLS.update(EMAIL_SKILLS)
 SKILLS.update(CALENDAR_SKILLS)
+SKILLS.update(REPORTING_SKILLS)
 
 # Add Maton API Gateway skill (managed OAuth proxy to 100+ APIs)
 from gateway import GATEWAY_SKILLS

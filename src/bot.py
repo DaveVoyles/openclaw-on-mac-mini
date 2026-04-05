@@ -50,6 +50,7 @@ from permissions import (  # noqa: F401 — re-exported for backward compat
     require_auth,
 )
 from qmd import remember_fact
+from runtime_state import set_bot
 from scheduler import scheduler
 from skills import SKILLS
 from trace_context import setup_trace_logging
@@ -203,6 +204,7 @@ class OpenClawBot(commands.Bot):
     async def on_ready(self) -> None:
         log.info("OpenClaw online as %s (ID %s)", self.user, self.user.id)
         audit_log(None, "bot_ready", f"Logged in as {self.user}")
+        set_bot(self)
 
         _load_channel_config()
 

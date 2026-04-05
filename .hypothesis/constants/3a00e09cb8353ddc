@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/llm_client.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.3, 'TOOLS_CONFIG', 'array', 'boolean', 'config', 'config/tools.yaml', 'description', 'integer', 'max_output_tokens', 'name', 'number', 'object', 'openclaw.llm.client', 'parameters', 'prompt_token_count', 'prompts', 'properties', 'required', 'string', 'system.txt', 'system_instruction', 'temperature', 'thinking_config', 'tools', 'tools.yaml', 'type']

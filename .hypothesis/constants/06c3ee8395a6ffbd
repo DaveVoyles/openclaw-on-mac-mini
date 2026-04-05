@@ -1,0 +1,4 @@
+# file: /Users/davevoyles/openclaw/src/http_session.py
+# hypothesis_version: 6.151.10
+
+['__weakref__', '_connector_kwargs', '_name', '_session', '_timeout', 'close %s: %s', 'limit', 'limit_per_host', 'openclaw.http', 'ttl_dns_cache']

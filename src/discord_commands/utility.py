@@ -96,6 +96,8 @@ def _register_utility_commands(bot: commands.Bot) -> None:
                 ("`/websearch <query>`", "Search the live web"),
                 ("`/browse <url>`", "Fetch and read a web page"),
                 ("`/research <topic>`", "Deep multi-source research"),
+                ("`/recap weekly`", "Summarize the current Discord channel or thread"),
+                ("`/sports upcoming`", "Create a sports watch guide with table output"),
                 ("`/analyze-image <image>`", "Analyze an image with Gemini Vision"),
                 ("`/analyze-file <file>`", "Analyze a document/PDF with AI"),
             ],
