@@ -5,7 +5,6 @@ Free tier: 100 requests/day
 Rate limit handled via tool circuit breaker
 """
 
-import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 

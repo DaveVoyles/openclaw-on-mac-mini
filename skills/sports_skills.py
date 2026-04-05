@@ -337,17 +337,17 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
         }
 
     config = sport_config[sport.lower()]
-    
+
     # Default to next 7 days if no dates specified
     if not date_from:
         date_from = datetime.now().strftime("%Y-%m-%d")
-    
+
     params = {
         "league": config["league"],
         "season": config["season"],
         "from": date_from,
     }
-    
+
     if date_to:
         params["to"] = date_to
 
@@ -380,11 +380,11 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
             for game in data.get("response", []):
                 home_team = game["teams"]["home"]["name"]
                 away_team = game["teams"]["away"]["name"]
-                
+
                 # Filter by team if specified
                 if team_name and team_name.lower() not in home_team.lower() and team_name.lower() not in away_team.lower():
                     continue
-                
+
                 games.append({
                     "date": game["date"],
                     "home": home_team,

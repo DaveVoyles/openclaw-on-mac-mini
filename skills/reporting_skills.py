@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import re
 from typing import Any, Iterable
 
 import discord
@@ -25,6 +26,31 @@ _RECAP_STYLES = {
     ),
 }
 
+_SPORT_KEYWORDS = {
+    "lacrosse": "lacrosse",
+    "basketball": "basketball",
+    "baseball": "baseball",
+    "football": "football",
+    "soccer": "soccer",
+    "hockey": "hockey",
+}
+
+_LEAGUE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b(?:(?:ncaa|college|men'?s|women'?s)\s+)?division\s*1\b|\bd1\b", re.IGNORECASE), "NCAA Division 1"),
+    (re.compile(r"\bnba\b", re.IGNORECASE), "NBA"),
+    (re.compile(r"\bwnba\b", re.IGNORECASE), "WNBA"),
+    (re.compile(r"\bnfl\b", re.IGNORECASE), "NFL"),
+    (re.compile(r"\bmlb\b", re.IGNORECASE), "MLB"),
+    (re.compile(r"\bnhl\b", re.IGNORECASE), "NHL"),
+    (re.compile(r"\bmls\b", re.IGNORECASE), "MLS"),
+)
+
+_TEAM_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\bdoes\s+([A-Z][A-Za-z0-9&.\- ]{1,30}?)\s+(?:have|play|face)\b"),
+    re.compile(r"\bfor\s+([A-Z][A-Za-z0-9&.\- ]{1,30}?)(?:\s+in\b|\s+this\b|\s+next\b|$)"),
+    re.compile(r"\babout\s+([A-Z][A-Za-z0-9&.\- ]{1,30}?)(?:\s+in\b|\s+this\b|\s+next\b|$)"),
+)
+
 
 def _normalize_style(style: str) -> str:
     value = (style or "highlights").strip().lower()
@@ -36,6 +62,91 @@ def _clean_text(text: str, limit: int = 280) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 1] + "…"
+
+
+def _extract_day_window(
+    text: str,
+    *,
+    default: int,
+    minimum: int,
+    maximum: int,
+    direction: str,
+) -> int:
+    lowered = (text or "").lower()
+
+    if direction == "future":
+        match = re.search(r"\bnext\s+(\d{1,2})\s+days?\b", lowered)
+        if match:
+            return max(minimum, min(int(match.group(1)), maximum))
+        if "tomorrow" in lowered:
+            return max(minimum, min(2, maximum))
+        if "this weekend" in lowered or "weekend" in lowered:
+            return max(minimum, min(3, maximum))
+        if "next week" in lowered or "this week" in lowered:
+            return max(minimum, min(7, maximum))
+    else:
+        match = re.search(r"\b(?:last|past)\s+(\d{1,2})\s+days?\b", lowered)
+        if match:
+            return max(minimum, min(int(match.group(1)), maximum))
+        if "yesterday" in lowered or "today" in lowered:
+            return max(minimum, min(1, maximum))
+        if "last week" in lowered or "this week" in lowered:
+            return max(minimum, min(7, maximum))
+        if "last month" in lowered:
+            return max(minimum, min(30, maximum))
+
+    return max(minimum, min(int(default), maximum))
+
+
+def infer_sports_request(
+    query: str = "",
+    *,
+    sport: str = "",
+    league: str = "",
+    team: str = "",
+    days: int = 7,
+) -> dict[str, Any]:
+    text = (query or "").strip()
+    lowered = text.lower()
+
+    detected_sport = sport.strip()
+    if not detected_sport:
+        for needle, normalized in _SPORT_KEYWORDS.items():
+            if needle in lowered:
+                detected_sport = normalized
+                break
+
+    detected_league = league.strip()
+    if not detected_league:
+        for pattern, normalized in _LEAGUE_PATTERNS:
+            if pattern.search(text):
+                detected_league = normalized
+                break
+
+    detected_team = team.strip()
+    if text and not detected_team:
+        for pattern in _TEAM_PATTERNS:
+            match = pattern.search(text)
+            if match:
+                candidate = " ".join(match.group(1).split())
+                if candidate and candidate.lower() not in {"this week", "next week"}:
+                    detected_team = candidate
+                    break
+
+    detected_days = _extract_day_window(
+        text,
+        default=days,
+        minimum=1,
+        maximum=14,
+        direction="future",
+    )
+
+    return {
+        "sport": detected_sport,
+        "league": detected_league,
+        "team": detected_team,
+        "days": detected_days,
+    }
 
 
 def _format_message_history(messages: Iterable[Any], max_chars: int = 12000) -> str:
@@ -214,12 +325,19 @@ async def generate_sports_watch_report(
     include_watch_info: bool = True,
 ) -> str:
     """Create a structured sports watch guide from web search results."""
-    lookahead = max(1, min(int(days), 14))
-    base_query = build_sports_watch_query(
+    inferred = infer_sports_request(
         query=query,
         sport=sport,
         league=league,
         team=team,
+        days=days,
+    )
+    lookahead = max(1, min(int(inferred["days"]), 14))
+    base_query = build_sports_watch_query(
+        query=query,
+        sport=str(inferred["sport"]),
+        league=str(inferred["league"]),
+        team=str(inferred["team"]),
         days=lookahead,
     )
     search_query = base_query
@@ -239,7 +357,17 @@ async def generate_sports_watch_report(
     if search_results.startswith("❌"):
         return search_results
 
-    subject = query.strip() or " ".join(bit for bit in (team, league, sport) if bit).strip() or "Upcoming games"
+    subject = (
+        query.strip()
+        or " ".join(
+            bit for bit in (
+                str(inferred["team"]),
+                str(inferred["league"]),
+                str(inferred["sport"]),
+            ) if bit
+        ).strip()
+        or "Upcoming games"
+    )
     watch_instruction = (
         "Include a Watch column with TV channel, streaming service, or 'TBD' when not available."
         if include_watch_info

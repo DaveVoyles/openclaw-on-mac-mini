@@ -5,7 +5,6 @@ Free tier: 25 requests/day
 Covers: stock data, market news, sentiment analysis, financial indicators
 """
 
-from datetime import datetime
 from typing import Any
 
 from config import cfg
