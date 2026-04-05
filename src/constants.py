@@ -5,18 +5,32 @@ import os
 # ---------------------------------------------------------------------------
 # Discord embed limits (chars)
 # ---------------------------------------------------------------------------
-EMBED_DESC_LIMIT = 4000         # Discord max is 4096; leave headroom
-EMBED_SPLIT_LIMIT = 3800        # Max chars per chunk when splitting long responses
-EMBED_FIELD_LIMIT = 1024        # Discord embed field value max
-EMBED_PROMPT_LIMIT = 3500       # Truncation limit for text stuffed into an LLM prompt
+DISCORD_MESSAGE_LIMIT = 2000     # Discord max message length
+EMBED_DESC_LIMIT = 4000          # Discord max is 4096; leave headroom
+EMBED_SPLIT_LIMIT = 3800         # Max chars per chunk when splitting long responses
+EMBED_FIELD_LIMIT = 1024         # Discord embed field value max
+EMBED_PROMPT_LIMIT = 3500        # Truncation limit for text stuffed into an LLM prompt
 
 # ---------------------------------------------------------------------------
 # Timing intervals (seconds)
 # ---------------------------------------------------------------------------
-PROACTIVE_SCAN_INTERVAL = 7200  # 2 hours between autonomous insight scans
-CLEANUP_INTERVAL = 300          # 5 minutes between expired-conversation sweeps
-AUDIT_FLUSH_INTERVAL = 30       # Seconds between audit-log buffer flushes
-BRIEFING_CHECK_INTERVAL = 60    # Seconds between morning-briefing schedule checks
+PROACTIVE_SCAN_INTERVAL = 7200   # 2 hours between autonomous insight scans
+CLEANUP_INTERVAL = 300           # 5 minutes between expired-conversation sweeps
+AUDIT_FLUSH_INTERVAL = 30        # Seconds between audit-log buffer flushes
+BRIEFING_CHECK_INTERVAL = 60     # Seconds between morning-briefing schedule checks
+HTTP_TIMEOUT_DEFAULT = 30        # Default HTTP request timeout
+APPROVAL_TTL = 300               # 5 minutes for approval requests to expire
+PLAN_TIMEOUT_DEFAULT = 600       # 10 minutes default plan execution timeout
+THREAD_ARCHIVE_SHORT = 60        # Short thread auto-archive time (1 hour)
+THREAD_ARCHIVE_LONG = 1440       # Long thread auto-archive time (24 hours)
+
+# ---------------------------------------------------------------------------
+# Content snippet limits (chars)
+# ---------------------------------------------------------------------------
+QUESTION_SNIPPET = 300           # Max chars from user question for context
+RESPONSE_SNIPPET = 500           # Max chars from response for context
+GOAL_SNIPPET = 60                # Max chars for goal display in lists
+FOLLOW_UP_MAX_LENGTH = 60        # Max chars per follow-up question
 
 # ---------------------------------------------------------------------------
 # Morning briefing schedule

@@ -150,8 +150,9 @@ from audit import _audit_buffer, audit_log  # noqa: E402
 # Shared HTTP session (reused for attachment downloads)
 # ---------------------------------------------------------------------------
 from http_session import SessionManager as _SessionManager
+from constants import HTTP_TIMEOUT_DEFAULT
 
-_bot_sessions = _SessionManager(timeout=30, name="bot")
+_bot_sessions = _SessionManager(timeout=HTTP_TIMEOUT_DEFAULT, name="bot")
 
 
 # ---------------------------------------------------------------------------
