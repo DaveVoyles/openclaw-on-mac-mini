@@ -45,6 +45,7 @@ _stats: dict[str, SearchStats] = {}
 
 
 def get_stats(provider: str) -> SearchStats:
+    """Get or create stats for a search provider (e.g., 'perplexity', 'tavily')."""
     if provider not in _stats:
         _stats[provider] = SearchStats(provider=provider)
     return _stats[provider]

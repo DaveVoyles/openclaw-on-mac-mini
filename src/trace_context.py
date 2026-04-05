@@ -22,10 +22,12 @@ class TraceContext:
 
 
 def get_trace() -> "TraceContext | None":
+    """Return the current trace context or None if not in a trace."""
     return _current_trace.get()
 
 
 def get_trace_id() -> str:
+    """Return the current trace ID or 'no-trace' if not in a trace context."""
     trace = _current_trace.get()
     return trace.trace_id if trace else "no-trace"
 
