@@ -786,7 +786,7 @@ async def ask_cmd(
     question: str,
     attachment: discord.Attachment | None = None,
     model: app_commands.Choice[str] | None = None,
-):
+) -> None:
     """Main user query handler — routes to Gemini (tool-capable) or Ollama (conversational)."""
 
     if is_emergency_stopped():
@@ -1432,7 +1432,8 @@ async def on_message(message: discord.Message) -> None:
 # ---------------------------------------------------------------------------
 
 
-def main():
+def main() -> None:
+    """Start the OpenClaw Discord bot."""
     # Run config validation and log results
     issues = cfg.validate()
     for issue in issues:
