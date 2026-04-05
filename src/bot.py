@@ -692,49 +692,10 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
         return []
 
 
-async def _handle_image_attachment(
-    attachment: discord.Attachment, question: str
-) -> str:
-    """Download and analyze an image attachment via Gemini vision."""
-    try:
-        session = await _bot_sessions.get()
-        async with session.get(
-            attachment.url, timeout=aiohttp.ClientTimeout(total=30)
-        ) as resp:
-            if resp.status == 200:
-                img_bytes = await resp.read()
-                mime = (attachment.content_type or "").split(";")[0].strip()
-                image_answer = await llm_analyze_image(img_bytes, mime, question)
-                return f"{question}\n\n[Attachment analysis: {image_answer}]"
-    except Exception as e:
-        log.warning("ask_cmd: failed to analyze image attachment: %s", e)
-    return question
-
-
-async def _handle_doc_attachment(
-    attachment: discord.Attachment, question: str
-) -> str:
-    """Download and analyze a document attachment via Gemini."""
-    try:
-        session = await _bot_sessions.get()
-        async with session.get(
-            attachment.url, timeout=aiohttp.ClientTimeout(total=30)
-        ) as resp:
-            if resp.status == 200:
-                raw = await resp.read()
-                try:
-                    doc_text = raw.decode("utf-8", errors="replace")[
-                        :ATTACHMENT_TEXT_MAX_CHARS
-                    ]
-                except Exception as exc:
-                    log.debug("Attachment text decode failed: %s", exc)
-                    doc_text = ""
-                if doc_text:
-                    return f"{question}\n\n[Attached file `{attachment.filename}`]:\n{doc_text}"
-    except Exception as e:
-        log.warning("ask_cmd: failed to read attachment: %s", e)
-    return question
-
+from bot_attachments import (
+    handle_image_attachment as _handle_image_attachment,
+    handle_doc_attachment as _handle_doc_attachment,
+)
 
 @bot.tree.command(name="ask", description="Ask OpenClaw anything (AI-powered with function calling)")
 @app_commands.describe(

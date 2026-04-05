@@ -121,7 +121,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         save_to_vault: bool = False,
         schedule_weekly: bool = False,
     ):
-        from obsidian_writer import save_to_vault
+        from obsidian_writer import save_to_vault as save_report_to_vault
         from reporting_skills import generate_channel_recap_report
 
         await interaction.response.defer()
@@ -141,7 +141,7 @@ class ReportsCog(commands.Cog, name="Reports"):
 
         if save_to_vault:
             channel_name = getattr(interaction.channel, "name", f"channel-{interaction.channel_id}")
-            vault_result = await save_to_vault(
+            vault_result = await save_report_to_vault(
                 title=f"Weekly Recap - {channel_name}",
                 content=report,
                 tags=["discord", "weekly-recap", channel_name],
@@ -198,7 +198,7 @@ class ReportsCog(commands.Cog, name="Reports"):
         save_to_vault: bool = False,
         schedule_weekly: bool = False,
     ):
-        from obsidian_writer import save_to_vault
+        from obsidian_writer import save_to_vault as save_report_to_vault
         from reporting_skills import build_sports_watch_query, generate_sports_watch_report
 
         await interaction.response.defer()
@@ -227,7 +227,7 @@ class ReportsCog(commands.Cog, name="Reports"):
 
         if save_to_vault:
             title = team.strip() or league.strip() or sport.strip() or "Sports Watch Guide"
-            vault_result = await save_to_vault(
+            vault_result = await save_report_to_vault(
                 title=f"{title} - watch guide",
                 content=report,
                 tags=["sports", "watch-guide"],
