@@ -962,6 +962,8 @@ class TestDefaultAskChannelMode:
         monkeypatch.setattr(discord_events_mod, "ALLOWED_USER_IDS", [42], raising=False)
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
         monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
+        monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", lambda: False)
+        monkeypatch.setattr(discord_events_mod, "llm_is_configured", lambda: True)
         discord_events_mod._MESSAGE_CONTENT_HINT_CACHE.clear()
 
         channel = MagicMock()
