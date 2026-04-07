@@ -217,11 +217,10 @@ async def handle_ask(
 
     # Channel role injection
     if not conv.history:
-        # Late import to avoid circular dependency (bot.py module-level dicts)
-        from bot import _CHANNEL_ROLES, _CHANNEL_PROMPTS
-        channel_role = _CHANNEL_ROLES.get(interaction.channel_id)
+        from runtime_state import get_channel_roles, get_channel_prompts
+        channel_role = get_channel_roles().get(interaction.channel_id)
         if channel_role:
-            role_prompt = _CHANNEL_PROMPTS.get(channel_role, "")
+            role_prompt = get_channel_prompts().get(channel_role, "")
             if role_prompt:
                 conv.history.append({
                     "role": "model",

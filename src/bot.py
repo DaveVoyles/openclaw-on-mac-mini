@@ -175,7 +175,6 @@ def _resolve_channel_thread_scope(
 
 async def _load_channel_config() -> None:
     """Load channel roles from config.yaml and map them to env-provided IDs."""
-    global _CHANNEL_ROLES, _CHANNEL_PROMPTS
     config_file = CONFIG_DIR / "config.yaml"
     if config_file.exists():
         try:

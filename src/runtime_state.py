@@ -1424,3 +1424,30 @@ def set_current_user_id(user_id: str) -> None:
 def get_current_user_id() -> str | None:
     """Return the active Discord user ID bound to the current request, if any."""
     return _INTERACTION_STATE.user_id.get()
+
+
+# ---------------------------------------------------------------------------
+# Channel role/prompt accessors — dicts live in bot.py; late import avoids
+# a module-level circular dependency (bot → runtime_state → bot).
+# ---------------------------------------------------------------------------
+
+
+def get_channel_roles() -> dict[int, str]:
+    """Return the channel-role mapping owned by bot.py."""
+    import bot  # noqa: PLC0415 — intentional late import
+    return bot._CHANNEL_ROLES
+
+
+def get_channel_prompts() -> dict[str, str]:
+    """Return the channel-prompt mapping owned by bot.py."""
+    import bot  # noqa: PLC0415 — intentional late import
+    return bot._CHANNEL_PROMPTS
+
+
+def set_channel_config(roles: dict[int, str], prompts: dict[str, str]) -> None:
+    """Update channel config in-place (called by bot.py after loading config)."""
+    import bot  # noqa: PLC0415 — intentional late import
+    bot._CHANNEL_ROLES.clear()
+    bot._CHANNEL_ROLES.update(roles)
+    bot._CHANNEL_PROMPTS.clear()
+    bot._CHANNEL_PROMPTS.update(prompts)
