@@ -17,6 +17,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import bot as mod
+import ask_handler as ask_handler_mod
 from ask_orchestrator import AskStreamResult
 
 
@@ -44,21 +45,21 @@ def _make_interaction(channel_id=100, user_id=1):
 
 def _apply_standard_mocks(monkeypatch, response_text="Answer text here."):
     """Apply all standard mocks needed for ask_cmd to complete successfully."""
-    monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=False))
-    monkeypatch.setattr(mod, "llm_is_configured", MagicMock(return_value=True))
-    monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
-    monkeypatch.setattr(mod, "get_model_preference", MagicMock(return_value="auto"))
-    monkeypatch.setattr(mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
-    monkeypatch.setattr(mod, "audit_log", MagicMock())
-    monkeypatch.setattr(mod, "set_anchor_state", MagicMock())
-    monkeypatch.setattr(mod.cfg, "thread_auto_create", False, raising=False)
+    monkeypatch.setattr(ask_handler_mod, "is_emergency_stopped", MagicMock(return_value=False))
+    monkeypatch.setattr(ask_handler_mod, "llm_is_configured", MagicMock(return_value=True))
+    monkeypatch.setattr(ask_handler_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+    monkeypatch.setattr(ask_handler_mod, "get_model_preference", MagicMock(return_value="auto"))
+    monkeypatch.setattr(ask_handler_mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
+    monkeypatch.setattr(ask_handler_mod, "audit_log", MagicMock())
+    monkeypatch.setattr(ask_handler_mod, "set_anchor_state", MagicMock())
+    monkeypatch.setattr(ask_handler_mod.cfg, "thread_auto_create", False, raising=False)
 
     conv = MagicMock()
     conv.history = []
     conv.message_count = 3
-    monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-    monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
-    monkeypatch.setattr(mod.conversation_store, "cleanup_expired", MagicMock())
+    monkeypatch.setattr(ask_handler_mod.conversation_store, "get", MagicMock(return_value=conv))
+    monkeypatch.setattr(ask_handler_mod.conversation_store, "auto_save_thread", MagicMock())
+    monkeypatch.setattr(ask_handler_mod.conversation_store, "cleanup_expired", MagicMock())
 
     stream_result = AskStreamResult(
         response_text=response_text,
@@ -67,15 +68,15 @@ def _apply_standard_mocks(monkeypatch, response_text="Answer text here."):
         routing_notes=[],
         context_badges=[],
     )
-    monkeypatch.setattr(mod, "run_ask_stream", AsyncMock(return_value=stream_result))
-    monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-    monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+    monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(return_value=stream_result))
+    monkeypatch.setattr(ask_handler_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+    monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
         "response_text": response_text,
         "model_used": "auto",
         "final_meta": {},
         "retry_result": None,
     }))
-    monkeypatch.setattr(mod, "_generate_follow_ups", AsyncMock(return_value=[]))
+    monkeypatch.setattr(ask_handler_mod, "_generate_follow_ups", AsyncMock(return_value=[]))
     return conv
 
 
@@ -87,8 +88,8 @@ class TestImageAttachment:
     @pytest.mark.asyncio
     async def test_image_attachment_calls_handle_image(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod, "_handle_image_attachment", AsyncMock(return_value="[image described]"))
-        monkeypatch.setattr(mod, "_handle_doc_attachment", AsyncMock(return_value="[doc]"))
+        monkeypatch.setattr(ask_handler_mod, "_handle_image_attachment", AsyncMock(return_value="[image described]"))
+        monkeypatch.setattr(ask_handler_mod, "_handle_doc_attachment", AsyncMock(return_value="[doc]"))
 
         attachment = MagicMock()
         attachment.content_type = "image/png"
@@ -98,14 +99,14 @@ class TestImageAttachment:
         await mod.ask_cmd.callback(
             interaction, question="Describe this", attachment=attachment, model=None, scope=None
         )
-        mod._handle_image_attachment.assert_awaited_once()
-        mod._handle_doc_attachment.assert_not_awaited()
+        ask_handler_mod._handle_image_attachment.assert_awaited_once()
+        ask_handler_mod._handle_doc_attachment.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_image_attachment_too_large_skips_handler(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod, "_handle_image_attachment", AsyncMock(return_value="[image]"))
-        monkeypatch.setattr(mod, "_handle_doc_attachment", AsyncMock(return_value="[doc]"))
+        monkeypatch.setattr(ask_handler_mod, "_handle_image_attachment", AsyncMock(return_value="[image]"))
+        monkeypatch.setattr(ask_handler_mod, "_handle_doc_attachment", AsyncMock(return_value="[doc]"))
 
         attachment = MagicMock()
         attachment.content_type = "image/png"
@@ -115,8 +116,8 @@ class TestImageAttachment:
         await mod.ask_cmd.callback(
             interaction, question="Large file", attachment=attachment, model=None, scope=None
         )
-        mod._handle_image_attachment.assert_not_awaited()
-        mod._handle_doc_attachment.assert_not_awaited()
+        ask_handler_mod._handle_image_attachment.assert_not_awaited()
+        ask_handler_mod._handle_doc_attachment.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +128,8 @@ class TestDocAttachment:
     @pytest.mark.asyncio
     async def test_doc_attachment_calls_handle_doc(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod, "_handle_image_attachment", AsyncMock(return_value="[image]"))
-        monkeypatch.setattr(mod, "_handle_doc_attachment", AsyncMock(return_value="[doc content]"))
+        monkeypatch.setattr(ask_handler_mod, "_handle_image_attachment", AsyncMock(return_value="[image]"))
+        monkeypatch.setattr(ask_handler_mod, "_handle_doc_attachment", AsyncMock(return_value="[doc content]"))
 
         attachment = MagicMock()
         attachment.content_type = "application/pdf"
@@ -138,8 +139,8 @@ class TestDocAttachment:
         await mod.ask_cmd.callback(
             interaction, question="Read this doc", attachment=attachment, model=None, scope=None
         )
-        mod._handle_doc_attachment.assert_awaited_once()
-        mod._handle_image_attachment.assert_not_awaited()
+        ask_handler_mod._handle_doc_attachment.assert_awaited_once()
+        ask_handler_mod._handle_image_attachment.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +156,7 @@ class TestModelPreference:
         await mod.ask_cmd.callback(
             interaction, question="What is the weather?", model=None, scope=None
         )
-        mod.get_model_preference.assert_called()
+        ask_handler_mod.get_model_preference.assert_called()
 
     @pytest.mark.asyncio
     async def test_vector_store_recall_injects_context(self, monkeypatch):
@@ -183,7 +184,7 @@ class TestGuardrailNote:
     async def test_guardrail_note_appended_when_upgraded_to_gemini(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
         # Override normalize_model_preference to return upgraded_to_gemini=True
-        monkeypatch.setattr(mod, "normalize_model_preference", MagicMock(return_value=("gemini", True)))
+        monkeypatch.setattr(ask_handler_mod, "normalize_model_preference", MagicMock(return_value=("gemini", True)))
 
         interaction = _make_interaction()
         await mod.ask_cmd.callback(
@@ -196,7 +197,7 @@ class TestGuardrailNote:
     async def test_no_guardrail_note_when_not_upgraded(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
         # normalized returns gemini=False
-        monkeypatch.setattr(mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
+        monkeypatch.setattr(ask_handler_mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
 
         interaction = _make_interaction()
         await mod.ask_cmd.callback(
@@ -214,8 +215,8 @@ class TestTimeoutPath:
     async def test_timeout_error_sends_timeout_message(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
         # Override run_ask_stream to raise TimeoutError inside the inner try block
-        monkeypatch.setattr(mod, "run_ask_stream", AsyncMock(side_effect=asyncio.TimeoutError()))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(side_effect=asyncio.TimeoutError()))
+        monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(side_effect=asyncio.TimeoutError()))
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(side_effect=asyncio.TimeoutError()))
 
         interaction = _make_interaction()
         await mod.ask_cmd.callback(
@@ -231,8 +232,8 @@ class TestTimeoutPath:
     async def test_timeout_model_used_is_timeout(self, monkeypatch):
         """Timeout path sets model_used='timeout', which reaches error tracking."""
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod, "run_ask_stream", AsyncMock(side_effect=asyncio.TimeoutError()))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(side_effect=asyncio.TimeoutError()))
+        monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(side_effect=asyncio.TimeoutError()))
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(side_effect=asyncio.TimeoutError()))
 
         # Track what record_outcome was called with
         record_calls = []
@@ -256,7 +257,7 @@ class TestExceptionPath:
     @pytest.mark.asyncio
     async def test_outer_exception_sends_failure_message(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod, "run_ask_stream", AsyncMock(side_effect=RuntimeError("boom")))
+        monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(side_effect=RuntimeError("boom")))
 
         interaction = _make_interaction()
         await mod.ask_cmd.callback(
@@ -281,7 +282,7 @@ class TestRetryResultPath:
         retry_result.routing_notes = ["retried"]
         retry_result.context_badges = ["badge"]
 
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Better answer",
             "model_used": "gemini",
             "final_meta": {},
@@ -304,7 +305,7 @@ class TestEmptyEchoResponse:
     async def test_empty_response_detected(self, monkeypatch):
         _apply_standard_mocks(monkeypatch, response_text="ok")
         # 5 chars — < 10, triggers is_empty
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "ok",
             "model_used": "auto",
             "final_meta": {},
@@ -330,8 +331,8 @@ class TestAutoThread:
     @pytest.mark.asyncio
     async def test_auto_thread_created_when_configured(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod.cfg, "thread_auto_create", True, raising=False)
-        monkeypatch.setattr(mod.cfg, "thread_archive_minutes", 60, raising=False)
+        monkeypatch.setattr(ask_handler_mod.cfg, "thread_auto_create", True, raising=False)
+        monkeypatch.setattr(ask_handler_mod.cfg, "thread_archive_minutes", 60, raising=False)
 
         fake_thread = MagicMock()
         fake_thread.name = "test thread"
@@ -349,7 +350,7 @@ class TestAutoThread:
     @pytest.mark.asyncio
     async def test_auto_thread_not_created_when_disabled(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod.cfg, "thread_auto_create", False, raising=False)
+        monkeypatch.setattr(ask_handler_mod.cfg, "thread_auto_create", False, raising=False)
 
         interaction = _make_interaction()
         await mod.ask_cmd.callback(
@@ -360,8 +361,8 @@ class TestAutoThread:
     @pytest.mark.asyncio
     async def test_auto_thread_long_archive_duration(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod.cfg, "thread_auto_create", True, raising=False)
-        monkeypatch.setattr(mod.cfg, "thread_archive_minutes", 1440, raising=False)  # > 60
+        monkeypatch.setattr(ask_handler_mod.cfg, "thread_auto_create", True, raising=False)
+        monkeypatch.setattr(ask_handler_mod.cfg, "thread_archive_minutes", 1440, raising=False)  # > 60
 
         fake_thread = MagicMock()
         fake_thread.name = "long archive thread"
@@ -386,7 +387,7 @@ class TestLongResponseFilePath:
     async def test_long_response_sends_as_file(self, monkeypatch):
         long_text = "A" * 9000  # > _FILE_THRESHOLD (8000)
         _apply_standard_mocks(monkeypatch, response_text=long_text)
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": long_text,
             "model_used": "auto",
             "final_meta": {},
@@ -410,7 +411,7 @@ class TestLongResponseFilePath:
     async def test_long_response_discord_not_found_uses_followup(self, monkeypatch):
         long_text = "B" * 9000
         _apply_standard_mocks(monkeypatch, response_text=long_text)
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": long_text,
             "model_used": "auto",
             "final_meta": {},
@@ -437,7 +438,7 @@ class TestMultiChunkResponse:
         # 3000 chars — likely splits into 2 chunks (EMBED_SPLIT_LIMIT ~2000)
         chunk_text = "C" * 3000
         _apply_standard_mocks(monkeypatch, response_text=chunk_text)
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": chunk_text,
             "model_used": "auto",
             "final_meta": {},
@@ -499,7 +500,7 @@ class TestErrorTracking:
     @pytest.mark.asyncio
     async def test_error_tracker_called_on_error_response(self, monkeypatch):
         _apply_standard_mocks(monkeypatch)
-        monkeypatch.setattr(mod, "run_ask_stream", AsyncMock(side_effect=RuntimeError("LLM blew up")))
+        monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(side_effect=RuntimeError("LLM blew up")))
 
         record_calls = []
         fake_error_tracker = MagicMock()
@@ -594,6 +595,6 @@ class TestAuditLog:
         await mod.ask_cmd.callback(
             interaction, question="Audit test question", model=None, scope=None
         )
-        mod.audit_log.assert_called()
-        call_args = mod.audit_log.call_args
+        ask_handler_mod.audit_log.assert_called()
+        call_args = ask_handler_mod.audit_log.call_args
         assert call_args[0][1] == "ask"

@@ -14,6 +14,7 @@ os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_handlers_logs")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_handlers_audit")
 
 import bot as bot_mod
+import discord_events as discord_events_mod
 import runtime_state as runtime_state_mod
 from ask_orchestrator import AskStreamResult
 from bot_attachments import handle_doc_attachment, handle_image_attachment
@@ -583,21 +584,22 @@ class TestDefaultAskChannelMode:
     def _setup_default_message_flow(self, monkeypatch):
         monkeypatch.setenv("THREAD_DB_PATH", "/tmp/openclaw-default-ask-quality.db")
         runtime_state_mod._reset_channel_profile_store_for_tests()
-        monkeypatch.setattr(bot_mod, "ALLOWED_USER_IDS", [42], raising=False)
-        monkeypatch.setattr(bot_mod, "is_emergency_stopped", lambda: False)
-        monkeypatch.setattr(bot_mod, "llm_is_configured", lambda: True)
+        monkeypatch.setattr(discord_events_mod, "ALLOWED_USER_IDS", [42], raising=False)
+        monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", lambda: False)
+        monkeypatch.setattr(discord_events_mod, "llm_is_configured", lambda: True)
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
         monkeypatch.setattr(bot_mod.discord, "Thread", _FakeThread)
         monkeypatch.setattr(bot_mod.cfg, "thread_auto_create", True, raising=False)
         monkeypatch.setattr(bot_mod.cfg, "thread_archive_minutes", 60, raising=False)
         monkeypatch.setattr(bot_mod.bot._connection, "user", MagicMock(id=999), raising=False)
-        monkeypatch.setattr(bot_mod, "get_model_preference", lambda user_id: "gemini")
-        monkeypatch.setattr(bot_mod, "audit_log", MagicMock())
+        monkeypatch.setattr(discord_events_mod, "get_model_preference", lambda user_id: "gemini")
+        monkeypatch.setattr(discord_events_mod, "audit_log", MagicMock())
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
         monkeypatch.setattr(bot_mod.conversation_store, "cleanup_expired", MagicMock())
         conv = MagicMock(history=[], message_count=0)
         monkeypatch.setattr(bot_mod.conversation_store, "get", lambda **kwargs: conv)
         monkeypatch.setattr(bot_mod.conversation_store, "auto_save_thread", MagicMock())
-        bot_mod._DEFAULT_ASK_THREAD_CACHE.clear()
+        discord_events_mod._DEFAULT_ASK_THREAD_CACHE.clear()
 
         channel = MagicMock()
         channel.id = 123
@@ -631,7 +633,7 @@ class TestDefaultAskChannelMode:
             stream_calls.append(dict(kwargs))
             yield "Model response", True, {"updated_history": [{"role": "model", "parts": ["Model response"]}]}
 
-        monkeypatch.setattr(bot_mod, "llm_chat_stream", fake_stream)
+        monkeypatch.setattr(discord_events_mod, "llm_chat_stream", fake_stream)
 
         await bot_mod.on_message(message)
 
@@ -641,8 +643,8 @@ class TestDefaultAskChannelMode:
         bot_mod.conversation_store.auto_save_thread.assert_any_call(42, 321, "Dave")
         thread.send.assert_awaited()
         channel.send.assert_awaited_once_with("💬 Continuing in <#321>")
-        bot_mod.audit_log.assert_called_once()
-        assert bot_mod.audit_log.call_args.args[1] == "ask_default"
+        discord_events_mod.audit_log.assert_called_once()
+        assert discord_events_mod.audit_log.call_args.args[1] == "ask_default"
         bot_mod.bot.process_commands.assert_not_awaited()
         runtime_state_mod._reset_channel_profile_store_for_tests()
         bot_mod._DEFAULT_ASK_THREAD_CACHE.clear()
@@ -662,7 +664,7 @@ class TestDefaultAskChannelMode:
                 return AskStreamResult(response_text="short", model_used="gemini", final_meta={})
             return AskStreamResult(response_text=improved_text, model_used="gemini", final_meta={})
 
-        monkeypatch.setattr(bot_mod, "run_ask_stream", fake_run_ask_stream)
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", fake_run_ask_stream)
         await bot_mod.on_message(message)
 
         assert len(calls) == 2
@@ -684,7 +686,7 @@ class TestDefaultAskChannelMode:
             calls.append(kwargs["user_message"])
             return AskStreamResult(response_text=high_text, model_used="gemini", final_meta={})
 
-        monkeypatch.setattr(bot_mod, "run_ask_stream", fake_run_ask_stream)
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", fake_run_ask_stream)
         await bot_mod.on_message(message)
 
         assert len(calls) == 1
@@ -702,7 +704,7 @@ class TestDefaultAskChannelMode:
                 return AskStreamResult(response_text="short", model_used="gemini", final_meta={})
             raise RuntimeError("retry failed")
 
-        monkeypatch.setattr(bot_mod, "run_ask_stream", fake_run_ask_stream)
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", fake_run_ask_stream)
         await bot_mod.on_message(message)
 
         assert len(calls) == 2
@@ -843,7 +845,8 @@ class TestDefaultAskChannelMode:
     @pytest.mark.asyncio
     async def test_slash_prefixed_message_keeps_command_precedence(self, monkeypatch):
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
-        monkeypatch.setattr(bot_mod, "llm_chat_stream", AsyncMock())
+        monkeypatch.setattr(discord_events_mod, "llm_chat_stream", AsyncMock())
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
 
         message = MagicMock()
         message.author = MagicMock(bot=False)
@@ -853,24 +856,25 @@ class TestDefaultAskChannelMode:
         await bot_mod.on_message(message)
 
         bot_mod.bot.process_commands.assert_awaited_once_with(message)
-        bot_mod.llm_chat_stream.assert_not_called()
+        discord_events_mod.llm_chat_stream.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_plain_text_in_user_owned_thread_uses_default_ask_flow(self, monkeypatch):
         monkeypatch.setenv("THREAD_DB_PATH", "/tmp/openclaw-default-ask-thread-test.db")
         runtime_state_mod._reset_channel_profile_store_for_tests()
-        monkeypatch.setattr(bot_mod, "ALLOWED_USER_IDS", [42], raising=False)
-        monkeypatch.setattr(bot_mod, "is_emergency_stopped", lambda: False)
-        monkeypatch.setattr(bot_mod, "llm_is_configured", lambda: True)
+        monkeypatch.setattr(discord_events_mod, "ALLOWED_USER_IDS", [42], raising=False)
+        monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", lambda: False)
+        monkeypatch.setattr(discord_events_mod, "llm_is_configured", lambda: True)
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
         monkeypatch.setattr(bot_mod.discord, "Thread", _FakeThread)
         monkeypatch.setattr(bot_mod.bot._connection, "user", MagicMock(id=999), raising=False)
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
 
         conv = MagicMock(history=[], message_count=0)
         monkeypatch.setattr(bot_mod.conversation_store, "get", lambda **kwargs: conv)
         monkeypatch.setattr(bot_mod.conversation_store, "auto_save_thread", MagicMock())
         monkeypatch.setattr(bot_mod.conversation_store, "cleanup_expired", MagicMock())
-        monkeypatch.setattr(bot_mod, "get_model_preference", lambda user_id: "gemini")
+        monkeypatch.setattr(discord_events_mod, "get_model_preference", lambda user_id: "gemini")
 
         stream_calls: list[dict[str, Any]] = []
 
@@ -878,8 +882,8 @@ class TestDefaultAskChannelMode:
             stream_calls.append(dict(kwargs))
             yield "Thread response", True, {"updated_history": [{"role": "model", "parts": ["Thread response"]}]}
 
-        monkeypatch.setattr(bot_mod, "llm_chat_stream", fake_stream)
-        monkeypatch.setattr(bot_mod, "audit_log", MagicMock())
+        monkeypatch.setattr(discord_events_mod, "llm_chat_stream", fake_stream)
+        monkeypatch.setattr(discord_events_mod, "audit_log", MagicMock())
 
         parent = MagicMock()
         parent.id = 777
@@ -912,7 +916,8 @@ class TestDefaultAskChannelMode:
     @pytest.mark.asyncio
     async def test_plain_text_in_unreadable_channel_falls_back_to_command_handler(self, monkeypatch):
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
-        monkeypatch.setattr(bot_mod, "llm_chat_stream", AsyncMock())
+        monkeypatch.setattr(discord_events_mod, "llm_chat_stream", AsyncMock())
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
 
         channel = MagicMock()
         channel.guild = MagicMock(me=object())
@@ -927,15 +932,16 @@ class TestDefaultAskChannelMode:
         await bot_mod.on_message(message)
 
         bot_mod.bot.process_commands.assert_awaited_once_with(message)
-        bot_mod.llm_chat_stream.assert_not_called()
+        discord_events_mod.llm_chat_stream.assert_not_called()
         channel.send.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_plain_text_keeps_llm_configured_safety_check(self, monkeypatch):
-        monkeypatch.setattr(bot_mod, "ALLOWED_USER_IDS", [], raising=False)
-        monkeypatch.setattr(bot_mod, "is_emergency_stopped", lambda: False)
-        monkeypatch.setattr(bot_mod, "llm_is_configured", lambda: False)
+        monkeypatch.setattr(discord_events_mod, "ALLOWED_USER_IDS", [], raising=False)
+        monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", lambda: False)
+        monkeypatch.setattr(discord_events_mod, "llm_is_configured", lambda: False)
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
 
         channel = MagicMock()
         channel.guild = MagicMock(me=object())
@@ -953,9 +959,10 @@ class TestDefaultAskChannelMode:
 
     @pytest.mark.asyncio
     async def test_empty_plain_message_posts_message_content_hint_once(self, monkeypatch):
-        monkeypatch.setattr(bot_mod, "ALLOWED_USER_IDS", [42], raising=False)
+        monkeypatch.setattr(discord_events_mod, "ALLOWED_USER_IDS", [42], raising=False)
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
-        bot_mod._MESSAGE_CONTENT_HINT_CACHE.clear()
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
+        discord_events_mod._MESSAGE_CONTENT_HINT_CACHE.clear()
 
         channel = MagicMock()
         channel.id = 999
@@ -979,17 +986,18 @@ class TestDefaultAskChannelMode:
     async def test_default_ask_falls_back_to_parent_channel_if_thread_send_fails(self, monkeypatch):
         monkeypatch.setenv("THREAD_DB_PATH", "/tmp/openclaw-default-ask-fallback.db")
         runtime_state_mod._reset_channel_profile_store_for_tests()
-        monkeypatch.setattr(bot_mod, "ALLOWED_USER_IDS", [42], raising=False)
-        monkeypatch.setattr(bot_mod, "is_emergency_stopped", lambda: False)
-        monkeypatch.setattr(bot_mod, "llm_is_configured", lambda: True)
+        monkeypatch.setattr(discord_events_mod, "ALLOWED_USER_IDS", [42], raising=False)
+        monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", lambda: False)
+        monkeypatch.setattr(discord_events_mod, "llm_is_configured", lambda: True)
         monkeypatch.setattr(bot_mod.bot, "process_commands", AsyncMock())
         monkeypatch.setattr(bot_mod.discord, "Thread", _FakeThread)
         monkeypatch.setattr(bot_mod.cfg, "thread_auto_create", True, raising=False)
         monkeypatch.setattr(bot_mod.cfg, "thread_archive_minutes", 60, raising=False)
         monkeypatch.setattr(bot_mod.bot._connection, "user", MagicMock(id=999), raising=False)
-        monkeypatch.setattr(bot_mod, "get_model_preference", lambda user_id: "gemini")
-        monkeypatch.setattr(bot_mod, "audit_log", MagicMock())
-        bot_mod._DEFAULT_ASK_THREAD_CACHE.clear()
+        monkeypatch.setattr(discord_events_mod, "get_model_preference", lambda user_id: "gemini")
+        monkeypatch.setattr(discord_events_mod, "audit_log", MagicMock())
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
+        discord_events_mod._DEFAULT_ASK_THREAD_CACHE.clear()
 
         conv = MagicMock(history=[], message_count=0)
         monkeypatch.setattr(bot_mod.conversation_store, "get", lambda **kwargs: conv)
@@ -999,7 +1007,7 @@ class TestDefaultAskChannelMode:
         async def fake_stream(**kwargs):
             yield "Model response", True, {"updated_history": [{"role": "model", "parts": ["Model response"]}]}
 
-        monkeypatch.setattr(bot_mod, "llm_chat_stream", fake_stream)
+        monkeypatch.setattr(discord_events_mod, "llm_chat_stream", fake_stream)
 
         channel = MagicMock()
         channel.id = 456

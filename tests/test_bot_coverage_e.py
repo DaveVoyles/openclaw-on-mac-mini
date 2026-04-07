@@ -28,6 +28,7 @@ os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit_e")
 os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_e.db")
 
 import bot as mod  # noqa: E402
+import discord_events as discord_events_mod
 
 
 # ---------------------------------------------------------------------------
@@ -107,14 +108,16 @@ def _patch_bot_user(monkeypatch, bot_id=999):
 def _standard_patches(monkeypatch, *, can_read=True, bot_id=999):
     """Apply the standard set of patches needed for most on_message tests."""
     _patch_bot_user(monkeypatch, bot_id)
-    monkeypatch.setattr(mod, "_is_user_allowed", MagicMock(return_value=True))
-    monkeypatch.setattr(mod, "_bot_can_read_channel", MagicMock(return_value=can_read))
-    monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=False))
-    monkeypatch.setattr(mod, "llm_is_configured", MagicMock(return_value=True))
-    monkeypatch.setattr(mod, "get_model_preference", MagicMock(return_value="auto"))
-    monkeypatch.setattr(mod, "audit_log", MagicMock())
+    # discord_events.handle_message calls get_bot() — return the real bot object
+    monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=mod.bot))
+    monkeypatch.setattr(discord_events_mod, "_is_user_allowed", MagicMock(return_value=True))
+    monkeypatch.setattr(discord_events_mod, "_bot_can_read_channel", MagicMock(return_value=can_read))
+    monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", MagicMock(return_value=False))
+    monkeypatch.setattr(discord_events_mod, "llm_is_configured", MagicMock(return_value=True))
+    monkeypatch.setattr(discord_events_mod, "get_model_preference", MagicMock(return_value="auto"))
+    monkeypatch.setattr(discord_events_mod, "audit_log", MagicMock())
     monkeypatch.setattr(mod.bot, "process_commands", AsyncMock())
-    monkeypatch.setattr(mod.conversation_store, "cleanup_expired", MagicMock())
+    monkeypatch.setattr(discord_events_mod.conversation_store, "cleanup_expired", MagicMock())
 
 
 def _make_run_ask_stream_mock(response="Here is my answer"):
@@ -141,7 +144,7 @@ class TestInThreadCannotRead:
         # Message arrives in a real Thread (isinstance check passes)
         msg = _make_thread_message(owner_id=999)
         # Override: the channel IS a discord.Thread instance
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
 
         await mod.on_message(msg)
 
@@ -151,22 +154,22 @@ class TestInThreadCannotRead:
     async def test_thread_readable_does_not_call_process_commands_early(self, monkeypatch):
         """in Thread and bot CAN read → does NOT hit the 2654-2656 early return."""
         _standard_patches(monkeypatch, can_read=True)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},
             "retry_result": None,
         }))
-        monkeypatch.setattr(mod, "_generate_follow_ups", AsyncMock(return_value=[]))
-        monkeypatch.setattr(mod.conversation_store, "get",
+        monkeypatch.setattr(discord_events_mod, "_generate_follow_ups", AsyncMock(return_value=[]))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get",
                             MagicMock(return_value=MagicMock(history=[], message_count=0)))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         msg = _make_thread_message(owner_id=999)
         await mod.on_message(msg)
@@ -185,24 +188,24 @@ class TestBotOwnedThreadParentRemember:
     async def test_bot_owned_thread_calls_remember(self, monkeypatch):
         """Lines 2677-2680: bot-owned thread message triggers _remember_default_ask_thread."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
 
         remember_mock = MagicMock()
-        monkeypatch.setattr(mod, "_remember_default_ask_thread", remember_mock)
+        monkeypatch.setattr(discord_events_mod, "_remember_default_ask_thread", remember_mock)
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},
             "retry_result": None,
         }))
-        monkeypatch.setattr(mod.conversation_store, "get",
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get",
                             MagicMock(return_value=MagicMock(history=[], message_count=0)))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         msg = _make_thread_message(owner_id=999)  # bot-owned thread
         # Set parent with a valid id so the condition on line 2679 is True
@@ -225,7 +228,7 @@ class TestThreadRedirect:
     async def test_redirect_message_sent_when_thread_created(self, monkeypatch):
         """Lines 2688-2694: non-thread message routes to thread → redirect msg sent."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
 
         parent = MagicMock()
         parent.id = 500
@@ -235,23 +238,23 @@ class TestThreadRedirect:
 
         routed_thread = _FakeThread(thread_id=321, parent=parent, owner_id=999)
 
-        monkeypatch.setattr(mod, "_get_or_create_default_ask_thread",
+        monkeypatch.setattr(discord_events_mod, "_get_or_create_default_ask_thread",
                             AsyncMock(return_value=(routed_thread, True)))
-        monkeypatch.setattr(mod, "_remember_default_ask_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod, "_remember_default_ask_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},
             "retry_result": None,
         }))
-        monkeypatch.setattr(mod.conversation_store, "get",
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get",
                             MagicMock(return_value=MagicMock(history=[], message_count=0)))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         msg = _make_text_channel_message()
         # Replace channel with parent for proper flow
@@ -269,7 +272,7 @@ class TestThreadRedirect:
     async def test_redirect_send_exception_is_swallowed(self, monkeypatch):
         """Lines 2695-2696: redirect send raises → exception is swallowed (debug log only)."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
 
         parent = MagicMock()
         parent.id = 500
@@ -279,23 +282,23 @@ class TestThreadRedirect:
 
         routed_thread = _FakeThread(thread_id=321, parent=parent, owner_id=999)
 
-        monkeypatch.setattr(mod, "_get_or_create_default_ask_thread",
+        monkeypatch.setattr(discord_events_mod, "_get_or_create_default_ask_thread",
                             AsyncMock(return_value=(routed_thread, True)))
-        monkeypatch.setattr(mod, "_remember_default_ask_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod, "_remember_default_ask_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},
             "retry_result": None,
         }))
-        monkeypatch.setattr(mod.conversation_store, "get",
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get",
                             MagicMock(return_value=MagicMock(history=[], message_count=0)))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         msg = _make_text_channel_message()
         msg.channel = parent
@@ -318,15 +321,15 @@ class TestMaxMessageGuard:
     async def test_max_messages_exceeded_sends_warning_and_returns(self, monkeypatch):
         """Lines 2699-2710: thread_max_messages exceeded → warning sent, LLM not called."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 2, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 2, raising=False)
 
         conv = MagicMock()
         conv.message_count = 10  # 10 >= 2*2=4 → guard fires
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
 
         msg = _make_thread_message(owner_id=999)
 
@@ -342,19 +345,19 @@ class TestMaxMessageGuard:
     async def test_max_messages_not_exceeded_continues(self, monkeypatch):
         """thread_max_messages not exceeded → LLM still runs."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 10, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 10, raising=False)
 
         conv = MagicMock()
         conv.message_count = 1  # well below limit
         conv.history = []
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},
@@ -370,19 +373,19 @@ class TestMaxMessageGuard:
     async def test_max_messages_zero_disables_guard(self, monkeypatch):
         """thread_max_messages=0 means guard is disabled → LLM runs regardless."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         conv = MagicMock()
         conv.message_count = 9999
         conv.history = []
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},
@@ -405,11 +408,11 @@ class TestEmptyMessageHint:
     async def test_empty_content_with_hint_sends_hint_message(self, monkeypatch):
         """Lines 2712-2726: empty message + hint enabled → hint sent."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
         monkeypatch.setattr(mod, "_should_send_message_content_hint", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "_get_or_create_default_ask_thread",
+        monkeypatch.setattr(discord_events_mod, "_get_or_create_default_ask_thread",
                             AsyncMock(return_value=(None, False)))
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         msg = _make_text_channel_message(content="")
         msg.guild = MagicMock()  # guild must be non-None
@@ -424,11 +427,11 @@ class TestEmptyMessageHint:
     async def test_empty_content_hint_exception_swallowed(self, monkeypatch):
         """Lines 2725-2726: hint send raises → swallowed, function returns cleanly."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
         monkeypatch.setattr(mod, "_should_send_message_content_hint", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "_get_or_create_default_ask_thread",
+        monkeypatch.setattr(discord_events_mod, "_get_or_create_default_ask_thread",
                             AsyncMock(return_value=(None, False)))
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         msg = _make_text_channel_message(content="")
         msg.channel.send = AsyncMock(side_effect=Exception("send error"))
@@ -441,14 +444,14 @@ class TestEmptyMessageHint:
     async def test_empty_content_no_hint_returns_silently(self, monkeypatch):
         """Empty message with hint disabled → returns without sending anything."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
         monkeypatch.setattr(mod, "_should_send_message_content_hint", MagicMock(return_value=False))
-        monkeypatch.setattr(mod, "_get_or_create_default_ask_thread",
+        monkeypatch.setattr(discord_events_mod, "_get_or_create_default_ask_thread",
                             AsyncMock(return_value=(None, False)))
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
 
         msg = _make_text_channel_message(content="")
         msg.guild = MagicMock()
@@ -467,19 +470,19 @@ class TestEmptyMessageHint:
 class TestFullLLMStreamingPath:
     def _setup_llm_patches(self, monkeypatch, response="Here is my answer", owner_id=999):
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         conv = MagicMock()
         conv.history = []
         conv.message_count = 0
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock(response=response)
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": response,
             "model_used": "auto",
             "final_meta": {},
@@ -521,8 +524,8 @@ class TestFullLLMStreamingPath:
         msg = _make_thread_message(content="Tell me something.", owner_id=999)
         await mod.on_message(msg)
 
-        mod.audit_log.assert_called()
-        call_args = mod.audit_log.call_args
+        discord_events_mod.audit_log.assert_called()
+        call_args = discord_events_mod.audit_log.call_args
         assert call_args.args[1] in ("thread_followup", "ask_default")
 
     @pytest.mark.asyncio
@@ -533,8 +536,8 @@ class TestFullLLMStreamingPath:
         msg = _make_thread_message(owner_id=999)  # bot.user.id == owner_id → bot_owns_thread
         await mod.on_message(msg)
 
-        mod.audit_log.assert_called()
-        action = mod.audit_log.call_args.args[1]
+        discord_events_mod.audit_log.assert_called()
+        action = discord_events_mod.audit_log.call_args.args[1]
         assert action == "thread_followup"
 
     @pytest.mark.asyncio
@@ -545,24 +548,24 @@ class TestFullLLMStreamingPath:
         msg = _make_thread_message(owner_id=1234)  # different from bot.user.id=999
         await mod.on_message(msg)
 
-        mod.audit_log.assert_called()
-        action = mod.audit_log.call_args.args[1]
+        discord_events_mod.audit_log.assert_called()
+        action = discord_events_mod.audit_log.call_args.args[1]
         assert action == "ask_default"
 
     @pytest.mark.asyncio
     async def test_llm_error_sends_error_text(self, monkeypatch):
         """Lines 2808-2810: run_ask_stream raises → error message sent to channel."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         conv = MagicMock()
         conv.history = []
         conv.message_count = 0
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
-        monkeypatch.setattr(mod, "run_ask_stream",
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream",
                             AsyncMock(side_effect=RuntimeError("LLM exploded")))
 
         msg = _make_thread_message(content="This will fail.", owner_id=999)
@@ -592,21 +595,21 @@ class TestFullLLMStreamingPath:
     async def test_quality_scoring_called(self, monkeypatch):
         """Lines 2771-2775: _safe_score_answer_quality called with response_text."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         conv = MagicMock()
         conv.history = []
         conv.message_count = 0
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock(response="Great answer here.")
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
 
         quality_mock = MagicMock(return_value={})
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", quality_mock)
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", quality_mock)
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Great answer here.",
             "model_used": "auto",
             "final_meta": {},
@@ -623,18 +626,18 @@ class TestFullLLMStreamingPath:
     async def test_quality_repair_called(self, monkeypatch):
         """Lines 2789-2798: _run_quality_auto_repair called after scoring."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         conv = MagicMock()
         conv.history = []
         conv.message_count = 0
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock(response="Good response.")
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
 
         repair_mock = AsyncMock(return_value={
             "response_text": "Good response.",
@@ -642,7 +645,7 @@ class TestFullLLMStreamingPath:
             "final_meta": {},
             "retry_result": None,
         })
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", repair_mock)
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", repair_mock)
 
         msg = _make_thread_message(content="Run quality repair.", owner_id=999)
         await mod.on_message(msg)
@@ -660,8 +663,8 @@ class TestNonThreadRoutedToThread:
     async def test_non_thread_auto_create_routes_to_thread(self, monkeypatch):
         """Lines 2682-2696: non-thread + _get_or_create returns thread → flow uses thread."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
 
         parent = MagicMock()
         parent.id = 600
@@ -671,20 +674,20 @@ class TestNonThreadRoutedToThread:
 
         routed_thread = _FakeThread(thread_id=777, parent=parent, owner_id=999)
 
-        monkeypatch.setattr(mod, "_get_or_create_default_ask_thread",
+        monkeypatch.setattr(discord_events_mod, "_get_or_create_default_ask_thread",
                             AsyncMock(return_value=(routed_thread, True)))
-        monkeypatch.setattr(mod, "_remember_default_ask_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod, "_remember_default_ask_thread", MagicMock())
 
         conv = MagicMock()
         conv.history = []
         conv.message_count = 0
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},
@@ -705,21 +708,21 @@ class TestNonThreadRoutedToThread:
     async def test_non_thread_no_auto_create_uses_channel_directly(self, monkeypatch):
         """_get_or_create returns None → flow stays on original channel."""
         _standard_patches(monkeypatch)
-        monkeypatch.setattr(mod.discord, "Thread", _FakeThread)
-        monkeypatch.setattr(mod.cfg, "thread_max_messages", 0, raising=False)
-        monkeypatch.setattr(mod, "_get_or_create_default_ask_thread",
+        monkeypatch.setattr(discord_events_mod.discord, "Thread", _FakeThread)
+        monkeypatch.setattr(discord_events_mod.cfg, "thread_max_messages", 0, raising=False)
+        monkeypatch.setattr(discord_events_mod, "_get_or_create_default_ask_thread",
                             AsyncMock(return_value=(None, False)))
 
         conv = MagicMock()
         conv.history = []
         conv.message_count = 0
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(discord_events_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(discord_events_mod.conversation_store, "auto_save_thread", MagicMock())
 
         run_mock = _make_run_ask_stream_mock()
-        monkeypatch.setattr(mod, "run_ask_stream", run_mock)
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(discord_events_mod, "run_ask_stream", run_mock)
+        monkeypatch.setattr(discord_events_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is my answer",
             "model_used": "auto",
             "final_meta": {},

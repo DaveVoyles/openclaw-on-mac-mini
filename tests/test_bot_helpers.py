@@ -22,6 +22,8 @@ os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_logs")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit")
 
 import bot as mod
+import ask_handler as ask_handler_mod
+import discord_events as discord_events_mod
 import response_actions as ra_mod
 
 
@@ -976,7 +978,7 @@ class TestAskCmdGuards:
     @pytest.mark.asyncio
     async def test_emergency_stop_blocks_ask(self, monkeypatch):
         import bot as mod
-        monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=True))
+        monkeypatch.setattr(ask_handler_mod, "is_emergency_stopped", MagicMock(return_value=True))
         interaction = _make_interaction(user_id=1, channel_id=1)
         interaction.response.send_message = AsyncMock()
         await mod.ask_cmd.callback(interaction, question="test?")
@@ -986,8 +988,8 @@ class TestAskCmdGuards:
     @pytest.mark.asyncio
     async def test_llm_not_configured_blocks_ask(self, monkeypatch):
         import bot as mod
-        monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=False))
-        monkeypatch.setattr(mod, "llm_is_configured", MagicMock(return_value=False))
+        monkeypatch.setattr(ask_handler_mod, "is_emergency_stopped", MagicMock(return_value=False))
+        monkeypatch.setattr(ask_handler_mod, "llm_is_configured", MagicMock(return_value=False))
         interaction = _make_interaction(user_id=1, channel_id=1)
         interaction.response.send_message = AsyncMock()
         await mod.ask_cmd.callback(interaction, question="test?")
@@ -1030,6 +1032,7 @@ class TestOnMessageGuards:
         import bot as mod
         msg = self._make_message(content="/help")
         mod.bot.process_commands = AsyncMock()
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=mod.bot))
         await mod.on_message(msg)
         mod.bot.process_commands.assert_called_once_with(msg)
 
@@ -1046,9 +1049,10 @@ class TestOnMessageGuards:
     async def test_emergency_stop_sends_notice(self, monkeypatch):
         import bot as mod
         msg = self._make_message(user_id=42)
-        monkeypatch.setattr(mod, "_is_user_allowed", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "_bot_can_read_channel", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=True))
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=mod.bot))
+        monkeypatch.setattr(discord_events_mod, "_is_user_allowed", MagicMock(return_value=True))
+        monkeypatch.setattr(discord_events_mod, "_bot_can_read_channel", MagicMock(return_value=True))
+        monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", MagicMock(return_value=True))
         await mod.on_message(msg)
         call_text = str(msg.channel.send.call_args)
         assert "Emergency stop" in call_text
@@ -1057,10 +1061,11 @@ class TestOnMessageGuards:
     async def test_llm_not_configured_sends_notice(self, monkeypatch):
         import bot as mod
         msg = self._make_message(user_id=42)
-        monkeypatch.setattr(mod, "_is_user_allowed", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "_bot_can_read_channel", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=False))
-        monkeypatch.setattr(mod, "llm_is_configured", MagicMock(return_value=False))
+        monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=mod.bot))
+        monkeypatch.setattr(discord_events_mod, "_is_user_allowed", MagicMock(return_value=True))
+        monkeypatch.setattr(discord_events_mod, "_bot_can_read_channel", MagicMock(return_value=True))
+        monkeypatch.setattr(discord_events_mod, "is_emergency_stopped", MagicMock(return_value=False))
+        monkeypatch.setattr(discord_events_mod, "llm_is_configured", MagicMock(return_value=False))
         await mod.on_message(msg)
         call_text = str(msg.channel.send.call_args)
         assert "LLM not configured" in call_text
@@ -1194,19 +1199,19 @@ class TestAskCmdIntegration:
         from ask_orchestrator import AskStreamResult
 
         monkeypatch.setenv("THREAD_DB_PATH", "/tmp/test_ask_cmd.db")
-        monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=False))
-        monkeypatch.setattr(mod, "llm_is_configured", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
-        monkeypatch.setattr(mod, "get_model_preference", MagicMock(return_value="auto"))
-        monkeypatch.setattr(mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
-        monkeypatch.setattr(mod, "audit_log", MagicMock())
-        monkeypatch.setattr(mod, "set_anchor_state", MagicMock())
-        monkeypatch.setattr(mod.cfg, "thread_auto_create", False, raising=False)
+        monkeypatch.setattr(ask_handler_mod, "is_emergency_stopped", MagicMock(return_value=False))
+        monkeypatch.setattr(ask_handler_mod, "llm_is_configured", MagicMock(return_value=True))
+        monkeypatch.setattr(ask_handler_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ask_handler_mod, "get_model_preference", MagicMock(return_value="auto"))
+        monkeypatch.setattr(ask_handler_mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
+        monkeypatch.setattr(ask_handler_mod, "audit_log", MagicMock())
+        monkeypatch.setattr(ask_handler_mod, "set_anchor_state", MagicMock())
+        monkeypatch.setattr(ask_handler_mod.cfg, "thread_auto_create", False, raising=False)
 
         conv = MagicMock()
         conv.history = []
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(ask_handler_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(ask_handler_mod.conversation_store, "auto_save_thread", MagicMock())
 
         stream_result = AskStreamResult(
             response_text="Here is the answer.",
@@ -1215,15 +1220,15 @@ class TestAskCmdIntegration:
             routing_notes=[],
             context_badges=[],
         )
-        monkeypatch.setattr(mod, "run_ask_stream", AsyncMock(return_value=stream_result))
-        monkeypatch.setattr(mod, "_safe_score_answer_quality", MagicMock(return_value={}))
-        monkeypatch.setattr(mod, "_run_quality_auto_repair", AsyncMock(return_value={
+        monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(return_value=stream_result))
+        monkeypatch.setattr(ask_handler_mod, "_safe_score_answer_quality", MagicMock(return_value={}))
+        monkeypatch.setattr(ask_handler_mod, "_run_quality_auto_repair", AsyncMock(return_value={
             "response_text": "Here is the answer.",
             "model_used": "auto",
             "final_meta": {},
             "retry_result": None,
         }))
-        monkeypatch.setattr(mod, "_generate_follow_ups", AsyncMock(return_value=[]))
+        monkeypatch.setattr(ask_handler_mod, "_generate_follow_ups", AsyncMock(return_value=[]))
 
         interaction = self._make_interaction()
         await mod.ask_cmd.callback(interaction, question="What is 2+2?")
@@ -1237,21 +1242,21 @@ class TestAskCmdIntegration:
         import bot as mod
 
         monkeypatch.setenv("THREAD_DB_PATH", "/tmp/test_ask_cmd_err.db")
-        monkeypatch.setattr(mod, "is_emergency_stopped", MagicMock(return_value=False))
-        monkeypatch.setattr(mod, "llm_is_configured", MagicMock(return_value=True))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
-        monkeypatch.setattr(mod, "get_model_preference", MagicMock(return_value="auto"))
-        monkeypatch.setattr(mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
-        monkeypatch.setattr(mod, "audit_log", MagicMock())
-        monkeypatch.setattr(mod, "set_anchor_state", MagicMock())
-        monkeypatch.setattr(mod.cfg, "thread_auto_create", False, raising=False)
+        monkeypatch.setattr(ask_handler_mod, "is_emergency_stopped", MagicMock(return_value=False))
+        monkeypatch.setattr(ask_handler_mod, "llm_is_configured", MagicMock(return_value=True))
+        monkeypatch.setattr(ask_handler_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ask_handler_mod, "get_model_preference", MagicMock(return_value="auto"))
+        monkeypatch.setattr(ask_handler_mod, "normalize_model_preference", MagicMock(return_value=("auto", False)))
+        monkeypatch.setattr(ask_handler_mod, "audit_log", MagicMock())
+        monkeypatch.setattr(ask_handler_mod, "set_anchor_state", MagicMock())
+        monkeypatch.setattr(ask_handler_mod.cfg, "thread_auto_create", False, raising=False)
 
         conv = MagicMock()
         conv.history = []
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=conv))
-        monkeypatch.setattr(mod.conversation_store, "auto_save_thread", MagicMock())
-        monkeypatch.setattr(mod, "run_ask_stream", AsyncMock(side_effect=RuntimeError("LLM blew up")))
-        monkeypatch.setattr(mod, "_generate_follow_ups", AsyncMock(return_value=[]))
+        monkeypatch.setattr(ask_handler_mod.conversation_store, "get", MagicMock(return_value=conv))
+        monkeypatch.setattr(ask_handler_mod.conversation_store, "auto_save_thread", MagicMock())
+        monkeypatch.setattr(ask_handler_mod, "run_ask_stream", AsyncMock(side_effect=RuntimeError("LLM blew up")))
+        monkeypatch.setattr(ask_handler_mod, "_generate_follow_ups", AsyncMock(return_value=[]))
 
         interaction = self._make_interaction()
         await mod.ask_cmd.callback(interaction, question="Crash test?")
