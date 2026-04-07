@@ -6,7 +6,6 @@ import asyncio
 import datetime
 import io
 import logging
-import re
 import time
 from typing import Any
 
@@ -18,24 +17,36 @@ from ask_orchestrator import (
     normalize_model_preference,
     run_ask_stream,
 )
+from audit import audit_log
 from bot_attachments import (
     handle_doc_attachment as _handle_doc_attachment,
+)
+from bot_attachments import (
     handle_image_attachment as _handle_image_attachment,
 )
 from bot_formatting import (
     build_attachment_embed_summary as _build_attachment_embed_summary,
+)
+from bot_formatting import (
     extract_file_attachment as _extract_file_attachment,
+)
+from bot_formatting import (
     extract_image_url as _extract_image_url,
+)
+from bot_formatting import (
     format_markdown_for_discord as _format_markdown_for_discord,
+)
+from bot_formatting import (
     format_tables_for_context as _format_tables_for_context,
+)
+from bot_formatting import (
     split_response as _split_response,
 )
 from config import cfg
 from constants import EMBED_SPLIT_LIMIT, MAX_FILE_SIZE
-from llm import SUPPORTED_IMAGE_MIMES
+from llm import SUPPORTED_IMAGE_MIMES, get_rate_info
 from llm import chat as llm_chat  # noqa: F401 — available if needed
 from llm import chat_stream as llm_chat_stream
-from llm import get_rate_info
 from llm import is_configured as llm_is_configured
 from memory import get_model_preference
 from memory import store as conversation_store
@@ -58,7 +69,6 @@ from runtime_state import (
     set_anchor_state,
     set_context_lock,  # noqa: F401 — available if needed
 )
-from audit import audit_log
 from trace_context import get_trace_id
 
 log = logging.getLogger(__name__)
@@ -217,7 +227,7 @@ async def handle_ask(
 
     # Channel role injection
     if not conv.history:
-        from runtime_state import get_channel_roles, get_channel_prompts
+        from runtime_state import get_channel_prompts, get_channel_roles
         channel_role = get_channel_roles().get(interaction.channel_id)
         if channel_role:
             role_prompt = get_channel_prompts().get(channel_role, "")

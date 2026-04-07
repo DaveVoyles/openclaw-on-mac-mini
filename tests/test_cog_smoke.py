@@ -13,7 +13,6 @@ the memory_manager deletion.  Deeper behavioral tests live in their own files.
 from __future__ import annotations
 
 import sys
-import types
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -264,7 +263,7 @@ def test_cog_imports_and_instantiates(module_name: str, class_name: str):
     # Force fresh import for each test — remove cached module if present
     full_module = f"cogs.{module_name}"
     stubs.pop(full_module, None)
-    stubs.pop(f"cogs", None)
+    stubs.pop("cogs", None)
 
     mock_bot = MagicMock()
     mock_bot.loop = MagicMock()

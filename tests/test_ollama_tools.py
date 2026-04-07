@@ -445,8 +445,6 @@ class TestChatOllamaWithToolsErrors:
 
     async def test_max_rounds_fallback_response(self):
         """When every round returns tool_calls, fallback request is made."""
-        tc_resp_factory = lambda: _make_tool_call_resp()
-
         def _make_tool_call_resp():
             r = AsyncMock()
             r.status = 200
@@ -456,6 +454,9 @@ class TestChatOllamaWithToolsErrors:
             r.__aenter__ = AsyncMock(return_value=r)
             r.__aexit__ = AsyncMock(return_value=False)
             return r
+
+        def tc_resp_factory():
+            return _make_tool_call_resp()
 
         final_fallback = _chat_response("fallback answer")
 

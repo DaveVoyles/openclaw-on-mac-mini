@@ -21,11 +21,9 @@ Lines targeted:
 
 from __future__ import annotations
 
-import asyncio
 import os
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -35,7 +33,6 @@ os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_a.db")
 
 import bot as mod
 import quality_helpers as qh_mod
-
 
 # ---------------------------------------------------------------------------
 # Channel rate-limit path (lines 159-160)

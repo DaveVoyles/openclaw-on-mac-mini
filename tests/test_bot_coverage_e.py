@@ -30,7 +30,6 @@ os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_e.db")
 import bot as mod  # noqa: E402
 import discord_events as discord_events_mod
 
-
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------

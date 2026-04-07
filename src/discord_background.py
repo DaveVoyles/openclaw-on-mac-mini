@@ -995,6 +995,7 @@ async def _check_monstervision_cookies(bot):
         return
 
     import aiohttp
+
     from config import cfg
 
     # Trust the API's cookie_status first; skip log scraping when cookies are OK

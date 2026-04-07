@@ -1,6 +1,7 @@
 """Route registration for the dashboard package."""
 
 from collections.abc import Awaitable, Callable
+
 from aiohttp import web
 
 from .api_handlers import (

@@ -6,7 +6,6 @@ and all four LLM-callable scheduling functions.
 """
 
 import asyncio
-import contextlib
 import datetime
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,7 +22,6 @@ from scheduler import (
     list_scheduled_tasks,
     schedule_research_report,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

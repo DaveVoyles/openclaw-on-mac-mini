@@ -12,6 +12,7 @@ import pytest
 
 import memory as memory_module  # noqa: E402
 
+
 # Bind the facade functions to the `memory_manager` namespace used throughout this file.
 # `store` is already taken in memory.py (ConversationStore singleton), so the unified
 # facade uses `store_memory`, `recall_memories`, etc.

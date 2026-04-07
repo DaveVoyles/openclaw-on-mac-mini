@@ -25,10 +25,12 @@ if str(_src) not in sys.path:
 # from ever installing stubs that would pollute test_patreon_monitor.py.
 # ---------------------------------------------------------------------------
 import alert_patreon  # noqa: F401 — side-effect: populates sys.modules
+import openclaw_types
 import patreon_monitor as _patreon_monitor_real  # noqa: F401
 import patreon_recovery  # noqa: F401
-
-import openclaw_types
+import patreon_scheduled
+import profiler as profiler_mod
+import reminder_manager as rm_mod
 from openclaw_types import (
     APIResponse,
     ConversationMessage,
@@ -42,16 +44,9 @@ from openclaw_types import (
     UserPreferences,
     WeatherData,
 )
-
-import profiler as profiler_mod
-from profiler import Profiler, get_profiler, profile_memory
-
-import reminder_manager as rm_mod
-from reminder_manager import Reminder, ReminderManager, parse_time_expression
-
-import patreon_scheduled
 from patreon_scheduled import PATREON_MONITORING_TASK, scheduled_patreon_health_check
-
+from profiler import Profiler, get_profiler, profile_memory
+from reminder_manager import Reminder, ReminderManager, parse_time_expression
 
 # =============================================================================
 # openclaw_types.py

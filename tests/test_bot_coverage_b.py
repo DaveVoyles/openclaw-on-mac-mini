@@ -24,17 +24,14 @@ os.environ.setdefault("LOG_DIR", str(_TEST_BASE / ".test_logs_b"))
 os.environ.setdefault("AUDIT_DIR", str(_TEST_BASE / ".test_audit_b"))
 os.environ.setdefault("THREAD_DB_PATH", str(_TEST_BASE / ".test_cov_b.db"))
 
-import asyncio
 import time
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import discord
 import pytest
 from discord.ext import commands
 
 import bot as mod
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures

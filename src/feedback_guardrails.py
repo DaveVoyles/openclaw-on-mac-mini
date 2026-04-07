@@ -11,7 +11,6 @@ from __future__ import annotations
 import sys as _sys
 import threading
 import time
-from typing import Any
 
 # ---------------------------------------------------------------------------
 # Module-level state

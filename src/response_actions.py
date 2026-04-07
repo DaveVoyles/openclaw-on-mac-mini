@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 import datetime
-import sys as _sys
 import json
 import logging
+import sys as _sys
 from pathlib import Path
 from typing import Any
 
 import aiofiles
 import discord
-from discord import app_commands
 
+from agentmail import send_agent_mail
 from constants import EMBED_SPLIT_LIMIT
+from feedback_guardrails import _apply_feedback_guardrails
 from llm import chat as llm_chat
 from memory import store as conversation_store
 from qmd import remember_fact
@@ -23,21 +24,8 @@ from runtime_state import (
     reset_anchor_state,
     reset_context_lock,
     resolve_context_lock,
-    set_anchor_state,
     set_context_lock,
 )
-from bot_formatting import (
-    build_attachment_embed_summary as _build_attachment_embed_summary,
-    extract_file_attachment as _extract_file_attachment,
-    extract_image_url as _extract_image_url,
-    format_markdown_for_discord as _format_markdown_for_discord,
-    format_tables_for_context as _format_tables_for_context,
-    should_package_as_attachment as _should_package_as_attachment,
-    split_response as _split_response,
-)
-from agentmail import send_agent_mail
-
-from feedback_guardrails import _apply_feedback_guardrails
 
 try:
     from quality_helpers import _record_quality_metric

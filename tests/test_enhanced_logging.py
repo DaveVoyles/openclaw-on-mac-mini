@@ -8,15 +8,14 @@ All file I/O and external calls are mocked.
 import json
 import logging
 import logging.handlers
-from datetime import datetime, timedelta
-from io import StringIO
-from pathlib import Path
-from unittest.mock import MagicMock, call, mock_open, patch
-
-import pytest
 
 # Patch the legacy audit module before importing the module under test
 import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
 
 _mock_audit_mod = MagicMock()
 sys.modules.setdefault("audit", _mock_audit_mod)
@@ -28,7 +27,6 @@ from enhanced_logging import (
     get_audit_logger,
     setup_logging,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

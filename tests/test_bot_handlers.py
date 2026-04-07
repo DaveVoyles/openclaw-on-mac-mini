@@ -1,8 +1,8 @@
 """Tests for bot message/attachment handlers."""
 
-import os
 import asyncio
 import json
+import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, call, patch
 

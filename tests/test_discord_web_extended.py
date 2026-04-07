@@ -1,15 +1,10 @@
 """Extended tests for discord_web.py — health, smoke, webhook, and service handlers."""
 
-import asyncio
 import json
 import time
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 import discord_web as mod
-
 
 # ---------------------------------------------------------------------------
 # Helpers

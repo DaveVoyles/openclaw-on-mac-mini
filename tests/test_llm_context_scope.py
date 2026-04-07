@@ -12,8 +12,8 @@ sys.modules.setdefault("google.genai", _genai_mock)
 sys.modules.setdefault("google.genai.types", _genai_mock.types)
 
 import llm.context as ctx  # noqa: E402
-from llm import chat_stream  # noqa: E402
 import runtime_state as runtime_state_mod  # noqa: E402
+from llm import chat_stream  # noqa: E402
 
 
 @pytest.mark.asyncio

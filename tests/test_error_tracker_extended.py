@@ -3,7 +3,6 @@ Extended tests for src/error_tracker.py — covering previously uncovered functi
 get_recent_outcomes, get_error_stats, check_error_patterns, execute_fix,
 get_past_incidents, record_incident.
 """
-import asyncio
 import json
 import time
 from pathlib import Path
@@ -12,7 +11,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import error_tracker as mod
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

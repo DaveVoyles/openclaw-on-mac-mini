@@ -1,13 +1,11 @@
 """Extended tests for vector_store.py — targeting uncovered lines 61-1207."""
 
 import asyncio
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import vector_store as mod
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -241,7 +239,6 @@ class TestCompactScopeEarlyExits:
     @pytest.mark.asyncio
     async def test_compaction_with_protection_window(self):
         """Test that recently-added items are protected (lines 276-279)."""
-        import time as time_mod
         now = 1_700_000_000.0
         col = _make_fake_col(count=5)
         col.get.return_value = {
@@ -276,7 +273,6 @@ class TestCompactScopeEarlyExits:
     @pytest.mark.asyncio
     async def test_compaction_record_event_exception_is_swallowed(self):
         """record_memory_compaction_event raising should not propagate (lines 319-320)."""
-        import time as time_mod
         now = 1_700_000_000.0
         col = _make_fake_col(count=5)
         col.get.return_value = {
@@ -310,7 +306,6 @@ class TestCompactScopeEarlyExits:
     @pytest.mark.asyncio
     async def test_compaction_audit_log_exception_is_swallowed(self):
         """audit_log raising should not propagate (lines 321-330)."""
-        import time as time_mod
         now = 1_700_000_000.0
         col = _make_fake_col(count=5)
         col.get.return_value = {

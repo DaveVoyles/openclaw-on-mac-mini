@@ -9,15 +9,12 @@ discord_background.py, and the web/health server in discord_web.py.
 
 import asyncio
 import datetime
-import io
 import json
 import logging
 import os
 import re
 import sys
-import threading
 import time
-import pathlib
 from pathlib import Path
 from typing import Any
 

@@ -9,7 +9,6 @@ singleton (bot = OpenClawBot()) exercises the class __init__ path for coverage.
 
 from __future__ import annotations
 
-import asyncio
 import os
 import time
 from types import SimpleNamespace
@@ -21,11 +20,10 @@ import pytest
 os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_logs")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit")
 
-import bot as mod
 import ask_handler as ask_handler_mod
+import bot as mod
 import discord_events as discord_events_mod
 import response_actions as ra_mod
-
 
 # ---------------------------------------------------------------------------
 # _prune_feedback_event_buffer
@@ -480,7 +478,6 @@ class TestIsReusableBotThread:
         return t
 
     def test_reusable_when_all_conditions_met(self):
-        import discord as _discord
         t = self._make_thread(owner_id=999, parent_id=10)
         mod.bot._connection.user = SimpleNamespace(id=999)
         assert mod._is_reusable_bot_thread(t, parent_channel_id=10) is True
@@ -489,25 +486,21 @@ class TestIsReusableBotThread:
         assert mod._is_reusable_bot_thread(SimpleNamespace(), parent_channel_id=10) is False
 
     def test_not_reusable_when_bot_user_is_none(self):
-        import discord as _discord
         t = self._make_thread(owner_id=1, parent_id=10)
         mod.bot._connection.user = None
         assert mod._is_reusable_bot_thread(t, parent_channel_id=10) is False
 
     def test_not_reusable_when_archived(self):
-        import discord as _discord
         mod.bot._connection.user = SimpleNamespace(id=999)
         t = self._make_thread(owner_id=999, parent_id=10, archived=True)
         assert mod._is_reusable_bot_thread(t, parent_channel_id=10) is False
 
     def test_not_reusable_when_locked(self):
-        import discord as _discord
         mod.bot._connection.user = SimpleNamespace(id=999)
         t = self._make_thread(owner_id=999, parent_id=10, locked=True)
         assert mod._is_reusable_bot_thread(t, parent_channel_id=10) is False
 
     def test_not_reusable_when_wrong_parent(self):
-        import discord as _discord
         mod.bot._connection.user = SimpleNamespace(id=999)
         t = self._make_thread(owner_id=999, parent_id=99)
         assert mod._is_reusable_bot_thread(t, parent_channel_id=10) is False

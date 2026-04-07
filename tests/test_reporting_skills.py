@@ -1,11 +1,11 @@
 """Tests for reporting_skills.py."""
 
 import datetime as dt
-import llm
 from types import SimpleNamespace
 
 import pytest
 
+import llm
 from skills import reporting_skills as mod
 
 

@@ -12,14 +12,14 @@ os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_logs_d")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit_d")
 os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_d.db")
 
+from unittest.mock import AsyncMock, MagicMock
+
 import discord
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
-import bot as mod
 import ask_handler as ask_handler_mod
+import bot as mod
 from ask_orchestrator import AskStreamResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers

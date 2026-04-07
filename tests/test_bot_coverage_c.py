@@ -11,11 +11,11 @@ Tests for bot.py targeting uncovered lines 1475-1835:
 from __future__ import annotations
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import discord
-from discord import app_commands
 import pytest
+from discord import app_commands
 
 os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_logs_c")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit_c")
@@ -23,7 +23,6 @@ os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_c.db")
 
 import bot as mod
 import response_actions as ra_mod
-
 
 # ---------------------------------------------------------------------------
 # Helpers
