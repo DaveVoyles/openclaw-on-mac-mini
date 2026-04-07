@@ -76,8 +76,8 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             content = content[:500]
 
         try:
-            from memory_manager import store
-            await store(content, source="context_menu", user_id=str(interaction.user.id))
+            from memory import store_memory
+            await store_memory(content, source="context_menu")
             await interaction.response.send_message(
                 f"📌 Saved to memory: *{content[:80]}{'…' if len(content) > 80 else ''}*",
                 ephemeral=True,

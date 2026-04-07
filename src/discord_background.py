@@ -12,13 +12,17 @@ import json
 import logging
 import os
 import re
+import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import discord
 
+from alert_manager import QUALITY_DRIFT_ALERT_COOLDOWN, should_route_bounded_alert
 from approvals import approval_store
 from audit import _audit_buffer, audit_log
 from http_session import SessionManager as _SessionManager
+from metrics_collector import get_collector
 from trace_context import trace_context
 
 _bg_sessions = _SessionManager(timeout=10, name="discord-background")
@@ -51,6 +55,11 @@ log = logging.getLogger("openclaw")
 
 AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
+_BACKGROUND_RESTART_DELAY_SECONDS = 5
+_BACKGROUND_TASKS: dict[str, asyncio.Task] = {}
+_BACKGROUND_FACTORIES: dict[str, Callable[[], Awaitable[None]]] = {}
+_BACKGROUND_STOPPING = False
+_QUALITY_DRIFT_ALERT_ROUTE = "quality_calibration_drift"
 
 # ---------------------------------------------------------------------------
 # Self-healing constants
@@ -94,20 +103,38 @@ async def audit_writer_loop():
 # Background cleanup
 # ---------------------------------------------------------------------------
 
+
 async def background_cleanup_loop():
     """Periodically clean up expired conversations and approval requests."""
     while True:
         await asyncio.sleep(CLEANUP_INTERVAL)
-        try:
-            conversation_store.cleanup_expired()
-            approval_store.cleanup_expired()
-        except Exception as e:
-            log.warning("Background cleanup error: %s", e)
+        with trace_context(command="background_cleanup", user_id=0, channel_id=0):
+            start = time.time()
+            success = True
+            error_type = None
+            try:
+                conversation_store.cleanup_expired()
+                approval_store.cleanup_expired()
+            except Exception as e:
+                log.warning("Background cleanup error: %s", e)
+                success = False
+                error_type = type(e).__name__
+            finally:
+                duration = time.time() - start
+                get_collector().record_command(
+                    command="background_cleanup",
+                    user="background",
+                    workspace="background",
+                    duration=duration,
+                    success=success,
+                    error_type=error_type,
+                )
 
 
 # ---------------------------------------------------------------------------
 # Morning briefing
 # ---------------------------------------------------------------------------
+
 
 async def morning_briefing_loop(bot):
     """Post a morning briefing to ALERT_CHANNEL_ID each day at ~8:00 AM."""
@@ -119,7 +146,27 @@ async def morning_briefing_loop(bot):
                 today_str = now.strftime("%Y-%m-%d")
                 if today_str != last_briefing_date:
                     last_briefing_date = today_str
-                    asyncio.create_task(send_morning_briefing(bot))
+                    # Observability: trace context and metrics
+                    with trace_context(command="morning_briefing", user_id=0, channel_id=ALERT_CHANNEL_ID):
+                        start = time.time()
+                        success = True
+                        error_type = None
+                        try:
+                            asyncio.create_task(send_morning_briefing(bot))
+                        except Exception as e:
+                            log.warning("Morning briefing task error: %s", e)
+                            success = False
+                            error_type = type(e).__name__
+                        finally:
+                            duration = time.time() - start
+                            get_collector().record_command(
+                                command="morning_briefing",
+                                user="background",
+                                workspace="background",
+                                duration=duration,
+                                success=success,
+                                error_type=error_type,
+                            )
         except Exception as e:
             log.warning("Morning briefing scheduler error: %s", e)
         await asyncio.sleep(BRIEFING_CHECK_INTERVAL)
@@ -366,11 +413,79 @@ async def proactive_insight_loop(bot):
         try:
             with trace_context(command="proactive_scan"):
                 log.info("Proactive scan starting")
+                await _check_quality_drift_alert(bot)
                 await _run_proactive_scan(bot)
                 log.info("Proactive scan complete")
         except Exception as e:
             log.warning("Proactive scan error: %s", e)
         await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)
+
+
+async def _check_quality_drift_alert(bot) -> bool:
+    """Post severe calibration drift alerts with cooldown + de-dup bounds."""
+    if not ALERT_CHANNEL_ID:
+        return False
+    try:
+        from dashboard.api_handlers import _build_offline_quality_calibration_payload
+    except Exception as exc:
+        log.debug("Quality drift calibration import failed: %s", exc)
+        return False
+
+    calibration = _build_offline_quality_calibration_payload()
+    if not isinstance(calibration, dict):
+        return False
+    drift = calibration.get("drift")
+    if not isinstance(drift, dict):
+        return False
+    severity = drift.get("severity")
+    if not isinstance(severity, dict):
+        severity = {}
+    if not bool(severity.get("severe")):
+        return False
+
+    regressed_metrics = sorted(str(item) for item in drift.get("regressed_metrics", []) if str(item).strip())
+    fingerprint = json.dumps(
+        {
+            "status": str(drift.get("status") or ""),
+            "severity": str(severity.get("level") or ""),
+            "regressed_metrics": regressed_metrics,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    allowed, reason = should_route_bounded_alert(
+        _QUALITY_DRIFT_ALERT_ROUTE,
+        fingerprint=fingerprint,
+        cooldown_seconds=QUALITY_DRIFT_ALERT_COOLDOWN,
+    )
+    if not allowed:
+        log.debug("Quality drift alert skipped (%s)", reason)
+        return False
+
+    channel = bot.get_channel(ALERT_CHANNEL_ID)
+    if not channel:
+        return False
+
+    score_value = int(severity.get("score", 0) or 0)
+    reason_lines = [f"• {item}" for item in severity.get("reasons", []) if isinstance(item, str) and item.strip()]
+    metrics_line = ", ".join(regressed_metrics[:6]) if regressed_metrics else "none"
+    embed = discord.Embed(
+        title="🚨 Severe Quality Calibration Drift",
+        description=(
+            f"Offline calibration detected **severe** drift.\n"
+            f"Regressed metrics: {metrics_line}"
+        ),
+        color=discord.Color.red(),
+    )
+    embed.add_field(name="Severity", value=f"{severity.get('level', 'unknown')} (score: {score_value})", inline=True)
+    embed.add_field(name="Policy", value="Advisory only (no auto threshold mutation)", inline=True)
+    if reason_lines:
+        embed.add_field(name="Reasons", value="\n".join(reason_lines)[:1024], inline=False)
+    embed.set_footer(text="Quality drift monitor • bounded alert routing")
+    await channel.send(embed=embed)
+    audit_log(None, "quality_drift_alert", detail=f"severe drift score={score_value} metrics={metrics_line}")
+    log.warning("Severe quality drift alert sent (score=%d)", score_value)
+    return True
 
 
 async def _gather_system_signals():
@@ -880,11 +995,10 @@ async def _check_monstervision_cookies(bot):
         return
 
     import aiohttp
-    from config_loader import get as _cfg
+    from config import cfg
 
     # Trust the API's cookie_status first; skip log scraping when cookies are OK
     try:
-        cfg = _cfg()
         session = await _bg_sessions.get()
         async with session.get(
             f"http://{cfg.docker_host_ip}:{cfg.monstervision_port}/api/status",
@@ -1095,18 +1209,147 @@ async def reminder_loop(bot):
         await asyncio.sleep(15)
 
 
-def start_background_tasks(bot):
-    """Create all background asyncio tasks. Called from OpenClawBot.on_ready."""
-    asyncio.create_task(background_cleanup_loop())
-    asyncio.create_task(audit_writer_loop())
-    asyncio.create_task(reminder_loop(bot))
+def _build_background_task_factories(bot) -> dict[str, Callable[[], Awaitable[None]]]:
+    factories: dict[str, Callable[[], Awaitable[None]]] = {
+        "background_cleanup": background_cleanup_loop,
+        "audit_writer": audit_writer_loop,
+        "reminder": lambda: reminder_loop(bot),
+    }
     if ALERT_CHANNEL_ID:
-        asyncio.create_task(morning_briefing_loop(bot))
-        asyncio.create_task(evening_digest_loop(bot))
-        asyncio.create_task(proactive_insight_loop(bot))
-        asyncio.create_task(error_monitor_loop(bot))
-        asyncio.create_task(container_health_loop(bot))
-        asyncio.create_task(resource_monitor_loop(bot))
+        factories.update({
+            "morning_briefing": lambda: morning_briefing_loop(bot),
+            "evening_digest": lambda: evening_digest_loop(bot),
+            "proactive_insight": lambda: proactive_insight_loop(bot),
+            "error_monitor": lambda: error_monitor_loop(bot),
+            "container_health": lambda: container_health_loop(bot),
+            "resource_monitor": lambda: resource_monitor_loop(bot),
+        })
+    return factories
+
+
+def _handle_background_task_done(task_name: str, task: asyncio.Task) -> None:
+    if _BACKGROUND_STOPPING:
+        return
+    if task.cancelled():
+        return
+    try:
+        error = task.exception()
+    except asyncio.CancelledError:
+        return
+
+    if error:
+        log.warning(
+            "Background task %s crashed: %s; restarting in %ss",
+            task_name,
+            error,
+            _BACKGROUND_RESTART_DELAY_SECONDS,
+        )
+    else:
+        log.warning(
+            "Background task %s exited unexpectedly; restarting in %ss",
+            task_name,
+            _BACKGROUND_RESTART_DELAY_SECONDS,
+        )
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    loop.call_later(_BACKGROUND_RESTART_DELAY_SECONDS, _restart_background_task, task_name)
+
+
+def _launch_background_task(task_name: str, task_factory: Callable[[], Awaitable[None]]) -> None:
+    _BACKGROUND_FACTORIES[task_name] = task_factory
+    task = asyncio.create_task(
+        _run_supervised_background_task(task_name, task_factory),
+        name=f"openclaw.background.{task_name}",
+    )
+    _BACKGROUND_TASKS[task_name] = task
+    task.add_done_callback(lambda done, name=task_name: _handle_background_task_done(name, done))
+
+
+async def _run_supervised_background_task(
+    task_name: str,
+    task_factory: Callable[[], Awaitable[None]],
+) -> None:
+    start = time.monotonic()
+    success = True
+    error_type: str | None = None
+    cancelled = False
+
+    try:
+        with trace_context(command=f"background:{task_name}", user_id=0, channel_id=ALERT_CHANNEL_ID, component="background"):
+            await task_factory()
+    except asyncio.CancelledError:
+        cancelled = True
+        raise
+    except Exception as exc:
+        success = False
+        error_type = type(exc).__name__
+        raise
+    finally:
+        if not (cancelled and _BACKGROUND_STOPPING):
+            get_collector().record_command(
+                command=f"background:{task_name}",
+                user="system",
+                workspace="background",
+                duration=max(0.0, time.monotonic() - start),
+                success=success,
+                error_type=error_type,
+            )
+
+
+def _restart_background_task(task_name: str) -> None:
+    if _BACKGROUND_STOPPING:
+        return
+    current = _BACKGROUND_TASKS.get(task_name)
+    if current and not current.done():
+        return
+    task_factory = _BACKGROUND_FACTORIES.get(task_name)
+    if task_factory is None:
+        return
+    _launch_background_task(task_name, task_factory)
+
+
+def start_background_tasks(bot) -> int:
+    """Create all background asyncio tasks. Called from OpenClawBot.on_ready."""
+    global _BACKGROUND_STOPPING
+
+    if any(not task.done() for task in _BACKGROUND_TASKS.values()):
+        log.info("Background tasks already running (%d active)", len(_BACKGROUND_TASKS))
+        return len(_BACKGROUND_TASKS)
+
+    _BACKGROUND_STOPPING = False
+    _BACKGROUND_TASKS.clear()
+    _BACKGROUND_FACTORIES.clear()
+
+    for task_name, task_factory in _build_background_task_factories(bot).items():
+        _launch_background_task(task_name, task_factory)
+
+    if ALERT_CHANNEL_ID:
         log.info("Proactive tasks started (alert channel: %d)", ALERT_CHANNEL_ID)
     else:
         log.info("ALERT_CHANNEL_ID not set — proactive push notifications disabled")
+    log.info("Background task supervisor started (%d loops)", len(_BACKGROUND_TASKS))
+    return len(_BACKGROUND_TASKS)
+
+
+async def stop_background_tasks() -> None:
+    """Cancel and await all supervised background tasks."""
+    global _BACKGROUND_STOPPING
+
+    if not _BACKGROUND_TASKS:
+        return
+
+    _BACKGROUND_STOPPING = True
+    tasks = list(_BACKGROUND_TASKS.items())
+    for _, task in tasks:
+        task.cancel()
+
+    results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
+    for (task_name, _), result in zip(tasks, results):
+        if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+            log.debug("Background task %s stopped with error: %s", task_name, result)
+
+    _BACKGROUND_TASKS.clear()
+    _BACKGROUND_FACTORIES.clear()
+    log.info("Background task supervisor stopped")

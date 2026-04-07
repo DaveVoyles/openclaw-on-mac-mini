@@ -6,17 +6,19 @@ Core Docker & System Monitoring + Advanced Media/Network/Analysis skills.
 import asyncio
 import logging
 import os
+import re
 import shlex
 
-from memory_manager import recall as memory_recall  # noqa: F401
-from memory_manager import stats as memory_stats  # noqa: F401
+from memory import recall as memory_recall  # noqa: F401
+from memory import memory_stats  # noqa: F401
 
 # Unified memory manager (Phase 16)
-from memory_manager import store as memory_store  # noqa: F401
+from memory import store_memory as memory_store  # noqa: F401
 from subprocess_utils import COMMAND_TIMEOUT  # noqa: F401
 from subprocess_utils import run as _run
 
 log = logging.getLogger("openclaw.skills")
+_CONTAINER_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,9 +43,18 @@ async def list_containers() -> str:
     return out.strip() or "No containers running."
 
 
+def _normalize_container_name(service: str) -> str | None:
+    candidate = str(service or "").strip()
+    if not candidate or not _CONTAINER_NAME_RE.fullmatch(candidate):
+        return None
+    return candidate
+
+
 async def get_container_status(service: str) -> str:
     """Get detailed status for a specific container."""
-    safe_name = shlex.quote(service).strip("'")
+    safe_name = _normalize_container_name(service)
+    if not safe_name:
+        return "❌ Invalid container name."
 
     # Get basic info
     rc, out, err = await _run([
@@ -81,7 +92,9 @@ async def get_container_logs(service: str, lines: int = 100) -> str:
     get buried in verbose health-check output.
     """
     import re as _re
-    safe_name = shlex.quote(service).strip("'")
+    safe_name = _normalize_container_name(service)
+    if not safe_name:
+        return "❌ Invalid container name."
     # Fetch up to 500 lines so we have enough to extract signal from
     fetch_lines = max(min(lines, 500), 100)
 
@@ -122,7 +135,9 @@ async def get_container_logs(service: str, lines: int = 100) -> str:
 
 async def restart_container(service: str) -> str:
     """Restart a Docker container by name. Falls back to NAS via SSH if not found locally."""
-    safe_name = shlex.quote(service).strip("'")
+    safe_name = _normalize_container_name(service)
+    if not safe_name:
+        return "❌ Invalid container name."
 
     # Try local Docker first
     rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
@@ -145,8 +160,9 @@ async def restart_container(service: str) -> str:
 
         ssh_opts = ["-p", str(NAS_SSH_PORT), "-o", "ConnectTimeout=10", "-o", "BatchMode=yes"]
         ssh_target = f"{NAS_SSH_USER}@{NAS_HOST}"
+        remote_container = shlex.quote(safe_name)
         rc, out, err = await _run(
-            ["ssh"] + ssh_opts + [ssh_target, f"/usr/local/bin/docker restart {safe_name}"],
+            ["ssh"] + ssh_opts + [ssh_target, f"/usr/local/bin/docker restart {remote_container}"],
             timeout=60,
         )
         if rc == 0:
@@ -165,7 +181,9 @@ async def restart_container(service: str) -> str:
 
 async def stop_container(service: str) -> str:
     """Stop a Docker container by name. Returns result message."""
-    safe_name = shlex.quote(service).strip("'")
+    safe_name = _normalize_container_name(service)
+    if not safe_name:
+        return "❌ Invalid container name."
 
     rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
     if rc != 0:
@@ -179,7 +197,9 @@ async def stop_container(service: str) -> str:
 
 async def pause_container(service: str) -> str:
     """Pause a running Docker container by name. Returns result message."""
-    safe_name = shlex.quote(service).strip("'")
+    safe_name = _normalize_container_name(service)
+    if not safe_name:
+        return "❌ Invalid container name."
 
     rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
     if rc != 0:
@@ -193,7 +213,9 @@ async def pause_container(service: str) -> str:
 
 async def unpause_container(service: str) -> str:
     """Unpause a paused Docker container by name. Returns result message."""
-    safe_name = shlex.quote(service).strip("'")
+    safe_name = _normalize_container_name(service)
+    if not safe_name:
+        return "❌ Invalid container name."
 
     rc, _, err = await _run(["docker", "inspect", "--format", "{{.State.Status}}", safe_name])
     if rc != 0:

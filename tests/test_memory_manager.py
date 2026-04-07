@@ -1,5 +1,6 @@
 """
-Tests for memory_manager.py — Unified Memory Facade (Phase 16).
+Tests for the unified memory facade (store_memory/recall_memories/forget_memory/memory_stats)
+merged into memory.py (Phase 16 consolidation — formerly memory_manager.py).
 
 Uses mocks for all backends so tests run without ChromaDB/disk/LLM.
 """
@@ -9,7 +10,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-import memory_manager
+import memory as memory_module  # noqa: E402
+
+# Bind the facade functions to the `memory_manager` namespace used throughout this file.
+# `store` is already taken in memory.py (ConversationStore singleton), so the unified
+# facade uses `store_memory`, `recall_memories`, etc.
+class _MemoryManagerFacade:
+    store = staticmethod(memory_module.store_memory)
+    recall = staticmethod(memory_module.recall_memories)
+    forget = staticmethod(memory_module.forget_memory)
+    stats = staticmethod(memory_module.memory_stats)
+    _content_id = staticmethod(memory_module._mem_content_id)
+    _unique_id = staticmethod(memory_module._mem_unique_id)
+
+memory_manager = _MemoryManagerFacade()
 
 
 def _make_mock_vector_store(**overrides):

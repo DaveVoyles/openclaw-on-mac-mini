@@ -34,6 +34,7 @@ LABEL version="0.6.0"
 # Production environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/app" \
     PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
