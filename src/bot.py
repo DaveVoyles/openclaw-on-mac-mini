@@ -15,7 +15,9 @@ import logging
 import os
 import re
 import sys
+import threading
 import time
+import pathlib
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,13 @@ from dotenv import load_dotenv
 from agent_loop import scan_interrupted as scan_interrupted_plans
 from agentmail import send_agent_mail
 from approvals import is_emergency_stopped
+from ask_orchestrator import (
+    apply_repair_budget,
+    get_latency_load_snapshot,
+    normalize_model_preference,
+    run_ask_stream,
+    select_latency_budget_policy,
+)
 from config import cfg
 from constants import (
     EMBED_DESC_LIMIT,
@@ -50,17 +59,63 @@ from permissions import (  # noqa: F401 — re-exported for backward compat
 from qmd import remember_fact
 from runtime_state import (
     get_anchor_state,
-    get_context_lock,
+    get_effective_channel_profile,
     request_context,
     reset_anchor_state,
     reset_context_lock,
+    resolve_context_lock,
     set_anchor_state,
     set_bot,
     set_context_lock,
 )
 from scheduler import scheduler
 from skills import SKILLS
-from trace_context import setup_trace_logging
+from trace_context import get_trace_id, setup_trace_logging
+
+# --- Refactored modules ---
+from feedback_guardrails import (
+    _FEEDBACK_CHANNEL_EVENTS,
+    _FEEDBACK_CHANNEL_RATE_LIMIT_MAX,
+    _FEEDBACK_CHANNEL_RATE_LIMIT_WINDOW_SECONDS,
+    _FEEDBACK_DEDUPE_WINDOW_SECONDS,
+    _FEEDBACK_GUARDRAIL_LOCK,
+    _FEEDBACK_RECENT_EVENTS,
+    _FEEDBACK_USER_EVENTS,
+    _FEEDBACK_USER_RATE_LIMIT_MAX,
+    _FEEDBACK_USER_RATE_LIMIT_WINDOW_SECONDS,
+    _apply_feedback_guardrails as _apply_feedback_guardrails_from_module,
+    _prune_feedback_event_buffer,
+    _reset_feedback_guardrails_for_tests,
+)
+from quality_helpers import (
+    _append_explainability_footer,
+    _build_ask_context_controls,
+    _build_ask_failure_message,
+    _build_ask_recovery_block,
+    _build_ask_timeout_message,
+    _build_coverage_summary_for_embed,
+    _build_quality_broadening_prompt,
+    _classify_ask_failure,
+    _count_markdown_table_items,
+    _explainability_note_from_meta,
+    _extract_distinct_source_domains,
+    _extract_reported_evidence_completeness,
+    _extract_requested_item_count,
+    _quality_retry_improved,
+    _QUALITY_RETRY_MAX_ATTEMPTS,
+    _QUALITY_RETRY_TIMEOUT_SECONDS,
+    _record_budget_policy_metric,
+    _record_quality_metric,
+    _score_answer_quality,
+    _with_requested_item_target,
+    _UNCERTAINTY_MARKERS,
+    _FRESHNESS_MARKERS,
+    _EVIDENCE_COMPLETENESS_RE,
+    _REQUESTED_ITEMS_PREFIX_RE,
+    _REQUESTED_ITEMS_BARE_RE,
+)
+from response_actions import _generate_follow_ups
+from bot_formatting import truncate_for_embed
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -81,6 +136,74 @@ ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 
 _CHANNEL_ROLES: dict[int, str] = {}
 _CHANNEL_PROMPTS: dict[str, str] = {}
+_DEFAULT_ASK_THREAD_CACHE: dict[tuple[int, int, int], tuple[int, float]] = {}
+_DEFAULT_ASK_THREAD_CACHE_TTL_SECONDS = 60 * 60 * 24
+_MESSAGE_CONTENT_HINT_CACHE: dict[int, float] = {}
+_MESSAGE_CONTENT_HINT_COOLDOWN_SECONDS = 60 * 30
+
+_CHANNEL_ROLES: dict[int, str] = {}
+_CHANNEL_PROMPTS: dict[str, str] = {}
+_DEFAULT_ASK_THREAD_CACHE: dict[tuple[int, int, int], tuple[int, float]] = {}
+_DEFAULT_ASK_THREAD_CACHE_TTL_SECONDS = 60 * 60 * 24
+_MESSAGE_CONTENT_HINT_CACHE: dict[int, float] = {}
+_MESSAGE_CONTENT_HINT_COOLDOWN_SECONDS = 60 * 30
+
+
+def _apply_feedback_guardrails(
+    *,
+    user_id: int | None,
+    channel_id: int | None,
+    message_id: int | None,
+    rating: str,
+    now: float | None = None,
+) -> tuple[bool, str]:
+    """Return (accepted, decision_reason) for a feedback interaction.
+
+    Defined in bot.py so constants can be patched via monkeypatch on the bot module.
+    """
+    resolved_now = float(now) if now is not None else time.monotonic()
+    safe_user_id = int(user_id or 0)
+    safe_channel_id = int(channel_id or 0)
+    safe_message_id = int(message_id or 0)
+    normalized_rating = str(rating or "").strip().lower() or "unknown"
+
+    dedupe_key = (safe_user_id, safe_channel_id, safe_message_id, normalized_rating)
+    user_key = (safe_user_id, safe_channel_id)
+
+    with _FEEDBACK_GUARDRAIL_LOCK:
+        dedupe_cutoff = resolved_now - max(0.0, _FEEDBACK_DEDUPE_WINDOW_SECONDS)
+        for key, ts in list(_FEEDBACK_RECENT_EVENTS.items()):
+            if ts < dedupe_cutoff:
+                _FEEDBACK_RECENT_EVENTS.pop(key, None)
+
+        previous_ts = _FEEDBACK_RECENT_EVENTS.get(dedupe_key)
+        if previous_ts is not None and (resolved_now - previous_ts) < _FEEDBACK_DEDUPE_WINDOW_SECONDS:
+            return False, "dedupe"
+
+        user_events = _prune_feedback_event_buffer(
+            _FEEDBACK_USER_EVENTS.get(user_key, []),
+            resolved_now,
+            _FEEDBACK_USER_RATE_LIMIT_WINDOW_SECONDS,
+        )
+        _FEEDBACK_USER_EVENTS[user_key] = user_events
+        if len(user_events) >= _FEEDBACK_USER_RATE_LIMIT_MAX:
+            _FEEDBACK_RECENT_EVENTS[dedupe_key] = resolved_now
+            return False, "rate_limited_user"
+
+        channel_events = _prune_feedback_event_buffer(
+            _FEEDBACK_CHANNEL_EVENTS.get(safe_channel_id, []),
+            resolved_now,
+            _FEEDBACK_CHANNEL_RATE_LIMIT_WINDOW_SECONDS,
+        )
+        _FEEDBACK_CHANNEL_EVENTS[safe_channel_id] = channel_events
+        if len(channel_events) >= _FEEDBACK_CHANNEL_RATE_LIMIT_MAX:
+            _FEEDBACK_RECENT_EVENTS[dedupe_key] = resolved_now
+            return False, "rate_limited_channel"
+
+        user_events.append(resolved_now)
+        channel_events.append(resolved_now)
+        _FEEDBACK_RECENT_EVENTS[dedupe_key] = resolved_now
+        return True, "accepted"
 
 
 def _resolve_channel_thread_scope(
@@ -96,7 +219,11 @@ def _resolve_channel_thread_scope(
         resolved_thread_id = channel.id
         if channel.parent_id:
             resolved_channel_id = channel.parent_id
-    lock = get_context_lock(user_id)
+    lock, _ = resolve_context_lock(
+        user_id=user_id,
+        channel_id=resolved_channel_id,
+        thread_id=resolved_thread_id,
+    )
     if lock and lock.get("mode") in {"channel", "thread", "prior_report"}:
         if lock.get("channel_id"):
             resolved_channel_id = int(lock["channel_id"])
@@ -164,11 +291,159 @@ setup_trace_logging()
 # ---------------------------------------------------------------------------
 
 
-def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:
-    """Truncate *text* to fit in a Discord embed description."""
-    if len(text) <= limit:
-        return text
-    return text[: limit - 20] + "\n… (truncated)"
+def _is_user_allowed(user_id: int) -> bool:
+    """Return True when *user_id* is in the configured allow-list."""
+    if not ALLOWED_USER_IDS:
+        return True
+    return user_id in ALLOWED_USER_IDS
+
+
+def _bot_can_read_channel(channel: Any) -> bool:
+    """Best-effort check that the bot has read access to *channel*."""
+    guild = getattr(channel, "guild", None)
+    if guild is None:
+        return True
+    permissions_for = getattr(channel, "permissions_for", None)
+    if not callable(permissions_for):
+        return False
+    bot_member = getattr(guild, "me", None)
+    if bot_member is None and bot.user is not None and hasattr(guild, "get_member"):
+        bot_member = guild.get_member(bot.user.id)
+    if bot_member is None:
+        return True
+    perms = permissions_for(bot_member)
+    return bool(getattr(perms, "read_messages", getattr(perms, "view_channel", False)))
+
+
+def _should_send_message_content_hint(channel: Any) -> bool:
+    """Rate-limit message-content intent hints to avoid channel spam."""
+    channel_id = getattr(channel, "id", None)
+    if channel_id is None:
+        return False
+    now = time.time()
+    last_sent = _MESSAGE_CONTENT_HINT_CACHE.get(int(channel_id), 0.0)
+    if now - last_sent < _MESSAGE_CONTENT_HINT_COOLDOWN_SECONDS:
+        return False
+    _MESSAGE_CONTENT_HINT_CACHE[int(channel_id)] = now
+    return True
+
+
+def _default_ask_thread_cache_key(channel: Any, user_id: int) -> tuple[int, int, int]:
+    guild_id = 0
+    guild = getattr(channel, "guild", None)
+    if guild is not None and getattr(guild, "id", None):
+        guild_id = int(guild.id)
+    return guild_id, int(channel.id), int(user_id)
+
+
+def _default_ask_thread_user_tag(user_id: int) -> str:
+    return f"u{int(user_id)}"
+
+
+def _build_default_ask_thread_name(user_question: str, user_id: int) -> str:
+    snippet = re.sub(r"\s+", " ", (user_question or "").strip())
+    if not snippet:
+        snippet = "conversation"
+    snippet = snippet[:50].strip()
+    if len(snippet) == 50:
+        snippet += "…"
+    tag = _default_ask_thread_user_tag(user_id)
+    name = f"💬 {snippet} · {tag}"
+    if len(name) > 100:
+        keep = max(1, 100 - len(f" · {tag}") - 1)
+        name = f"💬 {snippet[:keep].rstrip()} · {tag}"
+    return name
+
+
+def _is_reusable_bot_thread(candidate: Any, *, parent_channel_id: int) -> bool:
+    if not isinstance(candidate, discord.Thread):
+        return False
+    if bot.user is None:
+        return False
+    if getattr(candidate, "owner_id", None) != bot.user.id:
+        return False
+    if getattr(candidate, "parent_id", None) != parent_channel_id:
+        return False
+    if bool(getattr(candidate, "archived", False)):
+        return False
+    if bool(getattr(candidate, "locked", False)):
+        return False
+    return True
+
+
+def _remember_default_ask_thread(channel: Any, user_id: int, thread_id: int) -> None:
+    _DEFAULT_ASK_THREAD_CACHE[_default_ask_thread_cache_key(channel, user_id)] = (thread_id, time.time())
+
+
+def _pick_most_recent_thread(candidates: list[discord.Thread]) -> discord.Thread:
+    def _thread_sort_key(thread: discord.Thread) -> int:
+        last_msg = getattr(thread, "last_message_id", None)
+        try:
+            return int(last_msg or thread.id)
+        except Exception:
+            return int(thread.id)
+
+    return sorted(candidates, key=_thread_sort_key, reverse=True)[0]
+
+
+async def _get_or_create_default_ask_thread(
+    channel: Any,
+    *,
+    user_id: int,
+    user_question: str,
+) -> tuple[discord.Thread | None, bool]:
+    """Return (thread, created_new) for top-level default ask routing."""
+    if (
+        not cfg.thread_auto_create
+        or isinstance(channel, discord.DMChannel)
+        or not hasattr(channel, "create_thread")
+        or bot.user is None
+    ):
+        return None, False
+
+    key = _default_ask_thread_cache_key(channel, user_id)
+    cached = _DEFAULT_ASK_THREAD_CACHE.get(key)
+    if cached:
+        thread_id, last_seen = cached
+        if time.time() - last_seen <= _DEFAULT_ASK_THREAD_CACHE_TTL_SECONDS:
+            candidate = bot.get_channel(thread_id)
+            if candidate is None:
+                guild = getattr(channel, "guild", None)
+                get_thread = getattr(guild, "get_thread", None)
+                if callable(get_thread):
+                    candidate = get_thread(thread_id)
+            if _is_reusable_bot_thread(candidate, parent_channel_id=int(channel.id)):
+                _remember_default_ask_thread(channel, user_id, int(candidate.id))
+                return candidate, False
+        else:
+            _DEFAULT_ASK_THREAD_CACHE.pop(key, None)
+
+    user_tag = _default_ask_thread_user_tag(user_id)
+    channel_threads = getattr(channel, "threads", None)
+    if channel_threads is not None:
+        matching_threads = [
+            thread
+            for thread in list(channel_threads)
+            if _is_reusable_bot_thread(thread, parent_channel_id=int(channel.id))
+            and user_tag in str(getattr(thread, "name", ""))
+        ]
+        if matching_threads:
+            chosen = _pick_most_recent_thread(matching_threads)
+            _remember_default_ask_thread(channel, user_id, int(chosen.id))
+            return chosen, False
+
+    try:
+        archive_duration = 60 if cfg.thread_archive_minutes <= 60 else 1440
+        created = await channel.create_thread(
+            name=_build_default_ask_thread_name(user_question, user_id),
+            auto_archive_duration=archive_duration,
+            reason=f"Auto-threaded default ask for user {user_id}",
+        )
+        _remember_default_ask_thread(channel, user_id, int(created.id))
+        return created, True
+    except Exception as exc:
+        log.debug("Default ask auto-thread creation failed: %s", exc)
+        return None, False
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +507,14 @@ class OpenClawBot(commands.Bot):
         # Start health-check HTTP server
         from discord_web import start_health_server
         self._health_runner = await start_health_server(self)
+
+        # Start background metrics collector for Prometheus export updates
+        try:
+            from metrics_collector import start_metrics_collector
+
+            await start_metrics_collector()
+        except Exception as exc:
+            log.warning("Failed to start metrics collector: %s", exc)
 
     async def on_ready(self) -> None:
         """Initialize bot on connection to Discord.
@@ -315,7 +598,27 @@ class OpenClawBot(commands.Bot):
 
         # Start background tasks (cleanup, audit writer, proactive loops)
         from discord_background import start_background_tasks
-        start_background_tasks(self)
+
+        active_background_loops = 0
+        try:
+            active_background_loops = int(start_background_tasks(self))
+        except Exception as exc:
+            log.error("Failed to start background task supervisor: %s", exc)
+
+        if active_background_loops <= 0:
+            log.warning(
+                "Background loops unavailable; proactive monitoring is disabled until restart",
+            )
+            if ALERT_CHANNEL_ID:
+                alert_channel = self.get_channel(ALERT_CHANNEL_ID)
+                if alert_channel is not None:
+                    try:
+                        await alert_channel.send(
+                            "⚠️ Background monitoring loops failed to start. "
+                            "Slash commands remain online, but proactive alerts are paused.",
+                        )
+                    except Exception as exc:
+                        log.debug("Failed to post background-loop warning: %s", exc)
 
         # Set bot presence/activity
         container_count = len(self.guilds)
@@ -351,6 +654,10 @@ class OpenClawBot(commands.Bot):
 
     async def close(self) -> None:
         """Graceful shutdown: flush audit log, close sessions, stop health server."""
+        from discord_background import stop_background_tasks
+
+        await stop_background_tasks()
+
         if _audit_buffer:
             entries = list(_audit_buffer)
             _audit_buffer.clear()
@@ -374,6 +681,12 @@ class OpenClawBot(commands.Bot):
                 await fn()
             except Exception as exc:
                 log.debug("close %s: %s", name, exc)
+        try:
+            from metrics_collector import stop_metrics_collector
+
+            await stop_metrics_collector()
+        except Exception as exc:
+            log.debug("close metrics_collector: %s", exc)
         if self._health_runner:
             await self._health_runner.cleanup()
         await super().close()
@@ -393,53 +706,348 @@ register_commands(bot)
 # /ask command and helpers (core — stays in bot.py)
 # ---------------------------------------------------------------------------
 
+
+async def _send_app_command_error_message(
+    interaction: discord.Interaction,
+    message: str,
+) -> None:
+    """Safely send slash-command error output regardless of response state."""
+    if interaction.response.is_done():
+        await interaction.followup.send(message, ephemeral=True)
+    else:
+        await interaction.response.send_message(message, ephemeral=True)
+
+
+@bot.tree.error
+async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+    """Global fallback for non-cog app-command errors."""
+    command_name = getattr(getattr(interaction, "command", None), "qualified_name", "unknown")
+    user_id = getattr(getattr(interaction, "user", None), "id", "unknown")
+    channel_id = getattr(interaction, "channel_id", "unknown")
+    guild_id = getattr(interaction, "guild_id", "dm")
+
+    if isinstance(error, app_commands.CheckFailure):
+        user_message = str(error).strip() or "⛔ You don't have permission to use this command."
+        log.warning(
+            "App command check failed command=%s user_id=%s channel_id=%s guild_id=%s error=%r",
+            command_name,
+            user_id,
+            channel_id,
+            guild_id,
+            error,
+        )
+    elif isinstance(error, app_commands.TransformerError):
+        user_message = "⚠️ I couldn't parse one of your inputs. Please check the command options and try again."
+        log.warning(
+            "App command transformer error command=%s user_id=%s channel_id=%s guild_id=%s error=%r",
+            command_name,
+            user_id,
+            channel_id,
+            guild_id,
+            error,
+        )
+    elif isinstance(error, app_commands.CommandInvokeError):
+        original = getattr(error, "original", error)
+        if isinstance(original, (asyncio.TimeoutError, TimeoutError)):
+            user_message = "⏱️ This command timed out before it finished. Please try again."
+            log.warning(
+                "App command timeout command=%s user_id=%s channel_id=%s guild_id=%s error=%r",
+                command_name,
+                user_id,
+                channel_id,
+                guild_id,
+                original,
+            )
+        else:
+            user_message = "⚠️ Something went wrong while running that command. Please try again."
+            log.exception(
+                "App command invoke error command=%s user_id=%s channel_id=%s guild_id=%s",
+                command_name,
+                user_id,
+                channel_id,
+                guild_id,
+                exc_info=original,
+            )
+    else:
+        user_message = "⚠️ Something went wrong while handling that command. Please try again."
+        log.exception(
+            "Unhandled app command error command=%s user_id=%s channel_id=%s guild_id=%s",
+            command_name,
+            user_id,
+            channel_id,
+            guild_id,
+            exc_info=error,
+        )
+
+    try:
+        await _send_app_command_error_message(interaction, user_message)
+    except Exception as send_exc:
+        log.exception(
+            "Failed to send app command error response command=%s user_id=%s channel_id=%s guild_id=%s",
+            command_name,
+            user_id,
+            channel_id,
+            guild_id,
+            exc_info=send_exc,
+        )
+
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 _FILE_THRESHOLD = 8000
-
-_IMAGE_LINK_RE = re.compile(
-    r"!?\[(?:[^\]]*(?:photo|image|📸|🖼️|property|listing)[^\]]*)\]\((https?://[^)]+)\)",
-    re.IGNORECASE,
-)
-_BARE_IMAGE_RE = re.compile(
-    r"(https?://\S+\.(?:jpg|jpeg|png|webp|gif)(?:\?\S*)?)",
-    re.IGNORECASE,
-)
-
 
 # ---------------------------------------------------------------------------
 # Message formatting (extracted to bot_formatting.py)
 # ---------------------------------------------------------------------------
 
 from bot_formatting import (
+    build_attachment_embed_summary as _build_attachment_embed_summary,
     extract_file_attachment as _extract_file_attachment,
-)
-from bot_formatting import (
     extract_image_url as _extract_image_url,
-)
-from bot_formatting import (
     format_markdown_for_discord as _format_markdown_for_discord,
-)
-from bot_formatting import (
     format_tables_for_context as _format_tables_for_context,
-)
-from bot_formatting import (
+    should_package_as_attachment as _should_package_as_attachment,
     split_response as _split_response,
 )
 
 _STREAM_EDIT_INTERVAL = 3.0
 
 
+# ---------------------------------------------------------------------------
+# Quality helpers — defined in bot.py so test patches to mod.XXX work
+# ---------------------------------------------------------------------------
 
-_STREAM_EDIT_INTERVAL = 3.0
 
-_CODE_BLOCK_RE = re.compile(
-    r"```(\w+)?\n([\s\S]+?)```",
-)
+def _safe_score_answer_quality(
+    answer_text: str,
+    *,
+    final_meta: dict[str, Any] | None = None,
+    context: str = "ask",
+) -> dict[str, Any]:
+    """Failure-safe wrapper for answer quality scoring."""
+    try:
+        result = _score_answer_quality(answer_text, final_meta=final_meta)
+        evidence = result.get("evidence_completeness")
+        source_fields_missing = bool(result.get("evidence_source_fields_missing"))
+        if isinstance(evidence, (int, float)) and float(evidence) < 0.5 and not source_fields_missing:
+            _record_quality_metric("ask_low_evidence_completeness", context=context)
+        return result
+    except Exception as exc:
+        _record_quality_metric("ask_quality_scoring_error", context=context)
+        log.debug("Answer quality scoring failed: %s", exc)
+        requested_item_count = None
+        if isinstance(final_meta, dict) and isinstance(final_meta.get("requested_item_count"), int):
+            requested_item_count = max(1, min(int(final_meta["requested_item_count"]), 25))
+        return {
+            "score": 50,
+            "status": "medium",
+            "reasons": ["Quality scoring unavailable; using neutral fallback."],
+            "item_count": 0,
+            "table_item_count": 0,
+            "source_domain_count": 0,
+            "freshness_cue_count": 0,
+            "uncertainty_marker_count": 0,
+            "requested_item_count": requested_item_count,
+            "error": str(exc),
+        }
+
+
+def _should_prefer_file_for_multichunk_response(
+    *,
+    question: str,
+    chunks: list[str],
+    response_text: str,
+) -> bool:
+    """Use one attachment when recap/list responses would otherwise fragment across messages."""
+    requested = _extract_requested_item_count(question)
+    lowered = (question or "").lower()
+    recap_like = any(token in lowered for token in ("recap", "headlines", "stories", "this week", "weekend"))
+    if _should_package_as_attachment(response_text, chunks):
+        return True
+    if len(chunks) <= 1:
+        return False
+    if isinstance(requested, int) and requested >= 6:
+        return True
+    if recap_like and len(response_text) >= 2800:
+        return True
+    return False
+
+
+async def _run_quality_auto_repair(
+    *,
+    question: str,
+    response_text: str,
+    model_used: str,
+    final_meta: dict[str, Any] | None,
+    quality_meta: dict[str, Any],
+    context: str,
+    run_retry_stream: Any,
+    think_hook: Any | None = None,
+) -> dict[str, Any]:
+    """Run a strict one-attempt quality repair path with bounded timeout."""
+    profile_values = get_effective_channel_profile()
+    profile_name = str(
+        (profile_values.get("retrieval_profile") if isinstance(profile_values, dict) else None)
+        or "general"
+    ).strip().lower()
+    if profile_name == "auto":
+        profile_name = "general"
+
+    load_stats = get_latency_load_snapshot(command_hint=context)
+    latency_policy = select_latency_budget_policy(
+        profile_name=profile_name,
+        load_stats=load_stats,
+    )
+    base_attempts = 1 if _QUALITY_RETRY_MAX_ATTEMPTS > 0 else 0
+    base_timeout_seconds = int(_QUALITY_RETRY_TIMEOUT_SECONDS)
+    repair_budget = apply_repair_budget(
+        max_attempts=base_attempts,
+        timeout_seconds=base_timeout_seconds,
+        policy=latency_policy,
+    )
+    max_attempts = int(repair_budget["max_attempts"])
+    timeout_seconds = int(repair_budget["timeout_seconds"])
+    if load_stats is None:
+        _record_quality_metric("ask_budget_metrics_missing", context=context)
+    _record_budget_policy_metric(
+        path="ask_repair",
+        profile=profile_name,
+        load_tier=str(latency_policy.get("load_tier", "unknown")),
+        decision=str(latency_policy.get("decision", "failsafe")),
+    )
+    _record_quality_metric(
+        f"ask_budget_decision_{latency_policy.get('decision', 'failsafe')}",
+        context=context,
+    )
+
+    status = str(quality_meta.get("status", "unknown"))
+    eligible = status == "low" and model_used != "error" and max_attempts > 0
+
+    current_meta = _with_requested_item_target(final_meta, question=question)
+    requested_item_count = current_meta.get("requested_item_count")
+    if isinstance(requested_item_count, int):
+        requested_item_count = max(1, min(int(requested_item_count), 25))
+    else:
+        requested_item_count = None
+
+    quality_payload = dict(quality_meta) if isinstance(quality_meta, dict) else {}
+    if isinstance(requested_item_count, int):
+        quality_payload["requested_item_count"] = requested_item_count
+    current_meta["answer_quality"] = quality_payload
+    retry_summary: dict[str, Any] = {
+        "policy": "latency_aware_single_attempt",
+        "max_attempts": max_attempts,
+        "timeout_seconds": timeout_seconds,
+        "profile_name": profile_name,
+        "load_tier": latency_policy.get("load_tier", "unknown"),
+        "latency_decision": latency_policy.get("decision", "failsafe"),
+        "degrade_mode": latency_policy.get("degrade_mode", "normal"),
+        "degrade_reasons": latency_policy.get("degrade_reasons", []),
+        "metrics_available": latency_policy.get("metrics_available", False),
+        "attempted": False,
+        "attempt_count": 0,
+        "eligible": eligible,
+        "outcome": "skipped",
+        "status_path": [status],
+        "improved": False,
+        "requested_item_count": requested_item_count,
+    }
+
+    if not eligible:
+        retry_summary["skip_reason"] = "high_quality" if status != "low" else "ineligible"
+        current_meta["answer_quality_retry"] = retry_summary
+        _record_quality_metric("ask_quality_retry_skipped", context=context)
+        return {
+            "response_text": response_text,
+            "model_used": model_used,
+            "final_meta": current_meta,
+            "quality_meta": quality_meta,
+            "retry_summary": retry_summary,
+            "retry_result": None,
+        }
+
+    _record_quality_metric("ask_low_score_detected", context=context)
+    _record_quality_metric("ask_quality_retry_attempted", context=context)
+    retry_summary["attempted"] = True
+    retry_summary["attempt_count"] = 1
+
+    retry_question = _build_quality_broadening_prompt(
+        question,
+        quality_meta.get("reasons", []),
+    )
+    if think_hook is not None:
+        await think_hook("Low confidence detected — broadening once…")
+
+    try:
+        retry_result = await asyncio.wait_for(
+            run_retry_stream(retry_question),
+            timeout=timeout_seconds,
+        )
+    except asyncio.TimeoutError:
+        retry_summary["outcome"] = "failed"
+        retry_summary["error"] = "timeout"
+        _record_quality_metric("ask_quality_retry_failed", context=context)
+        current_meta["answer_quality_retry"] = retry_summary
+        return {
+            "response_text": response_text,
+            "model_used": model_used,
+            "final_meta": current_meta,
+            "quality_meta": quality_meta,
+            "retry_summary": retry_summary,
+            "retry_result": None,
+        }
+    except Exception as retry_exc:
+        retry_summary["outcome"] = "failed"
+        retry_summary["error"] = str(retry_exc)
+        _record_quality_metric("ask_quality_retry_failed", context=context)
+        log.debug("Quality broadening retry failed (%s): %s", context, retry_exc)
+        current_meta["answer_quality_retry"] = retry_summary
+        return {
+            "response_text": response_text,
+            "model_used": model_used,
+            "final_meta": current_meta,
+            "quality_meta": quality_meta,
+            "retry_summary": retry_summary,
+            "retry_result": None,
+        }
+
+    retry_quality = _safe_score_answer_quality(
+        retry_result.response_text,
+        final_meta=_with_requested_item_target(retry_result.final_meta, question=question),
+        context=context,
+    )
+    retry_summary["status_path"].append(retry_quality.get("status", "unknown"))
+    if _quality_retry_improved(original=quality_meta, retried=retry_quality):
+        improved_meta = _with_requested_item_target(retry_result.final_meta, question=question)
+        improved_meta["answer_quality"] = retry_quality
+        retry_summary["improved"] = True
+        retry_summary["outcome"] = "improved"
+        improved_meta["answer_quality_retry"] = retry_summary
+        _record_quality_metric("ask_quality_retry_improved", context=context)
+        return {
+            "response_text": retry_result.response_text,
+            "model_used": retry_result.model_used,
+            "final_meta": improved_meta,
+            "quality_meta": retry_quality,
+            "retry_summary": retry_summary,
+            "retry_result": retry_result,
+        }
+
+    retry_summary["outcome"] = "no_improvement"
+    current_meta["answer_quality_retry"] = retry_summary
+    _record_quality_metric("ask_quality_retry_no_improvement", context=context)
+    return {
+        "response_text": response_text,
+        "model_used": model_used,
+        "final_meta": current_meta,
+        "quality_meta": quality_meta,
+        "retry_summary": retry_summary,
+        "retry_result": None,
+    }
 
 
 # ---------------------------------------------------------------------------
 # Reaction-based action buttons on responses
 # ---------------------------------------------------------------------------
+
 
 class ResponseActions(discord.ui.View):
     """Buttons attached to /ask responses: Save, Regenerate, Email."""
@@ -542,13 +1150,13 @@ class ResponseActions(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Email failed: {e}", ephemeral=True)
 
-    @discord.ui.button(label="👍", style=discord.ButtonStyle.success)
+    @discord.ui.button(label="👍 Helpful", style=discord.ButtonStyle.success)
     async def thumbs_up_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        await self._record_feedback(interaction, "positive")
+        await self._record_feedback(interaction, "helpful")
 
-    @discord.ui.button(label="👎", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label="👎 Not helpful", style=discord.ButtonStyle.danger)
     async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        await self._record_feedback(interaction, "negative")
+        await self._record_feedback(interaction, "not_helpful")
 
     @discord.ui.button(label="🔒 Lock to Channel", style=discord.ButtonStyle.secondary, row=2)
     async def lock_channel_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -688,44 +1296,72 @@ class ResponseActions(discord.ui.View):
             await interaction.followup.send(f"❌ Failed: {e}")
 
     async def _record_feedback(self, interaction: discord.Interaction, rating: str) -> None:
-        import json
-        from pathlib import Path
+        normalized_rating = (
+            "helpful"
+            if str(rating).strip().lower() in {"helpful", "positive", "up", "thumbs_up"}
+            else "not_helpful"
+        )
+        channel_id = getattr(interaction.channel, "id", None)
+        message_id = getattr(interaction.message, "id", None)
+        accepted, decision_reason = _apply_feedback_guardrails(
+            user_id=getattr(interaction.user, "id", None),
+            channel_id=channel_id,
+            message_id=message_id,
+            rating=normalized_rating,
+        )
         try:
-            feedback_file = Path("/memory/feedback.jsonl")
+            if not accepted:
+                _record_quality_metric(
+                    event="ask_feedback_suppressed",
+                    context="discord_ask",
+                )
+                _record_quality_metric(
+                    event=f"ask_feedback_suppressed_{decision_reason}",
+                    context="discord_ask",
+                )
+                if decision_reason == "dedupe":
+                    emoji = "👍" if normalized_rating == "helpful" else "👎"
+                    await interaction.response.send_message(
+                        f"{emoji} Already captured that feedback just now — thanks!",
+                        ephemeral=True,
+                    )
+                else:
+                    await interaction.response.send_message(
+                        "⏱️ Thanks — feedback is rate-limited right now. Try again shortly.",
+                        ephemeral=True,
+                    )
+                return
+
+            feedback_file = pathlib.Path("/memory/feedback.jsonl")
             entry = {
                 "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "user_id": interaction.user.id,
+                "channel_id": channel_id,
+                "message_id": message_id,
                 "question": self._question[:200],
-                "rating": rating,
+                "rating": normalized_rating,
             }
             feedback_file.parent.mkdir(parents=True, exist_ok=True)
             async with aiofiles.open(feedback_file, "a") as f:
                 await f.write(json.dumps(entry) + "\n")
-            emoji = "👍" if rating == "positive" else "👎"
+            _record_quality_metric(
+                event=f"ask_feedback_{normalized_rating}",
+                context="discord_ask",
+            )
+            _record_quality_metric(
+                event="ask_feedback_accepted",
+                context="discord_ask",
+            )
+            emoji = "👍" if normalized_rating == "helpful" else "👎"
             await interaction.response.send_message(
                 f"{emoji} Feedback recorded — thanks!", ephemeral=True,
             )
         except Exception as e:
-            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
-
-
-async def _generate_follow_ups(question: str, response: str) -> list[str]:
-    """Generate 2 short follow-up questions based on the Q&A exchange."""
-    try:
-        from llm.chat import chat
-        prompt = (
-            f"Based on this Q&A exchange, suggest exactly 2 short follow-up questions the user might want to ask next.\n"
-            f"Q: {question[:300]}\n"
-            f"A: {response[:500]}\n\n"
-            f"Return ONLY the 2 questions, one per line, no numbering, no extra text. Keep each under 60 characters."
-        )
-        text, _, _ = await chat(prompt, model_preference="gemini")
-        lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
-        return lines[:2]
-    except (ImportError, RuntimeError, TimeoutError):
-        # LLM may be unavailable; return empty list to skip follow-ups
-        return []
-
+            log.debug("Feedback capture failed: %s", e)
+            await interaction.response.send_message(
+                "⚠️ Couldn't save feedback this time, but thanks for sharing.",
+                ephemeral=True,
+            )
 
 from bot_attachments import (
     handle_doc_attachment as _handle_doc_attachment,
@@ -739,20 +1375,33 @@ from bot_attachments import (
 @app_commands.describe(
     question="Your question or request",
     attachment="Optional image or document to include in your question",
-    model="LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude)",
+    model="LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude). Alias: claude → anthropic",
+    scope="Context scope: current channel/thread, cross-channel, or prior-report anchor mode",
+    reset_context="Reset the current anchor context before recall (optional)",
+    anchor="Optional anchor override ID. Use 'none' to disable anchor targeting",
 )
-@app_commands.choices(model=[
-    app_commands.Choice(name="🔄 Auto (Copilot → Gemini)", value="auto"),
-    app_commands.Choice(name="🏠 Local (Gemma/Ollama)", value="local"),
-    app_commands.Choice(name="☁️ Gemini (cloud)", value="gemini"),
-    app_commands.Choice(name="🟢 OpenAI (GPT-4o)", value="openai"),
-    app_commands.Choice(name="🟣 Anthropic (Claude)", value="anthropic"),
-])
+@app_commands.choices(
+    model=[
+        app_commands.Choice(name="🔄 Auto (Copilot → Gemini)", value="auto"),
+        app_commands.Choice(name="🏠 Local (Gemma/Ollama)", value="local"),
+        app_commands.Choice(name="☁️ Gemini (cloud)", value="gemini"),
+        app_commands.Choice(name="🟢 OpenAI (GPT-4o)", value="openai"),
+        app_commands.Choice(name="🟣 Anthropic (Claude)", value="anthropic"),
+    ],
+    scope=[
+        app_commands.Choice(name="Current channel/thread", value="current"),
+        app_commands.Choice(name="Cross-channel recall", value="cross-channel"),
+        app_commands.Choice(name="Prior report anchor", value="prior-report"),
+    ],
+)
 async def ask_cmd(
     interaction: discord.Interaction,
     question: str,
     attachment: discord.Attachment | None = None,
     model: app_commands.Choice[str] | None = None,
+    scope: app_commands.Choice[str] | None = None,
+    reset_context: bool | None = None,
+    anchor: str | None = None,
 ) -> None:
     """Main user query handler — routes to Gemini (tool-capable) or Ollama (conversational)."""
 
@@ -907,11 +1556,18 @@ async def ask_cmd(
     response_text = ""
     model_used = "unknown"
     model_pref = model.value if model else get_model_preference(interaction.user.id)
+    context_controls = _build_ask_context_controls(
+        scope=scope.value if scope else None,
+        reset_context=reset_context,
+        anchor=anchor,
+    )
 
     # Guardrail: if user picks "local" but query clearly needs tools, auto-upgrade
     from llm import _needs_tools as llm_needs_tools
-    if model_pref == "local" and llm_needs_tools(question):
-        model_pref = "gemini"
+    model_pref, upgraded_to_gemini = normalize_model_preference(
+        question, model_pref, llm_needs_tools,
+    )
+    if upgraded_to_gemini:
         guardrail_note = "\n\n> ⚡ *Auto-upgraded to Gemini (your query requires tool access)*"
     else:
         guardrail_note = ""
@@ -964,72 +1620,127 @@ async def ask_cmd(
 
         # Streaming response with progressive Discord edits
         _routing_notes: list[str] = []
+        _context_explainability_note = ""
+        _final_meta: dict[str, Any] = {}
         _model_labels = {"auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini", "openai": "GPT-4o", "anthropic": "Claude"}
         await _think(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
         last_edit = 0.0
         display_question = question if len(question) < 200 else question[:197] + "..."
 
-        _DISCORD_TIMEOUT = 840
-
         try:
-            _context_badges: list[str] = []
-            with request_context(channel_id=context_channel_id, thread_id=context_thread_id, user_id=str(interaction.user.id)):
-                async for chunk_text, is_final, meta in llm_chat_stream(
-                    user_message=question,
+            def _update_history(updated_history: list[dict[str, Any]]) -> None:
+                conv.update_from_llm(updated_history)
+                conversation_store.auto_save_thread(
+                    interaction.user.id, interaction.channel_id, str(interaction.user.display_name),
+                )
+
+            async def _handle_partial_chunk(chunk_text: str) -> None:
+                nonlocal last_edit
+                now = time.monotonic()
+                if now - last_edit < _STREAM_EDIT_INTERVAL:
+                    return
+                try:
+                    preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
+                    embed = discord.Embed(description=preview, color=discord.Color.purple())
+                    embed.set_author(
+                        name=f"Replying to: {display_question}",
+                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                    )
+                    await interaction.edit_original_response(content=None, embed=embed)
+                    last_edit = now
+                except Exception as exc:
+                    log.debug("Stream edit failed: %s", exc)
+
+            result = await run_ask_stream(
+                llm_stream=llm_chat_stream,
+                user_message=question,
+                history=conv.history,
+                user_name=str(interaction.user.display_name),
+                model_preference=model_pref,
+                channel_id=context_channel_id,
+                thread_id=context_thread_id,
+                user_id=str(interaction.user.id),
+                on_tool_call=_on_tool_call,
+                on_partial_chunk=_handle_partial_chunk,
+                update_history=_update_history,
+                context_controls=context_controls,
+            )
+            response_text = result.response_text
+            model_used = result.model_used
+            _final_meta = result.final_meta
+            _final_meta = _with_requested_item_target(_final_meta, question=question)
+            _context_explainability_note = _explainability_note_from_meta(_final_meta)
+            _routing_notes.extend(result.routing_notes)
+            if not _context_explainability_note:
+                _routing_notes.extend(result.context_badges)
+
+            quality_meta = _safe_score_answer_quality(
+                response_text,
+                final_meta=_final_meta,
+                context="ask",
+            )
+            async def _run_retry_stream(retry_question: str) -> Any:
+                return await run_ask_stream(
+                    llm_stream=llm_chat_stream,
+                    user_message=retry_question,
                     history=conv.history,
                     user_name=str(interaction.user.display_name),
-                    on_tool_call=_on_tool_call,
                     model_preference=model_pref,
-                ):
-                    model_used = meta.get("model_used", "unknown")
-                    badge = meta.get("context_badge")
-                    if isinstance(badge, str) and badge and badge not in _context_badges:
-                        _context_badges.append(badge)
+                    channel_id=context_channel_id,
+                    thread_id=context_thread_id,
+                    user_id=str(interaction.user.id),
+                    on_tool_call=_on_tool_call,
+                    on_partial_chunk=_handle_partial_chunk,
+                    update_history=_update_history,
+                    context_controls=context_controls,
+                )
 
-                    if is_final:
-                        response_text = chunk_text
-                        _routing_notes.extend(meta.get("routing_notes", []))
-                        _routing_notes.extend(_context_badges)
-                        if "updated_history" in meta:
-                            conv.update_from_llm(meta["updated_history"])
-                            conversation_store.auto_save_thread(
-                                interaction.user.id, interaction.channel_id, str(interaction.user.display_name)
-                            )
-                        log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
-                        break
+            repair_result = await _run_quality_auto_repair(
+                question=question,
+                response_text=response_text,
+                model_used=model_used,
+                final_meta=_final_meta,
+                quality_meta=quality_meta,
+                context="ask",
+                run_retry_stream=_run_retry_stream,
+                think_hook=_think,
+            )
+            response_text = str(repair_result["response_text"])
+            model_used = str(repair_result["model_used"])
+            _final_meta = dict(repair_result["final_meta"])
+            retry_result = repair_result.get("retry_result")
+            if retry_result is not None:
+                _context_explainability_note = _explainability_note_from_meta(_final_meta)
+                _routing_notes = list(retry_result.routing_notes)
+                if not _context_explainability_note:
+                    _routing_notes.extend(retry_result.context_badges)
 
-                    now = time.monotonic()
-                    if now - last_edit >= _STREAM_EDIT_INTERVAL and chunk_text:
-                        try:
-                            preview = chunk_text[:_EMBED_LIMIT - 50] + "\n\n*⏳ streaming…*"
-                            embed = discord.Embed(description=preview, color=discord.Color.purple())
-                            embed.set_author(
-                                name=f"Replying to: {display_question}",
-                                icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                            )
-                            await interaction.edit_original_response(content=None, embed=embed)
-                            last_edit = now
-                        except Exception as exc:
-                            log.debug("Stream edit failed: %s", exc)
+            final_quality = _final_meta.get("answer_quality")
+            if isinstance(final_quality, dict) and final_quality.get("status") == "low":
+                _routing_notes.append("Quality: low confidence")
+            recovery_block = _build_ask_recovery_block(_final_meta)
+            if recovery_block and "Recovery note" not in response_text:
+                response_text = f"{response_text.rstrip()}{recovery_block}"
+            log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
 
         except asyncio.TimeoutError:
             elapsed = time.monotonic() - _progress_start
             log.warning("LLM response timed out after %.0fs for: %.80s", elapsed, question)
-            progress_so_far = "\n".join(_progress_lines) if _progress_lines else "No progress recorded"
-            response_text = (
-                f"⏰ **Timed out** after {elapsed:.0f}s.\n\n"
-                f"**Steps completed:**\n{progress_so_far}\n\n"
-                f"Try a simpler query, or use `/ask model:gemini` to retry."
+            response_text = _build_ask_timeout_message(
+                elapsed_seconds=elapsed,
+                progress_lines=_progress_lines,
+                model_pref=model_pref,
+                trace_id=_trace.trace_id,
             )
             model_used = "timeout"
 
     except Exception as e:
         log.error("LLM error: %s", e)
-        safe_question = discord.utils.escape_markdown(question)
-        response_text = (
-            f"❌ **LLM Error:** {str(e)}\n\n"
-            "**Your message was saved below for easy copy-pasting/retry:**\n"
-            f"```\n{safe_question}\n```"
+        response_text = _build_ask_failure_message(
+            question=question,
+            model_pref=model_pref,
+            trace_id=_trace.trace_id,
+            category=_classify_ask_failure(str(e)),
         )
         model_used = "error"
 
@@ -1043,6 +1754,7 @@ async def ask_cmd(
             response_text = (
                 f"⚠️ I wasn't able to generate a useful response for this query.\n\n"
                 f"**What happened:** The model returned {'an empty response' if is_empty else 'your question echoed back'}.\n"
+                f"**Trace ID:** `{_trace.trace_id}`\n"
                 f"**Suggestion:** Try rephrasing, or use `/ask model:gemini` to force Gemini with tools.\n\n"
                 f"```\n{question[:300]}\n```"
             )
@@ -1087,6 +1799,11 @@ async def ask_cmd(
     chunks = _split_response(response_text)
     image_url = _extract_image_url(response_text)
     file_attachment = _extract_file_attachment(response_text)
+    force_file_response = _should_prefer_file_for_multichunk_response(
+        question=question,
+        chunks=chunks,
+        response_text=response_text,
+    )
 
     # Generate follow-up questions asynchronously
     follow_ups = await _generate_follow_ups(question, response_text)
@@ -1138,21 +1855,24 @@ async def ask_cmd(
         else:
             actual_icon = "🔄"
         ft = f"💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model}"
+        ft = _append_explainability_footer(ft, _context_explainability_note)
         if _routing_notes:
             ft += " | ⚠️ " + " → ".join(_routing_notes)
         return ft
 
     # Long-response path: send as downloadable .md file
-    if len(response_text) > _FILE_THRESHOLD:
+    if len(response_text) > _FILE_THRESHOLD or force_file_response:
         ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
         md_file = discord.File(
             io.BytesIO(response_text.encode()),
             filename=f"openclaw-response-{ts}.md",
         )
 
-        summary = response_text[:500].rstrip()
-        if len(response_text) > 500:
-            summary += "\n\n📎 **Full response attached as file**"
+        summary = _build_attachment_embed_summary(
+            response_text,
+            coverage_summary=_build_coverage_summary_for_embed(_final_meta),
+            attachment_note="📎 **Full response attached as file**",
+        )
 
         embed = discord.Embed(description=summary, color=discord.Color.purple())
         display_question = question if len(question) < 200 else question[:197] + "..."
@@ -1257,14 +1977,28 @@ async def ask_cmd(
     # Error tracking: record /ask outcome
     try:
         from error_tracker import record_outcome
+        explainability = _final_meta.get("explainability") if isinstance(_final_meta.get("explainability"), dict) else {}
+        scope_mode = _final_meta.get("scope_mode") or explainability.get("scope_mode")
+        lock_mode = explainability.get("lock_mode")
+        anchor_id = explainability.get("anchor_id")
+        anchor_age = explainability.get("anchor_age_seconds")
+        profile_values = explainability.get("effective_profile") or explainability.get("effective_profile_values")
         record_outcome(
             user_id=interaction.user.id,
             question=question,
             model_used=model_used,
             success=(model_used != "error"),
             error_msg=response_text if model_used == "error" else "",
+            trace_id=get_trace_id(),
+            response_preview=response_text[:2000],
             latency_ms=int((time.monotonic() - _ask_start) * 1000),
             routing_notes=_routing_notes,
+            scope_mode=scope_mode,
+            lock_mode=lock_mode,
+            anchor_id=anchor_id,
+            anchor_age=anchor_age,
+            profile_values=profile_values if isinstance(profile_values, dict) else {},
+            explainability=explainability if isinstance(explainability, dict) else {},
         )
     except Exception as exc:
         log.debug("Error tracking record failed: %s", exc)
@@ -1340,23 +2074,32 @@ async def ask_cmd(
 
 @bot.event
 async def on_message(message: discord.Message) -> None:
-    """Handle follow-up messages in bot-created threads as conversational /ask."""
+    """Handle thread follow-ups and default plain-text /ask messages."""
     # Ignore bot messages
     if message.author.bot:
         return
 
-    # Only handle messages inside threads
-    if not isinstance(message.channel, discord.Thread):
+    user_question = (message.content or "").strip()
+    if user_question.startswith("/"):
         await bot.process_commands(message)
         return
 
-    # Only handle threads the bot owns
-    if message.channel.owner_id != bot.user.id:
+    in_thread = isinstance(message.channel, discord.Thread)
+    bot_owns_thread = in_thread and bot.user is not None and message.channel.owner_id == bot.user.id
+    original_bot_owned_thread = bot_owns_thread
+
+    # Allow default plain-message ask flow in user-owned/forum threads too.
+    # Previously these returned early, which made non-slash messages appear ignored.
+    if in_thread and not _bot_can_read_channel(message.channel):
+        await bot.process_commands(message)
+        return
+
+    if not in_thread and not _bot_can_read_channel(message.channel):
         await bot.process_commands(message)
         return
 
     # Auth check
-    if not is_allowed(message.author.id):
+    if not _is_user_allowed(message.author.id):
         return
 
     if is_emergency_stopped():
@@ -1369,63 +2112,140 @@ async def on_message(message: discord.Message) -> None:
         await message.channel.send("⚠️ LLM not configured.")
         return
 
-    # Max message guard
-    if cfg.thread_max_messages > 0:
+    flow_channel = message.channel
+    if original_bot_owned_thread:
+        parent_channel = getattr(message.channel, "parent", None)
+        if parent_channel is not None and getattr(parent_channel, "id", None):
+            _remember_default_ask_thread(parent_channel, message.author.id, int(message.channel.id))
+
+    if not in_thread:
+        routed_thread, _created_new = await _get_or_create_default_ask_thread(
+            message.channel,
+            user_id=message.author.id,
+            user_question=user_question,
+        )
+        if routed_thread is not None:
+            flow_channel = routed_thread
+            in_thread = True
+            bot_owns_thread = True
+            _remember_default_ask_thread(message.channel, message.author.id, int(routed_thread.id))
+            try:
+                await message.channel.send(f"💬 Continuing in {routed_thread.mention}")
+            except Exception as exc:
+                log.debug("Failed to send default-ask thread redirect: %s", exc)
+
+    # Max message guard (threads only)
+    if bot_owns_thread and cfg.thread_max_messages > 0:
         conv = conversation_store.get(
             user_id=message.author.id,
-            channel_id=message.channel.id,
+            channel_id=flow_channel.id,
             user_name=str(message.author.display_name),
         )
         if conv.message_count >= cfg.thread_max_messages * 2:
-            await message.channel.send(
+            await flow_channel.send(
                 f"⚠️ This thread has reached {cfg.thread_max_messages} exchanges. "
                 "Please start a new `/ask` for a fresh conversation."
             )
             return
 
-    user_question = message.content.strip()
     if not user_question:
+        if (
+            getattr(message, "guild", None) is not None
+            and _is_user_allowed(message.author.id)
+            and _should_send_message_content_hint(message.channel)
+        ):
+            try:
+                await message.channel.send(
+                    "ℹ️ I received a message with no readable content. "
+                    "If plain-message chat isn't working, enable **Message Content Intent** "
+                    "for this bot in the Discord Developer Portal, then restart OpenClaw. "
+                    "You can still use `/ask` immediately."
+                )
+            except Exception as exc:
+                log.debug("Failed to send message-content hint: %s", exc)
         return
 
     _ask_start = time.monotonic()
 
-    async with message.channel.typing():
+    async with flow_channel.typing():
         conv = conversation_store.get(
             user_id=message.author.id,
-            channel_id=message.channel.id,
+            channel_id=flow_channel.id,
             user_name=str(message.author.display_name),
         )
 
         model_pref = get_model_preference(message.author.id)
         from llm import _needs_tools as llm_needs_tools
-        if model_pref == "local" and llm_needs_tools(user_question):
-            model_pref = "gemini"
+        model_pref, _ = normalize_model_preference(user_question, model_pref, llm_needs_tools)
 
         response_text = ""
 
         try:
             scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
-                message.channel,
-                message.channel.id,
+                flow_channel,
+                flow_channel.id,
                 user_id=message.author.id,
             )
-            with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(message.author.id)):
-                async for chunk_text, is_final, meta in llm_chat_stream(
-                    user_message=user_question,
+            def _update_history(updated_history: list[dict[str, Any]]) -> None:
+                conv.update_from_llm(updated_history)
+                conversation_store.auto_save_thread(
+                    message.author.id, flow_channel.id, str(message.author.display_name),
+                )
+
+            result = await run_ask_stream(
+                llm_stream=llm_chat_stream,
+                user_message=user_question,
+                history=conv.history,
+                user_name=str(message.author.display_name),
+                model_preference=model_pref,
+                channel_id=scoped_channel_id,
+                thread_id=scoped_thread_id,
+                user_id=str(message.author.id),
+                update_history=_update_history,
+            )
+            response_text = result.response_text
+            model_used = result.model_used
+
+            final_meta: dict[str, Any] = _with_requested_item_target(result.final_meta, question=user_question)
+            quality_meta = _safe_score_answer_quality(
+                response_text,
+                final_meta=final_meta,
+                context="ask_message_flow",
+            )
+            async def _run_retry_stream(retry_question: str) -> Any:
+                return await run_ask_stream(
+                    llm_stream=llm_chat_stream,
+                    user_message=retry_question,
                     history=conv.history,
                     user_name=str(message.author.display_name),
                     model_preference=model_pref,
-                ):
-                    if is_final:
-                        response_text = chunk_text
-                        if "updated_history" in meta:
-                            conv.update_from_llm(meta["updated_history"])
-                            conversation_store.auto_save_thread(
-                                message.author.id, message.channel.id, str(message.author.display_name)
-                            )
-                        break
+                    channel_id=scoped_channel_id,
+                    thread_id=scoped_thread_id,
+                    user_id=str(message.author.id),
+                    update_history=_update_history,
+                )
+
+            repair_result = await _run_quality_auto_repair(
+                question=user_question,
+                response_text=response_text,
+                model_used=model_used,
+                final_meta=final_meta,
+                quality_meta=quality_meta,
+                context="ask_message_flow",
+                run_retry_stream=_run_retry_stream,
+            )
+            response_text = str(repair_result["response_text"])
+            final_meta = dict(repair_result["final_meta"])
+            recovery_block = _build_ask_recovery_block(final_meta)
+            if recovery_block and "Recovery note" not in response_text:
+                response_text = f"{response_text.rstrip()}{recovery_block}"
+            log.info(
+                "message ask quality status=%s path=%s",
+                final_meta.get("answer_quality", {}).get("status", "unknown"),
+                final_meta.get("answer_quality_retry", {}).get("status_path"),
+            )
         except Exception as e:
-            log.error("Thread follow-up LLM error: %s", e)
+            log.error("Message ask-flow LLM error: %s", e)
             response_text = f"❌ **Error:** {e}"
 
         if not response_text or len(response_text.strip()) < 5:
@@ -1455,13 +2275,23 @@ async def on_message(message: discord.Message) -> None:
         )
         chunks = _split_response(response_text)
 
-        for chunk in chunks:
-            embed = discord.Embed(description=chunk, color=discord.Color.purple())
-            await message.channel.send(embed=embed)
-        if table_image_file:
-            await message.channel.send(file=table_image_file)
+        try:
+            for chunk in chunks:
+                embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                await flow_channel.send(embed=embed)
+            if table_image_file:
+                await flow_channel.send(file=table_image_file)
+        except Exception as exc:
+            log.warning("Failed to send default ask response in flow channel: %s", exc)
+            if flow_channel is not message.channel:
+                for chunk in chunks:
+                    embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                    await message.channel.send(embed=embed)
+                if table_image_file:
+                    await message.channel.send(file=table_image_file)
 
-    audit_log(message.author, "thread_followup", detail=user_question[:200])
+    audit_action = "thread_followup" if original_bot_owned_thread else "ask_default"
+    audit_log(message.author, audit_action, detail=user_question[:200])
     conversation_store.cleanup_expired()
 
 
