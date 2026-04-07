@@ -449,10 +449,9 @@ class TestCheckQualityDriftAlertEdgeCases:
     async def test_import_failure_returns_false(self, monkeypatch):
         monkeypatch.setattr(mod, "ALERT_CHANNEL_ID", 123)
         import sys
-        # Ensure dashboard is absent
-        sys.modules.pop("dashboard", None)
-        sys.modules.pop("dashboard.api_handlers", None)
-
+        # Use patch.dict to safely hide dashboard modules during the test.
+        # patch.dict will restore sys.modules to its original state after the block,
+        # preserving any previously imported references.
         with patch.dict(sys.modules, {"dashboard": None, "dashboard.api_handlers": None}):
             result = await mod._check_quality_drift_alert(MagicMock())
         assert result is False
