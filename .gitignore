@@ -56,3 +56,4 @@ Thumbs.db
 # Legacy test files
 test_phase4.py
 test_phase5.py
+data/ssh/

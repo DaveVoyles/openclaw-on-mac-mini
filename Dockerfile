@@ -46,6 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     lsb-release \
     fonts-dejavu-core \
     openssh-client \
+    rsync \
     ca-certificates \
     # Playwright runtime dependencies (minimal set)
     libnss3 \

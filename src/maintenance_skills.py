@@ -120,7 +120,7 @@ async def backup_config_to_nas() -> str:
     tasks_file = Path("/app/data/tasks.json")
     if tasks_file.exists():
         rc3, _, err3 = await _run(
-            ["scp", f"-P{NAS_SSH_PORT}", "-o", "BatchMode=yes",
+            ["scp", "-O", f"-P{NAS_SSH_PORT}", "-o", "BatchMode=yes",
              str(tasks_file), f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/tasks.json"],
             timeout=30,
         )
@@ -130,7 +130,7 @@ async def backup_config_to_nas() -> str:
     env_file = Path("/app/.env")
     if env_file.exists():
         rc4, _, err4 = await _run(
-            ["scp", f"-P{NAS_SSH_PORT}", "-o", "BatchMode=yes",
+            ["scp", "-O", f"-P{NAS_SSH_PORT}", "-o", "BatchMode=yes",
              str(env_file), f"{NAS_SSH_USER}@{NAS_HOST}:{remote_dest}/dot-env"],
             timeout=30,
         )
