@@ -14,7 +14,10 @@ from typing import Callable, Coroutine
 
 import discord
 
+from config import cfg
+
 log = logging.getLogger("openclaw.approvals")
+ALLOWED_APPROVER_IDS = set(getattr(cfg, "allowed_user_ids", []))
 
 
 # ---------------------------------------------------------------------------
@@ -184,6 +187,12 @@ class ApprovalView(discord.ui.View):
         await self._handle(interaction, approved=False)
 
     async def _handle(self, interaction: discord.Interaction, approved: bool):
+        if not is_authorized_approver(interaction.user.id):
+            await interaction.response.send_message(
+                "🚫 You are not authorized to approve this action.",
+                ephemeral=True,
+            )
+            return
         req = approval_store.resolve(
             self.request_id,
             approved=approved,
@@ -259,6 +268,10 @@ RISK_EMOJI = {
     RiskLevel.HIGH: "🟠",
     RiskLevel.CRITICAL: "🔴",
 }
+
+
+def is_authorized_approver(user_id: int) -> bool:
+    return bool(ALLOWED_APPROVER_IDS) and int(user_id) in ALLOWED_APPROVER_IDS
 
 
 def build_approval_embed(req: ApprovalRequest) -> discord.Embed:

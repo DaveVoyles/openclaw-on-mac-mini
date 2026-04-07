@@ -193,6 +193,18 @@
       .tip strong {
         color: var(--gold);
       }
+      .cmd-chip {
+        border: 1px solid var(--border);
+        background: rgba(104, 172, 229, 0.08);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 0.22rem 0.65rem;
+        font-size: 0.75rem;
+        cursor: pointer;
+      }
+      .cmd-chip:hover {
+        border-color: var(--spirit-blue);
+      }
       @media (max-width: 600px) {
         .toc {
           columns: 1;
@@ -420,32 +432,45 @@ You get a Discord embed with your active downloads</code></pre>
 
       <h3>First Commands to Try</h3>
       <div class="card">
+        <p style="margin:0;color:var(--muted)">
+          Use the quick-start chips below. They are loaded from the same runtime
+          command metadata as the dashboard, so this guide stays in sync with
+          live commands.
+        </p>
+      </div>
+
+      <h3>Live Command Finder</h3>
+      <div class="card">
+        <p style="color: var(--muted); margin-top: 0">
+          Same command metadata as the dashboard API, with quick-start shortcuts
+          and category-aware search.
+        </p>
+        <div
+          id="guide-command-quickstart"
+          style="display:flex;flex-wrap:wrap;gap:0.45rem;margin-bottom:0.75rem"
+        ></div>
+        <input
+          id="guide-command-search"
+          type="text"
+          placeholder="🔎 Search commands by name, description, or category"
+          style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:0.55rem;padding:0.55rem 0.7rem;color:var(--text);margin-bottom:0.55rem"
+        />
+        <div
+          id="guide-command-meta"
+          style="color:var(--muted);font-size:0.78rem;margin-bottom:0.5rem"
+        ></div>
         <table>
-          <tr>
-            <td><code>/ping</code></td>
-            <td>Verify the bot is alive. Shows latency and uptime.</td>
-          </tr>
-          <tr>
-            <td><code>/about</code></td>
-            <td>See version, Python version, discord.py version, OS info.</td>
-          </tr>
-          <tr>
-            <td><code>/whoami</code></td>
-            <td>
-              Check your Discord ID and whether you're in the allowed-users
-              list.
-            </td>
-          </tr>
-          <tr>
-            <td><code>/help</code></td>
-            <td>Full list of all 40+ commands grouped by category.</td>
-          </tr>
-          <tr>
-            <td><code>/skills</code></td>
-            <td>
-              See all 117 LLM-callable skills that <code>/ask</code> can use.
-            </td>
-          </tr>
+          <thead>
+            <tr>
+              <th style="width: 15rem">Command</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody id="guide-command-body">
+            <tr>
+              <td colspan="2" style="color:var(--muted);font-style:italic">Loading command index…</td>
+            </tr>
+          </tbody>
         </table>
       </div>
 
@@ -523,6 +548,11 @@ You get a Discord embed with your active downloads</code></pre>
           <td>Forces this one query to use Gemini (cloud)</td>
         </tr>
         <tr>
+          <td>Per-message</td>
+          <td><code>/ask model:anthropic "review this code"</code></td>
+          <td>Forces this one query to use Anthropic Claude</td>
+        </tr>
+        <tr>
           <td>Sticky default</td>
           <td><code>/model set</code> &rarr; choose preference</td>
           <td>All future <code>/ask</code> calls use your choice</td>
@@ -538,6 +568,12 @@ You get a Discord embed with your active downloads</code></pre>
         tool access (e.g., container management), OpenClaw auto-upgrades to
         Gemini and notes it in the response.
       </p>
+      <p>
+        <strong>Accepted model values:</strong>
+        <code>auto</code>, <code>local</code>, <code>gemini</code>,
+        <code>openai</code>, <code>anthropic</code>. Alias:
+        <code>claude</code> maps to <code>anthropic</code>.
+      </p>
 
       <div class="tip">
         <strong>&#128161; Context is per-channel:</strong>
@@ -548,6 +584,36 @@ You get a Discord embed with your active downloads</code></pre>
         Copy exports (<code>/recap copy-latest</code>,
         <code>/recap copy-thread</code>) stay locked to the current
         channel/thread.
+      </div>
+
+      <div class="tip">
+        <strong>&#128161; Default plain-message behavior:</strong> In allowed,
+        readable channels, plain messages (no leading <code>/</code>) are
+        treated like <code>/ask</code> automatically. OpenClaw creates or reuses
+        a bot-owned thread and keeps continuity in that thread for follow-ups.
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Context Controls &amp; Contamination Guard</h3>
+        <p style="margin-top: 0">
+          Keep scope strict by default, then override intentionally when needed:
+        </p>
+        <p>
+          <code>/ask</code> now exposes structured context options directly:
+          <code>scope</code>, <code>reset_context</code>, and <code>anchor</code>.
+          (Set <code>anchor:none</code> to disable anchor targeting.)
+        </p>
+        <ul>
+          <li><code>--reset-context</code> — clear anchor context before recall.</li>
+          <li><code>--cross-channel</code> — opt into cross-channel recall.</li>
+          <li><code>--use-prior-report</code> — prefer anchored prior-report context.</li>
+          <li><code>--anchor &lt;id&gt;</code> / <code>--no-anchor</code> — force or disable anchor targeting.</li>
+          <li><code>use:sports</code> / <code>use:wwe</code> — explicit domain directives that intentionally allow those context domains.</li>
+        </ul>
+        <p style="color: var(--muted); margin-bottom: 0">
+          Without explicit opt-in, recall guardrails suppress out-of-scope
+          sports/WWE candidates to reduce cross-topic contamination.
+        </p>
       </div>
 
       <div class="card">
@@ -1407,10 +1473,17 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
         processed. The final report appears with action buttons:<br />
         &nbsp;&nbsp;<strong>&#128204; Save to Memory</strong> &mdash; stores the
         report summary in QMD long-term memory<br />
-        &nbsp;&nbsp;<strong>&#128260; Re-run in 24h</strong> &mdash; schedules
-        the research query to repeat tomorrow<br />
+        &nbsp;&nbsp;<strong>&#128260; Re-run full research in 24h</strong>
+        &mdash; schedules the full <code>run_scheduled_research</code> workflow
+        (not just a quick web search)<br />
         &nbsp;&nbsp;<strong>&#128206; Save to Vault</strong> &mdash; writes the
         full report as a Markdown file to <code>data/vault/Research/</code>
+      </div>
+      <div class="tip">
+        <strong>&#129534; Persistence receipts:</strong> After completion, the
+        bot posts a receipt block showing what was saved and where (session
+        thread/channel, vault path, vector index entry, and Google Doc link when
+        configured).
       </div>
 
       <h2 id="recaps-sports">14.5 Recaps &amp; Sports Watch Guides</h2>
@@ -1445,11 +1518,18 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       <div class="card">
         <h3 style="margin-top: 0">Copy-ready recap exports</h3>
         <pre><code>/recap copy-latest
-/recap copy-thread days:7 style:action-items</code></pre>
+/recap copy-thread days:7 style:action-items
+/recap package-latest variant:copy-safe
+/recap package-thread days:7 style:table variant:artifact</code></pre>
         <p style="margin-top: 0.5rem">
           Use these when you want a clean copy/paste payload. They are locked to
           your current channel/thread context.
         </p>
+        <ul>
+          <li><code>copy-safe</code> — plain text bundle for chat/email/docs paste.</li>
+          <li><code>artifact</code> — attaches <code>report-package.txt</code> (+ table image when needed).</li>
+          <li><code>brief-detail</code> — fast skim summary plus full detail in one package.</li>
+        </ul>
       </div>
 
       <div class="card">
@@ -1555,6 +1635,30 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       <p>
         See any pending approval requests (e.g., a <code>/restart</code> waiting
         for confirmation).
+      </p>
+
+      <h3><code>/incident start &lt;title&gt; &lt;severity&gt; [details] [services]</code></h3>
+      <p>
+        Starts an incident room with Incident Copilot triage. The bot gathers
+        health, logs, audit, metrics, and memory context, then posts a summary
+        and suggested next actions in the incident thread.
+      </p>
+      <p>
+        Executable actions are never run immediately; they surface as action
+        buttons and must pass the same approval workflow before execution.
+      </p>
+      <h3><code>/incident list [state] [limit]</code></h3>
+      <p>
+        Lists recent incidents. Use <code>state</code> to filter
+        (<code>active</code>, <code>all</code>, <code>open</code>,
+        <code>investigating</code>, <code>monitoring</code>,
+        <code>resolved</code>).
+      </p>
+      <h3><code>/incident timeline [id] [limit]</code></h3>
+      <p>
+        Shows the incident timeline, including status transitions and Incident
+        Copilot events. If used inside an incident thread, the command can infer
+        the incident automatically.
       </p>
 
       <h3><code>/auditlog [lines]</code></h3>
@@ -1830,6 +1934,14 @@ https://openclaw.davevoyles.synology.me/guide</code></pre>
             <td>
               Wait 1 minute. Default: 60 requests/min. Reduce usage or increase
               limits in <code>config.yaml</code>.
+            </td>
+          </tr>
+          <tr>
+            <td><code>/ask</code> timeout or error includes a trace ID</td>
+            <td>
+              Keep the trace ID and check Dashboard &rarr; Runs for the matching
+              entry. Include that trace ID when opening an incident for faster
+              triage.
             </td>
           </tr>
           <tr>
@@ -3327,9 +3439,47 @@ Division 1 men's lacrosse games this week and post a table.
       <!-- 36. Enhanced Dashboard -->
       <h2 id="dashboard-enhanced">36. Enhanced Dashboard</h2>
       <p>
-        Phase 16 adds four new panels to the
-        <a href="/dashboard">dashboard</a>:
+        The <a href="/dashboard">dashboard</a> now includes operator-focused
+        panels for explainability, scoped memory, profile recommendations, and
+        quality scorecards.
       </p>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Workflow Lanes (Fast Navigation)</h3>
+        <p style="margin-bottom:0.55rem">
+          Use these four lanes as your default mental model when triaging work from the dashboard and command list.
+        </p>
+        <table>
+          <tr>
+            <th>Lane</th>
+            <th>Best for</th>
+            <th>Start with</th>
+          </tr>
+          <tr>
+            <td>Ask</td>
+            <td>Direct answers, summaries, and routine operator requests</td>
+            <td><code>/ask</code></td>
+          </tr>
+          <tr>
+            <td>Research</td>
+            <td>Deeper reports, source gathering, and ongoing tracking</td>
+            <td><code>/research</code>, <code>/research-search</code></td>
+          </tr>
+          <tr>
+            <td>Memory</td>
+            <td>Durable recall, scoped memory checks, and lifecycle tuning</td>
+            <td><em>Memory Browser</em>, <em>Channel Memory Inspector</em></td>
+          </tr>
+          <tr>
+            <td>Debug</td>
+            <td>Health, incidents, approvals, and explainability diagnostics</td>
+            <td><em>Run History Timeline</em>, <code>/status</code>, <code>/errors</code></td>
+          </tr>
+        </table>
+        <div class="tip" style="margin-bottom:0">
+          <strong>Safety note:</strong> Scoped memory clear is now previewed and requires explicit confirmation before deletion.
+        </div>
+      </div>
 
       <div class="card">
         <h3 style="margin-top: 0">New Dashboard Panels</h3>
@@ -3367,6 +3517,58 @@ Division 1 men's lacrosse games this week and post a table.
             </td>
           </tr>
         </table>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top: 0">Operator Playbook (Quick Reactions)</h3>
+        <ol>
+          <li>
+            <strong>Interpret context explainability first.</strong>
+            In <em>Run History Timeline</em>, click a run and read
+            <code>Scope</code>, <code>Lock</code>, <code>Anchor</code>, and
+            <code>Effective profile</code>. If these do not match intent,
+            fix lock/profile before debugging model output.
+          </li>
+          <li>
+            <strong>Use strict lock controls, then override explicitly.</strong>
+            Default to response buttons: <em>Lock to Channel</em>,
+            <em>Lock to Thread</em>, <em>Use Prior Report</em>, and
+            <em>Reset Context</em>. Prefer slash options on <code>/ask</code>
+            (<code>scope</code>, <code>reset_context</code>, <code>anchor</code>),
+            and use prompt markers only when needed:
+            <code>--cross-channel</code>, <code>--use-prior-report</code>,
+            <code>--anchor &lt;id&gt;</code>, <code>--no-anchor</code>,
+            <code>--reset-context</code>.
+          </li>
+          <li>
+            <strong>Tune memory lifecycle using policy + compaction signals.</strong>
+            In <em>Channel Memory Inspector</em>, check scoped counts,
+            <code>memory_policy</code>, and recent compaction events before
+            clearing/retraining. If compactions are frequent, increase scope
+            budget/retention; if stale recall appears, lower retention or clear
+            then retrain.
+          </li>
+          <li>
+            <strong>Run profile assistant changes as approve → apply.</strong>
+            Recommendations stay non-destructive until approved/applied.
+            Use <em>Revert</em> to restore the baseline profile value if the
+            change hurts output quality.
+          </li>
+          <li>
+            <strong>Choose report packaging by destination.</strong>
+            Use <code>copy-safe</code> for direct paste, <code>artifact</code>
+            for file handoff/audit attachments, and
+            <code>brief-detail</code> when stakeholders need a quick top-line
+            plus full context.
+          </li>
+          <li>
+            <strong>Respond to quality eval trends by window, not one run.</strong>
+            Watch summary + per-metric rates together with sample size. For a
+            sustained drop, inspect related runs’ explainability chips and active
+            profile values, then adjust locks/profile and monitor the next
+            scorecard cycle.
+          </li>
+        </ol>
       </div>
 
       <div class="tip">
@@ -4666,5 +4868,90 @@ git push --tags
       </div>
     </div>
     <!-- /container -->
+    <script>
+      const guideState = {
+        commands: [],
+        quickstart: [],
+      };
+
+      function escGuide(s) {
+        return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      }
+
+      function renderGuideQuickstart() {
+        const el = document.getElementById("guide-command-quickstart");
+        if (!el) return;
+        el.innerHTML = "";
+        guideState.quickstart.forEach((item) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "cmd-chip";
+          chip.textContent = item.name;
+          chip.title = item.desc || item.name;
+          chip.onclick = () => {
+            const input = document.getElementById("guide-command-search");
+            input.value = item.name;
+            filterGuideCommands();
+          };
+          el.appendChild(chip);
+        });
+      }
+
+      function renderGuideCommands(filter = "") {
+        const body = document.getElementById("guide-command-body");
+        const q = filter.trim().toLowerCase();
+        let total = 0;
+        let visible = 0;
+        const rows = [];
+
+        guideState.commands.forEach((cat) => {
+          const cmdRows = [];
+          (cat.commands || []).forEach((cmd) => {
+            total += 1;
+            const haystack = `${cmd.name} ${cmd.desc} ${cat.category}`.toLowerCase();
+            if (q && !haystack.includes(q)) return;
+            visible += 1;
+            cmdRows.push(
+              `<tr><td><code>${escGuide(cmd.name)}</code></td><td>${escGuide(cmd.desc)}</td></tr>`,
+            );
+          });
+          if (cmdRows.length) {
+            rows.push(`<tr><td colspan="2" style="font-weight:600;color:var(--gold);background:rgba(104,172,229,0.08)">${escGuide(cat.category)}</td></tr>`);
+            rows.push(...cmdRows);
+          }
+        });
+
+        body.innerHTML = rows.length
+          ? rows.join("")
+          : '<tr><td colspan="2" style="color:var(--muted);font-style:italic">No commands matched your search.</td></tr>';
+
+        const meta = document.getElementById("guide-command-meta");
+        meta.textContent = q
+          ? `Showing ${visible} of ${total} commands for “${q}”`
+          : `Showing all ${total} commands`;
+      }
+
+      function filterGuideCommands() {
+        const input = document.getElementById("guide-command-search");
+        renderGuideCommands(input ? input.value : "");
+      }
+
+      async function initGuideCommandFinder() {
+        const body = document.getElementById("guide-command-body");
+        try {
+          const r = await fetch("/api/dashboard");
+          const data = await r.json();
+          guideState.commands = data.commands || [];
+          guideState.quickstart = data.command_quickstart || [];
+          renderGuideQuickstart();
+          renderGuideCommands();
+        } catch (e) {
+          body.innerHTML = '<tr><td colspan="2" style="color:var(--muted);font-style:italic">Unable to load command index right now. Use <code>/help</code> in Discord.</td></tr>';
+        }
+      }
+
+      document.getElementById("guide-command-search")?.addEventListener("input", filterGuideCommands);
+      initGuideCommandFinder();
+    </script>
   </body>
 </html>

@@ -1,5 +1,7 @@
 """Tests for research_agent module — ResearchAgent with mocked dependencies."""
 
+import sys
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -126,6 +128,110 @@ async def test_data_truncation(agent):
         synth_args = mock_synth.call_args
         data = synth_args[0][1]  # second positional arg (data)
         assert len(data) <= 41000  # 40K + "[...truncated...]" suffix
+
+
+@pytest.mark.asyncio
+async def test_research_records_persistence_receipts(agent):
+    """Research run exposes explicit persistence receipts for UI surfaces."""
+    fake_vs = SimpleNamespace(
+        RESEARCH_COLLECTION="research",
+        search=AsyncMock(return_value=[]),
+        add_research_report=AsyncMock(return_value="research_123"),
+    )
+
+    with patch.object(agent, "_plan_searches", new_callable=AsyncMock) as mock_plan, \
+         patch.object(agent, "_perform_searches", new_callable=AsyncMock) as mock_search, \
+         patch.object(agent, "_fetch_pages", new_callable=AsyncMock) as mock_fetch, \
+         patch.object(agent, "_synthesize", new_callable=AsyncMock) as mock_synth, \
+         patch.object(agent, "_auto_save", new_callable=AsyncMock) as mock_auto_save:
+        mock_plan.return_value = ["q1"]
+        mock_search.return_value = [{"query": "q1", "results": "x", "urls": ["https://example.com"]}]
+        mock_fetch.return_value = []
+        mock_synth.return_value = "Final report"
+        mock_auto_save.return_value = {
+            "vault": {"saved": True, "location": "data/vault/Research/test.md", "detail": "ok"},
+            "gdoc": {"saved": False, "location": "google-docs", "detail": "Skipped"},
+        }
+
+        with patch.dict(sys.modules, {"vector_store": fake_vs}):
+            result = await agent.run("test query")
+
+        assert result == "Final report"
+        receipts = agent.get_last_receipts()
+        assert receipts["vault"]["saved"] is True
+        assert receipts["vault"]["location"] == "data/vault/Research/test.md"
+        assert receipts["vector"]["saved"] is True
+        assert receipts["vector"]["location"] == "research/research_123"
+
+
+@pytest.mark.asyncio
+async def test_research_receipts_capture_vector_index_failures(agent):
+    """Vector indexing failures are represented in persistence receipts."""
+    fake_vs = SimpleNamespace(
+        RESEARCH_COLLECTION="research",
+        search=AsyncMock(return_value=[]),
+        add_research_report=AsyncMock(side_effect=RuntimeError("vector down")),
+    )
+
+    with patch.object(agent, "_plan_searches", new_callable=AsyncMock) as mock_plan, \
+         patch.object(agent, "_perform_searches", new_callable=AsyncMock) as mock_search, \
+         patch.object(agent, "_fetch_pages", new_callable=AsyncMock) as mock_fetch, \
+         patch.object(agent, "_synthesize", new_callable=AsyncMock) as mock_synth, \
+         patch.object(agent, "_auto_save", new_callable=AsyncMock) as mock_auto_save:
+        mock_plan.return_value = ["q1"]
+        mock_search.return_value = [{"query": "q1", "results": "x", "urls": []}]
+        mock_fetch.return_value = []
+        mock_synth.return_value = "Final report"
+        mock_auto_save.return_value = {}
+
+        with patch.dict(sys.modules, {"vector_store": fake_vs}):
+            await agent.run("test query")
+
+        receipts = agent.get_last_receipts()
+        assert receipts["vector"]["saved"] is False
+        assert "failed" in receipts["vector"]["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_auto_save_receipts_include_vault_and_gdoc_locations(agent, monkeypatch):
+    """_auto_save returns explicit save locations for vault and Google Docs."""
+    monkeypatch.setenv("MATON_API_KEY", "test-key")
+    post = AsyncMock()
+
+    fake_obsidian = SimpleNamespace(
+        save_to_vault=AsyncMock(return_value="✅ Saved to vault: `Research/sample.md`")
+    )
+    fake_nas = SimpleNamespace(
+        nas_write_file=AsyncMock(
+            return_value=(
+                "✅ Saved `sample.md` to NAS at "
+                "`/volume1/documents/research/sample.md` (10 bytes)"
+            )
+        )
+    )
+    fake_gateway = SimpleNamespace(
+        create_google_doc=AsyncMock(
+            return_value=(
+                "✅ Google Doc created: **Research: sample**\n"
+                "🔗 https://docs.google.com/document/d/doc123/edit"
+            )
+        )
+    )
+
+    with patch.dict(
+        sys.modules,
+        {
+            "obsidian_writer": fake_obsidian,
+            "nas": fake_nas,
+            "gateway": fake_gateway,
+        },
+    ):
+        receipts = await agent._auto_save("sample", "report body", post)
+
+    assert receipts["vault"]["saved"] is True
+    assert receipts["vault"]["location"] == "data/vault/Research/sample.md"
+    assert receipts["gdoc"]["saved"] is True
+    assert receipts["gdoc"]["location"] == "https://docs.google.com/document/d/doc123/edit"
 
 
 # ---------------------------------------------------------------------------

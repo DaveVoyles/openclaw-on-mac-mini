@@ -9,6 +9,8 @@ import os
 import time
 from pathlib import Path
 
+from trace_context import get_trace_id
+
 log = logging.getLogger("openclaw.error_tracker")
 
 JOURNAL_FILE = Path(os.getenv("ERROR_JOURNAL", "/memory/error_journal.jsonl"))
@@ -25,10 +27,22 @@ def record_outcome(
     routing_notes: list[str] | None = None,
     tools_called: list[str] | None = None,
     reflected: bool = False,
+    scope_mode: str = None,
+    lock_mode: str = None,
+    anchor_id: str = None,
+    anchor_age: float = None,
+    profile_values: dict = None,
+    response_preview: str = "",
+    explainability: dict | None = None,
+    trace_id: str | None = None,
 ) -> None:
     """Record a /ask outcome to the error journal."""
+    resolved_trace_id = (trace_id or "").strip() or get_trace_id()
+    if resolved_trace_id == "no-trace":
+        resolved_trace_id = ""
     entry = {
         "ts": time.time(),
+        "trace_id": resolved_trace_id,
         "user_id": user_id,
         "question": question[:200],
         "model_used": model_used,
@@ -38,6 +52,13 @@ def record_outcome(
         "routing_notes": routing_notes or [],
         "tools_called": tools_called or [],
         "reflected": reflected,
+        "scope_mode": scope_mode,
+        "lock_mode": lock_mode,
+        "anchor_id": anchor_id,
+        "anchor_age": anchor_age,
+        "profile_values": profile_values or {},
+        "response_preview": (response_preview or "")[:2000],
+        "explainability": explainability or {},
     }
 
     try:

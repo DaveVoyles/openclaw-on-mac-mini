@@ -14,6 +14,16 @@ DEFAULT_INCIDENT_DB_PATH = Path(os.getenv("INCIDENT_DB_PATH", "/memory/incidents
 
 INCIDENT_STATUSES = ("open", "investigating", "monitoring", "resolved")
 INCIDENT_SEVERITIES = ("low", "medium", "high", "critical")
+INCIDENT_EVENT_TYPES = (
+    "created",
+    "status_update",
+    "resolved",
+    "postmortem",
+    "copilot_summary",
+    "copilot_actions",
+    "copilot_action_requested",
+    "copilot_action_executed",
+)
 ALLOWED_STATUS_TRANSITIONS = {
     "open": {"investigating", "monitoring", "resolved"},
     "investigating": {"monitoring", "resolved"},
@@ -86,6 +96,8 @@ class IncidentStore:
 
             CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
             CREATE INDEX IF NOT EXISTS idx_incidents_updated_at ON incidents(updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_incidents_thread_updated ON incidents(thread_id, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_incidents_channel_updated ON incidents(channel_id, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_incident_events_incident_id ON incident_events(incident_id, created_at DESC);
             """
         )
@@ -278,14 +290,37 @@ class IncidentStore:
             return None
         return self._row_to_incident(row)
 
-    def list_recent(self, limit: int = 20, include_resolved: bool = True) -> list[dict[str, Any]]:
+    def list_recent(
+        self,
+        limit: int = 20,
+        include_resolved: bool = True,
+        *,
+        status: str | None = None,
+        channel_id: int | None = None,
+        thread_id: int | None = None,
+    ) -> list[dict[str, Any]]:
         sql = "SELECT * FROM incidents"
         params: list[Any] = []
-        if not include_resolved:
-            sql += " WHERE status != 'resolved'"
+        clauses: list[str] = []
+        normalized_status = status.strip().lower() if status else ""
+        if normalized_status:
+            if normalized_status not in INCIDENT_STATUSES:
+                raise ValueError(f"Invalid status: {status}")
+            clauses.append("status = ?")
+            params.append(normalized_status)
+        elif not include_resolved:
+            clauses.append("status != 'resolved'")
+        if channel_id is not None:
+            clauses.append("channel_id = ?")
+            params.append(channel_id)
+        if thread_id is not None:
+            clauses.append("thread_id = ?")
+            params.append(thread_id)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
         sql += " ORDER BY updated_at DESC LIMIT ?"
         params.append(max(1, min(limit, 200)))
-        rows = self.conn.execute(sql, params).fetchall()
+        rows = self.conn.execute(sql, tuple(params)).fetchall()
         return [self._row_to_incident(row) for row in rows]
 
     def get_timeline(self, incident_id: int, limit: int = 50) -> list[dict[str, Any]]:
@@ -300,6 +335,63 @@ class IncidentStore:
             (incident_id, max(1, min(limit, 200))),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def get_incident_for_thread(self, thread_id: int, *, include_resolved: bool = True) -> dict[str, Any] | None:
+        sql = "SELECT * FROM incidents WHERE thread_id = ?"
+        params: list[Any] = [thread_id]
+        if not include_resolved:
+            sql += " AND status != 'resolved'"
+        sql += " ORDER BY updated_at DESC LIMIT 1"
+        row = self.conn.execute(sql, tuple(params)).fetchone()
+        if row is None:
+            return None
+        return self._row_to_incident(row)
+
+    def get_latest_for_channel(self, channel_id: int, *, include_resolved: bool = True) -> dict[str, Any] | None:
+        sql = "SELECT * FROM incidents WHERE channel_id = ?"
+        params: list[Any] = [channel_id]
+        if not include_resolved:
+            sql += " AND status != 'resolved'"
+        sql += " ORDER BY updated_at DESC LIMIT 1"
+        row = self.conn.execute(sql, tuple(params)).fetchone()
+        if row is None:
+            return None
+        return self._row_to_incident(row)
+
+    def append_event(
+        self,
+        incident_id: int,
+        *,
+        event_type: str,
+        status: str | None = None,
+        note: str = "",
+        actor_id: int | None = None,
+        actor_name: str | None = None,
+        created_at: float | None = None,
+    ) -> bool:
+        row = self.conn.execute("SELECT status FROM incidents WHERE id = ?", (incident_id,)).fetchone()
+        if row is None:
+            return False
+        normalized_type = event_type.strip().lower()
+        if normalized_type not in INCIDENT_EVENT_TYPES:
+            raise ValueError(f"Invalid incident event type: {event_type}")
+        normalized_status = (status or str(row["status"])).strip().lower()
+        if normalized_status not in INCIDENT_STATUSES:
+            raise ValueError(f"Invalid incident status: {normalized_status}")
+
+        now = created_at if created_at is not None else time.time()
+        self._record_event(
+            incident_id=incident_id,
+            event_type=normalized_type,
+            status=normalized_status,
+            note=note.strip()[:4000],
+            actor_id=actor_id,
+            actor_name=actor_name,
+            created_at=now,
+        )
+        self.conn.execute("UPDATE incidents SET updated_at = ? WHERE id = ?", (now, incident_id))
+        self.conn.commit()
+        return True
 
     def _record_event(
         self,

@@ -6,6 +6,7 @@ import asyncio
 import datetime as dt
 import logging
 import re
+from difflib import SequenceMatcher
 from typing import Any, Iterable
 
 import discord
@@ -20,6 +21,17 @@ from runtime_state import (
 from skills import finance_skills, news_skills, sports_skills
 
 log = logging.getLogger("openclaw.reporting_skills")
+
+
+def _record_quality_metric(event: str, context: str = "reporting") -> None:
+    """Best-effort metric emission for recap reliability signals."""
+    try:
+        from metrics_collector import get_collector
+
+        get_collector().record_quality_event(event=event, context=context)
+    except Exception:
+        # Metrics must not interfere with recap generation.
+        pass
 
 _RECAP_STYLES = {
     "highlights": (
@@ -80,6 +92,33 @@ _TEAM_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"\babout\s+([A-Z][A-Za-z0-9&.\- ]{1,30}?)(?:\s+in\b|\s+this\b|\s+next\b|$)"),
 )
 
+_MATCHUP_RE = re.compile(
+    r"\b[A-Z][A-Za-z0-9&'().\- ]{1,30}\s+(?:vs\.?|at)\s+[A-Z][A-Za-z0-9&'().\- ]{1,30}\b"
+)
+_RESULT_TITLE_RE = re.compile(r"^\*\*\d+\.\s+(.*?)\*\*$")
+_URL_RE = re.compile(r"https?://[^\s<>)]+", re.IGNORECASE)
+_SCORE_RE = re.compile(r"\b\d{1,3}\s*[-–]\s*\d{1,3}\b")
+_MONEY_RE = re.compile(r"\$\s?\d[\d,]*(?:\.\d+)?\s*(?:m|mn|million|b|bn|billion)?\b", re.IGNORECASE)
+_STATUS_RE = re.compile(r"\b(final|postponed|cancelled|canceled|delayed|live|tbd)\b", re.IGNORECASE)
+_DOMAIN_TOKEN_RE = re.compile(r"\b(?:www\.)?[a-z0-9.-]+\.[a-z]{2,}\b", re.IGNORECASE)
+_PLACEHOLDER_SOURCE_VALUES = {
+    "",
+    "-",
+    "n/a",
+    "na",
+    "none",
+    "unknown",
+    "tbd",
+    "not available",
+    "unverified",
+}
+_UNCERTAINTY_SIGNAL_RE = re.compile(
+    r"\b(unverified|uncertain|tentative|provisional|may|might|appears|reportedly|likely|not yet confirmed)\b",
+    re.IGNORECASE,
+)
+_LOW_TRUST_THRESHOLD = 55.0
+_LOW_FRESHNESS_THRESHOLD = 45.0
+
 
 def _normalize_style(style: str) -> str:
     value = (style or "highlights").strip().lower()
@@ -91,6 +130,13 @@ def _clean_text(text: str, limit: int = 280) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 1] + "…"
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
 
 
 def _extract_day_window(
@@ -412,10 +458,57 @@ async def generate_channel_recap_report(
         log.error("Weekly recap generation failed: %s", exc)
         return f"❌ Weekly recap failed: {exc}"
 
+    grounding = _compute_evidence_completeness(response.strip())
+    require_uncertainty = (not grounding["fail_safe"]) and (
+        grounding["unsupported_claim_count"] > 0 or grounding["evidence_completeness"] < 0.6
+    )
+    partial_coverage = bool(require_uncertainty)
+    reviewed_response = _enforce_uncertainty_wording(
+        response.strip(),
+        require_uncertainty=require_uncertainty,
+    )
+    warning_banner = ""
+    if partial_coverage:
+        evidence_pct = int(round(float(grounding["evidence_completeness"]) * 100))
+        warning_banner = _build_coverage_shortfall_block(
+            label=(
+                f"Evidence completeness is {evidence_pct}% and "
+                f"{grounding['unsupported_claim_count']} claim-like statement(s) are unsupported."
+            ),
+            scope_hint="limit recap scope (single thread/topic or fewer days) and rerun",
+            confidence_hint="Keep key details tentative until verified in source messages",
+        )
     recap_output = (
         f"## Weekly recap for #{channel_name}\n\n"
-        f"{response.strip()}\n\n"
+        f"{reviewed_response}\n\n"
         f"_Reviewed {len(messages)} messages from the last {window_days} day(s) via {model_used}_"
+    )
+    evidence_pct = int(round(float(grounding["evidence_completeness"]) * 100))
+    if grounding["fail_safe"]:
+        _record_quality_metric("recap_evidence_fail_safe", context="channel_recap")
+    elif grounding["evidence_completeness"] < 0.6:
+        _record_quality_metric("recap_low_evidence_completeness", context="channel_recap")
+    evidence_status_line = (
+        "- Evidence status: ⚪ fail-safe (source fields missing; no automatic penalty)\n"
+        if grounding["fail_safe"]
+        else (
+            "- Evidence status: ⚠️ unsupported claim rows detected\n"
+            if grounding["unsupported_claim_count"] > 0
+            else "- Evidence status: ✅ claim rows appear grounded\n"
+        )
+    )
+    recap_output = (
+        f"{warning_banner}{recap_output}\n\n"
+        "## 📎 Coverage Summary\n"
+        f"- Evidence completeness: **{evidence_pct}%** "
+        f"({grounding['supported_claim_count']}/{max(grounding['claim_like_count'], 1)} claim-like statements supported)\n"
+        f"{evidence_status_line}"
+        + (
+            "- Coverage shortfall: add source backing for unsupported claim-like statements.\n"
+            "- Retry scope hint: limit recap scope (single thread/topic or fewer days) and rerun.\n"
+            if partial_coverage
+            else ""
+        )
     )
     try:
         import vector_store
@@ -520,6 +613,595 @@ def _append_report_guardrails(
     return "\n".join(part for part in lines if part).strip()
 
 
+def _count_markdown_table_items(markdown_text: str) -> int:
+    """Count data rows in markdown tables (excluding header + separator rows)."""
+    rows = []
+    for line in (markdown_text or "").splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        if re.match(r"^\|[\s:\-\|]+\|?$", stripped):
+            continue
+        rows.append(stripped)
+
+    if len(rows) <= 1:
+        return 0
+    # First non-separator row is assumed to be table header.
+    return max(0, len(rows) - 1)
+
+
+def _extract_distinct_source_domains(text: str) -> set[str]:
+    """Extract unique URL domains from free-form text."""
+    matches = re.findall(r"https?://([A-Za-z0-9.-]+\.[A-Za-z]{2,})(?:/|\b)", text or "")
+    return {m.lower().lstrip("www.") for m in matches if m}
+
+
+def _sports_watch_quality_targets(*, subject: str, lookahead_days: int) -> tuple[int, int, str]:
+    """Return deterministic quality thresholds for sports recap outputs."""
+    lowered = (subject or "").lower()
+    if "weekend" in lowered:
+        return 8, 3, "full-weekend sports recap"
+    if lookahead_days >= 7:
+        return 5, 2, f"{lookahead_days}-day sports recap"
+    return 2, 1, f"{lookahead_days}-day sports recap"
+
+
+def _estimate_matchup_mentions(text: str) -> int:
+    """Heuristic estimate of unique game mentions in search/provider text."""
+    if not text:
+        return 0
+    return len({match.group(0).strip().lower() for match in _MATCHUP_RE.finditer(text)})
+
+
+def _extract_domain(url: str) -> str:
+    match = re.search(r"^https?://([^/]+)", (url or "").strip(), re.IGNORECASE)
+    if not match:
+        return ""
+    host = match.group(1).lower().strip()
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def _split_markdown_row(line: str) -> list[str]:
+    stripped = (line or "").strip()
+    if not stripped.startswith("|"):
+        return []
+    cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+    return cells if cells and any(cell for cell in cells) else []
+
+
+def _is_claim_like_text(text: str) -> bool:
+    normalized = " ".join((text or "").split())
+    lowered = normalized.lower()
+    if not normalized or lowered.startswith(("source:", "sources:")):
+        return False
+    if len(normalized) < 16:
+        return False
+    if _SCORE_RE.search(normalized) or _MONEY_RE.search(normalized) or _STATUS_RE.search(normalized):
+        return True
+    if _MATCHUP_RE.search(normalized):
+        return True
+    if re.search(r"\b\d+(?:\.\d+)?\b", normalized):
+        return True
+    return bool(
+        re.search(
+            r"\b(increase|decrease|rose|fell|deploy|rollback|mitigation|impact|timeline|risk|action item|follow-up)\b",
+            lowered,
+        )
+    )
+
+
+def _contains_source_evidence(text: str) -> bool:
+    normalized = " ".join((text or "").split()).strip()
+    if not normalized:
+        return False
+    if _URL_RE.search(normalized):
+        return True
+    lowered = normalized.lower()
+    if lowered in _PLACEHOLDER_SOURCE_VALUES:
+        return False
+    return bool(_DOMAIN_TOKEN_RE.search(normalized))
+
+
+def _compute_evidence_completeness(markdown_text: str) -> dict[str, Any]:
+    """Compute deterministic claim-grounding completeness for recap/report text."""
+    lines = (markdown_text or "").splitlines()
+    source_fields_present = False
+    global_sources_present = False
+    claim_like_count = 0
+    supported_claim_count = 0
+
+    table_idx = 0
+    while table_idx < len(lines):
+        line = lines[table_idx].strip()
+        if not line.startswith("|"):
+            table_idx += 1
+            continue
+        table_lines: list[str] = []
+        while table_idx < len(lines) and lines[table_idx].strip().startswith("|"):
+            table_lines.append(lines[table_idx].strip())
+            table_idx += 1
+        if len(table_lines) < 2:
+            continue
+        header_cells = _split_markdown_row(table_lines[0])
+        source_idx: int | None = None
+        for idx, cell in enumerate(header_cells):
+            if any(label in cell.lower() for label in ("source", "citation", "evidence", "reference", "ref")):
+                source_idx = idx
+                source_fields_present = True
+                break
+        for row_line in table_lines[1:]:
+            if re.match(r"^\|[\s:\-\|]+\|?$", row_line):
+                continue
+            row_cells = _split_markdown_row(row_line)
+            row_text = " | ".join(row_cells) if row_cells else row_line
+            if source_idx is not None and row_cells:
+                claim_cells = [cell for idx, cell in enumerate(row_cells) if idx != source_idx]
+                claim_text = " | ".join(claim_cells)
+            else:
+                claim_text = row_text
+            if not _is_claim_like_text(claim_text):
+                continue
+            claim_like_count += 1
+            supported = _contains_source_evidence(row_text)
+            if not supported and source_idx is not None and source_idx < len(row_cells):
+                supported = _contains_source_evidence(row_cells[source_idx])
+            if supported:
+                supported_claim_count += 1
+
+    in_sources_section = False
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("|") or line.startswith("#"):
+            continue
+        lowered = line.lower()
+        if lowered.startswith(("source:", "sources:")):
+            source_fields_present = True
+            in_sources_section = True
+            if _contains_source_evidence(line):
+                global_sources_present = True
+            continue
+        if in_sources_section and line.startswith("-"):
+            if _contains_source_evidence(line):
+                global_sources_present = True
+            continue
+        if in_sources_section and not line.startswith(("-", "*")):
+            in_sources_section = False
+
+        if _is_claim_like_text(line):
+            claim_like_count += 1
+            supported = _contains_source_evidence(line) or (source_fields_present and global_sources_present)
+            if supported:
+                supported_claim_count += 1
+
+    fail_safe = claim_like_count > 0 and not source_fields_present
+    if claim_like_count == 0 or fail_safe:
+        completeness = 1.0
+        unsupported_claim_count = 0
+    else:
+        completeness = round(supported_claim_count / claim_like_count, 3)
+        unsupported_claim_count = max(claim_like_count - supported_claim_count, 0)
+
+    return {
+        "evidence_completeness": completeness,
+        "claim_like_count": int(claim_like_count),
+        "supported_claim_count": int(supported_claim_count if not fail_safe else claim_like_count),
+        "unsupported_claim_count": int(unsupported_claim_count),
+        "source_fields_present": bool(source_fields_present),
+        "fail_safe": bool(fail_safe),
+    }
+
+
+def _parse_search_evidence_rows(search_results: str) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+
+    def _flush_current() -> None:
+        nonlocal current
+        if not current:
+            return
+        current["title"] = (current.get("title", "") or "").strip() or "Untitled"
+        current["snippet"] = " ".join((current.get("snippet", "") or "").split()).strip()
+        rows.append(current)
+        current = None
+
+    for raw_line in (search_results or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("### Query:") or line.startswith("### Provider override:"):
+            _flush_current()
+            continue
+
+        title_match = _RESULT_TITLE_RE.match(line)
+        if title_match:
+            _flush_current()
+            current = {"title": title_match.group(1).strip(), "url": "", "snippet": ""}
+            continue
+
+        url_match = _URL_RE.search(line)
+        if line.startswith("🔗") and url_match:
+            if current is None:
+                current = {"title": "Untitled", "url": "", "snippet": ""}
+            current["url"] = url_match.group(0).rstrip(".,)")
+            continue
+
+        if url_match and current is None:
+            url = url_match.group(0).rstrip(".,)")
+            title = line.replace(url_match.group(0), "").strip(" -:[]*")
+            current = {"title": title or "Untitled", "url": url, "snippet": ""}
+            continue
+
+        if line.lower().startswith("*providers queried:") or line.lower().startswith("*via "):
+            continue
+        if line.startswith("**Web Search Results**"):
+            continue
+
+        if current is None:
+            current = {"title": "Untitled", "url": "", "snippet": line}
+        else:
+            snippet = current.get("snippet", "")
+            current["snippet"] = f"{snippet} {line}".strip()
+
+    _flush_current()
+    return rows
+
+
+def _rank_search_evidence_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    if not rows:
+        return []
+    try:
+        from skills.search_skills import rank_hits_for_evidence
+
+        ranked = rank_hits_for_evidence(rows)
+        if ranked:
+            return ranked
+        log.info("Evidence ranker returned no rows; falling back to parsed order")
+        _record_quality_metric("reporting_ranker_empty_fallback", context="reporting")
+    except Exception:
+        log.warning("Evidence ranker failed; falling back to parsed order", exc_info=True)
+        _record_quality_metric("reporting_ranker_error_fallback", context="reporting")
+    return list(rows)
+
+
+def _normalize_url_for_dedup(url: str) -> str:
+    cleaned = (url or "").strip().rstrip(".,)")
+    if not cleaned:
+        return ""
+    cleaned = re.sub(r"#.*$", "", cleaned)
+    cleaned = re.sub(r"\?.*$", "", cleaned)
+    return cleaned.rstrip("/")
+
+
+def _canonical_row_text(row: dict[str, str]) -> str:
+    text = " ".join(
+        part
+        for part in ((row.get("title", "") or "").strip(), (row.get("snippet", "") or "").strip())
+        if part
+    ).lower()
+    text = re.sub(r"\b(today|latest|update|updated|report|coverage|recap|preview)\b", " ", text)
+    text = re.sub(r"[^a-z0-9\s\-]", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _event_identity_for_row(row: dict[str, str]) -> str:
+    text = " ".join(
+        part
+        for part in ((row.get("title", "") or "").strip(), (row.get("snippet", "") or "").strip())
+        if part
+    )
+    matchup = ""
+    match = _MATCHUP_RE.search(text)
+    if match:
+        matchup = re.sub(r"\s+", " ", match.group(0).lower()).strip()
+    scores = sorted({m.group(0).replace("–", "-") for m in _SCORE_RE.finditer(text)})
+    dates = sorted(
+        {
+            m.group(0).lower()
+            for m in re.finditer(
+                r"\b(?:mon|tue|wed|thu|fri|sat|sun)(?:day)?\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b",
+                text,
+                re.IGNORECASE,
+            )
+        }
+    )
+    status_terms = sorted({m.group(1).lower() for m in _STATUS_RE.finditer(text)})
+    if not matchup and not scores and not dates and not status_terms:
+        return ""
+    return "|".join(
+        part
+        for part in (
+            f"matchup:{matchup}" if matchup else "",
+            f"scores:{','.join(scores[:2])}" if scores else "",
+            f"dates:{','.join(dates[:2])}" if dates else "",
+            f"status:{','.join(status_terms[:2])}" if status_terms else "",
+        )
+        if part
+    )
+
+
+def _row_identity_key(row: dict[str, str]) -> str:
+    url_key = _normalize_url_for_dedup(str(row.get("url", "")))
+    if url_key:
+        return f"url:{url_key}"
+    event_identity = _event_identity_for_row(row)
+    if event_identity:
+        return f"event:{event_identity}|domain:{_extract_domain(str(row.get('url', '')))}"
+    return f"text:{_canonical_row_text(row)}"
+
+
+def _filter_near_duplicate_evidence_rows(rows: list[dict[str, str]], *, similarity_threshold: float = 0.97) -> list[dict[str, str]]:
+    """Drop obvious duplicates while preserving distinct events with similar phrasing."""
+    if not rows:
+        return []
+    filtered: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    seen_identity_keys: set[str] = set()
+    canonical_by_domain: dict[str, list[str]] = {}
+    event_identities_by_domain: dict[str, list[str]] = {}
+
+    for row in rows:
+        normalized_row = {
+            "title": (row.get("title", "") or "").strip() or "Untitled",
+            "url": (row.get("url", "") or "").strip(),
+            "snippet": " ".join((row.get("snippet", "") or "").split()).strip(),
+        }
+        normalized_row.update({k: v for k, v in row.items() if k not in {"title", "url", "snippet"}})
+
+        normalized_url = _normalize_url_for_dedup(normalized_row.get("url", ""))
+        if normalized_url and normalized_url in seen_urls:
+            continue
+
+        domain = _extract_domain(normalized_url or normalized_row.get("url", "")) or "unknown"
+        canonical = _canonical_row_text(normalized_row)
+        identity_key = _row_identity_key(normalized_row)
+        if identity_key in seen_identity_keys and identity_key.startswith("url:"):
+            continue
+
+        near_duplicate = False
+        existing_canonicals = canonical_by_domain.get(domain, [])
+        existing_events = event_identities_by_domain.get(domain, [])
+        for idx, existing in enumerate(existing_canonicals):
+            if canonical and existing and SequenceMatcher(None, canonical, existing).ratio() >= similarity_threshold:
+                event_a = _event_identity_for_row(normalized_row)
+                event_b = existing_events[idx] if idx < len(existing_events) else ""
+                if event_a and event_b and event_a != event_b:
+                    continue
+                near_duplicate = True
+                break
+        if near_duplicate:
+            continue
+
+        filtered.append(normalized_row)
+        if normalized_url:
+            seen_urls.add(normalized_url)
+        if identity_key:
+            seen_identity_keys.add(identity_key)
+        row_event_identity = _event_identity_for_row(normalized_row)
+        if canonical:
+            canonical_by_domain.setdefault(domain, []).append(canonical)
+            event_identities_by_domain.setdefault(domain, []).append(row_event_identity)
+    return filtered
+
+
+def _merge_ranked_with_parsed_rows(
+    ranked_rows: list[dict[str, str]],
+    parsed_rows: list[dict[str, str]],
+    *,
+    max_rows: int = 24,
+) -> list[dict[str, str]]:
+    """Recover distinct events that may have been collapsed upstream, then de-duplicate safely."""
+    merged: list[dict[str, str]] = []
+    seen_keys: set[str] = set()
+    for source_rows in (ranked_rows, parsed_rows):
+        for row in source_rows:
+            key = _row_identity_key(row)
+            if not key or key in seen_keys:
+                continue
+            seen_keys.add(key)
+            merged.append(row)
+            if len(merged) >= max_rows:
+                break
+        if len(merged) >= max_rows:
+            break
+    return _filter_near_duplicate_evidence_rows(merged)
+
+
+def _build_source_diversity_feedback(*, source_count: int, min_sources: int) -> dict[str, Any]:
+    required = max(int(min_sources), 1)
+    observed = max(int(source_count), 0)
+    shortfall = max(required - observed, 0)
+    floor_met = shortfall == 0
+    warning_text = ""
+    summary_note = ""
+    if shortfall:
+        scope_hint = "Re-run with a tighter scope (single league/team or shorter window) to improve coverage."
+        warning_text = (
+            f"> ⚠️ **Partial coverage warning:** Source diversity floor missed ({observed}/{required} distinct domains).\n"
+            f"> 🧭 **Actionable shortfall:** Add at least **{shortfall}** more distinct source domain(s) "
+            "before treating this recap/report as complete.\n"
+            f"> 🔁 **Retry scope hint:** {scope_hint}\n"
+            "> ℹ️ **Confidence posture:** Keep conclusions tentative until source diversity improves.\n\n"
+        )
+        summary_note = (
+            f"- Source diversity shortfall: add **{shortfall}** more distinct domain(s) to reach the required floor.\n"
+            f"- Retry scope hint: {scope_hint}\n"
+        )
+    return {
+        "required": required,
+        "observed": observed,
+        "shortfall": shortfall,
+        "floor_met": floor_met,
+        "warning_text": warning_text,
+        "summary_note": summary_note,
+    }
+
+
+def _claim_key_for_row(row: dict[str, str]) -> str:
+    title = (row.get("title", "") or "").strip().lower()
+    title = re.sub(r"[^a-z0-9 ]", " ", title)
+    title = re.sub(r"\b(today|latest|update|updated|report|coverage)\b", " ", title)
+    title = re.sub(r"\s+", " ", title).strip()
+    if title:
+        return title
+    return _extract_domain(str(row.get("url", ""))) or "unknown"
+
+
+def _claim_signature_for_row(row: dict[str, str]) -> str:
+    text = " ".join(
+        part
+        for part in (row.get("title", ""), row.get("snippet", ""))
+        if part
+    )
+    parts: list[str] = []
+    parts.extend(sorted({m.group(0).replace("–", "-") for m in _SCORE_RE.finditer(text)}))
+    parts.extend(sorted({m.group(0).lower() for m in _MONEY_RE.finditer(text)}))
+    parts.extend(sorted({m.group(1).lower() for m in _STATUS_RE.finditer(text)}))
+    return "|".join(parts[:4])
+
+
+def _collect_conflict_clusters(rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, set[str]]] = {}
+    for row in rows:
+        key = _claim_key_for_row(row)
+        signature = _claim_signature_for_row(row)
+        if not signature:
+            continue
+        bucket = grouped.setdefault(key, {"signatures": set(), "domains": set()})
+        bucket["signatures"].add(signature)
+        domain = _extract_domain(str(row.get("url", "")))
+        if domain:
+            bucket["domains"].add(domain)
+    clusters: list[dict[str, Any]] = []
+    for key, bucket in grouped.items():
+        signatures = bucket.get("signatures", set())
+        domains = bucket.get("domains", set())
+        if len(signatures) > 1 and len(domains) >= 2:
+            clusters.append(
+                {
+                    "key": key,
+                    "signature_count": len(signatures),
+                    "domain_count": len(domains),
+                }
+            )
+    return clusters
+
+
+def _count_conflicting_evidence_groups(rows: list[dict[str, str]]) -> int:
+    return len(_collect_conflict_clusters(rows))
+
+
+def _summarize_evidence_health(rows: list[dict[str, str]]) -> dict[str, Any]:
+    total = len(rows)
+    stale_count = sum(
+        1
+        for row in rows
+        if str(row.get("stale_signal", "")).strip().lower() in {"1", "true", "yes"}
+    )
+    if stale_count == 0:
+        stale_count = sum(1 for row in rows if _safe_float(row.get("freshness_score", 100), 100) < 40)
+    conflict_clusters = _collect_conflict_clusters(rows)
+    low_trust_low_fresh_count = sum(
+        1
+        for row in rows
+        if str(row.get("low_trust_low_fresh_signal", "")).strip().lower() in {"1", "true", "yes"}
+        or (
+            _safe_float(row.get("trust_score", 100), 100) < _LOW_TRUST_THRESHOLD
+            and _safe_float(row.get("freshness_score", 100), 100) < _LOW_FRESHNESS_THRESHOLD
+        )
+    )
+    strict_uncertainty_required = low_trust_low_fresh_count > 0
+    return {
+        "total": total,
+        "stale_count": stale_count,
+        "conflict_groups": len(conflict_clusters),
+        "low_trust_low_fresh_count": low_trust_low_fresh_count,
+        "strict_uncertainty_required": strict_uncertainty_required,
+    }
+
+
+def _format_evidence_health_lines(health: dict[str, Any]) -> list[str]:
+    total = max(int(health.get("total", 0)), 0)
+    stale_count = max(int(health.get("stale_count", 0)), 0)
+    conflict_groups = max(int(health.get("conflict_groups", 0)), 0)
+    low_trust_low_fresh_count = max(int(health.get("low_trust_low_fresh_count", 0)), 0)
+    strict_uncertainty_required = bool(health.get("strict_uncertainty_required", False))
+    freshness_line = (
+        f"- Freshness signals: ⚠️ stale evidence in **{stale_count}**/{total} ranked item(s)\n"
+        if total and stale_count
+        else "- Freshness signals: ✅ no strong stale evidence detected\n"
+    )
+    consistency_line = (
+        f"- Consistency signals: ⚠️ conflicting claims detected across **{conflict_groups}** topic group(s)\n"
+        if conflict_groups
+        else "- Consistency signals: ✅ no direct evidence conflicts detected\n"
+    )
+    reliability_line = (
+        f"- Reliability signals: ⚠️ low-trust + low-freshness evidence in **{low_trust_low_fresh_count}**/{total} ranked item(s)\n"
+        if total and low_trust_low_fresh_count
+        else "- Reliability signals: ✅ no low-trust + low-freshness evidence cluster detected\n"
+    )
+    confidence_line = (
+        "- Confidence posture: ℹ️ use tentative wording and verify high-impact details with primary sources\n"
+        if strict_uncertainty_required
+        else "- Confidence posture: ✅ standard confidence wording is acceptable\n"
+    )
+    return [freshness_line, consistency_line, reliability_line, confidence_line]
+
+
+def _build_coverage_shortfall_block(
+    *,
+    label: str,
+    scope_hint: str,
+    confidence_hint: str,
+) -> str:
+    """Compact, explicit recovery guidance for partial coverage scenarios."""
+    return (
+        f"> ⚠️ **Partial coverage warning:** {label}\n"
+        "> 🧭 **Actionable shortfall:** Coverage target was missed.\n"
+        f"> 🔁 **Retry scope hint:** {scope_hint}\n"
+        f"> ℹ️ **Confidence posture:** {confidence_hint}\n\n"
+    )
+
+
+def _enforce_uncertainty_wording(
+    text: str,
+    *,
+    require_uncertainty: bool,
+) -> str:
+    if not text:
+        return text
+    if not require_uncertainty:
+        return text
+    if _UNCERTAINTY_SIGNAL_RE.search(text):
+        return text
+    note = (
+        "> ℹ️ **Confidence note:** Evidence quality is mixed, so key details below should be treated as "
+        "tentative until verified against primary sources."
+    )
+    return f"{note}\n\n{text.strip()}"
+
+
+def _format_ranked_evidence_context(rows: list[dict[str, str]], *, max_items: int = 12) -> str:
+    if not rows:
+        return "(No ranked evidence rows available.)"
+    lines: list[str] = []
+    for index, row in enumerate(rows[:max_items], 1):
+        title = (row.get("title", "") or "Untitled").strip()
+        url = (row.get("url", "") or "").strip()
+        snippet = (row.get("snippet", "") or "").strip()[:180]
+        trust = _safe_float(row.get("trust_score", 0), 0)
+        freshness = _safe_float(row.get("freshness_score", 0), 0)
+        stale_tag = " stale" if _safe_float(row.get("freshness_score", 100), 100) < 40 else ""
+        source = f"[{title}]({url})" if url else title
+        lines.append(
+            f"{index}. {source} — trust {trust:.0f}/100, freshness {freshness:.0f}/100{stale_tag}"
+            + (f" | {snippet}" if snippet else "")
+        )
+    return "\n".join(lines)
+
+
 async def generate_sports_watch_report(
     query: str = "",
     sport: str = "",
@@ -547,19 +1229,113 @@ async def generate_sports_watch_report(
     search_query = base_query
     if include_watch_info:
         search_query += " TV schedule where to watch streaming ESPN NCAA"
+    recap_mode = any(
+        phrase in (query or "").lower()
+        for phrase in ("recap", "results", "final", "scoreboard", "last weekend")
+    )
+    weekend_mode = "weekend" in (query or "").lower()
 
+    search_queries: list[str] = [search_query]
+    if weekend_mode:
+        search_queries.extend([f"{search_query} Saturday", f"{search_query} Sunday"])
+    if recap_mode:
+        search_queries.append(f"{search_query} all games final scores")
+    if not str(inferred.get("team") or "").strip():
+        broad_subject = " ".join(
+            part
+            for part in (
+                str(inferred.get("league") or "").strip(),
+                str(inferred.get("sport") or "").strip(),
+            )
+            if part
+        ).strip()
+        if broad_subject:
+            search_queries.append(
+                f"{broad_subject} {'weekend results all games' if recap_mode else f'next {lookahead} days all games schedule'}"
+            )
+
+    search_chunks: list[str] = []
+    seen_chunks: set[str] = set()
     try:
         from skills.search_skills import search_web
 
-        search_results = await asyncio.wait_for(search_web(search_query, num_results=8), timeout=45)
+        for q in search_queries:
+            result = await asyncio.wait_for(
+                search_web(
+                    q,
+                    num_results=10,
+                    min_results=5,
+                    retry_on_low_results=True,
+                    expand_query=True,
+                    expansion_context="sports_recap",
+                ),
+                timeout=45,
+            )
+            normalized = (result or "").strip()
+            if not normalized or normalized.startswith("❌"):
+                continue
+            key = " ".join(normalized.split()).lower()
+            if key in seen_chunks:
+                continue
+            seen_chunks.add(key)
+            search_chunks.append(f"### Query: {q}\n{normalized}")
     except asyncio.TimeoutError:
         return "❌ Sports search timed out."
     except Exception as exc:
         log.error("Sports search failed for %r: %s", search_query, exc)
         return f"❌ Sports search failed: {exc}"
 
-    if search_results.startswith("❌"):
-        return search_results
+    if not search_chunks:
+        return "❌ Sports search failed: no usable results returned."
+
+    search_results = "\n\n---\n\n".join(search_chunks)
+    parsed_rows = _parse_search_evidence_rows(search_results)
+    ranked_evidence = _rank_search_evidence_rows(parsed_rows)
+    evidence_rows = _merge_ranked_with_parsed_rows(ranked_evidence, parsed_rows, max_rows=28)
+    if not evidence_rows:
+        evidence_rows = _filter_near_duplicate_evidence_rows(parsed_rows)
+    evidence_health = _summarize_evidence_health(evidence_rows)
+    ranked_evidence_context = _format_ranked_evidence_context(evidence_rows, max_items=14)
+    fallback_applied = False
+    initial_source_count = len(_extract_distinct_source_domains(search_results))
+    initial_matchup_mentions = _estimate_matchup_mentions(search_results)
+    needs_strong_coverage = weekend_mode or recap_mode
+    if needs_strong_coverage and (initial_source_count < 2 or initial_matchup_mentions < max(4, lookahead * 2)):
+        fallback_applied = True
+        fallback_query = " ".join(
+            part
+            for part in (
+                str(inferred.get("league") or "").strip(),
+                str(inferred.get("sport") or "").strip(),
+                "weekend all games final scores" if recap_mode else f"next {max(lookahead, 7)} days all games schedule",
+            )
+            if part
+        ).strip()
+        for provider in ("serper", "duckduckgo", ""):
+            try:
+                fallback_results = await asyncio.wait_for(
+                    search_web(
+                        fallback_query,
+                        num_results=10,
+                        provider=provider,
+                        min_results=4,
+                        retry_on_low_results=True,
+                        expand_query=True,
+                        expansion_context="sports_recap",
+                    ),
+                    timeout=45,
+                )
+            except Exception:
+                continue
+            normalized = (fallback_results or "").strip()
+            if not normalized or normalized.startswith("❌"):
+                continue
+            key = " ".join(normalized.split()).lower()
+            if key in seen_chunks:
+                continue
+            seen_chunks.add(key)
+            search_chunks.append(f"### Query: {fallback_query}\n### Provider override: {provider or 'auto'}\n{normalized}")
+        search_results = "\n\n---\n\n".join(search_chunks)
 
     subject = (
         query.strip()
@@ -572,22 +1348,45 @@ async def generate_sports_watch_report(
         ).strip()
         or "Upcoming games"
     )
+    evidence_matchup_mentions = _estimate_matchup_mentions(search_results)
+    target_rows = 0
+    if weekend_mode or recap_mode:
+        # Use evidence-driven row targets for fuller recap output when broad requests
+        # ask for league/weekend coverage (e.g. "this weekend's games").
+        target_rows = max(6, min(20, evidence_matchup_mentions))
+        if not str(inferred.get("team") or "").strip():
+            target_rows = max(target_rows, 10 if weekend_mode else 8)
+
     watch_instruction = (
         "Include a Watch column with TV channel, streaming service, or 'TBD' when not available."
         if include_watch_info
         else "Include a Notes column instead of Watch information."
     )
+    recap_instruction = (
+        "This request is recap-oriented. Prioritize completed games and include final scores when available.\n"
+        if recap_mode
+        else ""
+    )
+    row_target_instruction = (
+        f"3a. Target at least {target_rows} distinct game rows when evidence supports that many games.\n"
+        if target_rows > 0
+        else ""
+    )
 
     prompt = (
         f"Create a concise sports watch guide for: {subject}\n"
-        f"Window: next {lookahead} days.\n"
+        f"Window: {'this weekend' if weekend_mode else f'next {lookahead} days'}.\n"
+        f"{recap_instruction}"
         f"{watch_instruction}\n\n"
         "Output requirements:\n"
         "1. Start with a one-line heading.\n"
-        "2. Provide a markdown table with columns Date | Matchup | Time (ET) | Watch | Notes.\n"
-        "3. Add 2-4 short notes for uncertainties, ranked games, or streaming caveats.\n"
-        "4. Do not invent watch details; use TBD when the source does not say.\n\n"
-        f"Search results:\n{search_results[:12000]}"
+        "2. Provide a markdown table with columns Date | Matchup | Time/Result | Watch | Notes | Sources.\n"
+        "3. Deduplicate duplicate listings across search snippets and include as many distinct games as supported by evidence.\n"
+        f"{row_target_instruction}"
+        "4. Add 2-4 short notes for uncertainties, ranked games, or streaming caveats.\n"
+        "5. Do not invent watch details; use TBD when the source does not say.\n\n"
+        f"Prioritized evidence (highest trust/freshness first):\n{ranked_evidence_context}\n\n"
+        f"Search results:\n{search_results[:20000]}"
     )
 
     try:
@@ -607,7 +1406,99 @@ async def generate_sports_watch_report(
         log.error("Sports watch guide generation failed: %s", exc)
         return f"❌ Sports watch guide failed: {exc}"
 
-    return f"{response.strip()}\n\n_via {model_used}_"
+    response_text = response.strip()
+    item_count = _count_markdown_table_items(response_text)
+    source_domains = {domain for domain in (_extract_domain(str(row.get("url", "")) ) for row in evidence_rows) if domain}
+    source_count = max(len(source_domains), len(_extract_distinct_source_domains(search_results)))
+    matchup_mentions = _estimate_matchup_mentions(search_results)
+    grounding = _compute_evidence_completeness(response_text)
+    low_evidence_completeness = (not grounding["fail_safe"]) and grounding["evidence_completeness"] < 0.6
+    expected_items, min_sources, context_label = _sports_watch_quality_targets(
+        subject=subject,
+        lookahead_days=lookahead,
+    )
+    source_feedback = _build_source_diversity_feedback(source_count=source_count, min_sources=min_sources)
+    partial_coverage = (
+        item_count < expected_items
+        or (not source_feedback["floor_met"])
+        or (recap_mode and matchup_mentions < expected_items)
+        or low_evidence_completeness
+    )
+
+    warning_banner = ""
+    if partial_coverage:
+        warning_banner = source_feedback["warning_text"]
+        if not warning_banner:
+            shortfall_bits: list[str] = []
+            if item_count < expected_items:
+                shortfall_bits.append(f"items {item_count}/{expected_items}")
+            if recap_mode and matchup_mentions < expected_items:
+                shortfall_bits.append(f"search mentions {matchup_mentions}/{expected_items}")
+            if low_evidence_completeness:
+                shortfall_bits.append(
+                    f"evidence completeness {int(round(float(grounding['evidence_completeness']) * 100))}% (<60%)"
+                )
+            label = "This recap may be incomplete based on item/source thresholds."
+            if shortfall_bits:
+                label = f"{label} Shortfalls: {', '.join(shortfall_bits)}."
+            warning_banner = _build_coverage_shortfall_block(
+                label=label,
+                scope_hint="narrow to one league/team or a shorter date window, then rerun",
+                confidence_hint="Treat this as partial until key details are verified in primary sources",
+            )
+    if fallback_applied:
+        _record_quality_metric("recap_fallback_activation", context="sports_recap")
+    if partial_coverage:
+        _record_quality_metric("recap_partial_coverage_warning", context="sports_recap")
+    if evidence_health["stale_count"] > 0:
+        _record_quality_metric("recap_stale_source_signal", context="sports_recap")
+    if evidence_health["conflict_groups"] > 0:
+        _record_quality_metric("recap_conflict_signal", context="sports_recap")
+    if low_evidence_completeness:
+        _record_quality_metric("recap_low_evidence_completeness", context="sports_recap")
+    if grounding["fail_safe"]:
+        _record_quality_metric("recap_evidence_fail_safe", context="sports_recap")
+
+    coverage_summary = "".join(
+        [
+            "## 📎 Coverage Summary\n",
+            f"- Context: {context_label}\n",
+            f"- Search game mentions: **{matchup_mentions}**\n",
+            f"- Items listed: **{item_count}** (expected ≥ {expected_items})\n",
+            f"- Source count: **{source_count}** distinct domains (required ≥ {min_sources})\n",
+            str(source_feedback["summary_note"]),
+            (
+                f"- Coverage shortfall: add **{expected_items - item_count}** more item(s) to hit the target.\n"
+                if item_count < expected_items
+                else ""
+            ),
+            (
+                f"- Coverage shortfall: add evidence for **{grounding['unsupported_claim_count']}** unsupported claim-like row(s).\n"
+                if int(grounding.get("unsupported_claim_count", 0)) > 0
+                else ""
+            ),
+            (
+                "- Retry scope hint: narrow to one league/team or a shorter date window, then rerun.\n"
+                if partial_coverage
+                else ""
+            ),
+            (
+                f"- Evidence completeness: **{int(round(float(grounding['evidence_completeness']) * 100))}%** "
+                f"({grounding['supported_claim_count']}/{max(grounding['claim_like_count'], 1)} claim-like rows supported)\n"
+            ),
+            "".join(_format_evidence_health_lines(evidence_health)),
+            f"- Fallback broadening used: {'yes' if fallback_applied else 'no'}\n",
+            "- Status: ⚠️ **Partial coverage**\n" if partial_coverage else "- Status: ✅ Coverage thresholds met\n",
+        ]
+    )
+
+    guarded_response_text = _enforce_uncertainty_wording(
+        response_text,
+        require_uncertainty=bool(evidence_health.get("strict_uncertainty_required", False))
+        or bool(low_evidence_completeness)
+        or bool(evidence_health.get("conflict_groups", 0) > 0),
+    )
+    return f"{warning_banner}{guarded_response_text}\n\n{coverage_summary}\n_via {model_used}_"
 
 
 async def generate_box_office_report(
@@ -638,7 +1529,17 @@ async def generate_box_office_report(
     try:
         from skills.search_skills import search_web
 
-        search_results = await asyncio.wait_for(search_web(search_query, num_results=10), timeout=45)
+        search_results = await asyncio.wait_for(
+            search_web(
+                search_query,
+                num_results=10,
+                min_results=6,
+                retry_on_low_results=True,
+                expand_query=True,
+                expansion_context="news_recap",
+            ),
+            timeout=45,
+        )
     except asyncio.TimeoutError:
         return "❌ Box-office search timed out."
     except Exception as exc:
@@ -647,6 +1548,15 @@ async def generate_box_office_report(
 
     if search_results.startswith("❌"):
         return search_results
+
+    parsed_rows = _parse_search_evidence_rows(search_results)
+    ranked_evidence = _rank_search_evidence_rows(parsed_rows)
+    evidence_rows = _merge_ranked_with_parsed_rows(ranked_evidence, parsed_rows, max_rows=20)
+    if not evidence_rows:
+        evidence_rows = _filter_near_duplicate_evidence_rows(parsed_rows)
+    evidence_health = _summarize_evidence_health(evidence_rows)
+    ranked_evidence_context = _format_ranked_evidence_context(evidence_rows, max_items=10)
+    source_count = len({domain for domain in (_extract_domain(str(row.get("url", "")) ) for row in evidence_rows) if domain})
 
     release_requirement = (
         "Include notable new releases from this window in either the table or a follow-up bullet section."
@@ -670,6 +1580,7 @@ async def generate_box_office_report(
         "4. Use N/A explicitly for unavailable values.\n"
         "5. Include a short section named 'Sources'.\n"
         "6. Keep the response concise and readable in Discord.\n\n"
+        f"Prioritized evidence (highest trust/freshness first):\n{ranked_evidence_context}\n\n"
         f"Search results:\n{search_results[:14000]}"
     )
 
@@ -695,7 +1606,67 @@ async def generate_box_office_report(
         timeframe_label=timeframe_label,
         require_table=True,
     )
-    return f"{report}\n\n_via {model_used}_"
+    item_count = _count_markdown_table_items(report)
+    grounding = _compute_evidence_completeness(report)
+    low_evidence_completeness = (not grounding["fail_safe"]) and grounding["evidence_completeness"] < 0.6
+    min_sources = 2
+    source_feedback = _build_source_diversity_feedback(source_count=source_count, min_sources=min_sources)
+    partial_coverage = (not source_feedback["floor_met"]) or low_evidence_completeness
+    if evidence_health["stale_count"] > 0:
+        _record_quality_metric("report_stale_source_signal", context="news_recap")
+    if evidence_health["conflict_groups"] > 0:
+        _record_quality_metric("report_conflict_signal", context="news_recap")
+    if low_evidence_completeness:
+        _record_quality_metric("report_low_evidence_completeness", context="news_recap")
+    if grounding["fail_safe"]:
+        _record_quality_metric("report_evidence_fail_safe", context="news_recap")
+    report = _enforce_uncertainty_wording(
+        report,
+        require_uncertainty=bool(evidence_health.get("strict_uncertainty_required", False))
+        or bool(low_evidence_completeness)
+        or bool(evidence_health.get("conflict_groups", 0) > 0),
+    )
+    warning_banner = ""
+    if partial_coverage:
+        warning_banner = source_feedback["warning_text"]
+        if not warning_banner:
+            label = "This report may be incomplete based on evidence/source thresholds."
+            if low_evidence_completeness:
+                label = (
+                    f"{label} Evidence completeness is "
+                    f"{int(round(float(grounding['evidence_completeness']) * 100))}% (<60%)."
+                )
+            warning_banner = _build_coverage_shortfall_block(
+                label=label,
+                scope_hint="tighten the timeframe or focus on top titles, then rerun",
+                confidence_hint="Treat these figures as provisional until cross-checked with additional sources",
+            )
+    coverage_summary = "".join(
+        [
+            "## 📎 Coverage Summary\n",
+            f"- Context: box office report ({timeframe_label})\n",
+            f"- Items listed: **{item_count}**\n",
+            f"- Source count: **{source_count}** distinct domains (required ≥ {min_sources})\n",
+            str(source_feedback["summary_note"]),
+            (
+                f"- Coverage shortfall: add evidence for **{grounding['unsupported_claim_count']}** unsupported claim-like row(s).\n"
+                if int(grounding.get("unsupported_claim_count", 0)) > 0
+                else ""
+            ),
+            (
+                "- Retry scope hint: tighten the timeframe or focus on top titles, then rerun.\n"
+                if partial_coverage
+                else ""
+            ),
+            (
+                f"- Evidence completeness: **{int(round(float(grounding['evidence_completeness']) * 100))}%** "
+                f"({grounding['supported_claim_count']}/{max(grounding['claim_like_count'], 1)} claim-like rows supported)\n"
+            ),
+            "".join(_format_evidence_health_lines(evidence_health)),
+            "- Status: ⚠️ **Partial coverage**\n" if partial_coverage else "- Status: ✅ Coverage thresholds met\n",
+        ]
+    )
+    return f"{warning_banner}{report}\n\n{coverage_summary}\n\n_via {model_used}_"
 
 
 async def generate_weekly_recap(
@@ -777,6 +1748,10 @@ async def generate_weekly_recap(
     # ========== NEWS HIGHLIGHTS SECTION ==========
     news_articles_by_topic = {}
     news_total_count = 0
+    sports_games_count = 0
+    standings_count = 0
+    stock_entries_count = 0
+    market_news_count = 0
 
     for topic in topics:
         if topic in ["entertainment", "tech", "finance", "general", "sports"]:
@@ -863,7 +1838,9 @@ async def generate_weekly_recap(
             if nba_scores.get("status") == "ok" and nba_scores.get("games"):
                 report_sections.append(f"### NBA Scores ({yesterday})\n")
 
-                for game in nba_scores["games"][:5]:  # Top 5 games
+                top_games = nba_scores["games"][:5]
+                sports_games_count += len(top_games)
+                for game in top_games:  # Top 5 games
                     home = game["teams"]["home"]
                     away = game["teams"]["away"]
                     status = game.get("status", "Unknown")
@@ -895,7 +1872,9 @@ async def generate_weekly_recap(
             if standings.get("status") == "ok" and standings.get("standings"):
                 report_sections.append("### NBA Standings (Top 5)\n")
 
-                for team in standings["standings"][:5]:
+                top_standings = standings["standings"][:5]
+                standings_count += len(top_standings)
+                for team in top_standings:
                     rank = team.get("rank", "?")
                     name = team.get("team", "Unknown")
                     wins = team.get("wins", 0)
@@ -936,6 +1915,7 @@ async def generate_weekly_recap(
                             # Format with color indicator
                             indicator = "🟢" if "+" in str(change) else "🔴" if "-" in str(change) else "⚪"
                             report_sections.append(f"- {indicator} **{studio}** ({symbol}): ${price:.2f} ({change})\n")
+                            stock_entries_count += 1
 
                     report_sections.append("\n")
                     sources_used.append("Alpha Vantage (Entertainment Stocks)")
@@ -963,7 +1943,9 @@ async def generate_weekly_recap(
                 if market_news.get("status") == "ok" and market_news.get("feed"):
                     report_sections.append("### 📈 Market News & Sentiment\n")
 
-                    for article in market_news["feed"][:3]:
+                    market_items = market_news["feed"][:3]
+                    market_news_count += len(market_items)
+                    for article in market_items:
                         title = article.get("title", "Untitled")
                         sentiment = article.get("sentiment", {})
                         sentiment_label = sentiment.get("label", "Neutral")
@@ -1003,6 +1985,42 @@ async def generate_weekly_recap(
         insights.append("- All requested data sources processed successfully")
 
     report_sections.extend([f"{insight}\n" for insight in insights])
+    report_sections.append("\n")
+
+    # ========== COVERAGE SUMMARY SECTION ==========
+    distinct_sources = sorted(set(sources_used))
+    source_count = len(distinct_sources)
+    total_items = (
+        news_total_count + sports_games_count + standings_count + stock_entries_count + market_news_count
+    )
+    expected_min_items = 6 if date_range == "last_week" else 3
+    expected_min_sources = 2 if len(topics) >= 2 else 1
+    partial_coverage = total_items < expected_min_items or source_count < expected_min_sources
+
+    report_sections.append("## 📎 Coverage Summary\n")
+    report_sections.append(f"- Items captured: **{total_items}** (expected ≥ {expected_min_items})\n")
+    report_sections.append(f"- Source count: **{source_count}** distinct providers (required ≥ {expected_min_sources})\n")
+    if partial_coverage:
+        missing_items = max(expected_min_items - total_items, 0)
+        missing_sources = max(expected_min_sources - source_count, 0)
+        report_sections.append(
+            _build_coverage_shortfall_block(
+                label=(
+                    f"Coverage targets missed: items {total_items}/{expected_min_items}, "
+                    f"sources {source_count}/{expected_min_sources}."
+                ),
+                scope_hint="limit topics or shorten date range and regenerate",
+                confidence_hint="Use this recap as directional until missing coverage is filled",
+            )
+        )
+        if missing_items > 0:
+            report_sections.append(f"- Coverage shortfall: add **{missing_items}** more item(s).\n")
+        if missing_sources > 0:
+            report_sections.append(f"- Coverage shortfall: add **{missing_sources}** more source provider(s).\n")
+        report_sections.append("- Retry scope hint: limit topics or shorten date range and regenerate.\n")
+        report_sections.append("- Status: ⚠️ **Partial coverage**\n")
+    else:
+        report_sections.append("- Status: ✅ Coverage thresholds met\n")
     report_sections.append("\n")
 
     # ========== SOURCES SECTION ==========

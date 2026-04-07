@@ -6,6 +6,7 @@ Includes rate limiting, configurable thresholds, and alert formatting.
 """
 
 import logging
+import time
 from datetime import datetime
 
 import discord
@@ -16,6 +17,38 @@ log = logging.getLogger("openclaw.alert_manager")
 
 # Alert cooldown (1 hour default)
 DEFAULT_COOLDOWN = 3600
+QUALITY_DRIFT_ALERT_COOLDOWN = 6 * 3600
+_BOUNDED_ALERT_CACHE: dict[str, tuple[float, str]] = {}
+
+
+def should_route_bounded_alert(
+    route_key: str,
+    *,
+    fingerprint: str,
+    cooldown_seconds: int = DEFAULT_COOLDOWN,
+    now_ts: float | None = None,
+) -> tuple[bool, str]:
+    """Return whether an alert should be routed, with de-duplication + cooldown."""
+    normalized_route = str(route_key or "").strip().lower() or "default"
+    normalized_fp = str(fingerprint or "").strip()
+    now_value = float(now_ts) if now_ts is not None else time.time()
+
+    cached = _BOUNDED_ALERT_CACHE.get(normalized_route)
+    if cached:
+        previous_sent_at, previous_fp = cached
+        elapsed = max(0.0, now_value - float(previous_sent_at))
+        if elapsed < max(0, int(cooldown_seconds)):
+            if previous_fp == normalized_fp:
+                return False, "duplicate_within_cooldown"
+            return False, "cooldown_active"
+
+    _BOUNDED_ALERT_CACHE[normalized_route] = (now_value, normalized_fp)
+    return True, "routed"
+
+
+def reset_bounded_alert_cache() -> None:
+    """Test helper to clear in-memory bounded alert state."""
+    _BOUNDED_ALERT_CACHE.clear()
 
 
 def format_trend_alert(analysis: TrendAnalysis, alert_type: str = "TRENDING") -> discord.Embed:

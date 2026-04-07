@@ -68,6 +68,7 @@ async def test_context_menu_send_to_sms_registers_and_prompts(monkeypatch):
     bot = SimpleNamespace(tree=SimpleNamespace(add_command=lambda cmd: captured.append(cmd)))
     context_mod._register_context_menus(bot)
     assert captured, "context menu command should be registered"
+    monkeypatch.setattr(context_mod, "_is_allowed", lambda _interaction: True)
 
     cmd = next(command for command in captured if command.name == "Send to SMS")
     interaction = _mock_interaction()
@@ -104,10 +105,11 @@ def test_build_copy_workflow_payload_strips_markdown_and_formats_bullets():
 
 
 @pytest.mark.asyncio
-async def test_context_menu_copy_workflow_context_returns_ephemeral_copy_block():
+async def test_context_menu_copy_workflow_context_returns_ephemeral_copy_block(monkeypatch):
     captured: list = []
     bot = SimpleNamespace(tree=SimpleNamespace(add_command=lambda cmd: captured.append(cmd)))
     context_mod._register_context_menus(bot)
+    monkeypatch.setattr(context_mod, "_is_allowed", lambda _interaction: True)
 
     cmd = next(command for command in captured if command.name == "Copy Workflow Context")
     interaction = _mock_interaction()
@@ -124,6 +126,67 @@ async def test_context_menu_copy_workflow_context_returns_ephemeral_copy_block()
     assert "Copy-ready export" in args[0]
     assert "```text" in args[0]
     assert "• Ship v1 today" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_context_menu_package_copy_safe_returns_bundle(monkeypatch):
+    captured: list = []
+    bot = SimpleNamespace(tree=SimpleNamespace(add_command=lambda cmd: captured.append(cmd)))
+    context_mod._register_context_menus(bot)
+    monkeypatch.setattr(context_mod, "_is_allowed", lambda _interaction: True)
+
+    cmd = next(command for command in captured if command.name == "Package Report: Copy-safe")
+    interaction = _mock_interaction()
+    message = SimpleNamespace(content="Status\n- Ship report packaging\n- Verify mobile chunks")
+
+    await cmd.callback(interaction, message)
+
+    interaction.response.send_message.assert_awaited_once()
+    args = interaction.response.send_message.await_args.args
+    kwargs = interaction.response.send_message.await_args.kwargs
+    assert kwargs["ephemeral"] is True
+    assert "Copy-safe text bundle" in args[0]
+    assert "• Ship report packaging" in args[0]
+
+
+@pytest.mark.asyncio
+async def test_context_menu_package_artifact_attaches_text_file(monkeypatch):
+    captured: list = []
+    bot = SimpleNamespace(tree=SimpleNamespace(add_command=lambda cmd: captured.append(cmd)))
+    context_mod._register_context_menus(bot)
+    monkeypatch.setattr(context_mod, "_is_allowed", lambda _interaction: True)
+
+    cmd = next(command for command in captured if command.name == "Package Report: Artifact")
+    interaction = _mock_interaction()
+    message = SimpleNamespace(content="Artifact report text")
+
+    await cmd.callback(interaction, message)
+
+    interaction.response.send_message.assert_awaited_once()
+    kwargs = interaction.response.send_message.await_args.kwargs
+    assert kwargs["ephemeral"] is True
+    assert kwargs["files"]
+    assert kwargs["files"][0].filename == "report-package.txt"
+
+
+@pytest.mark.asyncio
+async def test_context_menu_package_brief_detail_sends_mobile_friendly_text(monkeypatch):
+    captured: list = []
+    bot = SimpleNamespace(tree=SimpleNamespace(add_command=lambda cmd: captured.append(cmd)))
+    context_mod._register_context_menus(bot)
+    monkeypatch.setattr(context_mod, "_is_allowed", lambda _interaction: True)
+
+    cmd = next(command for command in captured if command.name == "Package Report: Brief+Detail")
+    interaction = _mock_interaction()
+    message = SimpleNamespace(content="Summary\n- Point A\n- Point B")
+
+    await cmd.callback(interaction, message)
+
+    interaction.response.send_message.assert_awaited_once()
+    args = interaction.response.send_message.await_args.args
+    kwargs = interaction.response.send_message.await_args.kwargs
+    assert kwargs["ephemeral"] is True
+    assert "Brief+Detail package" in args[0]
 
 
 @pytest.mark.asyncio

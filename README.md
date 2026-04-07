@@ -23,6 +23,15 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 
 ## Features
 
+### Operator Playbook (Dashboard-first)
+
+- **Context explainability:** In Run History, open a run and read `Scope`, `Lock`, `Anchor`, and `Effective profile` first to verify why context was selected.
+- **Strict locks + overrides:** Use response buttons (`Lock to Channel`, `Lock to Thread`, `Use Prior Report`, `Reset Context`) for guardrails; use explicit markers (`--cross-channel`, `--use-prior-report`, `--anchor <id>`, `--no-anchor`) only when you intentionally override.
+- **Memory lifecycle visibility:** Use Channel Memory Inspector to validate scoped memory, current policy, and recent compactions before clearing/retraining.
+- **Profile recommendation flow:** In Channel Profile Assistant, run **approve → apply** to adopt a recommendation, and **revert** to roll back to the stored baseline.
+- **Report packaging variants:** Use `/recap package-latest` and `/recap package-thread` with `copy-safe`, `artifact`, or `brief-detail` based on destination.
+- **Quality eval response:** Monitor Quality Eval Scorecards for rate/sample changes; act on sustained drops by checking run explainability and profile settings for the same window.
+
 **Phase 1 — Foundation** ✅
 
 - Discord bot with `/ping`, `/about`, `/whoami`, `/help`
@@ -48,6 +57,10 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - **Domain packs + personas**: prefix `/ask` prompts with `use:finance`, `use:sports`, `use:wwe`, or `use:gaming` to apply persona-aware tool filtering while keeping normal fallback behavior when omitted
 - **Semantic fallback retrieval**: when lexical matching is weak, `/ask` can semantically shortlist likely tools instead of exposing the full tool set
 - **User-controlled model selection**: `/ask model:local` or `/ask model:gemini` to override routing per-message; `/model set` for a sticky per-user default
+- **Default plain-message `/ask` flow (allowed channels)**: when a user sends a plain message (not slash-prefixed) in a readable channel, OpenClaw routes it through the `/ask` pipeline and auto-threads follow-ups for continuity
+- **Scope-safe lock/anchor handling**: context locks and anchors are only applied when they match the active channel/thread scope; stale or mismatched lock/anchor state is ignored and surfaced in explainability metadata
+- **Contamination guard for sports/WWE bleed**: scoped recall suppresses out-of-scope sports/WWE memories unless the user explicitly opts in with controls such as `--cross-channel` or an explicit `use:sports` / `use:wwe` directive
+- **Reset/override controls**: prompt markers `--reset-context`, `--cross-channel`, `--use-prior-report`, `--anchor <id>`, and `--no-anchor` provide explicit context reset/override control per request
 - Function calling — LLM autonomously invokes skills (container status, logs, system stats)
 - Conversation memory — multi-turn context is isolated per user + channel/thread scope (TTL/history are configurable; defaults: 30 min + 50 turns)
 - Markdown table handling — tables are reformatted for Discord embeds; large/complex tables can include an attached `table.png` fallback image
@@ -81,6 +94,9 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 - `/estop resume` — resume normal operations after emergency stop
 - Risk classification system (LOW/MEDIUM/HIGH/CRITICAL)
 - Emergency stop blocks `/ask` and `/restart` when active
+- `/incident start` — creates an incident room, assembles telemetry context, and posts an Incident Copilot summary
+- Incident Copilot suggested remediations render as action buttons in the incident thread
+- Executable incident remediations are approval-gated before action (no direct execution path)
 
 **Phase 6 — Advanced Skills** ✅
 
@@ -344,6 +360,8 @@ _Closes the feature gap between OpenClaw and frontier LLMs (GPT-4, Claude, Gemin
 - `/recap weekly` — summarize the current Discord channel or thread over the last 1-30 days, with styles for highlights, action items, or a compact table
 - `/recap copy-latest` — copy-ready export of your latest OpenClaw response in the current channel/thread
 - `/recap copy-thread` — generate a fresh channel/thread recap and return a copy-ready export
+- `/recap package-latest` — package latest response as `copy-safe`, `artifact`, or `brief-detail`
+- `/recap package-thread` — generate + package a thread recap with the same variants
 - `/sports upcoming` — generate a sports watch guide with matchup tables, game times, and where-to-watch details based on live web research
 - Report outputs now append concise citation metadata/footnotes when source URLs are available
 - Both commands can optionally **save to the Obsidian vault** and **schedule a Monday-morning recurring report**
@@ -615,76 +633,67 @@ docker exec openclaw env | grep VARIABLE_NAME | wc -c
 
 ### System Overview
 
-```
-User (Discord)
-  │
-  ▼
-┌─────────────────────────────────────────────────────────┐
-│ OpenClaw Bot (Mac Mini M4 Pro · Docker · 117 skills)    │
-│                                                         │
-│  ┌─ LLM Layer ──────────────────────────────────────┐  │
-│  │ Gemini 2.5 Flash (primary, 106 tools registered) │  │
-│  │ Gemma 4 E4B (local fallback via Ollama)           │  │
-│  │ Hallucination guard + auto-retry                  │  │
-│  └───────────────────────────────────────────────────┘  │
-│                                                         │
-│  ┌─ Search Cascade ─────────────────────────────────┐  │
-│  │ 1. Perplexity AI (synthesized answers + citations)│  │
-│  │ 2. Firecrawl (search + extract in one call)       │  │
-│  │ 3. Tavily (structured search)                     │  │
-│  │ 4. DuckDuckGo (free)                              │  │
-│  │ 5. Bing Lite (last resort)                        │  │
-│  │ + Serper Google SERP (direct tool, not in cascade)│  │
-│  └───────────────────────────────────────────────────┘  │
-│                                                         │
-│  ┌─ Content Extraction ─────────────────────────────┐  │
-│  │ trafilatura → Jina AI Reader → Playwright         │  │
-│  └───────────────────────────────────────────────────┘  │
-│                                                         │
-│  ┌─ Memory ─────────────────────────────────────────┐  │
-│  │ ChromaDB (3 collections) · QMD facts · SQLite     │  │
-│  │ User profiles · Auto-RAG context injection        │  │
-│  │ Auto-Dream (4AM daily cognitive consolidation)    │  │
-│  └───────────────────────────────────────────────────┘  │
-│                                                         │
-│  ┌─ Integrations ───────────────────────────────────┐  │
-│  │ Gmail · Google Calendar · NAS FileStation          │  │
-│  │ Docker socket · Obsidian vault · Sonarr/Radarr    │  │
-│  └───────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-          │                    │                │
-          ▼                    ▼                ▼
-   Synology NAS         Perplexity/         Docker
-   (FileStation)        Firecrawl/          Containers
-                        Tavily APIs         (20+ services)
+```mermaid
+flowchart LR
+    U[Discord User] --> D[Discord API]
+    D --> BOT[src/bot.py]
+
+    BOT --> ORCH[src/ask_orchestrator.py]
+    ORCH --> LLM[src/llm/chat.py]
+    LLM --> TR[src/tool_router.py]
+    LLM --> EXEC[src/llm_tools.py]
+    EXEC --> SKILLS[skills/*]
+
+    BOT --> WEB[src/discord_web.py]
+    WEB --> DASH[src/dashboard/routes.py + api_handlers.py]
+    BOT --> SCHED[src/scheduler.py]
+    BOT --> BG[src/discord_background.py]
+    LLM --> WORKER[src/worker_agent.py\nspawn_worker()]
+
+    BOT --> MEM[src/memory.py]
+    BOT --> THREADS[src/thread_store.py]
+    LLM --> VEC[src/vector_store.py]
 ```
 
-### Request Flow — AI Hybrid Routing
+### Request Flow — Discord `/ask` Lifecycle
 
 ```mermaid
 sequenceDiagram
     participant U as Discord User
-    participant B as OpenClaw Bot
-    participant O as Ollama (local)
-    participant G as Gemini 2.5 Flash
-    participant S as Skills
-
-    U->>B: /ask "hello"
-    B->>B: _needs_tools()? → No
-    B->>O: chat (local, free)
-    O-->>B: conversational reply
-    B-->>U: embed · local · unlimited
+    participant B as src/bot.py ask_cmd
+    participant O as src/ask_orchestrator.py
+    participant L as src/llm/chat.py chat_stream
+    participant R as src/tool_router.py
+    participant T as src/llm_tools.py
+    participant S as skills/*
+    participant M as memory stores
 
     U->>B: /ask "is sonarr healthy?"
-    B->>B: _needs_tools()? → Yes ("sonarr")
-    B->>G: prompt + 106 tool declarations
-    G-->>B: call check_arr_health()
-    B->>S: invoke check_arr_health
-    S-->>B: {"sonarr": "healthy", ...}
-    B->>G: tool result
-    G-->>B: natural language summary
-    B-->>U: embed · via gemini-2.5-flash
+    B->>M: recall context (memory/thread/vector)
+    B->>O: run_ask_stream(...)
+    O->>L: llm_stream(user_message, history, model_preference)
+    L->>R: route_tool_declarations(...)
+    R-->>L: selected tool set + routing hints
+    L->>T: _run_tool_loop(...)
+    T->>S: execute selected skills
+    S-->>T: tool results
+    T-->>L: tool responses
+    L-->>O: final response + metadata
+    O-->>B: AskStreamResult
+    B->>M: persist updated history
+    B-->>U: embed/file response (+ follow-up actions)
 ```
+
+### Runtime Component Boundaries
+
+| Service | Responsibility | Code Boundary |
+| --- | --- | --- |
+| Discord bot | Slash commands, `/ask`, response formatting, user/thread context | `src/bot.py`, `src/discord_commands/` |
+| LLM routing/tool loop | Model/tool selection and execution | `src/llm/chat.py`, `src/tool_router.py`, `src/llm_tools.py`, `src/model_router.py` |
+| Web API + dashboard | Health/metrics endpoints and dashboard JSON/HTML routes | `src/discord_web.py`, `src/dashboard/routes.py`, `src/dashboard/api_handlers.py` |
+| Scheduler + autonomous loops | Cron jobs, reminders, monitoring, proactive scans | `src/scheduler.py`, `src/discord_background.py` |
+| Worker agents | Delegated sub-agent tasks for focused tool-driven subtasks | `src/worker_agent.py` |
+| Memory stores | Conversation state + semantic recall + thread persistence | `src/memory.py`, `src/vector_store.py`, `src/thread_store.py`, `src/qmd.py` |
 
 ### Request Flow — Multi-Model Routing (Phase 15)
 

@@ -1,6 +1,7 @@
 """Shared utilities for the dashboard package."""
 
 import logging
+import re
 from pathlib import Path
 
 import yaml
@@ -73,8 +74,8 @@ def _cron_to_human(expr: str) -> str:
         return expr
 
 
-def _command_list() -> list[dict]:
-    """Static command reference grouped by category."""
+def _raw_command_groups() -> list[dict]:
+    """Canonical command metadata grouped by category."""
     return [
         {"category": "🏛️ Foundation", "commands": [
             {"name": "/ping", "desc": "Check if bot is alive"},
@@ -91,9 +92,9 @@ def _command_list() -> list[dict]:
             {"name": "/restart <service>", "desc": "Restart a container (requires approval)"},
         ]},
         {"category": "🤖 AI & LLM", "commands": [
-            {"name": "/ask <question> [model]", "desc": "AI-powered query — auto-routes to Gemini (tools) or Ollama (chat). Optional model: auto/local/gemini."},
+            {"name": "/ask <question> [model] [scope] [reset_context] [anchor]", "desc": "AI-powered query — auto-routes to Gemini (tools) or Ollama (chat). Context controls are first-class slash options: scope (current/cross-channel/prior-report), reset_context, and anchor override ('none' disables anchor). Legacy inline flags (e.g. --cross-channel, --reset-context, --anchor, --no-anchor) still work."},
             {"name": "/model show", "desc": "Show your current LLM routing preference and Ollama status."},
-            {"name": "/model set <preference>", "desc": "Set your default LLM routing: auto (smart), local (Gemma), or gemini (cloud)."},
+            {"name": "/model set <preference>", "desc": "Set your default LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude). Alias accepted: claude → anthropic."},
             {"name": "/research <query> [deep:true]", "desc": "Deep multi-step research — Discord thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section"},
             {"name": "/weather [location]", "desc": "Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var)"},
             {"name": "/clear", "desc": "Clear active conversation history"},
@@ -115,6 +116,14 @@ def _command_list() -> list[dict]:
             {"name": "/health", "desc": "Check *arr + download client health"},
             {"name": "/ports", "desc": "Service port connectivity check"},
             {"name": "/report", "desc": "Comprehensive status report"},
+        ]},
+        {"category": "🚨 Incident Operations", "commands": [
+            {"name": "/incident start <title> <severity> [details] [services]", "desc": "Create an incident and post Copilot triage summary + recommended actions in the incident thread."},
+            {"name": "/incident create <title> <severity> [details]", "desc": "Create a manual incident room entry without Copilot triage."},
+            {"name": "/incident status <id> [state] [note]", "desc": "Check or update incident state (open/investigating/monitoring)."},
+            {"name": "/incident list [state] [limit]", "desc": "List recent incidents (active/all/open/investigating/monitoring/resolved)."},
+            {"name": "/incident timeline [id] [limit]", "desc": "Show timeline events for an incident; defaults to current incident thread when possible."},
+            {"name": "/incident resolve <id> <summary> [action_items] [notes]", "desc": "Resolve an incident and capture postmortem notes/actions."},
         ]},
         {"category": "🧠 Memory & Automation", "commands": [
             {"name": "/remember <fact> [tags]", "desc": "Store a fact in long-term memory"},
@@ -139,6 +148,79 @@ def _command_list() -> list[dict]:
             {"name": "/auditlog [lines]", "desc": "View audit trail"},
             {"name": "/estop [stop|resume]", "desc": "Emergency stop all actions"},
             {"name": "/mail <to> <subject> <body>", "desc": "Send email via AgentMail"},
+        ]},
+        {"category": "📋 Copy/Paste Workflow", "commands": [
+            {"name": "/recap copy-latest", "desc": "Copy-ready export of your latest OpenClaw response in the current channel/thread"},
+            {"name": "/recap copy-thread [days] [style]", "desc": "Generate and export a copy-ready recap for the current channel/thread"},
+            {"name": "Context menu: Copy Workflow Context", "desc": "Right-click any message to export a mobile-friendly copy block"},
+        ]},
+        {"category": "Document Review & Interview", "commands": [
+            {"name": "/review text [mode]", "desc": "Paste text for structured critique (writing/technical/quick)"},
+            {"name": "/review file [mode]", "desc": "Upload DOCX/PDF/TXT/etc for structured critique"},
+            {"name": "/interview <goal>", "desc": "Sequential Q&A modals → personalized output"},
+        ]},
+        {"category": "Calendar & Email", "commands": [
+            {"name": "/calendar today", "desc": "List today's Google Calendar events"},
+            {"name": "/calendar upcoming [days]", "desc": "Next N days of events"},
+            {"name": "/calendar add <title> <when>", "desc": "Create event"},
+            {"name": "/email inbox [count]", "desc": "Show recent emails (ephemeral)"},
+            {"name": "/email search <query>", "desc": "Search inbox"},
+            {"name": "/email read <id>", "desc": "Read full email"},
+            {"name": "/email send <to> <subject> <body>", "desc": "Send email (requires approval)"},
+        ]},
+        {"category": "Journal & GitHub", "commands": [
+            {"name": "/journal write [entry]", "desc": "Save today's journal entry to vault"},
+            {"name": "/journal read [date]", "desc": "Read past entry"},
+            {"name": "/journal streak", "desc": "Streak counter"},
+            {"name": "/journal prompt", "desc": "AI writing prompt"},
+            {"name": "/github prs [repo]", "desc": "List open pull requests"},
+            {"name": "/github issues [repo]", "desc": "List open issues"},
+            {"name": "/github watch <repo>", "desc": "Subscribe to activity DMs"},
+        ]},
+        {"category": "🎨 Image Generation", "commands": [
+            {"name": "/imagine generate <prompt> [size] [negative]", "desc": "Generate image via Stable Diffusion txt2img"},
+            {"name": "/imagine status", "desc": "Check SD online status and list models"},
+        ]},
+        {"category": "🌐 DNS Management", "commands": [
+            {"name": "/dns status", "desc": "AdGuard Home status and filtering toggle"},
+            {"name": "/dns stats", "desc": "Query/block counts and top domains"},
+            {"name": "/dns block <domain>", "desc": "Block domain via DNS rewrite"},
+            {"name": "/dns allow <domain>", "desc": "Unblock a domain"},
+            {"name": "/dns blocked", "desc": "List all manually blocked domains"},
+        ]},
+        {"category": "📝 Notion", "commands": [
+            {"name": "/notion search <query>", "desc": "Search Notion pages and databases"},
+            {"name": "/notion page <title> <content>", "desc": "Create a new Notion page"},
+            {"name": "/notion todo <item>", "desc": "Add item to Notion todo database"},
+        ]},
+        {"category": "📄 Google Docs", "commands": [
+            {"name": "/gdoc save <title> <content>", "desc": "Create a new Google Doc"},
+            {"name": "/gdoc list", "desc": "List recent Google Docs"},
+        ]},
+        {"category": "🖥️ System Performance", "commands": [
+            {"name": "/perf", "desc": "CPU, memory, disk, load average via Glances"},
+        ]},
+        {"category": "📱 Push Notifications", "commands": [
+            {"name": "/ntfy send <message> [title] [priority]", "desc": "Send phone push notification via ntfy"},
+            {"name": "/ntfy test", "desc": "Send test notification to verify setup"},
+        ]},
+        {"category": "📲 SMS One-Tap", "commands": [
+            {"name": "/sms config <phone> [send_verification]", "desc": "Save phone number for one-tap SMS; can trigger verification send"},
+            {"name": "/sms test [code]", "desc": "Start verification or submit code from SMS"},
+            {"name": "/sms status", "desc": "Show masked phone, verification state, and remaining send budget"},
+            {"name": "/sms send <message>", "desc": "Confirmation-based SMS send to configured phone"},
+            {"name": "Context menu: Send to SMS", "desc": "Right-click a Discord message and forward it via SMS with confirmation"},
+        ]},
+        {"category": "🎬 Movie & TV", "commands": [
+            {"name": "/media movie <title>", "desc": "Look up a movie with poster and ratings"},
+            {"name": "/media tv <title>", "desc": "Look up a TV show with season/episode info"},
+            {"name": "/media search <query>", "desc": "Search movies and TV via OMDb"},
+        ]},
+        {"category": "🐛 Error Monitoring", "commands": [
+            {"name": "/sentry issues [project]", "desc": "List unresolved Sentry issues"},
+            {"name": "/sentry projects", "desc": "List Sentry org projects"},
+            {"name": "/sentry resolve <issue_id>", "desc": "Resolve a Sentry issue"},
+            {"name": "/sentry stats [project]", "desc": "Hourly error rate stats"},
         ]},
         {"category": "Third-Party API Gateway (via /ask)", "commands": [
             {"name": "gateway_request", "desc": "Call any of 100+ APIs (Slack, GitHub, Notion, HubSpot, Stripe…) via Maton managed OAuth. Invoked by /ask."},
@@ -184,6 +266,87 @@ def _command_list() -> list[dict]:
             {"name": "resume_plan", "desc": "(via /ask) Resume an interrupted plan from where it left off."},
         ]},
     ]
+
+
+def _command_list() -> list[dict]:
+    """Canonical command metadata grouped by category."""
+    normalized: list[dict] = []
+    for group in _raw_command_groups():
+        category = group.get("category", "Other")
+        commands: list[dict] = []
+        for cmd in group.get("commands", []):
+            name = str(cmd.get("name", "")).strip()
+            desc = str(cmd.get("desc", "")).strip()
+            tokens = re.findall(r"[a-z0-9_/-]+", f"{category} {name} {desc}".lower())
+            commands.append({
+                "name": name,
+                "desc": desc,
+                "keywords": sorted(set(tokens)),
+            })
+        normalized.append({"category": category, "commands": commands})
+    return normalized
+
+
+def _command_quickstart() -> list[dict]:
+    """Quick-start commands to improve discoverability surfaces."""
+    return [
+        {"name": "/help", "desc": "Browse commands by category"},
+        {"name": "/ask", "desc": "Use plain English and let OpenClaw route tools"},
+        {"name": "/research", "desc": "Run deep multi-source research"},
+        {"name": "/schedule", "desc": "Create and manage automations"},
+        {"name": "/incident start", "desc": "Kick off guided incident triage"},
+        {"name": "/recap weekly", "desc": "Summarize a channel/thread quickly"},
+    ]
+
+
+def _md_escape(value: str) -> str:
+    """Escape markdown table-sensitive characters."""
+    return value.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def render_command_reference_markdown() -> str:
+    """Render docs/COMMANDS.md from canonical command metadata."""
+    groups = _raw_command_groups()
+    total_commands = sum(len(group.get("commands", [])) for group in groups)
+
+    lines = [
+        "# OpenClaw Command Reference",
+        "",
+        "> Source of truth: `src/dashboard/helpers.py::_raw_command_groups()`",
+        ">",
+        "> This file is generated from runtime command metadata used by the dashboard and guide command finder.",
+        "",
+        f"Total documented commands: **{total_commands}**",
+        "",
+        "## Quick Start",
+        "",
+    ]
+    for cmd in _command_quickstart():
+        lines.append(f"- `{_md_escape(cmd['name'])}` — {_md_escape(cmd['desc'])}")
+
+    for group in groups:
+        category = _md_escape(str(group.get("category", "Other")))
+        lines.extend([
+            "",
+            f"## {category}",
+            "",
+            "| Command | Description |",
+            "| --- | --- |",
+        ])
+        for cmd in group.get("commands", []):
+            name = _md_escape(str(cmd.get("name", "")))
+            desc = _md_escape(str(cmd.get("desc", "")))
+            lines.append(f"| `{name}` | {desc} |")
+
+    lines.extend([
+        "",
+        "---",
+        "",
+        "_Generated from runtime metadata to prevent command-doc drift._",
+        "",
+    ])
+
+    return "\n".join(lines)
 
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"

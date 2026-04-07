@@ -10,7 +10,8 @@ from typing import Literal
 import discord
 
 from constants import EMBED_DESC_LIMIT, EMBED_SPLIT_LIMIT
-from runtime_state import get_effective_channel_profile
+from copy_workflow_formatter import build_copy_workflow_payload
+from runtime_state import get_effective_channel_profile, record_channel_profile_signal
 
 # Regex patterns for formatting
 _IMAGE_LINK_RE = re.compile(r'!\[.*?\]\((https?://[^\s)]+)\)')
@@ -18,9 +19,16 @@ _BARE_IMAGE_RE = re.compile(r'\b(https?://[^\s]+\.(?:png|jpg|jpeg|gif|webp))\b',
 _CODE_BLOCK_RE = re.compile(r"```(\w+)?\n([\s\S]+?)```")
 _FENCED_BLOCK_RE = re.compile(r"```[^\n]*\n[\s\S]*?```")
 TableFormatMode = Literal["discord", "copy-safe"]
+_DENSE_LIST_LINE_RE = re.compile(r"^\s*(?:[-*•]\s+|\d+[.)]\s+)")
+_RECAP_DENSE_HINT_RE = re.compile(
+    r"\b(?:recap|summary|headlines?|stories?|watch(?:\s+guide)?|results?|action\s+items?)\b",
+    re.IGNORECASE,
+)
 
 # Discord embed split limit shared with bot.py so helper behavior stays consistent.
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
+PACKAGE_CHUNK_THRESHOLD = 2
+PACKAGE_SUMMARY_LIMIT = 500
 
 
 def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:
@@ -74,6 +82,17 @@ def format_markdown_for_discord(text: str) -> str:
 def _is_markdown_table_separator(line: str) -> bool:
     stripped = line.strip()
     return stripped.startswith("|") and all(c in "|-: " for c in stripped.replace("|", ""))
+
+
+def _contains_markdown_table(text: str) -> bool:
+    lines = text.split("\n")
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            continue
+        if idx + 1 < len(lines) and _is_markdown_table_separator(lines[idx + 1]):
+            return True
+    return False
 
 
 def _parse_markdown_table_rows(table_lines: list[str]) -> list[list[str]]:
@@ -208,6 +227,12 @@ def format_tables_for_context(
     profile = get_effective_channel_profile(channel_id=channel_id, thread_id=thread_id)
     table_style = profile.get("table_style", "discord")
     mode: TableFormatMode = "copy-safe" if table_style == "copy-safe" else "discord"
+    if channel_id and _contains_markdown_table(text):
+        record_channel_profile_signal(
+            channel_id,
+            thread_id=thread_id,
+            signal="table_render_copy_safe" if mode == "copy-safe" else "table_render_discord",
+        )
     return format_tables(text, mode=mode)
 
 
@@ -322,3 +347,87 @@ def extract_file_attachment(text: str) -> tuple[discord.File, str] | None:
 
     buffer = io.BytesIO(code.encode("utf-8"))
     return discord.File(buffer, filename=f"openclaw_output.{ext}"), lang
+
+
+def build_copy_safe_text_bundle(text: str) -> str:
+    """Create a copy-first text bundle optimized for mobile-safe sharing."""
+    payload = build_copy_workflow_payload(text)
+    if payload:
+        return payload
+    formatted = format_tables_for_copy(format_markdown_for_discord(text or ""))
+    return formatted.strip()
+
+
+def build_brief_detail_bundle(text: str) -> str:
+    """Create a brief+detail package for Discord/mobile parity."""
+    brief = build_copy_safe_text_bundle(text)
+    detail = format_tables_for_copy(format_markdown_for_discord(text or "")).strip()
+    if not brief and not detail:
+        return ""
+    return (
+        "## Brief\n"
+        f"{brief or 'No brief summary available.'}\n\n"
+        "## Detail\n"
+        f"{detail or 'No detailed content available.'}"
+    ).strip()
+
+
+def split_mobile_safe_bundle(text: str, *, limit: int = 1200) -> list[str]:
+    """Split package text into mobile-safe chunks while preserving readability."""
+    return split_response(text, limit=limit)
+
+
+def _count_table_rows(text: str) -> int:
+    rows = 0
+    lines = text.splitlines()
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if not (stripped.startswith("|") and stripped.endswith("|")):
+            continue
+        if idx + 1 < len(lines) and _is_markdown_table_separator(lines[idx + 1]):
+            continue
+        if _is_markdown_table_separator(stripped):
+            continue
+        rows += 1
+    return rows
+
+
+def is_dense_recap_or_list(text: str) -> bool:
+    """Return True when text is recap/list-like and dense enough to package as attachment."""
+    content = (text or "").strip()
+    if not content:
+        return False
+    list_lines = sum(1 for line in content.splitlines() if _DENSE_LIST_LINE_RE.match(line))
+    table_rows = _count_table_rows(content)
+    recap_like = bool(_RECAP_DENSE_HINT_RE.search(content))
+    return (recap_like and (list_lines >= 6 or table_rows >= 5)) or list_lines >= 12 or table_rows >= 8
+
+
+def should_package_as_attachment(
+    text: str,
+    chunks: list[str],
+    *,
+    chunk_threshold: int = PACKAGE_CHUNK_THRESHOLD,
+) -> bool:
+    """Use one attachment package when output is chunk-heavy or dense recap/list content."""
+    if len(chunks) >= max(1, int(chunk_threshold)):
+        return True
+    return is_dense_recap_or_list(text)
+
+
+def build_attachment_embed_summary(
+    text: str,
+    *,
+    summary_limit: int = PACKAGE_SUMMARY_LIMIT,
+    attachment_note: str = "📎 **Full response attached as file**",
+    coverage_summary: str | None = None,
+) -> str:
+    """Build compact embed summary for attachment-first responses."""
+    summary = (text or "")[:summary_limit].rstrip()
+    blocks: list[str] = []
+    if coverage_summary:
+        blocks.append(f"📊 {coverage_summary}")
+    if summary:
+        blocks.append(summary)
+    blocks.append(attachment_note)
+    return "\n\n".join(blocks).strip()

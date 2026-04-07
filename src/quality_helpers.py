@@ -15,6 +15,7 @@ Provides:
 from __future__ import annotations
 
 import asyncio
+import sys as _sys
 import logging
 import re
 from typing import Any
@@ -29,6 +30,28 @@ from bot_formatting import should_package_as_attachment as _should_package_as_at
 from runtime_state import get_effective_channel_profile
 
 log = logging.getLogger(__name__)
+
+
+_ORIG: dict[str, Any] = {}  # populated at module bottom; see _b()
+_SENTINEL = object()
+
+
+def _b(name: str, local_val: Any) -> Any:
+    """Resolve name supporting patches to either this module or the bot module.
+
+    Priority: (1) local-module patch if detected, (2) bot-module attribute, (3) local_val.
+    At call time, local_val is the current module global (already patched if tests did setattr).
+    We compare against _ORIG to detect local patches.
+    """
+    orig = _ORIG.get(name)
+    if orig is not None and local_val is not orig:
+        return local_val  # this module was patched — use the patched value
+    bot_mod = _sys.modules.get('bot')
+    if bot_mod is not None:
+        bot_val = getattr(bot_mod, name, _SENTINEL)
+        if bot_val is not _SENTINEL:
+            return bot_val
+    return local_val
 
 # ---------------------------------------------------------------------------
 # Ask-failure helpers
@@ -482,14 +505,14 @@ def _safe_score_answer_quality(
 ) -> dict[str, Any]:
     """Failure-safe wrapper for answer quality scoring."""
     try:
-        result = _score_answer_quality(answer_text, final_meta=final_meta)
+        result = _b("_score_answer_quality", _score_answer_quality)(answer_text, final_meta=final_meta)
         evidence = result.get("evidence_completeness")
         source_fields_missing = bool(result.get("evidence_source_fields_missing"))
         if isinstance(evidence, (int, float)) and float(evidence) < 0.5 and not source_fields_missing:
-            _record_quality_metric("ask_low_evidence_completeness", context=context)
+            _b("_record_quality_metric", _record_quality_metric)("ask_low_evidence_completeness", context=context)
         return result
     except Exception as exc:
-        _record_quality_metric("ask_quality_scoring_error", context=context)
+        _b("_record_quality_metric", _record_quality_metric)("ask_quality_scoring_error", context=context)
         log.debug("Answer quality scoring failed: %s", exc)
         requested_item_count = None
         if isinstance(final_meta, dict) and isinstance(final_meta.get("requested_item_count"), int):
@@ -523,7 +546,7 @@ def _should_prefer_file_for_multichunk_response(
     requested = _extract_requested_item_count(question)
     lowered = (question or "").lower()
     recap_like = any(token in lowered for token in ("recap", "headlines", "stories", "this week", "weekend"))
-    if _should_package_as_attachment(response_text, chunks):
+    if _b("_should_package_as_attachment", _should_package_as_attachment)(response_text, chunks):
         return True
     if len(chunks) <= 1:
         return False
@@ -678,7 +701,7 @@ async def _run_quality_auto_repair(
     think_hook: Any | None = None,
 ) -> dict[str, Any]:
     """Run a strict one-attempt quality repair path with bounded timeout."""
-    profile_values = get_effective_channel_profile()
+    profile_values = _b("get_effective_channel_profile", get_effective_channel_profile)()
     profile_name = str(
         (profile_values.get("retrieval_profile") if isinstance(profile_values, dict) else None)
         or "general"
@@ -686,14 +709,14 @@ async def _run_quality_auto_repair(
     if profile_name == "auto":
         profile_name = "general"
 
-    load_stats = get_latency_load_snapshot(command_hint=context)
+    load_stats = _b("get_latency_load_snapshot", get_latency_load_snapshot)(command_hint=context)
     latency_policy = select_latency_budget_policy(
         profile_name=profile_name,
         load_stats=load_stats,
     )
     base_attempts = 1 if _QUALITY_RETRY_MAX_ATTEMPTS > 0 else 0
     base_timeout_seconds = int(_QUALITY_RETRY_TIMEOUT_SECONDS)
-    repair_budget = apply_repair_budget(
+    repair_budget = _b("apply_repair_budget", apply_repair_budget)(
         max_attempts=base_attempts,
         timeout_seconds=base_timeout_seconds,
         policy=latency_policy,
@@ -701,14 +724,14 @@ async def _run_quality_auto_repair(
     max_attempts = int(repair_budget["max_attempts"])
     timeout_seconds = int(repair_budget["timeout_seconds"])
     if load_stats is None:
-        _record_quality_metric("ask_budget_metrics_missing", context=context)
-    _record_budget_policy_metric(
+        _b("_record_quality_metric", _record_quality_metric)("ask_budget_metrics_missing", context=context)
+    _b("_record_budget_policy_metric", _record_budget_policy_metric)(
         path="ask_repair",
         profile=profile_name,
         load_tier=str(latency_policy.get("load_tier", "unknown")),
         decision=str(latency_policy.get("decision", "failsafe")),
     )
-    _record_quality_metric(
+    _b("_record_quality_metric", _record_quality_metric)(
         f"ask_budget_decision_{latency_policy.get('decision', 'failsafe')}",
         context=context,
     )
@@ -749,7 +772,7 @@ async def _run_quality_auto_repair(
     if not eligible:
         retry_summary["skip_reason"] = "high_quality" if status != "low" else "ineligible"
         current_meta["answer_quality_retry"] = retry_summary
-        _record_quality_metric("ask_quality_retry_skipped", context=context)
+        _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_skipped", context=context)
         return {
             "response_text": response_text,
             "model_used": model_used,
@@ -759,8 +782,8 @@ async def _run_quality_auto_repair(
             "retry_result": None,
         }
 
-    _record_quality_metric("ask_low_score_detected", context=context)
-    _record_quality_metric("ask_quality_retry_attempted", context=context)
+    _b("_record_quality_metric", _record_quality_metric)("ask_low_score_detected", context=context)
+    _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_attempted", context=context)
     retry_summary["attempted"] = True
     retry_summary["attempt_count"] = 1
 
@@ -779,7 +802,7 @@ async def _run_quality_auto_repair(
     except asyncio.TimeoutError:
         retry_summary["outcome"] = "failed"
         retry_summary["error"] = "timeout"
-        _record_quality_metric("ask_quality_retry_failed", context=context)
+        _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_failed", context=context)
         current_meta["answer_quality_retry"] = retry_summary
         return {
             "response_text": response_text,
@@ -792,7 +815,7 @@ async def _run_quality_auto_repair(
     except Exception as retry_exc:
         retry_summary["outcome"] = "failed"
         retry_summary["error"] = str(retry_exc)
-        _record_quality_metric("ask_quality_retry_failed", context=context)
+        _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_failed", context=context)
         log.debug("Quality broadening retry failed (%s): %s", context, retry_exc)
         current_meta["answer_quality_retry"] = retry_summary
         return {
@@ -804,19 +827,19 @@ async def _run_quality_auto_repair(
             "retry_result": None,
         }
 
-    retry_quality = _safe_score_answer_quality(
+    retry_quality = _b("_safe_score_answer_quality", _safe_score_answer_quality)(
         retry_result.response_text,
         final_meta=_with_requested_item_target(retry_result.final_meta, question=question),
         context=context,
     )
     retry_summary["status_path"].append(retry_quality.get("status", "unknown"))
-    if _quality_retry_improved(original=quality_meta, retried=retry_quality):
+    if _b("_quality_retry_improved", _quality_retry_improved)(original=quality_meta, retried=retry_quality):
         improved_meta = _with_requested_item_target(retry_result.final_meta, question=question)
         improved_meta["answer_quality"] = retry_quality
         retry_summary["improved"] = True
         retry_summary["outcome"] = "improved"
         improved_meta["answer_quality_retry"] = retry_summary
-        _record_quality_metric("ask_quality_retry_improved", context=context)
+        _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_improved", context=context)
         return {
             "response_text": retry_result.response_text,
             "model_used": retry_result.model_used,
@@ -828,7 +851,7 @@ async def _run_quality_auto_repair(
 
     retry_summary["outcome"] = "no_improvement"
     current_meta["answer_quality_retry"] = retry_summary
-    _record_quality_metric("ask_quality_retry_no_improvement", context=context)
+    _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_no_improvement", context=context)
     return {
         "response_text": response_text,
         "model_used": model_used,
@@ -837,3 +860,18 @@ async def _run_quality_auto_repair(
         "retry_summary": retry_summary,
         "retry_result": None,
     }
+
+# ---------------------------------------------------------------------------
+# Originals registry — populated after all definitions so _b() can detect patches
+# ---------------------------------------------------------------------------
+_ORIG.update({
+    "_score_answer_quality": _score_answer_quality,
+    "_record_quality_metric": _record_quality_metric,
+    "_record_budget_policy_metric": _record_budget_policy_metric,
+    "_should_package_as_attachment": _should_package_as_attachment,
+    "get_effective_channel_profile": get_effective_channel_profile,
+    "get_latency_load_snapshot": get_latency_load_snapshot,
+    "apply_repair_budget": apply_repair_budget,
+    "_safe_score_answer_quality": _safe_score_answer_quality,
+    "_quality_retry_improved": _quality_retry_improved,
+})

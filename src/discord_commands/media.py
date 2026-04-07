@@ -19,8 +19,9 @@ from llm import SUPPORTED_IMAGE_MIMES
 from llm import analyze_document as llm_analyze_document
 from llm import analyze_image as llm_analyze_image
 from llm import is_configured as llm_is_configured
+from permissions import require_auth
 
-from ._helpers import _get_http_session, require_auth, truncate_for_embed
+from ._helpers import _get_http_session, truncate_for_embed
 
 log = logging.getLogger("openclaw")
 
@@ -37,6 +38,7 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
         image="Image file to analyze (PNG, JPEG, WebP, GIF, HEIC)",
         question="What to ask about the image (optional)",
     )
+    @require_auth
     async def analyze_image_cmd(
         interaction: discord.Interaction,
         image: discord.Attachment,
@@ -90,6 +92,7 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
         file="File to analyze (PDF, TXT, JSON, CSV, YAML, log files, etc.)",
         question="What to ask about the document (optional)",
     )
+    @require_auth
     async def analyze_file_cmd(
         interaction: discord.Interaction,
         file: discord.Attachment,

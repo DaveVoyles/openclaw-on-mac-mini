@@ -13,8 +13,10 @@ Embedding model is configurable via the EMBEDDING_MODEL env var:
 """
 
 import asyncio
+import json
 import logging
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -85,6 +87,56 @@ _embedding_fn = _get_embedding_function()
 _client = None
 _collections: dict = {}
 _lock = asyncio.Lock()
+_RETENTION_PROTECT_SECONDS = {
+    "short": 0,
+    "standard": 6 * 3600,
+    "long": 24 * 3600,
+}
+_RECALL_GUARD_MIN_SIMILARITY = float(os.getenv("RECALL_GUARD_MIN_SIMILARITY", "0.78"))
+_RECALL_DOMAIN_DIRECTIVE_RE = re.compile(r"\buse\s*:?\s*(sports|wwe)\b", re.IGNORECASE)
+_RECALL_DOMAIN_TERMS: dict[str, tuple[str, ...]] = {
+    "sports": (
+        "sports", "game", "games", "matchup", "schedule", "scores", "team",
+        "teams", "league", "espn", "ncaa", "nba", "nfl", "mlb", "nhl", "mls", "lacrosse",
+    ),
+    "wwe": (
+        "wwe", "wrestling", "raw", "smackdown", "nxt", "wrestlemania",
+        "pay-per-view", "ppv", "premium live event",
+    ),
+}
+_last_recall_guard_notes: list[str] = []
+
+
+def consume_recall_guard_notes() -> list[str]:
+    """Return and clear recall-guard notes from the last recall_for_context call."""
+    global _last_recall_guard_notes
+    notes = list(_last_recall_guard_notes)
+    _last_recall_guard_notes = []
+    return notes
+
+
+def _set_recall_guard_notes(notes: list[str]) -> None:
+    global _last_recall_guard_notes
+    _last_recall_guard_notes = list(notes)
+
+
+def _extract_explicit_recall_domains(query: str) -> set[str]:
+    return {str(match.group(1)).lower() for match in _RECALL_DOMAIN_DIRECTIVE_RE.finditer(query or "")}
+
+
+def _infer_recall_domains(text: str) -> set[str]:
+    lowered = (text or "").lower()
+    domains: set[str] = set()
+    for domain, terms in _RECALL_DOMAIN_TERMS.items():
+        if domain in lowered:
+            domains.add(domain)
+            continue
+        hits = sum(1 for term in terms if term in lowered)
+        if domain == "wwe" and hits >= 1:
+            domains.add(domain)
+        elif domain == "sports" and hits >= 2:
+            domains.add(domain)
+    return domains
 
 
 def _normalize_scope_id(value: Any) -> str | None:
@@ -160,6 +212,125 @@ def _allow_fallback_result(
     return doc_channel_id == channel_id
 
 
+def _compaction_priority(doc_id: str, meta: dict[str, Any]) -> tuple[Any, ...]:
+    """Lower values are less relevant/older and get pruned first."""
+    access_count = int(meta.get("access_count", 0) or 0)
+    last_accessed = float(meta.get("last_accessed", 0) or 0)
+    added_at = float(meta.get("added_at", 0) or 0)
+    return access_count, last_accessed, added_at, str(doc_id)
+
+
+def _retention_window_seconds(retention_class: str | None) -> int:
+    normalized = (retention_class or "standard").strip().lower()
+    return _RETENTION_PROTECT_SECONDS.get(normalized, _RETENTION_PROTECT_SECONDS["standard"])
+
+
+async def _compact_scope_if_needed(
+    *,
+    collection_name: str,
+    channel_id: str | None,
+    thread_id: str | None,
+) -> dict[str, Any] | None:
+    if not channel_id:
+        return None
+    try:
+        from runtime_state import (
+            get_memory_lifecycle_policy,
+            record_memory_compaction_event,
+        )
+    except Exception:
+        return None
+
+    try:
+        policy = get_memory_lifecycle_policy(
+            channel_id=int(channel_id),
+            thread_id=int(thread_id) if thread_id is not None else None,
+        )
+    except Exception:
+        return None
+
+    retention_class = str(policy.get("retention_class", "standard"))
+    memory_budget_items = max(1, int(policy.get("memory_budget_items", 200)))
+    protection_window = _retention_window_seconds(retention_class)
+
+    def _compact() -> dict[str, Any] | None:
+        col = _get_collection(collection_name)
+        where = _combine_scope_where(None, channel_id=channel_id, thread_id=thread_id)
+        if col.count() == 0:
+            return None
+        results = col.get(where=where, include=["metadatas"])
+        ids = list(results.get("ids", []) or [])
+        metadatas = list(results.get("metadatas", []) or [])
+        if len(ids) <= memory_budget_items:
+            return None
+
+        now = time.time()
+        overflow = len(ids) - memory_budget_items
+        candidates: list[tuple[str, dict[str, Any]]] = []
+        protected: list[tuple[str, dict[str, Any]]] = []
+        for idx, doc_id in enumerate(ids):
+            meta = metadatas[idx] if idx < len(metadatas) and metadatas[idx] else {}
+            added_at = float(meta.get("added_at", 0) or 0)
+            age_seconds = max(0.0, now - added_at) if added_at else float("inf")
+            row = (doc_id, meta)
+            if protection_window > 0 and age_seconds < protection_window:
+                protected.append(row)
+            else:
+                candidates.append(row)
+
+        candidates.sort(key=lambda row: _compaction_priority(row[0], row[1]))
+        protected.sort(key=lambda row: _compaction_priority(row[0], row[1]))
+        ordered = [*candidates, *protected]
+        prune_ids = [row[0] for row in ordered[:overflow]]
+        if not prune_ids:
+            return None
+        col.delete(ids=prune_ids)
+        return {
+            "collection": collection_name,
+            "scope": {"channel_id": channel_id, "thread_id": thread_id},
+            "retention_class": retention_class,
+            "memory_budget_items": memory_budget_items,
+            "before_count": len(ids),
+            "after_count": len(ids) - len(prune_ids),
+            "pruned_count": len(prune_ids),
+            "pruned_ids": prune_ids,
+            "protected_recent_count": len(protected),
+        }
+
+    loop = asyncio.get_running_loop()
+    event = await loop.run_in_executor(None, _compact)
+    if not event:
+        return None
+    try:
+        record_memory_compaction_event(
+            collection=collection_name,
+            channel_id=channel_id,
+            thread_id=thread_id,
+            retention_class=retention_class,
+            memory_budget_items=memory_budget_items,
+            before_count=event["before_count"],
+            after_count=event["after_count"],
+            pruned_count=event["pruned_count"],
+            metadata={
+                "protected_recent_count": event.get("protected_recent_count", 0),
+                "pruned_ids": event.get("pruned_ids", [])[:20],
+            },
+        )
+    except Exception:
+        pass
+    try:
+        from audit import audit_log
+
+        audit_log(
+            "memory-lifecycle",
+            "memory_compaction",
+            detail=json.dumps(event, separators=(",", ":")),
+        )
+    except Exception:
+        pass
+    return event
+
+
 def _get_client():
     """Return the ChromaDB PersistentClient, creating it on first call."""
     global _client
@@ -215,6 +386,8 @@ async def add_document(
         channel_id=channel_id,
         thread_id=thread_id,
     )
+    resolved_channel_id = _normalize_scope_id(meta.get("channel_id"))
+    resolved_thread_id = _normalize_scope_id(meta.get("thread_id"))
     meta["added_at"] = time.time()
     meta.setdefault("access_count", 0)
     meta.setdefault("last_accessed", 0.0)
@@ -229,6 +402,11 @@ async def add_document(
 
     loop = asyncio.get_running_loop()
     await loop.run_in_executor(None, _upsert)
+    await _compact_scope_if_needed(
+        collection_name=collection_name,
+        channel_id=resolved_channel_id,
+        thread_id=resolved_thread_id,
+    )
     log.debug("Upserted doc '%s' into '%s'", doc_id, collection_name)
 
 
@@ -691,6 +869,25 @@ async def get_scoped_memory_summary(
         }
     except Exception:
         payload["alerts"] = {"count": 0, "items": []}
+    try:
+        from runtime_state import get_memory_compaction_events, get_memory_lifecycle_policy
+
+        payload["memory_policy"] = get_memory_lifecycle_policy(
+            channel_id=int(resolved_channel_id),
+            thread_id=int(resolved_thread_id) if resolved_thread_id is not None else None,
+        )
+        compaction_events = get_memory_compaction_events(
+            channel_id=resolved_channel_id,
+            thread_id=resolved_thread_id,
+            limit=10,
+        )
+        payload["compaction"] = {
+            "count": len(compaction_events),
+            "items": compaction_events,
+        }
+    except Exception:
+        payload["memory_policy"] = {"retention_class": "standard", "memory_budget_items": 200}
+        payload["compaction"] = {"count": 0, "items": []}
     return payload
 
 
@@ -926,6 +1123,7 @@ async def recall_for_context(
     from config import cfg
 
     top_k = top_k or cfg.auto_recall_top_k
+    _set_recall_guard_notes([])
 
     where = {"anchor_id": anchor_id} if anchor_id else None
     results = await search_all(
@@ -944,6 +1142,70 @@ async def recall_for_context(
             thread_id=thread_id,
             cross_channel=cross_channel,
         )
+    if not results:
+        return ""
+
+    query_domains = _infer_recall_domains(query)
+    explicit_domains = _extract_explicit_recall_domains(query)
+    guard_target_domains = {"sports", "wwe"}
+    suppressed_domain = 0
+    suppressed_low_similarity = 0
+    guarded_results: list[dict] = []
+    min_similarity = max(SIMILARITY_THRESHOLD, _RECALL_GUARD_MIN_SIMILARITY)
+    for item in results:
+        similarity = float(item.get("similarity") or 0.0)
+        if similarity < min_similarity:
+            suppressed_low_similarity += 1
+            continue
+
+        item_text = str(item.get("text") or "")
+        item_domains = _infer_recall_domains(item_text)
+        if (
+            not cross_channel
+            and not explicit_domains
+            and not (query_domains & guard_target_domains)
+            and (item_domains & guard_target_domains)
+        ):
+            suppressed_domain += 1
+            continue
+        guarded_results.append(item)
+
+    if guarded_results:
+        results = guarded_results
+    elif suppressed_domain or suppressed_low_similarity:
+        results = []
+
+    if suppressed_domain or suppressed_low_similarity:
+        notes: list[str] = []
+        if suppressed_domain:
+            notes.append(f"suppressed {suppressed_domain} out-of-scope sports/WWE memory candidates")
+        if suppressed_low_similarity:
+            notes.append(
+                f"suppressed {suppressed_low_similarity} low-relevance memory candidates (<{min_similarity:.0%})"
+            )
+        _set_recall_guard_notes(notes)
+
+        resolved_channel_id, resolved_thread_id = _resolve_scope(channel_id=channel_id, thread_id=thread_id)
+        if resolved_channel_id:
+            try:
+                from runtime_state import record_scoped_recall_alert
+
+                record_scoped_recall_alert(
+                    category="contamination_guard_block",
+                    message="Recall guard suppressed potentially contaminating context candidates.",
+                    channel_id=resolved_channel_id,
+                    thread_id=resolved_thread_id,
+                    metadata={
+                        "suppressed_domain": suppressed_domain,
+                        "suppressed_low_similarity": suppressed_low_similarity,
+                        "query": query[:200],
+                        "cross_channel": cross_channel,
+                        "explicit_domains": sorted(explicit_domains),
+                    },
+                )
+            except Exception:
+                pass
+
     if not results:
         return ""
 

@@ -153,3 +153,145 @@ def test_transition_rejects_invalid_transition_and_resolved_filtering(tmp_path):
     )
     unresolved = store.list_recent(limit=10, include_resolved=False)
     assert unresolved == []
+
+
+def test_append_event_supports_incident_copilot_events(tmp_path):
+    store = IncidentStore(tmp_path / "incidents.db")
+    incident = store.create_incident(
+        title="Copilot event capture",
+        severity="high",
+        description="initial",
+        channel_id=1,
+        channel_name="ops",
+        thread_id=None,
+        thread_name=None,
+        created_by=7,
+        created_by_name="Eve",
+    )
+    ok = store.append_event(
+        incident["id"],
+        event_type="copilot_summary",
+        note='{"summary":"test"}',
+        actor_id=8,
+        actor_name="Frank",
+    )
+    assert ok is True
+    timeline = store.get_timeline(incident["id"])
+    assert timeline[0]["event_type"] == "copilot_summary"
+    assert timeline[0]["status"] == "open"
+
+
+def test_append_event_rejects_unknown_event_type(tmp_path):
+    store = IncidentStore(tmp_path / "incidents.db")
+    incident = store.create_incident(
+        title="Bad event type",
+        severity="medium",
+        description="initial",
+        channel_id=1,
+        channel_name="ops",
+        thread_id=None,
+        thread_name=None,
+        created_by=1,
+        created_by_name="Alice",
+    )
+    with pytest.raises(ValueError):
+        store.append_event(
+            incident["id"],
+            event_type="copilot_magic",
+            note="invalid",
+            actor_id=1,
+            actor_name="Alice",
+        )
+
+
+def test_list_recent_filters_by_status_and_context(tmp_path):
+    store = IncidentStore(tmp_path / "incidents.db")
+    primary = store.create_incident(
+        title="Primary incident",
+        severity="high",
+        description="initial",
+        channel_id=11,
+        channel_name="ops",
+        thread_id=101,
+        thread_name="incident-101",
+        created_by=1,
+        created_by_name="Alice",
+    )
+    secondary = store.create_incident(
+        title="Secondary incident",
+        severity="medium",
+        description="initial",
+        channel_id=11,
+        channel_name="ops",
+        thread_id=102,
+        thread_name="incident-102",
+        created_by=2,
+        created_by_name="Bob",
+    )
+    store.transition_status(
+        secondary["id"],
+        new_status="investigating",
+        note="triage",
+        actor_id=2,
+        actor_name="Bob",
+    )
+    store.resolve_incident(
+        primary["id"],
+        summary="resolved",
+        action_items=[],
+        postmortem_notes="",
+        actor_id=1,
+        actor_name="Alice",
+    )
+
+    investigating = store.list_recent(limit=5, status="investigating")
+    assert [row["id"] for row in investigating] == [secondary["id"]]
+
+    channel_rows = store.list_recent(limit=5, include_resolved=True, channel_id=11)
+    assert {row["id"] for row in channel_rows} == {primary["id"], secondary["id"]}
+
+    thread_rows = store.list_recent(limit=5, thread_id=101, include_resolved=True)
+    assert [row["id"] for row in thread_rows] == [primary["id"]]
+
+
+def test_context_lookup_prefers_latest_thread_and_channel(tmp_path):
+    store = IncidentStore(tmp_path / "incidents.db")
+    older = store.create_incident(
+        title="Older thread incident",
+        severity="high",
+        description="initial",
+        channel_id=20,
+        channel_name="ops",
+        thread_id=999,
+        thread_name="incident-999",
+        created_by=1,
+        created_by_name="Alice",
+        created_at=1_700_000_000.0,
+    )
+    latest = store.create_incident(
+        title="Latest thread incident",
+        severity="critical",
+        description="initial",
+        channel_id=20,
+        channel_name="ops",
+        thread_id=999,
+        thread_name="incident-999",
+        created_by=1,
+        created_by_name="Alice",
+        created_at=1_700_000_300.0,
+    )
+    assert store.get_incident_for_thread(999)["id"] == latest["id"]
+    assert store.get_latest_for_channel(20)["id"] == latest["id"]
+
+    store.resolve_incident(
+        latest["id"],
+        summary="fixed",
+        action_items=[],
+        postmortem_notes="",
+        actor_id=1,
+        actor_name="Alice",
+        resolved_at=1_700_000_600.0,
+    )
+    unresolved = store.get_incident_for_thread(999, include_resolved=False)
+    assert unresolved is not None
+    assert unresolved["id"] == older["id"]

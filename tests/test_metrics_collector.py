@@ -3,12 +3,14 @@ Tests for metrics collector.
 """
 
 import asyncio
+import uuid
 
 import pytest
 
 from metrics_collector import (
     MetricsCollector,
     get_collector,
+    get_quality_event_snapshot,
 )
 
 
@@ -219,3 +221,132 @@ async def test_concurrent_recording():
     await asyncio.gather(*[record_many() for _ in range(3)])
 
     assert collector._command_counts["ask"] == 300
+
+
+def test_quality_event_snapshot_feedback_guardrail_counts(collector):
+    baseline = get_quality_event_snapshot()
+    base_events = baseline.get("event_counts", {})
+    base_helpful = int(base_events.get("ask_feedback_helpful", 0))
+    base_not_helpful = int(base_events.get("ask_feedback_not_helpful", 0))
+    base_accepted = int(base_events.get("ask_feedback_accepted", 0))
+    base_suppressed = int(base_events.get("ask_feedback_suppressed", 0))
+    base_suppressed_dedupe = int(base_events.get("ask_feedback_suppressed_dedupe", 0))
+    base_suppressed_rate_limited = int(
+        base_events.get("ask_feedback_suppressed_rate_limited_user", 0)
+    ) + int(base_events.get("ask_feedback_suppressed_rate_limited_channel", 0))
+
+    collector.record_quality_event("ask_feedback_helpful", "discord_ask")
+    collector.record_quality_event("ask_feedback_helpful", "discord_ask")
+    collector.record_quality_event("ask_feedback_not_helpful", "discord_ask")
+    collector.record_quality_event("ask_feedback_accepted", "discord_ask")
+    collector.record_quality_event("ask_feedback_accepted", "discord_ask")
+    collector.record_quality_event("ask_feedback_accepted", "discord_ask")
+    collector.record_quality_event("ask_feedback_suppressed", "discord_ask")
+    collector.record_quality_event("ask_feedback_suppressed", "discord_ask")
+    collector.record_quality_event("ask_feedback_suppressed_dedupe", "discord_ask")
+    collector.record_quality_event("ask_feedback_suppressed_rate_limited_user", "discord_ask")
+
+    snapshot = get_quality_event_snapshot()
+    feedback = snapshot["feedback"]
+
+    assert feedback["helpful"] == base_helpful + 2
+    assert feedback["not_helpful"] == base_not_helpful + 1
+    assert feedback["total"] == base_helpful + base_not_helpful + 3
+    assert feedback["accepted"] == base_accepted + 3
+    assert feedback["suppressed"] == base_suppressed + 2
+    assert feedback["suppressed_dedupe"] == base_suppressed_dedupe + 1
+    assert feedback["suppressed_rate_limited"] == base_suppressed_rate_limited + 1
+
+
+def test_record_degrade_mode_activation_updates_snapshot(collector):
+    baseline = get_quality_event_snapshot()
+    base_degrade = baseline.get("degrade_mode", {})
+    base_total = int(base_degrade.get("total_activations", 0))
+    base_mode_counts = base_degrade.get("mode_counts", {})
+    base_path_counts = base_degrade.get("path_counts", {})
+    base_reason_counts = base_degrade.get("reason_counts", {})
+    base_event_counts = baseline.get("event_counts", {})
+    base_constrained_events = int(base_event_counts.get("degrade_mode_constrained", 0))
+
+    collector.record_degrade_mode_activation(
+        mode="constrained",
+        path="ask_retrieval",
+        reason="provider_timeout_rate",
+    )
+    collector.record_degrade_mode_activation(
+        mode="constrained",
+        path="ask_retrieval",
+        reason="retrieval_sparsity_rate",
+    )
+
+    snapshot = get_quality_event_snapshot()
+    degrade = snapshot["degrade_mode"]
+
+    assert degrade["total_activations"] == base_total + 2
+    assert degrade["mode_counts"]["constrained"] == int(base_mode_counts.get("constrained", 0)) + 2
+    assert degrade["path_counts"]["ask_retrieval"] == int(base_path_counts.get("ask_retrieval", 0)) + 2
+    assert degrade["reason_counts"]["provider_timeout_rate"] == int(base_reason_counts.get("provider_timeout_rate", 0)) + 1
+    assert degrade["reason_counts"]["retrieval_sparsity_rate"] == int(base_reason_counts.get("retrieval_sparsity_rate", 0)) + 1
+    assert snapshot["event_counts"]["degrade_mode_constrained"] == base_constrained_events + 2
+
+
+def test_quality_event_snapshot_includes_bounded_domain_and_signal_slices(collector):
+    suffix = uuid.uuid4().hex[:8]
+    failure_event = f"zztest_fallback_incident_{suffix}"
+    mitigation_event = f"zztest_retry_improved_{suffix}"
+    degrade_event = f"degrade_mode_constrained_{suffix}"
+
+    for _ in range(12):
+        collector.record_quality_event(failure_event, "zztest_scope")
+    for _ in range(8):
+        collector.record_quality_event(mitigation_event, "zztest_scope")
+    for _ in range(6):
+        collector.record_quality_event(degrade_event, "zztest_scope")
+
+    snapshot = get_quality_event_snapshot(limit=5)
+
+    assert len(snapshot["domain_trends"]) <= 5
+    assert len(snapshot["top_recurring_failures"]) <= 5
+    assert len(snapshot["recent_signal_slices"]["mitigation"]) <= 5
+    assert len(snapshot["recent_signal_slices"]["degrade"]) <= 5
+    assert any(
+        item["domain"] == "zztest"
+        and int(item["failure_events"]) >= 12
+        and int(item["mitigation_events"]) >= 8
+        for item in snapshot["domain_trends"]
+    )
+    assert any(
+        item["event"] == failure_event and int(item["count"]) >= 12
+        for item in snapshot["top_recurring_failures"]
+    )
+    assert any(
+        item["signal"] == mitigation_event and int(item["count"]) >= 8
+        for item in snapshot["recent_signal_slices"]["mitigation"]
+    )
+
+
+def test_quality_event_snapshot_includes_normalized_failure_categories(collector):
+    collector.record_quality_event("search_low_results_incident", "search")
+    collector.record_quality_event("search_low_results_incident", "search")
+    collector.record_quality_event("recap_source_diversity_warning", "recap")
+    collector.record_quality_event("recap_partial_coverage_warning", "recap")
+    collector.record_quality_event("degrade_mode_constrained", "ask_retrieval")
+    collector.record_quality_event("search_provider_timeout_error", "search")
+    collector.record_quality_event("ask_quality_retry_no_improvement", "ask")
+
+    snapshot = get_quality_event_snapshot(limit=3)
+
+    assert "top_quality_failure_categories" in snapshot
+    assert len(snapshot["top_quality_failure_categories"]) <= 3
+    assert "quality_failure_categories" in snapshot
+    counts = snapshot["quality_failure_categories"]["counts"]
+    assert counts["requested_item_shortfall"] >= 2
+    assert counts["source_diversity_shortfall"] >= 1
+    assert counts["low_evidence_completeness"] >= 1
+    assert counts["degrade_mode_constrained"] >= 1
+    assert counts["provider_timeout_pressure"] >= 1
+    assert counts["quality_regression"] >= 1
+    top_first = snapshot["top_quality_failure_categories"][0]
+    assert "category" in top_first
+    assert "count" in top_first
+    assert "share" in top_first

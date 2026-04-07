@@ -1,7 +1,7 @@
 """Tests for vector_store.py — search_safe wrapper and search logic."""
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -75,6 +75,44 @@ class _FakeCollection:
 
     def upsert(self, **kwargs):
         self.upsert_calls.append(kwargs)
+
+
+class _CompactionCollection:
+    def __init__(self, ids, metadatas):
+        self.ids = list(ids)
+        self.metadatas = list(metadatas)
+        self.deleted_ids = []
+
+    def count(self):
+        return len(self.ids)
+
+    def get(self, where=None, include=None, ids=None):
+        if ids is not None:
+            filtered = [(doc_id, meta) for doc_id, meta in zip(self.ids, self.metadatas) if doc_id in ids]
+            return {
+                "ids": [row[0] for row in filtered],
+                "metadatas": [row[1] for row in filtered],
+            }
+        return {
+            "ids": list(self.ids),
+            "metadatas": list(self.metadatas),
+            "documents": ["" for _ in self.ids],
+        }
+
+    def delete(self, ids):
+        self.deleted_ids.extend(ids)
+        keep = [(doc_id, meta) for doc_id, meta in zip(self.ids, self.metadatas) if doc_id not in ids]
+        self.ids = [row[0] for row in keep]
+        self.metadatas = [row[1] for row in keep]
+
+    def upsert(self, ids, documents, metadatas):
+        for doc_id, meta in zip(ids, metadatas):
+            if doc_id in self.ids:
+                idx = self.ids.index(doc_id)
+                self.metadatas[idx] = meta
+            else:
+                self.ids.append(doc_id)
+                self.metadatas.append(meta)
 
 
 def _chroma_result(items):
@@ -255,3 +293,166 @@ class TestChannelScopedIsolation:
         assert mock_search_all.await_count == 2
         _, first_kwargs = mock_search_all.await_args_list[0]
         assert first_kwargs["where"] == {"anchor_id": "report_42"}
+
+    @pytest.mark.asyncio
+    async def test_recall_for_context_suppresses_out_of_scope_wwe_context_without_opt_in(self):
+        mock_search_all = AsyncMock(
+            return_value=[
+                {
+                    "collection": mod.MEMORIES_COLLECTION,
+                    "text": "WWE RAW and SmackDown recap with pay-per-view notes",
+                    "similarity": 0.96,
+                },
+            ]
+        )
+        with patch.object(mod, "search_all", mock_search_all):
+            text = await mod.recall_for_context(
+                "Summarize deployment blockers from this week",
+                channel_id=10,
+                thread_id=20,
+                cross_channel=False,
+            )
+
+        assert text == ""
+        notes = mod.consume_recall_guard_notes()
+        assert any("out-of-scope sports/WWE" in note for note in notes)
+
+    @pytest.mark.asyncio
+    async def test_recall_for_context_keeps_out_of_scope_wwe_context_with_cross_channel_opt_in(self):
+        mock_search_all = AsyncMock(
+            return_value=[
+                {
+                    "collection": mod.MEMORIES_COLLECTION,
+                    "text": "WWE RAW and SmackDown recap with pay-per-view notes",
+                    "similarity": 0.96,
+                },
+            ]
+        )
+        with patch.object(mod, "search_all", mock_search_all):
+            text = await mod.recall_for_context(
+                "Summarize deployment blockers from this week",
+                channel_id=10,
+                thread_id=20,
+                cross_channel=True,
+            )
+
+        assert "[Your Memory]" in text
+        assert "WWE RAW and SmackDown recap" in text
+
+    @pytest.mark.asyncio
+    async def test_recall_for_context_keeps_wwe_context_with_explicit_pack_directive(self):
+        mock_search_all = AsyncMock(
+            return_value=[
+                {
+                    "collection": mod.MEMORIES_COLLECTION,
+                    "text": "WWE RAW and SmackDown recap with pay-per-view notes",
+                    "similarity": 0.96,
+                },
+            ]
+        )
+        with patch.object(mod, "search_all", mock_search_all):
+            text = await mod.recall_for_context(
+                "use:wwe summarize deployment blockers from this week",
+                channel_id=10,
+                thread_id=20,
+                cross_channel=False,
+            )
+
+        assert "[Your Memory]" in text
+        assert "WWE RAW and SmackDown recap" in text
+        assert mod.consume_recall_guard_notes() == []
+
+    @pytest.mark.asyncio
+    async def test_recall_for_context_suppresses_low_similarity_candidates(self):
+        mock_search_all = AsyncMock(
+            return_value=[
+                {
+                    "collection": mod.MEMORIES_COLLECTION,
+                    "text": "Mostly unrelated reminder",
+                    "similarity": 0.5,
+                },
+            ]
+        )
+        with patch.object(mod, "search_all", mock_search_all):
+            text = await mod.recall_for_context("What changed in my project today?")
+
+        assert text == ""
+        notes = mod.consume_recall_guard_notes()
+        assert any("low-relevance" in note for note in notes)
+
+
+class TestMemoryLifecycleCompaction:
+    @pytest.mark.asyncio
+    async def test_add_document_triggers_scope_compaction(self):
+        fake = _FakeCollection([])
+        mock_compact = AsyncMock(return_value=None)
+        with (
+            patch.object(mod, "_get_collection", return_value=fake),
+            patch.object(mod, "_compact_scope_if_needed", mock_compact),
+        ):
+            with request_context(channel_id=111, thread_id=222):
+                await mod.add_document(
+                    mod.MEMORIES_COLLECTION,
+                    doc_id="doc1",
+                    text="remember this",
+                    metadata={"source": "test"},
+                )
+        mock_compact.assert_awaited_once_with(
+            collection_name=mod.MEMORIES_COLLECTION,
+            channel_id="111",
+            thread_id="222",
+        )
+
+    @pytest.mark.asyncio
+    async def test_compaction_prunes_least_relevant_then_oldest(self):
+        now = 1_700_000_000.0
+        fake = _CompactionCollection(
+            ids=["doc_a", "doc_b", "doc_c", "doc_d"],
+            metadatas=[
+                {"channel_id": "10", "thread_id": "20", "access_count": 0, "last_accessed": 0.0, "added_at": now - 1000},
+                {"channel_id": "10", "thread_id": "20", "access_count": 0, "last_accessed": 10.0, "added_at": now - 900},
+                {"channel_id": "10", "thread_id": "20", "access_count": 1, "last_accessed": 0.0, "added_at": now - 800},
+                {"channel_id": "10", "thread_id": "20", "access_count": 2, "last_accessed": 0.0, "added_at": now - 700},
+            ],
+        )
+        runtime_state_mock = MagicMock(
+            get_memory_lifecycle_policy=MagicMock(
+                return_value={"retention_class": "standard", "memory_budget_items": 2}
+            ),
+            record_memory_compaction_event=MagicMock(),
+        )
+        audit_mock = MagicMock(audit_log=MagicMock())
+        with (
+            patch.object(mod, "_get_collection", return_value=fake),
+            patch("vector_store.time.time", return_value=now),
+            patch.dict("sys.modules", {"runtime_state": runtime_state_mock, "audit": audit_mock}),
+        ):
+            event = await mod._compact_scope_if_needed(
+                collection_name=mod.MEMORIES_COLLECTION,
+                channel_id="10",
+                thread_id="20",
+            )
+
+        assert event is not None
+        assert event["pruned_count"] == 2
+        assert fake.deleted_ids == ["doc_a", "doc_b"]
+
+    @pytest.mark.asyncio
+    async def test_scoped_memory_summary_exposes_policy_and_compactions(self):
+        fake = _CompactionCollection(ids=[], metadatas=[])
+        runtime_state_mock = MagicMock(
+            get_scoped_recall_alerts=MagicMock(return_value=[]),
+            get_memory_lifecycle_policy=MagicMock(
+                return_value={"retention_class": "long", "memory_budget_items": 400}
+            ),
+            get_memory_compaction_events=MagicMock(
+                return_value=[{"collection": "memories", "pruned_count": 10}]
+            ),
+        )
+        with (
+            patch.object(mod, "_get_collection", return_value=fake),
+            patch.dict("sys.modules", {"runtime_state": runtime_state_mock}),
+        ):
+            payload = await mod.get_scoped_memory_summary(channel_id="123", thread_id="456")
+        assert payload["memory_policy"]["retention_class"] == "long"
+        assert payload["compaction"]["count"] == 1

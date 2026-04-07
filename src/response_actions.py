@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import sys as _sys
 import json
 import logging
 from pathlib import Path
@@ -49,6 +50,23 @@ except ImportError:
             pass
 
 log = logging.getLogger(__name__)
+
+
+_ORIG: dict[str, Any] = {}  # populated at module bottom
+_SENTINEL = object()
+
+
+def _b(name: str, local_val: Any) -> Any:
+    """Resolve name supporting patches to either this module or the bot module."""
+    orig = _ORIG.get(name)
+    if orig is not None and local_val is not orig:
+        return local_val  # this module was patched
+    bot_mod = _sys.modules.get('bot')
+    if bot_mod is not None:
+        bot_val = getattr(bot_mod, name, _SENTINEL)
+        if bot_val is not _SENTINEL:
+            return bot_val
+    return local_val
 
 _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 _FILE_THRESHOLD = 8000
@@ -143,7 +161,7 @@ class ResponseActions(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
         try:
             fact = self._response_text[:500]
-            result = await remember_fact(
+            result = await _b("remember_fact", remember_fact)(
                 f"Saved from /ask: {self._question[:100]}", fact
             )
             await interaction.followup.send(f"📌 Saved to memory.\n{result}", ephemeral=True)
@@ -153,7 +171,7 @@ class ResponseActions(discord.ui.View):
     @discord.ui.button(label="🔄 Regenerate", style=discord.ButtonStyle.secondary)
     async def regen_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
-        conv = conversation_store.get(
+        conv = _b("conversation_store", conversation_store).get(
             user_id=self._user_id,
             channel_id=self._channel_id,
             user_name=str(interaction.user.display_name),
@@ -161,13 +179,13 @@ class ResponseActions(discord.ui.View):
         if len(conv.history) >= 2:
             conv.history = conv.history[:-2]
         try:
-            scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+            scoped_channel_id, scoped_thread_id = _b("_resolve_channel_thread_scope", _resolve_channel_thread_scope)(
                 interaction.channel,
                 self._channel_id,
                 user_id=self._user_id,
             )
             with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)):
-                response_text, updated_history, model_used = await llm_chat(
+                response_text, updated_history, model_used = await _b("llm_chat", llm_chat)(
                     user_message=self._question,
                     history=conv.history,
                     user_name=str(interaction.user.display_name),
@@ -183,7 +201,7 @@ class ResponseActions(discord.ui.View):
     async def email_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
-            result = await send_agent_mail(
+            result = await _b("send_agent_mail", send_agent_mail)(
                 subject=f"OpenClaw: {self._question[:80]}",
                 body=self._response_text,
             )
@@ -201,7 +219,7 @@ class ResponseActions(discord.ui.View):
 
     @discord.ui.button(label="🔒 Lock to Channel", style=discord.ButtonStyle.secondary, row=2)
     async def lock_channel_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        set_context_lock(
+        _b("set_context_lock", set_context_lock)(
             user_id=self._user_id,
             mode="channel",
             channel_id=self._channel_id,
@@ -211,12 +229,12 @@ class ResponseActions(discord.ui.View):
 
     @discord.ui.button(label="🧵 Lock to Thread", style=discord.ButtonStyle.secondary, row=2)
     async def lock_thread_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+        scoped_channel_id, scoped_thread_id = _b("_resolve_channel_thread_scope", _resolve_channel_thread_scope)(
             interaction.channel,
             self._channel_id,
             user_id=self._user_id,
         )
-        set_context_lock(
+        _b("set_context_lock", set_context_lock)(
             user_id=self._user_id,
             mode="thread",
             channel_id=scoped_channel_id or self._channel_id,
@@ -229,19 +247,19 @@ class ResponseActions(discord.ui.View):
 
     @discord.ui.button(label="📎 Use Prior Report", style=discord.ButtonStyle.secondary, row=2)
     async def use_prior_report_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+        scoped_channel_id, scoped_thread_id = _b("_resolve_channel_thread_scope", _resolve_channel_thread_scope)(
             interaction.channel,
             self._channel_id,
             user_id=self._user_id,
         )
-        anchor = get_anchor_state(channel_id=scoped_channel_id, thread_id=scoped_thread_id)
+        anchor = _b("get_anchor_state", get_anchor_state)(channel_id=scoped_channel_id, thread_id=scoped_thread_id)
         if not anchor:
             await interaction.response.send_message(
                 "⚠️ No prior report/job anchor found for this scope yet.",
                 ephemeral=True,
             )
             return
-        set_context_lock(
+        _b("set_context_lock", set_context_lock)(
             user_id=self._user_id,
             mode="prior_report",
             channel_id=scoped_channel_id or self._channel_id,
@@ -255,32 +273,32 @@ class ResponseActions(discord.ui.View):
 
     @discord.ui.button(label="♻️ Reset Context", style=discord.ButtonStyle.secondary, row=2)
     async def reset_context_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+        scoped_channel_id, scoped_thread_id = _b("_resolve_channel_thread_scope", _resolve_channel_thread_scope)(
             interaction.channel,
             self._channel_id,
             user_id=self._user_id,
         )
-        reset_context_lock(self._user_id)
+        _b("reset_context_lock", reset_context_lock)(self._user_id)
         if scoped_channel_id is not None:
-            reset_anchor_state(channel_id=scoped_channel_id, thread_id=scoped_thread_id)
+            _b("reset_anchor_state", reset_anchor_state)(channel_id=scoped_channel_id, thread_id=scoped_thread_id)
         await interaction.response.send_message("♻️ Context lock and anchor reset for this scope.", ephemeral=True)
 
     def _make_followup_callback(self, follow_up_question: str):
         async def callback(interaction: discord.Interaction):
             await interaction.response.defer()
-            conv = conversation_store.get(
+            conv = _b("conversation_store", conversation_store).get(
                 user_id=self._user_id,
                 channel_id=self._channel_id,
                 user_name=str(interaction.user.display_name),
             )
             try:
-                scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+                scoped_channel_id, scoped_thread_id = _b("_resolve_channel_thread_scope", _resolve_channel_thread_scope)(
                     interaction.channel,
                     self._channel_id,
                     user_id=self._user_id,
                 )
                 with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)):
-                    response_text, updated_history, model_used = await llm_chat(
+                    response_text, updated_history, model_used = await _b("llm_chat", llm_chat)(
                         user_message=follow_up_question,
                         history=conv.history,
                         user_name=str(interaction.user.display_name),
@@ -291,7 +309,7 @@ class ResponseActions(discord.ui.View):
                     color=discord.Color.purple(),
                 )
                 embed.set_footer(text=f"💬 Follow-up | via {model_used}")
-                new_follow_ups = await _generate_follow_ups(follow_up_question, response_text)
+                new_follow_ups = await _b("_generate_follow_ups", _generate_follow_ups)(follow_up_question, response_text)
                 view = ResponseActions(
                     response_text=response_text,
                     question=follow_up_question,
@@ -309,19 +327,19 @@ class ResponseActions(discord.ui.View):
     async def _go_deeper_callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         deeper_q = f"Give a much more detailed and thorough explanation of: {self._question}"
-        conv = conversation_store.get(
+        conv = _b("conversation_store", conversation_store).get(
             user_id=self._user_id,
             channel_id=self._channel_id,
             user_name=str(interaction.user.display_name),
         )
         try:
-            scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
+            scoped_channel_id, scoped_thread_id = _b("_resolve_channel_thread_scope", _resolve_channel_thread_scope)(
                 interaction.channel,
                 self._channel_id,
                 user_id=self._user_id,
             )
             with request_context(channel_id=scoped_channel_id, thread_id=scoped_thread_id, user_id=str(self._user_id)):
-                response_text, updated_history, model_used = await llm_chat(
+                response_text, updated_history, model_used = await _b("llm_chat", llm_chat)(
                     user_message=deeper_q,
                     history=conv.history,
                     user_name=str(interaction.user.display_name),
@@ -344,7 +362,7 @@ class ResponseActions(discord.ui.View):
         )
         channel_id = getattr(interaction.channel, "id", None)
         message_id = getattr(interaction.message, "id", None)
-        accepted, decision_reason = _apply_feedback_guardrails(
+        accepted, decision_reason = _b("_apply_feedback_guardrails", _apply_feedback_guardrails)(
             user_id=getattr(interaction.user, "id", None),
             channel_id=channel_id,
             message_id=message_id,
@@ -352,11 +370,11 @@ class ResponseActions(discord.ui.View):
         )
         try:
             if not accepted:
-                _record_quality_metric(
+                _b("_record_quality_metric", _record_quality_metric)(
                     event="ask_feedback_suppressed",
                     context="discord_ask",
                 )
-                _record_quality_metric(
+                _b("_record_quality_metric", _record_quality_metric)(
                     event=f"ask_feedback_suppressed_{decision_reason}",
                     context="discord_ask",
                 )
@@ -385,11 +403,11 @@ class ResponseActions(discord.ui.View):
             feedback_file.parent.mkdir(parents=True, exist_ok=True)
             async with aiofiles.open(feedback_file, "a") as f:
                 await f.write(json.dumps(entry) + "\n")
-            _record_quality_metric(
+            _b("_record_quality_metric", _record_quality_metric)(
                 event=f"ask_feedback_{normalized_rating}",
                 context="discord_ask",
             )
-            _record_quality_metric(
+            _b("_record_quality_metric", _record_quality_metric)(
                 event="ask_feedback_accepted",
                 context="discord_ask",
             )
@@ -421,3 +439,23 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
     except (ImportError, RuntimeError, TimeoutError):
         # LLM may be unavailable; return empty list to skip follow-ups
         return []
+
+
+# ---------------------------------------------------------------------------
+# Originals registry for _b() patch detection
+# ---------------------------------------------------------------------------
+_ORIG.update({
+    "remember_fact": remember_fact,
+    "send_agent_mail": send_agent_mail,
+    "set_context_lock": set_context_lock,
+    "reset_context_lock": reset_context_lock,
+    "reset_anchor_state": reset_anchor_state,
+    "resolve_context_lock": resolve_context_lock,
+    "get_anchor_state": get_anchor_state,
+    "llm_chat": llm_chat,
+    "conversation_store": conversation_store,
+    "_resolve_channel_thread_scope": _resolve_channel_thread_scope,
+    "_generate_follow_ups": _generate_follow_ups,
+    "_apply_feedback_guardrails": _apply_feedback_guardrails,
+    "_record_quality_metric": _record_quality_metric,
+})

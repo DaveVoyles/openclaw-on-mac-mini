@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
+import runtime_state as runtime_state_mod
 from cogs import reports_cog as mod
 from memory import Conversation
 
@@ -71,19 +72,17 @@ async def test_send_chunks_splits_long_rendered_tables_readably(monkeypatch):
         color=discord.Color.green(),
     )
 
-    descriptions = [
-        call.kwargs["embed"].description for call in interaction.followup.send.await_args_list if "embed" in call.kwargs
-    ]
-    assert len(descriptions) > 1
-    assert all(len(description) <= 140 for description in descriptions)
-    joined = "\n".join(descriptions)
-    assert "📋 Table" in joined
-    assert "Team 0" in joined
-    assert "Team 13" in joined
+    calls = interaction.followup.send.await_args_list
+    assert len(calls) >= 1
+    kwargs = calls[0].kwargs
+    assert "embed" in kwargs
+    assert "file" in kwargs
+    assert "📋 Table" in kwargs["embed"].description
+    assert "Full report attached as file" in kwargs["embed"].description
 
 
 @pytest.mark.asyncio
-async def test_send_chunks_marks_follow_up_embeds_as_continuations(monkeypatch):
+async def test_send_chunks_packages_multichunk_reports_as_single_attachment(monkeypatch):
     cog = mod.ReportsCog(_DummyBot())
     interaction = SimpleNamespace(followup=SimpleNamespace(send=AsyncMock()))
 
@@ -96,10 +95,64 @@ async def test_send_chunks_marks_follow_up_embeds_as_continuations(monkeypatch):
         color=discord.Color.blurple(),
     )
 
-    calls = [call for call in interaction.followup.send.await_args_list if "embed" in call.kwargs]
-    assert len(calls) == 2
-    assert calls[0].kwargs["embed"].title == "Weekly Recap"
-    assert calls[1].kwargs["embed"].title == "Weekly Recap (cont.)"
+    calls = interaction.followup.send.await_args_list
+    assert len(calls) == 1
+    kwargs = calls[0].kwargs
+    assert "embed" in kwargs
+    assert "file" in kwargs
+    assert kwargs["embed"].title == "Weekly Recap"
+    assert "Full report attached as file" in kwargs["embed"].description
+
+
+def test_extract_report_recovery_summary_builds_compact_line():
+    report = (
+        "## 📎 Coverage Summary\n"
+        "- Coverage shortfall: add **2** more item(s) to hit the target.\n"
+        "- Retry scope hint: narrow to one league/team or a shorter date window, then rerun.\n"
+        "- Status: ⚠️ **Partial coverage**\n"
+    )
+    summary = mod._extract_report_recovery_summary(report)
+    assert summary is not None
+    assert "Partial coverage" in summary
+    assert "add **2** more item(s)" in summary
+    assert "Retry scope" in summary
+
+
+def test_extract_report_recovery_summary_includes_runtime_constrained_signal():
+    report = (
+        "## 📎 Coverage Summary\n"
+        "- Runtime mode: constrained (high latency)\n"
+        "- Retry scope hint: narrow to one topic and shorter window, then rerun.\n"
+    )
+    summary = mod._extract_report_recovery_summary(report)
+    assert summary is not None
+    assert "Runtime constrained" in summary
+    assert "Retry scope" in summary
+
+
+@pytest.mark.asyncio
+async def test_send_chunks_attachment_embed_includes_recovery_summary(monkeypatch):
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = SimpleNamespace(followup=SimpleNamespace(send=AsyncMock()))
+    monkeypatch.setattr(mod, "split_response", lambda _text: ["chunk-a", "chunk-b"])
+    body = (
+        "## 📎 Coverage Summary\n"
+        "- Coverage shortfall: add **2** more item(s) to hit the target.\n"
+        "- Retry scope hint: narrow to one league/team or a shorter date window, then rerun.\n"
+        "- Status: ⚠️ **Partial coverage**\n"
+    )
+
+    await cog._send_chunks(
+        interaction,
+        title="Weekly Recap",
+        body=body,
+        color=discord.Color.blurple(),
+    )
+
+    kwargs = interaction.followup.send.await_args_list[0].kwargs
+    assert "embed" in kwargs
+    assert "Partial coverage" in kwargs["embed"].description
+    assert "Retry scope" in kwargs["embed"].description
 
 
 @pytest.mark.asyncio
@@ -176,6 +229,44 @@ async def test_send_chunks_sends_table_image_when_renderer_provides_bytes(monkey
     assert any("file" in call.kwargs for call in calls)
 
 
+@pytest.mark.asyncio
+async def test_send_text_package_uses_attachment_for_chunked_payload(monkeypatch):
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = SimpleNamespace(followup=SimpleNamespace(send=AsyncMock()))
+    monkeypatch.setattr(mod, "split_mobile_safe_bundle", lambda _text: ["part1", "part2"])
+
+    await cog._send_text_package(
+        interaction,
+        label="🧾 Brief+Detail package",
+        text="chunked payload",
+    )
+
+    interaction.followup.send.assert_awaited_once()
+    kwargs = interaction.followup.send.await_args.kwargs
+    assert "embed" in kwargs
+    assert "file" in kwargs
+    assert kwargs["embed"].title == "🧾 Brief+Detail package"
+    assert "Full package attached as file" in kwargs["embed"].description
+
+
+@pytest.mark.asyncio
+async def test_send_text_package_sends_plain_message_for_single_chunk(monkeypatch):
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = SimpleNamespace(followup=SimpleNamespace(send=AsyncMock()))
+    monkeypatch.setattr(mod, "split_mobile_safe_bundle", lambda _text: ["single chunk"])
+
+    await cog._send_text_package(
+        interaction,
+        label="📋 Copy-safe text bundle",
+        text="single chunk",
+    )
+
+    interaction.followup.send.assert_awaited_once_with(
+        "📋 Copy-safe text bundle\nsingle chunk",
+        ephemeral=True,
+    )
+
+
 class _InteractionStub:
     def __init__(self, *, user_id: int = 123, channel_id: int = 456, display_name: str = "Dave"):
         self.user = SimpleNamespace(id=user_id, display_name=display_name)
@@ -185,9 +276,11 @@ class _InteractionStub:
 
 
 @pytest.mark.asyncio
-async def test_recap_copy_latest_returns_ephemeral_copy_block(monkeypatch):
+async def test_recap_copy_latest_returns_ephemeral_copy_block(monkeypatch, tmp_path):
     cog = mod.ReportsCog(_DummyBot())
     interaction = _InteractionStub()
+    monkeypatch.setenv("THREAD_DB_PATH", str(tmp_path / "reports-cog-test.db"))
+    runtime_state_mod._reset_channel_profile_store_for_tests()
 
     conv = Conversation(user_name="Dave")
     conv.history = [
@@ -206,12 +299,15 @@ async def test_recap_copy_latest_returns_ephemeral_copy_block(monkeypatch):
     assert kwargs["ephemeral"] is True
     assert "Copy-ready export (latest response)" in message
     assert "• Shipped copy flow" in message
+    runtime_state_mod._reset_channel_profile_store_for_tests()
 
 
 @pytest.mark.asyncio
-async def test_recap_copy_thread_uses_formatter_and_returns_ephemeral(monkeypatch):
+async def test_recap_copy_thread_uses_formatter_and_returns_ephemeral(monkeypatch, tmp_path):
     cog = mod.ReportsCog(_DummyBot())
     interaction = _InteractionStub(channel_id=999)
+    monkeypatch.setenv("THREAD_DB_PATH", str(tmp_path / "reports-cog-test.db"))
+    runtime_state_mod._reset_channel_profile_store_for_tests()
 
     fake_reporting = types.SimpleNamespace(
         generate_channel_recap_report=AsyncMock(return_value="Recap heading\n- Task A\n- Task B")
@@ -233,6 +329,7 @@ async def test_recap_copy_thread_uses_formatter_and_returns_ephemeral(monkeypatc
         focus="ship",
         style="action-items",
     )
+    runtime_state_mod._reset_channel_profile_store_for_tests()
 
 
 @pytest.mark.asyncio
@@ -249,4 +346,62 @@ async def test_recap_copy_latest_handles_missing_model_response(monkeypatch):
     interaction.response.send_message.assert_awaited_once_with(
         "❌ No recent OpenClaw response found in this channel/thread.",
         ephemeral=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_recap_package_latest_uses_selected_variant(monkeypatch):
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = _InteractionStub(channel_id=321)
+
+    conv = Conversation(user_name="Dave")
+    conv.history = [{"role": "model", "parts": ["Report body\n- item one\n- item two"]}]
+    monkeypatch.setattr(mod, "conversation_store", SimpleNamespace(get=lambda **_kwargs: conv))
+    package_mock = AsyncMock()
+    monkeypatch.setattr(cog, "_package_response", package_mock)
+
+    await cog.recap_package_latest.callback(cog, interaction, variant="brief-detail")
+
+    interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+    package_mock.assert_awaited_once_with(
+        interaction,
+        source_text="Report body\n- item one\n- item two",
+        variant="brief-detail",
+        source_label="latest response",
+    )
+
+
+@pytest.mark.asyncio
+async def test_recap_package_thread_generates_report_and_packages(monkeypatch):
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = _InteractionStub(channel_id=999)
+
+    fake_reporting = types.SimpleNamespace(
+        generate_channel_recap_report=AsyncMock(return_value="Thread recap body")
+    )
+    monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
+    package_mock = AsyncMock()
+    monkeypatch.setattr(cog, "_package_response", package_mock)
+
+    await cog.recap_package_thread.callback(
+        cog,
+        interaction,
+        days=5,
+        focus="risks",
+        style="table",
+        variant="artifact",
+    )
+
+    interaction.response.defer.assert_awaited_once_with(ephemeral=True)
+    fake_reporting.generate_channel_recap_report.assert_awaited_once_with(
+        channel_id=999,
+        days=5,
+        focus="risks",
+        style="table",
+    )
+    package_mock.assert_awaited_once_with(
+        interaction,
+        source_text="Thread recap body",
+        variant="artifact",
+        source_label="thread recap",
     )

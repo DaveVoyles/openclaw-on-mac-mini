@@ -8,6 +8,7 @@ Extracted from bot.py — contains module-level state and three guard functions:
 
 from __future__ import annotations
 
+import sys as _sys
 import threading
 import time
 from typing import Any
@@ -25,6 +26,15 @@ _FEEDBACK_GUARDRAIL_LOCK = threading.Lock()
 _FEEDBACK_RECENT_EVENTS: dict[tuple[int, int, int, str], float] = {}
 _FEEDBACK_USER_EVENTS: dict[tuple[int, int], list[float]] = {}
 _FEEDBACK_CHANNEL_EVENTS: dict[int, list[float]] = {}
+
+
+def _fg_const(name: str, local_val):
+    """Read constant from bot module if available (test monkeypatching), else use local."""
+    m = _sys.modules.get('bot')
+    if m is not None and hasattr(m, name):
+        return getattr(m, name)
+    return local_val
+
 
 
 def _prune_feedback_event_buffer(events: list[float], now: float, window_seconds: float) -> list[float]:
@@ -51,32 +61,32 @@ def _apply_feedback_guardrails(
     user_key = (safe_user_id, safe_channel_id)
 
     with _FEEDBACK_GUARDRAIL_LOCK:
-        dedupe_cutoff = resolved_now - max(0.0, _FEEDBACK_DEDUPE_WINDOW_SECONDS)
+        dedupe_cutoff = resolved_now - max(0.0, _fg_const("_FEEDBACK_DEDUPE_WINDOW_SECONDS", _FEEDBACK_DEDUPE_WINDOW_SECONDS))
         for key, ts in list(_FEEDBACK_RECENT_EVENTS.items()):
             if ts < dedupe_cutoff:
                 _FEEDBACK_RECENT_EVENTS.pop(key, None)
 
         previous_ts = _FEEDBACK_RECENT_EVENTS.get(dedupe_key)
-        if previous_ts is not None and (resolved_now - previous_ts) < _FEEDBACK_DEDUPE_WINDOW_SECONDS:
+        if previous_ts is not None and (resolved_now - previous_ts) < _fg_const("_FEEDBACK_DEDUPE_WINDOW_SECONDS", _FEEDBACK_DEDUPE_WINDOW_SECONDS):
             return False, "dedupe"
 
         user_events = _prune_feedback_event_buffer(
             _FEEDBACK_USER_EVENTS.get(user_key, []),
             resolved_now,
-            _FEEDBACK_USER_RATE_LIMIT_WINDOW_SECONDS,
+            _fg_const("_FEEDBACK_USER_RATE_LIMIT_WINDOW_SECONDS", _FEEDBACK_USER_RATE_LIMIT_WINDOW_SECONDS),
         )
         _FEEDBACK_USER_EVENTS[user_key] = user_events
-        if len(user_events) >= _FEEDBACK_USER_RATE_LIMIT_MAX:
+        if len(user_events) >= _fg_const("_FEEDBACK_USER_RATE_LIMIT_MAX", _FEEDBACK_USER_RATE_LIMIT_MAX):
             _FEEDBACK_RECENT_EVENTS[dedupe_key] = resolved_now
             return False, "rate_limited_user"
 
         channel_events = _prune_feedback_event_buffer(
             _FEEDBACK_CHANNEL_EVENTS.get(safe_channel_id, []),
             resolved_now,
-            _FEEDBACK_CHANNEL_RATE_LIMIT_WINDOW_SECONDS,
+            _fg_const("_FEEDBACK_CHANNEL_RATE_LIMIT_WINDOW_SECONDS", _FEEDBACK_CHANNEL_RATE_LIMIT_WINDOW_SECONDS),
         )
         _FEEDBACK_CHANNEL_EVENTS[safe_channel_id] = channel_events
-        if len(channel_events) >= _FEEDBACK_CHANNEL_RATE_LIMIT_MAX:
+        if len(channel_events) >= _fg_const("_FEEDBACK_CHANNEL_RATE_LIMIT_MAX", _FEEDBACK_CHANNEL_RATE_LIMIT_MAX):
             _FEEDBACK_RECENT_EVENTS[dedupe_key] = resolved_now
             return False, "rate_limited_channel"
 

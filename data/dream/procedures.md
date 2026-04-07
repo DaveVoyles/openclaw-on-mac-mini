@@ -46,3 +46,34 @@ Preferences: report_frequency=2x weekly (Monday 7 AM, Friday 7 AM), lacrosse_rep
 
 **Pending Items:**
 *   Clarification is needed regarding
+
+- [Session handover for Dave] **Handover Note**
+
+**Decisions Made:**
+*   User preferences for WWE recap content format were confirmed (title + 1 paragraph per match, context, storylines, match cities, upcoming events).
+*   The bot will prioritize current and accurate information, avoiding outdated new
+
+- [Session handover for Dave] **Decisions Made:**
+*   Media requests will be excluded from morning briefings unless there are pending requests.
+
+**Pending Items:**
+*   None.
+
+**Next Steps:**
+*   None.
+
+- [Session handover for Dave] **Decisions Made:**
+*   Confirmed WWE recap content format (title + 1 paragraph per match, context, storylines, match cities, upcoming events).
+*   All future reports, especially financial ones, will use standard Markdown tables.
+
+**Pending Items:**
+*   Unable to access t
+
+- [Session handover for Dave] **Decisions Made:**
+*   The user requested and received a recap of NCAA Division 1 men's lacrosse games from "this weekend."
+
+**Pending Items:**
+*   None.
+
+**Next Steps:**
+*   None.

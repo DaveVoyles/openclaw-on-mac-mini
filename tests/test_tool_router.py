@@ -59,6 +59,14 @@ def test_route_tool_declarations_extracts_hints_for_sports_prompts():
     assert info["hints"]["days"] == 5
 
 
+def test_route_tool_declarations_prefers_sports_tool_for_weekend_recap():
+    names, info = _route_names("Give me a men's division 1 lacrosse weekend recap with game results and sources.")
+    assert info["strategy"] == "shortlist"
+    assert info["hints"]["report_topic"] == "sports"
+    assert info["hints"]["retrieval_profile"] == "sports"
+    assert "generate_sports_watch_report" in names
+
+
 def test_route_tool_declarations_prefers_box_office_report_bundle():
     names, info = _route_names(
         "Give me the box office financials and new releases for the last week in a markdown table with emojis."
@@ -67,15 +75,22 @@ def test_route_tool_declarations_prefers_box_office_report_bundle():
     assert "weekly-market-report" in info["bundles"]
     assert "generate_box_office_report" in names
     assert info["hints"]["report_topic"] == "box-office"
+    assert info["hints"]["retrieval_profile"] == "news"
     assert info["hints"]["output_style"] == "table"
     assert info["hints"]["emoji_level"] in {"light", "rich"}
+
+
+def test_route_tool_declarations_sets_engineering_retrieval_profile_hint():
+    _, info = _route_names("Give me an engineering incident recap for this week's deploy outage and latency spikes.")
+    assert info["hints"]["report_topic"] == "engineering"
+    assert info["hints"]["retrieval_profile"] == "engineering"
 
 
 def test_route_tool_declarations_falls_back_to_full_set_for_low_confidence():
     all_declarations = _get_tool_declarations()
     selected, info = route_tool_declarations("hello there", all_declarations)
-    assert info["strategy"] == "fallback-full"
-    assert len(selected) == len(all_declarations)
+    assert info["strategy"] in {"fallback-full", "guarded-fallback"}
+    assert len(selected) <= len(all_declarations)
 
 
 def test_route_tool_declarations_filters_finance_pack_from_use_prefix():
@@ -135,3 +150,81 @@ def test_route_tool_declarations_supports_plain_english_pack_and_persona_metadat
     assert info["persona"] == "wwe-reporter"
     assert "wwe_recap" in names
     assert "gaming_news" not in names
+
+
+def test_route_tool_declarations_guards_wwe_and_sports_for_non_matching_intent():
+    declarations = [
+        {"name": "search_web", "description": "Search the web", "always_available": True},
+        {"name": "wwe_recap", "description": "Generate WWE RAW recap", "personas": ["wwe-reporter"]},
+        {"name": "sports_watch", "description": "Build sports watch guide", "domains": ["sports"]},
+        {"name": "project_recap", "description": "Summarize project updates and blockers"},
+    ]
+    selected, info = route_tool_declarations(
+        "Give me a weekly recap of deployment blockers and engineering risks.",
+        declarations,
+    )
+    names = {str(declaration.get("name", "")) for declaration in selected}
+    assert "project_recap" in names
+    assert "wwe_recap" not in names
+    assert "sports_watch" not in names
+    assert info["guard_suppressed"]
+    assert "wwe_recap" in info["guard_suppressed"]
+
+
+def test_route_tool_declarations_preserves_explicit_wwe_pack_directive():
+    declarations = [
+        {"name": "search_web", "description": "Search the web", "always_available": True},
+        {"name": "wwe_recap", "description": "Generate WWE RAW recap", "personas": ["wwe-reporter"]},
+        {"name": "sports_watch", "description": "Build sports watch guide", "domains": ["sports"]},
+    ]
+    selected, info = route_tool_declarations("use:wwe recap RAW and SmackDown this week", declarations)
+    names = {str(declaration.get("name", "")) for declaration in selected}
+    assert info["pack"] == "wwe"
+    assert "wwe_recap" in names
+
+
+def test_route_tool_declarations_preserves_explicit_sports_pack_directive():
+    declarations = [
+        {"name": "search_web", "description": "Search the web", "always_available": True},
+        {"name": "sports_watch", "description": "Build sports watch guide", "domains": ["sports"]},
+        {"name": "project_recap", "description": "Summarize project updates and blockers"},
+    ]
+    selected, info = route_tool_declarations("use:sports recap this week's launch blockers", declarations)
+    names = {str(declaration.get("name", "")) for declaration in selected}
+    assert info["pack"] == "sports"
+    assert "sports_watch" in names
+
+
+def test_route_tool_declarations_sets_gaming_retrieval_profile_hints():
+    declarations = [
+        {"name": "search_web", "description": "Search the web", "always_available": True},
+        {"name": "gaming_news", "description": "Get gaming headlines", "domains": ["gaming"]},
+        {"name": "sports_watch", "description": "Build sports watch guide", "domains": ["sports"]},
+    ]
+    selected, info = route_tool_declarations(
+        "Give me a recap of top gaming stories this week on Xbox and PlayStation.",
+        declarations,
+    )
+    names = {str(declaration.get("name", "")) for declaration in selected}
+    assert info["hints"]["retrieval_profile"] == "gaming"
+    assert info["hints"]["report_topic"] == "gaming"
+    assert "gaming_news" in names
+
+
+def test_route_tool_declarations_extracts_requested_item_count_hint():
+    _, info = _route_names("Give me top 8 gaming stories from this weekend with links.")
+    assert info["hints"]["requested_item_count"] == 8
+    assert info["hints"]["timeframe"] == "this weekend"
+
+
+def test_route_tool_declarations_extracts_last_weekend_timeframe_hint():
+    _, info = _route_names("Need a last weekend recap of lacrosse results.")
+    assert info["hints"]["timeframe"] == "last weekend"
+    assert info["hints"]["days"] == 3
+
+
+def test_route_tool_declarations_extracts_explicit_day_window_timeframe_hint():
+    _, info = _route_names("Bring in 6 headlines from the past 7 days on PlayStation updates.")
+    assert info["hints"]["requested_item_count"] == 6
+    assert info["hints"]["timeframe"] == "past 7 days"
+    assert info["hints"]["days"] == 7

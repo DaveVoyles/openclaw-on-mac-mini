@@ -76,6 +76,23 @@ class TestModelPreference:
         assert "✅" in result
         assert memory.get_model_preference(12345) == "gemini"
 
+    def test_set_preference_accepts_claude_alias(self, tmp_path, monkeypatch):
+        import memory
+
+        monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        result = memory.set_model_preference(12345, "claude")
+        assert "✅" in result
+        assert "Anthropic" in result
+        assert memory.get_model_preference(12345) == "anthropic"
+
+    def test_set_invalid_preference_includes_did_you_mean(self, tmp_path, monkeypatch):
+        import memory
+
+        monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        result = memory.set_model_preference(12345, "gemni")
+        assert "❌" in result
+        assert "Did you mean `gemini`?" in result
+
 
 # ---------------------------------------------------------------------------
 # llm.py — _try_local_model force param

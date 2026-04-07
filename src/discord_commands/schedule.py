@@ -5,6 +5,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from audit import audit_log
+from permissions import require_auth
 from scheduler import scheduler
 from ui_components import EmbedColors
 
@@ -21,6 +22,7 @@ def _register_schedule_commands(bot: commands.Bot) -> None:
     # /schedule list
     # ------------------------------------------------------------------
     @schedule_group.command(name="list", description="Show all scheduled tasks")
+    @require_auth
     async def schedule_list(interaction: discord.Interaction):
         tasks = scheduler.list_tasks()
         if not tasks:
@@ -60,6 +62,7 @@ def _register_schedule_commands(bot: commands.Bot) -> None:
         minute="Minute (0-59)",
         interval="Interval in minutes (overrides hour/minute if set)"
     )
+    @require_auth
     async def schedule_add(
         interaction: discord.Interaction,
         skill: str,
@@ -100,6 +103,7 @@ def _register_schedule_commands(bot: commands.Bot) -> None:
     # ------------------------------------------------------------------
     @schedule_group.command(name="remove", description="Remove a scheduled task")
     @app_commands.describe(task_id="Task ID to remove (e.g., sched-1)")
+    @require_auth
     async def schedule_remove(
         interaction: discord.Interaction,
         task_id: str,
@@ -130,6 +134,7 @@ def _register_schedule_commands(bot: commands.Bot) -> None:
     # ------------------------------------------------------------------
     @schedule_group.command(name="toggle", description="Enable or disable a scheduled task")
     @app_commands.describe(task_id="Task ID to toggle (e.g., sched-1)")
+    @require_auth
     async def schedule_toggle(
         interaction: discord.Interaction,
         task_id: str,

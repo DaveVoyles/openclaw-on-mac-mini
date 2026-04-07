@@ -1,519 +1,289 @@
-# OpenClaw — Discord Slash Commands Reference
+# OpenClaw Command Reference
 
-All 126 slash commands across `bot.py` and 24 cogs, organized by category.
-
-> **Risk levels:** LOW (auto-execute) | MEDIUM (logged) | HIGH (requires button approval) | CRITICAL (requires approval + preview)
+> Source of truth: `src/dashboard/helpers.py::_raw_command_groups()`
 >
-> **Auth Required** = uses `@require_auth` decorator or explicit `is_allowed()` check.
-
----
-
-## Core
-
-General-purpose commands for identity, help, and conversation management.
-
-| Command          | Description                                               | Parameters                                     | Auth | Risk   | File     |
-| ---------------- | --------------------------------------------------------- | ---------------------------------------------- | ---- | ------ | -------- |
-| `/ping`          | Check if OpenClaw is alive (latency + uptime)             | —                                              | ✅   | LOW    | `bot.py` |
-| `/about`         | Show OpenClaw version and system info                     | —                                              | ✅   | LOW    | `bot.py` |
-| `/whoami`        | Show your Discord identity and permission level           | —                                              | ✅   | LOW    | `bot.py` |
-| `/help`          | List available OpenClaw commands                          | —                                              | ✅   | LOW    | `bot.py` |
-| `/ask`           | AI-powered natural language query (auto-routes to Gemini/GPT-4o/Claude/Ollama); auto-creates a Discord thread after 3+ exchanges — follow-up messages work without `/ask` inside the thread | `question: str`, `attachment: file (optional)`, `model: auto\|local\|gemini\|openai\|anthropic (optional)` | —    | MEDIUM | `bot.py` |
-| `/clear`         | Clear your conversation history                           | —                                              | ✅   | LOW    | `bot.py` |
-| `/model show`    | Show your current model routing preference                | —                                              | —    | LOW    | `bot.py` |
-| `/model set`     | Set your default model routing preference                 | `preference: auto\|local\|gemini\|openai\|anthropic` | —    | LOW    | `bot.py` |
-| `/save`          | Save current conversation as a named thread               | `name: str`                                    | ✅   | LOW    | `bot.py` |
-| `/resume`        | Resume a previously saved conversation thread             | `name: str`                                    | ✅   | LOW    | `bot.py` |
-| `/threads`       | List all your saved conversation threads                  | —                                              | ✅   | LOW    | `bot.py` |
-| `/forget`        | Delete a saved conversation thread                        | `name: str`                                    | ✅   | LOW    | `bot.py` |
-| `/skills`        | List all available skill functions                        | —                                              | ✅   | LOW    | `bot.py` |
-| `/remember`      | Store a fact in long-term QMD memory                      | `content: str`, `tags: str (optional)`         | ✅   | LOW    | `bot.py` |
-| `/recall`        | Search long-term QMD memory                               | `query: str`                                   | ✅   | LOW    | `bot.py` |
-
-**`/ask` routing** — By default, queries are auto-routed: code queries → Claude (via Copilot proxy), creative writing → GPT-4o (via Copilot proxy), tool-requiring queries → Gemini 2.5 Flash, simple/conversational queries → Ollama (`gemma4:e4b`, free). Auto-RAG injects top-5 relevant memories, user profile, and active rules before every call. You can override routing per-message with the `model:` parameter, or set a sticky default with `/model set`. The response footer shows which model handled the request.
-
-**`/ask` follow-up UX (Pass 9)** — Every `/ask` response now includes 2 LLM-generated follow-up question buttons (grey, secondary style) and a **🔁 Go Deeper** button that re-runs the original question with a detailed-explanation prefix. Clicking a follow-up button generates a full new response with its own follow-up buttons, so the chain continues naturally.
-
-| Model choice | Icon | Behavior |
-|---|---|---|
-| `auto` | 🔄 | Smart routing — classifies query and picks the best model |
-| `local` | 🏠 | Always use Gemma/Ollama (auto-upgrades to Gemini if tools are needed) |
-| `gemini` | ☁️ | Always use Gemini cloud (best quality, uses API quota) |
-| `openai` | 🧠 | Route to GPT-4o via Copilot proxy (creative writing, general knowledge) |
-| `anthropic` | 🔬 | Route to Claude Sonnet 4.5 via Copilot proxy (code review, reasoning) |
-
----
-
-## Docker & System
-
-Container management, system monitoring, and infrastructure diagnostics.
-
-| Command        | Description                                      | Parameters                         | Auth | Risk     | File             |
-| -------------- | ------------------------------------------------ | ---------------------------------- | ---- | -------- | ---------------- |
-| `/containers`  | Interactive container management (select menu + action buttons: status, logs, restart) | —                    | —    | LOW      | `docker_cog.py`  |
-| `/status`      | Detailed status for a container                  | `service: str`                     | —    | LOW      | `docker_cog.py`  |
-| `/logs`        | View recent logs from a container                | `service: str`, `lines: int = 30`  | —    | LOW      | `docker_cog.py`  |
-| `/system`      | Show system resource usage (CPU, RAM, disk)      | —                                  | —    | LOW      | `docker_cog.py`  |
-| `/dockerstats` | Show resource usage per container                | —                                  | —    | LOW      | `docker_cog.py`  |
-| `/restart`     | Restart a Docker container (requires approval)   | `service: str`                     | —    | **HIGH** | `docker_cog.py`  |
-| `/ports`       | Verify all services are listening                | —                                  | ✅   | LOW      | `bot.py`         |
-| `/report`      | Comprehensive system status report               | —                                  | ✅   | LOW      | `bot.py`         |
-| `/analyze`     | AI-powered container log analysis                | `service: str`, `lines: int = 50`  | ✅   | LOW      | `bot.py`         |
-| `/schedule`    | Manage recurring scheduled tasks                 | `action`, `skill`, `cron`, `prompt`, `hour`, `minute`, `interval`, `task_id` | — | LOW | `bot.py` |
-
-**`/restart` policy** — Allowed services are declared in `config/permissions.yaml`. Critical services (`traefik`, `socket-proxy`, `homepage`, `watchtower`) are always denied regardless of approval.
-
-**`/schedule` actions:** `list` (default), `add` (requires `skill` + `cron`/`hour`/`minute`/`interval`, or `prompt` + `cron` for prompt jobs), `remove` / `toggle` (requires `task_id`).
-
-**Cron Expressions** (new):
-- `"0 7 * * 1,5"` — Monday and Friday at 7 AM
-- `"0 9 * * 1-5"` — Weekdays at 9 AM
-- `"*/30 * * * *"` — Every 30 minutes
-- Format: `minute hour day-of-month month day-of-week`
-
-**Prompt Jobs** (new):
-Instead of calling a specific skill, prompt jobs send a natural language instruction to the LLM with full tool access. The LLM can search the web, browse pages, execute code, and post results.
-
-Example: "Search ESPN for D1 lacrosse games this week and create a table"
-
-**Natural Language Creation**: Tell the bot via `/ask` — e.g., "schedule a prompt job every Monday at 7 AM to check lacrosse scores" — and it creates the cron job automatically.
-
----
-
-## Media & Downloads
-
-Plex, *arr stack, and download client management.
-
-| Command       | Description                                         | Parameters                                              | Auth | Risk | File           |
-| ------------- | --------------------------------------------------- | ------------------------------------------------------- | ---- | ---- | -------------- |
-| `/search`     | Search Sonarr + Radarr for TV shows or movies       | `query: str`, `media_type: str = "all"`                 | —    | LOW  | `media_cog.py` |
-| `/queue`      | Show active downloads (SABnzbd + qBittorrent)       | —                                                       | —    | LOW  | `media_cog.py` |
-| `/recent`     | Recently added media from Plex (via Tautulli)       | `count: int = 10`                                       | —    | LOW  | `media_cog.py` |
-| `/health`     | Check *arr services and download client health      | —                                                       | —    | LOW  | `media_cog.py` |
-| `/nowplaying` | Show what's currently playing on Plex               | —                                                       | —    | LOW  | `media_cog.py` |
-| `/watch`      | Create a persistent scheduled alert                 | `condition: str`, `action: str = "list"`, `watch_id: str` | —  | LOW  | `media_cog.py` |
-
----
-
-## Network
-
-Network diagnostics, VPN status, and connectivity.
-
-| Command      | Description                                           | Parameters | Auth | Risk | File             |
-| ------------ | ----------------------------------------------------- | ---------- | ---- | ---- | ---------------- |
-| `/network`   | LAN + internet + DNS + Tailscale + health summary     | —          | —    | LOW  | `network_cog.py` |
-| `/tailscale` | Tailscale VPN status and device IP                    | —          | —    | LOW  | `network_cog.py` |
-| `/speedtest` | Cloudflare download speed + DNS latency               | —          | —    | LOW  | `network_cog.py` |
-
----
-
-## AI & Research
-
-Web search, browsing, file analysis, image generation, code execution, and autonomous research.
-
-| Command          | Description                                              | Parameters                                                            | Auth | Risk | File     |
-| ---------------- | -------------------------------------------------------- | --------------------------------------------------------------------- | ---- | ---- | -------- |
-| `/websearch`     | Live web search via Tavily (DuckDuckGo fallback)         | `query: str`, `results: int = 5`                                      | ✅   | LOW  | `bot.py` |
-| `/browse`        | Fetch and read a web page; optional Q&A                  | `url: str`, `question: str (optional)`                                | ✅   | LOW  | `bot.py` |
-| `/analyze-image` | Analyze an uploaded image with Gemini vision             | `image: attachment`, `question: str (optional)`                       | —    | LOW  | `bot.py` |
-| `/analyze-file`  | Analyze a document (PDF, TXT, JSON…) with Gemini        | `file: attachment`, `question: str (optional)`                        | —    | LOW  | `bot.py` |
-| `/research`      | Autonomous multi-step research with synthesis            | `query: str`                                                          | ✅   | LOW  | `bot.py` |
-| `/bookmark`      | Save a URL or note to the Obsidian vault                 | `url: str (optional)`, `note: str (optional)`, `tags: str (optional)` | ✅   | LOW  | `bot.py` |
-| `/imagine`       | Generate an image using local Stable Diffusion           | `prompt: str`, `negative`, `width`, `height`, `steps`                 | ✅   | LOW  | `bot.py` |
-| `/run-code`      | Execute Python code in a sandboxed container             | `code: str` (max 10,000 chars)                                        | ✅   | LOW  | `bot.py` |
-| `/weather`       | Get current weather and forecast                         | `location: str (optional)`, `units: str (optional)`                   | ✅   | LOW  | `bot.py` |
-| `/briefing`      | On-demand morning briefing (weather, health, downloads)  | —                                                                     | ✅   | LOW  | `bot.py` |
-
----
-
-## Document Editing
-
-Word (.docx) and Excel (.xlsx) document creation, reading, and AI-assisted editing.
-
-| Command                      | Description                                              | Parameters                                    | Auth | Risk   | File          |
-| ---------------------------- | -------------------------------------------------------- | --------------------------------------------- | ---- | ------ | ------------- |
-| `/doc read`                  | Extract and display Word document content                | `attachment: .docx file`                       | —    | LOW    | `doc_cog.py`  |
-| `/doc edit <instructions>`   | AI-assisted Word document editing                        | `attachment: .docx file`, `instructions: str`  | —    | LOW    | `doc_cog.py`  |
-| `/doc create <description>`  | Generate a new Word document from natural language       | `description: str`                             | —    | LOW    | `doc_cog.py`  |
-| `/sheet read`                | Display Excel spreadsheet as a formatted table           | `attachment: .xlsx file`                       | —    | LOW    | `doc_cog.py`  |
-| `/sheet edit <instructions>` | AI-assisted Excel spreadsheet editing                    | `attachment: .xlsx file`, `instructions: str`  | —    | LOW    | `doc_cog.py`  |
-| `/sheet create <description>`| Generate a new Excel spreadsheet from description        | `description: str`                             | —    | LOW    | `doc_cog.py`  |
-
-**Examples:**
-```
-/doc read                          → attach a .docx file to see its content
-/doc edit "fix all typos"          → attach a .docx file + describe changes
-/doc create "weekly status report template with headers for accomplishments, blockers, and next steps"
-/sheet read                        → attach a .xlsx file to see it as a table
-/sheet edit "add a Total row"      → attach a .xlsx file + describe changes
-/sheet create "budget tracker with columns: date, category, amount, notes"
-```
-
-**Dependencies:** `python-docx`, `openpyxl` (in `requirements.txt`).
-**Implementation:** `src/document_skills.py` (skill logic) + `src/cogs/doc_cog.py` (Discord commands).
-
-> **💾 Save to NAS:** After `/doc create` or `/sheet create`, the response includes a **Save to NAS** button that rsyncs the generated file to the Synology NAS.
-
----
-
-## Notes & Vault
-
-Quick note-taking and full-text search across the Obsidian vault.
-
-| Command                      | Description                                              | Parameters                                                    | Auth | Risk | File           |
-| ---------------------------- | -------------------------------------------------------- | ------------------------------------------------------------- | ---- | ---- | -------------- |
-| `/note create`               | Create a Markdown note and save to the Obsidian vault    | `title: str`, `content: str`, `tags: str (optional)`          | ✅   | LOW  | `note_cog.py`  |
-| `/note list`                 | Browse recent vault notes, optionally filtered by type   | `type: research\|bookmark\|note\|analytics (optional)`        | ✅   | LOW  | `note_cog.py`  |
-| `/note view`                 | Read a vault note's full content                         | `filename: str`                                               | ✅   | LOW  | `note_cog.py`  |
-| `/note search`               | Full-text search across all vault notes                  | `query: str`                                                  | ✅   | LOW  | `note_cog.py`  |
-
-**Examples:**
-```
-/note create title:"Meeting Notes" content:"Discussed migration timeline" tags:"meeting,planning"
-/note list type:research
-/note view filename:"2026-03-25-docker-patterns.md"
-/note search query:"Sonarr upgrade"
-```
-
-**Implementation:** `src/cogs/note_cog.py` (Discord commands) + `src/obsidian_writer.py` (vault I/O).
-
----
-
-## Research
-
-| Command          | Description                                              | Parameters                                                            | Auth | Risk | File     |
-| ---------------- | -------------------------------------------------------- | --------------------------------------------------------------------- | ---- | ---- | -------- |
-| `/research`      | Autonomous multi-step research with synthesis            | `query: str`, `deep: bool (optional)`                                 | ✅   | LOW  | `bot.py` |
-
-> **📎 Save to Vault:** After research completes, the report thread includes a **Save to Vault** button that writes the full report as a Markdown file to `data/vault/Research/`.
-
----
-
-## Security & Approvals
-
-Audit trail, emergency controls, and approval workflows.
-
-| Command          | Description                                        | Parameters             | Auth | Risk         | File               |
-| ---------------- | -------------------------------------------------- | ---------------------- | ---- | ------------ | ------------------ |
-| `/pending`       | View all pending approval requests                 | —                      | ✅   | LOW          | `bot.py`           |
-| `/estop`         | Emergency stop — halt all write actions            | `action: str = "stop"` | ✅   | **CRITICAL** | `bot.py`           |
-| `/auditlog`      | View recent audit log entries (max 25)             | `lines: int = 10`      | —    | LOW          | `analytics_cog.py` |
-| `/audit-summary` | Analytics summary of today's audit log             | —                      | —    | LOW          | `analytics_cog.py` |
-| `/spending`      | View Gemini API spending and budget status         | `breakdown: bool = false` | —  | LOW          | `analytics_cog.py` |
-| `/diff`          | Show uncommitted git changes in the OpenClaw repo  | —                      | ✅   | LOW          | `bot.py`           |
-| `/mail`          | Send email via AgentMail.to                        | `to`, `subject`, `body` | ✅  | MEDIUM       | `bot.py`           |
-
-**`/estop`** — `action` can be `stop` (default), `resume`, `start`, or `off`. When active, all write operations are blocked.
-
----
-
-## Planning & Tasks
-
-Kanban task management and persistent multi-step agent plans.
-
-| Command        | Description                                                         | Parameters                                               | Auth | Risk   | File     |
-| -------------- | ------------------------------------------------------------------- | -------------------------------------------------------- | ---- | ------ | -------- |
-| `/tasks`       | View Mission Control task board                                     | `status: str` (all\|backlog\|in_progress\|review\|done)  | ✅   | LOW    | `bot.py` |
-| `/plans`       | List active/recent agent plans                                      | `status`: all \| in-progress \| completed \| interrupted | ✅   | LOW    | `bot.py` |
-| `/plan-detail` | Show full details of a specific plan (steps, status, outputs)       | `plan_id: str`                                           | ✅   | LOW    | `bot.py` |
-| `/resume-plan` | Resume an interrupted plan from where it left off                   | `plan_id: str`                                           | ✅   | LOW    | `bot.py` |
-| `/cancel-plan` | Cancel an active plan (marks interrupted, resets in-progress steps) | `plan_id: str`                                           | ✅   | MEDIUM | `bot.py` |
-
-### Mission Control
-
-Tasks stored in `data/tasks.json`, synced to [GitHub Pages dashboard](https://davevoyles.github.io/openclaw-dashboard/). LLM-callable tools: `get_mission_tasks`, `get_task_detail`, `update_task_status`, `complete_task`, `add_task_comment`.
-
-### Agent Plans
-
-Plans stored as Markdown in `data/plans/` and survive restarts. On startup, interrupted plans are detected and reported to `ALERT_CHANNEL_ID`.
-
-LLM-callable tools: `create_plan`, `update_plan_step`, `read_plan`, `list_plans`, `adjust_plan`, `cancel_plan`, `resume_plan`.
-
-### Ontology (Graph Memory)
-
-Structured graph memory via `/ask` — entities, relations, queries, validation. Stored in `data/memory/ontology/graph.jsonl`.
-
-LLM-callable tools: `ontology_create_entity`, `ontology_get_entity`, `ontology_update_entity`, `ontology_query`, `ontology_relate`, `ontology_get_related`, `ontology_validate`.
-
----
-
-## Notifications
-
-Per-user alert preferences — mute, filter, block, and DM controls.
-
-| Command               | Description                                    | Parameters                     | Auth | Risk | File            |
-| --------------------- | ---------------------------------------------- | ------------------------------ | ---- | ---- | --------------- |
-| `/notify show`        | Show your notification preferences             | —                              | —    | LOW  | `notify_cog.py` |
-| `/notify mute`        | Mute alerts for a duration (e.g., 30m, 2h, 8h) | `duration: str`               | —    | LOW  | `notify_cog.py` |
-| `/notify unmute`      | Resume alerts immediately                      | —                              | —    | LOW  | `notify_cog.py` |
-| `/notify filter`      | Set severity filter                            | `level: all\|warning\|critical` | —    | LOW  | `notify_cog.py` |
-| `/notify block`       | Block alerts from a specific service           | `service: str`                 | —    | LOW  | `notify_cog.py` |
-| `/notify unblock`     | Unblock a previously blocked service           | `service: str`                 | —    | LOW  | `notify_cog.py` |
-| `/notify dm`          | Toggle DM delivery for alerts                  | `enabled: on\|off`             | —    | LOW  | `notify_cog.py` |
-
----
-
-## Personal Assistant
-
-Reminders, tasks, translation, polls, habits, expenses, and daily digests.
-
-| Command                    | Description                                                    | Parameters                                                       | Auth | Risk | File              |
-| -------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------- | ---- | ---- | ----------------- |
-| `/remind set`              | Set a personal reminder (e.g. "in 30m take a break")           | `when: str`, `message: str`                                      | —    | LOW  | `reminder_cog.py` |
-| `/remind list`             | List your active reminders                                     | —                                                                | —    | LOW  | `reminder_cog.py` |
-| `/remind cancel`           | Cancel a pending reminder                                      | `reminder_id: str`                                               | —    | LOW  | `reminder_cog.py` |
-| `/timer`                   | Start a countdown timer (DMs you when done)                    | `duration: str`                                                  | —    | LOW  | `reminder_cog.py` |
-| `/todo add`                | Add a task with optional priority                              | `task: str`, `priority: low\|medium\|high (optional)`            | —    | LOW  | `todo_cog.py`     |
-| `/todo list`               | List your tasks (filterable by status/priority)                | `status: str (optional)`, `priority: str (optional)`             | —    | LOW  | `todo_cog.py`     |
-| `/todo done`               | Mark a task as completed                                       | `task_id: str`                                                   | —    | LOW  | `todo_cog.py`     |
-| `/todo delete`             | Delete a task                                                  | `task_id: str`                                                   | —    | LOW  | `todo_cog.py`     |
-| `/translate`               | Translate text to another language (Gemini-powered)            | `text: str`, `language: str`                                     | —    | LOW  | `translate_cog.py`|
-| `/poll`                    | Create a reaction-based poll with auto-tally                   | `question: str`, `options: str` (comma-separated)                | —    | LOW  | `poll_cog.py`     |
-| `/habit add`               | Start tracking a new daily habit                               | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
-| `/habit checkin`           | Check in for today on a habit                                  | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
-| `/habit streak`            | Show your current streak for a habit                           | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
-| `/habit list`              | List all tracked habits with streaks                           | —                                                                | —    | LOW  | `habit_cog.py`    |
-| `/habit delete`            | Stop tracking a habit                                          | `name: str`                                                      | —    | LOW  | `habit_cog.py`    |
-| `/expense add`             | Log an expense with category and amount                        | `amount: float`, `category: str`, `note: str (optional)`         | —    | LOW  | `expense_cog.py`  |
-| `/expense list`            | List recent expenses (filterable by category)                  | `category: str (optional)`, `days: int (optional)`               | —    | LOW  | `expense_cog.py`  |
-| `/expense summary`         | Spending summary by category (weekly/monthly)                  | `period: week\|month (optional)`                                 | —    | LOW  | `expense_cog.py`  |
-| `/expense delete`          | Delete an expense entry                                        | `expense_id: str`                                                | —    | LOW  | `expense_cog.py`  |
-
-**Evening Digest** — automated 9 PM daily summary posted to `ALERT_CHANNEL_ID`. Covers today's reminders fired, tasks completed, habits checked in, expenses logged, and upcoming items. Complements the morning briefing. Configure the hour with `EVENING_DIGEST_HOUR` (default: `21`).
-
----
-
-## Calendar & Email
-
-Google Calendar event management and email read/send via Gmail or Outlook.
-
-Requires: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN` (calendar); `GMAIL_USER`, `GMAIL_APP_PASSWORD` and/or `OUTLOOK_USER`, `OUTLOOK_APP_PASSWORD` (email).
-
-| Command                                               | Description                                            | Parameters                                                              | Auth | Risk   | File               |
-| ----------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- | ---- | ------ | ------------------ |
-| `/calendar today`                                     | List today's Google Calendar events                    | —                                                                       | —    | LOW    | `calendar_cog.py`  |
-| `/calendar upcoming`                                  | Next N days of events (default 7)                      | `days: int (optional)`                                                  | —    | LOW    | `calendar_cog.py`  |
-| `/calendar add <title> <when>`                        | Create a new calendar event                            | `title: str`, `when: str`, `description: str (optional)`, `location: str (optional)` | ✅ | MEDIUM | `calendar_cog.py` |
-| `/calendar delete <event_id>`                         | Delete a calendar event                                | `event_id: str`                                                         | ✅   | HIGH   | `calendar_cog.py`  |
-| `/email inbox`                                        | Show recent emails (default 10, ephemeral)             | `count: int (optional)`, `provider: str (optional)`                     | —    | LOW    | `email_cog.py`     |
-| `/email read <id>`                                    | Read full email body (ephemeral)                       | `id: str`, `provider: str (optional)`                                   | —    | LOW    | `email_cog.py`     |
-| `/email search <query>`                               | Search inbox (ephemeral)                               | `query: str`, `provider: str (optional)`                                | —    | LOW    | `email_cog.py`     |
-| `/email send <to> <subject> <body>`                   | Send an email                                          | `to: str`, `subject: str`, `body: str`, `provider: str (optional)`      | ✅   | HIGH   | `email_cog.py`     |
-
----
-
-## Journal
-
-Vault-integrated daily journaling with AI writing prompts. Entries saved to `/vault/Journal/` as `Journal - YYYY-MM-DD.md` with Obsidian frontmatter.
-
-| Command           | Description                                                      | Parameters                | Auth | Risk | File              |
-| ----------------- | ---------------------------------------------------------------- | ------------------------- | ---- | ---- | ----------------- |
-| `/journal write`  | Save today's journal entry (opens modal if no entry provided)    | `entry: str (optional)`   | —    | LOW  | `journal_cog.py`  |
-| `/journal read`   | Read a past journal entry (default today)                        | `date: str (optional)`    | —    | LOW  | `journal_cog.py`  |
-| `/journal streak` | Show consecutive days journaled                                  | —                         | —    | LOW  | `journal_cog.py`  |
-| `/journal prompt` | Get an AI writing prompt from Gemini                             | —                         | —    | LOW  | `journal_cog.py`  |
-
----
-
-## GitHub
-
-PR and issue monitoring with background DM alerts. Polls watched repos every 30 minutes.
-
-Requires: `GITHUB_TOKEN`, `GITHUB_DEFAULT_REPOS` (comma-separated).
-
-| Command                  | Description                                              | Parameters                            | Auth | Risk   | File             |
-| ------------------------ | -------------------------------------------------------- | ------------------------------------- | ---- | ------ | ---------------- |
-| `/github prs`            | List open PRs for a repo                                 | `repo: str (optional)`                | —    | LOW    | `github_cog.py`  |
-| `/github issues`         | List open issues for a repo                              | `repo: str (optional)`, `label: str (optional)` | — | LOW | `github_cog.py` |
-| `/github watch <repo>`   | Subscribe to PR/issue activity DMs                       | `repo: str`                           | ✅   | MEDIUM | `github_cog.py`  |
-| `/github unwatch <repo>` | Unsubscribe from repo activity DMs                       | `repo: str`                           | —    | LOW    | `github_cog.py`  |
-
----
+> This file is generated from runtime command metadata used by the dashboard and guide command finder.
+
+Total documented commands: **134**
+
+## Quick Start
+
+- `/help` — Browse commands by category
+- `/ask` — Use plain English and let OpenClaw route tools
+- `/research` — Run deep multi-source research
+- `/schedule` — Create and manage automations
+- `/incident start` — Kick off guided incident triage
+- `/recap weekly` — Summarize a channel/thread quickly
+
+## 🏛️ Foundation
+
+| Command | Description |
+| --- | --- |
+| `/ping` | Check if bot is alive |
+| `/about` | Version and system info |
+| `/whoami` | Your Discord identity & permissions |
+| `/help` | List all commands |
+
+## 🐳 Docker & System
+
+| Command | Description |
+| --- | --- |
+| `/containers` | List running containers |
+| `/status <service>` | Container detail + resources |
+| `/logs <service> [lines]` | View container logs |
+| `/system` | CPU, memory, disk usage |
+| `/dockerstats` | Per-container resource usage |
+| `/restart <service>` | Restart a container (requires approval) |
+
+## 🤖 AI & LLM
+
+| Command | Description |
+| --- | --- |
+| `/ask <question> [model] [scope] [reset_context] [anchor]` | AI-powered query — auto-routes to Gemini (tools) or Ollama (chat). Context controls are first-class slash options: scope (current/cross-channel/prior-report), reset_context, and anchor override ('none' disables anchor). Legacy inline flags (e.g. --cross-channel, --reset-context, --anchor, --no-anchor) still work. |
+| `/model show` | Show your current LLM routing preference and Ollama status. |
+| `/model set <preference>` | Set your default LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude). Alias accepted: claude → anthropic. |
+| `/research <query> [deep:true]` | Deep multi-step research — Discord thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section |
+| `/weather [location]` | Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var) |
+| `/clear` | Clear active conversation history |
+| `/save <name>` | Save current conversation as a named thread (persisted to disk) |
+| `/resume <name>` | Resume a previously saved conversation thread |
+| `/threads` | List all your saved conversation threads |
+| `/forget <name>` | Delete a saved conversation thread |
+| `/analyze <service> [lines]` | AI log analysis |
+
+## 🗓️ Recaps & Watch Guides
+
+| Command | Description |
+| --- | --- |
+| `/recap weekly [days] [style]` | Summarize the current Discord channel or thread with highlights, action items, or a compact table. Optional save-to-vault and Monday scheduling. |
+| `/sports upcoming [query]` | Create a sports watch guide with matchups, ET kickoff times, and where-to-watch details from live web research. Optional save-to-vault and Monday scheduling. |
+| `Create recap from thread` | Right-click a Discord message or thread to generate a recap without typing a slash command. |
+
+## 🎬 Media & Downloads
+
+| Command | Description |
+| --- | --- |
+| `/search <query> [type]` | Search Sonarr/Radarr catalogs |
+| `/queue` | Active downloads (SABnzbd + qBit) |
+| `/recent [count]` | Recently added Plex media |
+| `/health` | Check *arr + download client health |
+| `/ports` | Service port connectivity check |
+| `/report` | Comprehensive status report |
+
+## 🚨 Incident Operations
+
+| Command | Description |
+| --- | --- |
+| `/incident start <title> <severity> [details] [services]` | Create an incident and post Copilot triage summary + recommended actions in the incident thread. |
+| `/incident create <title> <severity> [details]` | Create a manual incident room entry without Copilot triage. |
+| `/incident status <id> [state] [note]` | Check or update incident state (open/investigating/monitoring). |
+| `/incident list [state] [limit]` | List recent incidents (active/all/open/investigating/monitoring/resolved). |
+| `/incident timeline [id] [limit]` | Show timeline events for an incident; defaults to current incident thread when possible. |
+| `/incident resolve <id> <summary> [action_items] [notes]` | Resolve an incident and capture postmortem notes/actions. |
+
+## 🧠 Memory & Automation
+
+| Command | Description |
+| --- | --- |
+| `/remember <fact> [tags]` | Store a fact in long-term memory |
+| `/recall <query>` | Search long-term memory |
+| `/schedule` | Manage scheduled tasks (CRUD via slash command) |
+| `/skills` | List all LLM-callable skills |
+| `/briefing` | On-demand morning briefing (weather + health + calendar) |
+| `/audit-summary` | Analytics on today's audit log |
+| `/nowplaying` | Live Plex active streams |
+| `/dream` | Run cognitive dream cycle (memory consolidation) |
+| `/memory-health` | Show memory health score and 5 metrics |
+| `/memory-export` | Export memory bundle |
+
+## 🌐 Network & Monitoring
+
+| Command | Description |
+| --- | --- |
+| `/network` | LAN, internet, DNS connectivity |
+| `/tailscale` | Tailscale VPN status |
+| `/speedtest` | Network speed test |
+| `/spending [breakdown]` | Gemini API cost tracking |
+
+## Security & Admin
+
+| Command | Description |
+| --- | --- |
+| `/pending` | Pending approval requests |
+| `/auditlog [lines]` | View audit trail |
+| `/estop [stop\|resume]` | Emergency stop all actions |
+| `/mail <to> <subject> <body>` | Send email via AgentMail |
+
+## 📋 Copy/Paste Workflow
+
+| Command | Description |
+| --- | --- |
+| `/recap copy-latest` | Copy-ready export of your latest OpenClaw response in the current channel/thread |
+| `/recap copy-thread [days] [style]` | Generate and export a copy-ready recap for the current channel/thread |
+| `Context menu: Copy Workflow Context` | Right-click any message to export a mobile-friendly copy block |
 
 ## Document Review & Interview
 
-Structured AI critique for text and files, plus an interactive interview mode for personalized output generation.
+| Command | Description |
+| --- | --- |
+| `/review text [mode]` | Paste text for structured critique (writing/technical/quick) |
+| `/review file [mode]` | Upload DOCX/PDF/TXT/etc for structured critique |
+| `/interview <goal>` | Sequential Q&A modals → personalized output |
 
-### Review
+## Calendar & Email
 
-| Command            | Description                                                                    | Parameters                               | Auth | Risk | File              |
-| ------------------ | ------------------------------------------------------------------------------ | ---------------------------------------- | ---- | ---- | ----------------- |
-| `/review text`     | Opens a modal to paste text; returns structured AI critique as an embed        | `mode: writing\|technical\|quick (optional)` | —    | LOW  | `review_cog.py`   |
-| `/review file`     | Upload a document for structured critique (DOCX, PDF, TXT, XLSX, MD, PY, JSON, CSV) | `mode: writing\|technical\|quick (optional)` | —    | LOW  | `review_cog.py`   |
+| Command | Description |
+| --- | --- |
+| `/calendar today` | List today's Google Calendar events |
+| `/calendar upcoming [days]` | Next N days of events |
+| `/calendar add <title> <when>` | Create event |
+| `/email inbox [count]` | Show recent emails (ephemeral) |
+| `/email search <query>` | Search inbox |
+| `/email read <id>` | Read full email |
+| `/email send <to> <subject> <body>` | Send email (requires approval) |
 
-**Mode options:**
-- `writing` — clarity, tone, and structure
-- `technical` — completeness, accuracy, and readability
-- `quick` — 3-bullet summary
+## Journal & GitHub
 
-Output is an embed with **Strengths / Areas to Improve / Specific Suggestions** sections plus a **💾 Save Review to Vault** button that saves to `/vault/Reviews/` as Obsidian Markdown.
-
-**Implementation:** `src/cogs/review_cog.py`
-
----
-
-### Interview
-
-| Command               | Description                                                                                     | Parameters    | Auth | Risk | File                |
-| --------------------- | ----------------------------------------------------------------------------------------------- | ------------- | ---- | ---- | ------------------- |
-| `/interview <goal>`   | Bot asks 3–5 clarifying questions via sequential Discord modals, then synthesizes tailored output | `goal: str`   | —    | LOW  | `interview_cog.py`  |
-
-**Example goals:** `"write my bio"`, `"plan my week"`, `"draft a cover letter"`, `"help me decide X"`
-
-Output is an embed summarising the synthesised result plus a **💾 Save to Vault** button. Each question modal has a 10-minute timeout.
-
-**Implementation:** `src/cogs/interview_cog.py`
-
----
+| Command | Description |
+| --- | --- |
+| `/journal write [entry]` | Save today's journal entry to vault |
+| `/journal read [date]` | Read past entry |
+| `/journal streak` | Streak counter |
+| `/journal prompt` | AI writing prompt |
+| `/github prs [repo]` | List open pull requests |
+| `/github issues [repo]` | List open issues |
+| `/github watch <repo>` | Subscribe to activity DMs |
 
 ## 🎨 Image Generation
 
-Generate images via a local Stable Diffusion instance.
-
-Requires: `SD_URL` (Stable Diffusion API base URL, e.g. `http://192.168.1.93:7860`).
-
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/imagine generate <prompt>` | Generate an image via Stable Diffusion txt2img | `prompt: str`, `size: 512\|768\|1024 (optional)`, `negative: str (optional)` | ✅ | MEDIUM | `imagine_cog.py` |
-| `/imagine status` | Check if Stable Diffusion is online and list available models | — | ✅ | LOW | `imagine_cog.py` |
-
----
+| Command | Description |
+| --- | --- |
+| `/imagine generate <prompt> [size] [negative]` | Generate image via Stable Diffusion txt2img |
+| `/imagine status` | Check SD online status and list models |
 
 ## 🌐 DNS Management
 
-Manage DNS filtering via AdGuard Home.
-
-Requires: `ADGUARD_URL`, `ADGUARD_USER`, `ADGUARD_PASSWORD`.
-
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/dns status` | Show AdGuard Home status and filtering enabled/disabled | — | ✅ | LOW | `dns_cog.py` |
-| `/dns stats` | Show query counts, block counts, and top domains | — | ✅ | LOW | `dns_cog.py` |
-| `/dns block <domain>` | Block a domain via DNS rewrite | `domain: str` | ✅ | HIGH | `dns_cog.py` |
-| `/dns allow <domain>` | Unblock a previously blocked domain | `domain: str` | ✅ | HIGH | `dns_cog.py` |
-| `/dns blocked` | List all manually blocked domains | — | ✅ | LOW | `dns_cog.py` |
-
----
+| Command | Description |
+| --- | --- |
+| `/dns status` | AdGuard Home status and filtering toggle |
+| `/dns stats` | Query/block counts and top domains |
+| `/dns block <domain>` | Block domain via DNS rewrite |
+| `/dns allow <domain>` | Unblock a domain |
+| `/dns blocked` | List all manually blocked domains |
 
 ## 📝 Notion
 
-Search and create Notion content via Maton automation.
-
-Requires: `MATON_NOTION_SEARCH_URL`, `MATON_NOTION_CREATE_URL`, `MATON_NOTION_TODO_URL`.
-
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/notion search <query>` | Search Notion pages and databases | `query: str` | ✅ | LOW | `notion_cog.py` |
-| `/notion page <title> <content>` | Create a new Notion page | `title: str`, `content: str` | ✅ | MEDIUM | `notion_cog.py` |
-| `/notion todo <item>` | Add an item to the Notion todo database | `item: str` | ✅ | MEDIUM | `notion_cog.py` |
-
----
+| Command | Description |
+| --- | --- |
+| `/notion search <query>` | Search Notion pages and databases |
+| `/notion page <title> <content>` | Create a new Notion page |
+| `/notion todo <item>` | Add item to Notion todo database |
 
 ## 📄 Google Docs
 
-Create and list Google Docs via Maton automation.
-
-Requires: `MATON_GDOC_CREATE_URL`, `MATON_GDOC_LIST_URL`.
-
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/gdoc save <title> <content>` | Create a new Google Doc with the given content | `title: str`, `content: str` | ✅ | MEDIUM | `gdoc_cog.py` |
-| `/gdoc list` | List recent Google Docs | — | ✅ | LOW | `gdoc_cog.py` |
-
----
+| Command | Description |
+| --- | --- |
+| `/gdoc save <title> <content>` | Create a new Google Doc |
+| `/gdoc list` | List recent Google Docs |
 
 ## 🖥️ System Performance
 
-Real-time system metrics via Glances.
-
-Requires: `GLANCES_URL` (e.g. `http://192.168.1.93:61208`).
-
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/perf` | System snapshot — CPU, memory, disk usage, and load average | — | ✅ | LOW | `perf_cog.py` |
-
----
+| Command | Description |
+| --- | --- |
+| `/perf` | CPU, memory, disk, load average via Glances |
 
 ## 📱 Push Notifications
 
-Send phone push notifications via ntfy.sh or a self-hosted ntfy instance.
+| Command | Description |
+| --- | --- |
+| `/ntfy send <message> [title] [priority]` | Send phone push notification via ntfy |
+| `/ntfy test` | Send test notification to verify setup |
 
-Requires: `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` (optional).
+## 📲 SMS One-Tap
 
-Also exports `push_notification()` as a utility for other cogs to send phone alerts.
-
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/ntfy send <message>` | Send a phone push notification | `message: str`, `title: str (optional)`, `priority: min\|low\|default\|high\|urgent (optional)` | ✅ | MEDIUM | `ntfy_cog.py` |
-| `/ntfy test` | Send a test push notification to verify setup | — | ✅ | LOW | `ntfy_cog.py` |
-
----
+| Command | Description |
+| --- | --- |
+| `/sms config <phone> [send_verification]` | Save phone number for one-tap SMS; can trigger verification send |
+| `/sms test [code]` | Start verification or submit code from SMS |
+| `/sms status` | Show masked phone, verification state, and remaining send budget |
+| `/sms send <message>` | Confirmation-based SMS send to configured phone |
+| `Context menu: Send to SMS` | Right-click a Discord message and forward it via SMS with confirmation |
 
 ## 🎬 Movie & TV
 
-Look up movies and TV shows via OMDb/IMDb.
-
-Requires: `OMDB_API_KEY` (free at https://www.omdbapi.com/).
-
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/media movie <title>` | Look up a movie with poster, ratings, and plot | `title: str` | — | LOW | `imdb_cog.py` |
-| `/media tv <title>` | Look up a TV show with season/episode info and ratings | `title: str` | — | LOW | `imdb_cog.py` |
-| `/media search <query>` | Search both movies and TV shows | `query: str` | — | LOW | `imdb_cog.py` |
-
----
+| Command | Description |
+| --- | --- |
+| `/media movie <title>` | Look up a movie with poster and ratings |
+| `/media tv <title>` | Look up a TV show with season/episode info |
+| `/media search <query>` | Search movies and TV via OMDb |
 
 ## 🐛 Error Monitoring
 
-Monitor application errors via Sentry.
+| Command | Description |
+| --- | --- |
+| `/sentry issues [project]` | List unresolved Sentry issues |
+| `/sentry projects` | List Sentry org projects |
+| `/sentry resolve <issue_id>` | Resolve a Sentry issue |
+| `/sentry stats [project]` | Hourly error rate stats |
 
-Requires: `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_URL` (default `https://sentry.io`).
+## Third-Party API Gateway (via /ask)
 
-| Command | Description | Parameters | Auth | Risk | File |
-| ------- | ----------- | ---------- | ---- | ---- | ---- |
-| `/sentry issues [project]` | List unresolved Sentry issues | `project: str (optional)` | ✅ | LOW | `sentry_cog.py` |
-| `/sentry projects` | List all Sentry projects in the org | — | ✅ | LOW | `sentry_cog.py` |
-| `/sentry resolve <issue_id>` | Mark a Sentry issue as resolved | `issue_id: str` | ✅ | HIGH | `sentry_cog.py` |
-| `/sentry stats [project]` | Show hourly error rate stats | `project: str (optional)` | ✅ | LOW | `sentry_cog.py` |
+| Command | Description |
+| --- | --- |
+| `gateway_request` | Call any of 100+ APIs (Slack, GitHub, Notion, HubSpot, Stripe…) via Maton managed OAuth. Invoked by /ask. |
+| `gateway_list_connections` | List active Maton OAuth connections (optionally filter by app). Invoked by /ask. |
+| `gateway_create_connection` | Create a new Maton OAuth connection for an app and return the authorization URL. Invoked by /ask. |
+
+## Knowledge Graph & Ontology (via /ask)
+
+| Command | Description |
+| --- | --- |
+| `ontology_create_entity` | Create a new typed entity (Person, Project, Task, etc.) in graph memory. |
+| `ontology_get_entity` | Retrieve all details and relations for a specific entity name. |
+| `ontology_relate` | Create a typed link between two entities (e.g., 'blocks', 'manages'). |
+| `ontology_query` | Search the knowledge graph for entities by name or type. |
+
+## Self-Management & Autonomy (via /ask)
+
+| Command | Description |
+| --- | --- |
+| `spawn_worker` | Spawn a focused AI sub-agent to accomplish a specific goal autonomously using its own tool loop. |
+| `create_scheduled_task` | Create a recurring scheduled task (LLM-controlled). Supports cron expressions, prompt jobs, or interval-based. |
+| `cancel_scheduled_task` | Cancel a scheduled task by ID. |
+| `list_scheduled_tasks` | List all active scheduled tasks with cron expressions, run counts, and next run times. |
+| `webfetch_md` | Smartly scrape any URL and convert main content to clean Markdown. |
+| `git_status` | Check project repository status for code changes. |
+| `git_log` | View recent code change history (commit log). |
+| `git_diff` | Compare code changes or view uncommitted changes. |
+| `git_commit` | Commit all current changes with a brief summary message. |
+| `init_planning_files` | Initialize task_plan.md, findings.md, progress.md for complex tasks. |
+| `update_plan_status` | Log progress or update status of a phase in planning files. |
+
+## 📝 Notes & Vault
+
+| Command | Description |
+| --- | --- |
+| `/note create` | Create a note in the Obsidian vault |
+| `/note list` | Browse recent vault notes |
+| `/note view` | View a vault note's content |
+| `/note search` | Search vault notes by content |
+
+## 📋 Agent Loop & Plans
+
+| Command | Description |
+| --- | --- |
+| `/plans [status]` | List active/recent agent plans. Filter: all, in-progress, completed, interrupted. |
+| `/plan-detail <plan_id>` | Show full details of a specific plan (steps, status, outputs). |
+| `/resume-plan <plan_id>` | Resume an interrupted plan from where it left off. |
+| `/cancel-plan <plan_id>` | Cancel an active plan (marks interrupted, resets in-progress steps). |
+| `create_plan` | (via /ask) Create a new task plan with a goal and ordered steps. Returns plan_id. |
+| `update_plan_step` | (via /ask) Update a step's status (done/failed/skipped) with output summary. |
+| `read_plan` | (via /ask) Read the current state of a plan including all step statuses. |
+| `list_plans` | (via /ask) List plans filtered by status. |
+| `adjust_plan` | (via /ask) Add, remove, or reorder steps in an active plan. |
+| `cancel_plan` | (via /ask) Cancel an active plan and mark it interrupted. |
+| `resume_plan` | (via /ask) Resume an interrupted plan from where it left off. |
 
 ---
 
-## Summary
-
-| Category             | Commands | Source Files                                |
-| -------------------- | -------- | ------------------------------------------- |
-| Core                 | 13       | `bot.py`                                    |
-| Docker & System      | 10       | `bot.py`, `docker_cog.py`                   |
-| Media & Downloads    | 6        | `media_cog.py`                              |
-| Network              | 3        | `network_cog.py`                            |
-| AI & Research        | 10       | `bot.py`                                    |
-| Document Editing     | 6        | `doc_cog.py`                                |
-| Security & Approvals | 7        | `bot.py`, `analytics_cog.py`                |
-| Planning & Tasks     | 5        | `bot.py`                                    |
-| Notifications        | 7        | `notify_cog.py`                             |
-| Personal Assistant   | 19       | `reminder_cog.py`, `todo_cog.py`, `translate_cog.py`, `poll_cog.py`, `habit_cog.py`, `expense_cog.py` |
-| Calendar & Email     | 8        | `calendar_cog.py`, `email_cog.py`           |
-| Journal              | 4        | `journal_cog.py`                            |
-| GitHub               | 4        | `github_cog.py`                             |
-| Document Review & Interview | 3   | `review_cog.py`, `interview_cog.py`         |
-| Image Generation     | 2        | `imagine_cog.py`                            |
-| DNS Management       | 5        | `dns_cog.py`                                |
-| Notion               | 3        | `notion_cog.py`                             |
-| Google Docs          | 2        | `gdoc_cog.py`                               |
-| System Performance   | 1        | `perf_cog.py`                               |
-| Push Notifications   | 2        | `ntfy_cog.py`                               |
-| Movie & TV           | 3        | `imdb_cog.py`                               |
-| Error Monitoring     | 4        | `sentry_cog.py`                             |
-| **Total**            | **129**  | + 60 LLM-callable skill functions via `/ask` |
-
----
-
-## Adding a New Command
-
-1. Declare the function in [bot.py](../src/bot.py) with `@bot.tree.command(name=..., description=...)` or in a cog file under `src/cogs/` with `@app_commands.command(name=..., description=...)`
-2. Call `is_allowed(interaction)` at the top of every command handler — no exceptions
-3. Check `is_emergency_stopped()` for any write/mutating command
-4. If the command is HIGH/CRITICAL risk, use `approval_store.create()` + `ApprovalView` (see `/restart` as the template)
-5. Call `audit_log(interaction.user, "<action>", detail=..., result=...)` at every outcome branch
-6. Assign the risk level in `config/permissions.yaml`
-7. Add it to this document
+_Generated from runtime metadata to prevent command-doc drift._

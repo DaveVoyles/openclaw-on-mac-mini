@@ -10,8 +10,17 @@ log = logging.getLogger("openclaw.tool_router")
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9+._-]*")
 _DAY_WINDOW_RE = re.compile(r"\b(?:last|past|next)\s+(\d{1,2})\s+days?\b")
+_WEEK_WINDOW_RE = re.compile(r"\b(?:last|past|next)\s+(\d{1,2})\s+weeks?\b")
 _PACK_DIRECTIVE_RE = re.compile(r"\buse\s*:\s*([a-z0-9_-]+)\b", re.IGNORECASE)
 _PACK_PLAIN_RE = re.compile(r"\buse\s+(finance|sports|wwe|gaming)\s*(?:pack|persona|tools?)?\b", re.IGNORECASE)
+_REQUESTED_ITEMS_PREFIX_RE = re.compile(
+    r"\b(?:top|first|at\s+least|minimum(?:\s+of)?|up\s+to|bring(?:\s+in)?|include|cover|list|give(?:\s+me)?|show(?:\s+me)?|get(?:\s+me)?|provide)\s+(\d{1,2})\s+(?:[a-z][a-z0-9'/-]*\s+){0,2}(stories?|headlines?|games?|items?|results?)\b",
+    re.IGNORECASE,
+)
+_REQUESTED_ITEMS_BARE_RE = re.compile(
+    r"^\s*(\d{1,2})\s+(?:[a-z][a-z0-9'/-]*\s+){0,2}(stories?|headlines?|games?|items?|results?)\b",
+    re.IGNORECASE,
+)
 
 _ALWAYS_AVAILABLE = {
     "search_web",
@@ -35,6 +44,9 @@ _INTENT_HINTS: dict[str, tuple[str, ...]] = {
         "watch guide",
         "upcoming games",
         "games this week",
+        "weekend recap",
+        "sports recap",
+        "game results",
         "sports schedule",
         "streaming schedule",
         "college lacrosse",
@@ -254,6 +266,50 @@ def _iter_metadata_values(declaration: dict[str, Any]) -> list[str]:
     return values
 
 
+def _declaration_domains(declaration: dict[str, Any]) -> set[str]:
+    domains: set[str] = set()
+    raw_values: list[str] = []
+    for key in ("domains", "packs", "personas"):
+        raw = declaration.get(key)
+        if isinstance(raw, str):
+            raw_values.append(raw.lower())
+        elif isinstance(raw, list):
+            raw_values.extend(str(item).lower() for item in raw)
+    if any(value in {"sports", "sports-analyst"} for value in raw_values):
+        domains.add("sports")
+    if any(value in {"wwe", "wwe-reporter"} for value in raw_values):
+        domains.add("wwe")
+    if any(value in {"gaming", "gaming-scout"} for value in raw_values):
+        domains.add("gaming")
+
+    metadata_text = " ".join(_iter_metadata_values(declaration)).lower()
+    for domain in ("sports", "wwe", "gaming"):
+        terms = tuple(str(item).lower() for item in _PACK_PROFILES.get(domain, {}).get("terms", ()))
+        hits = sum(1 for term in terms if term and term in metadata_text)
+        if domain == "wwe" and hits >= 1:
+            domains.add("wwe")
+        elif domain == "gaming" and hits >= 2:
+            domains.add("gaming")
+        elif domain == "sports" and hits >= 2:
+            domains.add("sports")
+    return domains
+
+
+def _infer_message_domains(message_lower: str, message_tokens: set[str]) -> set[str]:
+    domains: set[str] = set()
+    for domain in ("sports", "wwe", "gaming"):
+        terms = tuple(str(item).lower() for item in _PACK_PROFILES.get(domain, {}).get("terms", ()))
+        token_hits = sum(1 for term in terms if term in message_tokens)
+        phrase_hits = sum(1 for term in terms if " " in term and term in message_lower)
+        if domain == "wwe" and (token_hits + phrase_hits) >= 1:
+            domains.add("wwe")
+        elif domain == "gaming" and (token_hits + phrase_hits) >= 2:
+            domains.add("gaming")
+        elif domain == "sports" and (token_hits + phrase_hits) >= 2:
+            domains.add("sports")
+    return domains
+
+
 def _extract_pack_directive(message: str) -> tuple[str | None, str | None, str]:
     """Extract `use:<pack>` or plain-English `use <pack> pack` directives."""
     pack_name: str | None = None
@@ -354,6 +410,20 @@ def _matching_workflow_bundles(message_lower: str, message_tokens: set[str]) -> 
     return matches
 
 
+def _extract_requested_item_count(message: str) -> int | None:
+    """Infer explicit item-count ask from plain-English prompts."""
+    text = message or ""
+    match = _REQUESTED_ITEMS_PREFIX_RE.search(text)
+    if match:
+        return max(1, min(int(match.group(1)), 25))
+
+    bare_match = _REQUESTED_ITEMS_BARE_RE.search(text)
+    if bare_match:
+        return max(1, min(int(bare_match.group(1)), 25))
+
+    return None
+
+
 def _extract_request_hints(message: str, message_lower: str, message_tokens: set[str]) -> dict[str, Any]:
     hints: dict[str, Any] = {}
 
@@ -365,6 +435,8 @@ def _extract_request_hints(message: str, message_lower: str, message_tokens: set
         ("today", 1),
         ("tomorrow", 2),
         ("this weekend", 3),
+        ("last weekend", 3),
+        ("weekend recap", 3),
         ("this week", 7),
         ("next week", 7),
         ("last week", 7),
@@ -378,6 +450,14 @@ def _extract_request_hints(message: str, message_lower: str, message_tokens: set
     if explicit_days:
         hints["days"] = max(1, min(int(explicit_days.group(1)), 30))
         hints["timeframe"] = explicit_days.group(0)
+    explicit_weeks = _WEEK_WINDOW_RE.search(message_lower)
+    if explicit_weeks:
+        hints["days"] = max(1, min(int(explicit_weeks.group(1)) * 7, 30))
+        hints["timeframe"] = explicit_weeks.group(0)
+
+    requested_item_count = _extract_requested_item_count(message)
+    if isinstance(requested_item_count, int):
+        hints["requested_item_count"] = requested_item_count
 
     for sport in _SPORT_TERMS:
         if sport in message_tokens:
@@ -400,10 +480,22 @@ def _extract_request_hints(message: str, message_lower: str, message_tokens: set
 
     if "box office" in message_lower:
         hints["report_topic"] = "box-office"
+        hints["retrieval_profile"] = "news"
+    elif any(term in message_lower for term in ("gaming", "esports", "videogame", "video game", "steam", "xbox", "playstation", "nintendo")):
+        hints["report_topic"] = "gaming"
+        hints["retrieval_profile"] = "gaming"
+    elif any(term in message_tokens for term in _SPORT_TERMS) or "sports" in message_lower:
+        hints["report_topic"] = "sports"
+        hints["retrieval_profile"] = "sports"
+    elif any(term in message_lower for term in ("news", "headline", "breaking", "latest update")):
+        hints["report_topic"] = "news"
+        hints["retrieval_profile"] = "news"
+    elif any(term in message_lower for term in ("incident", "outage", "deploy", "latency", "engineering", "ops")):
+        hints["report_topic"] = "engineering"
+        hints["retrieval_profile"] = "engineering"
     elif "recap" in message_lower:
         hints["report_topic"] = "recap"
-    elif "sports" in message_lower:
-        hints["report_topic"] = "sports"
+        hints["retrieval_profile"] = "general"
 
     if "table" in message_lower or "markdown" in message_lower:
         hints["output_style"] = "table"
@@ -457,6 +549,7 @@ def route_tool_declarations(
             candidate_declarations = filtered_declarations
 
     message_tokens = _tokenize(message_lower)
+    message_domains = _infer_message_domains(message_lower, message_tokens)
     matched_bundles = _matching_workflow_bundles(message_lower, message_tokens)
     request_hints = _extract_request_hints(route_message, message_lower, message_tokens)
     if pack_name:
@@ -470,15 +563,28 @@ def route_tool_declarations(
     }
     scored: list[tuple[int, str, dict[str, Any]]] = []
     always_on: list[dict[str, Any]] = []
+    guard_suppressed: list[str] = []
+    guard_domains: list[str] = []
+    guarded_domains = {"sports", "wwe"} - message_domains if not pack_name else set()
 
     for declaration in candidate_declarations:
         name = str(declaration.get("name", ""))
+        declaration_domains = _declaration_domains(declaration)
+        if guarded_domains and (declaration_domains & guarded_domains):
+            if not declaration.get("always_available") and name not in _ALWAYS_AVAILABLE:
+                guard_suppressed.append(name)
+                continue
         if declaration.get("always_available") or name in _ALWAYS_AVAILABLE:
             always_on.append(declaration)
         score = _score_declaration(message_lower, message_tokens, declaration)
         if name in bundled_tool_names:
             score += 10
         scored.append((score, name, declaration))
+
+    if guard_suppressed:
+        guard_domains = sorted(guarded_domains)
+        request_hints["guarded_domains"] = guard_domains
+        request_hints["guard_suppressed"] = guard_suppressed[:8]
 
     scored.sort(key=lambda item: (-item[0], item[1]))
     top_score = scored[0][0] if scored else 0
@@ -493,15 +599,30 @@ def route_tool_declarations(
                 "hints": request_hints,
                 "pack": pack_name,
                 "persona": persona_name,
+                "guard_domains": guard_domains,
+                "guard_suppressed": guard_suppressed,
             }
-        return declarations, {
-            "strategy": "fallback-full",
+        fallback_declarations = declarations
+        fallback_strategy = "fallback-full"
+        if guard_suppressed:
+            fallback_declarations = [
+                declaration
+                for declaration in declarations
+                if str(declaration.get("name", "")) not in set(guard_suppressed)
+                or declaration.get("always_available")
+                or str(declaration.get("name", "")) in _ALWAYS_AVAILABLE
+            ]
+            fallback_strategy = "guarded-fallback"
+        return fallback_declarations, {
+            "strategy": fallback_strategy,
             "selected": [name for _, name, _ in scored[: min(12, len(scored))]],
             "top_score": top_score,
             "bundles": [str(bundle.get("name", "")) for bundle in matched_bundles],
             "hints": request_hints,
             "pack": pack_name,
             "persona": persona_name,
+            "guard_domains": guard_domains,
+            "guard_suppressed": guard_suppressed,
         }
 
     selected: list[dict[str, Any]] = []
@@ -537,4 +658,6 @@ def route_tool_declarations(
         "hints": request_hints,
         "pack": pack_name,
         "persona": persona_name,
+        "guard_domains": guard_domains,
+        "guard_suppressed": guard_suppressed,
     }

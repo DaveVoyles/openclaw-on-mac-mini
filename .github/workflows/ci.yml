@@ -115,6 +115,11 @@ jobs:
             python3 scripts/syntax_check.py
           fi
 
+      - name: Quality eval smoke gate (offline)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python -m pytest tests/evals/test_offline_quality_eval.py -q -n 0 --tb=short
+
       - name: Run tests (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         env:

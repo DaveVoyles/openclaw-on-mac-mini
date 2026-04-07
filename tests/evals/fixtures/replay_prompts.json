@@ -1,0 +1,89 @@
+{
+  "cases": [
+    {
+      "id": "sports-recap-weekend",
+      "domain": "sports",
+      "tags": ["canary", "sports", "production-replay"],
+      "prompt": "Give me a men's division 1 lacrosse weekend recap with scores, watch options, and sources.",
+      "response": "## D1 Lacrosse Weekend Recap\n\n| Date | Matchup | Result | Watch | Source |\n| --- | --- | --- | --- | --- |\n| Sat | Maryland vs Johns Hopkins | 12-10 | ESPN+ | espn.com |\n| Sat | Duke vs Virginia | 14-11 | ACCN | ncaa.com |\n| Sun | Notre Dame vs Syracuse | 9-8 | ESPNU | usila.org |\n\n## Coverage Summary\n- Full weekend slate included.\n- Sources validated.\n\nSources:\n- https://www.espn.com/lacrosse/\n- https://www.ncaa.com/scoreboard/lacrosse-men/d1\n- https://www.usila.org",
+      "required_terms": [
+        "Coverage Summary",
+        "Maryland",
+        "Johns Hopkins",
+        "Sources"
+      ],
+      "expected_min_sources": 3,
+      "targets": {
+        "min_coverage_proxy": 0.9,
+        "min_source_diversity_proxy": 1.0,
+        "expected_quality_status": "pass"
+      },
+      "simulated_latency_ms": 380,
+      "max_latency_bucket": "moderate"
+    },
+    {
+      "id": "incident-summary-deploy",
+      "domain": "engineering",
+      "tags": ["canary", "engineering", "production-replay"],
+      "prompt": "Summarize this week's production incident with impact, timeline, mitigation, and follow-ups.",
+      "response": "## Incident Summary\n\n### Impact\n- Elevated API latency and intermittent 5xx responses for 19 minutes.\n\n### Timeline\n- 13:02 UTC deploy started\n- 13:07 UTC error rate increase detected\n- 13:21 UTC rollback completed\n\n### Mitigation\n- Rolled back canary and scaled read replicas.\n\n### Follow-up Actions\n- Add alert for p95 latency regression.\n- Tighten rollout guardrails.\n\nSources:\n- https://status.example.com/incidents/abc123\n- https://app.datadoghq.com/dashboard/incident-latency\n- https://github.com/example/openclaw/actions/runs/12345",
+      "required_terms": [
+        "Impact",
+        "Timeline",
+        "Mitigation",
+        "Follow-up Actions",
+        "Sources"
+      ],
+      "expected_min_sources": 2,
+      "targets": {
+        "min_coverage_proxy": 0.8,
+        "min_source_diversity_proxy": 1.0,
+        "expected_quality_status": "pass"
+      },
+      "simulated_latency_ms": 910,
+      "max_latency_bucket": "slow"
+    },
+    {
+      "id": "weekly-digest-engineering",
+      "domain": "news",
+      "tags": ["canary", "news", "production-replay"],
+      "prompt": "Create a weekly engineering digest with wins, risks, and next actions.",
+      "response": "## Weekly Engineering Digest\n\n### Wins\n- Search reliability improved after retry tuning.\n\n### Risks\n- ⚠️ **Partial coverage warning:** backlog review only covered active epics.\n\n### Next Actions\n- Expand retrieval checks for archived projects.\n\nSources:\n- https://linear.app/example/team/backlog",
+      "required_terms": [
+        "Weekly Engineering Digest",
+        "Wins",
+        "Risks",
+        "Next Actions"
+      ],
+      "expected_min_sources": 2,
+      "targets": {
+        "min_coverage_proxy": 0.75,
+        "min_source_diversity_proxy": 0.5,
+        "expected_quality_status": "review"
+      },
+      "simulated_partial_coverage": true,
+      "simulated_latency_ms": 1820,
+      "max_latency_bucket": "slow"
+    },
+    {
+      "id": "gaming-meta-update",
+      "domain": "gaming",
+      "tags": ["canary", "gaming", "production-replay"],
+      "prompt": "Summarize this week in competitive gaming with match highlights, patch impact, and sources.",
+      "response": "## Competitive Gaming Weekly Update\n\n### Highlights\n- Team Alpha defeated Team Nova 3-1 in the regional finals.\n- Patch 14.8 reduced late-game objective snowballing by 9%.\n\n### Meta Impact\n- Priority shifted to scaling compositions in top-tier play.\n\n### Watch Options\n- VOD recap: https://www.twitch.tv/videos/123456789\n\nSources:\n- https://www.esportsinsider.com/weekly-report\n- https://www.riotgames.com/en/news/game-updates\n- https://www.twitch.tv/videos/123456789",
+      "required_terms": [
+        "Highlights",
+        "Meta Impact",
+        "Sources"
+      ],
+      "expected_min_sources": 3,
+      "targets": {
+        "min_coverage_proxy": 0.8,
+        "min_source_diversity_proxy": 1.0,
+        "expected_quality_status": "pass"
+      },
+      "simulated_latency_ms": 640,
+      "max_latency_bucket": "slow"
+    }
+  ]
+}

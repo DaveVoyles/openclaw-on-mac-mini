@@ -9,6 +9,7 @@ Autonomous multi-step research engine that:
 
 import asyncio
 import logging
+import re
 import time
 from typing import Awaitable, Callable
 from urllib.parse import urlparse
@@ -153,6 +154,11 @@ class ResearchAgent:
         self.browse_top_n = browse_top_n
         self.timeout_seconds = timeout_seconds
         self._semaphore = asyncio.Semaphore(max_concurrent)
+        self._last_receipts: dict = {}
+
+    def get_last_receipts(self) -> dict:
+        """Return persistence receipts from the most recent research run."""
+        return dict(self._last_receipts or {})
 
     async def run(
         self,
@@ -218,6 +224,13 @@ class ResearchAgent:
         await post("plan", f"Planning research strategy for: *{query[:80]}*")
 
         # ── Step 0: Check for prior research on this topic ────────────────────
+        receipts = {
+            "vault": {"saved": False, "location": "", "detail": "Not attempted"},
+            "session": {"saved": False, "location": "", "detail": "Recorded by caller"},
+            "vector": {"saved": False, "location": "", "detail": "Not attempted"},
+            "gdoc": {"saved": False, "location": "", "detail": "Not attempted"},
+        }
+
         prior_context = ""
         try:
             import vector_store
@@ -282,16 +295,29 @@ class ResearchAgent:
         await post("done", f"Research complete — {len(raw_results)} searches, {len(browsed_pages)} pages read")
 
         # ── Step 5: Auto-save report to NAS (if configured) ──────────────────
-        await self._auto_save(query, report, post)
+        save_receipts = await self._auto_save(query, report, post)
+        if isinstance(save_receipts, dict):
+            receipts.update(save_receipts)
 
         # ── Step 6: Index report in vector store for future recall ────────────
         try:
             import vector_store
             source_urls = [u for r in raw_results for u in r["urls"]]
-            await vector_store.add_research_report(query, report, source_urls)
+            report_id = await vector_store.add_research_report(query, report, source_urls)
+            receipts["vector"] = {
+                "saved": True,
+                "location": f"{vector_store.RESEARCH_COLLECTION}/{report_id}",
+                "detail": "Indexed for /research-search and follow-up context",
+            }
         except Exception as e:
+            receipts["vector"] = {
+                "saved": False,
+                "location": "research",
+                "detail": f"Indexing failed: {e}",
+            }
             log.debug("Vector index for research failed (non-critical): %s", e)
 
+        self._last_receipts = receipts
         return report
 
     async def _perform_searches(
@@ -387,10 +413,15 @@ class ResearchAgent:
                     log.warning("Browse error %s: %s", url, e)
         return browsed_pages
 
-    async def _auto_save(self, query: str, report: str, post) -> None:
+    async def _auto_save(self, query: str, report: str, post) -> dict:
         """Save research report to the Obsidian vault (primary) and NAS (secondary)."""
         import datetime as _dt
         import re as _re
+
+        receipts = {
+            "vault": {"saved": False, "location": "data/vault/Research", "detail": "Not saved"},
+            "gdoc": {"saved": False, "location": "google-docs", "detail": "Not attempted"},
+        }
 
         safe_slug = _re.sub(r"[^a-zA-Z0-9]+", "_", query[:40]).strip("_").lower()
         date_str = _dt.date.today().isoformat()
@@ -412,7 +443,24 @@ class ResearchAgent:
             )
             if vault_result.startswith("✅"):
                 await post("done", vault_result)
+                vault_path_match = re.search(r"`([^`]+)`", vault_result)
+                receipts["vault"] = {
+                    "saved": True,
+                    "location": f"data/vault/{vault_path_match.group(1)}" if vault_path_match else "data/vault/Research",
+                    "detail": "Auto-saved research markdown",
+                }
+            else:
+                receipts["vault"] = {
+                    "saved": False,
+                    "location": "data/vault/Research",
+                    "detail": vault_result,
+                }
         except Exception as e:
+            receipts["vault"] = {
+                "saved": False,
+                "location": "data/vault/Research",
+                "detail": f"Vault save skipped: {e}",
+            }
             log.debug("Research vault save skipped: %s", e)
 
         # Also sync to NAS
@@ -436,10 +484,40 @@ class ResearchAgent:
                         )
                         if doc_result.startswith("✅"):
                             await post("done", "Also saved to Google Docs")
+                            link_match = re.search(r"(https://docs\.google\.com/document/d/[^\s`]+)", doc_result)
+                            receipts["gdoc"] = {
+                                "saved": True,
+                                "location": link_match.group(1) if link_match else "google-docs",
+                                "detail": "Auto-created Google Doc",
+                            }
+                        else:
+                            receipts["gdoc"] = {
+                                "saved": False,
+                                "location": "google-docs",
+                                "detail": doc_result,
+                            }
+                    else:
+                        receipts["gdoc"] = {
+                            "saved": False,
+                            "location": "google-docs",
+                            "detail": "Skipped (MATON_API_KEY not set)",
+                        }
                 except Exception as exc:
+                    receipts["gdoc"] = {
+                        "saved": False,
+                        "location": "google-docs",
+                        "detail": f"Google Docs save failed: {exc}",
+                    }
                     log.debug("Research auto-save to Google Docs failed: %s", exc)
         except Exception as e:
+            receipts["gdoc"] = {
+                "saved": False,
+                "location": "google-docs",
+                "detail": "Skipped (NAS save unavailable)",
+            }
             log.debug("Research NAS save skipped: %s", e)
+
+        return receipts
 
     # ── Deep research helpers ────────────────────────────────────────────────
 

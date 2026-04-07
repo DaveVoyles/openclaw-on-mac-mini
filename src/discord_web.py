@@ -20,31 +20,9 @@ import discord
 from aiohttp import web
 
 from constants import EMBED_FIELD_LIMIT
-from dashboard import (
-    api_channel_memory_action_handler,
-    api_channel_memory_inspect_handler,
-    api_config_status_handler,
-    api_dashboard_handler,
-    api_dream_health_handler,
-    api_errors_handler,
-    api_goals_handler,
-    api_knowledge_graph_handler,
-    api_memories_handler,
-    api_quota_status_handler,
-    api_research_handler,
-    api_response_stats_handler,
-    api_schedule_delete_handler,
-    api_schedules_handler,
-    api_search_stats_handler,
-    api_skill_stats_handler,
-    api_status_handler,
-    api_threads_handler,
-    api_topology_handler,
-    dashboard_handler,
-    guide_handler,
-    terminal_handler,
-)
+from dashboard import setup_dashboard
 from llm import chat as llm_chat
+from metrics_collector import get_collector
 
 log = logging.getLogger("openclaw")
 
@@ -52,7 +30,10 @@ from config import cfg as _web_cfg
 
 HEALTH_PORT = _web_cfg.health_port
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+WEBHOOK_SECRET = _web_cfg.webhook_secret
+WEBHOOK_REQUIRE_AUTH = _web_cfg.webhook_require_auth
+API_ACTION_TOKEN = _web_cfg.dashboard_api_token
+API_ACTION_AUTH_REQUIRED = _web_cfg.dashboard_api_auth_required
 
 
 # ---------------------------------------------------------------------------
@@ -98,9 +79,25 @@ async def _metrics_handler(request: web.Request) -> web.Response:
         f"openclaw_latency_ms {latency_ms}",
         "",
     ]
+    basic_metrics = "\n".join(lines)
+
+    collector_metrics = ""
+    content_type = "text/plain; version=0.0.4; charset=utf-8"
+    try:
+        collector = get_collector()
+        collector_metrics = collector.export_prometheus().decode("utf-8")
+        content_type = collector.get_prometheus_content_type()
+    except Exception as exc:
+        log.warning("Failed to export collector metrics: %s", exc)
+
+    metrics_payload = collector_metrics
+    if metrics_payload and not metrics_payload.endswith("\n"):
+        metrics_payload += "\n"
+    metrics_payload += basic_metrics
+
     return web.Response(
-        text="\n".join(lines),
-        content_type="text/plain",
+        body=metrics_payload.encode("utf-8"),
+        headers={"Content-Type": content_type},
     )
 
 
@@ -223,6 +220,9 @@ async def _smoke_handler(request: web.Request) -> web.Response:
 
 async def _trigger_scan_handler(request: web.Request) -> web.Response:
     """POST /api/trigger-scan — immediately run a proactive insight scan."""
+    auth_error = _require_api_action_auth(request)
+    if auth_error is not None:
+        return auth_error
     import asyncio
 
     from discord_background import _run_proactive_scan
@@ -239,10 +239,11 @@ async def _webhook_handler(request: web.Request) -> web.Response:
     The handler formats a human-readable Discord notification and posts it
     to ALERT_CHANNEL_ID (if configured), then returns 200 OK.
     """
-    if WEBHOOK_SECRET:
-        auth = request.headers.get("Authorization", "")
-        expected = f"Bearer {WEBHOOK_SECRET}"
-        if not hmac.compare_digest(auth.encode(), expected.encode()):
+    if WEBHOOK_REQUIRE_AUTH:
+        if not WEBHOOK_SECRET:
+            log.error("Webhook rejected: WEBHOOK_REQUIRE_AUTH=true but WEBHOOK_SECRET is not configured")
+            return web.json_response({"error": "webhook auth not configured"}, status=503)
+        if not _is_authorized_bearer(request, WEBHOOK_SECRET):
             return web.json_response({"error": "unauthorized"}, status=401)
 
     from webhook_formatter import FORMATTERS, format_generic
@@ -306,6 +307,27 @@ async def _analyze_webhook_event(source: str, payload: dict, channel):
             await channel.send(embed=embed)
     except Exception as e:
         log.warning("Webhook auto-analysis failed: %s", e)
+
+
+def _is_authorized_bearer(request: web.Request, secret: str) -> bool:
+    auth = request.headers.get("Authorization", "").strip()
+    alt = request.headers.get("X-OpenClaw-Token", "").strip()
+    expected = f"Bearer {secret}"
+    return (
+        hmac.compare_digest(auth.encode(), expected.encode())
+        or hmac.compare_digest(alt.encode(), secret.encode())
+    )
+
+
+def _require_api_action_auth(request: web.Request) -> web.Response | None:
+    if not API_ACTION_AUTH_REQUIRED:
+        return None
+    if not API_ACTION_TOKEN:
+        log.error("API action auth required but DASHBOARD_API_TOKEN is not configured")
+        return web.json_response({"error": "api action auth not configured"}, status=503)
+    if not _is_authorized_bearer(request, API_ACTION_TOKEN):
+        return web.json_response({"error": "unauthorized"}, status=401)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -437,34 +459,13 @@ async def start_health_server(bot) -> web.AppRunner:
     """Create and start the aiohttp web application. Returns the AppRunner for cleanup."""
     app = web.Application()
     app["bot"] = bot
-    app.router.add_get("/", dashboard_handler)
+
+    setup_dashboard(app, require_action_auth=_require_api_action_auth)
     app.router.add_get("/health", _health_handler)
     app.router.add_get("/health/llm", _health_llm_handler)
     app.router.add_get("/health/memory", _health_memory_handler)
     app.router.add_get("/health/services", _health_services_handler)
     app.router.add_get("/metrics", _metrics_handler)
-    app.router.add_get("/dashboard", dashboard_handler)
-    app.router.add_get("/api/dashboard", api_dashboard_handler)
-    app.router.add_get("/api/memories", api_memories_handler)
-    app.router.add_get("/api/channel-memory/inspect", api_channel_memory_inspect_handler)
-    app.router.add_post("/api/channel-memory/action", api_channel_memory_action_handler)
-    app.router.add_get("/api/threads", api_threads_handler)
-    app.router.add_get("/api/goals", api_goals_handler)
-    app.router.add_get("/api/research", api_research_handler)
-    app.router.add_get("/api/schedules", api_schedules_handler)
-    app.router.add_delete("/api/schedules/{task_id}", api_schedule_delete_handler)
-    app.router.add_get("/api/status", api_status_handler)
-    app.router.add_get("/api/errors", api_errors_handler)
-    app.router.add_get("/api/response-stats", api_response_stats_handler)
-    app.router.add_get("/api/dream-health", api_dream_health_handler)
-    app.router.add_get("/api/config-status", api_config_status_handler)
-    app.router.add_get("/api/search-stats", api_search_stats_handler)
-    app.router.add_get("/api/quota-status", api_quota_status_handler)
-    app.router.add_get("/api/skill-stats", api_skill_stats_handler)
-    app.router.add_get("/api/knowledge-graph", api_knowledge_graph_handler)
-    app.router.add_get("/api/topology", api_topology_handler)
-    app.router.add_get("/guide", guide_handler)
-    app.router.add_get("/terminal", terminal_handler)
     app.router.add_get("/smoke", _smoke_handler)
     app.router.add_post("/webhook/{source}", _webhook_handler)
     app.router.add_post("/api/trigger-scan", _trigger_scan_handler)

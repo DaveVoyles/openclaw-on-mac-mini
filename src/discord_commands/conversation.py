@@ -9,9 +9,8 @@ from discord.ext import commands
 from audit import audit_log
 from memory import get_model_preference, set_model_preference
 from memory import store as conversation_store
+from permissions import require_auth
 from ui_components import EmbedColors
-
-from ._helpers import require_auth
 
 log = logging.getLogger("openclaw")
 
@@ -37,6 +36,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
     model_group = app_commands.Group(name="model", description="View or change your LLM model preference")
 
     @model_group.command(name="show", description="Show your current model routing preference")
+    @require_auth
     async def model_show_cmd(interaction: discord.Interaction):
         pref = get_model_preference(interaction.user.id)
         labels = {
@@ -80,6 +80,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
         app_commands.Choice(name="🟢 OpenAI — GPT-4o via Copilot", value="openai"),
         app_commands.Choice(name="🟣 Anthropic — Claude via Copilot", value="anthropic"),
     ])
+    @require_auth
     async def model_set_cmd(interaction: discord.Interaction, preference: app_commands.Choice[str]):
         result = set_model_preference(interaction.user.id, preference.value)
         embed = discord.Embed(

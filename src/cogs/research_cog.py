@@ -17,6 +17,31 @@ from ui_components import EmbedColors
 log = logging.getLogger("openclaw")
 
 
+def _format_persistence_receipts(receipts: dict) -> str:
+    """Format persistence receipts into a compact markdown block."""
+    if not receipts:
+        return "🧾 **Persistence receipts**\n• No persistence metadata available."
+
+    ordered = [
+        ("session", "Session"),
+        ("vault", "Vault"),
+        ("vector", "Vector"),
+        ("gdoc", "Google Doc"),
+    ]
+    lines = ["🧾 **Persistence receipts**"]
+    for key, label in ordered:
+        info = receipts.get(key, {})
+        saved = bool(info.get("saved"))
+        icon = "✅" if saved else "⚪"
+        location = str(info.get("location", "")).strip() or "n/a"
+        detail = str(info.get("detail", "")).strip()
+        line = f"• {icon} **{label}** → `{location}`"
+        if detail:
+            line += f" — {detail}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
 class _ResearchView(discord.ui.View):
     """Action buttons attached to a completed research report."""
 
@@ -55,20 +80,20 @@ class _ResearchView(discord.ui.View):
             await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
         audit_log(interaction.user, "research_save_vault", detail=self._query[:80])
 
-    @discord.ui.button(label="🔄 Re-run in 24h", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🔄 Re-run full research in 24h", style=discord.ButtonStyle.secondary)
     async def schedule_rerun(self, interaction: discord.Interaction, _button: discord.ui.Button):
         from scheduler import scheduler
 
         task = scheduler.create(
-            action="search_web",
-            args={"query": self._query, "num_results": 5},
+            action="run_scheduled_research",
+            args={"query": self._query, "deep": False},
             hour=-1,
             minute=0,
             interval_minutes=1440,  # 24 hours
             created_by=str(interaction.user),
         )
         await interaction.response.send_message(
-            f"✅ Scheduled daily re-search for **{self._query[:60]}** (task `{task.task_id}`).",
+            f"✅ Scheduled full research re-run every 24h for **{self._query[:60]}** (task `{task.task_id}`).",
             ephemeral=True,
         )
         audit_log(interaction.user, "research_schedule_rerun", detail=self._query[:80])
@@ -230,6 +255,21 @@ class ResearchCog(commands.Cog, name="Research"):
                     await thread.send(embed=embed)
                 else:
                     await interaction.followup.send(embed=embed)
+
+        session_location = (
+            f"discord-thread:{thread.id}" if thread else f"discord-channel:{interaction.channel_id}"
+        )
+        receipts = agent.get_last_receipts()
+        receipts["session"] = {
+            "saved": True,
+            "location": session_location,
+            "detail": "Final report posted to this conversation",
+        }
+        receipts_text = _format_persistence_receipts(receipts)
+        if thread:
+            await thread.send(receipts_text)
+        else:
+            await interaction.followup.send(receipts_text)
 
         try:
             follow_ups = await agent.generate_follow_ups(query, report)

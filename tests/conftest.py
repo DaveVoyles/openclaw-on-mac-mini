@@ -79,16 +79,17 @@ def _clear_module_caches():
                         warnings.warn(f"Failed to clear cache {attr} on {mod_name}: {e}")
 
 
-@pytest.fixture(autouse=True, scope="function")
-async def _cleanup_http_sessions():
-    """Close all aiohttp sessions after each test to prevent 'Unclosed client session' warnings."""
-    yield
-    # Close all SessionManager instances
-    try:
-        from http_session import close_all
-        await close_all()
-    except Exception:
-        pass  # Ignore if module not imported yet
+# Disabled for pytest-asyncio compatibility with pytest>=8
+# @pytest.fixture(autouse=True, scope="function")
+# async def _cleanup_http_sessions():
+#     """Close all aiohttp sessions after each test to prevent 'Unclosed client session' warnings."""
+#     yield
+#     # Close all SessionManager instances
+#     try:
+#         from http_session import close_all
+#         await close_all()
+#     except Exception:
+#         pass  # Ignore if module not imported yet
 
 
 @pytest.fixture(autouse=True)

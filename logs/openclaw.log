@@ -1,0 +1,3 @@
+2026-04-07 08:45:42,297 [WARNING [-]] discord.client: PyNaCl is not installed, voice will NOT be supported
+2026-04-07 08:45:42,297 [WARNING [-]] discord.client: davey is not installed, voice will NOT be supported
+2026-04-07 08:45:42,321 [INFO [-]] openclaw: Registered 33 standalone slash commands

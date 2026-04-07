@@ -1,0 +1,148 @@
+name: Quality Calibration
+
+on:
+  schedule:
+    - cron: "23 3 * * *" # nightly UTC
+  workflow_dispatch:
+
+jobs:
+  offline-calibration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run offline quality calibration (advisory-only)
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m offline_quality_eval \
+            --fixtures tests/evals/fixtures/replay_prompts.json \
+            --baseline .github/quality/offline_quality_baseline.json \
+            --output quality-calibration-report.json
+
+      - name: Build CI calibration operator summary
+        env:
+          MAX_TARGET_ASSERTION_FAILURES: "0"
+          MAX_SEVERE_DRIFT_COUNT: "0"
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(Path("quality-calibration-report.json").read_text(encoding="utf-8"))
+          ci = report.get("ci_summary") or {}
+          calibration = report.get("calibration") or {}
+
+          target_assertion_failures = ci.get("target_assertion_failures") or []
+          if not isinstance(target_assertion_failures, list):
+              target_assertion_failures = []
+
+          summary = {
+              "status": str(ci.get("status") or "unknown"),
+              "failed_checks": ci.get("failed_checks") or [],
+              "drift_status": str(ci.get("drift_status") or "unknown"),
+              "drift_severity_level": str(ci.get("drift_severity_level") or "unknown"),
+              "drift_severity_score": int(ci.get("drift_severity_score") or 0),
+              "drift_severity_severe": bool(ci.get("drift_severity_severe")),
+              "drift_severity_severe_count": 1 if ci.get("drift_severity_severe") else 0,
+              "target_assertion_failure_count": len(target_assertion_failures),
+              "target_assertion_failures": target_assertion_failures,
+              "quality_status_counts": ci.get("quality_status_counts") or {},
+              "advisory_only": bool(calibration.get("advisory_only")),
+              "auto_apply": bool(calibration.get("auto_apply")),
+              "guardrail_bounds": {
+                  "max_target_assertion_failures": int(os.environ["MAX_TARGET_ASSERTION_FAILURES"]),
+                  "max_severe_drift_count": int(os.environ["MAX_SEVERE_DRIFT_COUNT"]),
+              },
+          }
+
+          Path("quality-calibration-ci-summary.json").write_text(
+              json.dumps(summary, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          failed_checks = summary["failed_checks"]
+          failed_checks_display = ", ".join(sorted(str(item) for item in failed_checks)) if failed_checks else "none"
+          markdown = "\n".join(
+              [
+                  "# Quality Calibration CI Summary",
+                  "",
+                  "| Signal | Value |",
+                  "| --- | --- |",
+                  f"| Status | `{summary['status']}` |",
+                  f"| Drift status | `{summary['drift_status']}` |",
+                  f"| Drift severity | `{summary['drift_severity_level']}` (score={summary['drift_severity_score']}) |",
+                  f"| Severe drift count | `{summary['drift_severity_severe_count']}` / max `{summary['guardrail_bounds']['max_severe_drift_count']}` |",
+                  f"| Target assertion failures | `{summary['target_assertion_failure_count']}` / max `{summary['guardrail_bounds']['max_target_assertion_failures']}` |",
+                  f"| Failed checks | `{failed_checks_display}` |",
+                  f"| Advisory-only recommendations | `{summary['advisory_only']}` |",
+                  f"| Auto-apply enabled | `{summary['auto_apply']}` |",
+                  "",
+                  "Artifacts: `quality-calibration-report.json`, `quality-calibration-ci-summary.json`, `quality-calibration-ci-summary.md`",
+              ]
+          )
+
+          Path("quality-calibration-ci-summary.md").write_text(markdown + "\n", encoding="utf-8")
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with Path(summary_path).open("a", encoding="utf-8") as handle:
+                  handle.write(markdown + "\n")
+          PY
+
+      - name: Upload calibration report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-calibration-report
+          path: |
+            quality-calibration-report.json
+            quality-calibration-ci-summary.json
+            quality-calibration-ci-summary.md
+          retention-days: 30
+
+      - name: Enforce bounded calibration guardrails
+        env:
+          MAX_TARGET_ASSERTION_FAILURES: "0"
+          MAX_SEVERE_DRIFT_COUNT: "0"
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          summary = json.loads(Path("quality-calibration-ci-summary.json").read_text(encoding="utf-8"))
+          violations = []
+
+          max_target_assertion_failures = int(os.environ["MAX_TARGET_ASSERTION_FAILURES"])
+          max_severe_drift_count = int(os.environ["MAX_SEVERE_DRIFT_COUNT"])
+          target_assertion_failure_count = int(summary.get("target_assertion_failure_count", 0) or 0)
+          severe_drift_count = int(summary.get("drift_severity_severe_count", 0) or 0)
+
+          if not bool(summary.get("advisory_only")):
+              violations.append("recommendations must remain advisory_only=true")
+          if bool(summary.get("auto_apply")):
+              violations.append("recommendations must keep auto_apply=false")
+          if target_assertion_failure_count > max_target_assertion_failures:
+              violations.append(
+                  f"target assertion failures {target_assertion_failure_count} exceeded max {max_target_assertion_failures}"
+              )
+          if severe_drift_count > max_severe_drift_count:
+              violations.append(f"severe drift count {severe_drift_count} exceeded max {max_severe_drift_count}")
+
+          if violations:
+              for violation in violations:
+                  print(f"::error::{violation}")
+              raise SystemExit(1)
+
+          print("Calibration guardrails passed.")
+          PY

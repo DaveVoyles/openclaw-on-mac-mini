@@ -11,31 +11,68 @@ Key architectural patterns:
 
 ---
 
-## Modular Structure (April 2026)
+## Architecture Map (Runtime Services)
 
-`bot.py` was split from 3,084 → 1,146 lines. `llm.py` extracted companion modules. `advanced_skills.py` split into focused skill modules.
+```mermaid
+flowchart LR
+    U[Discord User] --> D[Discord API/Gateway]
+    D --> BOT[src/bot.py\n/ask + orchestration]
 
+    BOT --> ORCH[src/ask_orchestrator.py\nrun_ask_stream()]
+    ORCH --> LLM[src/llm/chat.py\nchat_stream()]
+    LLM --> ROUTER[src/tool_router.py\nroute_tool_declarations()]
+    LLM --> TOOLS[src/llm_tools.py\ntool loop executor]
+    TOOLS --> SKILLS[skills/*]
+
+    BOT --> BG[src/discord_background.py\nsupervised loops]
+    BOT --> SCHED[src/scheduler.py\nTaskScheduler]
+    BOT --> WEB[src/discord_web.py\nhealth + dashboard API host]
+    WEB --> DASH[src/dashboard/routes.py\nsrc/dashboard/api_handlers.py]
+
+    BOT --> MEM[src/memory.py\nconversation store]
+    LLM --> VEC[src/vector_store.py\nChromaDB recall/write]
+    BOT --> THREADS[src/thread_store.py\nthread persistence]
 ```
-bot.py was split from 3,084 → 1,146 lines:
-├── bot.py (1,146) — Core: init, auth, /ask command
-├── discord_commands.py (1,130) — Slash commands
-├── discord_background.py (702) — Background loops + container health alerts
-└── discord_web.py (332) — Health server + /api/quota-status
 
-llm.py has extracted companion modules:
-├── llm.py (1,098) — Public API facade
-├── llm_client.py (257) — Gemini client wrapper
-├── llm_tools.py (275) — Tool execution
-├── llm_patterns.py (194) — Regex + validation
-└── llm_ratelimit.py (82) — Rate limiting
+## Discord Request Lifecycle (`/ask`)
 
-skills/advanced_skills.py split into focused modules:
-├── advanced_skills.py (280) — Orchestration glue, reporting
-├── search_skills.py (525) — Web search cascade + retry logic
-├── media_skills.py (480) — *arr services, Plex, download clients
-├── web_skills.py (274) — URL browsing, content extraction
-└── document_skills.py — Word (.docx) & Excel (.xlsx) reading, editing, creation
+```mermaid
+sequenceDiagram
+    participant U as Discord User
+    participant B as src/bot.py ask_cmd
+    participant O as src/ask_orchestrator.py
+    participant L as src/llm/chat.py chat_stream
+    participant R as src/tool_router.py
+    participant T as src/llm_tools.py
+    participant S as skills/*
+    participant M as memory/vector stores
+
+    U->>B: /ask "question"
+    B->>M: Load conversation + recall context
+    B->>O: run_ask_stream(...)
+    O->>L: llm_stream(user_message, history, model_preference)
+    L->>R: route_tool_declarations(...)
+    R-->>L: shortlisted tools + routing hints
+    L->>T: _run_tool_loop(...)
+    T->>S: Execute selected skill calls
+    S-->>T: Tool results
+    T-->>L: Structured tool responses
+    L-->>O: final text + metadata
+    O-->>B: AskStreamResult(model_used, response_text)
+    B->>M: Persist updated thread/history
+    B-->>U: Embed/file response + follow-up actions
 ```
+
+## Runtime Component Boundaries
+
+| Runtime Service | Primary Responsibility | Main Entry Points |
+| --- | --- | --- |
+| Discord bot runtime | Command handling, `/ask` orchestration, response formatting, per-user context | `src/bot.py`, `src/ask_orchestrator.py`, `src/discord_commands/` |
+| LLM routing + tool execution | Model selection, tool declaration routing, tool loop execution | `src/llm/chat.py`, `src/model_router.py`, `src/tool_router.py`, `src/llm_tools.py` |
+| Web API + dashboard | Health/metrics endpoints and dashboard JSON/HTML APIs | `src/discord_web.py`, `src/dashboard/routes.py`, `src/dashboard/api_handlers.py` |
+| Scheduler + background loops | Cron/interval jobs, proactive monitors, reminder/briefing loops | `src/scheduler.py`, `src/discord_background.py` |
+| Worker agents | Delegated sub-task execution for complex asks via tool calls | `src/worker_agent.py` |
+| Memory stores | Conversation history, semantic recall, structured memory/thread persistence | `src/memory.py`, `src/vector_store.py`, `src/thread_store.py`, `src/qmd.py` |
 
 ---
 
@@ -50,10 +87,10 @@ graph TB
     %% ── Core Bot ────────────────────────────────────────────────
     subgraph OpenClaw ["🐾 OpenClaw (Docker Container)"]
         Bot["bot.py\nCore: init, auth, /ask\n(1,146 lines)"]
-        DiscordCmds["discord_commands.py\nSlash commands"]
+        DiscordCmds["src/discord_commands/\nSlash commands package"]
         DiscordBG["discord_background.py\nBackground loops (702 lines)"]
         DiscordWeb["discord_web.py\nHealth/metrics server"]
-        LLM["llm.py\nLLM Dispatcher\n(public API facade)"]
+        LLM["src/llm/chat.py\nLLM chat/stream entrypoint"]
         LLMClient["llm_client.py\nGemini client wrapper"]
         LLMTools["llm_tools.py\nTool execution engine"]
         LLMPatterns["llm_patterns.py\nQuery classification"]
@@ -66,7 +103,7 @@ graph TB
         Scheduler["scheduler.py\nCron Jobs"]
         Memory["memory.py\nContext Store + Session Summaries"]
         Spending["spending.py\nCost Tracker"]
-        Dashboard["dashboard.py\nHTML Dashboard + JSON API\n:8765/dashboard"]
+        Dashboard["src/dashboard/routes.py\n+ api_handlers.py\nDashboard/API routes"]
         WebhookFmt["webhook_formatter.py\nIncoming Webhook Parser"]
         HealthAlerts["discord_background.py\nContainer Health Alerts\n(every 5 min)"]
         WorkerAgent["worker_agent.py\nBackground Sub-Agent"]
@@ -93,7 +130,7 @@ graph TB
             DiscordWeb
         end
 
-        subgraph LLMModules ["📦 llm.py modules (extracted)"]
+        subgraph LLMModules ["📦 LLM runtime modules"]
             LLMClient
             LLMTools
             LLMPatterns
@@ -404,16 +441,16 @@ graph TB
 
 | Flow                            | Path                                                                                                                                            |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| **User command → response**     | User → Discord → `bot.py` → `llm.py` (`llm_client` + `llm_tools` + `llm_patterns`) → `skills/` → target service → Discord |
+| **User command → response**     | User → Discord → `bot.py` → `ask_orchestrator.py` → `llm/chat.py` (`llm_client` + `llm_tools` + `tool_router`) → `skills/` → target service → Discord |
 | **Media request approval**      | User → Discord → `approvals.py` → Overseerr → Sonarr/Radarr → SABnzbd/qBit (via gluetun VPN on NAS) → Plex                                                               |
 | **Web search (5-tier cascade)** | `search_web()` → Perplexity AI (primary) → Firecrawl (search+extract) → Tavily (structured) → DuckDuckGo Lite (free) → Bing HTML scrape (last resort); Serper Google SERP available as direct tool |
-| **Weather**                     | `/weather` or `/ask weather…` → `llm.py` → `get_weather()` → `wttr.in` JSON API                                                                 |
+| **Weather**                     | `/weather` or `/ask weather…` → `llm/chat.py` → `get_weather()` → `wttr.in` JSON API                                                                 |
 | **Deep research**               | `/research` → `research_agent.py` → Gemini (plan) → `search_web()` × N → `browse_url()` → Gemini (synthesize) → Discord thread                  |
 | **Session recall**              | Session expires → `memory.py` → `summarize_conversation()` → saved to disk + QMD; next session → recall note injected                           |
 | **Task management**             | User → Discord `/tasks` or `/ask "show tasks"` → `mission_control.py` → `data/tasks.json` → GitHub Pages dashboard                              |
-| **Structured memory**           | `llm.py` → `ontology_skills.py` → `skills/ontology/scripts/ontology.py` → `data/memory/ontology/graph.jsonl`                                    |
-| **Third-party API call**        | `llm.py` → `gateway.py` → Maton OAuth proxy → target SaaS API                                                                                   |
-| **Email / calendar**            | `llm.py` → `skills/` → `email_skills.py` / `calendar_skills.py` → Gmail / Outlook / Google Cal                                                  |
+| **Structured memory**           | `llm/chat.py` → `ontology_skills.py` → `skills/ontology/scripts/ontology.py` → `data/memory/ontology/graph.jsonl`                                    |
+| **Third-party API call**        | `llm/chat.py` → `gateway.py` → Maton OAuth proxy → target SaaS API                                                                                   |
+| **Email / calendar**            | `llm/chat.py` → `skills/` → `email_skills.py` / `calendar_skills.py` → Gmail / Outlook / Google Cal                                                  |
 | **Observability**               | Bot `/metrics` → Prometheus scrape + Uptime Kuma poll                                                                                           |
 | **Cost tracking**               | Every Gemini call → `spending.py` → `data/memory/spending.json`                                                                                 |
 | **Scheduled tasks**             | `scheduler.py` cron → any skill function                                                                                                        |
@@ -421,8 +458,8 @@ graph TB
 | **Container health alerts**     | `discord_background.py` (every 5 min) → `list_containers()` + `check_gluetun_vpn()` → filter unhealthy/exited/VPN down → Discord `#alerts` embed                                  |
 | **Scheduled research**          | `scheduler.py` cron → `schedule_research_report(topic, cron)` → `research_agent.py` → Discord thread + vault                                     |
 | **API quota dashboard**         | Browser → `:8765/api/quota-status` → `spending.py` `get_quota_status()` → JSON; dashboard card auto-refreshes                                    |
-| **Dashboard**                   | Browser → `:8765/dashboard` → `dashboard.py` → HTML page + `/api/dashboard` JSON + `/api/quota-status`                                           |
-| **Background autonomy**         | `worker_agent.py` → spawns fresh Gemini session → `llm.py` → skills                                                                             |
+| **Dashboard**                   | Browser → `:8765/dashboard` → `discord_web.py` + `dashboard/routes.py` → HTML page + `/api/dashboard` JSON + `/api/quota-status`                                           |
+| **Background autonomy**         | `worker_agent.py` → spawns fresh Gemini session → `llm` runtime (`llm/chat.py` + tool loop) → skills                                                                             |
 | **RSS feeds**                   | `scheduler.py` (periodic) → `rss_skills.py` → external feeds → `data/memory/rss_feeds.json` → LLM summarization → Discord notification                     |
 | **URL change detection**        | `scheduler.py` (periodic) → `monitor_skills.py` → `_fetch_text()` → SHA-256 compare → `data/memory/url_snapshots.json` → alert on diff                     |
 | **Obsidian bookmark**           | `/bookmark` → `obsidian_writer.py` → Markdown + YAML frontmatter → `data/vault/{Research,Bookmarks,Notes,Analytics}/`                           |
@@ -441,9 +478,9 @@ graph TB
 | **Knowledge routing**          | `qmd.py` `remember_fact()` → `_classify_fact()` → routes to `user_profile` / `rules_engine` / QMD+ChromaDB based on content                     |
 | **Auto-RAG injection**        | `bot.py` pre-LLM → `vector_store.recall(top_k=5)` + `user_profile` + `rules_engine` → context block injected before every LLM call              |
 | **Multi-model routing**       | `bot.py` → `model_router.py` `classify_query()` → code→Claude, creative→GPT-4o, tools→Gemini, chat→Gemma                                       |
-| **Copilot proxy**             | `llm.py` → `aiohttp` POST to `localhost:9191/v1/chat/completions` → GitHub Copilot API → OpenAI/Anthropic response                              |
+| **Copilot proxy**             | `llm/chat.py` → model router/copilot bridge → `localhost:9191/v1/chat/completions` → GitHub Copilot API → OpenAI/Anthropic response                              |
 | **Fact extraction**           | `bot.py` post-response → `fact_extractor.extract_facts()` → `should_store()` similarity check → `qmd.remember_fact()` with confidence=0.6       |
-| **Ollama tool calling**       | `llm.py` → `ollama_tools.py` `ollama_chat_with_tools()` → Ollama API with tool declarations → execute read-only tools → return result           |
+| **Ollama tool calling**       | `llm/chat.py` + `ollama_tools.py` `ollama_chat_with_tools()` → Ollama API with tool declarations → execute read-only tools → return result           |
 | **Notification prefs**       | `/notify` → `notify_cog.py` → `notification_prefs.py` → `data/notification_prefs.json`; checked before every alert dispatch                      |
 | **Error aggregation**        | `error_aggregator.py` receives alerts → dedup by fingerprint → batch similar errors → single Discord notification with count                       |
 | **Request tracing**          | `trace_context.py` assigns correlation ID → propagated through LLM calls, skill executions, API requests → structured log output                   |
@@ -471,7 +508,7 @@ OpenClaw supports 5 model backends, selected automatically by `model_router.py` 
 GPT-4o and Claude are accessed through a local proxy server that translates OpenAI-compatible API calls using your GitHub Copilot subscription. No separate API keys needed.
 
 ```
-Bot (llm.py) → model_router.py (classify) → Copilot Proxy (:9191) → GitHub Copilot API → OpenAI/Anthropic
+Bot (`llm/chat.py`) → `model_router.py` (classify) → Copilot Proxy (:9191) → GitHub Copilot API → OpenAI/Anthropic
 ```
 
 Setup: `bash scripts/setup-copilot-proxy.sh`

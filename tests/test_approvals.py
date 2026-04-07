@@ -14,6 +14,7 @@ from approvals import (
     ApprovalRequest,
     ApprovalStore,
     RiskLevel,
+    is_authorized_approver,
     is_emergency_stopped,
     set_emergency_stop,
 )
@@ -257,3 +258,17 @@ class TestEmergencyStop:
         set_emergency_stop(False)
         set_emergency_stop(True)
         assert is_emergency_stopped()
+
+
+class TestApprovalAuthorization:
+    def test_is_authorized_approver_true_when_in_allowlist(self, monkeypatch):
+        monkeypatch.setattr("approvals.ALLOWED_APPROVER_IDS", {1234, 5678})
+        assert is_authorized_approver(1234)
+
+    def test_is_authorized_approver_false_when_not_in_allowlist(self, monkeypatch):
+        monkeypatch.setattr("approvals.ALLOWED_APPROVER_IDS", {1234, 5678})
+        assert not is_authorized_approver(42)
+
+    def test_is_authorized_approver_false_when_allowlist_empty(self, monkeypatch):
+        monkeypatch.setattr("approvals.ALLOWED_APPROVER_IDS", set())
+        assert not is_authorized_approver(1234)

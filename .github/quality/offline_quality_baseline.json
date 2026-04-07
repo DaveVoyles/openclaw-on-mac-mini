@@ -1,0 +1,17 @@
+{
+  "report_version": 1,
+  "summary": {
+    "sample_size": 3,
+    "coverage_proxy": 1.0,
+    "source_diversity_proxy": 0.833,
+    "evidence_completeness": 1.0,
+    "unsupported_claim_rate": 0.0,
+    "warning_rate": 0.333,
+    "max_latency_bucket": "slow",
+    "latency_bucket_counts": {
+      "fast": 1,
+      "moderate": 1,
+      "slow": 1
+    }
+  }
+}

@@ -7,7 +7,7 @@ started here; _execute_task and _is_due are tested in isolation.
 
 import datetime
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -49,18 +49,18 @@ class TestScheduledTask:
         assert task.next_run_str == "soon"
 
     def test_next_run_str_interval_overdue(self):
-        past = (datetime.datetime.now() - datetime.timedelta(hours=2)).isoformat()
+        past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=2)).isoformat()
         task = self._make(interval_minutes=30, last_run=past)
         assert task.next_run_str == "overdue"
 
     def test_next_run_str_interval_in_future(self):
-        recent = (datetime.datetime.now() - datetime.timedelta(minutes=5)).isoformat()
+        recent = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)).isoformat()
         task = self._make(interval_minutes=30, last_run=recent)
         assert "in" in task.next_run_str and "m" in task.next_run_str
 
     def test_next_run_str_daily_in_future(self):
         # Set target time well in the future
-        future = datetime.datetime.now() + datetime.timedelta(hours=3)
+        future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=3)
         task = self._make(cron_hour=future.hour, cron_minute=future.minute, interval_minutes=0)
         result = task.next_run_str
         assert "in" in result and "h" in result
@@ -188,19 +188,19 @@ class TestIsDue:
 
     def test_interval_task_due_when_no_last_run(self, sched):
         task = self._make_interval_task(30)
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         assert sched._is_due(task, now)
 
     def test_interval_task_due_when_elapsed(self, sched):
-        past = (datetime.datetime.now() - datetime.timedelta(minutes=35)).isoformat()
+        past = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=35)).isoformat()
         task = self._make_interval_task(30, last_run=past)
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         assert sched._is_due(task, now)
 
     def test_interval_task_not_due_when_recent(self, sched):
-        recent = (datetime.datetime.now() - datetime.timedelta(minutes=5)).isoformat()
+        recent = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)).isoformat()
         task = self._make_interval_task(30, last_run=recent)
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         assert not sched._is_due(task, now)
 
     def test_interval_task_due_with_invalid_last_run(self, sched):
@@ -209,22 +209,22 @@ class TestIsDue:
         assert sched._is_due(task, now)  # Falls back to True on parse error
 
     def test_cron_task_due_at_exact_time(self, sched):
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         task = self._make_cron_task(now.hour, now.minute)
         assert sched._is_due(task, now)
 
     def test_cron_task_not_due_wrong_hour(self, sched):
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         task = self._make_cron_task((now.hour + 1) % 24, now.minute)
         assert not sched._is_due(task, now)
 
     def test_cron_task_not_due_wrong_minute(self, sched):
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         task = self._make_cron_task(now.hour, (now.minute + 1) % 60)
         assert not sched._is_due(task, now)
 
     def test_cron_task_not_due_already_ran_today(self, sched):
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         today_run = now.date().isoformat()
         task = self._make_cron_task(now.hour, now.minute, last_run=today_run)
         assert not sched._is_due(task, now)
@@ -269,8 +269,20 @@ class TestExecuteTask:
 
     async def test_execute_handles_unknown_skill(self, sched):
         task = sched.create("nonexistent_skill", {})
-        await sched._execute_task(task)  # Should not raise
+        mock_collector = MagicMock()
+
+        with patch("metrics_collector.get_collector", return_value=mock_collector):
+            await sched._execute_task(task)  # Should not raise
+
         assert "Unknown skill" in task.last_result
+        mock_collector.record_command.assert_called_once_with(
+            command="nonexistent_skill",
+            user="scheduler",
+            workspace="scheduler",
+            duration=0.0,
+            success=False,
+            error_type="unknown_skill",
+        )
 
     async def test_execute_handles_skill_exception(self, sched):
         async def failing_skill(**kwargs):
