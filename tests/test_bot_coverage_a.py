@@ -34,6 +34,7 @@ os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit_a")
 os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_a.db")
 
 import bot as mod
+import quality_helpers as qh_mod
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +400,7 @@ class TestSafeScoreAnswerQualityLowEvidence:
     def test_low_evidence_emits_metric(self, monkeypatch):
         """When scored evidence < 0.5, _record_quality_metric is called (best-effort)."""
         calls = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, **kw: calls.append(event))
+        monkeypatch.setattr(qh_mod, "_record_quality_metric", lambda event, **kw: calls.append(event))
         mod._safe_score_answer_quality(
             "text",
             final_meta={"evidence_completeness": 0.3},
@@ -410,7 +411,7 @@ class TestSafeScoreAnswerQualityLowEvidence:
     def test_no_low_evidence_metric_when_fields_missing(self, monkeypatch):
         """When source_fields_missing is True, low-evidence metric is NOT emitted."""
         calls = []
-        monkeypatch.setattr(mod, "_record_quality_metric", lambda event, **kw: calls.append(event))
+        monkeypatch.setattr(qh_mod, "_record_quality_metric", lambda event, **kw: calls.append(event))
         text = "Evidence Completeness: **30%** (fail-safe (source fields missing))"
         mod._safe_score_answer_quality(text, context="test")
         assert "ask_low_evidence_completeness" not in calls
@@ -424,7 +425,7 @@ class TestSafeScoreAnswerQualityLowEvidence:
 class TestSafeScoreAnswerQualityException:
     def test_exception_returns_neutral_fallback(self, monkeypatch):
         """When _score_answer_quality raises, neutral fallback dict is returned."""
-        monkeypatch.setattr(mod, "_score_answer_quality", lambda t, **kw: (_ for _ in ()).throw(ValueError("boom")))
+        monkeypatch.setattr(qh_mod, "_score_answer_quality", lambda t, **kw: (_ for _ in ()).throw(ValueError("boom")))
         result = mod._safe_score_answer_quality("any text", context="test")
         assert result["score"] == 50
         assert result["status"] == "medium"
@@ -435,7 +436,7 @@ class TestSafeScoreAnswerQualityException:
         def raise_err(t, **kw):
             raise RuntimeError("scoring exploded")
 
-        monkeypatch.setattr(mod, "_score_answer_quality", raise_err)
+        monkeypatch.setattr(qh_mod, "_score_answer_quality", raise_err)
         result = mod._safe_score_answer_quality(
             "text",
             final_meta={"requested_item_count": 7},
@@ -449,7 +450,7 @@ class TestSafeScoreAnswerQualityException:
         def raise_err(t, **kw):
             raise RuntimeError("fail")
 
-        monkeypatch.setattr(mod, "_score_answer_quality", raise_err)
+        monkeypatch.setattr(qh_mod, "_score_answer_quality", raise_err)
         result = mod._safe_score_answer_quality("text")
         assert result["requested_item_count"] is None
 
@@ -461,14 +462,14 @@ class TestSafeScoreAnswerQualityException:
 
 class TestShouldPreferFileForMultichunkResponse:
     def setup_method(self):
-        self._orig = mod._should_package_as_attachment
+        self._orig = qh_mod._should_package_as_attachment
 
     def teardown_method(self):
-        mod._should_package_as_attachment = self._orig
+        qh_mod._should_package_as_attachment = self._orig
 
     def test_large_requested_count_prefers_file(self, monkeypatch):
         """requested >= 6 AND multiple chunks → True (line 728)."""
-        monkeypatch.setattr(mod, "_should_package_as_attachment", lambda t, c: False)
+        monkeypatch.setattr(qh_mod, "_should_package_as_attachment", lambda t, c: False)
         result = mod._should_prefer_file_for_multichunk_response(
             question="give me 10 stories",
             chunks=["chunk1", "chunk2"],
@@ -478,7 +479,7 @@ class TestShouldPreferFileForMultichunkResponse:
 
     def test_recap_with_long_response_prefers_file(self, monkeypatch):
         """recap_like keyword + long response + multiple chunks → True (line 730)."""
-        monkeypatch.setattr(mod, "_should_package_as_attachment", lambda t, c: False)
+        monkeypatch.setattr(qh_mod, "_should_package_as_attachment", lambda t, c: False)
         result = mod._should_prefer_file_for_multichunk_response(
             question="give me the recap this week",
             chunks=["a", "b"],
@@ -488,7 +489,7 @@ class TestShouldPreferFileForMultichunkResponse:
 
     def test_small_request_no_recap_returns_false(self, monkeypatch):
         """Small request, no recap token, multiple chunks → False (line 731)."""
-        monkeypatch.setattr(mod, "_should_package_as_attachment", lambda t, c: False)
+        monkeypatch.setattr(qh_mod, "_should_package_as_attachment", lambda t, c: False)
         result = mod._should_prefer_file_for_multichunk_response(
             question="what happened?",
             chunks=["a", "b"],
@@ -498,7 +499,7 @@ class TestShouldPreferFileForMultichunkResponse:
 
     def test_single_chunk_returns_false(self, monkeypatch):
         """Single chunk → False regardless of question."""
-        monkeypatch.setattr(mod, "_should_package_as_attachment", lambda t, c: False)
+        monkeypatch.setattr(qh_mod, "_should_package_as_attachment", lambda t, c: False)
         result = mod._should_prefer_file_for_multichunk_response(
             question="give me 10 stories",
             chunks=["only_chunk"],

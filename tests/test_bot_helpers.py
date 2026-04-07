@@ -22,6 +22,7 @@ os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_logs")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit")
 
 import bot as mod
+import response_actions as ra_mod
 
 
 # ---------------------------------------------------------------------------
@@ -771,7 +772,7 @@ class TestResponseActionsSaveButton:
     async def test_save_btn_success(self, monkeypatch):
         view = _make_view()
         interaction = _make_interaction()
-        monkeypatch.setattr(mod, "remember_fact", AsyncMock(return_value="Saved!"))
+        monkeypatch.setattr(ra_mod, "remember_fact", AsyncMock(return_value="Saved!"))
 
         # discord.py wraps the method in _ItemCallback; reach the actual coroutine via .callback.callback
         await view.save_btn.callback.callback(view, interaction, MagicMock())
@@ -784,7 +785,7 @@ class TestResponseActionsSaveButton:
     async def test_save_btn_error_sends_error_message(self, monkeypatch):
         view = _make_view()
         interaction = _make_interaction()
-        monkeypatch.setattr(mod, "remember_fact", AsyncMock(side_effect=RuntimeError("db down")))
+        monkeypatch.setattr(ra_mod, "remember_fact", AsyncMock(side_effect=RuntimeError("db down")))
 
         await view.save_btn.callback.callback(view, interaction, MagicMock())
 
@@ -798,7 +799,7 @@ class TestResponseActionsEmailButton:
     async def test_email_btn_success(self, monkeypatch):
         view = _make_view()
         interaction = _make_interaction()
-        monkeypatch.setattr(mod, "send_agent_mail", AsyncMock(return_value="Sent!"))
+        monkeypatch.setattr(ra_mod, "send_agent_mail", AsyncMock(return_value="Sent!"))
 
         await view.email_btn.callback.callback(view, interaction, MagicMock())
 
@@ -810,7 +811,7 @@ class TestResponseActionsEmailButton:
     async def test_email_btn_error(self, monkeypatch):
         view = _make_view()
         interaction = _make_interaction()
-        monkeypatch.setattr(mod, "send_agent_mail", AsyncMock(side_effect=RuntimeError("smtp down")))
+        monkeypatch.setattr(ra_mod, "send_agent_mail", AsyncMock(side_effect=RuntimeError("smtp down")))
 
         await view.email_btn.callback.callback(view, interaction, MagicMock())
 
@@ -824,7 +825,7 @@ class TestResponseActionsContextLockButtons:
         view = _make_view(user_id=42)
         interaction = _make_interaction(user_id=42, channel_id=100)
         mock_lock = MagicMock()
-        monkeypatch.setattr(mod, "set_context_lock", mock_lock)
+        monkeypatch.setattr(ra_mod, "set_context_lock", mock_lock)
 
         await view.lock_channel_btn.callback.callback(view, interaction, MagicMock())
 
@@ -841,9 +842,9 @@ class TestResponseActionsContextLockButtons:
         interaction = _make_interaction(user_id=42, channel_id=100)
         mock_reset_lock = MagicMock()
         mock_reset_anchor = MagicMock()
-        monkeypatch.setattr(mod, "reset_context_lock", mock_reset_lock)
-        monkeypatch.setattr(mod, "reset_anchor_state", mock_reset_anchor)
-        monkeypatch.setattr(mod, "resolve_context_lock", MagicMock(return_value=(None, None)))
+        monkeypatch.setattr(ra_mod, "reset_context_lock", mock_reset_lock)
+        monkeypatch.setattr(ra_mod, "reset_anchor_state", mock_reset_anchor)
+        monkeypatch.setattr(ra_mod, "resolve_context_lock", MagicMock(return_value=(None, None)))
 
         await view.reset_context_btn.callback.callback(view, interaction, MagicMock())
 
@@ -861,7 +862,7 @@ class TestRecordFeedback:
         interaction = _make_interaction(user_id=1, channel_id=10)
         interaction.message.id = 100
 
-        with patch("bot.aiofiles") as mock_aiofiles, patch("bot.Path") as mock_path_cls:
+        with patch("response_actions.aiofiles") as mock_aiofiles, patch("response_actions.Path") as mock_path_cls:
             mock_file = AsyncMock()
             mock_file.__aenter__ = AsyncMock(return_value=mock_file)
             mock_file.__aexit__ = AsyncMock(return_value=False)
@@ -893,7 +894,7 @@ class TestRecordFeedback:
         mock_cm.__aenter__ = AsyncMock(return_value=mock_file)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("bot.aiofiles") as mock_aiofiles, patch("pathlib.Path") as mock_path_cls:
+        with patch("response_actions.aiofiles") as mock_aiofiles, patch("response_actions.Path") as mock_path_cls:
             mock_aiofiles.open = MagicMock(return_value=mock_cm)
             mock_path = MagicMock()
             mock_path.parent.mkdir = MagicMock()
@@ -916,7 +917,7 @@ class TestRecordFeedback:
         mock_cm.__aenter__ = AsyncMock(return_value=mock_file)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("bot.aiofiles") as mock_aiofiles, patch("pathlib.Path") as mock_path_cls:
+        with patch("response_actions.aiofiles") as mock_aiofiles, patch("response_actions.Path") as mock_path_cls:
             mock_aiofiles.open = MagicMock(return_value=mock_cm)
             mock_path = MagicMock()
             mock_path.parent.mkdir = MagicMock()
@@ -937,9 +938,9 @@ class TestResponseActionsRegenButton:
         mock_conv.history = [{"role": "user", "parts": ["q"]}, {"role": "model", "parts": ["a"]}]
         mock_conv.update_from_llm = MagicMock()
 
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(return_value=("regen response", [], "gemini-pro")))
-        monkeypatch.setattr(mod, "resolve_context_lock", MagicMock(return_value=(None, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(return_value=("regen response", [], "gemini-pro")))
+        monkeypatch.setattr(ra_mod, "resolve_context_lock", MagicMock(return_value=(None, None)))
 
         await view.regen_btn.callback.callback(view, interaction, MagicMock())
 
@@ -955,9 +956,9 @@ class TestResponseActionsRegenButton:
 
         mock_conv = MagicMock()
         mock_conv.history = []
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(side_effect=RuntimeError("llm down")))
-        monkeypatch.setattr(mod, "resolve_context_lock", MagicMock(return_value=(None, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(side_effect=RuntimeError("llm down")))
+        monkeypatch.setattr(ra_mod, "resolve_context_lock", MagicMock(return_value=(None, None)))
 
         await view.regen_btn.callback.callback(view, interaction, MagicMock())
 
@@ -1072,7 +1073,6 @@ class TestOnMessageGuards:
 class TestResponseActionsThumbsButtons:
     @pytest.mark.asyncio
     async def test_thumbs_up_calls_record_feedback(self, monkeypatch):
-        import bot as mod
         view = _make_view(user_id=11)
         interaction = _make_interaction(user_id=11, channel_id=100)
         interaction.message.id = 1
@@ -1082,7 +1082,7 @@ class TestResponseActionsThumbsButtons:
         mock_cm.__aenter__ = AsyncMock(return_value=mock_file)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("bot.aiofiles") as ma, patch("pathlib.Path") as mp:
+        with patch("response_actions.aiofiles") as ma, patch("response_actions.Path") as mp:
             ma.open = MagicMock(return_value=mock_cm)
             mp.return_value = MagicMock()
             mp.return_value.parent.mkdir = MagicMock()
@@ -1093,7 +1093,6 @@ class TestResponseActionsThumbsButtons:
 
     @pytest.mark.asyncio
     async def test_thumbs_down_calls_record_feedback(self, monkeypatch):
-        import bot as mod
         view = _make_view(user_id=22)
         interaction = _make_interaction(user_id=22, channel_id=200)
         interaction.message.id = 2
@@ -1103,7 +1102,7 @@ class TestResponseActionsThumbsButtons:
         mock_cm.__aenter__ = AsyncMock(return_value=mock_file)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("bot.aiofiles") as ma, patch("pathlib.Path") as mp:
+        with patch("response_actions.aiofiles") as ma, patch("response_actions.Path") as mp:
             ma.open = MagicMock(return_value=mock_cm)
             mp.return_value = MagicMock()
             mp.return_value.parent.mkdir = MagicMock()
@@ -1116,12 +1115,11 @@ class TestResponseActionsThumbsButtons:
 class TestResponseActionsLockButtons:
     @pytest.mark.asyncio
     async def test_lock_channel_btn_sends_confirmation(self, monkeypatch):
-        import bot as mod
         view = _make_view(user_id=33)
         interaction = _make_interaction(user_id=33, channel_id=300)
 
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(300, None)))
-        monkeypatch.setattr(mod, "set_context_lock", MagicMock())
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(300, None)))
+        monkeypatch.setattr(ra_mod, "set_context_lock", MagicMock())
 
         await view.lock_channel_btn.callback.callback(view, interaction, MagicMock())
         call_text = str(interaction.response.send_message.call_args)
@@ -1129,13 +1127,12 @@ class TestResponseActionsLockButtons:
 
     @pytest.mark.asyncio
     async def test_reset_context_btn_clears_lock(self, monkeypatch):
-        import bot as mod
         view = _make_view(user_id=44)
         interaction = _make_interaction(user_id=44, channel_id=400)
 
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(400, None)))
-        monkeypatch.setattr(mod, "reset_context_lock", MagicMock())
-        monkeypatch.setattr(mod, "reset_anchor_state", MagicMock())
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(400, None)))
+        monkeypatch.setattr(ra_mod, "reset_context_lock", MagicMock())
+        monkeypatch.setattr(ra_mod, "reset_anchor_state", MagicMock())
 
         await view.reset_context_btn.callback.callback(view, interaction, MagicMock())
         call_text = str(interaction.response.send_message.call_args)
@@ -1143,12 +1140,11 @@ class TestResponseActionsLockButtons:
 
     @pytest.mark.asyncio
     async def test_use_prior_report_btn_no_anchor(self, monkeypatch):
-        import bot as mod
         view = _make_view(user_id=55)
         interaction = _make_interaction(user_id=55, channel_id=500)
 
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(500, None)))
-        monkeypatch.setattr(mod, "get_anchor_state", MagicMock(return_value=None))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(500, None)))
+        monkeypatch.setattr(ra_mod, "get_anchor_state", MagicMock(return_value=None))
 
         await view.use_prior_report_btn.callback.callback(view, interaction, MagicMock())
         call_text = str(interaction.response.send_message.call_args)
@@ -1156,13 +1152,12 @@ class TestResponseActionsLockButtons:
 
     @pytest.mark.asyncio
     async def test_use_prior_report_btn_with_anchor(self, monkeypatch):
-        import bot as mod
         view = _make_view(user_id=66)
         interaction = _make_interaction(user_id=66, channel_id=600)
 
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(600, None)))
-        monkeypatch.setattr(mod, "get_anchor_state", MagicMock(return_value={"anchor_id": "abc123"}))
-        monkeypatch.setattr(mod, "set_context_lock", MagicMock())
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(600, None)))
+        monkeypatch.setattr(ra_mod, "get_anchor_state", MagicMock(return_value={"anchor_id": "abc123"}))
+        monkeypatch.setattr(ra_mod, "set_context_lock", MagicMock())
 
         await view.use_prior_report_btn.callback.callback(view, interaction, MagicMock())
         call_text = str(interaction.response.send_message.call_args)

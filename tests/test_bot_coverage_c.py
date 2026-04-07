@@ -22,6 +22,7 @@ os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_audit_c")
 os.environ.setdefault("THREAD_DB_PATH", "/tmp/test_cov_c.db")
 
 import bot as mod
+import response_actions as ra_mod
 
 
 # ---------------------------------------------------------------------------
@@ -245,8 +246,8 @@ class TestLockThreadBtn:
         interaction = _make_interaction(user_id=33, channel_id=300)
 
         mock_set_lock = MagicMock()
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(300, 500)))
-        monkeypatch.setattr(mod, "set_context_lock", mock_set_lock)
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(300, 500)))
+        monkeypatch.setattr(ra_mod, "set_context_lock", mock_set_lock)
 
         await view.lock_thread_btn.callback.callback(view, interaction, MagicMock())
 
@@ -265,8 +266,8 @@ class TestLockThreadBtn:
         interaction = _make_interaction(user_id=33, channel_id=300)
 
         mock_set_lock = MagicMock()
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(300, None)))
-        monkeypatch.setattr(mod, "set_context_lock", mock_set_lock)
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(300, None)))
+        monkeypatch.setattr(ra_mod, "set_context_lock", mock_set_lock)
 
         await view.lock_thread_btn.callback.callback(view, interaction, MagicMock())
 
@@ -280,8 +281,8 @@ class TestLockThreadBtn:
         interaction = _make_interaction(user_id=10, channel_id=200)
 
         mock_set_lock = MagicMock()
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(None, None)))
-        monkeypatch.setattr(mod, "set_context_lock", mock_set_lock)
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(None, None)))
+        monkeypatch.setattr(ra_mod, "set_context_lock", mock_set_lock)
 
         await view.lock_thread_btn.callback.callback(view, interaction, MagicMock())
 
@@ -304,10 +305,10 @@ class TestUsePriorReportBtn:
         view = _make_view(user_id=77)
         interaction = _make_interaction(user_id=77, channel_id=200)
 
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(200, None)))
-        monkeypatch.setattr(mod, "get_anchor_state", MagicMock(return_value={"anchor_id": "report-abc"}))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(200, None)))
+        monkeypatch.setattr(ra_mod, "get_anchor_state", MagicMock(return_value={"anchor_id": "report-abc"}))
         mock_set_lock = MagicMock()
-        monkeypatch.setattr(mod, "set_context_lock", mock_set_lock)
+        monkeypatch.setattr(ra_mod, "set_context_lock", mock_set_lock)
 
         await view.use_prior_report_btn.callback.callback(view, interaction, MagicMock())
 
@@ -326,8 +327,8 @@ class TestUsePriorReportBtn:
         view = _make_view(user_id=77)
         interaction = _make_interaction(user_id=77, channel_id=200)
 
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(200, None)))
-        monkeypatch.setattr(mod, "get_anchor_state", MagicMock(return_value=None))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(200, None)))
+        monkeypatch.setattr(ra_mod, "get_anchor_state", MagicMock(return_value=None))
 
         await view.use_prior_report_btn.callback.callback(view, interaction, MagicMock())
 
@@ -339,10 +340,10 @@ class TestUsePriorReportBtn:
         view = _make_view(user_id=55, channel_id=100)
         interaction = _make_interaction(user_id=55, channel_id=100)
 
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, 999)))
-        monkeypatch.setattr(mod, "get_anchor_state", MagicMock(return_value={"anchor_id": "thread-report"}))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, 999)))
+        monkeypatch.setattr(ra_mod, "get_anchor_state", MagicMock(return_value={"anchor_id": "thread-report"}))
         mock_set_lock = MagicMock()
-        monkeypatch.setattr(mod, "set_context_lock", mock_set_lock)
+        monkeypatch.setattr(ra_mod, "set_context_lock", mock_set_lock)
 
         await view.use_prior_report_btn.callback.callback(view, interaction, MagicMock())
 
@@ -369,10 +370,10 @@ class TestFollowupCallbackExecution:
         mock_conv = MagicMock()
         mock_conv.history = []
         mock_conv.update_from_llm = MagicMock()
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(return_value=("Follow-up answer", [], "gemini")))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
-        monkeypatch.setattr(mod, "_generate_follow_ups", AsyncMock(return_value=[]))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(return_value=("Follow-up answer", [], "gemini")))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ra_mod, "_generate_follow_ups", AsyncMock(return_value=[]))
 
         # Get the follow-up button (custom_id = "followup_0")
         fu_btn = next(
@@ -392,9 +393,9 @@ class TestFollowupCallbackExecution:
 
         mock_conv = MagicMock()
         mock_conv.history = []
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(side_effect=RuntimeError("llm crashed")))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(side_effect=RuntimeError("llm crashed")))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
 
         fu_btn = next(
             b for b in view.children
@@ -420,9 +421,9 @@ class TestGoDeeperCallback:
         mock_conv = MagicMock()
         mock_conv.history = []
         mock_conv.update_from_llm = MagicMock()
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(return_value=("Deep dive answer", [], "gemini-pro")))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(return_value=("Deep dive answer", [], "gemini-pro")))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
 
         await view._go_deeper_callback(interaction)
 
@@ -439,9 +440,9 @@ class TestGoDeeperCallback:
         mock_conv = MagicMock()
         mock_conv.history = []
         mock_conv.update_from_llm = MagicMock()
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(return_value=("Detailed answer", [], "gpt-4")))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(return_value=("Detailed answer", [], "gpt-4")))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
 
         await view._go_deeper_callback(interaction)
 
@@ -455,9 +456,9 @@ class TestGoDeeperCallback:
 
         mock_conv = MagicMock()
         mock_conv.history = []
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(side_effect=RuntimeError("service down")))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(side_effect=RuntimeError("service down")))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
 
         await view._go_deeper_callback(interaction)
 
@@ -478,9 +479,9 @@ class TestGoDeeperCallback:
         mock_conv = MagicMock()
         mock_conv.history = []
         mock_conv.update_from_llm = MagicMock()
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", capture_llm)
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", capture_llm)
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
 
         await view._go_deeper_callback(interaction)
 
@@ -496,9 +497,9 @@ class TestGoDeeperCallback:
         mock_conv = MagicMock()
         mock_conv.history = []
         mock_conv.update_from_llm = MagicMock()
-        monkeypatch.setattr(mod.conversation_store, "get", MagicMock(return_value=mock_conv))
-        monkeypatch.setattr(mod, "llm_chat", AsyncMock(return_value=("Detailed", [], "gemini")))
-        monkeypatch.setattr(mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
+        monkeypatch.setattr(ra_mod.conversation_store, "get", MagicMock(return_value=mock_conv))
+        monkeypatch.setattr(ra_mod, "llm_chat", AsyncMock(return_value=("Detailed", [], "gemini")))
+        monkeypatch.setattr(ra_mod, "_resolve_channel_thread_scope", MagicMock(return_value=(100, None)))
 
         # Find the Go Deeper button by custom_id
         deeper_btn = next(
