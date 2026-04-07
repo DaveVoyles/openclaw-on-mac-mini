@@ -70,7 +70,7 @@ openclaw/
 │       ├── docker_cog.py
 │       ├── media_cog.py
 │       └── network_cog.py
-├── skills/                 # Skill registry + ClawHub bundles
+├── skills/                 # Skill registry + ClawHub bundles  ⚠️ see note below
 │   ├── __init__.py         # SKILLS dict — central registry
 │   ├── advanced_skills.py  # Media, network, Plex, reports
 │   └── <bundle>/           # ClawHub skill bundles (13+)
@@ -94,9 +94,17 @@ openclaw/
 └── pyproject.toml
 ```
 
----
+> **⚠️ Import path conventions — read before adding code:**
+>
+> - **`skills/`** lives at the repo root, **not** inside `src/`. In the Docker container it is
+>   copied to `/app/skills/`. The Dockerfile sets `PYTHONPATH="/app"` so it is importable as
+>   `from skills import SKILLS` from any module. Do **not** move it into `src/`.
+>
+> - **Config singleton:** always import as `from config import cfg`. The `cfg` object is a
+>   module-level singleton — do not call it like a function. Never create or import from a
+>   module called `config_loader`; that module does not exist.
 
-## Adding a New Skill
+---
 
 Skills are async functions that the LLM can invoke via function calling. Follow these steps:
 

@@ -7,7 +7,8 @@ Quick-reference for diagnosing and fixing common issues.
 ## Table of Contents
 
 1. [Bot Won't Start](#bot-wont-start)
-2. [Bot is Online but Not Responding](#bot-online-not-responding)
+2. [ModuleNotFoundError on Startup (config\_loader / skills)](#modulenotfounderror-on-startup-config_loader--skills)
+3. [Bot is Online but Not Responding](#bot-online-not-responding)
 3. [Gemini API Errors](#gemini-api-errors)
 4. [Ollama / Local LLM Issues](#ollama-local-llm-issues)
 5. [Docker Socket Errors](#docker-socket-errors)
@@ -47,6 +48,7 @@ docker compose logs openclaw --tail 50
 | Invalid `DISCORD_TOKEN`  | Regenerate token at https://discord.com/developers/applications |
 | Missing `GOOGLE_API_KEY` | Get one at https://aistudio.google.com/app/apikey               |
 | Python dependency error  | Rebuild: `docker compose build --no-cache`                      |
+| `No module named 'skills'` | Ensure `PYTHONPATH="/app"` is set in Dockerfile ENV; rebuild with `docker compose build --no-cache` |
 | Port 8765 already in use | Check with `lsof -i :8765` and kill the conflicting process     |
 
 ### Symptom: "Privileged intent" error
@@ -56,6 +58,70 @@ The bot needs the **Message Content** intent enabled:
 1. Go to https://discord.com/developers/applications
 2. Select your bot → "Bot" tab
 3. Enable **Message Content Intent**
+
+---
+
+## ModuleNotFoundError on Startup (config\_loader / skills)
+
+### Symptom
+
+The container exits immediately with one of:
+
+```
+ModuleNotFoundError: No module named 'config_loader'
+ModuleNotFoundError: No module named 'skills'
+```
+
+### Root cause: `config_loader`
+
+`config_loader` never existed as a module. This is a naming error. The singleton config object lives in `src/config.py` and is **always** imported as:
+
+```python
+from config import cfg
+```
+
+If you see `from config_loader import get` or similar anywhere in `src/`, replace it:
+
+```bash
+# Find occurrences
+grep -rn "config_loader" src/
+
+# Fix: replace with the correct import
+from config import cfg
+# Usage: cfg.some_setting  (cfg is the singleton — not a function to call)
+```
+
+### Root cause: `skills`
+
+When Docker runs `python src/bot.py`, Python adds `/app/src/` to `sys.path` (the directory of the script). The `skills/` package lives at `/app/skills/` — **not** inside `/app/src/` — so `from skills import SKILLS` fails unless `PYTHONPATH` is set.
+
+**Fix:** verify that `PYTHONPATH="/app"` is present in the Dockerfile `ENV` block:
+
+```dockerfile
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH="/app" \
+    PATH="/opt/venv/bin:$PATH"
+```
+
+With `/app` in `PYTHONPATH`, Python can resolve:
+- `/app/src/` (added automatically by the script entrypoint) — for `config`, `llm_tools`, etc.
+- `/app/skills/` (added via `PYTHONPATH`) — for the `skills` package
+
+After editing the Dockerfile, rebuild:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
+
+### Quick sanity check
+
+```bash
+docker exec openclaw python -c "import skills; import config; print('OK')"
+```
+
+Both imports should succeed and print `OK`.
 
 ---
 
@@ -107,6 +173,17 @@ If it fails, regenerate at https://aistudio.google.com/app/apikey.
 ### "500 Internal Server Error"
 
 Gemini service outage. Check https://status.cloud.google.com/ and retry later.
+
+### `/ask` timeout or failure with trace ID
+
+New `/ask` timeout/error messages include a short **Trace ID**.
+
+- Copy the trace ID shown in Discord
+- Open Dashboard → **Runs** and find the matching trace
+- Use that trace when filing `/incident start` or triaging logs
+
+This avoids sharing raw stack traces in Discord while still giving operators a
+reliable correlation handle.
 
 ---
 
