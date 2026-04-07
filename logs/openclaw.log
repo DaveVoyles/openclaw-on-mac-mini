@@ -1,3 +1,15 @@
 2026-04-07 08:45:42,297 [WARNING [-]] discord.client: PyNaCl is not installed, voice will NOT be supported
 2026-04-07 08:45:42,297 [WARNING [-]] discord.client: davey is not installed, voice will NOT be supported
 2026-04-07 08:45:42,321 [INFO [-]] openclaw: Registered 33 standalone slash commands
+2026-04-07 10:08:56,799 [WARNING [-]] discord.client: PyNaCl is not installed, voice will NOT be supported
+2026-04-07 10:08:56,799 [WARNING [-]] discord.client: davey is not installed, voice will NOT be supported
+2026-04-07 10:08:56,821 [INFO [-]] openclaw: Registered 33 standalone slash commands
+2026-04-07 10:16:33,480 [WARNING [-]] discord.client: PyNaCl is not installed, voice will NOT be supported
+2026-04-07 10:16:33,480 [WARNING [-]] discord.client: davey is not installed, voice will NOT be supported
+2026-04-07 10:16:33,502 [INFO [-]] openclaw: Registered 33 standalone slash commands
+2026-04-07 10:38:52,412 [WARNING [-]] discord.client: PyNaCl is not installed, voice will NOT be supported
+2026-04-07 10:38:52,412 [WARNING [-]] discord.client: davey is not installed, voice will NOT be supported
+2026-04-07 10:38:52,431 [INFO [-]] openclaw: Registered 33 standalone slash commands
+2026-04-07 10:43:08,982 [WARNING [-]] discord.client: PyNaCl is not installed, voice will NOT be supported
+2026-04-07 10:43:08,983 [WARNING [-]] discord.client: davey is not installed, voice will NOT be supported
+2026-04-07 10:43:09,004 [INFO [-]] openclaw: Registered 33 standalone slash commands
