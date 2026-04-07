@@ -30,6 +30,7 @@ async def test_search_web_retries_provider_fallback_when_low_results(monkeypatch
     monkeypatch.setattr(mod, "PERPLEXITY_API_KEY", "test-key")
     monkeypatch.setattr(mod, "FIRECRAWL_API_KEY", "test-key")
     monkeypatch.setattr(mod, "TAVILY_API_KEY", "")
+    monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_perplexity(query: str, num_results: int = 5, *, return_hits: bool = False):
         calls.append("perplexity")
@@ -76,6 +77,8 @@ async def test_search_web_merges_and_dedupes_without_collapsing_distinct_games(m
     monkeypatch.setattr(mod, "PERPLEXITY_API_KEY", "test-key")
     monkeypatch.setattr(mod, "FIRECRAWL_API_KEY", "test-key")
     monkeypatch.setattr(mod, "TAVILY_API_KEY", "")
+    # Ensure deterministic budget regardless of any metrics collector state from other tests
+    monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_perplexity(query: str, num_results: int = 5, *, return_hits: bool = False):
         hits = [
@@ -118,6 +121,7 @@ async def test_search_web_expands_query_for_sports_context_when_needed(monkeypat
     monkeypatch.setattr(mod, "PERPLEXITY_API_KEY", "test-key")
     monkeypatch.setattr(mod, "FIRECRAWL_API_KEY", "")
     monkeypatch.setattr(mod, "TAVILY_API_KEY", "")
+    monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_perplexity(query: str, num_results: int = 5, *, return_hits: bool = False):
         calls.append(query)
@@ -157,6 +161,7 @@ async def test_search_web_records_low_results_metric(monkeypatch, _disable_scrip
     monkeypatch.setattr(mod, "PERPLEXITY_API_KEY", "test-key")
     monkeypatch.setattr(mod, "FIRECRAWL_API_KEY", "")
     monkeypatch.setattr(mod, "TAVILY_API_KEY", "")
+    monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_perplexity(_query: str, num_results: int = 5, *, return_hits: bool = False):
         hits = [{
@@ -191,6 +196,7 @@ async def test_e2e_incident_summary_search_surfaces_conflicts_with_quality_warni
     monkeypatch.setattr(mod, "PERPLEXITY_API_KEY", "test-key")
     monkeypatch.setattr(mod, "FIRECRAWL_API_KEY", "test-key")
     monkeypatch.setattr(mod, "TAVILY_API_KEY", "")
+    monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_perplexity(_query: str, num_results: int = 5, *, return_hits: bool = False):
         hits = [
@@ -309,6 +315,7 @@ async def test_search_web_applies_channel_profile_defaults_to_reliable_path(
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(mod, "get_effective_channel_profile", lambda: {"retrieval_profile": retrieval_profile})
+    monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_reliable(**kwargs):
         captured.update(kwargs)
