@@ -31,7 +31,7 @@ async def test_ask_command_with_tool_calling():
         ]
     }
 
-    with patch('src.llm_gateway.LLMGateway.chat') as mock_chat:
+    with patch('src.llm.chat.chat') as mock_chat:
         mock_chat.return_value = mock_response
 
         # Verify interaction handling
@@ -140,17 +140,21 @@ async def test_rate_limiting_across_apis():
 
     Verifies:
     - Rate limits are enforced
-    - Requests are queued when limit reached
+    - Remaining capacity tracked correctly
     - Rate limit resets work correctly
     """
-    from src.llm_ratelimiter import RateLimiter
+    from src.llm_ratelimit import RateLimiter
 
-    rate_limiter = RateLimiter(max_requests=5, time_window=60)
+    # Use production RateLimiter API: per_minute / per_hour
+    rate_limiter = RateLimiter(per_minute=5, per_hour=100)
 
-    # Test rate limiting logic
+    # Record 5 calls — should all fit within per_minute limit
     for i in range(5):
-        allowed = await rate_limiter.check()
-        assert allowed, f"Request {i} should be allowed"
+        rate_limiter.record()
+
+    # After 5 calls, per-minute capacity should be exhausted
+    assert rate_limiter.remaining_minute == 0, "Should have no remaining per-minute capacity"
+    assert not rate_limiter.check(), "Should be rate-limited after 5 calls"
 
 
 @pytest.mark.asyncio

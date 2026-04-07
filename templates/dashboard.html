@@ -577,7 +577,21 @@
       }
       .muted-text { color: var(--muted); font-style: italic; text-align: center; padding: 1rem; font-size: 0.85rem; }
 
-      @media (max-width: 600px) {
+      /* Quick action buttons in agent chat card */
+      .qa-btn {
+        padding: 0.35rem 0.75rem;
+        background: var(--surface-solid, #1a1b2e);
+        border: 1px solid var(--border, #333);
+        border-radius: 6px;
+        color: var(--text, #e8e8e8);
+        font-size: 0.8rem;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s, border-color 0.15s;
+      }
+      .qa-btn:hover { background: var(--accent, #7c3aed); border-color: var(--accent, #7c3aed); }
+
+
         .grid {
           grid-template-columns: 1fr;
         }
@@ -655,6 +669,49 @@
           <span>☁️ Gemini: <span id="st-gemini" class="status-dot">…</span></span>
           <span>🔗 Copilot: <span id="st-copilot" class="status-dot">…</span></span>
           <span>🎭 Patreon: <span id="st-patreon" class="status-dot">…</span></span>
+        </div>
+
+        <!-- 💬 Ask OpenClaw Agent (Dashboard Chat) -->
+        <div class="card" id="agent-chat-card">
+          <h2>💬 Ask OpenClaw</h2>
+          <!-- Quick Action Buttons -->
+          <div id="quick-actions" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem">
+            <button class="qa-btn" onclick="dashAsk('What is the weather today?')">🌤️ Weather</button>
+            <button class="qa-btn" onclick="dashAsk('Give me a brief summary of news headlines today.')">📰 News</button>
+            <button class="qa-btn" onclick="generateWeeklyRecap()">📋 Weekly Recap</button>
+            <button class="qa-btn" onclick="dashAsk('What are the latest box office results this weekend?')">🎬 Box Office</button>
+            <button class="qa-btn" onclick="dashAsk('What are the top trending topics right now?')">📈 Trends</button>
+            <button class="qa-btn" onclick="dashAsk('Run a health check on all monitored services and summarize results.')">🏥 Health Check</button>
+          </div>
+          <!-- Chat Input -->
+          <div style="display:flex;gap:0.5rem;align-items:flex-start">
+            <textarea id="agent-prompt" placeholder="Ask anything… (Shift+Enter for new line, Enter to send)"
+              style="flex:1;min-height:60px;max-height:200px;padding:0.6rem 0.8rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:8px;color:var(--text,#e8e8e8);font-size:0.88rem;resize:vertical;font-family:inherit"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();dashAsk();}"></textarea>
+            <div style="display:flex;flex-direction:column;gap:0.4rem">
+              <select id="agent-model" style="padding:0.4rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#333);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.8rem;cursor:pointer">
+                <option value="auto">🤖 Auto</option>
+                <option value="gemini">✨ Gemini</option>
+                <option value="openai">🟢 GPT-4o</option>
+                <option value="anthropic">🟣 Claude</option>
+                <option value="local">🏠 Local</option>
+              </select>
+              <button id="agent-send-btn" onclick="dashAsk()"
+                style="padding:0.5rem 1rem;background:var(--accent,#7c3aed);border:none;border-radius:6px;color:#fff;font-size:0.85rem;cursor:pointer;font-weight:600;white-space:nowrap">
+                Send ↵
+              </button>
+            </div>
+          </div>
+          <!-- Response Area -->
+          <div id="agent-response-wrap" style="display:none;margin-top:0.75rem">
+            <div id="agent-response-meta" style="font-size:0.75rem;color:var(--muted,#8b949e);margin-bottom:0.4rem"></div>
+            <div id="agent-response" style="padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;font-size:0.88rem;max-height:400px;overflow:auto;line-height:1.55"></div>
+            <div style="display:flex;gap:0.5rem;margin-top:0.5rem">
+              <button onclick="copyAgentResponse()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:transparent;border:1px solid var(--border,#444);border-radius:5px;color:var(--muted,#8b949e);cursor:pointer">📋 Copy</button>
+              <button onclick="clearAgentChat()" style="font-size:0.75rem;padding:0.25rem 0.6rem;background:transparent;border:1px solid var(--border,#444);border-radius:5px;color:var(--muted,#8b949e);cursor:pointer">🗑️ Clear</button>
+            </div>
+          </div>
+          <div id="agent-loading" style="display:none;padding:0.5rem 0;color:var(--muted,#8b949e);font-size:0.85rem">⏳ Thinking…</div>
         </div>
 
         <!-- Patreon/MonsterVision Status Card -->
@@ -861,7 +918,10 @@
               <div style="color: var(--muted); font-size: 0.8rem">
                 Past research is indexed and searchable via
                 <code>/research-search</code>. Follow-up research builds on
-                prior findings automatically.
+                prior findings automatically. Completed runs now include
+                persistence receipts (session, vault, vector, and Google Docs
+                when available), and the rerun action schedules a full research
+                cycle every 24h.
               </div>
             </div>
             <div
@@ -909,7 +969,9 @@
                 Ask for a recap, health report, sports watch guide, box-office
                 report, calendar lookup, or inbox search in plain English.
                 OpenClaw now
-                shortlists the most relevant skills automatically.
+                shortlists the most relevant skills automatically. In allowed
+                channels, plain messages route through default <code>/ask</code>
+                and continue in a bot-owned thread for continuity.
               </div>
             </div>
             <div
@@ -1506,7 +1568,7 @@
               <span style="color: var(--text); font-weight: 700; font-size: 0.95rem;">Phase 3 & 4 Impact</span>
             </div>
             <div style="color: var(--muted); font-size: 0.82rem; line-height: 1.6;">
-              <strong style="color: var(--gold);">150+ commands</strong> (was 101)
+              <strong style="color: var(--gold);">Live command index</strong> (runtime source of truth)
               • <strong style="color: var(--spirit-blue);">165+ skills</strong> (was 141)
               • <strong style="color: var(--mint-green);">11 APIs</strong> (was 4)
               • <strong style="color: var(--text);">1,167+ tests</strong> (was 767)
@@ -1974,23 +2036,41 @@
         <!-- Run History Timeline -->
         <div class="card">
           <h2>🧭 Run History Timeline</h2>
-          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.7rem">
-            <select id="run-filter-status" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
+          <div class="muted-text" style="font-size:0.75rem;margin-top:-0.2rem;margin-bottom:0.5rem">
+            Workflow Lanes
+          </div>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
+            Use filters to narrow results, then click any run row to inspect explainability details and effective profile context.
+          </p>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.7rem;align-items:flex-end">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.76rem;color:var(--muted)">
+              Status
+              <select id="run-filter-status" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
               <option value="">All status</option>
-            </select>
-            <select id="run-filter-model" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.76rem;color:var(--muted)">
+              Model
+              <select id="run-filter-model" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
               <option value="">All models</option>
-            </select>
-            <select id="run-filter-user" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.76rem;color:var(--muted)">
+              User
+              <select id="run-filter-user" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
               <option value="">All users</option>
-            </select>
-            <select id="run-filter-time" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.76rem;color:var(--muted)">
+              Time window
+              <select id="run-filter-time" onchange="applyRunFilters()" style="padding:0.25rem 0.45rem;border-radius:6px;background:var(--surface);color:var(--text);border:1px solid var(--border)">
               <option value="1">Last 1h</option>
               <option value="6">Last 6h</option>
               <option value="24" selected>Last 24h</option>
               <option value="168">Last 7d</option>
               <option value="all">All</option>
-            </select>
+              </select>
+            </label>
           </div>
           <div id="runs-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">Loading run summary...</div>
           <div class="scrollable-list" style="max-height:260px">
@@ -2008,7 +2088,41 @@
               <tbody id="runs-body"></tbody>
             </table>
           </div>
-          <p id="runs-empty" style="color:var(--muted);text-align:center;padding:0.8rem;display:none">No runs match filters</p>
+          <p id="runs-empty" style="color:var(--muted);text-align:center;padding:0.8rem;display:none">No runs match the current filters. Try widening the time window or clearing one filter.</p>
+          <div id="run-details" style="margin-top:0.7rem;padding:0.75rem;border:1px solid var(--border);border-radius:8px;background:var(--surface-alt, rgba(255,255,255,0.02))">
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.35rem">Run details</div>
+            <div id="run-details-summary" style="font-size:0.86rem;color:var(--muted)">Select a run row to inspect scope, lock, anchor, and effective profile explainability.</div>
+            <div id="run-details-explainability" style="margin-top:0.45rem;display:flex;flex-wrap:wrap;gap:0.35rem"></div>
+          </div>
+        </div>
+
+        <!-- Quality Eval Scorecards -->
+        <div class="card" id="quality-eval-card">
+          <h2>✅ Quality Eval Scorecards</h2>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.5rem">
+            Snapshot of rubric performance. Use trend chips to quickly spot quality regressions before they affect operators.
+          </p>
+          <div id="quality-eval-summary" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem">
+            Loading quality trend (watch rate + sample size before reacting)…
+          </div>
+          <div id="quality-eval-trend" class="memory-stats-bar" style="margin-bottom:0.6rem">
+            <span class="stat-chip"><span class="stat-chip-label">No history yet</span></span>
+          </div>
+          <div class="scrollable-list" style="max-height:220px">
+            <table style="width:100%">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Rate</th>
+                  <th>Pass</th>
+                  <th>Fail</th>
+                  <th>Sample</th>
+                </tr>
+              </thead>
+              <tbody id="quality-eval-metrics-body"></tbody>
+            </table>
+          </div>
+          <p id="quality-eval-updated" style="color:var(--muted);font-size:0.75rem;margin-top:0.55rem">—</p>
         </div>
 
         <!-- Config -->
@@ -2063,28 +2177,67 @@
         <div class="card" id="channel-memory-inspector-card">
           <h2>🧪 Channel Memory Inspector</h2>
           <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
-            Inspect vector memory visibility for a specific Discord channel/thread scope, then clear or retrain in one click.
+            Inspect scoped vector memory for a Discord channel/thread, verify guardrail alerts, then run clear/retrain actions when needed. Clear now uses a preview + confirmation guard.
           </p>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.6rem">
             <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Channel ID
+              Discord Channel ID (required)
               <input id="inspector-channel-id" type="text" placeholder="123456789012345678" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
             </label>
             <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
-              Thread ID (optional)
+              Discord Thread ID (optional)
               <input id="inspector-thread-id" type="text" placeholder="987654321098765432" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
             </label>
           </div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.6rem">
-            <button type="button" onclick="loadChannelMemoryInspector()" style="background:var(--spirit-blue);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer">Inspect</button>
-            <button type="button" onclick="runChannelMemoryAction('clear')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer">Clear Scope</button>
-            <button type="button" onclick="runChannelMemoryAction('retrain')" style="background:var(--surface);color:var(--gold);border:1px solid rgba(241,196,0,0.3);border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer">Retrain / Reindex</button>
+            <button type="button" onclick="loadChannelMemoryInspector()" style="background:var(--spirit-blue);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer" title="Fetch scoped memory summary and alerts">Inspect Scope / Preview</button>
+            <button type="button" onclick="runChannelMemoryAction('clear')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer" title="Delete vector entries for this scope">Clear Scoped Memory</button>
+            <button type="button" onclick="runChannelMemoryAction('retrain')" style="background:var(--surface);color:var(--gold);border:1px solid rgba(241,196,0,0.3);border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer" title="Trigger retrain/reindex cycle">Retrain / Reindex</button>
           </div>
-          <div id="inspector-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.6rem">Enter a channel ID to inspect scoped memory.</div>
+          <div id="inspector-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.6rem">Enter a channel ID, then choose <strong>Inspect Scope / Preview</strong> to view scoped memory and recent alerts.</div>
           <div id="inspector-summary" class="memory-stats-bar">
-            <span class="stat-chip"><span class="stat-chip-label">No scope selected</span></span>
+            <span class="stat-chip"><span class="stat-chip-label">Scope:</span> Awaiting channel ID</span>
           </div>
           <div id="inspector-latest" class="scrollable-list" style="max-height:260px"></div>
+        </div>
+
+        <div class="card" id="channel-profile-assistant-card">
+          <h2>🧠 Channel Profile Assistant</h2>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
+            Review usage-driven profile recommendations for a scope. Standard flow is approve → apply, then revert if output quality regresses.
+          </p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:0.6rem">
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
+              Discord Channel ID (required)
+              <input id="profile-assistant-channel-id" type="text" placeholder="123456789012345678" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+            </label>
+            <label style="display:flex;flex-direction:column;gap:0.2rem;font-size:0.78rem;color:var(--muted)">
+              Discord Thread ID (optional)
+              <input id="profile-assistant-thread-id" type="text" placeholder="987654321098765432" style="min-width:220px;padding:0.38rem 0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text)" />
+            </label>
+            <button type="button" onclick="loadChannelProfileRecommendations()" style="background:var(--spirit-blue);color:#fff;border:none;border-radius:6px;padding:0.42rem 0.85rem;cursor:pointer" title="Load recommendations and usage signals for this scope">Inspect Scope</button>
+          </div>
+          <div id="profile-assistant-feedback" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem">
+            Enter a channel ID, then choose <strong>Inspect Scope</strong> to load recommendations and usage signals.
+          </div>
+          <div id="profile-assistant-signals" class="memory-stats-bar">
+            <span class="stat-chip"><span class="stat-chip-label">Scope:</span> Awaiting channel ID</span>
+          </div>
+          <div class="scrollable-list" style="max-height:260px;margin-top:0.6rem">
+            <table style="width:100%">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Recommendation</th>
+                  <th>Why suggested</th>
+                  <th>State</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="profile-assistant-body"></tbody>
+            </table>
+          </div>
+          <p id="profile-assistant-empty" style="color:var(--muted);text-align:center;padding:0.8rem;display:none">No recommendations for this scope yet. Interact more in-channel, then refresh.</p>
         </div>
 
         <!-- Research History -->
@@ -2106,6 +2259,17 @@
         <div class="card">
           <h2>🔍 Search Provider Stats</h2>
           <div id="search-stats-content">
+            <p class="muted-text">Loading&hellip;</p>
+          </div>
+        </div>
+
+        <!-- Discord Answer Quality Telemetry -->
+        <div class="card">
+          <h2>🎯 Discord Answer Quality Telemetry</h2>
+          <div id="quality-metrics-summary" class="memory-stats-bar">
+            <span class="stat-chip"><span class="stat-chip-label">Status:</span> Loading…</span>
+          </div>
+          <div id="quality-metrics-content" style="margin-top:0.6rem">
             <p class="muted-text">Loading&hellip;</p>
           </div>
         </div>
@@ -2199,6 +2363,19 @@
             Manual slash commands you type directly in Discord to control the
             bot.
           </p>
+          <div
+            id="workflow-lanes"
+            style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.65rem"
+          >
+            <button type="button" style="border:1px solid var(--border);background:rgba(104,172,229,0.08);color:var(--text);border-radius:999px;padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;" title="Ask lane: everyday prompts and agent actions" onclick="document.getElementById('cmd-search').value='/ask';filterCmds()">🗣 Ask lane</button>
+            <button type="button" style="border:1px solid var(--border);background:rgba(104,172,229,0.08);color:var(--text);border-radius:999px;padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;" title="Research lane: deep reports and saved findings" onclick="document.getElementById('cmd-search').value='research';filterCmds()">🔎 Research lane</button>
+            <button type="button" style="border:1px solid var(--border);background:rgba(104,172,229,0.08);color:var(--text);border-radius:999px;padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;" title="Memory lane: memory tools and scoped inspector" onclick="document.getElementById('cmd-search').value='memory';filterCmds()">🧠 Memory lane</button>
+            <button type="button" style="border:1px solid var(--border);background:rgba(104,172,229,0.08);color:var(--text);border-radius:999px;padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;" title="Debug lane: diagnostics, incidents, and health checks" onclick="document.getElementById('cmd-search').value='debug';filterCmds()">🛠 Debug lane</button>
+          </div>
+          <div
+            id="command-quickstart"
+            style="display:flex;flex-wrap:wrap;gap:0.45rem;margin-bottom:0.75rem"
+          ></div>
           <input
             type="text"
             class="search-box"
@@ -2206,6 +2383,10 @@
             placeholder="&#128269; Search commands..."
             oninput="filterCmds()"
           />
+          <div
+            id="cmd-results-meta"
+            style="color:var(--muted);font-size:0.75rem;margin:0.35rem 0 0.55rem"
+          ></div>
           <table>
             <thead>
               <tr>
@@ -2524,82 +2705,8 @@
 
         // Commands
         _allCmds = d.commands;
-        const _extraCmdGroups = [
-          { category: "📋 Copy/Paste Workflow", commands: [
-            { name: "/recap copy-latest", desc: "Copy-ready export of your latest OpenClaw response in the current channel/thread" },
-            { name: "/recap copy-thread [days] [style]", desc: "Generate and export a copy-ready recap for the current channel/thread" },
-            { name: "Context menu: Copy Workflow Context", desc: "Right-click any message to export a mobile-friendly copy block" },
-          ]},
-          { category: "Document Review & Interview", commands: [
-            { name: "/review text [mode]", desc: "Paste text for structured critique (writing/technical/quick)" },
-            { name: "/review file [mode]", desc: "Upload DOCX/PDF/TXT/etc for structured critique" },
-            { name: "/interview <goal>", desc: "Sequential Q&A modals → personalized output" },
-          ]},
-          { category: "Calendar & Email", commands: [
-            { name: "/calendar today", desc: "List today's Google Calendar events" },
-            { name: "/calendar upcoming [days]", desc: "Next N days of events" },
-            { name: "/calendar add <title> <when>", desc: "Create event" },
-            { name: "/email inbox [count]", desc: "Show recent emails (ephemeral)" },
-            { name: "/email search <query>", desc: "Search inbox" },
-            { name: "/email read <id>", desc: "Read full email" },
-            { name: "/email send <to> <subject> <body>", desc: "Send email (requires approval)" },
-          ]},
-          { category: "Journal & GitHub", commands: [
-            { name: "/journal write [entry]", desc: "Save today's journal entry to vault" },
-            { name: "/journal read [date]", desc: "Read past entry" },
-            { name: "/journal streak", desc: "Streak counter" },
-            { name: "/journal prompt", desc: "AI writing prompt" },
-            { name: "/github prs [repo]", desc: "List open pull requests" },
-            { name: "/github issues [repo]", desc: "List open issues" },
-            { name: "/github watch <repo>", desc: "Subscribe to activity DMs" },
-          ]},
-          { category: "🎨 Image Generation", commands: [
-            { name: "/imagine generate <prompt> [size] [negative]", desc: "Generate image via Stable Diffusion txt2img" },
-            { name: "/imagine status", desc: "Check SD online status and list models" },
-          ]},
-          { category: "🌐 DNS Management", commands: [
-            { name: "/dns status", desc: "AdGuard Home status and filtering toggle" },
-            { name: "/dns stats", desc: "Query/block counts and top domains" },
-            { name: "/dns block <domain>", desc: "Block domain via DNS rewrite" },
-            { name: "/dns allow <domain>", desc: "Unblock a domain" },
-            { name: "/dns blocked", desc: "List all manually blocked domains" },
-          ]},
-          { category: "📝 Notion", commands: [
-            { name: "/notion search <query>", desc: "Search Notion pages and databases" },
-            { name: "/notion page <title> <content>", desc: "Create a new Notion page" },
-            { name: "/notion todo <item>", desc: "Add item to Notion todo database" },
-          ]},
-          { category: "📄 Google Docs", commands: [
-            { name: "/gdoc save <title> <content>", desc: "Create a new Google Doc" },
-            { name: "/gdoc list", desc: "List recent Google Docs" },
-          ]},
-          { category: "🖥️ System Performance", commands: [
-            { name: "/perf", desc: "CPU, memory, disk, load average via Glances" },
-          ]},
-          { category: "📱 Push Notifications", commands: [
-            { name: "/ntfy send <message> [title] [priority]", desc: "Send phone push notification via ntfy" },
-            { name: "/ntfy test", desc: "Send test notification to verify setup" },
-          ]},
-          { category: "📲 SMS One-Tap", commands: [
-            { name: "/sms config <phone> [send_verification]", desc: "Save phone number for one-tap SMS; can trigger verification send" },
-            { name: "/sms test [code]", desc: "Start verification or submit code from SMS" },
-            { name: "/sms status", desc: "Show masked phone, verification state, and remaining send budget" },
-            { name: "/sms send <message>", desc: "Confirmation-based SMS send to configured phone" },
-            { name: "Context menu: Send to SMS", desc: "Right-click a Discord message and forward it via SMS with confirmation" },
-          ]},
-          { category: "🎬 Movie & TV", commands: [
-            { name: "/media movie <title>", desc: "Look up a movie with poster and ratings" },
-            { name: "/media tv <title>", desc: "Look up a TV show with season/episode info" },
-            { name: "/media search <query>", desc: "Search movies and TV via OMDb" },
-          ]},
-          { category: "🐛 Error Monitoring", commands: [
-            { name: "/sentry issues [project]", desc: "List unresolved Sentry issues" },
-            { name: "/sentry projects", desc: "List Sentry org projects" },
-            { name: "/sentry resolve <issue_id>", desc: "Resolve a Sentry issue" },
-            { name: "/sentry stats [project]", desc: "Hourly error rate stats" },
-          ]},
-        ];
-        renderCmds([...d.commands, ..._extraCmdGroups]);
+        renderCommandQuickstart(d.command_quickstart || []);
+        renderCmds(_allCmds);
 
         // Config
         const cr = document.getElementById("config-rows");
@@ -2802,13 +2909,36 @@
           const hdr = document.createElement("tr");
           hdr.innerHTML = `<td class="cmd-cat" colspan="2">${esc(cat.category)}</td>`;
           hdr.dataset.cat = "1";
+          hdr.dataset.category = (cat.category || "").toLowerCase();
           cb.appendChild(hdr);
           cat.commands.forEach((c) => {
             const tr = document.createElement("tr");
             tr.innerHTML = `<td><code>${esc(c.name)}</code></td><td style="color:var(--muted)">${esc(c.desc)}</td>`;
             tr.dataset.name = c.name.toLowerCase();
+            tr.dataset.desc = (c.desc || "").toLowerCase();
+            tr.dataset.category = (cat.category || "").toLowerCase();
             cb.appendChild(tr);
           });
+        });
+        filterCmds();
+      }
+
+      function renderCommandQuickstart(items) {
+        const el = document.getElementById("command-quickstart");
+        if (!el) return;
+        el.innerHTML = "";
+        items.forEach((item) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.style.cssText = "border:1px solid var(--border);background:rgba(104,172,229,0.08);color:var(--text);border-radius:999px;padding:0.25rem 0.6rem;font-size:0.75rem;cursor:pointer;";
+          btn.textContent = item.name;
+          btn.title = item.desc || item.name;
+          btn.onclick = () => {
+            const input = document.getElementById("cmd-search");
+            input.value = item.name;
+            filterCmds();
+          };
+          el.appendChild(btn);
         });
       }
 
@@ -2836,18 +2966,33 @@
 
       function filterCmds() {
         const q = document.getElementById("cmd-search").value.toLowerCase();
-        const rows = document.querySelectorAll("#commands-body tr");
-        rows.forEach((r) => {
-          if (r.dataset.cat) {
-            r.style.display = q ? "none" : "";
-            return;
+        const categories = document.querySelectorAll("#commands-body tr[data-cat='1']");
+        let visibleCount = 0;
+        categories.forEach((header) => {
+          let row = header.nextElementSibling;
+          let catVisible = !q;
+          while (row && !row.dataset.cat) {
+            const match =
+              !q ||
+              (row.dataset.name || "").includes(q) ||
+              (row.dataset.desc || "").includes(q) ||
+              (row.dataset.category || "").includes(q);
+            row.style.display = match ? "" : "none";
+            if (match) {
+              visibleCount += 1;
+              catVisible = true;
+            }
+            row = row.nextElementSibling;
           }
-          r.style.display =
-            (r.dataset.name || "").includes(q) ||
-            r.textContent.toLowerCase().includes(q)
-              ? ""
-              : "none";
+          header.style.display = catVisible ? "" : "none";
         });
+        const total = document.querySelectorAll("#commands-body tr:not([data-cat])").length;
+        const meta = document.getElementById("cmd-results-meta");
+        if (meta) {
+          meta.textContent = q
+            ? `Showing ${visibleCount} of ${total} commands for “${q}”`
+            : `Showing all ${total} commands`;
+        }
       }
 
       async function refreshData(btn) {
@@ -2860,6 +3005,9 @@
           render(d);
           loadApprovals();
           loadRunTimeline();
+          loadQualityEvals();
+          loadQualityMetrics();
+          loadChannelProfileRecommendations({ quietIfMissing: true });
         } catch (e) {
           console.error(e);
         }
@@ -2965,6 +3113,33 @@
         el.style.color = isError ? 'var(--danger,#f85149)' : 'var(--muted)';
       }
 
+      function _statusChip(label, value, tone = 'neutral') {
+        const tones = {
+          neutral: { bg: 'rgba(148, 163, 184, 0.18)', fg: 'var(--muted)' },
+          good: { bg: 'rgba(63, 185, 80, 0.16)', fg: 'var(--mint-green)' },
+          warn: { bg: 'rgba(249, 196, 79, 0.16)', fg: 'var(--gold)' },
+          bad: { bg: 'rgba(248, 81, 73, 0.18)', fg: 'var(--danger,#f85149)' },
+        };
+        const style = tones[tone] || tones.neutral;
+        return `<span class="stat-chip" style="background:${style.bg};color:${style.fg}"><span class="stat-chip-label">${esc(label)}:</span> ${esc(String(value))}</span>`;
+      }
+
+      function _actionAuthHeaders(actor = 'dashboard-ui') {
+        const headers = {
+          'Content-Type': 'application/json',
+          'X-OpenClaw-Actor': actor,
+        };
+        const token = (
+          localStorage.getItem('openclaw_api_action_token') ||
+          (typeof window !== 'undefined' ? window.OPENCLAW_API_ACTION_TOKEN : '')
+        ).trim();
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['X-OpenClaw-Token'] = token;
+        }
+        return headers;
+      }
+
       function renderChannelMemoryInspector(data) {
         const summaryEl = document.getElementById('inspector-summary');
         const latestEl = document.getElementById('inspector-latest');
@@ -2975,13 +3150,16 @@
         const totalCount = data.total_count || 0;
         const anchor = data.anchor || {};
         const alerts = data.alerts || {};
+        const warnings = data.warnings || {};
+        const compactions = Number(warnings.recent_compactions || 0);
         const warningCount = alerts.count || 0;
         summaryEl.innerHTML = [
           `<span class="stat-chip"><span class="stat-chip-label">Channel:</span> <code>${esc(scope.channel_id || '—')}</code></span>`,
           `<span class="stat-chip"><span class="stat-chip-label">Thread:</span> <code>${esc(scope.thread_id || 'none')}</code></span>`,
-          `<span class="stat-chip"><span class="stat-chip-label">Total:</span> ${totalCount}</span>`,
-          `<span class="stat-chip"><span class="stat-chip-label">Anchor:</span> ${anchor.present ? 'yes' : 'no'}</span>`,
-          `<span class="stat-chip"><span class="stat-chip-label">Alerts:</span> ${warningCount}</span>`,
+          _statusChip('Entries', totalCount, totalCount > 0 ? 'warn' : 'neutral'),
+          _statusChip('Anchor', anchor.present ? 'present' : 'missing', anchor.present ? 'good' : 'warn'),
+          _statusChip('Recall alerts', warningCount, warningCount > 0 ? 'bad' : 'good'),
+          _statusChip('Recent compactions', compactions, compactions > 0 ? 'warn' : 'neutral'),
         ].join('');
 
         const collectionBlocks = Object.entries(collections).map(([name, info]) => {
@@ -2991,7 +3169,7 @@
               const date = item.added_at ? new Date(item.added_at * 1000).toLocaleString() : 'unknown time';
               return `<div class="memory-item"><span class="memory-text"><strong>${esc(item.type || 'entry')}</strong> · ${esc(item.excerpt || '')}</span><span class="memory-date">${esc(date)}</span></div>`;
             }).join('')
-            : '<p class="muted-text">No scoped entries.</p>';
+            : `<p class="muted-text">No entries in <strong>${esc(name)}</strong> for this scope.</p>`;
           return `<details style="margin-bottom:0.5rem" open>
               <summary style="cursor:pointer;color:var(--spirit-blue);font-weight:600">${esc(name)} (${info.count || 0})</summary>
               <div style="margin-top:0.3rem">${latestHtml}</div>
@@ -3006,7 +3184,10 @@
               }).join('') || '<p class="muted-text">No alert details.</p>'}</div>
             </details>`
           : '';
-        latestEl.innerHTML = alertHtml + (collectionBlocks.join('') || '<p class="muted-text">No collection data.</p>');
+        const warningLine = warnings.message
+          ? `<p class="muted-text" style="margin-bottom:0.4rem">${esc(warnings.message)}</p>`
+          : '';
+        latestEl.innerHTML = warningLine + alertHtml + (collectionBlocks.join('') || '<p class="muted-text">No scoped memory data yet. Run an interaction in this scope, then inspect again.</p>');
       }
 
       async function loadChannelMemoryInspector(options = {}) {
@@ -3041,22 +3222,39 @@
           setInspectorFeedback('Channel ID is required.', true);
           return;
         }
-        if (action === 'clear' && !confirm('Clear vector memory for this scope? This cannot be undone.')) {
-          return;
-        }
         setInspectorFeedback(`Running ${action}…`);
         try {
-          const resp = await fetch('/api/channel-memory/action', {
+          const basePayload = {
+            action,
+            channel_id: channelId,
+            thread_id: threadId || null,
+            actor: 'dashboard-ui',
+          };
+          let resp = await fetch('/api/channel-memory/action', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action,
-              channel_id: channelId,
-              thread_id: threadId || null,
-              actor: 'dashboard-ui',
-            }),
+            headers: _actionAuthHeaders('dashboard-ui'),
+            body: JSON.stringify(basePayload),
           });
-          const data = await resp.json();
+          let data = await resp.json();
+          if (action === 'clear' && resp.status === 409 && data?.requires_confirmation) {
+            const preview = data.preview || {};
+            const totalEntries = Number(preview.total_entries || 0);
+            const previewCollections = Object.entries(preview.collections || {})
+              .map(([name, info]) => `${name}: ${Number((info || {}).count || 0)}`)
+              .join(', ');
+            const prompt = `About to clear ${totalEntries} scoped vector entr${totalEntries === 1 ? 'y' : 'ies'}${previewCollections ? ` (${previewCollections})` : ''}. Continue?`;
+            setInspectorFeedback(`Preview: ${prompt}`);
+            if (!confirm(prompt)) {
+              setInspectorFeedback('Clear cancelled.');
+              return;
+            }
+            resp = await fetch('/api/channel-memory/action', {
+              method: 'POST',
+              headers: _actionAuthHeaders('dashboard-ui'),
+              body: JSON.stringify({ ...basePayload, confirm: true }),
+            });
+            data = await resp.json();
+          }
           if (!resp.ok) {
             setInspectorFeedback(data.error || `Failed to run ${action}.`, true);
             return;
@@ -3071,6 +3269,125 @@
           loadMemories();
         } catch {
           setInspectorFeedback(`Failed to run ${action}.`, true);
+        }
+      }
+
+      function _profileAssistantScope() {
+        const channelId = (document.getElementById('profile-assistant-channel-id')?.value || '').trim();
+        const threadId = (document.getElementById('profile-assistant-thread-id')?.value || '').trim();
+        return { channelId, threadId };
+      }
+
+      function setProfileAssistantFeedback(message, isError = false) {
+        const el = document.getElementById('profile-assistant-feedback');
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = isError ? 'var(--danger,#f85149)' : 'var(--muted)';
+      }
+
+      function _profileStatusBadge(status) {
+        const normalized = String(status || 'suggested').toLowerCase();
+        if (normalized === 'approved' || normalized === 'applied') {
+          return _statusChip('State', normalized.toUpperCase(), 'good');
+        }
+        if (normalized === 'rejected' || normalized === 'reverted') {
+          return _statusChip('State', normalized.toUpperCase(), 'bad');
+        }
+        return _statusChip('State', normalized.toUpperCase(), 'warn');
+      }
+
+      function renderProfileAssistant(data) {
+        const signalEl = document.getElementById('profile-assistant-signals');
+        const bodyEl = document.getElementById('profile-assistant-body');
+        const emptyEl = document.getElementById('profile-assistant-empty');
+        if (!signalEl || !bodyEl || !emptyEl) return;
+
+        const scope = data.scope || {};
+        const signals = data.signals || {};
+        const signalEntries = Object.entries(signals);
+        const signalChips = signalEntries.length
+          ? signalEntries.map(([k, v]) => `<span class="stat-chip"><span class="stat-chip-label">${esc(k)}:</span> ${esc(String(v || 0))}</span>`)
+          : ['<span class="stat-chip"><span class="stat-chip-label">Usage signals:</span> none captured yet</span>'];
+        signalEl.innerHTML = [
+          `<span class="stat-chip"><span class="stat-chip-label">Channel:</span> <code>${esc(scope.channel_id || '—')}</code></span>`,
+          `<span class="stat-chip"><span class="stat-chip-label">Thread:</span> <code>${esc(scope.thread_id || 'none')}</code></span>`,
+          ...signalChips,
+        ].join('');
+
+        const recommendations = data.recommendations || [];
+        bodyEl.innerHTML = '';
+        if (recommendations.length === 0) {
+          emptyEl.style.display = 'block';
+          return;
+        }
+        emptyEl.style.display = 'none';
+        recommendations.forEach(rec => {
+          const tr = document.createElement('tr');
+          const status = rec.status || 'suggested';
+          const id = rec.recommendation_id;
+          const recTone = Number(rec.confidence || 0) >= 0.8 ? 'good' : Number(rec.confidence || 0) >= 0.6 ? 'warn' : 'neutral';
+          tr.innerHTML = `<td><code>${esc(String(id || ''))}</code></td>
+            <td><code>${esc(rec.profile_field || '')}</code> → <strong>${esc(rec.recommended_value || '')}</strong><br/>${_statusChip('Confidence', (Number(rec.confidence || 0)).toFixed(2), recTone)}</td>
+            <td style="max-width:18rem;color:var(--muted)">${esc(rec.reason || '')}</td>
+            <td>${_profileStatusBadge(status)}</td>
+            <td style="white-space:nowrap">
+              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'approve')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--mint-green);cursor:pointer" title="Mark suggestion as approved">Approve</button>
+              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'reject')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--danger,#f85149);cursor:pointer" title="Reject suggestion and keep current profile">Reject</button>
+              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'apply')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--gold);cursor:pointer" title="Apply suggestion to active profile">Apply</button>
+              <button onclick="submitProfileRecommendationAction(${Number(id || 0)}, 'revert')" style="padding:0.18rem 0.42rem;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer" title="Revert a previously applied profile update">Revert</button>
+            </td>`;
+          bodyEl.appendChild(tr);
+        });
+      }
+
+      async function loadChannelProfileRecommendations(options = {}) {
+        const { quietIfMissing = false } = options;
+        const { channelId, threadId } = _profileAssistantScope();
+        if (!channelId) {
+          if (!quietIfMissing) setProfileAssistantFeedback('Channel ID is required.', true);
+          return;
+        }
+        localStorage.setItem('openclaw_profile_assistant_channel_id', channelId);
+        localStorage.setItem('openclaw_profile_assistant_thread_id', threadId || '');
+        setProfileAssistantFeedback('Loading profile recommendations…');
+        try {
+          const qs = new URLSearchParams({ channel_id: channelId });
+          if (threadId) qs.set('thread_id', threadId);
+          const resp = await fetch(`/api/channel-profile/recommendations?${qs.toString()}`);
+          const data = await resp.json();
+          if (!resp.ok) {
+            setProfileAssistantFeedback(data.error || 'Failed to load recommendations.', true);
+            return;
+          }
+          renderProfileAssistant(data);
+          setProfileAssistantFeedback('Recommendations loaded.');
+        } catch {
+          setProfileAssistantFeedback('Failed to load recommendations.', true);
+        }
+      }
+
+      async function submitProfileRecommendationAction(recommendationId, action) {
+        if (!recommendationId || !action) return;
+        setProfileAssistantFeedback(`Running ${action} on #${recommendationId}…`);
+        try {
+          const resp = await fetch('/api/channel-profile/recommendations/action', {
+            method: 'POST',
+            headers: _actionAuthHeaders('dashboard-ui'),
+            body: JSON.stringify({
+              recommendation_id: recommendationId,
+              action,
+              actor: 'dashboard-ui',
+            }),
+          });
+          const data = await resp.json();
+          if (!resp.ok) {
+            setProfileAssistantFeedback(data.error || 'Action failed.', true);
+            return;
+          }
+          setProfileAssistantFeedback(`Recommendation #${recommendationId} ${action} complete.`);
+          loadChannelProfileRecommendations({ quietIfMissing: true });
+        } catch {
+          setProfileAssistantFeedback('Action failed.', true);
         }
       }
 
@@ -3248,6 +3565,172 @@
           }).catch(() => {
               document.getElementById('search-stats-content').innerHTML =
                   '<p class="muted-text">Failed to load search stats.</p>';
+          });
+      }
+
+      function loadQualityMetrics() {
+          fetch('/api/quality-metrics').then(r => r.json()).then(data => {
+              const summaryEl = document.getElementById('quality-metrics-summary');
+              const contentEl = document.getElementById('quality-metrics-content');
+              if (!summaryEl || !contentEl) return;
+
+              const status = String(data.status || 'no_data');
+              const statusTone = status === 'healthy' ? 'good' : status === 'watch' ? 'warn' : status === 'degraded' ? 'bad' : 'neutral';
+              const statusLabel = status === 'healthy' ? 'Healthy' : status === 'watch' ? 'Watch' : status === 'degraded' ? 'Degraded' : 'No data';
+              const total = Number(data.total_events || 0);
+              const warningPressure = Number(data.warning_pressure || 0);
+              const signals = data.signals || {};
+              const topEvents = Array.isArray(data.top_events) ? data.top_events.slice(0, 6) : [];
+              const domainTrends = Array.isArray(data.domain_trends) ? data.domain_trends.slice(0, 6) : [];
+              const recurringFailures = Array.isArray(data.top_recurring_failures) ? data.top_recurring_failures.slice(0, 6) : [];
+              const signalSlices = data.recent_signal_slices || {};
+              const mitigationSignals = Array.isArray(signalSlices.mitigation) ? signalSlices.mitigation.slice(0, 6) : [];
+              const degradeSignals = Array.isArray(signalSlices.degrade) ? signalSlices.degrade.slice(0, 6) : [];
+              const scoreDist = data.score_distribution || {};
+              const lowConfidence = data.low_confidence || {};
+              const lowReasons = Array.isArray(lowConfidence.top_reasons) ? lowConfidence.top_reasons.slice(0, 3) : [];
+              const retry = data.retry_outcomes || {};
+              const feedback = data.feedback || {};
+              const lowPromptCount = Number(lowConfidence.prompt_count || 0);
+              const qualitySamples = Number(scoreDist.high || 0) + Number(scoreDist.medium || 0) + Number(scoreDist.low || 0);
+              const retrySignals = Number(retry.attempted || 0) + Number(retry.improved || 0) + Number(retry.no_improvement || 0) + Number(retry.failed || 0) + Number(retry.skipped || 0);
+              const feedbackHelpful = Number(feedback.helpful || 0);
+              const feedbackNotHelpful = Number(feedback.not_helpful || 0);
+              const feedbackTotal = Number(feedback.total || (feedbackHelpful + feedbackNotHelpful));
+              const feedbackHelpfulRate = feedbackTotal > 0
+                ? Number(feedback.helpful_rate ?? (feedbackHelpful / feedbackTotal))
+                : null;
+
+              summaryEl.innerHTML = [
+                  _statusChip('Quality telemetry', statusLabel, statusTone),
+                  `<span class="stat-chip"><span class="stat-chip-label">Events:</span> ${total}</span>`,
+                  `<span class="stat-chip"><span class="stat-chip-label">Warning pressure:</span> ${warningPressure}</span>`,
+                  `<span class="stat-chip"><span class="stat-chip-label">Low-confidence prompts:</span> ${lowPromptCount}</span>`,
+                  `<span class="stat-chip"><span class="stat-chip-label">Retry attempted:</span> ${Number(retry.attempted || 0)}</span>`,
+                  `<span class="stat-chip"><span class="stat-chip-label">Retry improved:</span> ${Number(retry.improved || 0)}</span>`,
+                  `<span class="stat-chip"><span class="stat-chip-label">Helpful:</span> ${feedbackHelpful}</span>`,
+                  `<span class="stat-chip"><span class="stat-chip-label">Not helpful:</span> ${feedbackNotHelpful}</span>`,
+              ].join('');
+
+               if (topEvents.length === 0 && recurringFailures.length === 0 && domainTrends.length === 0 && mitigationSignals.length === 0 && degradeSignals.length === 0 && qualitySamples === 0 && retrySignals === 0 && lowPromptCount === 0 && feedbackTotal === 0) {
+                   contentEl.innerHTML = '<p class="muted-text">No quality telemetry events yet.</p>';
+                   return;
+                }
+
+               const scoreDistHtml = [
+                 '<div class="section-subheading">Quality score distribution</div>',
+                 '<div class="memory-stats-bar" style="margin-bottom:0.2rem">',
+                 _statusChip('High', Number(scoreDist.high || 0), Number(scoreDist.high || 0) > 0 ? 'good' : 'neutral'),
+                 _statusChip('Medium', Number(scoreDist.medium || 0), Number(scoreDist.medium || 0) > 0 ? 'warn' : 'neutral'),
+                 _statusChip('Low', Number(scoreDist.low || 0), Number(scoreDist.low || 0) > 0 ? 'bad' : 'neutral'),
+                 '</div>',
+               ].join('');
+
+               const lowReasonHtml = lowReasons.length
+                 ? `<ul style="margin:0.35rem 0 0 1rem;padding:0">${lowReasons.map((entry) => `<li><span style="color:var(--muted)">${esc(String(entry.reason || 'unknown'))}</span> <strong>${Number(entry.count || 0)}</strong></li>`).join('')}</ul>`
+                 : '<p class="muted-text" style="margin:0.35rem 0 0">No reason breakdown available yet.</p>';
+
+               const lowConfidenceHtml = [
+                 '<div class="section-subheading" style="margin-top:0.5rem">Low-confidence prompts</div>',
+                 '<div class="memory-stats-bar" style="margin-bottom:0.2rem">',
+                 _statusChip('Count', lowPromptCount, lowPromptCount > 0 ? 'warn' : 'good'),
+                 `<span class="stat-chip"><span class="stat-chip-label">Low results:</span> ${Number(signals.search_low_results_incident || 0)}</span>`,
+                 `<span class="stat-chip"><span class="stat-chip-label">Partial recaps:</span> ${Number(signals.recap_partial_coverage_warning || 0)}</span>`,
+                 '</div>',
+                 lowReasonHtml,
+               ].join('');
+
+                const retryHtml = [
+                  '<div class="section-subheading" style="margin-top:0.6rem">Retry outcomes</div>',
+                  '<div class="memory-stats-bar" style="margin-bottom:0.2rem">',
+                 _statusChip('Attempted', Number(retry.attempted || 0), Number(retry.attempted || 0) > 0 ? 'warn' : 'neutral'),
+                 _statusChip('Improved', Number(retry.improved || 0), Number(retry.improved || 0) > 0 ? 'good' : 'neutral'),
+                 _statusChip('No improvement', Number(retry.no_improvement || 0), Number(retry.no_improvement || 0) > 0 ? 'warn' : 'neutral'),
+                 _statusChip('Failed', Number(retry.failed || 0), Number(retry.failed || 0) > 0 ? 'bad' : 'neutral'),
+                 _statusChip('Skipped', Number(retry.skipped || 0), Number(retry.skipped || 0) > 0 ? 'neutral' : 'good'),
+                  '</div>',
+                ].join('');
+
+                const feedbackHtml = [
+                  '<div class="section-subheading" style="margin-top:0.6rem">Discord answer feedback loop</div>',
+                  '<div class="memory-stats-bar" style="margin-bottom:0.2rem">',
+                  _statusChip('Helpful', feedbackHelpful, feedbackHelpful > 0 ? 'good' : 'neutral'),
+                  _statusChip('Not helpful', feedbackNotHelpful, feedbackNotHelpful > 0 ? 'warn' : 'neutral'),
+                  _statusChip('Total', feedbackTotal, feedbackTotal > 0 ? 'neutral' : 'good'),
+                  _statusChip('Helpful rate', feedbackHelpfulRate == null ? '—' : `${Math.round(feedbackHelpfulRate * 100)}%`, feedbackHelpfulRate == null ? 'neutral' : feedbackHelpfulRate >= 0.75 ? 'good' : feedbackHelpfulRate >= 0.5 ? 'warn' : 'bad'),
+                  '</div>',
+                ].join('');
+
+                const domainTrendHtml = domainTrends.length
+                  ? '<div class="section-subheading" style="margin-top:0.6rem">Domain trend summary</div>' +
+                    '<table style="width:100%"><thead><tr><th>Domain</th><th>Total</th><th>Failures</th><th>Mitigations</th><th>Trend</th></tr></thead><tbody>' +
+                    domainTrends.map((entry) => {
+                      const trend = String(entry.trend || 'stable');
+                      const tone = trend === 'improving' ? 'good' : trend === 'degrading' ? 'bad' : trend === 'watch' ? 'warn' : 'neutral';
+                      return '<tr>' +
+                        `<td style="text-transform:capitalize">${esc(String(entry.domain || 'general'))}</td>` +
+                        `<td>${Number(entry.total_events || 0)}</td>` +
+                        `<td>${Number(entry.failure_events || 0)}</td>` +
+                        `<td>${Number(entry.mitigation_events || 0)}</td>` +
+                        `<td>${_statusChip('Trend', trend, tone)}</td>` +
+                        '</tr>';
+                    }).join('') +
+                    '</tbody></table>'
+                  : '';
+
+                const recurringFailuresHtml = recurringFailures.length
+                  ? '<div class="section-subheading" style="margin-top:0.6rem">Top recurring quality failures</div>' +
+                    '<table style="width:100%"><thead><tr><th>Signal</th><th>Domain</th><th>Count</th></tr></thead><tbody>' +
+                    recurringFailures.map((entry) => {
+                      const name = String(entry.event || entry.signal || 'unknown').replaceAll('_', ' ');
+                      return '<tr>' +
+                        `<td style="text-transform:capitalize">${esc(name)}</td>` +
+                        `<td style="text-transform:capitalize;color:var(--muted)">${esc(String(entry.domain || 'general'))}</td>` +
+                        `<td>${Number(entry.count || 0)}</td>` +
+                        '</tr>';
+                    }).join('') +
+                    '</tbody></table>'
+                  : '';
+
+                const recentSignalHtml = mitigationSignals.length || degradeSignals.length
+                  ? [
+                    '<div class="section-subheading" style="margin-top:0.6rem">Recent mitigation/degrade signals</div>',
+                    '<div class="memory-stats-bar" style="margin-bottom:0.2rem">',
+                    ...mitigationSignals.map((entry) => _statusChip(
+                      String(entry.signal || 'mitigation').replaceAll('_', ' '),
+                      Number(entry.count || 0),
+                      'good',
+                    )),
+                    ...degradeSignals.map((entry) => _statusChip(
+                      String(entry.signal || 'degrade').replaceAll('_', ' '),
+                      Number(entry.count || 0),
+                      'warn',
+                    )),
+                    '</div>',
+                  ].join('')
+                  : '<div class="section-subheading" style="margin-top:0.6rem">Recent mitigation/degrade signals</div><p class="muted-text" style="margin:0.2rem 0 0">No mitigation/degrade signal slice available yet.</p>';
+
+                const topEventsHtml = topEvents.length
+                  ? '<div class="section-subheading" style="margin-top:0.6rem">Top telemetry events</div>' +
+                   '<table style="width:100%"><thead><tr>' +
+                   '<th>Event</th><th>Count</th>' +
+                   '</tr></thead><tbody>' +
+                   topEvents.map((entry) => {
+                       const name = String(entry.event || 'unknown').replaceAll('_', ' ');
+                       return '<tr>' +
+                           `<td style="text-transform:capitalize">${esc(name)}</td>` +
+                           `<td>${Number(entry.count || 0)}</td>` +
+                           '</tr>';
+                   }).join('') +
+                   '</tbody></table>'
+                  : '';
+
+                contentEl.innerHTML = `${scoreDistHtml}${lowConfidenceHtml}${retryHtml}${feedbackHtml}${domainTrendHtml}${recurringFailuresHtml}${recentSignalHtml}${topEventsHtml}`;
+          }).catch(() => {
+              const summaryEl = document.getElementById('quality-metrics-summary');
+              const contentEl = document.getElementById('quality-metrics-content');
+              if (summaryEl) summaryEl.innerHTML = _statusChip('Quality telemetry', 'Unavailable', 'bad');
+              if (contentEl) contentEl.innerHTML = '<p class="muted-text">Failed to load quality telemetry.</p>';
           });
       }
 
@@ -3435,7 +3918,7 @@
           try {
               const resp = await fetch('/api/sms/settings', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: _actionAuthHeaders('dashboard-ui'),
                   body: JSON.stringify({ user_id: Number(userId), phone_number: phone }),
               });
               const data = await resp.json();
@@ -3459,11 +3942,19 @@
           }
           const savedInspectorChannel = localStorage.getItem('openclaw_inspector_channel_id') || '';
           const savedInspectorThread = localStorage.getItem('openclaw_inspector_thread_id') || '';
+          const savedProfileAssistantChannel = localStorage.getItem('openclaw_profile_assistant_channel_id') || '';
+          const savedProfileAssistantThread = localStorage.getItem('openclaw_profile_assistant_thread_id') || '';
           if (savedInspectorChannel && document.getElementById('inspector-channel-id')) {
             document.getElementById('inspector-channel-id').value = savedInspectorChannel;
           }
           if (savedInspectorThread && document.getElementById('inspector-thread-id')) {
             document.getElementById('inspector-thread-id').value = savedInspectorThread;
+          }
+          if (savedProfileAssistantChannel && document.getElementById('profile-assistant-channel-id')) {
+            document.getElementById('profile-assistant-channel-id').value = savedProfileAssistantChannel;
+          }
+          if (savedProfileAssistantThread && document.getElementById('profile-assistant-thread-id')) {
+            document.getElementById('profile-assistant-thread-id').value = savedProfileAssistantThread;
           }
           const smsForm = document.getElementById('sms-settings-form');
           if (smsForm) smsForm.addEventListener('submit', saveSmsSettings);
@@ -3478,6 +3969,8 @@
           loadSchedules();
           loadApprovals();
           loadRunTimeline();
+          loadQualityEvals();
+          loadQualityMetrics();
           loadErrors();
           loadResponseStats();
           loadDreamHealth();
@@ -3488,6 +3981,7 @@
           loadConfigStatus();
           loadSmsPanel();
           loadChannelMemoryInspector({ quietIfMissing: true });
+          loadChannelProfileRecommendations({ quietIfMissing: true });
           refreshStatus();
         } catch (e) {
           document.getElementById("loading").innerHTML =
@@ -3496,7 +3990,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadApprovals(); loadRunTimeline(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadChannelProfileRecommendations({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -3631,6 +4125,77 @@
           }).catch(() => {});
       }
 
+      function _qualityMetricLabel(name) {
+          const labels = {
+              channel_leakage_prevention: 'Channel leakage prevention',
+              followup_anchor_correctness: 'Follow-up anchor correctness',
+              profile_adherence: 'Profile adherence',
+              table_readability_copy_safety: 'Table readability / copy safety',
+          };
+          return labels[name] || name;
+      }
+
+      function loadQualityEvals() {
+          fetch('/api/quality-evals?history=12')
+              .then(r => r.json())
+              .then(data => {
+                  const latest = data.latest || {};
+                  const summary = latest.summary || {};
+                  const rate = Number(summary.rate || 0);
+                  const body = document.getElementById('quality-eval-metrics-body');
+                  const trendEl = document.getElementById('quality-eval-trend');
+                  const summaryEl = document.getElementById('quality-eval-summary');
+                  const updatedEl = document.getElementById('quality-eval-updated');
+                  if (!body || !trendEl || !summaryEl || !updatedEl) return;
+
+                  const metrics = latest.metrics || {};
+                  const metricRows = Object.entries(metrics);
+                  body.innerHTML = '';
+                  if (metricRows.length === 0) {
+                      body.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:0.6rem">No metric samples yet.</td></tr>';
+                  } else {
+                      metricRows.forEach(([name, metric]) => {
+                          const m = metric || {};
+                          const row = document.createElement('tr');
+                          const metricRate = Number(m.rate || 0);
+                          const rateColor = metricRate >= 0.9 ? 'var(--mint-green)' : metricRate >= 0.75 ? 'var(--gold)' : 'var(--danger,#f85149)';
+                          row.innerHTML = `<td style="color:var(--muted)">${esc(_qualityMetricLabel(name))}</td>
+                              <td style="color:${rateColor};font-weight:700">${(metricRate * 100).toFixed(1)}%</td>
+                              <td>${Number(m.pass || 0)}</td>
+                              <td>${Number(m.fail || 0)}</td>
+                              <td>${Number(m.sample || 0)}</td>`;
+                          body.appendChild(row);
+                      });
+                  }
+
+                  const summaryTrend = (data.trend && data.trend.summary) || [];
+                  const last = summaryTrend[summaryTrend.length - 1];
+                  const prev = summaryTrend.length > 1 ? summaryTrend[summaryTrend.length - 2] : null;
+                  const delta = prev ? (Number(last.rate || 0) - Number(prev.rate || 0)) : 0;
+                  const deltaLabel = prev ? `${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}% vs prior` : 'No prior snapshot';
+                  const healthLabel = rate >= 0.9 ? 'Healthy' : rate >= 0.75 ? 'Watch' : 'Critical';
+                  const healthTone = rate >= 0.9 ? 'good' : rate >= 0.75 ? 'warn' : 'bad';
+                  trendEl.innerHTML = [
+                      _statusChip('Quality', healthLabel, healthTone),
+                      `<span class="stat-chip"><span class="stat-chip-label">Overall:</span> ${(rate * 100).toFixed(1)}%</span>`,
+                      `<span class="stat-chip"><span class="stat-chip-label">Pass:</span> ${Number(summary.pass || 0)}</span>`,
+                      `<span class="stat-chip"><span class="stat-chip-label">Fail:</span> ${Number(summary.fail || 0)}</span>`,
+                      `<span class="stat-chip"><span class="stat-chip-label">Trend:</span> ${esc(deltaLabel)}</span>`,
+                  ].join('');
+
+                  const ts = latest.timestamp ? new Date(Number(latest.timestamp) * 1000).toLocaleString() : 'unknown';
+                  const sampleSize = Number(latest.sample_size || 0);
+                  summaryEl.textContent = sampleSize > 0
+                    ? `Latest scorecard evaluates ${sampleSize} recent runs/responses.`
+                    : 'No recent scored responses yet. Keep interacting, then refresh this panel.';
+                  updatedEl.textContent = `Last scorecard: ${ts}`;
+              })
+              .catch(() => {
+                  const summaryEl = document.getElementById('quality-eval-summary');
+                  if (summaryEl) summaryEl.textContent = 'Failed to load quality scorecards.';
+              });
+      }
+
       // D-4: Scheduled Tasks
       function loadSchedules() {
           fetch('/api/schedules').then(r => r.json()).then(data => {
@@ -3746,7 +4311,7 @@
           if (!requestId) return;
           fetch(`/api/approvals/${encodeURIComponent(requestId)}/decision`, {
               method: 'POST',
-              headers: {'Content-Type': 'application/json'},
+              headers: _actionAuthHeaders('dashboard-ui'),
               body: JSON.stringify({approved, resolver_name: 'dashboard'}),
           }).then(r => r.json()).then(data => {
               if (!data.ok) {
@@ -3775,6 +4340,65 @@
           });
       }
 
+      function renderRunDetails(run) {
+        const summaryEl = document.getElementById('run-details-summary');
+        const explainEl = document.getElementById('run-details-explainability');
+        if (!summaryEl || !explainEl) return;
+        if (!run) {
+              summaryEl.textContent = 'Select a run row to inspect scope, lock, anchor, and effective profile explainability.';
+              explainEl.innerHTML = '';
+              return;
+          }
+
+          const explain = run.explainability || {};
+          const scopeMode = explain.scope_mode || run.scope_mode || 'unknown';
+          const lockMode = explain.lock_mode || run.lock_mode || 'none';
+          const anchorId = explain.anchor_id || run.anchor_id || 'none';
+          const anchorAge = explain.anchor_age_seconds ?? run.anchor_age_seconds ?? run.anchor_age;
+          const profile = explain.effective_profile_values || run.effective_profile_values || run.profile_values || {};
+          const profileSummary = Object.entries(profile).map(([k, v]) => `${k}:${v}`).join(' • ') || 'none';
+          const explainFields = [
+            { label: 'Scope', value: scopeMode },
+            { label: 'Lock', value: lockMode },
+            { label: 'Anchor', value: anchorId },
+            { label: 'Anchor age', value: anchorAge == null ? '—' : `${anchorAge}s` },
+            { label: 'Trace ID', value: (run.trace_id || explain.trace_id || '—') },
+            { label: 'Effective profile', value: profileSummary }
+          ];
+
+          // Add any additional explainability fields from backend
+          // (e.g., context_window, context_tokens, etc.)
+          const extraFields = [
+            { key: 'context_window', label: 'Context window' },
+            { key: 'context_tokens', label: 'Context tokens' },
+            { key: 'profile_source', label: 'Profile source' },
+            { key: 'profile_id', label: 'Profile ID' },
+            { key: 'profile_age_seconds', label: 'Profile age (s)' },
+            { key: 'explainability_note', label: 'Explainability note' }
+          ];
+          extraFields.forEach(f => {
+            let val = explain[f.key] ?? run[f.key];
+            if (val !== undefined && val !== null && val !== '') {
+              explainFields.push({ label: f.label, value: val });
+            }
+          });
+
+          const when = run.timestamp ? new Date(run.timestamp * 1000).toLocaleString() : '—';
+          const status = String(run.status || 'unknown').toLowerCase();
+          const statusTone = status === 'success' ? 'good' : status === 'error' ? 'bad' : 'warn';
+          const question = String(run.question || '').trim();
+          const questionPreview = question ? (question.length > 90 ? `${question.slice(0, 90)}…` : question) : 'No prompt text captured.';
+
+          summaryEl.innerHTML = `${_statusChip('Run', status.toUpperCase(), statusTone)} <code>${esc(run.model || 'unknown')}</code> • user ${esc(String(run.user || '0'))} • ${esc(when)}<br/><span style="color:var(--muted);font-size:0.78rem">Prompt: ${esc(questionPreview)}</span>`;
+          explainEl.innerHTML = explainFields.map(f => {
+            // Add tooltip for complex fields (profile values)
+            if (f.label === 'Effective profile' && f.value !== 'none') {
+              return `<span class=\"stat-chip\" title=\"${esc(String(f.value))}\"><span class=\"stat-chip-label\">${esc(f.label)}:</span> <span style=\"text-decoration:underline dotted;cursor:help\">${esc(String(f.value).slice(0, 40))}${f.value.length > 40 ? '…' : ''}</span></span>`;
+            }
+            return `<span class=\"stat-chip\"><span class=\"stat-chip-label\">${esc(f.label)}:</span> ${esc(String(f.value))}</span>`;
+          }).join('');
+      }
+
       function applyRunFilters() {
           const status = (document.getElementById('run-filter-status')?.value || '').toLowerCase();
           const model = (document.getElementById('run-filter-model')?.value || '').toLowerCase();
@@ -3800,13 +4424,17 @@
               filtered.slice(0, 120).forEach(run => {
                   const tr = document.createElement('tr');
                   const when = run.timestamp ? new Date(run.timestamp * 1000).toLocaleString() : '—';
-                  const statusColor = run.status === 'success' ? 'var(--mint-green)' : 'var(--danger,#f85149)';
+                  const isSuccess = run.status === 'success';
+                  const statusColor = isSuccess ? 'var(--mint-green)' : 'var(--danger,#f85149)';
+                  const statusBg = isSuccess ? 'rgba(63, 185, 80, 0.15)' : 'rgba(248, 81, 73, 0.18)';
+                  tr.style.cursor = 'pointer';
                   tr.innerHTML = `<td style="color:var(--muted)">${esc(when)}</td>
-                      <td style="color:${statusColor};font-weight:600">${esc((run.status || 'unknown').toUpperCase())}</td>
+                      <td><span class="stat-chip" style="margin:0;background:${statusBg};color:${statusColor};font-weight:700">${esc((run.status || 'unknown').toUpperCase())}</span></td>
                       <td><code>${esc(run.model || 'unknown')}</code></td>
                       <td>${esc(String(run.user || '0'))}</td>
                       <td>${esc(String(run.latency_ms || 0))} ms</td>
                       <td style="max-width:20rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)">${esc(run.error || '—')}</td>`;
+                  tr.onclick = () => renderRunDetails(run);
                   runsBody.appendChild(tr);
               });
           }
@@ -3816,7 +4444,10 @@
           const avgLatency = filtered.length
               ? Math.round(filtered.reduce((acc, run) => acc + (run.latency_ms || 0), 0) / filtered.length)
               : 0;
-          summary.textContent = `${filtered.length} runs • ${failures} failures • avg latency ${avgLatency} ms`;
+          summary.textContent = filtered.length
+              ? `${filtered.length} runs • ${failures} failures • avg latency ${avgLatency} ms • click a row for explainability details`
+              : '0 runs • adjust filters to broaden results';
+          renderRunDetails(filtered[0] || null);
       }
 
       function _attachTypeTooltips() {
@@ -3858,7 +4489,16 @@
       }
       function deleteTask(taskId) {
         if (!confirm(`Delete task "${taskId}"?`)) return;
-        fetch(`/api/schedules/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+        const token = (
+          localStorage.getItem('openclaw_api_action_token') ||
+          (typeof window !== 'undefined' ? window.OPENCLAW_API_ACTION_TOKEN : '')
+        ).trim();
+        const headers = { 'X-OpenClaw-Actor': 'dashboard-ui' };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+          headers['X-OpenClaw-Token'] = token;
+        }
+        fetch(`/api/schedules/${encodeURIComponent(taskId)}`, { method: 'DELETE', headers })
           .then(r => r.json())
           .then(data => {
             if (data.ok) {
@@ -4211,6 +4851,108 @@
           settled = false; simTicks = Math.max(simTicks, MAX_TICKS - 20);
           if (!animId) tick();
         });
+      }
+    </script>
+
+    <!-- Agent Chat JS -->
+    <script>
+      // ── Ask OpenClaw Agent ────────────────────────────────────────────────
+      let _agentHistory = [];
+
+      async function dashAsk(quickPrompt) {
+        const promptEl = document.getElementById('agent-prompt');
+        const prompt = (quickPrompt || promptEl.value || '').trim();
+        if (!prompt) return;
+
+        const model = document.getElementById('agent-model').value;
+        const sendBtn = document.getElementById('agent-send-btn');
+        const loadingEl = document.getElementById('agent-loading');
+        const wrapEl = document.getElementById('agent-response-wrap');
+        const responseEl = document.getElementById('agent-response');
+        const metaEl = document.getElementById('agent-response-meta');
+
+        sendBtn.disabled = true;
+        loadingEl.style.display = 'block';
+        wrapEl.style.display = 'none';
+
+        const startMs = Date.now();
+        try {
+          const res = await fetch('/api/agent/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt, model, history: _agentHistory }),
+          });
+          const data = await res.json();
+          const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+
+          if (data.error) {
+            responseEl.textContent = '\u274c ' + data.error;
+          } else {
+            responseEl.textContent = data.response || '(empty response)';
+            _agentHistory.push({ role: 'user', content: prompt });
+            _agentHistory.push({ role: 'model', content: data.response || '' });
+            if (_agentHistory.length > 20) _agentHistory = _agentHistory.slice(-20);
+          }
+          metaEl.textContent = 'Model: ' + (data.model || model) + '  \u2022  ' + elapsed + 's' + (data.tokens ? '  \u2022  ~' + data.tokens + ' tokens' : '');
+          wrapEl.style.display = 'block';
+          if (!quickPrompt) promptEl.value = '';
+        } catch (err) {
+          responseEl.textContent = '\u274c Request failed: ' + err.message;
+          metaEl.textContent = '';
+          wrapEl.style.display = 'block';
+        } finally {
+          sendBtn.disabled = false;
+          loadingEl.style.display = 'none';
+        }
+      }
+
+      async function generateWeeklyRecap() {
+        const sendBtn = document.getElementById('agent-send-btn');
+        const loadingEl = document.getElementById('agent-loading');
+        const wrapEl = document.getElementById('agent-response-wrap');
+        const responseEl = document.getElementById('agent-response');
+        const metaEl = document.getElementById('agent-response-meta');
+
+        sendBtn.disabled = true;
+        loadingEl.style.display = 'block';
+        wrapEl.style.display = 'none';
+
+        const startMs = Date.now();
+        try {
+          const res = await fetch('/api/recap/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ days: 7, style: 'highlights' }),
+          });
+          const data = await res.json();
+          const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
+          responseEl.textContent = data.report || data.error || '(no content)';
+          metaEl.textContent = 'Weekly Recap  \u2022  Model: ' + (data.model || 'auto') + '  \u2022  ' + elapsed + 's';
+          wrapEl.style.display = 'block';
+        } catch (err) {
+          responseEl.textContent = '\u274c Recap failed: ' + err.message;
+          wrapEl.style.display = 'block';
+        } finally {
+          sendBtn.disabled = false;
+          loadingEl.style.display = 'none';
+        }
+      }
+
+      function copyAgentResponse() {
+        const text = document.getElementById('agent-response').textContent;
+        navigator.clipboard.writeText(text).then(() => {
+          const btn = event.target;
+          const orig = btn.textContent;
+          btn.textContent = '\u2705 Copied!';
+          setTimeout(() => { btn.textContent = orig; }, 1500);
+        });
+      }
+
+      function clearAgentChat() {
+        _agentHistory = [];
+        document.getElementById('agent-response-wrap').style.display = 'none';
+        document.getElementById('agent-prompt').value = '';
+        document.getElementById('agent-prompt').focus();
       }
     </script>
   </body>

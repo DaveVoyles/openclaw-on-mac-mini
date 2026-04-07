@@ -6,9 +6,17 @@ Tasks persist across restarts via a JSON file.
 
 import asyncio
 import datetime
+
+
+def _parse_utc(dt_str):
+    dt = datetime.datetime.fromisoformat(dt_str)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
 import json
 import logging
 import os
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
@@ -52,14 +60,14 @@ class ScheduledTask:
     @property
     def next_run_str(self) -> str:
         """Human-readable next run time."""
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
 
         # Cron expression takes priority
         if self.cron_expression:
             try:
                 from croniter import croniter
                 cron = croniter(self.cron_expression, now)
-                next_dt = cron.get_next(datetime.datetime)
+                next_dt = cron.get_next(datetime.datetime).astimezone(datetime.timezone.utc).astimezone(datetime.timezone.utc)
                 return next_dt.strftime("%a %H:%M")
             except Exception:
                 return self.cron_expression
@@ -67,7 +75,7 @@ class ScheduledTask:
         if self.interval_minutes > 0:
             if self.last_run:
                 try:
-                    last = datetime.datetime.fromisoformat(self.last_run)
+                    last = _parse_utc(self.last_run)
                     next_run = last + datetime.timedelta(minutes=self.interval_minutes)
                     if next_run < now:
                         return "overdue"
@@ -77,7 +85,7 @@ class ScheduledTask:
                     pass
             return "soon"
         # Daily schedule
-        target = now.replace(hour=self.cron_hour, minute=self.cron_minute, second=0, microsecond=0)
+        target = now.replace(hour=self.cron_hour, minute=self.cron_minute, second=0, microsecond=0, tzinfo=datetime.timezone.utc)
         if target <= now:
             target += datetime.timedelta(days=1)
         delta = target - now
@@ -218,7 +226,7 @@ class TaskScheduler:
 
     async def _check_and_run(self) -> None:
         """Execute any due tasks."""
-        now = datetime.datetime.now()
+        now = datetime.datetime.now(datetime.timezone.utc)
         for task in self._tasks.values():
             if not task.enabled:
                 continue
@@ -243,7 +251,7 @@ class TaskScheduler:
             if not task.last_run:
                 return True
             try:
-                last = datetime.datetime.fromisoformat(task.last_run)
+                last = _parse_utc(task.last_run)
                 return (now - last).total_seconds() >= task.interval_minutes * 60
             except ValueError:
                 return True
@@ -265,64 +273,116 @@ class TaskScheduler:
 
         # Prompt job — send to LLM with full tool access
         if task.prompt:
-            log.info("Executing prompt job %s: %s", task.task_id, task.prompt[:80])
-            try:
-                from llm import chat
-                response_text, _, model_used = await chat(
-                    task.prompt,
-                    model_preference="gemini",
-                )
-                result = response_text or "No response from LLM"
-                task.last_result = result[:500]
-            except asyncio.TimeoutError:
-                task.last_result = "Error: Prompt job timed out"
-                log.error("Prompt job %s timed out", task.task_id)
-            except Exception as e:
-                task.last_result = f"❌ Prompt job failed: {e}"
-                log.error("Prompt job %s failed: %s", task.task_id, e)
-            finally:
-                async with self._running_lock:
-                    self._running_tasks.discard(task.task_id)
+            from metrics_collector import get_collector
+            from trace_context import trace_context
 
-            task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            task.run_count += 1
-            self._save()
+            with trace_context(command=task.action or "prompt-job", user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0):
+                log.info("Executing prompt job %s: %s", task.task_id, task.prompt[:80])
+                start = time.time()
+                success = True
+                error_type = None
+                try:
+                    from llm import chat
 
-            # Post result to Discord if configured
-            if task.notify_channel_id and self.notify_callback:
-                result_text = task.last_result or ""
-                is_alert = any(kw in result_text.lower() for kw in _ALERT_PATTERNS)
-                should_notify = (not task.alert_only) or is_alert
-                if should_notify:
-                    try:
-                        await self.notify_callback(task.task_id, task.action or "prompt-job", result_text, is_alert)
-                    except Exception as e:
-                        log.error("Scheduler notify callback failed for %s: %s", task.task_id, e)
-            return
+                    response_text, _, model_used = await chat(
+                        task.prompt,
+                        model_preference="gemini",
+                    )
+                    result = response_text or "No response from LLM"
+                    task.last_result = result[:500]
+                except asyncio.TimeoutError:
+                    task.last_result = "Error: Prompt job timed out"
+                    log.error("Prompt job %s timed out", task.task_id)
+                    success = False
+                    error_type = "timeout"
+                except Exception as e:
+                    task.last_result = f"❌ Prompt job failed: {e}"
+                    log.error("Prompt job %s failed: %s", task.task_id, e)
+                    success = False
+                    error_type = type(e).__name__
+                finally:
+                    duration = time.time() - start
+                    get_collector().record_command(
+                        command=task.action or "prompt-job",
+                        user=str(task.created_by or "scheduler"),
+                        workspace="scheduler",
+                        duration=duration,
+                        success=success,
+                        error_type=error_type,
+                    )
+                    async with self._running_lock:
+                        self._running_tasks.discard(task.task_id)
+
+                task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                task.run_count += 1
+                self._save()
+
+                # Post result to Discord if configured
+                if task.notify_channel_id and self.notify_callback:
+                    result_text = task.last_result or ""
+                    is_alert = any(kw in result_text.lower() for kw in _ALERT_PATTERNS)
+                    should_notify = (not task.alert_only) or is_alert
+                    if should_notify:
+                        try:
+                            await self.notify_callback(task.task_id, task.action or "prompt-job", result_text, is_alert)
+                        except Exception as e:
+                            log.error("Scheduler notify callback failed for %s: %s", task.task_id, e)
+                return
 
         # Skill job — existing behavior
         skill_fn = self._skill_registry.get(task.action)
         if skill_fn is None:
-            task.last_result = f"Unknown skill: {task.action}"
-            task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
-            self._save()
-            async with self._running_lock:
-                self._running_tasks.discard(task.task_id)
+            from metrics_collector import get_collector
+            from trace_context import trace_context
+
+            with trace_context(command=task.action, user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0):
+                task.last_result = f"Unknown skill: {task.action}"
+                task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                self._save()
+                get_collector().record_command(
+                    command=task.action,
+                    user=str(task.created_by or "scheduler"),
+                    workspace="scheduler",
+                    duration=0.0,
+                    success=False,
+                    error_type="unknown_skill",
+                )
+                async with self._running_lock:
+                    self._running_tasks.discard(task.task_id)
             return
 
-        log.info("Executing scheduled task %s: %s(%s)", task.task_id, task.action, task.args)
-        try:
-            result = await asyncio.wait_for(skill_fn(**task.args), timeout=300)
-            task.last_result = result[:500] if result else "OK"
-        except asyncio.TimeoutError:
-            task.last_result = "Error: Task timed out after 5 minutes"
-            log.error("Scheduled task %s timed out", task.task_id)
-        except Exception as e:
-            task.last_result = f"Error: {e}"
-            log.error("Scheduled task %s failed: %s", task.task_id, e)
-        finally:
-            async with self._running_lock:
-                self._running_tasks.discard(task.task_id)
+        from metrics_collector import get_collector
+        from trace_context import trace_context
+        with trace_context(command=task.action, user_id=task.created_by or 0, channel_id=task.notify_channel_id or 0):
+            log.info("Executing scheduled task %s: %s(%s)", task.task_id, task.action, task.args)
+            start = time.time()
+            success = True
+            error_type = None
+            try:
+                result = await asyncio.wait_for(skill_fn(**task.args), timeout=300)
+                task.last_result = result[:500] if result else "OK"
+            except asyncio.TimeoutError:
+                task.last_result = "Error: Task timed out after 5 minutes"
+                log.error("Scheduled task %s timed out", task.task_id)
+                success = False
+                error_type = "timeout"
+            except Exception as e:
+                task.last_result = f"Error: {e}"
+                log.error("Scheduled task %s failed: %s", task.task_id, e)
+                success = False
+                error_type = type(e).__name__
+            finally:
+                duration = time.time() - start
+                get_collector().record_command(
+                    command=task.action,
+                    user=str(task.created_by or "scheduler"),
+                    workspace="scheduler",
+                    duration=duration,
+                    success=success,
+                    error_type=error_type,
+                )
+                async with self._running_lock:
+                    self._running_tasks.discard(task.task_id)
 
         task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
         task.run_count += 1
@@ -381,6 +441,14 @@ async def create_scheduled_task(
         args = _json.loads(args_json) if args_json.strip() not in ("", "{}") else {}
     except _json.JSONDecodeError as e:
         return f"❌ Invalid args_json: {e}"
+
+    if cron_expression:
+        try:
+            from croniter import croniter
+            if not croniter.is_valid(cron_expression):
+                return f"❌ Invalid cron expression `{cron_expression}`. Expected format: minute hour day month weekday (e.g. `0 9 * * 1` for Mondays at 9am)."
+        except Exception as e:
+            return f"❌ Could not validate cron expression: {e}"
 
     if prompt:
         task = scheduler.create(

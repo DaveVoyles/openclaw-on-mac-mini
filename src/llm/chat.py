@@ -40,8 +40,11 @@ from trace_context import get_trace_id
 
 from .context import (
     _auto_recall_context,
+    _build_context_explainability,
     _extract_context_controls,
     _extract_cross_channel_opt_in,
+    _format_context_explainability_note,
+    _merge_structured_context_controls,
     _strip_recalled_prefix,
     _to_content,
     _trim_history,
@@ -153,6 +156,7 @@ def _apply_route_hints(model_message: str, route_info: dict[str, Any]) -> str:
         "output_style",
         "emoji_level",
         "detail_level",
+        "retrieval_profile",
         "pack",
         "persona",
     ):
@@ -181,6 +185,7 @@ async def chat_stream(
     on_tool_call: Any | None = None,
     model_preference: str = "auto",
     tool_declarations: list[dict[str, Any]] | None = None,
+    context_controls: dict[str, Any] | None = None,
 ):
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
     log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
@@ -191,12 +196,22 @@ async def chat_stream(
         _model_hint = "gemini"
     else:
         _model_hint = "gemini"
-    history = await _trim_history(history or [], model_hint=_model_hint)
+    context_quality: dict[str, Any] = {}
+    history = await _trim_history(
+        history or [],
+        model_hint=_model_hint,
+        context_quality=context_quality,
+    )
 
     _routing_notes: list[str] = []
 
     cleaned_user_message, cross_channel = _extract_cross_channel_opt_in(user_message)
-    cleaned_user_message, context_controls = _extract_context_controls(cleaned_user_message)
+    cleaned_user_message, legacy_context_controls = _extract_context_controls(cleaned_user_message)
+    cross_channel, context_controls = _merge_structured_context_controls(
+        cross_channel=cross_channel,
+        controls=legacy_context_controls,
+        structured_controls=context_controls,
+    )
     # --- hard-context-boundaries and followup-anchor-mode ---
     followup = False
     followup_phrases = ("follow up", "what about", "and ", "also ", "more on ", "next ", "continue ")
@@ -206,6 +221,7 @@ async def chat_stream(
     recalled_context = await _auto_recall_context(
         cleaned_user_message,
         cross_channel=cross_channel,
+        routing_notes=_routing_notes,
         followup=followup,
         reset_context=bool(context_controls.get("reset_context")),
         use_prior_report=bool(context_controls.get("use_prior_report")),
@@ -218,6 +234,25 @@ async def chat_stream(
         model_message = cleaned_user_message
     # Add metadata for cross-channel or anchor mode
     metadata = {}
+    metadata["context_quality"] = dict(context_quality)
+    explainability = _build_context_explainability(
+        cross_channel=cross_channel,
+        followup=followup,
+        use_prior_report=bool(context_controls.get("use_prior_report")),
+        anchor_override=context_controls.get("anchor_override"),  # type: ignore[arg-type]
+        disable_anchor=bool(context_controls.get("disable_anchor")),
+    )
+    metadata["explainability"] = explainability
+    metadata["explainability_note"] = _format_context_explainability_note(explainability)
+    if context_quality.get("compression_applied"):
+        _routing_notes.append(
+            "Context compressed "
+            f"(ratio {context_quality.get('compression_ratio', 1.0):.2f}, "
+            f"facts {context_quality.get('retained_key_facts_count', 0)})"
+        )
+        drift = str(context_quality.get("drift_risk") or "")
+        if drift and drift != "low":
+            _routing_notes.append(f"Context drift risk: {drift}")
     if cross_channel:
         metadata["context_mode"] = "cross-channel"
         metadata["context_badge"] = "🌐 Cross-channel"
@@ -366,6 +401,9 @@ async def chat_stream(
             _routing_notes.append(f"Persona: {route_info.get('persona')}")
     elif route_info.get("strategy") == "no-tools":
         _routing_notes.append("Tool use disabled for this internal request")
+    suppressed_tools = [str(name) for name in (route_info.get("guard_suppressed") or []) if name]
+    if suppressed_tools:
+        _routing_notes.append("Router guard suppressed: " + ", ".join(suppressed_tools[:6]))
     model_message = _apply_route_hints(model_message, route_info)
     model_name = model.model_name if hasattr(model, "model_name") else "unknown"
 
@@ -425,49 +463,6 @@ async def chat_stream(
     yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes, **metadata}
     return
 
-    # No-tool Gemini streaming path (dead code kept for future use)
-    gemini_history = [_to_content(msg) for msg in history]
-    chat_session = _client.chats.create(
-        model=model.model_name, config=model.config, history=gemini_history,
-    )
-
-    loop = asyncio.get_running_loop()
-    _rate_limiter.record()
-
-    try:
-        response = await loop.run_in_executor(
-            None, lambda: chat_session.send_message_stream(model_message)
-        )
-    except Exception as e:
-        yield f"❌ **LLM Error:** {e}", True, {"model_used": model_name, "updated_history": history, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
-        return
-
-    accumulated = ""
-    last_chunk = None
-    try:
-        for chunk in response:
-            last_chunk = chunk
-            try:
-                text = chunk.text
-            except (ValueError, AttributeError):
-                continue
-            if text:
-                accumulated += text
-                yield accumulated, False, {"model_used": model_name, "needs_tools": False, **metadata}
-    except Exception as e:
-        if not accumulated:
-            accumulated = f"❌ Streaming error: {e}"
-
-    if last_chunk is not None:
-        try:
-            await _record_usage(last_chunk)
-        except Exception as exc:
-            log.debug("Stream usage recording failed: %s", exc)
-
-    updated_history = _extract_history(chat_session)
-    updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
-    yield accumulated, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
-
 
 async def chat(
     user_message: str,
@@ -496,7 +491,12 @@ async def chat(
         _model_hint = "gemini"
     else:
         _model_hint = "gemini"
-    history = await _trim_history(history or [], model_hint=_model_hint)
+    context_quality: dict[str, Any] = {}
+    history = await _trim_history(
+        history or [],
+        model_hint=_model_hint,
+        context_quality=context_quality,
+    )
 
     cleaned_user_message, cross_channel = _extract_cross_channel_opt_in(user_message)
     cleaned_user_message, context_controls = _extract_context_controls(cleaned_user_message)
