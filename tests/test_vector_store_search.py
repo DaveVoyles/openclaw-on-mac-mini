@@ -76,6 +76,12 @@ class _FakeCollection:
     def upsert(self, **kwargs):
         self.upsert_calls.append(kwargs)
 
+    def get(self, where=None, include=None, ids=None):
+        return {"ids": [], "metadatas": [], "documents": []}
+
+    def delete(self, ids=None):
+        pass
+
 
 class _CompactionCollection:
     def __init__(self, ids, metadatas):
