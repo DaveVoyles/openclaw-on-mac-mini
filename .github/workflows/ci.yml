@@ -134,7 +134,7 @@ jobs:
         run: |
           mkdir -p ${{ matrix.memory-dir }}
           python -m pytest tests/ \
-            -x -q --tb=short \
+            -x -q --tb=short -n 0 \
             --ignore=tests/test_llm_chat.py \
             --ignore=tests/test_llm_ratelimiter.py \
             --ignore=tests/test_model_selection.py \
