@@ -212,11 +212,13 @@ class TestChatRouting:
     @pytest.mark.asyncio
     async def test_chat_returns_rate_limit_message_when_exhausted(self, monkeypatch):
         """When rate limit is exhausted, chat returns a warning message."""
-        monkeypatch.setattr(llm, "LOCAL_LLM_ENABLED", False)
+        import sys
+        chat_mod = sys.modules["llm.chat"]
+        monkeypatch.setattr(chat_mod, "LOCAL_LLM_ENABLED", False)
         # Exhaust the rate limiter
         rl = llm.RateLimiter(per_minute=1, per_hour=1)
         rl.record()
-        monkeypatch.setattr(llm, "_rate_limiter", rl)
+        monkeypatch.setattr(chat_mod, "_rate_limiter", rl)
 
         text, history, model = await llm.chat("hello")
         assert "Rate limit" in text
@@ -224,10 +226,12 @@ class TestChatRouting:
     @pytest.mark.asyncio
     async def test_chat_returns_tuple_of_three(self, monkeypatch):
         """chat() always returns (text, history, model_used)."""
-        monkeypatch.setattr(llm, "LOCAL_LLM_ENABLED", False)
+        import sys
+        chat_mod = sys.modules["llm.chat"]
+        monkeypatch.setattr(chat_mod, "LOCAL_LLM_ENABLED", False)
         rl = llm.RateLimiter(per_minute=1, per_hour=1)
         rl.record()
-        monkeypatch.setattr(llm, "_rate_limiter", rl)
+        monkeypatch.setattr(chat_mod, "_rate_limiter", rl)
         result = await llm.chat("test")
         assert isinstance(result, tuple)
         assert len(result) == 3

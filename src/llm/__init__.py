@@ -61,9 +61,17 @@ from .chat import (  # noqa: F401
     chat_deep,
     chat_stream,
     get_rate_info,
-    is_configured,
     summarize_conversation,
 )
+
+
+def is_configured() -> bool:
+    """Return True if at least one LLM backend is configured.
+
+    Reads GOOGLE_API_KEY and LOCAL_LLM_ENABLED from this package's namespace
+    so that tests can patch them with ``monkeypatch.setattr(llm, ...)``.
+    """
+    return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED
 from .context import (  # noqa: F401
     _CONTEXT_LIMITS,
     _auto_recall_context,
