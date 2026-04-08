@@ -25,11 +25,26 @@ import pytest  # noqa: E402
 def _patch_memory_dirs(tmp_path, monkeypatch):
     """Redirect /memory paths to a temp dir so tests never touch the real FS."""
     import memory
+    import memory_helpers
+    import memory_conversation
+    import memory_preferences
+    import memory_session
 
     mem_dir = tmp_path / "memory"
-    monkeypatch.setattr(memory, "MEMORY_DIR", mem_dir)
-    monkeypatch.setattr(memory, "THREADS_DIR", mem_dir / "threads")
-    monkeypatch.setattr(memory, "SUMMARIES_DIR", mem_dir / "summaries")
+    # Patch the thin hub (backward compat) and each sub-module that owns the constants
+    for mod in (memory, memory_helpers):
+        monkeypatch.setattr(mod, "MEMORY_DIR", mem_dir)
+        monkeypatch.setattr(mod, "THREADS_DIR", mem_dir / "threads")
+        monkeypatch.setattr(mod, "SUMMARIES_DIR", mem_dir / "summaries")
+    # memory_conversation imports THREADS_DIR directly from memory_helpers
+    monkeypatch.setattr(memory_conversation, "THREADS_DIR", mem_dir / "threads")
+    # memory_session imports SUMMARIES_DIR/MEMORY_DIR from memory_helpers
+    monkeypatch.setattr(memory_session, "MEMORY_DIR", mem_dir)
+    monkeypatch.setattr(memory_session, "SUMMARIES_DIR", mem_dir / "summaries")
+    monkeypatch.setattr(memory_session, "HANDOVER_DIR", mem_dir / "handovers")
+    # memory_preferences imports MEMORY_DIR from memory_helpers
+    monkeypatch.setattr(memory_preferences, "MEMORY_DIR", mem_dir)
+    monkeypatch.setattr(memory_preferences, "_PREFS_DIR", mem_dir / "preferences")
 
 
 @pytest.fixture
