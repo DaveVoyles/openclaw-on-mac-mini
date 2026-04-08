@@ -16,6 +16,23 @@ import runtime_state as runtime_state_mod  # noqa: E402
 from llm import chat_stream  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _reset_runtime_state_before_each_test(tmp_path, monkeypatch):
+    """Guarantee a clean runtime-state slate before (and after) every test.
+
+    This prevents state leakage between tests when running under xdist where
+    all tests in this file share the same worker process.  Without this,
+    a test that fails mid-run will skip its manual cleanup calls and leave
+    dirty anchor/lock state that causes subsequent tests to fail.
+    """
+    monkeypatch.setenv("THREAD_DB_PATH", str(tmp_path / "openclaw-scope-test.db"))
+    runtime_state_mod._reset_channel_profile_store_for_tests()
+    runtime_state_mod.reset_anchor_state()
+    yield
+    runtime_state_mod.reset_anchor_state()
+    runtime_state_mod._reset_channel_profile_store_for_tests()
+
+
 @pytest.mark.asyncio
 async def test_trim_history_uses_salience_compression_with_anti_drift_metadata():
     history: list[dict] = [
