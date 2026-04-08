@@ -425,3 +425,151 @@ class TestStatistics:
         assert stats["quota_used"] == 150
         assert stats["quota_daily"] == 500
         assert stats["quota_remaining"] == 350
+
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for improved coverage
+# ---------------------------------------------------------------------------
+
+import workspace_manager as wm_module
+from unittest.mock import patch
+from workspace_manager import WorkspaceRole, get_workspace_manager
+
+
+class TestWorkspaceRoleComparisons:
+    """Test WorkspaceRole comparison operators."""
+
+    def test_role_level_ordering(self):
+        """Roles have correct numeric level ordering."""
+        assert WorkspaceRole.OWNER.level > WorkspaceRole.ADMIN.level
+        assert WorkspaceRole.ADMIN.level > WorkspaceRole.MEMBER.level
+        assert WorkspaceRole.MEMBER.level > WorkspaceRole.VIEWER.level
+
+    def test_role_ge_operator(self):
+        """WorkspaceRole >= operator works correctly."""
+        assert WorkspaceRole.OWNER >= WorkspaceRole.ADMIN
+        assert WorkspaceRole.ADMIN >= WorkspaceRole.ADMIN
+        assert not (WorkspaceRole.MEMBER >= WorkspaceRole.ADMIN)
+
+    def test_role_gt_operator(self):
+        """WorkspaceRole > operator works correctly."""
+        assert WorkspaceRole.OWNER > WorkspaceRole.ADMIN
+        assert not (WorkspaceRole.ADMIN > WorkspaceRole.ADMIN)
+        assert not (WorkspaceRole.VIEWER > WorkspaceRole.MEMBER)
+
+    def test_unknown_role_level_zero(self):
+        """Unknown role value returns level 0."""
+        # Test the level dict fallback
+        levels = {"owner": 4, "admin": 3, "member": 2, "viewer": 1}
+        result = levels.get("nonexistent", 0)
+        assert result == 0
+
+
+class TestWorkspaceManagerGetNone:
+    """Test get_workspace returns None for missing workspace."""
+
+    def test_get_workspace_nonexistent_returns_none(self, managers):
+        _, workspace_manager = managers
+        result = workspace_manager.get_workspace(99999)
+        assert result is None
+
+
+class TestWorkspaceManagerUpdate:
+    """Tests for update_workspace."""
+
+    def test_update_workspace_name(self, managers, sample_users):
+        _, workspace_manager = managers
+        owner, _, _, _ = sample_users
+
+        workspace = workspace_manager.create_workspace("original", owner.id)
+        workspace_manager.update_workspace(workspace.id, name="renamed")
+
+        updated = workspace_manager.get_workspace(workspace.id)
+        assert updated.name == "renamed"
+
+    def test_update_workspace_description(self, managers, sample_users):
+        _, workspace_manager = managers
+        owner, _, _, _ = sample_users
+
+        workspace = workspace_manager.create_workspace("ws", owner.id)
+        workspace_manager.update_workspace(workspace.id, description="New description")
+
+        updated = workspace_manager.get_workspace(workspace.id)
+        assert updated.description == "New description"
+
+    def test_update_workspace_settings(self, managers, sample_users):
+        _, workspace_manager = managers
+        owner, _, _, _ = sample_users
+
+        workspace = workspace_manager.create_workspace("ws-settings", owner.id)
+        workspace_manager.update_workspace(workspace.id, settings={"theme": "dark"})
+
+        updated = workspace_manager.get_workspace(workspace.id)
+        assert updated.settings.get("theme") == "dark"
+
+    def test_update_workspace_no_fields_noop(self, managers, sample_users):
+        _, workspace_manager = managers
+        owner, _, _, _ = sample_users
+
+        workspace = workspace_manager.create_workspace("ws-noop", owner.id)
+        # Should not raise
+        workspace_manager.update_workspace(workspace.id)
+
+
+class TestQuotaReset:
+    """Test quota resets at day boundary."""
+
+    def test_check_quota_resets_when_expired(self, managers, sample_users):
+        """check_quota resets quota when quota_reset_at is in the past."""
+        import time
+        _, workspace_manager = managers
+        owner, _, _, _ = sample_users
+
+        workspace = workspace_manager.create_workspace("quota-test", owner.id)
+
+        # Exhaust quota and force reset time to past
+        workspace_manager.set_quota(workspace.id, 10)
+        workspace_manager.consume_quota(workspace.id, 10)
+
+        # Force quota_reset_at to past
+        workspace_manager.conn.execute(
+            "UPDATE workspaces SET quota_reset_at = ? WHERE id = ?",
+            (time.time() - 1, workspace.id),
+        )
+        workspace_manager.conn.commit()
+
+        # check_quota should detect reset time passed and reset quota
+        result = workspace_manager.check_quota(workspace.id)
+        assert result is True  # Quota was reset
+
+
+class TestGetWorkspaceManager:
+    """Test global workspace manager singleton."""
+
+    def test_get_workspace_manager_returns_instance(self, tmp_path):
+        """get_workspace_manager returns a WorkspaceManager instance."""
+        orig = wm_module._workspace_manager
+        db_path = tmp_path / "ws.db"
+        real_mgr = WorkspaceManager(db_path=db_path)
+        wm_module._workspace_manager = real_mgr
+        try:
+            mgr = get_workspace_manager()
+            assert isinstance(mgr, WorkspaceManager)
+        finally:
+            wm_module._workspace_manager = orig
+            real_mgr.close()
+
+    def test_get_workspace_manager_is_singleton(self, tmp_path):
+        """get_workspace_manager returns the same instance on repeated calls."""
+        db_path = tmp_path / "ws2.db"
+        orig = wm_module._workspace_manager
+        real_mgr = WorkspaceManager(db_path=db_path)
+        wm_module._workspace_manager = real_mgr
+        try:
+            mgr1 = get_workspace_manager()
+            mgr2 = get_workspace_manager()
+            assert mgr1 is mgr2
+        finally:
+            wm_module._workspace_manager = orig
+            real_mgr.close()

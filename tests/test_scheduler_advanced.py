@@ -499,3 +499,231 @@ class TestAdvancedSchedulerIntegration:
         assert len(history) == 1
         assert history[0].status == "success"
         assert history[0].task_id == task.task_id
+
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for improved scheduler_advanced coverage
+# ---------------------------------------------------------------------------
+
+import datetime
+import scheduler_advanced as adv_module
+from scheduler_advanced import (
+    AdvancedScheduler,
+    AdvancedTask,
+    EventTrigger,
+    TriggerType,
+    _parse_utc,
+    _safe_condition_eval,
+    get_advanced_scheduler,
+)
+from unittest.mock import MagicMock, AsyncMock, patch
+
+
+class TestParseUtc:
+    def test_naive_datetime_gets_utc(self):
+        result = _parse_utc("2024-01-01T09:00:00")
+        assert result.tzinfo == datetime.timezone.utc
+
+    def test_aware_datetime_converted_to_utc(self):
+        result = _parse_utc("2024-01-01T09:00:00+05:00")
+        assert result.tzinfo == datetime.timezone.utc
+        assert result.hour == 4  # 9 - 5
+
+
+class TestSafeConditionEval:
+    def test_simple_true_condition(self):
+        assert _safe_condition_eval("x > 5", {"x": 10}) is True
+
+    def test_simple_false_condition(self):
+        assert _safe_condition_eval("x > 5", {"x": 3}) is False
+
+    def test_empty_expression_returns_false(self):
+        assert _safe_condition_eval("", {}) is False
+
+    def test_too_long_expression_returns_false(self):
+        assert _safe_condition_eval("x" * 501, {"x": 1}) is False
+
+    def test_unsafe_call_raises(self):
+        import pytest
+        with pytest.raises((ValueError, Exception)):
+            _safe_condition_eval("__import__('os').system('echo')", {})
+
+
+class TestAdvancedSchedulerLoadTasks:
+    def test_load_tasks_with_non_standard_id(self, tmp_path):
+        """Non-standard task IDs dont crash load."""
+        sched = AdvancedScheduler(db_path=tmp_path / "a.db")
+        task = AdvancedTask(
+            task_id="custom-id",
+            action="test",
+            args={},
+            trigger=EventTrigger(trigger_type=TriggerType.CRON, event_name="0 9 * * *"),
+        )
+        sched.db.save_task(task)
+        sched2 = AdvancedScheduler(db_path=tmp_path / "a.db")
+        loaded = sched2.get_task("custom-id")
+        assert loaded is not None
+
+
+class TestAdvancedSchedulerDeleteTask:
+    def test_delete_existing_task(self, scheduler):
+        task = scheduler.create_task(action="test_action")
+        task_id = task.task_id
+        result = scheduler.delete_task(task_id)
+        assert result is True
+        assert scheduler.get_task(task_id) is None
+
+    def test_delete_nonexistent_task(self, scheduler):
+        result = scheduler.delete_task("adv-9999")
+        assert result is False
+
+
+class TestEvaluateConditionEdgeCases:
+    import pytest
+
+    @pytest.mark.asyncio
+    async def test_evaluate_condition_with_exception_returns_false(self, scheduler):
+        """Condition evaluation errors return False."""
+        task = AdvancedTask(
+            task_id="test-cond-err",
+            action="test",
+            args={},
+            trigger=EventTrigger(trigger_type=TriggerType.EVENT, event_name="test"),
+            condition=MagicMock(
+                enabled=True,
+                condition_script="unknown_variable_xyz > 5",
+                variables={},
+            ),
+        )
+        result = await scheduler._evaluate_condition(task, {})
+        assert result is False
+
+
+class TestExecuteTaskConditionSkip:
+    import pytest
+
+    @pytest.mark.asyncio
+    async def test_condition_false_skips_execution(self, scheduler):
+        """When condition evaluates to False, task returns skipped message."""
+        from scheduler_advanced import ConditionalExecution
+        task = AdvancedTask(
+            task_id="test-skip",
+            action="test_action",
+            args={},
+            trigger=EventTrigger(trigger_type=TriggerType.CRON, event_name="0 9 * * *"),
+            condition=ConditionalExecution(
+                enabled=True,
+                condition_script="x > 100",
+                variables={"x": 1},
+            ),
+        )
+        result, duration = await scheduler._execute_task(task, {})
+        assert "Skipped" in result
+        assert duration == 0
+
+
+class TestIsCronDue:
+    import pytest
+
+    @pytest.mark.asyncio
+    async def test_cron_due_within_window(self, scheduler):
+        task = AdvancedTask(
+            task_id="test-cron-due",
+            action="test",
+            args={},
+            trigger=EventTrigger(trigger_type=TriggerType.CRON, event_name="0 9 * * *"),
+        )
+        now = datetime.datetime(2024, 1, 1, 9, 1, 0, tzinfo=datetime.timezone.utc)
+        result = await scheduler._is_cron_due(task, now)
+        assert isinstance(result, bool)
+
+    @pytest.mark.asyncio
+    async def test_cron_invalid_expression_returns_false(self, scheduler):
+        task = AdvancedTask(
+            task_id="test-cron-invalid",
+            action="test",
+            args={},
+            trigger=EventTrigger(trigger_type=TriggerType.CRON, event_name="not-valid-cron"),
+        )
+        now = datetime.datetime.now(datetime.timezone.utc)
+        result = await scheduler._is_cron_due(task, now)
+        assert result is False
+
+
+class TestGetAdvancedSchedulerSingleton:
+    def test_get_advanced_scheduler_returns_instance(self, tmp_path):
+        db_path = tmp_path / "adv.db"
+        orig = adv_module._advanced_scheduler
+        adv_module._advanced_scheduler = None
+        try:
+            with patch.object(adv_module, "SCHEDULER_DB", db_path):
+                s1 = get_advanced_scheduler()
+            assert isinstance(s1, AdvancedScheduler)
+        finally:
+            adv_module._advanced_scheduler = orig
+
+    def test_get_advanced_scheduler_is_singleton(self, tmp_path):
+        db_path = tmp_path / "adv2.db"
+        orig = adv_module._advanced_scheduler
+        adv_module._advanced_scheduler = None
+        try:
+            with patch.object(adv_module, "SCHEDULER_DB", db_path):
+                s1 = get_advanced_scheduler()
+                s2 = get_advanced_scheduler()
+            assert s1 is s2
+        finally:
+            adv_module._advanced_scheduler = orig
+
+
+
+@pytest.mark.asyncio
+async def test_execute_task_raises_exception_handled(scheduler):
+    """_execute_task handles general exceptions."""
+    async def bad_skill(**kwargs):
+        raise ValueError("bad input")
+
+    scheduler.register_skills({"bad_skill": bad_skill})
+    task = AdvancedTask(
+        task_id="test-exc",
+        action="bad_skill",
+        args={},
+        trigger=EventTrigger(trigger_type=TriggerType.CRON, event_name="0 9 * * *"),
+    )
+    result, duration = await scheduler._execute_task(task, {})
+    assert "Error" in result
+
+
+@pytest.mark.asyncio
+async def test_scheduler_start_method(scheduler):
+    """start() creates background asyncio tasks."""
+    scheduler.start()
+    assert scheduler._runner_task is not None
+    assert scheduler._event_processor_task is not None
+    # Cancel tasks so they don't run forever
+    scheduler._runner_task.cancel()
+    scheduler._event_processor_task.cancel()
+    import asyncio
+    try:
+        await scheduler._runner_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await scheduler._event_processor_task
+    except asyncio.CancelledError:
+        pass
+
+
+def test_load_tasks_counter_update(tmp_path):
+    """_load_tasks updates counter for standard adv- task IDs."""
+    from scheduler_advanced import AdvancedScheduler, AdvancedTask, EventTrigger, TriggerType
+    s = AdvancedScheduler(db_path=tmp_path / "b.db")
+    task = AdvancedTask(
+        task_id="adv-42",
+        action="test",
+        args={},
+        trigger=EventTrigger(trigger_type=TriggerType.CRON, event_name="0 9 * * *"),
+    )
+    s.db.save_task(task)
+    s2 = AdvancedScheduler(db_path=tmp_path / "b.db")
+    assert s2._counter >= 42

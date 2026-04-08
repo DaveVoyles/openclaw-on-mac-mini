@@ -298,3 +298,277 @@ async def test_run_scheduled_research_channel_id_accepted():
 
         result = await run_scheduled_research("query", channel_id="123456")
         assert result == "Report"
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for improved coverage
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_on_progress_callback_error_is_swallowed(agent):
+    """on_progress callback errors are logged but don't abort research."""
+    call_count = 0
+
+    async def bad_callback(msg: str):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("Discord rate limited")
+
+    with patch.object(agent, "_research", new_callable=AsyncMock) as mock_research:
+        mock_research.return_value = "Report"
+        result = await agent.run("test query", on_progress=bad_callback)
+        assert result == "Report"
+
+
+@pytest.mark.asyncio
+async def test_plan_searches_returns_sub_queries(agent):
+    """_plan_searches decomposes query using LLM and returns a list."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = ('["query 1", "query 2", "query 3"]', [])
+        result = await agent._plan_searches("test topic")
+    assert result == ["query 1", "query 2", "query 3"]
+
+
+@pytest.mark.asyncio
+async def test_plan_searches_handles_markdown_fence(agent):
+    """_plan_searches handles markdown code fences in LLM response."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = ('```json\n["q1", "q2"]\n```', [])
+        result = await agent._plan_searches("test topic")
+    assert result == ["q1", "q2"]
+
+
+@pytest.mark.asyncio
+async def test_plan_searches_returns_empty_on_failure(agent):
+    """_plan_searches returns empty list when LLM fails."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.side_effect = RuntimeError("LLM error")
+        result = await agent._plan_searches("test topic")
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_synthesize_returns_report(agent):
+    """_synthesize calls LLM and returns generated report text."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = ("Synthesized report content", [])
+        result = await agent._synthesize("my query", "data text")
+    assert result == "Synthesized report content"
+
+
+@pytest.mark.asyncio
+async def test_synthesize_returns_error_on_failure(agent):
+    """_synthesize returns error string when LLM fails."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.side_effect = RuntimeError("LLM down")
+        result = await agent._synthesize("my query", "data text")
+    assert "Synthesis failed" in result or "❌" in result
+
+
+@pytest.mark.asyncio
+async def test_identify_gaps_returns_follow_ups(agent):
+    """_identify_gaps returns a list of follow-up queries."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = ('["gap query 1", "gap query 2"]', [])
+        result = await agent._identify_gaps("original query", "report text")
+    assert result == ["gap query 1", "gap query 2"]
+
+
+@pytest.mark.asyncio
+async def test_identify_gaps_handles_markdown_fence(agent):
+    """_identify_gaps handles markdown code fences."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = ('```json\n["gap 1"]\n```', [])
+        result = await agent._identify_gaps("query", "report")
+    assert result == ["gap 1"]
+
+
+@pytest.mark.asyncio
+async def test_identify_gaps_returns_empty_on_failure(agent):
+    """_identify_gaps returns empty list on failure."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.side_effect = RuntimeError("LLM error")
+        result = await agent._identify_gaps("query", "report")
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_merge_findings_merges_reports(agent):
+    """_merge_findings calls LLM to merge reports."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.return_value = ("Merged report text", [])
+        result = await agent._merge_findings("query", "old report", "new data")
+    assert result == "Merged report text"
+
+
+@pytest.mark.asyncio
+async def test_merge_findings_falls_back_on_failure(agent):
+    """_merge_findings appends new data to existing report on failure."""
+    with patch("llm.chat_deep", new_callable=AsyncMock) as mock_chat:
+        mock_chat.side_effect = RuntimeError("LLM error")
+        result = await agent._merge_findings("query", "old report", "new findings")
+    assert "old report" in result
+    assert "new findings" in result[:2100]
+
+
+@pytest.mark.asyncio
+async def test_perform_searches_returns_results(agent):
+    """_perform_searches executes parallel search workers."""
+    post = AsyncMock()
+    with patch("skills.advanced_skills.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.return_value = "Search result text https://example.com/article"
+        results = await agent._perform_searches(["q1", "q2"], post)
+    assert len(results) == 2
+    assert results[0]["query"] == "q1"
+    assert "example.com" in results[0]["urls"][0]
+
+
+@pytest.mark.asyncio
+async def test_perform_searches_handles_failure(agent):
+    """_perform_searches handles individual search failures."""
+    post = AsyncMock()
+    with patch("skills.advanced_skills.search_web", new_callable=AsyncMock) as mock_search:
+        mock_search.side_effect = RuntimeError("Search API down")
+        results = await agent._perform_searches(["q1"], post)
+    assert len(results) == 1
+    assert "Search failed" in results[0]["results"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_pages_returns_content(agent):
+    """_fetch_pages browses URLs and returns page content."""
+    post = AsyncMock()
+    with patch("skills.advanced_skills.browse_url", new_callable=AsyncMock) as mock_browse:
+        mock_browse.return_value = "Page content here"
+        pages = await agent._fetch_pages(["https://example.com"], post)
+    assert len(pages) == 1
+    assert pages[0]["url"] == "https://example.com"
+    assert pages[0]["content"] == "Page content here"
+
+
+@pytest.mark.asyncio
+async def test_fetch_pages_skips_error_pages(agent):
+    """_fetch_pages skips pages that start with error marker."""
+    post = AsyncMock()
+    with patch("skills.advanced_skills.browse_url", new_callable=AsyncMock) as mock_browse:
+        mock_browse.return_value = "❌ Failed to browse page"
+        pages = await agent._fetch_pages(["https://example.com"], post)
+    assert len(pages) == 0
+
+
+@pytest.mark.asyncio
+async def test_fetch_pages_handles_timeout(agent):
+    """_fetch_pages handles timeout gracefully."""
+    import asyncio
+    post = AsyncMock()
+
+    async def slow_browse(url):
+        await asyncio.sleep(999)
+
+    with patch("skills.advanced_skills.browse_url", side_effect=slow_browse):
+        pages = await agent._fetch_pages(["https://example.com"], post)
+    assert pages == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_pages_handles_browse_exception(agent):
+    """_fetch_pages handles general browse errors gracefully."""
+    post = AsyncMock()
+    with patch("skills.advanced_skills.browse_url", new_callable=AsyncMock) as mock_browse:
+        mock_browse.side_effect = RuntimeError("network error")
+        pages = await agent._fetch_pages(["https://example.com"], post)
+    assert pages == []
+
+
+@pytest.mark.asyncio
+async def test_auto_save_vault_failure_handled(agent):
+    """_auto_save handles vault save failure gracefully."""
+    import sys
+    post = AsyncMock()
+    with patch.dict(sys.modules, {"obsidian_writer": None, "nas": None, "gateway": None}):
+        receipts = await agent._auto_save("test query", "report", post)
+    assert "vault" in receipts
+    assert receipts["vault"]["saved"] is False
+
+
+@pytest.mark.asyncio
+async def test_auto_save_nas_failure_skips_gdoc(agent):
+    """_auto_save sets gdoc as skipped when NAS save fails."""
+    import sys
+    from types import SimpleNamespace
+    post = AsyncMock()
+    fake_obsidian = SimpleNamespace(
+        save_to_vault=AsyncMock(return_value="✅ Saved to vault: `Research/test.md`")
+    )
+    with patch.dict(sys.modules, {"obsidian_writer": fake_obsidian, "nas": None, "gateway": None}):
+        receipts = await agent._auto_save("test query", "report", post)
+    assert receipts["gdoc"]["saved"] is False
+
+
+@pytest.mark.asyncio
+async def test_auto_save_vault_non_success_response(agent):
+    """_auto_save handles non-success vault responses."""
+    import sys
+    from types import SimpleNamespace
+    post = AsyncMock()
+    fake_obsidian = SimpleNamespace(
+        save_to_vault=AsyncMock(return_value="❌ Vault not configured")
+    )
+    with patch.dict(sys.modules, {"obsidian_writer": fake_obsidian, "nas": None, "gateway": None}):
+        receipts = await agent._auto_save("test query", "report", post)
+    assert receipts["vault"]["saved"] is False
+
+
+@pytest.mark.asyncio
+async def test_deep_research_stops_when_no_gaps(agent):
+    """_deep_research_passes stops early when no gaps found."""
+    post = AsyncMock()
+    with patch.object(agent, "_identify_gaps", new_callable=AsyncMock) as mock_gaps:
+        mock_gaps.return_value = []
+        result = await agent._deep_research_passes(
+            "query", "initial report", [], [], post
+        )
+    assert result == "initial report"
+
+
+@pytest.mark.asyncio
+async def test_deep_research_passes_runs_extra_passes(agent):
+    """_deep_research_passes runs follow-up research passes when gaps found."""
+    post = AsyncMock()
+    with patch.object(agent, "_identify_gaps", new_callable=AsyncMock) as mock_gaps, \
+         patch.object(agent, "_plan_searches", new_callable=AsyncMock) as mock_plan, \
+         patch.object(agent, "_perform_searches", new_callable=AsyncMock) as mock_search, \
+         patch.object(agent, "_fetch_pages", new_callable=AsyncMock) as mock_fetch, \
+         patch.object(agent, "_merge_findings", new_callable=AsyncMock) as mock_merge:
+        mock_gaps.return_value = ["follow-up 1"]
+        mock_plan.return_value = ["sub-q1"]
+        mock_search.return_value = [{"query": "sub-q1", "results": "results", "urls": []}]
+        mock_fetch.return_value = []
+        mock_merge.return_value = "Merged report"
+        result = await agent._deep_research_passes(
+            "query", "initial report", [], [], post
+        )
+    assert result == "Merged report"
+    mock_merge.assert_called()
+
+
+@pytest.mark.asyncio
+async def test_deep_research_run(agent):
+    """deep=True triggers deep research passes."""
+    with patch.object(agent, "_plan_searches", new_callable=AsyncMock) as mock_plan, \
+         patch.object(agent, "_perform_searches", new_callable=AsyncMock) as mock_search, \
+         patch.object(agent, "_fetch_pages", new_callable=AsyncMock) as mock_fetch, \
+         patch.object(agent, "_synthesize", new_callable=AsyncMock) as mock_synth, \
+         patch.object(agent, "_auto_save", new_callable=AsyncMock) as mock_save, \
+         patch.object(agent, "_deep_research_passes", new_callable=AsyncMock) as mock_deep:
+        mock_plan.return_value = ["q1"]
+        mock_search.return_value = [{"query": "q1", "results": "r", "urls": []}]
+        mock_fetch.return_value = []
+        mock_synth.return_value = "Initial report"
+        mock_save.return_value = {}
+        mock_deep.return_value = "Deep report"
+        result = await agent.run("test query", deep=True)
+    assert result == "Deep report"
+    mock_deep.assert_called_once()

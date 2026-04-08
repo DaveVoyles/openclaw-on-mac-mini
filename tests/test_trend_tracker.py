@@ -521,3 +521,118 @@ def test_sources_collection(temp_db):
     assert "NewsAPI" in analysis.sources
     assert "Alpha Vantage" in analysis.sources
     assert "CoinDesk" in analysis.sources
+
+
+# ---------------------------------------------------------------------------
+# Additional tests for improved coverage
+# ---------------------------------------------------------------------------
+
+import tempfile as _tempfile
+from pathlib import Path as _Path
+from unittest.mock import patch as _patch, MagicMock as _MagicMock
+
+import time as _time
+import trend_tracker as _mod
+
+
+class TestTrackEntityEdgeCases:
+    def test_track_entity_failure_returns_false(self, temp_db):
+        """track_entity returns False on database error."""
+        with _patch.object(temp_db, "_get_db", side_effect=Exception("db error")):
+            result = temp_db.track_entity("Bitcoin", "Finance", volume=10)
+        assert result is False
+
+
+class TestGetTrendWithCategory:
+    def test_get_trend_with_category_filter(self, temp_db):
+        """get_trend filters by category when provided."""
+        temp_db.track_entity("Bitcoin", "Finance", volume=10)
+        temp_db.track_entity("Bitcoin", "Crypto", volume=20)
+
+        finance_points = temp_db.get_trend("Bitcoin", category="Finance")
+        assert all(p.category == "Finance" for p in finance_points)
+
+    def test_get_trend_without_category_returns_all(self, temp_db):
+        """get_trend without category returns all matching data."""
+        temp_db.track_entity("Bitcoin", "Finance", volume=10)
+        temp_db.track_entity("Bitcoin", "Crypto", volume=20)
+
+        points = temp_db.get_trend("Bitcoin", category="")
+        assert len(points) == 2
+
+
+class TestDetectAnomalies:
+    def test_detect_anomalies_insufficient_data_returns_empty(self, temp_db):
+        """detect_anomalies returns empty list with < 3 data points."""
+        temp_db.track_entity("Rare", "Finance", volume=100)
+        temp_db.track_entity("Rare", "Finance", volume=105)
+
+        anomalies = temp_db.detect_anomalies("Rare", "Finance")
+        assert anomalies == []
+
+    def test_detect_anomalies_with_spike(self, temp_db):
+        """detect_anomalies detects volume spikes."""
+        for i in range(10):
+            temp_db.track_entity("SpikyTopic", "News", volume=10, sentiment=0.5)
+        temp_db.track_entity("SpikyTopic", "News", volume=1000, sentiment=0.5)
+
+        anomalies = temp_db.detect_anomalies("SpikyTopic", "News", window_hours=24 * 7)
+        assert len(anomalies) > 0
+
+
+class TestEnableDisableTracking:
+    def test_enable_tracking_creates_config(self, temp_db):
+        """enable_tracking creates a tracking configuration."""
+        result = temp_db.enable_tracking("NewTopic", "News", user_id=123)
+        assert result is True
+        topics = temp_db.get_tracked_topics()
+        assert any(t["topic"] == "NewTopic" for t in topics)
+
+    def test_enable_tracking_failure_returns_false(self, temp_db):
+        """enable_tracking returns False on error."""
+        with _patch.object(temp_db, "_get_db", side_effect=Exception("db error")):
+            result = temp_db.enable_tracking("BadTopic", "News")
+        assert result is False
+
+    def test_disable_tracking_failure_returns_false(self, temp_db):
+        """disable_tracking returns False on error."""
+        with _patch.object(temp_db, "_get_db", side_effect=Exception("db error")):
+            result = temp_db.disable_tracking("BadTopic")
+        assert result is False
+
+    def test_get_tracked_topics_all_including_disabled(self, temp_db):
+        """get_tracked_topics with enabled_only=False returns all topics."""
+        temp_db.enable_tracking("EnabledTopic", "Finance")
+        temp_db.enable_tracking("DisabledTopic", "Finance")
+        temp_db.disable_tracking("DisabledTopic")
+
+        all_topics = temp_db.get_tracked_topics(enabled_only=False)
+        topic_names = [t["topic"] for t in all_topics]
+        assert "DisabledTopic" in topic_names
+
+
+class TestCanAlertExtra:
+    def test_can_alert_returns_true_when_no_config(self, temp_db):
+        """can_alert returns True when topic has no tracking config."""
+        result = temp_db.can_alert("UnknownTopicXYZ")
+        assert result is True
+
+    def test_record_alert_failure_returns_false(self, temp_db):
+        """record_alert returns False on error."""
+        with _patch.object(temp_db, "_get_db", side_effect=Exception("db error")):
+            result = temp_db.record_alert("SomeTopic")
+        assert result is False
+
+
+class TestGetTrackerSingleton:
+    def test_get_tracker_returns_same_instance(self, tmp_path):
+        """get_tracker is a singleton - second call returns same instance."""
+        db_path = tmp_path / "tracker_singleton.db"
+        orig = _mod._tracker
+        _mod._tracker = _mod.TrendTracker(db_path)
+        try:
+            t1 = _mod.get_tracker()
+            t2 = _mod.get_tracker()
+            assert t1 is t2
+        finally:
+            _mod._tracker = orig
