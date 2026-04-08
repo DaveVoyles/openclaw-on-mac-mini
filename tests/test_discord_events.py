@@ -17,7 +17,6 @@ _mocks = {
     "response_actions": MagicMock(),
     "llm": MagicMock(chat_stream=AsyncMock(), is_configured=MagicMock(return_value=True)),
     "memory": MagicMock(store=MagicMock(), get_model_preference=MagicMock(return_value=None)),
-    "table_renderer": MagicMock(),
 }
 for name, mock in _mocks.items():
     sys.modules.setdefault(name, mock)

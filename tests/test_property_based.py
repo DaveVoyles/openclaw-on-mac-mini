@@ -6,6 +6,8 @@ from hypothesis import strategies as st
 
 from table_renderer import _parse_markdown_table, should_render_table_image
 
+pytestmark = pytest.mark.xdist_group("table_renderer")
+
 
 class TestMarkdownTableParser:
     """Property-based tests for markdown table parsing."""

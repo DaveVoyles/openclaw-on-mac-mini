@@ -18,17 +18,18 @@ from src.correlation_engine import (
     find_correlations,
 )
 
-# Test database path
+pytestmark = pytest.mark.xdist_group("correlation_engine")
+
+# Test database path (kept for reference, overridden by tmp_path in fixture)
 TEST_DB_PATH = Path("/tmp/test_correlation.db")
 
 
 @pytest.fixture
-def clean_db():
+def clean_db(tmp_path):
     """Create clean test database with correlated data."""
-    if TEST_DB_PATH.exists():
-        TEST_DB_PATH.unlink()
+    db_path = tmp_path / "test_correlation.db"
 
-    conn = sqlite3.connect(TEST_DB_PATH)
+    conn = sqlite3.connect(db_path)
 
     # Create trend_data table
     conn.execute("""
@@ -93,11 +94,9 @@ def clean_db():
     conn.commit()
     conn.close()
 
-    yield TEST_DB_PATH
+    yield db_path
 
-    # Cleanup
-    if TEST_DB_PATH.exists():
-        TEST_DB_PATH.unlink()
+    # tmp_path cleanup is handled automatically by pytest
 
 
 def test_correlation_skills_registered():

@@ -11,6 +11,8 @@ from table_renderer import (
     should_render_table_image,
 )
 
+pytestmark = pytest.mark.xdist_group("table_renderer")
+
 
 SIMPLE_TABLE = """\
 | Name | Age | City |
