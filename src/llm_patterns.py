@@ -140,6 +140,7 @@ async def _reflect_on_response(
     Gemini call to check for errors, contradictions, or missing information.
     Returns the original or improved text.
     """
+    text = text or ""
     if not cfg.reflection_enabled:
         return text
     # Skip reflection for tool-based responses — tool results are factual.

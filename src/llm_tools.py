@@ -220,7 +220,7 @@ async def _run_tool_loop(
 def _extract_final_text(response, rounds: int, chat_session) -> str:
     """Pull the final answer text out of *response*, requesting synthesis if needed."""
     try:
-        text = response.text
+        text = response.text or ""
     except (AttributeError, ValueError):
         try:
             parts = response.candidates[0].content.parts
