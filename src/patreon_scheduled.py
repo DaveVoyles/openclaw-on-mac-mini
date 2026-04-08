@@ -7,6 +7,7 @@ Integrates with OpenClaw's advanced scheduler.
 
 import logging
 from datetime import datetime
+from typing import Any
 
 from alert_patreon import get_alert_manager
 from config import cfg
@@ -14,6 +15,16 @@ from patreon_monitor import get_patreon_checker
 from patreon_recovery import get_recovery_manager
 
 log = logging.getLogger("openclaw.patreon_scheduled")
+
+# Module-level bot reference — set at startup so it doesn't need to be
+# serialized into scheduler task args (discord.Client is not JSON-serializable).
+_discord_client: Any = None
+
+
+def set_discord_client(client: Any) -> None:
+    """Store the bot client for use by scheduled tasks."""
+    global _discord_client
+    _discord_client = client
 
 
 async def scheduled_patreon_health_check(
@@ -74,6 +85,13 @@ async def scheduled_patreon_health_check(
             alert_sent = await alert_mgr.send_alert_if_needed(
                 health_result=health,
                 discord_client=discord_client,
+                user_id=user_id,
+                channel_id=channel_id,
+            )
+        elif _discord_client:
+            alert_sent = await alert_mgr.send_alert_if_needed(
+                health_result=health,
+                discord_client=_discord_client,
                 user_id=user_id,
                 channel_id=channel_id,
             )

@@ -488,14 +488,13 @@ class OpenClawBot(commands.Bot):
 
         # Register Patreon monitoring (every 30 minutes)
         patreon_tasks = [t for t in scheduler.list_tasks() if "patreon" in t.action.lower()]
+        from patreon_scheduled import scheduled_patreon_health_check, set_discord_client as _set_patreon_client
+        _set_patreon_client(self)  # Always refresh module-level ref (survives restarts)
         if not patreon_tasks:
-            # Import and register the monitoring function
-            from patreon_scheduled import scheduled_patreon_health_check
             scheduler.register_skills({"patreon_health_check": scheduled_patreon_health_check})
             scheduler.create(
                 action="patreon_health_check",
                 args={
-                    "discord_client": self,
                     "alert_channel_id": ALERT_CHANNEL_ID,
                 },
                 interval_minutes=30,

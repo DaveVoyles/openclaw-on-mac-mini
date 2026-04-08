@@ -139,7 +139,17 @@ class TaskScheduler:
 
     def _save(self):
         """Persist tasks to disk atomically."""
-        data = [asdict(t) for t in self._tasks.values()]
+        _JSON_SAFE = (str, int, float, bool, type(None))
+
+        def _sanitize_args(args: dict) -> dict:
+            """Strip non-JSON-serializable values so discord clients etc. don't break saves."""
+            return {k: v for k, v in args.items() if isinstance(v, _JSON_SAFE)}
+
+        data = []
+        for t in self._tasks.values():
+            d = asdict(t)
+            d["args"] = _sanitize_args(d.get("args") or {})
+            data.append(d)
         atomic_write(SCHEDULE_FILE, json.dumps(data, indent=2))
 
     # -- CRUD --
@@ -289,7 +299,7 @@ class TaskScheduler:
                         model_preference="gemini",
                     )
                     result = response_text or "No response from LLM"
-                    task.last_result = result[:500]
+                    task.last_result = str(result)[:500]
                 except asyncio.TimeoutError:
                     task.last_result = "Error: Prompt job timed out"
                     log.error("Prompt job %s timed out", task.task_id)
@@ -360,7 +370,7 @@ class TaskScheduler:
             error_type = None
             try:
                 result = await asyncio.wait_for(skill_fn(**task.args), timeout=300)
-                task.last_result = result[:500] if result else "OK"
+                task.last_result = str(result)[:500] if result else "OK"
             except asyncio.TimeoutError:
                 task.last_result = "Error: Task timed out after 5 minutes"
                 log.error("Scheduled task %s timed out", task.task_id)
