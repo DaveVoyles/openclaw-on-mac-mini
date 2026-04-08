@@ -124,6 +124,30 @@ class TestSafeRestartTargets:
 
 
 class TestBackgroundTaskSupervisor:
+    @pytest.fixture(autouse=True)
+    async def _reset_bg_tasks(self):
+        """Cancel any leftover background tasks before each test to prevent state pollution."""
+        import bg_tasks as _bt
+        # Cancel any lingering tasks from prior tests
+        for task in list(_bt._BACKGROUND_TASKS.values()):
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        _bt._BACKGROUND_TASKS.clear()
+        _bt._BACKGROUND_STOPPING = False
+        yield
+        # Cleanup after test
+        for task in list(_bt._BACKGROUND_TASKS.values()):
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        _bt._BACKGROUND_TASKS.clear()
+        _bt._BACKGROUND_STOPPING = False
+
     @pytest.mark.asyncio
     async def test_start_is_idempotent(self, monkeypatch):
         async def idle_loop(*args, **kwargs):
@@ -132,8 +156,8 @@ class TestBackgroundTaskSupervisor:
 
         # Patch on the sub-modules where these are actually read/called
         monkeypatch.setattr(tasks_mod, "ALERT_CHANNEL_ID", 0)
-        monkeypatch.setattr(healing_mod, "background_cleanup_loop", idle_loop)
-        monkeypatch.setattr(healing_mod, "audit_writer_loop", idle_loop)
+        monkeypatch.setattr(tasks_mod, "background_cleanup_loop", idle_loop)
+        monkeypatch.setattr(tasks_mod, "audit_writer_loop", idle_loop)
         monkeypatch.setattr(tasks_mod, "reminder_loop", idle_loop)
 
         bot = object()
@@ -167,8 +191,8 @@ class TestBackgroundTaskSupervisor:
 
         monkeypatch.setattr(tasks_mod, "ALERT_CHANNEL_ID", 0)
         monkeypatch.setattr(tasks_mod, "_BACKGROUND_RESTART_DELAY_SECONDS", 0)
-        monkeypatch.setattr(healing_mod, "background_cleanup_loop", flaky_cleanup)
-        monkeypatch.setattr(healing_mod, "audit_writer_loop", idle_loop)
+        monkeypatch.setattr(tasks_mod, "background_cleanup_loop", flaky_cleanup)
+        monkeypatch.setattr(tasks_mod, "audit_writer_loop", idle_loop)
         monkeypatch.setattr(tasks_mod, "reminder_loop", idle_loop)
         monkeypatch.setattr(tasks_mod, "get_collector", lambda: mock_collector)
 
