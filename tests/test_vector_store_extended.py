@@ -46,7 +46,7 @@ def _chroma_result(items):
 
 class TestGetEmbeddingFunction:
     def test_returns_none_when_no_model_set(self):
-        with patch.object(mod, "EMBEDDING_MODEL", ""):
+        with patch("vector_store_config.EMBEDDING_MODEL", ""):
             result = mod._get_embedding_function()
         assert result is None
 
@@ -59,7 +59,7 @@ class TestGetEmbeddingFunction:
         fake_chroma.utils = MagicMock()
         fake_chroma.utils.embedding_functions = fake_ef_module
 
-        with patch.object(mod, "EMBEDDING_MODEL", "nomic-embed-text"):
+        with patch("vector_store_config.EMBEDDING_MODEL", "nomic-embed-text"):
             with patch.dict("sys.modules", {
                 "chromadb": fake_chroma,
                 "chromadb.utils": fake_chroma.utils,
@@ -78,7 +78,7 @@ class TestGetEmbeddingFunction:
                 raise ImportError("no module")
             return real_import(name, *args, **kwargs)
 
-        with patch.object(mod, "EMBEDDING_MODEL", "some-model"):
+        with patch("vector_store_config.EMBEDDING_MODEL", "some-model"):
             with patch("builtins.__import__", side_effect=patched_import):
                 result = mod._get_embedding_function()
 
@@ -89,7 +89,7 @@ class TestGetEmbeddingFunction:
         fake_ef_module = MagicMock()
         fake_ef_module.OllamaEmbeddingFunction = mock_ollama_class
 
-        with patch.object(mod, "EMBEDDING_MODEL", "fail-model"):
+        with patch("vector_store_config.EMBEDDING_MODEL", "fail-model"):
             with patch.dict("sys.modules", {
                 "chromadb.utils.embedding_functions": fake_ef_module,
             }):
@@ -205,7 +205,7 @@ class TestCompactScopeEarlyExits:
         })
         mock_rs.record_memory_compaction_event = MagicMock()
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 result = await mod._compact_scope_if_needed(
                     collection_name=mod.MEMORIES_COLLECTION,
@@ -227,7 +227,7 @@ class TestCompactScopeEarlyExits:
         })
         mock_rs.record_memory_compaction_event = MagicMock()
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 result = await mod._compact_scope_if_needed(
                     collection_name=mod.MEMORIES_COLLECTION,
@@ -257,7 +257,7 @@ class TestCompactScopeEarlyExits:
         mock_rs.record_memory_compaction_event = MagicMock()
         audit_mock = MagicMock(audit_log=MagicMock())
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch("vector_store.time.time", return_value=now):
                 with patch.dict("sys.modules", {"runtime_state": mock_rs, "audit": audit_mock}):
                     event = await mod._compact_scope_if_needed(
@@ -291,7 +291,7 @@ class TestCompactScopeEarlyExits:
         audit_mock = MagicMock()
         audit_mock.audit_log = MagicMock()
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch("vector_store.time.time", return_value=now):
                 with patch.dict("sys.modules", {"runtime_state": mock_rs, "audit": audit_mock}):
                     event = await mod._compact_scope_if_needed(
@@ -324,7 +324,7 @@ class TestCompactScopeEarlyExits:
         broken_audit = MagicMock()
         broken_audit.audit_log = MagicMock(side_effect=RuntimeError("audit down"))
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch("vector_store.time.time", return_value=now):
                 with patch.dict("sys.modules", {"runtime_state": mock_rs, "audit": broken_audit}):
                     event = await mod._compact_scope_if_needed(
@@ -344,8 +344,8 @@ class TestAddDocumentEdgeCases:
     @pytest.mark.asyncio
     async def test_skips_empty_text(self):
         col = _make_fake_col()
-        with patch.object(mod, "_get_collection", return_value=col):
-            with patch.object(mod, "_compact_scope_if_needed", new_callable=AsyncMock):
+        with patch("vector_store_client._get_collection", return_value=col):
+            with patch("vector_store_compaction._compact_scope_if_needed", new_callable=AsyncMock):
                 await mod.add_document(mod.MEMORIES_COLLECTION, "id1", "")
                 await mod.add_document(mod.MEMORIES_COLLECTION, "id1", "   ")
         col.upsert.assert_not_called()
@@ -353,8 +353,8 @@ class TestAddDocumentEdgeCases:
     @pytest.mark.asyncio
     async def test_stores_valid_text(self):
         col = _make_fake_col()
-        with patch.object(mod, "_get_collection", return_value=col):
-            with patch.object(mod, "_compact_scope_if_needed", new_callable=AsyncMock):
+        with patch("vector_store_client._get_collection", return_value=col):
+            with patch("vector_store_compaction._compact_scope_if_needed", new_callable=AsyncMock):
                 await mod.add_document(mod.MEMORIES_COLLECTION, "id1", "some text")
         col.upsert.assert_called_once()
 
@@ -367,21 +367,21 @@ class TestSearchEdgeCases:
     @pytest.mark.asyncio
     async def test_returns_empty_for_blank_query(self):
         col = _make_fake_col()
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             result = await mod.search(mod.MEMORIES_COLLECTION, "")
         assert result == []
 
     @pytest.mark.asyncio
     async def test_returns_empty_for_whitespace_query(self):
         col = _make_fake_col()
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             result = await mod.search(mod.MEMORIES_COLLECTION, "   ")
         assert result == []
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_collection_empty(self):
         col = _make_fake_col(count=0)
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             result = await mod.search(mod.MEMORIES_COLLECTION, "query", track_access=False)
         assert result == []
 
@@ -393,7 +393,7 @@ class TestSearchEdgeCases:
         col.query.return_value = _chroma_result([
             {"id": "doc1", "text": "text", "metadata": {"decayed": True}, "distance": 0.0},
         ])
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             results = await mod.search(
                 mod.MEMORIES_COLLECTION, "query", track_access=False,
                 threshold=0.5, cross_channel=True,
@@ -409,7 +409,7 @@ class TestSearchEdgeCases:
         col.query.return_value = _chroma_result([
             {"id": "doc1", "text": "text", "metadata": {"confidence": 1.0}, "distance": 0.0},
         ])
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             results = await mod.search(
                 mod.MEMORIES_COLLECTION, "query", track_access=False,
                 threshold=0.5, cross_channel=True,
@@ -424,7 +424,7 @@ class TestSearchEdgeCases:
         col.query.return_value = _chroma_result([
             {"id": "doc1", "text": "text", "metadata": {"confidence": "invalid"}, "distance": 0.0},
         ])
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             results = await mod.search(
                 mod.MEMORIES_COLLECTION, "query", track_access=False,
                 threshold=0.5, cross_channel=True,
@@ -439,7 +439,7 @@ class TestSearchEdgeCases:
         col.query.return_value = _chroma_result([
             {"id": "doc1", "text": "text", "metadata": {}, "distance": 2.0},
         ])
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             results = await mod.search(
                 mod.MEMORIES_COLLECTION, "query", track_access=False,
                 threshold=0.5, cross_channel=True,
@@ -455,8 +455,8 @@ class TestSearchEdgeCases:
         ])
 
         bump_mock = AsyncMock()
-        with patch.object(mod, "_get_collection", return_value=col):
-            with patch.object(mod, "bump_access", bump_mock):
+        with patch("vector_store_client._get_collection", return_value=col):
+            with patch("vector_store_compaction.bump_access", bump_mock):
                 from runtime_state import request_context
                 with request_context(channel_id=10, thread_id=20):
                     results = await mod.search(
@@ -484,7 +484,7 @@ class TestSearchEdgeCases:
         mock_rs = MagicMock()
         mock_rs.record_scoped_recall_alert = MagicMock()
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 from runtime_state import request_context
                 with request_context(channel_id=10, thread_id=20):
@@ -510,7 +510,7 @@ class TestSearchEdgeCases:
         bad_rs = MagicMock()
         bad_rs.record_scoped_recall_alert = MagicMock(side_effect=RuntimeError("alert failed"))
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": bad_rs}):
                 from runtime_state import request_context
                 with request_context(channel_id=10, thread_id=20):
@@ -534,8 +534,8 @@ class TestSearchEdgeCases:
             ]),
         ]
         bump_mock = AsyncMock()
-        with patch.object(mod, "_get_collection", return_value=col):
-            with patch.object(mod, "bump_access", bump_mock):
+        with patch("vector_store_client._get_collection", return_value=col):
+            with patch("vector_store_compaction.bump_access", bump_mock):
                 from runtime_state import request_context
                 with request_context(channel_id=10, thread_id=20):
                     results = await mod.search(
@@ -558,7 +558,7 @@ class TestSearchAll:
                 raise RuntimeError("db down")
             return [{"id": "r1", "text": "t", "distance": 0.1, "similarity": 0.95}]
 
-        with patch.object(mod, "search", side_effect=fake_search):
+        with patch("vector_store_client.search", side_effect=fake_search):
             results = await mod.search_all("query", top_k=5)
 
         ids = [r["id"] for r in results]
@@ -569,7 +569,7 @@ class TestSearchAll:
         async def fake_search(col, query, **kwargs):
             return [{"id": "x", "text": "t", "distance": 0.2, "similarity": 0.9}]
 
-        with patch.object(mod, "search", side_effect=fake_search):
+        with patch("vector_store_client.search", side_effect=fake_search):
             results = await mod.search_all("query", top_k=10)
 
         assert all("collection" in r for r in results)
@@ -583,7 +583,7 @@ class TestSearchAll:
             idx = collections.index(col)
             return [{"id": col, "text": "t", "distance": distances[idx], "similarity": 0.8}]
 
-        with patch.object(mod, "search", side_effect=fake_search):
+        with patch("vector_store_client.search", side_effect=fake_search):
             results = await mod.search_all("query", top_k=10)
 
         assert results[0]["distance"] == 0.1
@@ -599,7 +599,7 @@ class TestDeleteDocument:
     @pytest.mark.asyncio
     async def test_delete_calls_collection_delete(self):
         col = _make_fake_col()
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             await mod.delete_document(mod.MEMORIES_COLLECTION, "doc1")
         col.delete.assert_called_once_with(ids=["doc1"])
 
@@ -612,7 +612,7 @@ class TestBumpAccess:
     @pytest.mark.asyncio
     async def test_does_nothing_for_empty_list(self):
         col = _make_fake_col()
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             await mod.bump_access(mod.MEMORIES_COLLECTION, [])
         col.get.assert_not_called()
 
@@ -623,7 +623,7 @@ class TestBumpAccess:
             "ids": ["doc1"],
             "metadatas": [{"access_count": 3, "last_accessed": 0.0}],
         }
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch("vector_store.time.time", return_value=12345.0):
                 await mod.bump_access(mod.MEMORIES_COLLECTION, ["doc1"])
         col.update.assert_called_once()
@@ -636,7 +636,7 @@ class TestBumpAccess:
     async def test_skips_missing_doc(self):
         col = _make_fake_col()
         col.get.return_value = {"ids": [], "metadatas": []}
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             await mod.bump_access(mod.MEMORIES_COLLECTION, ["missing"])
         col.update.assert_not_called()
 
@@ -644,7 +644,7 @@ class TestBumpAccess:
     async def test_exception_in_bump_is_swallowed(self):
         col = _make_fake_col()
         col.get.side_effect = RuntimeError("collection error")
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             await mod.bump_access(mod.MEMORIES_COLLECTION, ["doc1"])  # should not raise
 
 
@@ -656,7 +656,7 @@ class TestGetDecayedDocuments:
     @pytest.mark.asyncio
     async def test_returns_empty_for_empty_collection(self):
         col = _make_fake_col(count=0)
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             result = await mod.get_decayed_documents(mod.MEMORIES_COLLECTION)
         assert result == []
 
@@ -673,7 +673,7 @@ class TestGetDecayedDocuments:
             "documents": ["old text", "new text"],
         }
         with patch("vector_store.time.time", return_value=cutoff + 86400 * 31):
-            with patch.object(mod, "_get_collection", return_value=col):
+            with patch("vector_store_client._get_collection", return_value=col):
                 result = await mod.get_decayed_documents(mod.MEMORIES_COLLECTION, max_age_days=30)
 
         ids = [r["id"] for r in result]
@@ -694,7 +694,7 @@ class TestGetDecayedDocuments:
             },
         ]
         with patch("vector_store.time.time", return_value=86400 * 31 + 1):
-            with patch.object(mod, "_get_collection", return_value=col):
+            with patch("vector_store_client._get_collection", return_value=col):
                 result = await mod.get_decayed_documents(mod.MEMORIES_COLLECTION)
 
         assert any(r["id"] == "old" for r in result)
@@ -708,7 +708,7 @@ class TestMarkDecayed:
     @pytest.mark.asyncio
     async def test_returns_zero_for_empty_list(self):
         col = _make_fake_col()
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             count = await mod.mark_decayed(mod.MEMORIES_COLLECTION, [])
         assert count == 0
 
@@ -719,7 +719,7 @@ class TestMarkDecayed:
             "ids": ["doc1"],
             "metadatas": [{"access_count": 1}],
         }
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             count = await mod.mark_decayed(mod.MEMORIES_COLLECTION, ["doc1"])
         assert count == 1
         call_kwargs = col.update.call_args
@@ -730,7 +730,7 @@ class TestMarkDecayed:
     async def test_skips_missing_doc(self):
         col = _make_fake_col()
         col.get.return_value = {"ids": [], "metadatas": []}
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             count = await mod.mark_decayed(mod.MEMORIES_COLLECTION, ["missing"])
         assert count == 0
 
@@ -738,7 +738,7 @@ class TestMarkDecayed:
     async def test_exception_in_mark_is_swallowed(self):
         col = _make_fake_col()
         col.get.side_effect = RuntimeError("db error")
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             count = await mod.mark_decayed(mod.MEMORIES_COLLECTION, ["doc1"])
         assert count == 0
 
@@ -761,8 +761,8 @@ class TestGetStats:
                 mod.RESEARCH_COLLECTION: col_research,
             }[name]
 
-        with patch.object(mod, "_get_client", return_value=MagicMock()):
-            with patch.object(mod, "_get_collection", side_effect=fake_get_collection):
+        with patch("vector_store_client._get_client", return_value=MagicMock()):
+            with patch("vector_store_client._get_collection", side_effect=fake_get_collection):
                 stats = await mod.get_stats()
 
         assert stats[mod.MEMORIES_COLLECTION]["count"] == 10
@@ -798,7 +798,7 @@ class TestGetScopedMemorySummary:
         })
         mock_rs.get_memory_compaction_events = MagicMock(return_value=[])
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 result = await mod.get_scoped_memory_summary(channel_id="10", thread_id="20")
 
@@ -821,7 +821,7 @@ class TestGetScopedMemorySummary:
             "anchor_id": "report_42", "timestamp": 12345.0,
         })
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 result = await mod.get_scoped_memory_summary(
                     channel_id="10", thread_id="20", include_anchor=True
@@ -843,7 +843,7 @@ class TestGetScopedMemorySummary:
         mock_rs.get_memory_compaction_events = MagicMock(return_value=[])
         mock_rs.get_anchor_state = MagicMock(return_value=None)
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 result = await mod.get_scoped_memory_summary(
                     channel_id="10", thread_id="20", include_anchor=True
@@ -864,7 +864,7 @@ class TestGetScopedMemorySummary:
         })
         mock_rs.get_memory_compaction_events = MagicMock(return_value=[])
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 result = await mod.get_scoped_memory_summary(channel_id="10", thread_id="20")
 
@@ -881,7 +881,7 @@ class TestGetScopedMemorySummary:
         mock_rs.get_memory_lifecycle_policy = MagicMock(side_effect=RuntimeError("policy down"))
         mock_rs.get_memory_compaction_events = MagicMock(side_effect=RuntimeError("compaction down"))
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 result = await mod.get_scoped_memory_summary(channel_id="10", thread_id="20")
 
@@ -904,7 +904,7 @@ class TestClearScopedMemory:
         col = _make_fake_col(count=3)
         col.get.return_value = {"ids": ["doc1", "doc2"], "metadatas": []}
 
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             result = await mod.clear_scoped_memory(channel_id="10", thread_id="20")
 
         col.delete.assert_called()
@@ -913,7 +913,7 @@ class TestClearScopedMemory:
     @pytest.mark.asyncio
     async def test_skips_empty_collections(self):
         col = _make_fake_col(count=0)
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             result = await mod.clear_scoped_memory(channel_id="10", thread_id="20")
         assert result["total_deleted"] == 0
         col.delete.assert_not_called()
@@ -922,7 +922,7 @@ class TestClearScopedMemory:
     async def test_returns_scope_info(self):
         col = _make_fake_col(count=1)
         col.get.return_value = {"ids": [], "metadatas": []}
-        with patch.object(mod, "_get_collection", return_value=col):
+        with patch("vector_store_client._get_collection", return_value=col):
             result = await mod.clear_scoped_memory(channel_id="42", thread_id="99")
         assert result["scope"]["channel_id"] == "42"
         assert result["scope"]["thread_id"] == "99"
@@ -938,9 +938,9 @@ class TestAddMemoryDeduped:
         add_mock = AsyncMock()
         search_mock = AsyncMock(return_value=[])
         bump_mock = AsyncMock()
-        with patch.object(mod, "search", search_mock):
-            with patch.object(mod, "add_document", add_mock):
-                with patch.object(mod, "bump_access", bump_mock):
+        with patch("vector_store_client.search", search_mock):
+            with patch("vector_store_client.add_document", add_mock):
+                with patch("vector_store_compaction.bump_access", bump_mock):
                     result = await mod.add_memory_deduped("fact1", "unique content")
         assert result is True
         add_mock.assert_awaited_once()
@@ -950,9 +950,9 @@ class TestAddMemoryDeduped:
         add_mock = AsyncMock()
         bump_mock = AsyncMock()
         existing = [{"id": "mem_existing", "similarity": 0.95, "text": "duplicate"}]
-        with patch.object(mod, "search", AsyncMock(return_value=existing)):
-            with patch.object(mod, "add_document", add_mock):
-                with patch.object(mod, "bump_access", bump_mock):
+        with patch("vector_store_client.search", AsyncMock(return_value=existing)):
+            with patch("vector_store_client.add_document", add_mock):
+                with patch("vector_store_compaction.bump_access", bump_mock):
                     result = await mod.add_memory_deduped("fact1", "near duplicate content")
         assert result is False
         add_mock.assert_not_called()
@@ -962,9 +962,9 @@ class TestAddMemoryDeduped:
     async def test_stores_when_search_raises(self):
         """If dedup check fails, stores anyway (lines 1000-1001)."""
         add_mock = AsyncMock()
-        with patch.object(mod, "search", AsyncMock(side_effect=RuntimeError("db error"))):
-            with patch.object(mod, "add_document", add_mock):
-                with patch.object(mod, "_compact_scope_if_needed", AsyncMock()):
+        with patch("vector_store_client.search", AsyncMock(side_effect=RuntimeError("db error"))):
+            with patch("vector_store_client.add_document", add_mock):
+                with patch("vector_store_compaction._compact_scope_if_needed", AsyncMock()):
                     result = await mod.add_memory_deduped("fact2", "some content")
         assert result is True
         add_mock.assert_awaited_once()
@@ -978,7 +978,7 @@ class TestAddConversationSummary:
     @pytest.mark.asyncio
     async def test_stores_in_conversations_collection(self):
         add_mock = AsyncMock()
-        with patch.object(mod, "add_document", add_mock):
+        with patch("vector_store_client.add_document", add_mock):
             await mod.add_conversation_summary(
                 user_id=123,
                 thread_name="general",
@@ -1001,7 +1001,7 @@ class TestAddResearchReport:
     @pytest.mark.asyncio
     async def test_stores_and_returns_report_id(self):
         add_mock = AsyncMock()
-        with patch.object(mod, "add_document", add_mock):
+        with patch("vector_store_client.add_document", add_mock):
             report_id = await mod.add_research_report(
                 query="deployment blockers",
                 report="Here are the blockers...",
@@ -1016,7 +1016,7 @@ class TestAddResearchReport:
     async def test_sets_anchor_state_when_channel_id_present(self):
         add_mock = AsyncMock()
 
-        with patch.object(mod, "add_document", add_mock):
+        with patch("vector_store_client.add_document", add_mock):
             with patch("vector_store._resolve_scope", return_value=("10", "20")):
                 with patch("vector_store.runtime_state", create=True) as _:
                     pass  # just ensure it exists
@@ -1050,7 +1050,7 @@ class TestAddResearchReport:
         add_mock = AsyncMock()
 
         from runtime_state import request_context
-        with patch.object(mod, "add_document", add_mock):
+        with patch("vector_store_client.add_document", add_mock):
             with patch.dict("sys.modules", {"runtime_state": bad_rs}):
                 with request_context(channel_id=10, thread_id=20):
                     report_id = await mod.add_research_report(
@@ -1067,7 +1067,7 @@ class TestAddResearchReport:
 class TestRecall:
     @pytest.mark.asyncio
     async def test_returns_empty_string_when_no_results(self):
-        with patch.object(mod, "search_all", AsyncMock(return_value=[])):
+        with patch("vector_store_client.search_all", AsyncMock(return_value=[])):
             result = await mod.recall("query")
         assert result == ""
 
@@ -1081,7 +1081,7 @@ class TestRecall:
                 "distance": 0.16,
             }
         ]
-        with patch.object(mod, "search_all", AsyncMock(return_value=fake_results)):
+        with patch("vector_store_client.search_all", AsyncMock(return_value=fake_results)):
             result = await mod.recall("query")
         assert "[Memories · 92%]" in result
         assert "some fact here" in result
@@ -1092,7 +1092,7 @@ class TestRecall:
             {"collection": mod.MEMORIES_COLLECTION, "text": "fact", "similarity": 0.9, "distance": 0.2},
             {"collection": mod.CONVERSATIONS_COLLECTION, "text": "summary", "similarity": 0.8, "distance": 0.4},
         ]
-        with patch.object(mod, "search_all", AsyncMock(return_value=fake_results)):
+        with patch("vector_store_client.search_all", AsyncMock(return_value=fake_results)):
             result = await mod.recall("query")
         lines = result.strip().split("\n")
         assert len(lines) == 2
@@ -1118,7 +1118,7 @@ class TestRecallForContextAlertException:
             }
         ]
 
-        with patch.object(mod, "search_all", AsyncMock(return_value=low_sim_result)):
+        with patch("vector_store_client.search_all", AsyncMock(return_value=low_sim_result)):
             with patch.dict("sys.modules", {"runtime_state": bad_rs}):
                 from runtime_state import request_context
                 with request_context(channel_id=10, thread_id=20):
@@ -1141,7 +1141,7 @@ class TestRecallForContextAlertException:
             }
         ]
 
-        with patch.object(mod, "search_all", AsyncMock(return_value=wwe_result)):
+        with patch("vector_store_client.search_all", AsyncMock(return_value=wwe_result)):
             with patch.dict("sys.modules", {"runtime_state": mock_rs}):
                 from runtime_state import request_context
                 with request_context(channel_id=10, thread_id=20):
@@ -1233,7 +1233,7 @@ class TestAddMemory:
     @pytest.mark.asyncio
     async def test_stores_in_memories_collection(self):
         add_mock = AsyncMock()
-        with patch.object(mod, "add_document", add_mock):
+        with patch("vector_store_client.add_document", add_mock):
             await mod.add_memory("fact1", "user likes coffee", tags=["preference"])
         add_mock.assert_awaited_once()
         args, kwargs = add_mock.await_args
@@ -1246,7 +1246,7 @@ class TestAddMemory:
     @pytest.mark.asyncio
     async def test_stores_with_confidence(self):
         add_mock = AsyncMock()
-        with patch.object(mod, "add_document", add_mock):
+        with patch("vector_store_client.add_document", add_mock):
             await mod.add_memory("fact2", "content", confidence=0.8)
         _, kwargs = add_mock.await_args
         assert kwargs["metadata"]["confidence"] == 0.8

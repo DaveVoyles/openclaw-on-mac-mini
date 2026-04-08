@@ -13,33 +13,33 @@ class TestSearchSafe:
     @pytest.mark.asyncio
     async def test_returns_results_on_success(self):
         fake_results = [{"id": "doc1", "text": "hello", "distance": 0.1}]
-        with patch.object(mod, "search", new_callable=AsyncMock, return_value=fake_results):
+        with patch("vector_store_client.search", new_callable=AsyncMock, return_value=fake_results):
             result = await mod.search_safe("memories", "test query")
         assert result == fake_results
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_failure(self):
-        with patch.object(mod, "search", new_callable=AsyncMock, side_effect=RuntimeError("ChromaDB down")):
+        with patch("vector_store_client.search", new_callable=AsyncMock, side_effect=RuntimeError("ChromaDB down")):
             result = await mod.search_safe("memories", "test query")
         assert result == []
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_timeout(self):
-        with patch.object(mod, "search", new_callable=AsyncMock, side_effect=asyncio.TimeoutError):
+        with patch("vector_store_client.search", new_callable=AsyncMock, side_effect=asyncio.TimeoutError):
             result = await mod.search_safe("memories", "query")
         assert result == []
 
     @pytest.mark.asyncio
     async def test_passes_top_k(self):
         mock_search = AsyncMock(return_value=[])
-        with patch.object(mod, "search", mock_search):
+        with patch("vector_store_client.search", mock_search):
             await mod.search_safe("conversations", "q", top_k=10)
         mock_search.assert_called_once_with("conversations", "q", 10)
 
     @pytest.mark.asyncio
     async def test_passes_kwargs(self):
         mock_search = AsyncMock(return_value=[])
-        with patch.object(mod, "search", mock_search):
+        with patch("vector_store_client.search", mock_search):
             await mod.search_safe("research", "q", threshold=0.8)
         mock_search.assert_called_once_with("research", "q", 5, threshold=0.8)
 
@@ -47,13 +47,13 @@ class TestSearchSafe:
 class TestSearchSafeEdgeCases:
     @pytest.mark.asyncio
     async def test_connection_error_returns_empty(self):
-        with patch.object(mod, "search", new_callable=AsyncMock, side_effect=ConnectionError("refused")):
+        with patch("vector_store_client.search", new_callable=AsyncMock, side_effect=ConnectionError("refused")):
             result = await mod.search_safe("memories", "anything")
         assert result == []
 
     @pytest.mark.asyncio
     async def test_import_error_returns_empty(self):
-        with patch.object(mod, "search", new_callable=AsyncMock, side_effect=ImportError("no chromadb")):
+        with patch("vector_store_client.search", new_callable=AsyncMock, side_effect=ImportError("no chromadb")):
             result = await mod.search_safe("memories", "anything")
         assert result == []
 
@@ -134,7 +134,7 @@ class TestChannelScopedIsolation:
     @pytest.mark.asyncio
     async def test_add_document_persists_channel_and_thread_metadata(self):
         fake = _FakeCollection([])
-        with patch.object(mod, "_get_collection", return_value=fake):
+        with patch("vector_store_client._get_collection", return_value=fake):
             with request_context(channel_id=111, thread_id=222):
                 await mod.add_document(
                     mod.MEMORIES_COLLECTION,
@@ -155,7 +155,7 @@ class TestChannelScopedIsolation:
             ]),
         ])
 
-        with patch.object(mod, "_get_collection", return_value=fake):
+        with patch("vector_store_client._get_collection", return_value=fake):
             with request_context(channel_id=10, thread_id=20):
                 results = await mod.search(mod.MEMORIES_COLLECTION, "hello", top_k=1, track_access=False)
 
@@ -175,7 +175,7 @@ class TestChannelScopedIsolation:
             ]),
         ])
 
-        with patch.object(mod, "_get_collection", return_value=fake):
+        with patch("vector_store_client._get_collection", return_value=fake):
             with request_context(channel_id=10, thread_id=20):
                 results = await mod.search(mod.MEMORIES_COLLECTION, "hello", top_k=5, track_access=False)
 
@@ -196,7 +196,7 @@ class TestChannelScopedIsolation:
             ]),
         ])
 
-        with patch.object(mod, "_get_collection", return_value=fake):
+        with patch("vector_store_client._get_collection", return_value=fake):
             with request_context(channel_id=10):
                 results = await mod.search(mod.MEMORIES_COLLECTION, "hello", top_k=5, track_access=False)
 
@@ -210,7 +210,7 @@ class TestChannelScopedIsolation:
     async def test_search_without_context_does_not_reuse_previous_scope(self):
         fake = _FakeCollection([_chroma_result([]), _chroma_result([])])
 
-        with patch.object(mod, "_get_collection", return_value=fake):
+        with patch("vector_store_client._get_collection", return_value=fake):
             with request_context(channel_id=10, thread_id=20):
                 await mod.search(
                     mod.MEMORIES_COLLECTION,
@@ -234,7 +234,7 @@ class TestChannelScopedIsolation:
     async def test_search_skips_fallback_when_disabled(self):
         fake = _FakeCollection([_chroma_result([])])
 
-        with patch.object(mod, "_get_collection", return_value=fake):
+        with patch("vector_store_client._get_collection", return_value=fake):
             with request_context(channel_id=10, thread_id=20):
                 results = await mod.search(
                     mod.MEMORIES_COLLECTION,
@@ -255,7 +255,7 @@ class TestChannelScopedIsolation:
             ]),
         ])
 
-        with patch.object(mod, "_get_collection", return_value=fake):
+        with patch("vector_store_client._get_collection", return_value=fake):
             with request_context(channel_id=10, thread_id=20):
                 results = await mod.search(
                     mod.MEMORIES_COLLECTION,
@@ -271,7 +271,7 @@ class TestChannelScopedIsolation:
     @pytest.mark.asyncio
     async def test_recall_for_context_cross_channel_opt_in_passed_to_search_all(self):
         mock_search_all = AsyncMock(return_value=[])
-        with patch.object(mod, "search_all", mock_search_all):
+        with patch("vector_store_client.search_all", mock_search_all):
             await mod.recall_for_context(
                 "hello",
                 channel_id=10,
@@ -289,7 +289,7 @@ class TestChannelScopedIsolation:
     @pytest.mark.asyncio
     async def test_recall_for_context_anchor_id_sets_where_filter(self):
         mock_search_all = AsyncMock(return_value=[])
-        with patch.object(mod, "search_all", mock_search_all):
+        with patch("vector_store_client.search_all", mock_search_all):
             await mod.recall_for_context(
                 "hello",
                 channel_id=10,
@@ -311,7 +311,7 @@ class TestChannelScopedIsolation:
                 },
             ]
         )
-        with patch.object(mod, "search_all", mock_search_all):
+        with patch("vector_store_client.search_all", mock_search_all):
             text = await mod.recall_for_context(
                 "Summarize deployment blockers from this week",
                 channel_id=10,
@@ -334,7 +334,7 @@ class TestChannelScopedIsolation:
                 },
             ]
         )
-        with patch.object(mod, "search_all", mock_search_all):
+        with patch("vector_store_client.search_all", mock_search_all):
             text = await mod.recall_for_context(
                 "Summarize deployment blockers from this week",
                 channel_id=10,
@@ -356,7 +356,7 @@ class TestChannelScopedIsolation:
                 },
             ]
         )
-        with patch.object(mod, "search_all", mock_search_all):
+        with patch("vector_store_client.search_all", mock_search_all):
             text = await mod.recall_for_context(
                 "use:wwe summarize deployment blockers from this week",
                 channel_id=10,
@@ -379,7 +379,7 @@ class TestChannelScopedIsolation:
                 },
             ]
         )
-        with patch.object(mod, "search_all", mock_search_all):
+        with patch("vector_store_client.search_all", mock_search_all):
             text = await mod.recall_for_context("What changed in my project today?")
 
         assert text == ""
@@ -393,8 +393,8 @@ class TestMemoryLifecycleCompaction:
         fake = _FakeCollection([])
         mock_compact = AsyncMock(return_value=None)
         with (
-            patch.object(mod, "_get_collection", return_value=fake),
-            patch.object(mod, "_compact_scope_if_needed", mock_compact),
+            patch("vector_store_client._get_collection", return_value=fake),
+            patch("vector_store_compaction._compact_scope_if_needed", mock_compact),
         ):
             with request_context(channel_id=111, thread_id=222):
                 await mod.add_document(
@@ -429,7 +429,7 @@ class TestMemoryLifecycleCompaction:
         )
         audit_mock = MagicMock(audit_log=MagicMock())
         with (
-            patch.object(mod, "_get_collection", return_value=fake),
+            patch("vector_store_client._get_collection", return_value=fake),
             patch("vector_store.time.time", return_value=now),
             patch.dict("sys.modules", {"runtime_state": runtime_state_mock, "audit": audit_mock}),
         ):
@@ -456,7 +456,7 @@ class TestMemoryLifecycleCompaction:
             ),
         )
         with (
-            patch.object(mod, "_get_collection", return_value=fake),
+            patch("vector_store_client._get_collection", return_value=fake),
             patch.dict("sys.modules", {"runtime_state": runtime_state_mock}),
         ):
             payload = await mod.get_scoped_memory_summary(channel_id="123", thread_id="456")
