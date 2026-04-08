@@ -33,7 +33,7 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.response.send_message(msg, ephemeral=True)
 
     @digest.command(name="now", description="Get your personalized digest right now")
-    @require_auth
+    @require_auth()
     async def digest_now(self, interaction: discord.Interaction):
         """Get an instant personalized digest."""
         from digest_manager import get_digest_manager
@@ -72,7 +72,7 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.followup.send(f"❌ Failed to generate digest: {exc}", ephemeral=True)
 
     @digest.command(name="preview", description="Preview what your next digest will contain")
-    @require_auth
+    @require_auth()
     async def digest_preview(self, interaction: discord.Interaction):
         """Preview the next scheduled digest."""
         from digest_manager import get_digest_manager
@@ -109,7 +109,7 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.followup.send(f"❌ Failed to preview digest: {exc}", ephemeral=True)
 
     @digest.command(name="config", description="View your current digest configuration")
-    @require_auth
+    @require_auth()
     async def digest_config(self, interaction: discord.Interaction):
         """Show current digest configuration."""
         from digest_manager import get_digest_manager
@@ -198,7 +198,7 @@ class DigestCog(commands.Cog, name="Digest"):
         action="add or remove",
         topic="Topic to add/remove (e.g., 'AI', 'space exploration', 'climate change')",
     )
-    @require_auth
+    @require_auth()
     async def digest_topic(
         self,
         interaction: discord.Interaction,
@@ -244,7 +244,7 @@ class DigestCog(commands.Cog, name="Digest"):
         action="add or remove",
         ticker="Stock ticker symbol (e.g., 'TSLA', 'NVDA', 'AAPL')",
     )
-    @require_auth
+    @require_auth()
     async def digest_stock(
         self,
         interaction: discord.Interaction,
@@ -291,7 +291,7 @@ class DigestCog(commands.Cog, name="Digest"):
         action="add or remove",
         team="Team name (e.g., 'Lakers', 'Patriots', 'Yankees')",
     )
-    @require_auth
+    @require_auth()
     async def digest_team(
         self,
         interaction: discord.Interaction,
@@ -338,7 +338,7 @@ class DigestCog(commands.Cog, name="Digest"):
         time="Delivery time in HH:MM format (e.g., '08:00')",
         day="Day of week for weekly digests (e.g., 'Monday')",
     )
-    @require_auth
+    @require_auth()
     async def digest_schedule(
         self,
         interaction: discord.Interaction,
@@ -388,7 +388,7 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.followup.send(f"❌ Failed to set schedule: {exc}", ephemeral=True)
 
     @digest.command(name="enable", description="Enable your digest delivery")
-    @require_auth
+    @require_auth()
     async def digest_enable(self, interaction: discord.Interaction):
         """Enable digest delivery."""
         from digest_manager import get_digest_manager
@@ -410,7 +410,7 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.followup.send(f"❌ Failed to enable digest: {exc}", ephemeral=True)
 
     @digest.command(name="disable", description="Disable your digest delivery")
-    @require_auth
+    @require_auth()
     async def digest_disable(self, interaction: discord.Interaction):
         """Disable digest delivery."""
         from digest_manager import get_digest_manager
