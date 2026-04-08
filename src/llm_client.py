@@ -80,9 +80,13 @@ def _load_system_prompt() -> str:
 
 def _load_tool_declarations() -> list[dict[str, Any]]:
     """Load tool declarations from config/tools.yaml."""
-    tools_file = Path(os.getenv("TOOLS_CONFIG", "config/tools.yaml"))
+    # Primary: honour explicit env override, then use CONFIG_DIR (same as system prompt)
+    tools_file = Path(os.getenv("TOOLS_CONFIG", str(CONFIG_DIR / "tools.yaml")))
     if not tools_file.exists():
-        # Fallback: try relative to this file's parent (Docker layout)
+        # Fallback: try relative to CWD (local dev layout)
+        tools_file = Path("config/tools.yaml")
+    if not tools_file.exists():
+        # Fallback: relative to this file's parent
         tools_file = Path(__file__).resolve().parent.parent / "config" / "tools.yaml"
     if not tools_file.exists():
         log.error("tools.yaml not found — no tools will be available")
