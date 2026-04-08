@@ -268,9 +268,11 @@ async def test_send_text_package_sends_plain_message_for_single_chunk(monkeypatc
 
 
 class _InteractionStub:
-    def __init__(self, *, user_id: int = 123, channel_id: int = 456, display_name: str = "Dave"):
+    def __init__(self, *, user_id: int = 123, channel_id: int = 456, display_name: str = "Dave",
+                 channel_name: str = "general"):
         self.user = SimpleNamespace(id=user_id, display_name=display_name)
         self.channel_id = channel_id
+        self.channel = SimpleNamespace(name=channel_name)
         self.response = SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock())
         self.followup = SimpleNamespace(send=AsyncMock())
 
@@ -405,3 +407,134 @@ async def test_recap_package_thread_generates_report_and_packages(monkeypatch):
         variant="artifact",
         source_label="thread recap",
     )
+
+
+# ---------------------------------------------------------------------------
+# /recap weekly
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_recap_weekly_happy_path(monkeypatch):
+    """recap_weekly defers, generates report, and sends it via _send_chunks."""
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = _InteractionStub(channel_id=42)
+
+    fake_reporting = types.SimpleNamespace(
+        generate_channel_recap_report=AsyncMock(return_value="## Weekly recap\n- Item A\n- Item B")
+    )
+    monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
+    send_chunks_mock = AsyncMock()
+    monkeypatch.setattr(cog, "_send_chunks", send_chunks_mock)
+    monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
+
+    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
+                                    save_to_vault=False, schedule_weekly=False)
+
+    interaction.response.defer.assert_awaited_once()
+    fake_reporting.generate_channel_recap_report.assert_awaited_once_with(
+        channel_id=42, days=7, focus="", style="highlights"
+    )
+    send_chunks_mock.assert_awaited_once()
+    _, kwargs = send_chunks_mock.await_args
+    assert "Weekly Recap" in (send_chunks_mock.await_args[1].get("title") or
+                               send_chunks_mock.await_args[0][1] if send_chunks_mock.await_args[0] else "Weekly Recap")
+
+
+@pytest.mark.asyncio
+async def test_recap_weekly_no_history_warning(monkeypatch):
+    """When the channel has no messages, recap returns a ⚠️ string and still sends."""
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = _InteractionStub(channel_id=77)
+
+    fake_reporting = types.SimpleNamespace(
+        generate_channel_recap_report=AsyncMock(
+            return_value="⚠️ No user messages found in #general for the last 7 day(s)."
+        )
+    )
+    monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
+    send_chunks_mock = AsyncMock()
+    monkeypatch.setattr(cog, "_send_chunks", send_chunks_mock)
+    monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
+
+    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
+                                    save_to_vault=False, schedule_weekly=False)
+
+    send_chunks_mock.assert_awaited_once()
+    # The ⚠️ warning body should be passed through unchanged
+    call_kwargs = send_chunks_mock.await_args.kwargs
+    assert "No user messages" in call_kwargs.get("body", "")
+
+
+@pytest.mark.asyncio
+async def test_recap_weekly_llm_error_passthrough(monkeypatch):
+    """When generate_channel_recap_report returns an ❌ error string, it is sent as-is."""
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = _InteractionStub(channel_id=55)
+
+    fake_reporting = types.SimpleNamespace(
+        generate_channel_recap_report=AsyncMock(return_value="❌ Weekly recap failed: timeout")
+    )
+    monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
+    send_chunks_mock = AsyncMock()
+    monkeypatch.setattr(cog, "_send_chunks", send_chunks_mock)
+    monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
+
+    await cog.recap_weekly.callback(cog, interaction, days=3, focus="bugs", style="action-items",
+                                    save_to_vault=False, schedule_weekly=False)
+
+    send_chunks_mock.assert_awaited_once()
+    call_kwargs = send_chunks_mock.await_args.kwargs
+    assert "Weekly recap failed" in call_kwargs.get("body", "")
+
+
+@pytest.mark.asyncio
+async def test_recap_weekly_save_to_vault(monkeypatch):
+    """recap_weekly with save_to_vault=True sends an additional followup after saving."""
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = _InteractionStub(channel_id=88)
+
+    fake_reporting = types.SimpleNamespace(
+        generate_channel_recap_report=AsyncMock(return_value="## Recap\n- Done")
+    )
+    monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
+    monkeypatch.setattr(cog, "_send_chunks", AsyncMock())
+    monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
+
+    fake_obsidian = types.SimpleNamespace(
+        save_to_vault=AsyncMock(return_value="✅ Saved to vault: Weekly Recap - general")
+    )
+    monkeypatch.setitem(sys.modules, "obsidian_writer", fake_obsidian)
+
+    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
+                                    save_to_vault=True, schedule_weekly=False)
+
+    interaction.followup.send.assert_awaited_once()
+    msg = interaction.followup.send.await_args.args[0]
+    assert "vault" in msg.lower() or "Saved" in msg
+
+
+@pytest.mark.asyncio
+async def test_recap_weekly_schedule_weekly(monkeypatch):
+    """recap_weekly with schedule_weekly=True calls scheduler and sends a confirmation."""
+    cog = mod.ReportsCog(_DummyBot())
+    interaction = _InteractionStub(channel_id=99)
+
+    fake_reporting = types.SimpleNamespace(
+        generate_channel_recap_report=AsyncMock(return_value="## Recap\n- Done")
+    )
+    monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
+    monkeypatch.setattr(cog, "_send_chunks", AsyncMock())
+    monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
+
+    fake_task = SimpleNamespace(task_id="task-abc-123")
+    fake_scheduler = SimpleNamespace(create=lambda **_kw: fake_task)
+    monkeypatch.setattr(mod, "scheduler", fake_scheduler)
+
+    await cog.recap_weekly.callback(cog, interaction, days=7, focus="", style="highlights",
+                                    save_to_vault=False, schedule_weekly=True)
+
+    interaction.followup.send.assert_awaited_once()
+    msg = interaction.followup.send.await_args.args[0]
+    assert "task-abc-123" in msg
+    assert "Scheduled" in msg or "Mondays" in msg

@@ -182,3 +182,27 @@ class TestExtractFinalText:
         resp.text = "Here are the results."
         text = mod._extract_final_text(resp, 5, None)
         assert "Tool call limit reached" in text
+
+    def test_response_text_is_none_returns_empty_string_guard(self):
+        """response.text == None must not crash — the `or ''` guard handles it."""
+        resp = MagicMock()
+        resp.text = None  # None, not AttributeError — the recent fix guards this
+        # Should fall through to the candidates fallback branch without raising
+        resp.candidates = []  # empty so candidates fallback also produces ""
+        resp.prompt_feedback = None
+        text = mod._extract_final_text(resp, 0, None)
+        # Result should be a non-crashing fallback string
+        assert isinstance(text, str)
+
+    def test_response_text_none_with_valid_candidates(self):
+        """When response.text raises ValueError (e.g. blocked), fallback uses candidates parts."""
+        resp = MagicMock()
+        # Simulate response.text raising ValueError (blocked content)
+        type(resp).text = property(lambda self: (_ for _ in ()).throw(ValueError("blocked")))
+        part = MagicMock()
+        part.text = "Fallback from candidates"
+        resp.candidates = [MagicMock()]
+        resp.candidates[0].content.parts = [part]
+        resp.prompt_feedback = None
+        text = mod._extract_final_text(resp, 0, None)
+        assert "Fallback from candidates" in text
