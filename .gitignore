@@ -57,3 +57,7 @@ Thumbs.db
 test_phase4.py
 test_phase5.py
 data/ssh/
+data/backups/
+data/exports/
+data/chromadb/
+.hypothesis/

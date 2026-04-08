@@ -98,8 +98,11 @@ class TestSplitResponse:
         text = ("line\n" * 2000)  # well over 3800 chars
         chunks = mod._split_response(text)
         assert len(chunks) >= 2
+        # Use the actual limit from the current bot_formatting module rather
+        # than mod._EMBED_LIMIT, which may differ if constants was re-imported.
+        import bot_formatting as _bf_current
         for chunk in chunks:
-            assert len(chunk) <= mod._EMBED_LIMIT + 1  # +1 for trailing ellipsis char
+            assert len(chunk) <= _bf_current._EMBED_LIMIT + 1  # +1 for trailing ellipsis
 
     def test_empty_string(self):
         assert mod._split_response("") == [""]

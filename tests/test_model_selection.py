@@ -16,7 +16,9 @@ class TestModelPreference:
     def test_default_preference_is_auto(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         # No file on disk → should return config default
         from config import cfg
         assert memory.get_model_preference(12345) == cfg.default_model_preference
@@ -24,7 +26,9 @@ class TestModelPreference:
     def test_set_and_get_preference(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "gemini")
         assert "✅" in result
         assert "Gemini" in result
@@ -33,7 +37,9 @@ class TestModelPreference:
     def test_set_preference_local(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "local")
         assert "✅" in result
         assert "Local" in result
@@ -42,7 +48,9 @@ class TestModelPreference:
     def test_set_preference_auto(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         # Set to gemini first, then back to auto
         memory.set_model_preference(12345, "gemini")
         result = memory.set_model_preference(12345, "auto")
@@ -52,7 +60,9 @@ class TestModelPreference:
     def test_set_invalid_preference(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "gpt4")
         assert "❌" in result
         assert "Invalid" in result
@@ -60,7 +70,9 @@ class TestModelPreference:
     def test_preference_persists_to_disk(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         memory.set_model_preference(99, "local")
         # Read raw file
         prefs_file = tmp_path / "prefs" / "99.json"
@@ -71,7 +83,9 @@ class TestModelPreference:
     def test_preference_case_insensitive(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "GEMINI")
         assert "✅" in result
         assert memory.get_model_preference(12345) == "gemini"
@@ -79,7 +93,9 @@ class TestModelPreference:
     def test_set_preference_accepts_claude_alias(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "claude")
         assert "✅" in result
         assert "Anthropic" in result
@@ -88,7 +104,9 @@ class TestModelPreference:
     def test_set_invalid_preference_includes_did_you_mean(self, tmp_path, monkeypatch):
         import memory
 
+        import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
         result = memory.set_model_preference(12345, "gemni")
         assert "❌" in result
         assert "Did you mean `gemini`?" in result
