@@ -35,6 +35,7 @@ from llm_patterns import (
 from llm_ratelimit import rate_limiter as _rate_limiter
 from llm_tools import _extract_final_text, _extract_history, _run_tool_loop
 from skills import SKILLS
+from tool_health import circuit_breaker as _gemini_circuit
 from tool_router import route_tool_declarations
 from trace_context import get_trace_id
 
@@ -50,8 +51,6 @@ from .context import (
     _trim_history,
 )
 from .tool_execution import _ollama_available, _try_local_model
-
-from tool_health import circuit_breaker as _gemini_circuit
 
 _GEMINI_CIRCUIT_KEY = "gemini"
 

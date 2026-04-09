@@ -21,9 +21,9 @@ from ask_orchestrator import (
     get_latency_load_snapshot,
     select_latency_budget_policy,
 )
+from channel_profiles import resolve_retrieval_profile_settings
 from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW
 from config import cfg as _cfg
-from channel_profiles import resolve_retrieval_profile_settings
 from http_session import SessionManager
 from runtime_state import get_effective_channel_profile
 from search_provider import get_stats, retry_once

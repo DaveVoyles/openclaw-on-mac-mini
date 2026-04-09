@@ -4,7 +4,6 @@ No class dependencies — safe to import from any memory sub-module.
 """
 
 import re
-import time
 from pathlib import Path
 from typing import Any
 

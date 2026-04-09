@@ -1,13 +1,6 @@
 """Tests for model_aliases.py and constants.py — pure modules, no mocking needed."""
 
-import pytest
 
-from model_aliases import (
-    MODEL_INPUT_ALIASES,
-    VALID_MODEL_PREFERENCES,
-    model_input_suggestion,
-    normalize_model_input,
-)
 from constants import (
     APPROVAL_TTL,
     ATTACHMENT_TEXT_MAX_CHARS,
@@ -42,7 +35,12 @@ from constants import (
     THREAD_ARCHIVE_LONG,
     THREAD_ARCHIVE_SHORT,
 )
-
+from model_aliases import (
+    MODEL_INPUT_ALIASES,
+    VALID_MODEL_PREFERENCES,
+    model_input_suggestion,
+    normalize_model_input,
+)
 
 # ---------------------------------------------------------------------------
 # normalize_model_input

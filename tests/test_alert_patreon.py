@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -85,7 +85,6 @@ class TestShouldSendAlert:
         assert key == "general_warning"
 
     def test_cooldown_suppresses_repeat(self):
-        from alert_patreon import ALERT_COOLDOWN_SECONDS
         result = _make_result(status=PatreonHealthStatus.CRITICAL, message="container is stopped")
         # Simulate a recent alert
         state = AlertState()

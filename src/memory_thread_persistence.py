@@ -7,11 +7,11 @@ import time
 from pathlib import Path
 
 from memory_helpers import (
+    _THREAD_NAME_RE,
     MAX_HISTORY_LENGTH,
     THREADS_DIR,
     _atomic_write,
     _relative_age,
-    _THREAD_NAME_RE,
 )
 
 log = logging.getLogger("openclaw.memory")

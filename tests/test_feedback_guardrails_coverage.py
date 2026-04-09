@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import os
-import time
 
 import pytest
 
 os.environ.setdefault("LOG_DIR", "/tmp")
 os.environ.setdefault("AUDIT_DIR", "/tmp")
 
-import feedback_guardrails as mod
 from feedback_guardrails import (
     _apply_feedback_guardrails,
     _prune_feedback_event_buffer,

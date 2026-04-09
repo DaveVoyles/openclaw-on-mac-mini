@@ -1,10 +1,7 @@
 """Tests for copy_workflow_formatter.py — markdown stripping and payload building."""
 from __future__ import annotations
 
-import pytest
-
 from copy_workflow_formatter import build_copy_workflow_payload, strip_discord_markdown_noise
-
 
 # ===========================================================================
 # strip_discord_markdown_noise

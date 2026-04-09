@@ -9,8 +9,8 @@ import os
 import re
 import shlex
 
-from memory import recall as memory_recall  # noqa: F401
 from memory import memory_stats  # noqa: F401
+from memory import recall as memory_recall  # noqa: F401
 
 # Unified memory manager (Phase 16)
 from memory import store_memory as memory_store  # noqa: F401

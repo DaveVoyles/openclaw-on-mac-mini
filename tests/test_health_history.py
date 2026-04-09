@@ -1,11 +1,10 @@
 """Tests for src/health_history.py — HealthHistory with SQLite."""
 import time
-from pathlib import Path
 
 import pytest
 
 import health_history as hh
-from health_history import HealthEntry, HealthHistory
+from health_history import HealthHistory
 
 
 @pytest.fixture(autouse=True)

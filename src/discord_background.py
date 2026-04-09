@@ -7,7 +7,6 @@ The implementation has been split into focused sub-modules:
   bg_tasks      — task lifecycle (start/stop/restart/supervise)
 """
 
-import asyncio  # needed so patch("discord_background.asyncio.sleep", ...) works in tests
 
 from bg_briefing import (
     evening_digest_loop,
@@ -16,9 +15,9 @@ from bg_briefing import (
     send_morning_briefing,
 )
 from bg_healing import (
-    _CopilotFixView,
     _SAFE_RESTART_TARGETS,
     _check_quality_drift_alert,
+    _CopilotFixView,
     _execute_self_healing,
     _gather_system_signals,
     _parse_heal_actions,

@@ -1,7 +1,7 @@
 """Tests for patreon_scheduled.py and openclaw_types.py."""
 
+import importlib
 import sys
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,7 +9,6 @@ import pytest
 # ---------------------------------------------------------------------------
 # openclaw_types tests — pure TypedDicts and type aliases
 # ---------------------------------------------------------------------------
-
 from openclaw_types import (
     JSON,
     APIResponse,
@@ -76,17 +75,14 @@ class TestOpenclawTypes:
 # patreon_scheduled tests
 # ---------------------------------------------------------------------------
 
-# Mock heavy deps before importing
+# Mock config before importing patreon_scheduled without polluting other module imports.
 _patreon_mocks = {
-    "alert_patreon": MagicMock(),
     "config": MagicMock(cfg=MagicMock(alert_channel_id=None, ollama_url="http://localhost:11434")),
-    "patreon_monitor": MagicMock(),
-    "patreon_recovery": MagicMock(),
 }
-for _name, _mock in _patreon_mocks.items():
-    sys.modules.setdefault(_name, _mock)
-
-import patreon_scheduled as ps  # noqa: E402
+with patch.dict(sys.modules, _patreon_mocks):
+    sys.modules.pop("patreon_scheduled", None)
+    ps = importlib.import_module("patreon_scheduled")
+sys.modules["patreon_scheduled"] = ps
 
 
 @pytest.fixture(autouse=True)

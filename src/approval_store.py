@@ -10,8 +10,8 @@ import logging
 import threading
 import uuid
 
-from config import cfg
 from approval_models import APPROVAL_TTL, ApprovalRequest, RiskLevel
+from config import cfg
 
 log = logging.getLogger("openclaw.approvals")
 

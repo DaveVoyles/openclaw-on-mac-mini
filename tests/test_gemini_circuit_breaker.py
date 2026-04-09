@@ -34,7 +34,6 @@ sys.modules.setdefault("google", MagicMock())
 sys.modules.setdefault("google.genai", _genai_mock)
 sys.modules.setdefault("google.genai.types", _genai_mock.types)
 
-import llm  # noqa: E402  — triggers llm.chat submodule import
 
 from tool_health import CircuitBreaker  # noqa: E402
 

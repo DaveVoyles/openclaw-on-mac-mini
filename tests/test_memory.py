@@ -217,6 +217,8 @@ class TestConversationStore:
 # _normalize_text / _message_text (pure helpers)
 # ===========================================================================
 
+
+import memory as _mem_mod
 from memory import (
     _build_salience_summary,
     _extract_key_topics,
@@ -227,8 +229,6 @@ from memory import (
     get_model_preference,
     set_model_preference,
 )
-import memory as _mem_mod
-from unittest.mock import patch
 
 
 class TestNormalizeText:

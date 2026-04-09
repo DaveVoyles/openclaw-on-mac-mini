@@ -11,13 +11,13 @@
 import logging
 import time
 
+from memory_conversation_cache import ConversationCache
 from memory_helpers import (
     CONTEXT_TTL,
     MAX_HISTORY_LENGTH,
+    THREADS_DIR,  # noqa: F401 - retained for test monkeypatching compatibility
     _build_salience_summary,
 )
-from memory_helpers import THREADS_DIR  # retained for test monkeypatching compatibility
-from memory_conversation_cache import ConversationCache
 from memory_thread_persistence import ThreadPersistence
 
 log = logging.getLogger("openclaw.memory")

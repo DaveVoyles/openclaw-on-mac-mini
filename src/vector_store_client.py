@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Optional
 
 from vector_store_config import (
     CHROMA_DIR,
+    CONVERSATIONS_COLLECTION,
     DEFAULT_TOP_K,
     MEMORIES_COLLECTION,
-    CONVERSATIONS_COLLECTION,
     RESEARCH_COLLECTION,
     SIMILARITY_THRESHOLD,
     _embedding_fn,

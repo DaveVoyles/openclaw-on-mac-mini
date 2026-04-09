@@ -3,11 +3,9 @@
 from unittest.mock import MagicMock
 
 import discord
-import pytest
 
 import permissions as mod
 from permissions import PermissionLevel, check_permission, get_plugin_permission, set_plugin_permission
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -12,12 +12,11 @@ import sys
 import time
 from collections.abc import Awaitable, Callable
 
+from bg_briefing import evening_digest_loop, morning_briefing_loop  # noqa: F401
+from bg_healing import audit_writer_loop, background_cleanup_loop, proactive_insight_loop  # noqa: F401
+from bg_monitoring import container_health_loop, error_monitor_loop, resource_monitor_loop  # noqa: F401
 from metrics_collector import get_collector
 from trace_context import trace_context
-
-from bg_briefing import evening_digest_loop, morning_briefing_loop
-from bg_healing import audit_writer_loop, background_cleanup_loop, proactive_insight_loop
-from bg_monitoring import container_health_loop, error_monitor_loop, resource_monitor_loop
 
 log = logging.getLogger("openclaw")
 

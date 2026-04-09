@@ -191,34 +191,6 @@ class TestComputeHealth:
 
 
 # ---------------------------------------------------------------------------
-# _compute_reachability
-# ---------------------------------------------------------------------------
-
-class TestComputeReachability:
-    def test_empty_returns_one(self):
-        assert mod._compute_reachability([]) == 1.0
-
-    def test_single_isolated_node(self):
-        entries = [{"id": "a", "relations": []}]
-        assert mod._compute_reachability(entries) == 1.0
-
-    def test_two_connected_nodes(self):
-        entries = [
-            {"id": "a", "relations": ["b"]},
-            {"id": "b", "relations": []},
-        ]
-        assert mod._compute_reachability(entries) == 1.0
-
-    def test_two_isolated_nodes(self):
-        entries = [
-            {"id": "a", "relations": []},
-            {"id": "b", "relations": []},
-        ]
-        # 2 components → 1/2 = 0.5
-        assert mod._compute_reachability(entries) == 0.5
-
-
-# ---------------------------------------------------------------------------
 # _fallback_insights
 # ---------------------------------------------------------------------------
 
@@ -339,7 +311,7 @@ class TestDreamCycleInit:
     async def test_run_returns_timeout_message_on_timeout(self, tmp_path, monkeypatch):
         """run() catches timeout and returns warning string."""
         import asyncio as _asyncio
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
 
         dc = mod.DreamCycle(data_dir=tmp_path)
         async def _slow(*a, **kw):

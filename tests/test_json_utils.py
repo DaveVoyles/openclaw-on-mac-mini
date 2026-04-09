@@ -1,7 +1,5 @@
 """Tests for src/json_utils.py — try_parse_json, extract_json_block, repair_json, format_tool_result."""
-import pytest
 
-import json_utils as ju
 from json_utils import (
     extract_json_block,
     format_tool_result,

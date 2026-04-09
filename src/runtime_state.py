@@ -9,11 +9,32 @@ All implementation has been split into focused sub-modules:
 
 from __future__ import annotations
 
-# ruff: noqa: F401 — re-exports for backward compatibility
+from anchor_context_state import (
+    _ANCHOR_STATE_BY_SCOPE,
+    _ANCHOR_STATE_LOCK,
+    _CONTEXT_LOCKS,
+    _CONTEXT_LOCKS_LOCK,
+    _LAST_ANCHOR_STATE,
+    _MAX_SCOPED_RECALL_ALERTS,
+    _SCOPED_RECALL_ALERTS,
+    _SCOPED_RECALL_ALERTS_LOCK,
+    ANCHOR_EXPIRY_SECONDS,
+    CONTEXT_LOCK_EXPIRY_SECONDS,
+    anchor_matches,
+    get_anchor_state,
+    get_context_lock,
+    get_scoped_recall_alerts,
+    record_scoped_recall_alert,
+    reset_anchor_state,
+    reset_context_lock,
+    resolve_anchor_state,
+    resolve_context_lock,
+    set_anchor_state,
+    set_context_lock,
+)
 
+# ruff: noqa: F401 — re-exports for backward compatibility
 from channel_profile_state import (
-    RUNTIME_STATE_CONTEXTS,
-    RuntimeStateContexts,
     _BOT,
     _CHANNEL_CONFIG_STATE,
     _CHANNEL_PROFILE_ALLOWED,
@@ -26,12 +47,14 @@ from channel_profile_state import (
     _CURRENT_CHANNEL_ID,
     _CURRENT_THREAD_ID,
     _CURRENT_USER_ID,
-    _InteractionState,
     _INTERACTION_STATE,
+    _PROFILE_USAGE_SIGNALS,
+    RUNTIME_STATE_CONTEXTS,
+    RuntimeStateContexts,
     _ChannelConfigState,
     _ConversationState,
-    _PROFILE_USAGE_SIGNALS,
     _get_channel_profile_db,
+    _InteractionState,
     _normalize_profile_int_value,
     _normalize_profile_value,
     _reset_channel_profile_store_for_tests,
@@ -58,31 +81,6 @@ from channel_profile_state import (
     set_current_user_id,
     update_channel_profile_recommendation,
 )
-
-from anchor_context_state import (
-    ANCHOR_EXPIRY_SECONDS,
-    CONTEXT_LOCK_EXPIRY_SECONDS,
-    _ANCHOR_STATE_BY_SCOPE,
-    _ANCHOR_STATE_LOCK,
-    _CONTEXT_LOCKS,
-    _CONTEXT_LOCKS_LOCK,
-    _LAST_ANCHOR_STATE,
-    _MAX_SCOPED_RECALL_ALERTS,
-    _SCOPED_RECALL_ALERTS,
-    _SCOPED_RECALL_ALERTS_LOCK,
-    anchor_matches,
-    get_anchor_state,
-    get_context_lock,
-    get_scoped_recall_alerts,
-    record_scoped_recall_alert,
-    reset_anchor_state,
-    reset_context_lock,
-    resolve_anchor_state,
-    resolve_context_lock,
-    set_anchor_state,
-    set_context_lock,
-)
-
 from memory_compaction_state import (
     _MAX_MEMORY_COMPACTION_EVENTS,
     _MEMORY_COMPACTION_EVENTS,
@@ -90,7 +88,6 @@ from memory_compaction_state import (
     get_memory_compaction_events,
     record_memory_compaction_event,
 )
-
 from quality_eval_state import (
     build_quality_eval_scorecard,
     create_quality_eval_scorecard,

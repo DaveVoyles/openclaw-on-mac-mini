@@ -8,11 +8,11 @@ import time
 from typing import Any, Optional
 
 from vector_store_config import (
+    _RECALL_GUARD_MIN_SIMILARITY,
     CONVERSATIONS_COLLECTION,
     MEMORIES_COLLECTION,
     RESEARCH_COLLECTION,
     SIMILARITY_THRESHOLD,
-    _RECALL_GUARD_MIN_SIMILARITY,
     _set_recall_guard_notes,
 )
 from vector_store_scope import (
@@ -21,9 +21,6 @@ from vector_store_scope import (
     _infer_recall_domains,
     _normalize_scope_id,
     _resolve_scope,
-)
-from vector_store_client import (
-    delete_document,
 )
 
 log = logging.getLogger("openclaw.vector_store")
