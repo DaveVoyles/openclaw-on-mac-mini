@@ -1,5 +1,6 @@
 """Tests for report rendering behavior in ReportsCog."""
 
+import itertools
 import sys
 import types
 from types import SimpleNamespace
@@ -267,9 +268,20 @@ async def test_send_text_package_sends_plain_message_for_single_chunk(monkeypatc
     )
 
 
+_INTERACTION_USER_IDS = itertools.count(123)
+
+
 class _InteractionStub:
-    def __init__(self, *, user_id: int = 123, channel_id: int = 456, display_name: str = "Dave",
-                 channel_name: str = "general"):
+    def __init__(
+        self,
+        *,
+        user_id: int | None = None,
+        channel_id: int = 456,
+        display_name: str = "Dave",
+        channel_name: str = "general",
+    ):
+        if user_id is None:
+            user_id = next(_INTERACTION_USER_IDS)
         self.user = SimpleNamespace(id=user_id, display_name=display_name)
         self.channel_id = channel_id
         self.channel = SimpleNamespace(name=channel_name)
