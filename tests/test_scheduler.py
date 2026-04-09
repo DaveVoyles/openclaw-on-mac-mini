@@ -330,8 +330,7 @@ class TestSchedulerPersistence:
 # ---------------------------------------------------------------------------
 
 import asyncio
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 
 def test_parse_utc_naive_datetime():
@@ -613,7 +612,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_create_scheduled_task_unknown_skill(self):
         """create_scheduled_task returns error for unknown skill name."""
-        from scheduler import create_scheduled_task, scheduler as global_sched
+        from scheduler import create_scheduled_task
+        from scheduler import scheduler as global_sched
         global_sched._skill_registry.pop("nonexistent_skill_xyz", None)
         result = await create_scheduled_task(skill_name="nonexistent_skill_xyz")
         assert "❌" in result
@@ -621,7 +621,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_create_scheduled_task_invalid_args_json(self):
         """create_scheduled_task returns error for invalid args_json."""
-        from scheduler import create_scheduled_task, scheduler as global_sched
+        from scheduler import create_scheduled_task
+        from scheduler import scheduler as global_sched
         global_sched.register_skills({"list_containers": AsyncMock(return_value="OK")})
         result = await create_scheduled_task(skill_name="list_containers", args_json="{invalid")
         assert "❌" in result
@@ -636,7 +637,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_create_scheduled_task_with_skill_success(self):
         """create_scheduled_task creates skill job successfully."""
-        from scheduler import create_scheduled_task, scheduler as global_sched
+        from scheduler import create_scheduled_task
+        from scheduler import scheduler as global_sched
         global_sched.register_skills({"my_test_skill": AsyncMock(return_value="OK")})
         result = await create_scheduled_task(skill_name="my_test_skill", hour=9)
         assert "✅" in result
@@ -662,7 +664,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_cancel_scheduled_task_success(self):
         """cancel_scheduled_task removes existing task."""
-        from scheduler import cancel_scheduled_task, scheduler as global_sched
+        from scheduler import cancel_scheduled_task
+        from scheduler import scheduler as global_sched
         task = global_sched.create("list_containers", {})
         result = await cancel_scheduled_task(task.task_id)
         assert "✅" in result
@@ -678,7 +681,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_list_scheduled_tasks_empty(self):
         """list_scheduled_tasks returns message when no tasks."""
-        from scheduler import list_scheduled_tasks, scheduler as global_sched
+        from scheduler import list_scheduled_tasks
+        from scheduler import scheduler as global_sched
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -690,7 +694,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_list_scheduled_tasks_shows_entries(self):
         """list_scheduled_tasks returns formatted list."""
-        from scheduler import list_scheduled_tasks, scheduler as global_sched
+        from scheduler import list_scheduled_tasks
+        from scheduler import scheduler as global_sched
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -704,7 +709,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_list_scheduled_tasks_with_prompt_job(self):
         """list_scheduled_tasks shows prompt jobs with icon."""
-        from scheduler import list_scheduled_tasks, scheduler as global_sched
+        from scheduler import list_scheduled_tasks
+        from scheduler import scheduler as global_sched
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -718,7 +724,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_list_scheduled_tasks_cron_expression_shown(self):
         """list_scheduled_tasks shows cron expression correctly."""
-        from scheduler import list_scheduled_tasks, scheduler as global_sched
+        from scheduler import list_scheduled_tasks
+        from scheduler import scheduler as global_sched
         orig_tasks = dict(global_sched._tasks)
         global_sched._tasks.clear()
         try:
@@ -732,7 +739,8 @@ class TestLLMSchedulingSkills:
     @pytest.mark.asyncio
     async def test_schedule_research_report_success(self):
         """schedule_research_report creates a scheduled research task."""
-        from scheduler import schedule_research_report, scheduler as global_sched
+        from scheduler import schedule_research_report
+        from scheduler import scheduler as global_sched
         orig_tasks = dict(global_sched._tasks)
         try:
             result = await schedule_research_report("AI trends in healthcare")

@@ -9,15 +9,13 @@ Covers:
 5. Backoff timing: next_retry_at increases correctly
 """
 
-import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import scheduler as scheduler_module
-from scheduler import _RETRY_DELAYS, _RetryTask, TaskScheduler
-
+from scheduler import _RETRY_DELAYS, TaskScheduler, _RetryTask
 
 # ---------------------------------------------------------------------------
 # Fixtures

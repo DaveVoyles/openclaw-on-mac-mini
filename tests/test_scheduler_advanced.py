@@ -507,17 +507,13 @@ class TestAdvancedSchedulerIntegration:
 # ---------------------------------------------------------------------------
 
 import datetime
+
 import scheduler_advanced as adv_module
 from scheduler_advanced import (
-    AdvancedScheduler,
-    AdvancedTask,
-    EventTrigger,
-    TriggerType,
     _parse_utc,
     _safe_condition_eval,
     get_advanced_scheduler,
 )
-from unittest.mock import MagicMock, AsyncMock, patch
 
 
 class TestParseUtc:
