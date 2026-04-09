@@ -11,6 +11,7 @@ Handles:
 
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -98,19 +99,29 @@ class PluginRegistry:
         plugin_dirs = await self.loader.discover_plugins()
 
         for plugin_dir in plugin_dirs:
-            plugin_name = plugin_dir.name
+            metadata = self.loader.load_manifest(plugin_dir)
+            plugin_name = metadata.name if metadata else plugin_dir.name
+
+            if not metadata:
+                results[plugin_name] = False
+                continue
 
             # Skip disabled plugins
-            if plugin_name in self._disabled_plugins:
+            if metadata.name in self._disabled_plugins or plugin_dir.name in self._disabled_plugins:
                 log.info(f"Skipping disabled plugin: {plugin_name}")
                 results[plugin_name] = False
                 continue
 
-            plugin = await self.loader.load_plugin(plugin_dir)
+            plugin, conflict = await self._load_plugin_with_conflict_checks(
+                plugin_dir,
+                metadata=metadata,
+            )
             if plugin and plugin.metadata:
                 self._plugins[plugin.metadata.name] = plugin
                 results[plugin.metadata.name] = True
             else:
+                if conflict:
+                    log.warning(f"Skipping plugin {plugin_name}: {conflict}")
                 results[plugin_name] = False
 
         return results
@@ -130,19 +141,12 @@ class PluginRegistry:
         if not metadata:
             return False, "Invalid or missing plugin.yaml"
 
-        # Check if already installed
-        if metadata.name in self._plugins:
-            return False, f"Plugin {metadata.name} already installed"
-
-        # Check for conflicts
-        conflict = self._check_conflicts(metadata)
-        if conflict:
-            return False, conflict
-
-        # Load plugin
-        plugin = await self.loader.load_plugin(plugin_dir)
-        if not plugin:
-            return False, "Failed to load plugin"
+        plugin, conflict = await self._load_plugin_with_conflict_checks(
+            plugin_dir,
+            metadata=metadata,
+        )
+        if not plugin or conflict:
+            return False, conflict or "Failed to load plugin"
 
         self._plugins[metadata.name] = plugin
         self._save_state()
@@ -195,9 +199,17 @@ class PluginRegistry:
         if not plugin_dir.exists():
             return False, f"Plugin directory not found: {plugin_dir}"
 
-        plugin = await self.loader.load_plugin(plugin_dir)
-        if not plugin or not plugin.metadata:
-            return False, "Failed to load plugin"
+        metadata = self.loader.load_manifest(plugin_dir)
+        if not metadata:
+            return False, "Invalid or missing plugin.yaml"
+
+        plugin, conflict = await self._load_plugin_with_conflict_checks(
+            plugin_dir,
+            metadata=metadata,
+            exclude_plugin=metadata.name,
+        )
+        if not plugin or conflict:
+            return False, conflict or "Failed to load plugin"
 
         self._plugins[plugin.metadata.name] = plugin
         self._disabled_plugins.remove(plugin_name)
@@ -252,7 +264,17 @@ class PluginRegistry:
 
         new_plugin = await self.loader.reload_plugin(old_plugin)
         if not new_plugin:
+            del self._plugins[plugin_name]
             return False, "Failed to reload plugin"
+
+        conflict = self._check_conflicts(
+            new_plugin.metadata,
+            commands=new_plugin.api.get_registered_commands(),
+            exclude_plugin=plugin_name,
+        )
+        if conflict:
+            del self._plugins[plugin_name]
+            return False, await self._rollback_failed_plugin_load(new_plugin, conflict)
 
         self._plugins[plugin_name] = new_plugin
 
@@ -314,21 +336,139 @@ class PluginRegistry:
             "commands": plugin.api.get_registered_commands(),
         }
 
-    def _check_conflicts(self, metadata: PluginMetadata) -> str | None:
+    async def _load_plugin_with_conflict_checks(
+        self,
+        plugin_dir: Path,
+        metadata: PluginMetadata | None = None,
+        *,
+        exclude_plugin: str | None = None,
+    ) -> tuple[Plugin | None, str | None]:
+        """
+        Load a plugin and roll it back if post-load conflict checks fail.
+
+        Args:
+            plugin_dir: Directory containing the plugin
+            metadata: Pre-loaded manifest metadata, if already available
+            exclude_plugin: Plugin name to ignore during conflict checks
+
+        Returns:
+            Tuple of (plugin, error_message)
+        """
+        metadata = metadata or self.loader.load_manifest(plugin_dir)
+        if not metadata:
+            return None, "Invalid or missing plugin.yaml"
+
+        conflict = self._check_conflicts(metadata, exclude_plugin=exclude_plugin)
+        if conflict:
+            return None, conflict
+
+        plugin = await self.loader.load_plugin(plugin_dir)
+        if not plugin or not plugin.metadata:
+            return None, "Failed to load plugin"
+
+        conflict = self._check_conflicts(
+            plugin.metadata,
+            commands=plugin.api.get_registered_commands(),
+            exclude_plugin=exclude_plugin,
+        )
+        if conflict:
+            return None, await self._rollback_failed_plugin_load(plugin, conflict)
+
+        return plugin, None
+
+    async def _rollback_failed_plugin_load(self, plugin: Plugin, error: str) -> str:
+        """
+        Unload a plugin after a post-load validation failure.
+
+        Args:
+            plugin: Loaded plugin that must be rolled back
+            error: Original validation error
+
+        Returns:
+            Final error message for callers
+        """
+        if await self.loader.unload_plugin(plugin):
+            return error
+
+        if plugin.metadata:
+            for skill_name in plugin.api.get_registered_skills():
+                plugin.api.unregister_skill(skill_name)
+
+            plugin._loaded = False
+            sys.modules.pop(f"plugin.{plugin.metadata.name}", None)
+
+        return f"{error}. The plugin was rejected and force-cleaned after unload failed."
+
+    def _check_conflicts(
+        self,
+        metadata: PluginMetadata,
+        commands: list[dict[str, Any]] | None = None,
+        *,
+        exclude_plugin: str | None = None,
+    ) -> str | None:
         """
         Check for conflicts with existing plugins.
 
         Args:
             metadata: Plugin metadata to check
+            commands: Registered commands to validate post-load
+            exclude_plugin: Plugin name to ignore during comparison
 
         Returns:
             Error message if conflict found, None otherwise
         """
         # Check for name conflicts
-        if metadata.name in self._plugins:
+        if metadata.name != exclude_plugin and metadata.name in self._plugins:
             return f"Plugin with name '{metadata.name}' already exists"
 
-        # TODO: Check for skill/command name conflicts
+        if metadata.name != exclude_plugin and metadata.name in self._disabled_plugins:
+            return f"Plugin with name '{metadata.name}' is already installed but disabled"
+
+        if not commands:
+            return None
+
+        existing_commands: dict[str, str] = {}
+        for plugin_name, plugin in self._plugins.items():
+            if plugin_name == exclude_plugin:
+                continue
+
+            for command in plugin.api.get_registered_commands():
+                raw_name = command.get("name")
+                if not isinstance(raw_name, str):
+                    continue
+
+                command_name = raw_name.strip().casefold()
+                if command_name:
+                    existing_commands[command_name] = plugin_name
+
+        seen_commands: dict[str, str] = {}
+        for command in commands:
+            raw_name = command.get("name")
+            if not isinstance(raw_name, str):
+                continue
+
+            display_name = raw_name.strip()
+            if not display_name:
+                continue
+
+            command_name = display_name.casefold()
+            if command_name in seen_commands:
+                return (
+                    f"Plugin '{metadata.name}' registers duplicate command '/{display_name}'"
+                )
+
+            if command_name in existing_commands:
+                owner = existing_commands[command_name]
+                return (
+                    f"Command '/{display_name}' from plugin '{metadata.name}' "
+                    f"conflicts with plugin '{owner}'"
+                )
+
+            seen_commands[command_name] = display_name
+
+        # Skill conflicts are handled by PluginAPI: each skill is registered with a
+        # "<plugin>." prefix in the global registry, so cross-plugin skill name
+        # collisions are only possible when plugin names themselves conflict.
         # TODO: Check for incompatible versions
 
         return None
