@@ -1,11 +1,9 @@
 """Tests for src/todo_manager.py — TodoManager CRUD with JSON persistence."""
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
-import todo_manager as tm
 from todo_manager import TodoItem, TodoManager
 
 

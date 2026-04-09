@@ -1,13 +1,9 @@
 """Tests for src/ui_components.py — EmbedColors, paginate_items, build_embed, error_embed."""
-import sys
-from unittest.mock import MagicMock, patch
 
-import pytest
 
 # discord is the real module (conftest loads it) — no stubs needed
 
 import ui_components as uc  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # EmbedColors

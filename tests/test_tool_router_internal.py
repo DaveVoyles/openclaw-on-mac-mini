@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import os
-from typing import Any
-
-import pytest
 
 os.environ.setdefault("LOG_DIR", "/tmp")
 os.environ.setdefault("AUDIT_DIR", "/tmp")
@@ -23,7 +20,6 @@ from tool_router import (
     _tokenize,
     route_tool_declarations,
 )
-
 
 # ---------------------------------------------------------------------------
 # _tokenize

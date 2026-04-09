@@ -1,10 +1,7 @@
 """Tests for src/resource_monitor.py — ResourceMonitor CRUD and threshold checks."""
-import asyncio
 import json
-import sys
 import time
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

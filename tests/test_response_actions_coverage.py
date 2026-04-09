@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import discord
@@ -14,7 +13,6 @@ os.environ.setdefault("AUDIT_DIR", "/tmp")
 
 import response_actions as mod
 from response_actions import _generate_follow_ups, _resolve_channel_thread_scope
-
 
 # ---------------------------------------------------------------------------
 # _resolve_channel_thread_scope

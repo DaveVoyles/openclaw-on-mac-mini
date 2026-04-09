@@ -3,12 +3,11 @@
 import copy
 import json
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 import user_profile as up
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

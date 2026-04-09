@@ -527,11 +527,8 @@ def test_sources_collection(temp_db):
 # Additional tests for improved coverage
 # ---------------------------------------------------------------------------
 
-import tempfile as _tempfile
-from pathlib import Path as _Path
-from unittest.mock import patch as _patch, MagicMock as _MagicMock
+from unittest.mock import patch as _patch
 
-import time as _time
 import trend_tracker as _mod
 
 

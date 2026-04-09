@@ -1,6 +1,4 @@
 """Tests for src/table_renderer.py — parse, should_render, extract_table_text."""
-import sys
-from unittest.mock import MagicMock
 
 import pytest
 

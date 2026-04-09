@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,7 +13,6 @@ os.environ.setdefault("AUDIT_DIR", "/tmp")
 
 import rules_engine as mod
 from rules_engine import detect_correction
-
 
 # ---------------------------------------------------------------------------
 # detect_correction — pure function

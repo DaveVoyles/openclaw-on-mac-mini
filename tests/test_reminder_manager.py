@@ -2,14 +2,11 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 
 import pytest
 
 import reminder_manager as mod
 from reminder_manager import Reminder, ReminderManager, parse_time_expression
-
 
 # ===========================================================================
 # parse_time_expression
