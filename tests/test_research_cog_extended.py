@@ -12,6 +12,7 @@ import discord
 import pytest
 
 import cogs.research_cog as mod
+from cooldowns import reset_cooldown
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,14 @@ def _make_interaction(user_id=1, done=False, is_thread=False):
 
 def _make_cog():
     return mod.ResearchCog(_FakeBot())
+
+
+@pytest.fixture(autouse=True)
+def _reset_research_cooldown():
+    """Keep /research cooldown state from leaking across tests in this module."""
+    reset_cooldown("research", 1)
+    yield
+    reset_cooldown("research", 1)
 
 
 # ── cog_command_error ─────────────────────────────────────────────────────────
