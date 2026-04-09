@@ -4,7 +4,9 @@ Generates PDF reports with charts, tables, and custom branding.
 Supports weekly summaries, API usage, performance reports, and financial reports.
 """
 
+import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -203,7 +205,70 @@ class ReportGenerator:
             "top_endpoints": [],
         }
 
-        # TODO: Integrate with actual API tracking when available
+        spending_data = self._load_spending_data()
+        journal_entries = self._load_error_journal_entries(start_date, end_date)
+
+        requests_by_api: dict[str, dict[str, Any]] = {}
+        total_cost = 0.0
+
+        for provider, stats in self._summarize_spending_by_provider(spending_data, start_date, end_date).items():
+            requests_by_api[provider] = stats
+            total_cost += stats["cost"]
+
+        provider_usage: dict[str, dict[str, int]] = {}
+        endpoint_usage: dict[str, dict[str, float]] = {}
+        total_failures = 0
+        rate_limit_hits = 0
+
+        for entry in journal_entries:
+            success = bool(entry.get("success", True))
+            if not success:
+                total_failures += 1
+            if self._is_rate_limited_entry(entry):
+                rate_limit_hits += 1
+
+            provider = self._provider_from_model(entry.get("model_used", ""))
+            provider_stats = provider_usage.setdefault(provider, {"requests": 0, "errors": 0}) if provider else None
+            if provider_stats is not None:
+                provider_stats["requests"] += 1
+                if not success:
+                    provider_stats["errors"] += 1
+
+            latency_ms = self._safe_float(entry.get("latency_ms"))
+            endpoints = self._extract_endpoints(entry)
+            for endpoint in endpoints:
+                endpoint_stats = endpoint_usage.setdefault(
+                    endpoint,
+                    {"requests": 0.0, "errors": 0.0, "latency_total_ms": 0.0, "latency_samples": 0.0},
+                )
+                endpoint_stats["requests"] += 1
+                if not success:
+                    endpoint_stats["errors"] += 1
+                if latency_ms > 0:
+                    endpoint_stats["latency_total_ms"] += latency_ms
+                    endpoint_stats["latency_samples"] += 1
+
+        for provider, stats in provider_usage.items():
+            merged = requests_by_api.setdefault(provider, {"requests": 0, "cost": 0.0, "errors": 0})
+            merged["requests"] = max(self._safe_int(merged.get("requests")), stats["requests"])
+            merged["errors"] = max(self._safe_int(merged.get("errors")), stats["errors"])
+
+        total_requests = sum(self._safe_int(stats.get("requests")) for stats in requests_by_api.values())
+        if total_requests == 0:
+            total_requests = len(journal_entries)
+
+        data.update({
+            "total_requests": total_requests,
+            "total_cost": round(total_cost, 4),
+            "requests_by_api": dict(sorted(
+                requests_by_api.items(),
+                key=lambda item: (-self._safe_int(item[1].get("requests")), item[0]),
+            )),
+            "error_rate": round((total_failures / len(journal_entries)) * 100, 1) if journal_entries else 0.0,
+            "rate_limit_hits": rate_limit_hits,
+            "top_endpoints": self._build_endpoint_rows(endpoint_usage, key="requests"),
+        })
+
         data.update(custom_data)
         return data
 
@@ -213,7 +278,7 @@ class ReportGenerator:
         """Gather data for performance report."""
         data = {
             "title": "Performance Report",
-            "uptime_percentage": 99.9,
+            "uptime_percentage": 0.0,
             "avg_response_time_ms": 0,
             "total_commands": 0,
             "commands_by_type": {},
@@ -221,9 +286,383 @@ class ReportGenerator:
             "slowest_endpoints": [],
         }
 
-        # TODO: Integrate with actual performance metrics
+        journal_entries = self._load_error_journal_entries(start_date, end_date)
+        audit_entries = self._load_audit_entries(start_date, end_date)
+
+        command_counts: dict[str, int] = {}
+        audit_failures = 0
+        for entry in audit_entries:
+            action = str(entry.get("action", "")).strip()
+            if action:
+                command_counts[action] = command_counts.get(action, 0) + 1
+            if str(entry.get("result", "success")).lower() != "success":
+                audit_failures += 1
+
+        latency_values: list[float] = []
+        endpoint_usage: dict[str, dict[str, float]] = {}
+        journal_failures = 0
+
+        for entry in journal_entries:
+            success = bool(entry.get("success", True))
+            if not success:
+                journal_failures += 1
+
+            latency_ms = self._safe_float(entry.get("latency_ms"))
+            if latency_ms > 0:
+                latency_values.append(latency_ms)
+
+            for endpoint in self._extract_endpoints(entry):
+                endpoint_stats = endpoint_usage.setdefault(
+                    endpoint,
+                    {"requests": 0.0, "errors": 0.0, "latency_total_ms": 0.0, "latency_samples": 0.0},
+                )
+                endpoint_stats["requests"] += 1
+                if not success:
+                    endpoint_stats["errors"] += 1
+                if latency_ms > 0:
+                    endpoint_stats["latency_total_ms"] += latency_ms
+                    endpoint_stats["latency_samples"] += 1
+
+        live_metrics = self._load_live_performance_metrics(start_date, end_date)
+        if not command_counts and live_metrics["commands_by_type"]:
+            command_counts = live_metrics["commands_by_type"]
+        if not latency_values and live_metrics["avg_response_time_ms"] > 0:
+            latency_values.append(live_metrics["avg_response_time_ms"])
+        if not endpoint_usage and live_metrics["slowest_endpoints"]:
+            endpoint_usage = {
+                item["name"]: {
+                    "requests": 0.0,
+                    "errors": 0.0,
+                    "latency_total_ms": float(item["time_ms"]),
+                    "latency_samples": 1.0,
+                }
+                for item in live_metrics["slowest_endpoints"]
+            }
+
+        period_seconds = max((end_date - start_date).total_seconds(), 1.0)
+        uptime_percentage = round(
+            min(100.0, (live_metrics["uptime_seconds"] / period_seconds) * 100),
+            1,
+        ) if live_metrics["uptime_seconds"] > 0 else 0.0
+
+        total_commands = sum(command_counts.values()) or len(journal_entries) or live_metrics["total_commands"]
+        error_count = audit_failures if audit_entries else journal_failures
+        if error_count == 0:
+            error_count = live_metrics["error_count"]
+
+        avg_response_time_ms = int(round(sum(latency_values) / len(latency_values))) if latency_values else 0
+
+        data.update({
+            "uptime_percentage": uptime_percentage,
+            "avg_response_time_ms": avg_response_time_ms,
+            "total_commands": total_commands,
+            "commands_by_type": dict(sorted(command_counts.items(), key=lambda item: (-item[1], item[0]))),
+            "error_count": error_count,
+            "slowest_endpoints": self._build_endpoint_rows(endpoint_usage, key="avg_latency", limit=10),
+        })
+
         data.update(custom_data)
         return data
+
+    @staticmethod
+    def _safe_int(value: Any, default: int = 0) -> int:
+        """Convert a value to int without raising."""
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _safe_float(value: Any, default: float = 0.0) -> float:
+        """Convert a value to float without raising."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _parse_timestamp(value: Any) -> float | None:
+        """Best-effort timestamp parser for JSONL metrics."""
+        if isinstance(value, (int, float)):
+            return float(value)
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _date_key_in_range(day_key: str, start_date: datetime, end_date: datetime) -> bool:
+        """Return True when YYYY-MM-DD falls inside the report range."""
+        try:
+            day = datetime.strptime(day_key, "%Y-%m-%d").date()
+        except ValueError:
+            return False
+        return start_date.date() <= day <= end_date.date()
+
+    def _load_spending_data(self) -> dict[str, Any]:
+        """Load persisted API spending data."""
+        try:
+            from spending import SPENDING_FILE
+
+            if Path(SPENDING_FILE).exists():
+                return json.loads(Path(SPENDING_FILE).read_text())
+        except Exception as exc:
+            log.debug("Failed to load spending data: %s", exc)
+        return {}
+
+    def _load_error_journal_entries(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
+        """Load error-journal entries that fall inside the report range."""
+        entries: list[dict[str, Any]] = []
+        start_ts = start_date.timestamp()
+        end_ts = end_date.timestamp()
+
+        try:
+            from error_tracker import JOURNAL_FILE
+
+            journal_path = Path(JOURNAL_FILE)
+            if not journal_path.exists():
+                return []
+
+            for line in journal_path.read_text().splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                ts = self._parse_timestamp(entry.get("ts"))
+                if ts is None or ts < start_ts or ts > end_ts:
+                    continue
+                entries.append(entry)
+        except Exception as exc:
+            log.debug("Failed to load error journal entries: %s", exc)
+
+        return entries
+
+    def _load_audit_entries(self, start_date: datetime, end_date: datetime) -> list[dict[str, Any]]:
+        """Load persisted and buffered audit entries for the report range."""
+        audit_dir = Path(os.getenv("AUDIT_DIR", "/audit"))
+        start_ts = start_date.timestamp()
+        end_ts = end_date.timestamp()
+        entries: list[dict[str, Any]] = []
+
+        def _add_entry(entry: dict[str, Any]) -> None:
+            ts = self._parse_timestamp(entry.get("ts"))
+            if ts is not None and start_ts <= ts <= end_ts:
+                entries.append(entry)
+
+        if audit_dir.is_dir():
+            for file_path in sorted(audit_dir.glob("*.jsonl")):
+                try:
+                    file_date = datetime.strptime(file_path.stem, "%Y-%m-%d").date()
+                except ValueError:
+                    file_date = None
+                if file_date and (file_date < start_date.date() or file_date > end_date.date()):
+                    continue
+
+                try:
+                    for line in file_path.read_text().splitlines():
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            _add_entry(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+                except Exception as exc:
+                    log.debug("Failed to read audit log %s: %s", file_path, exc)
+
+        try:
+            from audit import _audit_buffer
+
+            for entry in list(_audit_buffer):
+                if isinstance(entry, dict):
+                    _add_entry(entry)
+        except Exception as exc:
+            log.debug("Failed to read buffered audit entries: %s", exc)
+
+        return entries
+
+    def _summarize_spending_by_provider(
+        self,
+        spending_data: dict[str, Any],
+        start_date: datetime,
+        end_date: datetime,
+    ) -> dict[str, dict[str, Any]]:
+        """Build per-provider request and cost totals from spending data."""
+        providers: dict[str, dict[str, Any]] = {}
+
+        gemini_daily = spending_data.get("daily", {})
+        for day_key, day_stats in gemini_daily.items():
+            if not self._date_key_in_range(day_key, start_date, end_date):
+                continue
+            providers.setdefault("gemini", {"requests": 0, "cost": 0.0, "errors": 0})
+            providers["gemini"]["requests"] += self._safe_int(day_stats.get("calls"))
+            providers["gemini"]["cost"] += self._safe_float(day_stats.get("cost_usd"))
+
+        for provider in ("perplexity", "firecrawl"):
+            daily_stats = spending_data.get(provider, {}).get("daily", {})
+            for day_key, day_stats in daily_stats.items():
+                if not self._date_key_in_range(day_key, start_date, end_date):
+                    continue
+                providers.setdefault(provider, {"requests": 0, "cost": 0.0, "errors": 0})
+                providers[provider]["requests"] += self._safe_int(day_stats.get("calls"))
+                providers[provider]["cost"] += self._safe_float(day_stats.get("cost_usd"))
+
+        for stats in providers.values():
+            stats["cost"] = round(self._safe_float(stats.get("cost")), 4)
+
+        return providers
+
+    @staticmethod
+    def _provider_from_model(model_name: str) -> str:
+        """Map a model identifier to a provider bucket."""
+        normalized = str(model_name or "").strip().lower().replace("models/", "")
+        if not normalized or normalized in {"unknown", "error", "timeout", "none"}:
+            return ""
+        if "gemini" in normalized:
+            return "gemini"
+        if "perplexity" in normalized or "sonar" in normalized:
+            return "perplexity"
+        if "firecrawl" in normalized:
+            return "firecrawl"
+        if "claude" in normalized:
+            return "claude"
+        if "gpt" in normalized or "openai" in normalized:
+            return "openai"
+        if any(token in normalized for token in ("ollama", "llama", "qwen", "mistral")):
+            return "ollama"
+        return normalized
+
+    @staticmethod
+    def _is_rate_limited_entry(entry: dict[str, Any]) -> bool:
+        """Detect rate-limit style failures from journal entries."""
+        haystack = " ".join(
+            [
+                str(entry.get("error", "")),
+                " ".join(str(note) for note in entry.get("routing_notes", []) or []),
+                str(entry.get("response_preview", "")),
+            ]
+        ).lower()
+        return any(token in haystack for token in ("rate limit", "rate_limit", "429", "quota", "resource exhausted"))
+
+    def _extract_endpoints(self, entry: dict[str, Any]) -> list[str]:
+        """Extract endpoint/tool names from a journal entry."""
+        endpoints = [
+            str(tool).strip()
+            for tool in (entry.get("tools_called") or [])
+            if str(tool).strip()
+        ]
+        if endpoints:
+            return endpoints
+
+        provider = self._provider_from_model(entry.get("model_used", ""))
+        return [provider] if provider else []
+
+    @staticmethod
+    def _build_endpoint_rows(
+        endpoint_usage: dict[str, dict[str, float]],
+        *,
+        key: str,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Convert endpoint aggregates into sorted report rows."""
+        rows: list[dict[str, Any]] = []
+        for name, stats in endpoint_usage.items():
+            if not name:
+                continue
+            avg_latency = (
+                stats["latency_total_ms"] / stats["latency_samples"]
+                if stats.get("latency_samples")
+                else 0.0
+            )
+            rows.append({
+                "name": name,
+                "requests": int(stats.get("requests", 0)),
+                "errors": int(stats.get("errors", 0)),
+                "avg_latency_ms": int(round(avg_latency)),
+                "time_ms": int(round(avg_latency)),
+            })
+
+        if key == "avg_latency":
+            def sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+                return (-item["avg_latency_ms"], -item["requests"], item["name"])
+        else:
+            def sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+                return (-item["requests"], -item["avg_latency_ms"], item["name"])
+
+        return sorted(rows, key=sort_key)[:limit]
+
+    def _load_live_performance_metrics(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> dict[str, Any]:
+        """Best-effort live metrics from in-process collectors."""
+        metrics = {
+            "avg_response_time_ms": 0,
+            "total_commands": 0,
+            "commands_by_type": {},
+            "error_count": 0,
+            "slowest_endpoints": [],
+            "uptime_seconds": 0.0,
+        }
+
+        period_hours = max(1, int(((end_date - start_date).total_seconds() + 3599) // 3600))
+
+        try:
+            from metrics_collector import get_collector
+
+            collector_stats = get_collector().get_stats(hours=period_hours)
+            metrics["total_commands"] = self._safe_int(collector_stats.get("total_commands"))
+            metrics["commands_by_type"] = {
+                str(name): self._safe_int(count)
+                for name, count in (collector_stats.get("command_counts") or {}).items()
+            }
+            metrics["error_count"] = sum(
+                self._safe_int(count)
+                for count in (collector_stats.get("error_counts") or {}).values()
+            )
+            metrics["uptime_seconds"] = self._safe_float(collector_stats.get("uptime_seconds"))
+
+            percentiles = collector_stats.get("response_time_percentiles") or {}
+            if percentiles:
+                means = [self._safe_float(values.get("p50")) for values in percentiles.values() if values]
+                if means:
+                    metrics["avg_response_time_ms"] = int(round((sum(means) / len(means)) * 1000))
+                    metrics["slowest_endpoints"] = [
+                        {"name": name, "time_ms": int(round(self._safe_float(values.get("p95")) * 1000))}
+                        for name, values in percentiles.items()
+                        if values
+                    ]
+                    metrics["slowest_endpoints"].sort(key=lambda item: (-item["time_ms"], item["name"]))
+                    metrics["slowest_endpoints"] = metrics["slowest_endpoints"][:10]
+        except Exception as exc:
+            log.debug("Failed to load metrics collector stats: %s", exc)
+
+        if metrics["slowest_endpoints"]:
+            return metrics
+
+        try:
+            from performance_monitor import get_monitor
+
+            operation_stats = get_monitor().get_all_stats()
+            if operation_stats:
+                metrics["slowest_endpoints"] = [
+                    {"name": name, "time_ms": int(round(self._safe_float(values.get("mean")) * 1000))}
+                    for name, values in operation_stats.items()
+                    if values
+                ]
+                metrics["slowest_endpoints"].sort(key=lambda item: (-item["time_ms"], item["name"]))
+                metrics["slowest_endpoints"] = metrics["slowest_endpoints"][:10]
+        except Exception as exc:
+            log.debug("Failed to load performance monitor stats: %s", exc)
+
+        return metrics
 
     async def _gather_financial(
         self, start_date: datetime, end_date: datetime, custom_data: dict[str, Any]
