@@ -23,6 +23,7 @@ class PluginMetadata:
     description: str = ""
     dependencies: list[str] = field(default_factory=list)
     permissions: list[str] = field(default_factory=list)
+    permission_level: str = "MEMBER"  # PermissionLevel name for Discord invocation gate
     min_openclaw_version: str = "0.1.0"
     max_openclaw_version: str | None = None
     homepage: str | None = None
@@ -37,6 +38,7 @@ class PluginMetadata:
             "description": self.description,
             "dependencies": self.dependencies,
             "permissions": self.permissions,
+            "permission_level": self.permission_level,
             "min_openclaw_version": self.min_openclaw_version,
             "max_openclaw_version": self.max_openclaw_version,
             "homepage": self.homepage,

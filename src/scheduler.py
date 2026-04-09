@@ -35,6 +35,18 @@ SCHEDULE_FILE = Path(os.getenv("MEMORY_DIR", "/memory")) / "schedules.json"
 
 _ALERT_PATTERNS = ("error", "warn", "exception", "critical", "fatal", "❌", "⚠️", "failed", "unreachable", "timeout")
 
+_RETRY_DELAYS = [300, 900, 2700]  # 5min → 15min → 45min exponential backoff
+
+
+@dataclass
+class _RetryTask:
+    """A failed task queued for retry with exponential backoff."""
+
+    fn: Callable       # zero-arg async callable that re-runs the operation
+    label: str         # human-readable name, e.g. "sched-1/weekly_recap"
+    attempts_left: int
+    next_retry_at: float  # time.monotonic() value when next attempt is allowed
+
 
 @dataclass
 class ScheduledTask:
@@ -109,6 +121,8 @@ class TaskScheduler:
         self._runner_task: asyncio.Task | None = None
         self._running_tasks: set[str] = set()  # task IDs currently executing
         self._running_lock = asyncio.Lock()  # protects _running_tasks
+        self._retry_queue: list[_RetryTask] = []
+        self._last_retry_check: float = 0.0
         # Optional async callback: (task_id, action, result, is_alert) -> None
         # Set by bot.py after startup to enable Discord notifications
         self.notify_callback: Optional[Callable[[str, str, str, bool], Awaitable[None]]] = None
@@ -232,7 +246,44 @@ class TaskScheduler:
                 await self._check_and_run()
             except Exception as e:
                 log.error("Scheduler loop error: %s", e)
+            now_mono = time.monotonic()
+            if now_mono - self._last_retry_check >= 300:  # every 5 minutes
+                try:
+                    await self._process_retry_queue()
+                except Exception as e:
+                    log.error("Retry queue processing error: %s", e)
+                self._last_retry_check = now_mono
             await asyncio.sleep(60)
+
+    async def _process_retry_queue(self) -> None:
+        """Drain the retry queue, re-running tasks whose backoff window has elapsed."""
+        if not self._retry_queue:
+            return
+        now = time.monotonic()
+        still_pending: list[_RetryTask] = []
+        for retry_task in self._retry_queue:
+            if retry_task.next_retry_at > now:
+                still_pending.append(retry_task)
+                continue
+            try:
+                await retry_task.fn()
+                log.info("Retry succeeded for %s", retry_task.label)
+            except Exception as exc:
+                retry_task.attempts_left -= 1
+                if retry_task.attempts_left > 0:
+                    delay_idx = 3 - retry_task.attempts_left
+                    retry_task.next_retry_at = now + _RETRY_DELAYS[min(delay_idx, len(_RETRY_DELAYS) - 1)]
+                    log.warning(
+                        "Retry failed for %s (%d attempt(s) left): %s",
+                        retry_task.label, retry_task.attempts_left, exc,
+                    )
+                    still_pending.append(retry_task)
+                else:
+                    log.critical(
+                        "Task %s exhausted all retries — dropping. Last error: %s",
+                        retry_task.label, exc,
+                    )
+        self._retry_queue[:] = still_pending
 
     async def _check_and_run(self) -> None:
         """Execute any due tasks."""
@@ -327,6 +378,25 @@ class TaskScheduler:
                 task.run_count += 1
                 self._save()
 
+                if not success:
+                    _captured_prompt = task.prompt
+                    _label = f"{task.task_id}/{task.action or 'prompt-job'}"
+
+                    async def _retry_prompt(_p=_captured_prompt):
+                        from llm import chat
+                        await asyncio.wait_for(chat(_p, model_preference="gemini"), timeout=300)
+
+                    self._retry_queue.append(_RetryTask(
+                        fn=_retry_prompt,
+                        label=_label,
+                        attempts_left=3,
+                        next_retry_at=time.monotonic() + _RETRY_DELAYS[0],
+                    ))
+                    log.warning(
+                        "Prompt job %s queued for retry (3 attempts, first in %ds)",
+                        task.task_id, _RETRY_DELAYS[0],
+                    )
+
                 # Post result to Discord if configured
                 if task.notify_channel_id and self.notify_callback:
                     result_text = task.last_result or ""
@@ -397,6 +467,25 @@ class TaskScheduler:
         task.last_run = datetime.datetime.now(datetime.timezone.utc).isoformat()
         task.run_count += 1
         self._save()
+
+        if not success:
+            _captured_fn = skill_fn
+            _captured_args = dict(task.args)
+            _label = f"{task.task_id}/{task.action}"
+
+            async def _retry_skill(_fn=_captured_fn, _args=_captured_args):
+                await asyncio.wait_for(_fn(**_args), timeout=300)
+
+            self._retry_queue.append(_RetryTask(
+                fn=_retry_skill,
+                label=_label,
+                attempts_left=3,
+                next_retry_at=time.monotonic() + _RETRY_DELAYS[0],
+            ))
+            log.warning(
+                "Task %s queued for retry (3 attempts, first in %ds)",
+                task.task_id, _RETRY_DELAYS[0],
+            )
 
         # Post result to Discord if configured
         if task.notify_channel_id and self.notify_callback:

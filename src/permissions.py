@@ -3,6 +3,7 @@
 import functools
 import logging
 import os
+from enum import Enum
 from pathlib import Path
 
 import discord
@@ -75,6 +76,93 @@ def _load_permissions() -> dict:
         _permissions_cache = {}
     _permissions_mtime = current_mtime
     return _permissions_cache
+
+
+# ---------------------------------------------------------------------------
+# Plugin permission levels
+# ---------------------------------------------------------------------------
+
+
+class PermissionLevel(Enum):
+    PUBLIC = 0   # Anyone can use
+    MEMBER = 1   # Server members only (no DMs)
+    TRUSTED = 2  # Users with a specific role
+    ADMIN = 3    # Server administrators
+    OWNER = 4    # Bot owner only
+
+
+_DEFAULT_PLUGIN_LEVEL = PermissionLevel.MEMBER
+
+# Per-plugin overrides: {"plugin_name": PermissionLevel}
+_PLUGIN_PERMISSIONS: dict[str, PermissionLevel] = {}
+
+
+def set_plugin_permission(plugin_name: str, level: PermissionLevel) -> None:
+    """Set the required permission level for a plugin."""
+    _PLUGIN_PERMISSIONS[plugin_name] = level
+
+
+def get_plugin_permission(plugin_name: str) -> PermissionLevel:
+    """Return the required permission level for a plugin (defaults to MEMBER)."""
+    return _PLUGIN_PERMISSIONS.get(plugin_name, _DEFAULT_PLUGIN_LEVEL)
+
+
+def check_permission(
+    level: PermissionLevel,
+    interaction: discord.Interaction,
+    trusted_role_id: int | None = None,
+    owner_id: int | None = None,
+) -> bool:
+    """Return True if the interaction's user meets *level*.
+
+    Args:
+        level: The minimum required PermissionLevel.
+        interaction: The Discord interaction to evaluate.
+        trusted_role_id: Role ID that grants TRUSTED access (optional).
+        owner_id: Bot owner user ID for OWNER checks (optional).
+    """
+    user = interaction.user
+
+    if level == PermissionLevel.PUBLIC:
+        return True
+
+    if level == PermissionLevel.MEMBER:
+        return interaction.guild is not None
+
+    if level == PermissionLevel.TRUSTED:
+        if not interaction.guild or not trusted_role_id:
+            return False
+        member = interaction.guild.get_member(user.id)
+        return member is not None and any(r.id == trusted_role_id for r in member.roles)
+
+    if level == PermissionLevel.ADMIN:
+        if not interaction.guild:
+            return False
+        member = interaction.guild.get_member(user.id)
+        return member is not None and member.guild_permissions.administrator
+
+    if level == PermissionLevel.OWNER:
+        if owner_id is None:
+            return False
+        return user.id == owner_id
+
+    return False
+
+
+def check_plugin_permission(
+    plugin_name: str,
+    interaction: discord.Interaction,
+    trusted_role_id: int | None = None,
+    owner_id: int | None = None,
+) -> bool:
+    """Return True if the interaction user may invoke *plugin_name*."""
+    level = get_plugin_permission(plugin_name)
+    return check_permission(level, interaction, trusted_role_id=trusted_role_id, owner_id=owner_id)
+
+
+# ---------------------------------------------------------------------------
+# Service / skill permission checks (reads config/permissions.yaml)
+# ---------------------------------------------------------------------------
 
 
 def is_service_allowed(skill: str, service: str) -> bool:

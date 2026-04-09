@@ -18,6 +18,7 @@ from typing import Any
 
 import yaml
 
+from permissions import PermissionLevel, set_plugin_permission
 from .plugin_api import PluginAPI
 from .plugin_base import Plugin, PluginMetadata
 
@@ -114,6 +115,7 @@ class PluginLoader:
                 description=data.get("description", ""),
                 dependencies=data.get("dependencies", []),
                 permissions=data.get("permissions", []),
+                permission_level=data.get("permission_level", "MEMBER"),
                 min_openclaw_version=data.get("min_openclaw_version", "0.1.0"),
                 max_openclaw_version=data.get("max_openclaw_version"),
                 homepage=data.get("homepage"),
@@ -250,6 +252,17 @@ class PluginLoader:
             # Call on_load hook
             await plugin.on_load()
             plugin._loaded = True
+
+            # Register Discord invocation permission level from manifest
+            try:
+                level = PermissionLevel[metadata.permission_level.upper()]
+            except KeyError:
+                log.warning(
+                    f"Plugin {metadata.name}: unknown permission_level "
+                    f"'{metadata.permission_level}', defaulting to MEMBER"
+                )
+                level = PermissionLevel.MEMBER
+            set_plugin_permission(metadata.name, level)
 
             log.info(f"✓ Loaded plugin: {metadata.name} v{metadata.version}")
             return plugin

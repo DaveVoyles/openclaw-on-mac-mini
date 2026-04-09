@@ -51,6 +51,10 @@ from .context import (
 )
 from .tool_execution import _ollama_available, _try_local_model
 
+from tool_health import circuit_breaker as _gemini_circuit
+
+_GEMINI_CIRCUIT_KEY = "gemini"
+
 log = logging.getLogger("openclaw.llm")
 
 
@@ -67,7 +71,12 @@ async def _gemini_chat(
     """Common Gemini chat path: rate-limit, send, tool-loop, extract text.
 
     Returns (response_text, updated_history, model_name).
+    Raises RuntimeError if the Gemini circuit breaker is open.
     """
+    if _gemini_circuit.is_open(_GEMINI_CIRCUIT_KEY):
+        log.warning("Gemini circuit open — skipping API call, falling back to local model")
+        raise RuntimeError("Gemini circuit breaker is open")
+
     if not await _rate_limiter.wait_for_capacity(max_wait=30.0):
         return (
             "⚠️ Rate limit reached. Please wait a moment before asking again. "
@@ -82,28 +91,34 @@ async def _gemini_chat(
         model=model.model_name, config=model.config, history=gemini_history,
     )
 
-    loop = asyncio.get_running_loop()
-    _rate_limiter.record()
-    response = await loop.run_in_executor(
-        None, lambda: chat_session.send_message(user_message)
-    )
-    await _record_usage(response)
+    try:
+        loop = asyncio.get_running_loop()
+        _rate_limiter.record()
+        response = await loop.run_in_executor(
+            None, lambda: chat_session.send_message(user_message)
+        )
+        await _record_usage(response)
 
-    response, rounds = await _run_tool_loop(
-        chat_session, response,
-        max_rounds=max_tool_rounds,
-        on_tool_call=on_tool_call,
-        parallel=parallel_tools,
-        label=label,
-    )
+        response, rounds = await _run_tool_loop(
+            chat_session, response,
+            max_rounds=max_tool_rounds,
+            on_tool_call=on_tool_call,
+            parallel=parallel_tools,
+            label=label,
+        )
 
-    text = _extract_final_text(response, rounds, chat_session)
-    text = await _reflect_on_response(text, user_message, rounds)
+        text = _extract_final_text(response, rounds, chat_session)
+        text = await _reflect_on_response(text, user_message, rounds)
 
-    updated_history = _extract_history(chat_session)
-    model_name = model.model_name if hasattr(model, "model_name") else "unknown"
+        updated_history = _extract_history(chat_session)
+        model_name = model.model_name if hasattr(model, "model_name") else "unknown"
 
-    return text, updated_history, model_name
+        _gemini_circuit.record_success(_GEMINI_CIRCUIT_KEY)
+        return text, updated_history, model_name
+
+    except Exception:
+        _gemini_circuit.record_failure(_GEMINI_CIRCUIT_KEY)
+        raise
 
 
 async def _select_model_for_message(
@@ -407,12 +422,24 @@ async def chat_stream(
     model_message = _apply_route_hints(model_message, route_info)
     model_name = model.model_name if hasattr(model, "model_name") else "unknown"
 
-    text, updated_history, model_name = await _gemini_chat(
-        model_message, history, model,
-        on_tool_call=on_tool_call,
-        parallel_tools=True,
-        label="LLM",
-    )
+    try:
+        text, updated_history, model_name = await _gemini_chat(
+            model_message, history, model,
+            on_tool_call=on_tool_call,
+            parallel_tools=True,
+            label="LLM",
+        )
+    except Exception as exc:
+        log.warning("Gemini failed in stream mode (%s), trying local fallback: %s", type(exc).__name__, exc)
+        fallback = await _try_local_model(model_message, history, force=True)
+        if fallback is not None:
+            updated = history + [
+                {"role": "user", "parts": [cleaned_user_message]},
+                {"role": "model", "parts": [fallback]},
+            ]
+            yield fallback, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
+            return
+        raise
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
 
     if not _gemma_response_seems_valid(text):
@@ -613,10 +640,21 @@ async def chat(
             label="LLM",
         )
         model_message = _apply_route_hints(model_message, route_info)
-        text, updated_history, model_name = await _gemini_chat(
-            model_message, history, model,
-            on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
-        )
+        try:
+            text, updated_history, model_name = await _gemini_chat(
+                model_message, history, model,
+                on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
+            )
+        except Exception as exc:
+            log.warning("Gemini failed in forced mode (%s), trying local fallback: %s", type(exc).__name__, exc)
+            fallback = await _try_local_model(model_message, history, force=True)
+            if fallback is not None:
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [fallback]},
+                ]
+                return fallback, updated, OLLAMA_MODEL
+            raise
         updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
         return text, updated_history, model_name
 
@@ -654,14 +692,25 @@ async def chat(
         label="LLM",
     )
     model_message = _apply_route_hints(model_message, route_info)
-    text, updated_history, model_name = await _gemini_chat(
-        model_message,
-        history,
-        model,
-        on_tool_call=on_tool_call,
-        parallel_tools=True,
-        label="LLM",
-    )
+    try:
+        text, updated_history, model_name = await _gemini_chat(
+            model_message,
+            history,
+            model,
+            on_tool_call=on_tool_call,
+            parallel_tools=True,
+            label="LLM",
+        )
+    except Exception as exc:
+        log.warning("Gemini failed in auto mode (%s), trying local fallback: %s", type(exc).__name__, exc)
+        fallback = await _try_local_model(model_message, history, force=True)
+        if fallback is not None:
+            updated = history + [
+                {"role": "user", "parts": [cleaned_user_message]},
+                {"role": "model", "parts": [fallback]},
+            ]
+            return fallback, updated, OLLAMA_MODEL
+        raise
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
     return text, updated_history, model_name
 
