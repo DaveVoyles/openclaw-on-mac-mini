@@ -1,13 +1,11 @@
 """Tests for bg_tasks.py — background task lifecycle management."""
 
 import asyncio
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import bg_tasks
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -424,8 +422,6 @@ class TestRunSupervisedBackgroundTask:
 
     @pytest.mark.asyncio
     async def test_duration_is_positive(self, monkeypatch):
-        import time
-
         mock_collector = MagicMock()
         monkeypatch.setattr(bg_tasks, "get_collector", lambda: mock_collector)
         monkeypatch.setattr(bg_tasks, "ALERT_CHANNEL_ID", 0)
@@ -448,8 +444,6 @@ class TestReminderLoop:
     @pytest.mark.asyncio
     async def test_sends_due_reminders(self, monkeypatch):
         """Due reminders are sent to users via DM."""
-        import discord
-
         bot = _make_idle_bot()
         bot.is_closed = MagicMock(side_effect=[False, True])
 
@@ -533,8 +527,6 @@ class TestReminderLoop:
 
     async def test_recurring_reminder_shown_in_embed(self, monkeypatch):
         """Recurring reminder has recurrence in embed footer."""
-        import discord
-
         bot = _make_idle_bot()
         bot.is_closed = MagicMock(side_effect=[False, True])
 

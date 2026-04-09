@@ -50,6 +50,23 @@ class TestPluginAPISkills:
         with pytest.raises(ValueError, match="already registered"):
             plugin_api.register_skill("duplicate", skill)
 
+    def test_register_bound_method_with_description(self, plugin_api):
+        """Bound methods should register even when docstring metadata is added."""
+
+        class SkillContainer:
+            async def bound_skill(self) -> str:
+                return "ok"
+
+        container = SkillContainer()
+
+        plugin_api.register_skill(
+            "bound_skill",
+            container.bound_skill,
+            description="Bound method skill",
+        )
+
+        assert "test-plugin.bound_skill" in plugin_api.get_registered_skills()
+
     def test_unregister_skill(self, plugin_api):
         """Test skill unregistration."""
 

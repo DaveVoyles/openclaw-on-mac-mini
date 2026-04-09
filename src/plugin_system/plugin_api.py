@@ -89,9 +89,17 @@ class PluginAPI:
         if full_name in self._skills_registry:
             raise ValueError(f"Skill '{full_name}' already registered")
 
-        # Set docstring if not present
-        if description and not function.__doc__:
-            function.__doc__ = description
+        # Bound methods expose a read-only __doc__ attribute, so set the
+        # underlying function docstring when available.
+        doc_target = getattr(function, "__func__", function)
+        if description and not getattr(doc_target, "__doc__", None):
+            try:
+                doc_target.__doc__ = description
+            except (AttributeError, TypeError):
+                self.logger.debug(
+                    "Could not attach docstring metadata to skill '%s'",
+                    full_name,
+                )
 
         self._skills_registry[full_name] = function
         self._plugin_skills[full_name] = function
