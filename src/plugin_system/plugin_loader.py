@@ -13,16 +13,20 @@ import importlib.util
 import inspect
 import logging
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from permissions import PermissionLevel, set_plugin_permission
+
 from .plugin_api import PluginAPI
 from .plugin_base import Plugin, PluginMetadata
 
 log = logging.getLogger("openclaw.plugin_system.loader")
+
+_VERSION_COMPONENTS = 3
 
 
 class PluginLoader:
@@ -171,9 +175,99 @@ class PluginLoader:
         Returns:
             Tuple of (is_valid, error_message)
         """
-        # TODO: Implement actual version comparison
-        # For now, accept all versions
+        current_version, version_source = self._get_openclaw_version()
+        if current_version is None:
+            return False, "Unable to determine current OpenClaw version"
+
+        try:
+            current = self._parse_version(current_version, f"current OpenClaw version ({version_source})")
+            minimum = self._parse_version(
+                metadata.min_openclaw_version,
+                f"plugin {metadata.name} min_openclaw_version",
+            )
+        except ValueError as exc:
+            return False, str(exc)
+
+        maximum = None
+        if metadata.max_openclaw_version is not None:
+            try:
+                maximum = self._parse_version(
+                    metadata.max_openclaw_version,
+                    f"plugin {metadata.name} max_openclaw_version",
+                )
+            except ValueError as exc:
+                return False, str(exc)
+
+            if minimum > maximum:
+                return (
+                    False,
+                    f"Plugin {metadata.name} declares min_openclaw_version "
+                    f"{metadata.min_openclaw_version} greater than max_openclaw_version "
+                    f"{metadata.max_openclaw_version}",
+                )
+
+        if current < minimum:
+            return (
+                False,
+                f"Plugin {metadata.name} requires OpenClaw >= {metadata.min_openclaw_version}, "
+                f"current version is {current_version}",
+            )
+
+        if maximum is not None and current > maximum:
+            return (
+                False,
+                f"Plugin {metadata.name} supports OpenClaw <= {metadata.max_openclaw_version}, "
+                f"current version is {current_version}",
+            )
+
         return True, ""
+
+    @staticmethod
+    def _parse_version(value: Any, label: str) -> tuple[int, int, int]:
+        """Parse a simple semver-like version into a comparable tuple."""
+        if isinstance(value, bool) or value is None:
+            raise ValueError(f"Invalid {label}: {value!r}. Expected a version like '1', '1.2', or '1.2.3'")
+
+        if not isinstance(value, str | int | float):
+            raise ValueError(f"Invalid {label}: {value!r}. Expected a version like '1', '1.2', or '1.2.3'")
+
+        version = str(value).strip()
+        parts = version.split(".")
+        if (
+            not version
+            or len(parts) > _VERSION_COMPONENTS
+            or any(not part or not part.isdigit() for part in parts)
+        ):
+            raise ValueError(f"Invalid {label}: {value!r}. Expected a version like '1', '1.2', or '1.2.3'")
+
+        normalized = [int(part) for part in parts]
+        normalized.extend([0] * (_VERSION_COMPONENTS - len(normalized)))
+        return tuple(normalized)
+
+    def _get_openclaw_version(self) -> tuple[str | int | float | None, str]:
+        """Resolve the current OpenClaw version from runtime config or project metadata."""
+        runtime_version = self.config.get("version")
+        if runtime_version is not None:
+            return runtime_version, "runtime config"
+
+        repo_root = Path(__file__).resolve().parents[2]
+
+        config_path = repo_root / "config" / "config.yaml"
+        if config_path.exists():
+            with open(config_path) as config_file:
+                config_data = yaml.safe_load(config_file) or {}
+            if isinstance(config_data, dict) and config_data.get("version") is not None:
+                return config_data["version"], str(config_path.relative_to(repo_root))
+
+        pyproject_path = repo_root / "pyproject.toml"
+        if pyproject_path.exists():
+            with open(pyproject_path, "rb") as pyproject_file:
+                pyproject_data = tomllib.load(pyproject_file)
+            pyproject_version = pyproject_data.get("project", {}).get("version")
+            if pyproject_version is not None:
+                return pyproject_version, str(pyproject_path.relative_to(repo_root))
+
+        return None, "project metadata"
 
     async def load_plugin(self, plugin_dir: Path) -> Plugin | None:
         """

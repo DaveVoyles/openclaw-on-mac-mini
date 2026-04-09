@@ -159,24 +159,117 @@ class TestPluginLoader:
         assert not valid
         assert "nonexistent_package_xyz" in error
 
-    def test_validate_version(self):
-        """Test version validation."""
+    def test_validate_version_current_version_within_range(self):
+        """Test version validation using the project version fallback."""
         loader = PluginLoader(
             plugins_dir=Path("."),
             data_dir=Path("."),
             skills_registry={},
         )
 
+        current_version, source = loader._get_openclaw_version()
+        assert current_version is not None
+        assert source == "config/config.yaml"
+
         metadata = PluginMetadata(
             name="test",
             version="1.0.0",
             author="test",
-            min_openclaw_version="0.1.0",
+            min_openclaw_version=str(current_version),
+            max_openclaw_version=str(current_version),
         )
 
-        # Currently accepts all versions
         valid, _ = loader.validate_version(metadata)
         assert valid
+
+    def test_validate_version_rejects_below_minimum(self):
+        """Test version validation rejects plugins that require a newer OpenClaw."""
+        loader = PluginLoader(
+            plugins_dir=Path("."),
+            data_dir=Path("."),
+            skills_registry={},
+            config={"version": "0.6.0"},
+        )
+
+        metadata = PluginMetadata(
+            name="too-new-plugin",
+            version="1.0.0",
+            author="test",
+            min_openclaw_version="0.6.1",
+        )
+
+        valid, error = loader.validate_version(metadata)
+
+        assert not valid
+        assert "requires OpenClaw >= 0.6.1" in error
+        assert "current version is 0.6.0" in error
+
+    def test_validate_version_rejects_above_maximum(self):
+        """Test version validation rejects plugins that only support older OpenClaw versions."""
+        loader = PluginLoader(
+            plugins_dir=Path("."),
+            data_dir=Path("."),
+            skills_registry={},
+            config={"version": "0.6.0"},
+        )
+
+        metadata = PluginMetadata(
+            name="legacy-plugin",
+            version="1.0.0",
+            author="test",
+            min_openclaw_version="0.1.0",
+            max_openclaw_version="0.5.9",
+        )
+
+        valid, error = loader.validate_version(metadata)
+
+        assert not valid
+        assert "supports OpenClaw <= 0.5.9" in error
+        assert "current version is 0.6.0" in error
+
+    @pytest.mark.parametrize(
+        ("config", "metadata", "expected_error"),
+        [
+            (
+                {"version": "0.6.beta"},
+                PluginMetadata(name="bad-current", version="1.0.0", author="test"),
+                "Invalid current OpenClaw version",
+            ),
+            (
+                {"version": "0.6.0"},
+                PluginMetadata(
+                    name="bad-min",
+                    version="1.0.0",
+                    author="test",
+                    min_openclaw_version="0..1",
+                ),
+                "Invalid plugin bad-min min_openclaw_version",
+            ),
+            (
+                {"version": "0.6.0"},
+                PluginMetadata(
+                    name="bad-max",
+                    version="1.0.0",
+                    author="test",
+                    max_openclaw_version="1.0.0-beta",
+                ),
+                "Invalid plugin bad-max max_openclaw_version",
+            ),
+        ],
+    )
+    def test_validate_version_handles_malformed_versions_cleanly(self, config, metadata, expected_error):
+        """Test version validation reports malformed versions without crashing."""
+        loader = PluginLoader(
+            plugins_dir=Path("."),
+            data_dir=Path("."),
+            skills_registry={},
+            config=config,
+        )
+
+        valid, error = loader.validate_version(metadata)
+
+        assert not valid
+        assert expected_error in error
 
     @pytest.mark.asyncio
     async def test_load_plugin_success(self, valid_plugin_dir):
