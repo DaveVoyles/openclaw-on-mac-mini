@@ -76,8 +76,9 @@ services:
       - /tmp/openclaw-cache:/home/openclaw/.cache:rw
 
       # SSH keys for NAS access (backup, health check, self-heal)
-      - /Users/davevoyles/.ssh/id_ed25519:/home/openclaw/.ssh/id_ed25519:ro
-      - /Users/davevoyles/.ssh/known_hosts:/home/openclaw/.ssh/known_hosts:ro
+      # Set SSH_KEY_PATH and SSH_KNOWN_HOSTS in .env (see .env.example)
+      - ${SSH_KEY_PATH:-~/.ssh/id_ed25519}:/home/openclaw/.ssh/id_ed25519:ro
+      - ${SSH_KNOWN_HOSTS:-~/.ssh/known_hosts}:/home/openclaw/.ssh/known_hosts:ro
 
       # Audiobook library on NAS (read-only browse access for search queries)
       - /Users/davevoyles/mnt/Misc/audiobooks:/audiobooks:ro
