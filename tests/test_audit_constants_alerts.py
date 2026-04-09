@@ -53,6 +53,33 @@ class TestAuditLog:
         audit_log("u", "act")
         assert _audit_buffer[-1]["result"] == "success"
 
+    def test_detail_none_does_not_break(self):
+        audit_log("u", "act", detail=None)
+        assert _audit_buffer[-1]["detail"] == ""
+
+    def test_detail_text_appears_in_record(self):
+        audit_log("u", "act", detail="restart docker")
+        assert _audit_buffer[-1]["detail"] == "restart docker"
+
+    def test_default_severity_is_info(self):
+        audit_log("u", "act")
+        assert _audit_buffer[-1]["severity"] == "INFO"
+
+    def test_severity_stored_uppercased(self):
+        audit_log("u", "act", severity="high")
+        assert _audit_buffer[-1]["severity"] == "HIGH"
+
+    def test_high_severity_flushes_stdout(self, capsys):
+        audit_log("u", "critical_action", detail="ctx", severity="CRITICAL")
+        captured = capsys.readouterr()
+        assert "AUDIT:CRITICAL" in captured.out
+        assert "critical_action" in captured.out
+
+    def test_info_severity_does_not_print(self, capsys):
+        audit_log("u", "routine", severity="INFO")
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
     def test_timestamp_is_iso_format(self):
         audit_log("u", "act")
         ts = _audit_buffer[-1]["ts"]

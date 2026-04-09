@@ -4,6 +4,8 @@ Handles database backups, config files, and uploads to NAS.
 Supports incremental/full backups with compression and retention policies.
 """
 
+import asyncio
+import hashlib
 import logging
 import os
 import shutil
@@ -11,6 +13,9 @@ import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
+
+MAX_UPLOAD_ATTEMPTS = 3
+UPLOAD_RETRY_DELAY = 2.0  # seconds; doubles on each retry
 
 log = logging.getLogger("openclaw.backup_manager")
 
@@ -251,30 +256,90 @@ class BackupManager:
         log.info(f"  ✓ Compressed to {archive_path.name}")
         return archive_path
 
-    async def _upload_to_nas(self, backup_path: Path) -> bool:
-        """Upload backup to NAS using rsync."""
-        try:
-            # Ensure NAS directory exists
-            mkdir_cmd = [
-                "ssh",
-                f"{self.nas_user}@{self.nas_host}",
-                f"mkdir -p {self.nas_path}",
-            ]
-            subprocess.run(mkdir_cmd, check=True, capture_output=True)
+    @staticmethod
+    def _compute_file_hash(path: Path | str) -> str:
+        """Return SHA-256 hex digest of a file."""
+        sha = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                sha.update(chunk)
+        return sha.hexdigest()
 
-            # Upload with rsync
-            rsync_cmd = [
-                "rsync",
-                "-avz",
-                "--progress",
+    def _do_rsync(self, backup_path: Path) -> None:
+        """Run mkdir + rsync; raises subprocess.CalledProcessError on failure."""
+        subprocess.run(
+            ["ssh", f"{self.nas_user}@{self.nas_host}", f"mkdir -p {self.nas_path}"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [
+                "rsync", "-avz", "--progress",
                 str(backup_path),
                 f"{self.nas_user}@{self.nas_host}:{self.nas_path}/",
-            ]
+            ],
+            check=True,
+            capture_output=True,
+        )
 
-            subprocess.run(rsync_cmd, check=True, capture_output=True)
+    async def _upload_with_retry(self, backup_path: Path) -> None:
+        """Upload to NAS with exponential-backoff retry (raises on final failure)."""
+        last_exc: Exception | None = None
+        for attempt in range(MAX_UPLOAD_ATTEMPTS):
+            try:
+                self._do_rsync(backup_path)
+                return
+            except (OSError, IOError, subprocess.CalledProcessError) as exc:
+                last_exc = exc
+                if attempt < MAX_UPLOAD_ATTEMPTS - 1:
+                    delay = UPLOAD_RETRY_DELAY * (2 ** attempt)
+                    log.warning(
+                        f"  ⚠️ Upload attempt {attempt + 1}/{MAX_UPLOAD_ATTEMPTS} failed "
+                        f"(retry in {delay:.0f}s): {exc}"
+                    )
+                    await asyncio.sleep(delay)
+        raise last_exc  # type: ignore[misc]
+
+    def _verify_upload_checksum(self, local_path: Path) -> None:
+        """
+        Compare local SHA-256 against the remote copy via SSH sha256sum.
+
+        If the remote tool is unavailable (older NAS firmware), logs a warning
+        and returns without raising so the upload is still considered successful.
+        """
+        local_hash = self._compute_file_hash(local_path)
+        remote_file = f"{self.nas_path}/{local_path.name}"
+        result = subprocess.run(
+            ["ssh", f"{self.nas_user}@{self.nas_host}", f"sha256sum {remote_file}"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            log.warning("  ⚠️ Could not verify remote checksum (sha256sum unavailable); skipping")
+            return
+        remote_hash = result.stdout.split()[0]
+        if local_hash != remote_hash:
+            raise ValueError(
+                f"Checksum mismatch after NAS upload! "
+                f"local={local_hash[:16]}… remote={remote_hash[:16]}…"
+            )
+        log.info(f"  ✓ Checksum verified ({local_hash[:16]}…)")
+
+    async def _upload_to_nas(self, backup_path: Path) -> bool:
+        """Upload backup to NAS using rsync with retry and post-upload checksum."""
+        try:
+            await self._upload_with_retry(backup_path)
             log.info(f"  ✓ Uploaded to NAS: {self.nas_host}:{self.nas_path}")
+
+            # Verify file-level checksum only for single compressed archives
+            if backup_path.is_file():
+                self._verify_upload_checksum(backup_path)
+
             return True
 
+        except ValueError:
+            # Checksum mismatch — propagate so the caller knows the upload is bad
+            raise
         except subprocess.CalledProcessError as e:
             log.warning(f"  ⚠️ NAS upload failed: {e}")
             return False

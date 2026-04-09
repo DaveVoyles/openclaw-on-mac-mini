@@ -76,6 +76,8 @@ async def audit_writer_loop():
                 with open(audit_file, "a") as f:
                     for e in entries:
                         f.write(json.dumps(e) + "\n")
+                        if e.get("severity", "INFO") in ("HIGH", "CRITICAL"):
+                            f.flush()
             except OSError as ex:
                 log.warning("Audit flush failed: %s", ex)
 

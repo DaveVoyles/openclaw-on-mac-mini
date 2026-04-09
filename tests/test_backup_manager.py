@@ -227,3 +227,80 @@ async def test_nas_upload_disabled(backup_dir):
 
     if result["success"]:
         assert result["uploaded"] is False
+
+
+# ---------------------------------------------------------------------------
+# Retry + checksum tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_upload_retries_on_first_failure_then_succeeds(backup_dir, tmp_path):
+    """_upload_with_retry succeeds on the second attempt after one transient error."""
+    import subprocess
+    from unittest.mock import AsyncMock, MagicMock, patch, call
+
+    manager = BackupManager(backup_dir=backup_dir)
+
+    fake_path = tmp_path / "backup.tar.gz"
+    fake_path.write_bytes(b"data")
+
+    call_count = 0
+
+    def flaky_rsync(path):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise subprocess.CalledProcessError(1, "rsync", stderr=b"timeout")
+        # second call succeeds
+
+    with patch.object(manager, "_do_rsync", side_effect=flaky_rsync), \
+         patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await manager._upload_with_retry(fake_path)
+
+    assert call_count == 2
+    # Should have slept once between attempts
+    mock_sleep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_checksum_mismatch_raises(backup_dir, tmp_path):
+    """_verify_upload_checksum raises ValueError when remote hash differs."""
+    import subprocess
+    from unittest.mock import patch, MagicMock
+
+    manager = BackupManager(backup_dir=backup_dir)
+
+    local_file = tmp_path / "backup.tar.gz"
+    local_file.write_bytes(b"local content")
+
+    # SSH returns a *different* hash
+    fake_result = MagicMock()
+    fake_result.returncode = 0
+    fake_result.stdout = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef  /remote/backup.tar.gz\n"
+
+    with patch("subprocess.run", return_value=fake_result):
+        with pytest.raises(ValueError, match="Checksum mismatch"):
+            manager._verify_upload_checksum(local_file)
+
+
+@pytest.mark.asyncio
+async def test_checksum_match_succeeds(backup_dir, tmp_path):
+    """_verify_upload_checksum does not raise when hashes match."""
+    import hashlib
+    import subprocess
+    from unittest.mock import patch, MagicMock
+
+    manager = BackupManager(backup_dir=backup_dir)
+
+    local_file = tmp_path / "backup.tar.gz"
+    local_file.write_bytes(b"exact same content")
+
+    real_hash = BackupManager._compute_file_hash(local_file)
+
+    fake_result = MagicMock()
+    fake_result.returncode = 0
+    fake_result.stdout = f"{real_hash}  /remote/backup.tar.gz\n"
+
+    with patch("subprocess.run", return_value=fake_result):
+        # Should not raise
+        manager._verify_upload_checksum(local_file)
