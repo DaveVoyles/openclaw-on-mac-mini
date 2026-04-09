@@ -58,6 +58,13 @@ class ImagineCog(commands.Cog):
         size: str = "medium",
         negative: str = "",
     ):
+        from cooldowns import check_cooldown
+        remaining = check_cooldown("imagine", interaction.user.id, cooldown_seconds=10.0)
+        if remaining > 0:
+            await interaction.response.send_message(
+                f"⏱ Please wait {remaining:.1f}s before generating another image.", ephemeral=True
+            )
+            return
         await interaction.response.defer()
         await interaction.followup.send("🎨 Generating...")
 

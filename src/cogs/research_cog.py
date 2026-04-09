@@ -177,8 +177,16 @@ class ResearchCog(commands.Cog, name="Research"):
     @require_auth()
     async def research_cmd(self, interaction: discord.Interaction, query: str, deep: bool = False):
         from approvals import is_emergency_stopped
+        from cooldowns import check_cooldown
         from llm import is_configured as llm_is_configured
         from research_agent import ResearchAgent
+
+        remaining = check_cooldown("research", interaction.user.id, cooldown_seconds=15.0)
+        if remaining > 0:
+            await interaction.response.send_message(
+                f"⏱ Please wait {remaining:.1f}s before starting another research.", ephemeral=True
+            )
+            return
 
         if is_emergency_stopped():
             await interaction.response.send_message(

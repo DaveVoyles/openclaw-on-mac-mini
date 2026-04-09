@@ -477,8 +477,15 @@ class ReportsCog(commands.Cog, name="Reports"):
         style: str = "action-items",
         variant: str = "copy-safe",
     ):
+        from cooldowns import check_cooldown
         from skills.reporting_skills import generate_channel_recap_report
 
+        remaining = check_cooldown("recap", interaction.user.id, cooldown_seconds=30.0)
+        if remaining > 0:
+            await interaction.response.send_message(
+                f"⏱ Please wait {remaining:.1f}s before generating another recap.", ephemeral=True
+            )
+            return
         await interaction.response.defer(ephemeral=True)
         report = await generate_channel_recap_report(
             channel_id=interaction.channel_id,
@@ -523,9 +530,16 @@ class ReportsCog(commands.Cog, name="Reports"):
         save_to_vault: bool = False,
         schedule_weekly: bool = False,
     ):
+        from cooldowns import check_cooldown
         from obsidian_writer import save_to_vault as save_report_to_vault
         from skills.reporting_skills import generate_channel_recap_report
 
+        remaining = check_cooldown("recap", interaction.user.id, cooldown_seconds=30.0)
+        if remaining > 0:
+            await interaction.response.send_message(
+                f"⏱ Please wait {remaining:.1f}s before generating another recap.", ephemeral=True
+            )
+            return
         await interaction.response.defer(thinking=True)  # Progress indicator
 
         report = await generate_channel_recap_report(
