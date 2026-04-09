@@ -1832,6 +1832,7 @@ async def generate_weekly_recap(
 
         async def _fetch_scores(label: str, coro, emoji: str) -> None:
             """Fetch scores for a single sport and append to report_sections."""
+            nonlocal sports_games_count
             try:
                 scores = await asyncio.wait_for(coro, timeout=15)
                 if scores.get("status") == "ok" and scores.get("games"):
