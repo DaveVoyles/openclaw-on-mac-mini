@@ -370,9 +370,18 @@ def test_build_context_explainability_reports_stale_anchor(tmp_path, monkeypatch
             disable_anchor=False,
         )
         note = ctx._format_context_explainability_note(payload)
+        repeated_payload = ctx._build_context_explainability(
+            cross_channel=False,
+            followup=True,
+            use_prior_report=False,
+            anchor_override=None,
+            disable_anchor=False,
+        )
 
     assert payload["anchor_id"] is None
     assert "anchor:stale" in payload["ignored"]
+    assert repeated_payload["anchor_id"] is None
+    assert "anchor:stale" in repeated_payload["ignored"]
     assert "ignored:" in note
 
     runtime_state_mod.reset_anchor_state(channel_id=111, thread_id=222)

@@ -28,6 +28,35 @@ def _scope_key(channel_id: int, thread_id: int | None) -> tuple[int, int | None]
     return int(channel_id), (int(thread_id) if thread_id is not None else None)
 
 
+def _anchor_matches_scope(
+    anchor: dict[str, Any] | None,
+    *,
+    channel_id: int,
+    thread_id: int | None,
+) -> bool:
+    if not anchor:
+        return False
+    try:
+        anchor_channel_id = int(anchor.get("channel_id"))
+    except (TypeError, ValueError):
+        return False
+    anchor_thread = anchor.get("thread_id")
+    anchor_thread_id = int(anchor_thread) if anchor_thread is not None else None
+    return anchor_channel_id == int(channel_id) and anchor_thread_id == (
+        int(thread_id) if thread_id is not None else None
+    )
+
+
+def _get_scoped_anchor_snapshot(channel_id: int, thread_id: int | None) -> dict[str, Any] | None:
+    scoped = _ANCHOR_STATE_BY_SCOPE.get(_scope_key(channel_id, thread_id))
+    if scoped:
+        return dict(scoped)
+    latest = _LAST_ANCHOR_STATE
+    if _anchor_matches_scope(latest, channel_id=channel_id, thread_id=thread_id):
+        return dict(latest)
+    return None
+
+
 def _is_anchor_expired(anchor: dict[str, Any], now: float | None = None) -> bool:
     ts = anchor.get("timestamp")
     if not ts:
@@ -71,8 +100,7 @@ def get_anchor_state(channel_id: int | None = None, thread_id: int | None = None
             _CONVERSATION_STATE.last_anchor_state = None
 
         if channel_id is not None:
-            scoped = _ANCHOR_STATE_BY_SCOPE.get(_scope_key(channel_id, thread_id))
-            return dict(scoped) if scoped else None
+            return _get_scoped_anchor_snapshot(channel_id, thread_id)
         return dict(_LAST_ANCHOR_STATE) if _LAST_ANCHOR_STATE else None
 
 
@@ -182,21 +210,18 @@ def resolve_anchor_state(
     """Return scope-valid anchor and reason when ignored."""
     if channel_id is None:
         return None, "no_scope"
-    key = _scope_key(channel_id, thread_id)
     with _ANCHOR_STATE_LOCK:
-        anchor = _ANCHOR_STATE_BY_SCOPE.get(key)
+        anchor = _get_scoped_anchor_snapshot(channel_id, thread_id)
         if not anchor:
             return None, None
         if _is_anchor_expired(anchor):
             if prune_stale:
-                _ANCHOR_STATE_BY_SCOPE.pop(key, None)
+                _ANCHOR_STATE_BY_SCOPE.pop(_scope_key(channel_id, thread_id), None)
                 global _LAST_ANCHOR_STATE
                 latest = _LAST_ANCHOR_STATE
-                if latest and latest.get("channel_id") == int(channel_id):
-                    latest_thread = latest.get("thread_id")
-                    if latest_thread == (int(thread_id) if thread_id is not None else None):
-                        _LAST_ANCHOR_STATE = None
-                        _CONVERSATION_STATE.last_anchor_state = None
+                if _anchor_matches_scope(latest, channel_id=channel_id, thread_id=thread_id):
+                    _LAST_ANCHOR_STATE = None
+                    _CONVERSATION_STATE.last_anchor_state = None
             return None, "stale"
         return dict(anchor), None
 

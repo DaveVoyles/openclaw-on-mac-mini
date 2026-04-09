@@ -389,7 +389,11 @@ def _build_context_explainability(
         thread_id=thread_id,
     )
     lock_mode = str((lock or {}).get("mode") or "none")
-    anchor, anchor_state_reason = resolve_anchor_state(channel_id=channel_id, thread_id=thread_id)
+    anchor, anchor_state_reason = resolve_anchor_state(
+        channel_id=channel_id,
+        thread_id=thread_id,
+        prune_stale=False,
+    )
 
     effective_use_prior_report = bool(use_prior_report)
     resolved_anchor_override = anchor_override
