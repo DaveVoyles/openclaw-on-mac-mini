@@ -277,6 +277,27 @@ class TestExecutePlan:
         assert "⚠️" in result
 
     @pytest.mark.asyncio
+    async def test_happy_path_single_step(self):
+        """Single-step plan: LLM returns text directly, step marked done, plan completed."""
+        from unittest.mock import AsyncMock, patch
+
+        plan = agent_loop.Plan(plan_id="happy-001", goal="Do one thing", steps=[
+            agent_loop.Step(num=1, description="Just do it"),
+        ])
+        plan.status = "in-progress"
+        agent_loop.save_plan(plan)
+
+        mock_chat = AsyncMock(return_value=("Task accomplished.", [], "gemini"))
+        with patch("llm.chat", mock_chat):
+            result = await agent_loop.execute_plan("happy-001")
+
+        assert "happy-001" in result
+        loaded = agent_loop.load_plan("happy-001")
+        assert loaded.status == "completed"
+        assert loaded.steps[0].status == "done"
+        assert "Task accomplished." in loaded.steps[0].output
+
+    @pytest.mark.asyncio
     async def test_executes_steps_via_llm(self, sample_plan, monkeypatch):
         """execute_plan() drives each step via llm.chat; mock it."""
         from unittest.mock import AsyncMock, patch
@@ -288,9 +309,8 @@ class TestExecutePlan:
         agent_loop.save_plan(sample_plan)
 
         mock_chat = AsyncMock(return_value=("Step completed successfully.", [], "gemini"))
-        with patch("agent_loop._llm_chat", mock_chat, create=True):
-            with patch("llm.chat", mock_chat):
-                result = await agent_loop.execute_plan("test-001")
+        with patch("llm.chat", mock_chat):
+            result = await agent_loop.execute_plan("test-001")
         # Should mention steps executed
         assert "test-001" in result
 
@@ -336,6 +356,80 @@ class TestExecutePlan:
             await agent_loop.execute_plan("cb-001", on_progress=_on_progress)
         # at minimum "in-progress" was called for step 1
         assert any(step == 1 for step, _ in progress_calls)
+
+    @pytest.mark.asyncio
+    async def test_llm_exception_marks_step_failed_and_interrupts_plan(self):
+        """When llm.chat raises a generic exception the step is failed and plan interrupted."""
+        from unittest.mock import AsyncMock, patch
+
+        plan = agent_loop.Plan(plan_id="exc-001", goal="Blow up", steps=[
+            agent_loop.Step(num=1, description="Step that errors"),
+            agent_loop.Step(num=2, description="Never reached", depends_on=[1]),
+        ])
+        plan.status = "in-progress"
+        agent_loop.save_plan(plan)
+
+        mock_chat = AsyncMock(side_effect=RuntimeError("LLM exploded"))
+        with patch("llm.chat", mock_chat):
+            result = await agent_loop.execute_plan("exc-001")
+
+        assert "exc-001" in result
+        loaded = agent_loop.load_plan("exc-001")
+        assert loaded.steps[0].status == "failed"
+        assert "LLM exploded" in loaded.steps[0].output
+        # step 2 is still pending → plan should be interrupted, not completed
+        assert loaded.status == "interrupted"
+
+    @pytest.mark.asyncio
+    async def test_multi_step_context_accumulates(self):
+        """Outputs from completed steps are stored in plan.context for subsequent steps."""
+        from unittest.mock import AsyncMock, patch
+
+        plan = agent_loop.Plan(plan_id="ctx-001", goal="Accumulate context", steps=[
+            agent_loop.Step(num=1, description="Search for data"),
+            agent_loop.Step(num=2, description="Summarise findings"),
+        ])
+        plan.status = "in-progress"
+        agent_loop.save_plan(plan)
+
+        responses = [
+            ("Found 42 results.", [], "gemini"),
+            ("Summary complete.", [], "gemini"),
+        ]
+        mock_chat = AsyncMock(side_effect=responses)
+        with patch("llm.chat", mock_chat):
+            result = await agent_loop.execute_plan("ctx-001")
+
+        loaded = agent_loop.load_plan("ctx-001")
+        assert loaded.status == "completed"
+        # Step 1 output must be stored in context so step 2 can see it
+        assert "step_1_output" in loaded.context
+        assert "Found 42 results." in loaded.context["step_1_output"]
+        assert "2 steps executed" in result
+
+    @pytest.mark.asyncio
+    async def test_max_iterations_guard_via_timeout(self):
+        """If the LLM never finishes, asyncio.wait_for raises TimeoutError stopping the loop."""
+        import asyncio as _asyncio
+        from unittest.mock import patch
+
+        plan = agent_loop.Plan(plan_id="inf-001", goal="Run forever", steps=[
+            agent_loop.Step(num=1, description="Infinite step"),
+            agent_loop.Step(num=2, description="Unreachable", depends_on=[1]),
+            agent_loop.Step(num=3, description="Also unreachable", depends_on=[2]),
+        ])
+        plan.status = "in-progress"
+        agent_loop.save_plan(plan)
+
+        # Simulate an LLM that always times out — the loop must terminate
+        with patch("agent_loop.asyncio.wait_for", side_effect=_asyncio.TimeoutError):
+            result = await agent_loop.execute_plan("inf-001")
+
+        # Must return (not hang) and report the plan as interrupted
+        assert "inf-001" in result
+        loaded = agent_loop.load_plan("inf-001")
+        assert loaded.status == "interrupted"
+        assert loaded.steps[0].status == "failed"
 
 
 class TestScanInterrupted:
