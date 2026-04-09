@@ -1,9 +1,13 @@
-"""Tests for EmbedBuilder."""
+"""Tests for EmbedBuilder and EmbedColor."""
+
+from datetime import datetime, timezone
 
 import discord
+import pytest
 
 from builders.embed_builder import (
     EmbedBuilder,
+    EmbedColor,
     EmbedColors,
     error_embed,
     info_embed,
@@ -12,123 +16,198 @@ from builders.embed_builder import (
 )
 
 
-class TestEmbedBuilder:
-    def test_basic_embed(self):
-        embed = EmbedBuilder().title("Test").description("Description").build()
-        assert isinstance(embed, discord.Embed)
-        assert embed.title == "Test"
-        assert embed.description == "Description"
+class TestEmbedColor:
+    def test_values_are_valid_ints(self):
+        for member in EmbedColor:
+            assert isinstance(int(member), int)
+            assert 0 <= int(member) <= 0xFFFFFF
 
-    def test_chaining(self):
-        embed = (EmbedBuilder()
-            .title("Title")
-            .description("Desc")
-            .color(EmbedColors.INFO)
-            .build())
+    def test_specific_colors(self):
+        assert int(EmbedColor.ERROR) == 0xED4245
+        assert int(EmbedColor.SUCCESS) == 0x57F287
+        assert int(EmbedColor.WARNING) == 0xFEE75C
+        assert int(EmbedColor.SPORTS) == 0xFF6B35
+        assert int(EmbedColor.AI) == 0x9B59B6
 
-        assert embed.title == "Title"
-        assert embed.description == "Desc"
-        assert embed.color.value == EmbedColors.INFO
 
-    def test_fields(self):
-        embed = (EmbedBuilder()
-            .title("Test")
-            .field("Name", "Value", inline=False)
-            .field("Name2", "Value2", inline=True)
-            .build())
+class TestEmbedBuilderCore:
+    def test_default_color_applied(self):
+        embed = EmbedBuilder().build()
+        assert embed.color.value == int(EmbedColor.DEFAULT)
 
-        assert len(embed.fields) == 2
+    def test_custom_color_in_constructor(self):
+        embed = EmbedBuilder("Title", EmbedColor.SPORTS).build()
+        assert embed.color.value == int(EmbedColor.SPORTS)
+
+    def test_description_sets_description(self):
+        embed = EmbedBuilder().description("Hello world").build()
+        assert embed.description == "Hello world"
+
+    def test_add_field_appends_field(self):
+        embed = EmbedBuilder().add_field("Name", "Value").build()
+        assert len(embed.fields) == 1
         assert embed.fields[0].name == "Name"
         assert embed.fields[0].value == "Value"
-        assert not embed.fields[0].inline
-        assert embed.fields[1].inline
 
-    def test_author(self):
+    def test_add_field_empty_value_becomes_zwsp(self):
+        embed = EmbedBuilder().add_field("Name", "").build()
+        assert embed.fields[0].value == "\u200b"
+
+    def test_add_field_multiple(self):
         embed = (EmbedBuilder()
-            .title("Test")
-            .author("Author Name", url="https://example.com")
-            .build())
+                 .add_field("F1", "V1", inline=True)
+                 .add_field("F2", "V2", inline=False)
+                 .build())
+        assert len(embed.fields) == 2
+        assert embed.fields[0].inline is True
+        assert embed.fields[1].inline is False
 
-        assert embed.author.name == "Author Name"
-        assert embed.author.url == "https://example.com"
+    def test_footer_no_args_uses_default(self):
+        embed = EmbedBuilder().footer().build()
+        assert embed.footer.text == "OpenClaw"
 
-    def test_footer(self):
-        embed = (EmbedBuilder()
-            .title("Test")
-            .footer("Footer text")
-            .build())
+    def test_footer_custom_text(self):
+        embed = EmbedBuilder().footer("Custom Footer").build()
+        assert embed.footer.text == "Custom Footer"
 
-        assert embed.footer.text == "Footer text"
+    def test_timestamp_sets_utc_now(self):
+        before = datetime.now(tz=timezone.utc)
+        embed = EmbedBuilder().timestamp().build()
+        after = datetime.now(tz=timezone.utc)
+        assert embed.timestamp is not None
+        assert before <= embed.timestamp <= after
 
-    def test_thumbnail(self):
-        embed = (EmbedBuilder()
-            .title("Test")
-            .thumbnail("https://example.com/thumb.png")
-            .build())
+    def test_timestamp_accepts_explicit_datetime(self):
+        dt = datetime(2024, 6, 15, 10, 0, 0, tzinfo=timezone.utc)
+        embed = EmbedBuilder().timestamp(dt).build()
+        assert embed.timestamp == dt
 
-        assert embed.thumbnail.url == "https://example.com/thumb.png"
+    def test_build_returns_discord_embed(self):
+        result = EmbedBuilder().build()
+        assert isinstance(result, discord.Embed)
 
-    def test_image(self):
-        embed = (EmbedBuilder()
-            .title("Test")
-            .image("https://example.com/image.png")
-            .build())
+    def test_color_method_accepts_int(self):
+        embed = EmbedBuilder().color(0xFF0000).build()
+        assert embed.color.value == 0xFF0000
 
-        assert embed.image.url == "https://example.com/image.png"
+    def test_color_method_accepts_embed_color(self):
+        embed = EmbedBuilder().color(EmbedColor.AI).build()
+        assert embed.color.value == int(EmbedColor.AI)
 
-    def test_url(self):
-        embed = (EmbedBuilder()
-            .title("Test")
-            .url("https://example.com")
-            .build())
-
+    def test_url_sets_url(self):
+        embed = EmbedBuilder("Title").url("https://example.com").build()
         assert embed.url == "https://example.com"
 
-    def test_timestamp(self):
-        from datetime import datetime
-        dt = datetime(2024, 1, 1, 12, 0, 0)
-        embed = EmbedBuilder().title("Test").timestamp(dt).build()
+    def test_thumbnail(self):
+        embed = EmbedBuilder().thumbnail("https://example.com/t.png").build()
+        assert embed.thumbnail.url == "https://example.com/t.png"
 
-        # Just verify timestamp is set (don't compare exact datetime due to timezone conversion)
+    def test_image(self):
+        embed = EmbedBuilder().image("https://example.com/i.png").build()
+        assert embed.image.url == "https://example.com/i.png"
+
+    def test_author(self):
+        embed = EmbedBuilder().author("Dave", icon_url="https://example.com/a.png").build()
+        assert embed.author.name == "Dave"
+
+    def test_title_via_constructor(self):
+        embed = EmbedBuilder("My Title").build()
+        assert embed.title == "My Title"
+
+    def test_title_via_method(self):
+        embed = EmbedBuilder().title("Via Method").build()
+        assert embed.title == "Via Method"
+
+
+class TestFluentChaining:
+    """All builder methods (except build) must return self."""
+
+    def test_description_returns_self(self):
+        b = EmbedBuilder()
+        assert b.description("x") is b
+
+    def test_color_returns_self(self):
+        b = EmbedBuilder()
+        assert b.color(EmbedColor.ERROR) is b
+
+    def test_url_returns_self(self):
+        b = EmbedBuilder()
+        assert b.url("https://x.com") is b
+
+    def test_add_field_returns_self(self):
+        b = EmbedBuilder()
+        assert b.add_field("n", "v") is b
+
+    def test_thumbnail_returns_self(self):
+        b = EmbedBuilder()
+        assert b.thumbnail("https://x.com/t.png") is b
+
+    def test_image_returns_self(self):
+        b = EmbedBuilder()
+        assert b.image("https://x.com/i.png") is b
+
+    def test_author_returns_self(self):
+        b = EmbedBuilder()
+        assert b.author("name") is b
+
+    def test_footer_returns_self(self):
+        b = EmbedBuilder()
+        assert b.footer() is b
+
+    def test_timestamp_returns_self(self):
+        b = EmbedBuilder()
+        assert b.timestamp() is b
+
+    def test_build_returns_embed_not_self(self):
+        b = EmbedBuilder()
+        result = b.build()
+        assert result is not b
+        assert isinstance(result, discord.Embed)
+
+
+class TestClassMethods:
+    def test_error_returns_red_embed(self):
+        embed = EmbedBuilder.error("Oops", "Something broke")
+        assert isinstance(embed, discord.Embed)
+        assert embed.color.value == int(EmbedColor.ERROR)
+        assert embed.description == "Something broke"
+        assert embed.footer.text == "OpenClaw"
         assert embed.timestamp is not None
-        assert embed.timestamp.year == 2024
+
+    def test_success_returns_green_embed(self):
+        embed = EmbedBuilder.success("Done", "All good")
+        assert isinstance(embed, discord.Embed)
+        assert embed.color.value == int(EmbedColor.SUCCESS)
+        assert embed.description == "All good"
+        assert embed.footer.text == "OpenClaw"
+        assert embed.timestamp is not None
+
+    def test_info_returns_blurple_embed(self):
+        embed = EmbedBuilder.info("FYI", "Heads up")
+        assert isinstance(embed, discord.Embed)
+        assert embed.color.value == int(EmbedColor.INFO)
+        assert embed.footer.text == "OpenClaw"
+
+    def test_warning_returns_yellow_embed(self):
+        embed = EmbedBuilder.warning("Careful", "Watch out")
+        assert isinstance(embed, discord.Embed)
+        assert embed.color.value == int(EmbedColor.WARNING)
+        assert embed.footer.text == "OpenClaw"
 
 
-class TestConvenienceMethods:
-    def test_success(self):
-        embed = EmbedBuilder().success("Success", "It worked!").build()
+class TestBackwardCompatibility:
+    """Ensure old API still works for existing callers."""
 
-        assert "✅" in embed.title
-        assert "Success" in embed.title
-        assert embed.description == "It worked!"
-        assert embed.color.value == EmbedColors.SUCCESS
+    def test_embed_colors_success(self):
+        assert EmbedColors.SUCCESS == int(EmbedColor.SUCCESS)
 
-    def test_error(self):
-        embed = EmbedBuilder().error("Error", "It failed!").build()
+    def test_embed_colors_error(self):
+        assert EmbedColors.ERROR == int(EmbedColor.ERROR)
 
-        assert "❌" in embed.title
-        assert "Error" in embed.title
-        assert embed.description == "It failed!"
-        assert embed.color.value == EmbedColors.ERROR
+    def test_field_alias_works(self):
+        embed = EmbedBuilder().field("Name", "Value").build()
+        assert len(embed.fields) == 1
 
-    def test_warning(self):
-        embed = EmbedBuilder().warning("Warning", "Be careful!").build()
-
-        assert "⚠️" in embed.title
-        assert "Warning" in embed.title
-        assert embed.description == "Be careful!"
-        assert embed.color.value == EmbedColors.WARNING
-
-    def test_info(self):
-        embed = EmbedBuilder().info("Info", "FYI").build()
-
-        assert "ℹ️" in embed.title
-        assert "Info" in embed.title
-        assert embed.description == "FYI"
-        assert embed.color.value == EmbedColors.INFO
-
-
-class TestFactoryFunctions:
     def test_success_embed_factory(self):
         embed = success_embed("Deploy", "App is live")
         assert isinstance(embed, discord.Embed)
@@ -148,26 +227,3 @@ class TestFactoryFunctions:
         embed = info_embed("Info", "Version 1.0")
         assert isinstance(embed, discord.Embed)
         assert "ℹ️" in embed.title
-
-
-class TestComplexEmbed:
-    def test_fully_configured_embed(self):
-        embed = (EmbedBuilder()
-            .title("Complex Embed")
-            .description("With all features")
-            .color(EmbedColors.INFO)
-            .url("https://example.com")
-            .author("Author", url="https://author.com")
-            .field("Field 1", "Value 1", inline=True)
-            .field("Field 2", "Value 2", inline=True)
-            .footer("Footer text")
-            .thumbnail("https://example.com/thumb.png")
-            .build())
-
-        assert embed.title == "Complex Embed"
-        assert embed.description == "With all features"
-        assert embed.url == "https://example.com"
-        assert embed.author.name == "Author"
-        assert len(embed.fields) == 2
-        assert embed.footer.text == "Footer text"
-        assert embed.thumbnail.url == "https://example.com/thumb.png"
