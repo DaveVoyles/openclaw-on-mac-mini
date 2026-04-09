@@ -310,13 +310,60 @@ class TestPluginAPIUtilities:
         version = plugin_api.get_version()
         assert version == "unknown"
 
-    def test_has_permission(self, plugin_api):
-        """Test permission checking."""
-        # Currently always returns True
-        assert plugin_api.has_permission("network")
-        assert plugin_api.has_permission("storage")
-        assert plugin_api.has_permission("commands")
-        assert plugin_api.has_permission("any_permission")
+    def test_has_permission(self, tmp_path):
+        """Test declared permissions are granted."""
+        api = PluginAPI(
+            plugin_name="test-plugin",
+            data_dir=tmp_path / "data",
+            skills_registry={},
+            allowed_permissions=["network", "storage", "commands"],
+        )
+
+        assert api.has_permission("network")
+        assert api.has_permission("storage")
+        assert api.has_permission("commands")
+        assert not api.has_permission("any_permission")
+
+    def test_has_permission_denies_missing_permission(self, tmp_path):
+        """Test undeclared permissions are denied."""
+        api = PluginAPI(
+            plugin_name="test-plugin",
+            data_dir=tmp_path / "data",
+            skills_registry={},
+            allowed_permissions=["network"],
+        )
+
+        assert api.has_permission("network")
+        assert not api.has_permission("storage")
+
+    def test_has_permission_empty_permissions_default_to_none(self, plugin_api):
+        """Empty permission lists should not silently grant capabilities."""
+        assert not plugin_api.has_permission("network")
+
+    def test_has_permission_unknown_permission_requires_explicit_grant(self, tmp_path):
+        """Unknown capabilities stay denied until the host explicitly grants them."""
+        denied_api = PluginAPI(
+            plugin_name="test-plugin",
+            data_dir=tmp_path / "denied-data",
+            skills_registry={},
+        )
+        assert not denied_api.has_permission("custom-capability")
+
+        api = PluginAPI(
+            plugin_name="test-plugin",
+            data_dir=tmp_path / "data",
+            skills_registry={},
+            config={
+                "plugins": {
+                    "test-plugin": {
+                        "allowed_permissions": ["custom-capability"],
+                    }
+                }
+            },
+        )
+
+        assert api.has_permission("custom-capability")
+        assert not api.has_permission("network")
 
 
 @pytest.fixture

@@ -10,7 +10,7 @@ Provides a safe, versioned API for plugins to:
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +32,7 @@ class PluginAPI:
         skills_registry: dict[str, Any],
         config: dict[str, Any] | None = None,
         event_emitter: Any | None = None,
+        allowed_permissions: Iterable[str] | str | None = None,
     ):
         """
         Initialize the PluginAPI.
@@ -42,12 +43,16 @@ class PluginAPI:
             skills_registry: Global skills registry
             config: Bot configuration (read-only)
             event_emitter: Event system for plugin hooks
+            allowed_permissions: Capability permissions granted to the plugin.
+                The loader passes manifest permissions here; host config may
+                extend them via plugins.<plugin_name>.allowed_permissions.
         """
         self.plugin_name = plugin_name
         self.data_dir = data_dir
         self._skills_registry = skills_registry
         self._config = config or {}
         self._event_emitter = event_emitter
+        self._allowed_permissions = self._resolve_allowed_permissions(allowed_permissions)
         self._plugin_skills: dict[str, Callable] = {}
         self._plugin_commands: list[dict[str, Any]] = []
         self._storage: dict[str, Any] = {}
@@ -153,6 +158,50 @@ class PluginAPI:
     # Configuration Access
     # -------------------------------------------------------------------------
 
+    @staticmethod
+    def _normalize_permissions(permissions: Iterable[str] | str | None) -> set[str]:
+        """Normalize permission values into a lowercase set."""
+        if permissions is None:
+            return set()
+
+        if isinstance(permissions, str):
+            permissions = [permissions]
+
+        return {
+            permission.strip().lower()
+            for permission in permissions
+            if isinstance(permission, str) and permission.strip()
+        }
+
+    def _resolve_config_value(self, key: str) -> tuple[bool, Any]:
+        """Resolve a dotted config path from dict- or attribute-based config."""
+        value: Any = self._config
+
+        for part in key.split("."):
+            if isinstance(value, dict):
+                if part not in value:
+                    return False, None
+                value = value[part]
+            elif hasattr(value, part):
+                value = getattr(value, part)
+            else:
+                return False, None
+
+        return True, value
+
+    def _resolve_allowed_permissions(
+        self,
+        allowed_permissions: Iterable[str] | str | None,
+    ) -> set[str]:
+        """Build the effective permission set from manifest and config."""
+        configured_permissions = self.get_config(
+            f"plugins.{self.plugin_name}.allowed_permissions",
+            [],
+        )
+        return self._normalize_permissions(allowed_permissions) | self._normalize_permissions(
+            configured_permissions
+        )
+
     def get_config(self, key: str, default: Any = None) -> Any:
         """
         Get configuration value from bot config.
@@ -164,18 +213,9 @@ class PluginAPI:
         Returns:
             Configuration value or default
         """
-        parts = key.split(".")
-        value = self._config
-
-        for part in parts:
-            if isinstance(value, dict):
-                value = value.get(part)
-            else:
-                return default
-
-            if value is None:
-                return default
-
+        found, value = self._resolve_config_value(key)
+        if not found or value is None:
+            return default
         return value
 
     # -------------------------------------------------------------------------
@@ -290,8 +330,11 @@ class PluginAPI:
             True if permission granted
 
         Note:
-            Permissions are currently not enforced. This is a placeholder
-            for future sandboxing implementation.
+            An empty manifest permissions list grants no sandbox capabilities.
+            Hosts may explicitly extend capabilities with
+            plugins.<plugin_name>.allowed_permissions in config.
         """
-        # TODO: Implement actual permission checking
-        return True
+        normalized_permission = permission.strip().lower()
+        if not normalized_permission:
+            return False
+        return normalized_permission in self._allowed_permissions

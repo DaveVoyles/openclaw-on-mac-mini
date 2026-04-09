@@ -337,6 +337,7 @@ class PluginLoader:
                 data_dir=plugin_data_dir,
                 skills_registry=self.skills_registry,
                 config=self.config,
+                allowed_permissions=metadata.permissions,
             )
 
             # Instantiate plugin

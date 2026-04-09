@@ -251,10 +251,10 @@ class TestPluginAPI:
 
     def test_has_permission(self, plugin_api):
         """Test permission checking."""
-        # Currently always returns True (not enforced)
-        assert plugin_api.has_permission("network")
-        assert plugin_api.has_permission("storage")
-        assert plugin_api.has_permission("any_permission")
+        # Empty manifest permissions should not silently grant capabilities.
+        assert not plugin_api.has_permission("network")
+        assert not plugin_api.has_permission("storage")
+        assert not plugin_api.has_permission("any_permission")
 
 
 @pytest.fixture
