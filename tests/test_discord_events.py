@@ -3,9 +3,8 @@ Tests for discord_events.py — pure helper functions that don't require Discord
 """
 
 import sys
-import time
-from unittest.mock import MagicMock, AsyncMock, patch
-import pytest
+from unittest.mock import AsyncMock, MagicMock
+
 import discord
 
 # Mock all heavy dependencies before importing discord_events
@@ -22,7 +21,6 @@ for name, mock in _mocks.items():
     sys.modules.setdefault(name, mock)
 
 import discord_events as de  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Helpers

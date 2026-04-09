@@ -1,9 +1,4 @@
 """Tests for src/goal_tracker.py — detect_goal, load/save, get_active_goals, complete, dismiss."""
-import json
-import sys
-import time
-from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 

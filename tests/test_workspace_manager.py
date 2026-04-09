@@ -432,9 +432,9 @@ class TestStatistics:
 # Additional tests for improved coverage
 # ---------------------------------------------------------------------------
 
+
 import workspace_manager as wm_module
-from unittest.mock import patch
-from workspace_manager import WorkspaceRole, get_workspace_manager
+from workspace_manager import get_workspace_manager
 
 
 class TestWorkspaceRoleComparisons:

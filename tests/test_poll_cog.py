@@ -1,5 +1,4 @@
 """Tests for cogs/poll_cog.py."""
-import asyncio
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
 

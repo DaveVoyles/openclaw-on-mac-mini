@@ -3,7 +3,6 @@
 from datetime import datetime, timezone
 
 import discord
-import pytest
 
 from builders.embed_builder import (
     EmbedBuilder,

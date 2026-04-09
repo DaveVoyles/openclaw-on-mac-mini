@@ -12,17 +12,14 @@ import pytest
 os.environ.setdefault("LOG_DIR", "/tmp")
 os.environ.setdefault("AUDIT_DIR", "/tmp")
 
-import offline_quality_eval as mod
 from offline_quality_eval import (
-    DEFAULT_DRIFT_TOLERANCES,
     DEFAULT_THRESHOLDS,
-    SEVERE_DRIFT_SCORE_THRESHOLD,
     _bucket_from_rank,
     _bucket_rank,
     _build_drift_report,
     _build_threshold_recommendations,
-    _classify_drift_severity,
     _clamp,
+    _classify_drift_severity,
     _contains_evidence_token,
     _evaluate_claim_grounding,
     _is_claim_like_line,
@@ -33,7 +30,6 @@ from offline_quality_eval import (
     load_replay_fixtures,
     run_quality_eval,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures helpers

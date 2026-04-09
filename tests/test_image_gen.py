@@ -141,7 +141,6 @@ class TestGenerateImageErrors:
 
     @pytest.mark.asyncio
     async def test_timeout_returns_none_with_timeout_message(self, mock_session):
-        import aiohttp
         mock_session.post = MagicMock(side_effect=asyncio.TimeoutError())
 
         img_bytes, msg = await ig.generate_image("a prompt")

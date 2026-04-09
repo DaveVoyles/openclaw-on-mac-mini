@@ -1,6 +1,5 @@
 """Tests for src/expense_tracker.py — ExpenseTracker CRUD with JSON persistence."""
 import json
-from pathlib import Path
 
 import pytest
 

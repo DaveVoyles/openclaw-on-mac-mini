@@ -237,7 +237,7 @@ async def test_nas_upload_disabled(backup_dir):
 async def test_upload_retries_on_first_failure_then_succeeds(backup_dir, tmp_path):
     """_upload_with_retry succeeds on the second attempt after one transient error."""
     import subprocess
-    from unittest.mock import AsyncMock, MagicMock, patch, call
+    from unittest.mock import AsyncMock, patch
 
     manager = BackupManager(backup_dir=backup_dir)
 
@@ -265,8 +265,7 @@ async def test_upload_retries_on_first_failure_then_succeeds(backup_dir, tmp_pat
 @pytest.mark.asyncio
 async def test_checksum_mismatch_raises(backup_dir, tmp_path):
     """_verify_upload_checksum raises ValueError when remote hash differs."""
-    import subprocess
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
 
     manager = BackupManager(backup_dir=backup_dir)
 
@@ -286,9 +285,7 @@ async def test_checksum_mismatch_raises(backup_dir, tmp_path):
 @pytest.mark.asyncio
 async def test_checksum_match_succeeds(backup_dir, tmp_path):
     """_verify_upload_checksum does not raise when hashes match."""
-    import hashlib
-    import subprocess
-    from unittest.mock import patch, MagicMock
+    from unittest.mock import MagicMock, patch
 
     manager = BackupManager(backup_dir=backup_dir)
 

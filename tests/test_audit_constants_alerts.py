@@ -2,19 +2,14 @@
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
-
-import alert_manager as am_mod
-import audit as audit_mod
 from alert_manager import (
     DEFAULT_COOLDOWN,
     reset_bounded_alert_cache,
     should_route_bounded_alert,
 )
 from audit import _audit_buffer, audit_log
-
 
 # ===========================================================================
 # audit.py

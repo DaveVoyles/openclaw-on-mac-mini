@@ -1,10 +1,10 @@
 """Tests for per-user command cooldown tracking."""
+import os
+import sys
 import time
 
 import pytest
 
-import sys
-import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from cooldowns import check_cooldown, reset_cooldown

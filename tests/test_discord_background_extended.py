@@ -15,11 +15,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import discord
 import pytest
 
-import discord_background as mod
 import bg_briefing
 import bg_healing
 import bg_monitoring
 import bg_tasks
+import discord_background as mod
 
 # ---------------------------------------------------------------------------
 # Helpers

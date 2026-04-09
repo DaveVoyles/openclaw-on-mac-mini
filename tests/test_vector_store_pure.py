@@ -4,10 +4,6 @@ Tests focus on testable pure functions to avoid requiring a real ChromaDB instan
 """
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
-
-import vector_store as mod
 from vector_store import (
     _allow_fallback_result,
     _combine_scope_where,
@@ -20,7 +16,6 @@ from vector_store import (
     _set_recall_guard_notes,
     consume_recall_guard_notes,
 )
-
 
 # ===========================================================================
 # consume_recall_guard_notes / _set_recall_guard_notes

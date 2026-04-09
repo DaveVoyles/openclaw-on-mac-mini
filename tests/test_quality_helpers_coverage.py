@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -32,7 +31,6 @@ from quality_helpers import (
     _score_answer_quality,
     _with_requested_item_target,
 )
-
 
 # ---------------------------------------------------------------------------
 # _explainability_note_from_meta
@@ -590,7 +588,6 @@ async def test_run_quality_auto_repair_skips_when_high_quality():
         patch.object(mod, "_record_quality_metric", mock_metric),
         patch.object(mod, "_record_budget_policy_metric", MagicMock()),
     ):
-        from ask_orchestrator import select_latency_budget_policy
         with patch("ask_orchestrator.select_latency_budget_policy", mock_policy):
             result = await _run_quality_auto_repair(
                 question="test q",
@@ -631,7 +628,6 @@ async def test_run_quality_auto_repair_runs_retry_on_low_quality():
         patch.object(mod, "_safe_score_answer_quality", MagicMock(return_value={"score": 85, "status": "high", "reasons": []})),
         patch.object(mod, "_quality_retry_improved", MagicMock(return_value=True)),
     ):
-        from ask_orchestrator import select_latency_budget_policy
         with patch("ask_orchestrator.select_latency_budget_policy", mock_policy):
             result = await _run_quality_auto_repair(
                 question="tell me top 5 stories",

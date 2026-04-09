@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import time
-
 import pytest
 
 
@@ -461,7 +458,6 @@ def test_update_recommendation_apply():
 
 def test_update_recommendation_revert():
     from channel_profile_state import (
-        get_channel_profile,
         list_channel_profile_recommendations,
         record_channel_profile_signal,
         update_channel_profile_recommendation,
@@ -637,7 +633,7 @@ def test_normalize_profile_int_value_none_returns_default():
 
 @pytest.mark.parametrize("tone", ["neutral", "concise", "analytical", "friendly"])
 def test_all_tone_values_accepted(tone):
-    from channel_profile_state import get_channel_profile, set_channel_profile
+    from channel_profile_state import set_channel_profile
 
     set_channel_profile(200 + hash(tone) % 100, tone=tone)
     # validate via normalize

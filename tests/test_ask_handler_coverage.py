@@ -59,8 +59,9 @@ for _mod_name in _STUB_MODULES:
     sys.modules.setdefault(_mod_name, _make_mock_module(_mod_name))
 
 # Patch specific attributes we care about BEFORE importing ask_handler
-import discord as _discord_stub
 import types as _types
+
+import discord as _discord_stub
 
 # Save originals BEFORE mutating.  We'll restore them after ask_handler is
 # imported so that discord_commands/ (which registers app_commands with strict
@@ -96,19 +97,23 @@ _discord_stub.NotFound = Exception
 # NOTE: do NOT replace discord.app_commands — commands registration needs it real
 
 import constants as _const_stub
+
 _const_stub.EMBED_SPLIT_LIMIT = 4000
 _const_stub.MAX_FILE_SIZE = 10_000_000
 
 import config as _config_stub
+
 _cfg = MagicMock()
 _cfg.thread_auto_create = False
 _cfg.thread_archive_minutes = 60
 _config_stub.cfg = _cfg
 
 import approvals as _approvals_stub
+
 _approvals_stub.is_emergency_stopped = MagicMock(return_value=False)
 
 import llm as _llm_stub
+
 _llm_stub.SUPPORTED_IMAGE_MIMES = {"image/png", "image/jpeg"}
 _llm_stub.get_rate_info = MagicMock(return_value="100/min")
 _llm_stub.chat = AsyncMock()
@@ -117,6 +122,7 @@ _llm_stub.is_configured = MagicMock(return_value=True)
 _llm_stub._needs_tools = MagicMock(return_value=False)
 
 import memory as _memory_stub
+
 _mem_obj = MagicMock()
 _mem_obj.get.return_value = None  # set later in _reset_stubs
 _mem_obj.cleanup_expired = MagicMock()
@@ -128,9 +134,11 @@ _memory_stub.THREADS_DIR = MagicMock()
 _memory_stub.SUMMARIES_DIR = MagicMock()
 
 import audit as _audit_stub
+
 _audit_stub.audit_log = MagicMock()
 
 import bot_formatting as _fmt_stub
+
 _fmt_stub.build_attachment_embed_summary = MagicMock(return_value="summary")
 _fmt_stub.extract_file_attachment = MagicMock(return_value=None)
 _fmt_stub.extract_image_url = MagicMock(return_value=None)
@@ -139,10 +147,12 @@ _fmt_stub.format_tables_for_context = MagicMock(side_effect=lambda x, **kw: x)
 _fmt_stub.split_response = MagicMock(return_value=["chunk1"])
 
 import bot_attachments as _attach_stub
+
 _attach_stub.handle_doc_attachment = AsyncMock(return_value="doc question")
 _attach_stub.handle_image_attachment = AsyncMock(return_value="image question")
 
 import quality_helpers as _qh_stub
+
 _qh_stub._append_explainability_footer = MagicMock(side_effect=lambda ft, note: ft)
 _qh_stub._build_ask_context_controls = MagicMock(return_value={})
 _qh_stub._build_ask_failure_message = MagicMock(return_value="failure msg")
@@ -162,6 +172,7 @@ _qh_stub._should_prefer_file_for_multichunk_response = MagicMock(return_value=Fa
 _qh_stub._with_requested_item_target = MagicMock(side_effect=lambda meta, **kw: meta)
 
 import ask_orchestrator as _orch_stub
+
 _orch_stub.normalize_model_preference = MagicMock(return_value=("auto", False))
 
 _stream_result = SimpleNamespace(
@@ -174,11 +185,13 @@ _stream_result = SimpleNamespace(
 _orch_stub.run_ask_stream = AsyncMock(return_value=_stream_result)
 
 import response_actions as _ra_stub
+
 _ra_stub.ResponseActions = MagicMock(return_value=MagicMock())
 _ra_stub._generate_follow_ups = AsyncMock(return_value=["Follow up?"])
 _ra_stub._resolve_channel_thread_scope = MagicMock(return_value=(67890, None))
 
 import runtime_state as _rs_stub
+
 _rs_stub.set_anchor_state = MagicMock()
 _rs_stub.set_context_lock = MagicMock()
 _rs_stub.get_channel_roles = MagicMock(return_value={})
@@ -188,6 +201,7 @@ _rs_stub.request_context.return_value.__enter__ = MagicMock(return_value=None)
 _rs_stub.request_context.return_value.__exit__ = MagicMock(return_value=False)
 
 import trace_context as _tc_stub
+
 _trace_obj = SimpleNamespace(trace_id="trace-123", command="ask", user_id=12345, channel_id=67890)
 _TraceContext = MagicMock(return_value=_trace_obj)
 _tc_stub.TraceContext = _TraceContext
@@ -197,17 +211,18 @@ _tc_stub._current_trace = _current_trace
 _tc_stub.get_trace_id = MagicMock(return_value="trace-123")
 
 import llm.context as _llm_ctx_stub
+
 _llm_ctx_stub._extract_cross_channel_opt_in = MagicMock(return_value=("clean question", False))
 
 # Now import the module under test
-import ask_handler
-
 # ---------------------------------------------------------------------------
 # Post-import cleanup — restore all stubbed modules so subsequent test files
 # get real implementations when they `import constants`, `import config`, etc.
 # ask_handler already used `from X import ...` (local bindings), so this is safe.
 # ---------------------------------------------------------------------------
 import importlib as _importlib
+
+import ask_handler
 
 for _rm in [
     "approvals", "ask_orchestrator", "audit", "bot_attachments",

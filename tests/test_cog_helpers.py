@@ -1,13 +1,10 @@
 """Tests for src/cog_helpers.py — truncate_for_embed, split_response, require_auth."""
-import sys
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 # discord and project modules are real (conftest loads them) — no stubs needed
-
 import cog_helpers as ch  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # truncate_for_embed
@@ -98,6 +95,7 @@ class TestRequireAuth:
     @pytest.mark.asyncio
     async def test_predicate_allows_authorized_user(self):
         from unittest.mock import patch
+
         import discord.app_commands as _ac
 
         interaction = MagicMock()
@@ -118,6 +116,7 @@ class TestRequireAuth:
     @pytest.mark.asyncio
     async def test_predicate_raises_for_unauthorized_user(self):
         from unittest.mock import patch
+
         import discord.app_commands as _ac
 
         interaction = MagicMock()

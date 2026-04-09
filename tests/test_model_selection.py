@@ -15,7 +15,6 @@ class TestModelPreference:
 
     def test_default_preference_is_auto(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -25,7 +24,6 @@ class TestModelPreference:
 
     def test_set_and_get_preference(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -36,7 +34,6 @@ class TestModelPreference:
 
     def test_set_preference_local(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -47,7 +44,6 @@ class TestModelPreference:
 
     def test_set_preference_auto(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -59,7 +55,6 @@ class TestModelPreference:
 
     def test_set_invalid_preference(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -69,7 +64,6 @@ class TestModelPreference:
 
     def test_preference_persists_to_disk(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -82,7 +76,6 @@ class TestModelPreference:
 
     def test_preference_case_insensitive(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -92,7 +85,6 @@ class TestModelPreference:
 
     def test_set_preference_accepts_claude_alias(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
@@ -103,7 +95,6 @@ class TestModelPreference:
 
     def test_set_invalid_preference_includes_did_you_mean(self, tmp_path, monkeypatch):
         import memory
-
         import memory_preferences
         monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
         monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")

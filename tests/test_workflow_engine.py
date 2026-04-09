@@ -505,7 +505,6 @@ class TestWorkflowIntegration:
 # Additional tests for improved coverage
 # ---------------------------------------------------------------------------
 
-import workflow_engine as wf_module
 from workflow_engine import (
     create_workflow_from_template,
     list_workflows_skill,

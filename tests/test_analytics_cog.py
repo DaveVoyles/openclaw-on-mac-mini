@@ -2,7 +2,6 @@
 import datetime
 import json
 import os
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 os.environ.setdefault("LOG_DIR", "/tmp")

@@ -4,8 +4,8 @@ system prompt loading, and usage recording.
 """
 
 import sys
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 # Stub google.genai before importing llm_client
@@ -36,6 +36,7 @@ _real_init_gemini_model = llm_client._init_gemini_model
 # Resolve genai.types.Type via llm_client's actual genai reference (from `from google import genai`)
 # MagicMock attribute access is cached, so genai.types.Type.X is always the same object per X.
 import google as _google_module  # noqa: E402
+
 _lc_genai = getattr(_google_module, "genai", None) or sys.modules.get("google.genai")
 _lc_types = getattr(_lc_genai, "types", None) if _lc_genai else None
 

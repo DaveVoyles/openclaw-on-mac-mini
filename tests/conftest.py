@@ -25,8 +25,8 @@ import pytest  # noqa: E402
 def _patch_memory_dirs(tmp_path, monkeypatch):
     """Redirect /memory paths to a temp dir so tests never touch the real FS."""
     import memory
-    import memory_helpers
     import memory_conversation
+    import memory_helpers
     import memory_preferences
     import memory_session
 
