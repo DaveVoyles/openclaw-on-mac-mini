@@ -117,22 +117,48 @@ class TestRetryEnqueueOnFailure:
 class TestRetrySucceedsOnSecondAttempt:
     @pytest.mark.asyncio
     async def test_retry_success_removes_task_from_queue(self, sched):
-        """When a retry call succeeds, the task must be drained from the queue."""
-        call_count = 0
-
-        async def flaky():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("first try fails")
-
-        retry_task = _make_retry_task(fn=flaky, label="test/flaky")
+        """A retry fn that succeeds must be drained from the queue."""
+        success_fn = AsyncMock()
+        retry_task = _make_retry_task(fn=success_fn, label="test/flaky")
         sched._retry_queue.append(retry_task)
 
         await sched._process_retry_queue()
 
         assert sched._retry_queue == []
-        assert call_count == 1  # only one call from the queue this round
+        success_fn.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_retry_success_after_initial_failure(self, sched):
+        """Task placed in queue after failure is removed when retry call succeeds."""
+        call_count = 0
+
+        async def flaky():
+            nonlocal call_count
+            call_count += 1
+            # fails on first retry attempt, succeeds on second
+            if call_count == 1:
+                raise RuntimeError("first retry fails")
+
+        # Simulate: initial attempt failed → in queue with attempts_left=3
+        # First queue drain: fails → attempts_left=2, stays in queue
+        retry_task = _RetryTask(
+            fn=flaky,
+            label="test/flaky",
+            attempts_left=3,
+            next_retry_at=time.monotonic() - 1,
+        )
+        sched._retry_queue.append(retry_task)
+
+        await sched._process_retry_queue()
+        assert len(sched._retry_queue) == 1  # still in queue after first retry failure
+        assert sched._retry_queue[0].attempts_left == 2
+
+        # Force window to elapse, second drain: succeeds → removed
+        sched._retry_queue[0].next_retry_at = time.monotonic() - 1
+        await sched._process_retry_queue()
+
+        assert sched._retry_queue == []
+        assert call_count == 2
 
     @pytest.mark.asyncio
     async def test_retry_success_logs_info(self, sched, caplog):
