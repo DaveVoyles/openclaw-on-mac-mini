@@ -38,6 +38,9 @@ def _patch_memory_dirs(tmp_path, monkeypatch):
         monkeypatch.setattr(mod, "SUMMARIES_DIR", mem_dir / "summaries")
     # memory_conversation imports THREADS_DIR directly from memory_helpers
     monkeypatch.setattr(memory_conversation, "THREADS_DIR", mem_dir / "threads")
+    # memory_thread_persistence also references THREADS_DIR from memory_helpers
+    import memory_thread_persistence
+    monkeypatch.setattr(memory_thread_persistence, "THREADS_DIR", mem_dir / "threads")
     # memory_session imports SUMMARIES_DIR/MEMORY_DIR from memory_helpers
     monkeypatch.setattr(memory_session, "MEMORY_DIR", mem_dir)
     monkeypatch.setattr(memory_session, "SUMMARIES_DIR", mem_dir / "summaries")
