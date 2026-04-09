@@ -5,10 +5,14 @@ Free tier: 100 requests/day
 Rate limit handled via tool circuit breaker
 """
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 
+import aiohttp
+
 from config import cfg
+from decorators import retry_on_error
 from http_session import SessionManager
 from tool_health import tool_health
 
@@ -18,6 +22,7 @@ NEWS_API_BASE_URL = "https://newsapi.org/v2"
 NEWS_CACHE_TTL = 3600  # 1 hour cache for free tier
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def search_news(
     query: str,
     from_date: str | None = None,
@@ -107,6 +112,7 @@ async def search_news(
         return data
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def top_headlines(
     category: str | None = None,
     country: str = "us",
@@ -179,6 +185,7 @@ async def top_headlines(
         return data
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def news_by_source(
     source_id: str,
     query: str | None = None,

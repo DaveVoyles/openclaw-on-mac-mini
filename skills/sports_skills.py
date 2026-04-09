@@ -5,10 +5,14 @@ Free tier: 100 requests/day across all sports endpoints
 Covers: NBA, NFL, MLB, NHL, soccer, and 8 more sports
 """
 
+import asyncio
 from datetime import datetime
 from typing import Any
 
+import aiohttp
+
 from config import cfg
+from decorators import retry_on_error
 from http_session import SessionManager
 from tool_health import tool_health
 
@@ -30,6 +34,7 @@ def is_sport_in_season(sport: str) -> bool:
     return datetime.now().month in _SEASON_MONTHS.get(sport.lower(), set())
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_nba_scores(date: str | None = None, team_id: int | None = None) -> dict[str, Any]:
     """
     Get NBA game scores for a specific date.
@@ -124,6 +129,7 @@ async def get_nba_scores(date: str | None = None, team_id: int | None = None) ->
             }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_nfl_scores(date: str | None = None, team_id: int | None = None) -> dict[str, Any]:
     """
     Get NFL game scores for a specific date.
@@ -203,6 +209,7 @@ async def get_nfl_scores(date: str | None = None, team_id: int | None = None) ->
             }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_team_standings(sport: str = "nba", league_id: int | None = None, season: str | None = None) -> dict[str, Any]:
     """
     Get league standings for a sport.
@@ -315,6 +322,7 @@ def _extract_team_standing(team_data: dict) -> dict:
     }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_schedule(sport: str = "nba", team_name: str | None = None, date_from: str | None = None, date_to: str | None = None) -> dict[str, Any]:
     """
     Get upcoming games schedule.
@@ -415,6 +423,7 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
             }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_nhl_scores(date: str | None = None, team_id: int | None = None) -> dict[str, Any]:
     """
     Get NHL game scores for a specific date.
@@ -493,6 +502,7 @@ async def get_nhl_scores(date: str | None = None, team_id: int | None = None) ->
         }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_mlb_scores(date: str | None = None, team_id: int | None = None) -> dict[str, Any]:
     """
     Get MLB game scores for a specific date.

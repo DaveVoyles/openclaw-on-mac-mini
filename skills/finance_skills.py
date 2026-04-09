@@ -5,9 +5,13 @@ Free tier: 25 requests/day
 Covers: stock data, market news, sentiment analysis, financial indicators
 """
 
+import asyncio
 from typing import Any
 
+import aiohttp
+
 from config import cfg
+from decorators import retry_on_error
 from http_session import SessionManager
 from tool_health import tool_health
 
@@ -27,6 +31,7 @@ ENTERTAINMENT_STOCKS = {
 }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_stock_info(symbol: str) -> dict[str, Any]:
     """
     Get current stock price and key statistics.
@@ -112,6 +117,7 @@ async def get_stock_info(symbol: str) -> dict[str, Any]:
         }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_market_news(topics: str | None = None, tickers: str | None = None, limit: int = 10) -> dict[str, Any]:
     """
     Get market news with AI-powered sentiment and relevance scores.
@@ -225,6 +231,7 @@ async def get_market_news(topics: str | None = None, tickers: str | None = None,
         }
 
 
+@retry_on_error(max_retries=2, delay=1.0, backoff=2.0, exceptions=(aiohttp.ClientError, asyncio.TimeoutError))
 async def get_sentiment_analysis(tickers: str) -> dict[str, Any]:
     """
     Get AI-powered sentiment analysis for specific stocks.
