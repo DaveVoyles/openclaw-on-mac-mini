@@ -7,6 +7,7 @@ Includes rate limiting, configurable thresholds, and alert formatting.
 
 import logging
 import time
+from collections import OrderedDict
 from datetime import datetime
 
 import discord
@@ -18,7 +19,11 @@ log = logging.getLogger("openclaw.alert_manager")
 # Alert cooldown (1 hour default)
 DEFAULT_COOLDOWN = 3600
 QUALITY_DRIFT_ALERT_COOLDOWN = 6 * 3600
-_BOUNDED_ALERT_CACHE: dict[str, tuple[float, str]] = {}
+# LRU-capped cache — oldest entries evicted when limit reached.
+# Prevents unbounded memory growth on long-running bots (10 alerts/day × 365 days
+# would otherwise accumulate ~3,650 entries; 10k cap = ~27 years headroom).
+_CACHE_MAX_SIZE = 10_000
+_BOUNDED_ALERT_CACHE: OrderedDict[str, tuple[float, str]] = OrderedDict()
 
 
 def should_route_bounded_alert(
@@ -42,7 +47,11 @@ def should_route_bounded_alert(
                 return False, "duplicate_within_cooldown"
             return False, "cooldown_active"
 
+    # Move-to-end (LRU) then evict oldest if over cap
     _BOUNDED_ALERT_CACHE[normalized_route] = (now_value, normalized_fp)
+    _BOUNDED_ALERT_CACHE.move_to_end(normalized_route)
+    if len(_BOUNDED_ALERT_CACHE) > _CACHE_MAX_SIZE:
+        _BOUNDED_ALERT_CACHE.popitem(last=False)
     return True, "routed"
 
 
