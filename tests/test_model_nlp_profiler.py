@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch
 
-from model_aliases import MODEL_INPUT_ALIASES, VALID_MODEL_PREFERENCES, model_input_suggestion, normalize_model_input
+from model_aliases import VALID_MODEL_PREFERENCES, model_input_suggestion, normalize_model_input
 from nlp_entities import _dedupe, _phrase_in_text, enrich_route_text_and_hints, extract_entities
-
 
 # ===========================================================================
 # model_aliases.py

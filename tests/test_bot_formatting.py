@@ -1,7 +1,7 @@
 """Tests for bot_formatting.py — Discord message formatting utilities."""
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Stub modules before importing bot_formatting
 _cwf_mock = MagicMock()
@@ -13,13 +13,10 @@ _rs_mock.get_effective_channel_profile = MagicMock(return_value={"table_style": 
 _rs_mock.record_channel_profile_signal = MagicMock()
 sys.modules.setdefault("runtime_state", _rs_mock)
 
-import bot_formatting as bf  # noqa: E402 — must come after sys.modules patching
-
 import discord
-import pytest
 
+import bot_formatting as bf  # noqa: E402 — must come after sys.modules patching
 from constants import EMBED_DESC_LIMIT
-
 
 # ---------------------------------------------------------------------------
 # truncate_for_embed

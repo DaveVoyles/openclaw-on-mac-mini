@@ -1,13 +1,11 @@
 """Tests for channel_profiles module."""
 
-import pytest
-import channel_profiles
 from channel_profiles import (
-    _infer_topic_class,
-    _clamp_int,
-    _apply_numeric_override,
-    resolve_retrieval_profile_settings,
     _RETRIEVAL_PROFILES,
+    _apply_numeric_override,
+    _clamp_int,
+    _infer_topic_class,
+    resolve_retrieval_profile_settings,
 )
 
 

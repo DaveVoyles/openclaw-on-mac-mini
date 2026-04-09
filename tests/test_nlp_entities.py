@@ -1,12 +1,10 @@
 """Tests for nlp_entities module."""
 
-import pytest
-import nlp_entities
 from nlp_entities import (
-    extract_entities,
-    enrich_route_text_and_hints,
-    _phrase_in_text,
     _dedupe,
+    _phrase_in_text,
+    enrich_route_text_and_hints,
+    extract_entities,
 )
 
 

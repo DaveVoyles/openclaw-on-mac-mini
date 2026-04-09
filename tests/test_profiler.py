@@ -1,13 +1,11 @@
 """Tests for profiler.py — CPU profiling, memory decorator, get_profiler."""
 
-import cProfile
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from profiler import (
-    MEMORY_PROFILER_AVAILABLE,
     Profiler,
     get_profiler,
     profile_memory,

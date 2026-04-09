@@ -2,8 +2,7 @@
 import pytest
 
 # fact_extractor module-level code only uses standard library — no stubs needed
-import fact_extractor as fe  # noqa: E402
-from fact_extractor import should_extract, _extraction_counter, EXTRACT_EVERY_N, MIN_MESSAGE_LENGTH
+from fact_extractor import EXTRACT_EVERY_N, _extraction_counter, should_extract
 
 
 @pytest.fixture(autouse=True)
