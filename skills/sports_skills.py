@@ -16,6 +16,19 @@ _sessions = SessionManager(timeout=30, name="sports_skills")
 
 APISPORTS_BASE_URL = "https://v3.api-sports.io"
 
+# Month ranges when each sport is in regular season
+_SEASON_MONTHS: dict[str, set[int]] = {
+    "nba": {10, 11, 12, 1, 2, 3, 4, 5, 6},   # Oct–Jun (incl. playoffs)
+    "nfl": {9, 10, 11, 12, 1, 2},              # Sep–Feb (incl. playoffs)
+    "nhl": {10, 11, 12, 1, 2, 3, 4, 5, 6},    # Oct–Jun (incl. playoffs)
+    "mlb": {3, 4, 5, 6, 7, 8, 9, 10},         # Mar–Oct (incl. playoffs)
+}
+
+
+def is_sport_in_season(sport: str) -> bool:
+    """Return True if the sport is currently in regular season or playoffs."""
+    return datetime.now().month in _SEASON_MONTHS.get(sport.lower(), set())
+
 
 async def get_nba_scores(date: str | None = None, team_id: int | None = None) -> dict[str, Any]:
     """
@@ -402,7 +415,163 @@ async def get_schedule(sport: str = "nba", team_name: str | None = None, date_fr
             }
 
 
-# LLM-callable skill definitions
+async def get_nhl_scores(date: str | None = None, team_id: int | None = None) -> dict[str, Any]:
+    """
+    Get NHL game scores for a specific date.
+
+    Args:
+        date: Date in YYYY-MM-DD format (default: today)
+        team_id: Optional specific team ID to filter
+
+    Returns:
+        Same format as get_nba_scores()
+
+    Free tier: 100 requests/day (shared across all sports)
+    """
+    if not cfg.apisports_key:
+        return {
+            "status": "error",
+            "message": "APISPORTS_KEY not configured",
+            "games": [],
+        }
+
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
+
+    params = {"date": date, "league": "57", "season": "2024"}
+    if team_id:
+        params["team"] = str(team_id)
+
+    url = f"{APISPORTS_BASE_URL}/hockey/games"
+    headers = {"x-apisports-key": cfg.apisports_key}
+
+    session = await _sessions.get()
+    async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+        if resp.status == 429:
+            tool_health.record("apisports", success=False)
+            return {
+                "status": "error",
+                "message": "API-Sports rate limit exceeded. Free tier: 100 requests/day.",
+                "games": [],
+            }
+
+        if resp.status != 200:
+            error_text = await resp.text()
+            tool_health.record("apisports", success=False)
+            return {
+                "status": "error",
+                "message": f"API-Sports error: {error_text}",
+                "games": [],
+            }
+
+        data = await resp.json()
+        tool_health.record("apisports", success=True)
+
+        games = []
+        for game in data.get("response", []):
+            games.append({
+                "id": game["id"],
+                "date": game["date"],
+                "teams": {
+                    "home": {
+                        "name": game["teams"]["home"]["name"],
+                        "score": game["scores"]["home"]["total"],
+                    },
+                    "away": {
+                        "name": game["teams"]["away"]["name"],
+                        "score": game["scores"]["away"]["total"],
+                    },
+                },
+                "status": game["status"]["long"],
+                "period": game["status"]["short"],
+            })
+
+        return {
+            "status": "ok",
+            "results": len(games),
+            "games": games,
+        }
+
+
+async def get_mlb_scores(date: str | None = None, team_id: int | None = None) -> dict[str, Any]:
+    """
+    Get MLB game scores for a specific date.
+
+    Args:
+        date: Date in YYYY-MM-DD format (default: today)
+        team_id: Optional specific team ID to filter
+
+    Returns:
+        Same format as get_nba_scores(), with 'inning' instead of 'quarter'
+
+    Free tier: 100 requests/day (shared across all sports)
+    """
+    if not cfg.apisports_key:
+        return {
+            "status": "error",
+            "message": "APISPORTS_KEY not configured",
+            "games": [],
+        }
+
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
+
+    params = {"date": date, "league": "1", "season": "2024"}
+    if team_id:
+        params["team"] = str(team_id)
+
+    url = f"{APISPORTS_BASE_URL}/baseball/games"
+    headers = {"x-apisports-key": cfg.apisports_key}
+
+    session = await _sessions.get()
+    async with session.get(url, params=params, headers=headers, timeout=30) as resp:
+        if resp.status == 429:
+            tool_health.record("apisports", success=False)
+            return {
+                "status": "error",
+                "message": "API-Sports rate limit exceeded. Free tier: 100 requests/day.",
+                "games": [],
+            }
+
+        if resp.status != 200:
+            error_text = await resp.text()
+            tool_health.record("apisports", success=False)
+            return {
+                "status": "error",
+                "message": f"API-Sports error: {error_text}",
+                "games": [],
+            }
+
+        data = await resp.json()
+        tool_health.record("apisports", success=True)
+
+        games = []
+        for game in data.get("response", []):
+            games.append({
+                "id": game["id"],
+                "date": game["date"],
+                "teams": {
+                    "home": {
+                        "name": game["teams"]["home"]["name"],
+                        "score": game["scores"]["home"]["total"],
+                    },
+                    "away": {
+                        "name": game["teams"]["away"]["name"],
+                        "score": game["scores"]["away"]["total"],
+                    },
+                },
+                "status": game["status"]["long"],
+                "inning": game["status"]["short"],
+            })
+
+        return {
+            "status": "ok",
+            "results": len(games),
+            "games": games,
+        }
+
+
+
 SPORTS_SKILLS = [
     {
         "name": "get_nba_scores",
@@ -495,5 +664,43 @@ SPORTS_SKILLS = [
             "required": [],
         },
         "function": get_schedule,
+    },
+    {
+        "name": "get_nhl_scores",
+        "description": "Get NHL hockey game scores for a specific date. Use for 'NHL scores last night' or 'hockey results' queries. Free tier: 100 req/day (shared).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "description": "Date in YYYY-MM-DD format (default: today)",
+                },
+                "team_id": {
+                    "type": "integer",
+                    "description": "Optional team ID to filter",
+                },
+            },
+            "required": [],
+        },
+        "function": get_nhl_scores,
+    },
+    {
+        "name": "get_mlb_scores",
+        "description": "Get MLB baseball game scores for a specific date. Use for 'MLB scores', 'baseball results', or 'box scores' queries. Free tier: 100 req/day (shared).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "description": "Date in YYYY-MM-DD format (default: today)",
+                },
+                "team_id": {
+                    "type": "integer",
+                    "description": "Optional team ID to filter",
+                },
+            },
+            "required": [],
+        },
+        "function": get_mlb_scores,
     },
 ]

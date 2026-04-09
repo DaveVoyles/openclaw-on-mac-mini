@@ -19,6 +19,8 @@ def test_sports_skills_registered():
     """Verify API-Sports skills are registered."""
     assert "get_nba_scores" in SKILLS
     assert "get_nfl_scores" in SKILLS
+    assert "get_nhl_scores" in SKILLS
+    assert "get_mlb_scores" in SKILLS
     assert "get_team_standings" in SKILLS
     assert "get_schedule" in SKILLS
 
@@ -39,6 +41,8 @@ def test_skills_are_callables():
         "news_by_source",
         "get_nba_scores",
         "get_nfl_scores",
+        "get_nhl_scores",
+        "get_mlb_scores",
         "get_team_standings",
         "get_schedule",
         "get_stock_info",
@@ -76,6 +80,49 @@ async def test_sports_api_no_key_handling():
     assert "status" in result
     if result["status"] == "error":
         assert "message" in result
+
+
+@pytest.mark.asyncio
+async def test_nhl_scores_no_key_handling():
+    """Test NHL scores function returns graceful error without API key."""
+    from skills.sports_skills import get_nhl_scores
+
+    result = await get_nhl_scores()
+
+    assert "status" in result
+    assert "games" in result
+    if result["status"] == "error":
+        assert "message" in result
+
+
+@pytest.mark.asyncio
+async def test_mlb_scores_no_key_handling():
+    """Test MLB scores function returns graceful error without API key."""
+    from skills.sports_skills import get_mlb_scores
+
+    result = await get_mlb_scores()
+
+    assert "status" in result
+    assert "games" in result
+    if result["status"] == "error":
+        assert "message" in result
+
+
+def test_is_sport_in_season_returns_bool():
+    """is_sport_in_season should always return a bool."""
+    from skills.sports_skills import is_sport_in_season
+
+    for sport in ("nba", "nfl", "nhl", "mlb"):
+        result = is_sport_in_season(sport)
+        assert isinstance(result, bool), f"Expected bool for {sport}, got {type(result)}"
+
+
+def test_is_sport_in_season_unknown_sport():
+    """Unknown sport should return False (empty set membership)."""
+    from skills.sports_skills import is_sport_in_season
+
+    assert is_sport_in_season("rugby") is False
+    assert is_sport_in_season("") is False
 
 
 @pytest.mark.asyncio

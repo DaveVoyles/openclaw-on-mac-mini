@@ -1827,69 +1827,88 @@ async def generate_weekly_recap(
     if "sports" in topics:
         report_sections.append("## 🏀 Sports Recap\n")
 
-        # Get NBA scores from yesterday
+        # Get yesterday's date for score lookups
         yesterday = (today - dt.timedelta(days=1)).strftime("%Y-%m-%d")
-        try:
-            nba_scores = await asyncio.wait_for(
-                sports_skills.get_nba_scores(date=yesterday),
-                timeout=15,
-            )
 
-            if nba_scores.get("status") == "ok" and nba_scores.get("games"):
-                report_sections.append(f"### NBA Scores ({yesterday})\n")
+        async def _fetch_scores(label: str, coro, emoji: str) -> None:
+            """Fetch scores for a single sport and append to report_sections."""
+            try:
+                scores = await asyncio.wait_for(coro, timeout=15)
+                if scores.get("status") == "ok" and scores.get("games"):
+                    report_sections.append(f"### {emoji} {label} Scores ({yesterday})\n")
+                    for game in scores["games"][:5]:
+                        home = game["teams"]["home"]
+                        away = game["teams"]["away"]
+                        status = game.get("status", "Unknown")
+                        report_sections.append(
+                            f"- **{away['name']}** {away['score']} @ "
+                            f"**{home['name']}** {home['score']} - *{status}*\n"
+                        )
+                    report_sections.append("\n")
+                    sources_used.append(f"API-Sports ({label} Scores)")
+                    sports_games_count += len(scores["games"][:5])
+                elif "rate limit" in scores.get("message", "").lower():
+                    sources_failed.append(f"API-Sports ({label}) - rate limit")
+                    report_sections.append(f"*{label} scores unavailable (rate limit)*\n\n")
+            except asyncio.TimeoutError:
+                sources_failed.append(f"API-Sports ({label}) - timeout")
+                report_sections.append(f"*{label} scores unavailable (timeout)*\n\n")
+            except Exception as e:
+                sources_failed.append(f"API-Sports ({label}) - {str(e)[:50]}")
+                log.error(f"{label} API error: {e}")
 
-                top_games = nba_scores["games"][:5]
-                sports_games_count += len(top_games)
-                for game in top_games:  # Top 5 games
-                    home = game["teams"]["home"]
-                    away = game["teams"]["away"]
-                    status = game.get("status", "Unknown")
+        # NBA (Oct–Jun)
+        if sports_skills.is_sport_in_season("nba"):
+            await _fetch_scores("NBA", sports_skills.get_nba_scores(date=yesterday), "🏀")
 
-                    report_sections.append(
-                        f"- **{away['name']}** {away['score']} @ "
-                        f"**{home['name']}** {home['score']} - *{status}*\n"
-                    )
+        # NFL (Sep–Feb)
+        if sports_skills.is_sport_in_season("nfl"):
+            await _fetch_scores("NFL", sports_skills.get_nfl_scores(date=yesterday), "🏈")
 
-                report_sections.append("\n")
-                sources_used.append("API-Sports (NBA Scores)")
-            elif "rate limit" in nba_scores.get("message", "").lower():
-                sources_failed.append("API-Sports (NBA) - rate limit")
-                report_sections.append("*NBA scores unavailable (rate limit)*\n\n")
-        except asyncio.TimeoutError:
-            sources_failed.append("API-Sports (NBA) - timeout")
-            report_sections.append("*NBA scores unavailable (timeout)*\n\n")
-        except Exception as e:
-            sources_failed.append(f"API-Sports (NBA) - {str(e)[:50]}")
-            log.error(f"Sports API error: {e}")
+        # NHL (Oct–Jun)
+        if sports_skills.is_sport_in_season("nhl"):
+            await _fetch_scores("NHL", sports_skills.get_nhl_scores(date=yesterday), "🏒")
 
-        # Get NBA standings
-        try:
-            standings = await asyncio.wait_for(
-                sports_skills.get_team_standings(sport="nba"),
-                timeout=15,
-            )
+        # MLB (Mar–Oct)
+        if sports_skills.is_sport_in_season("mlb"):
+            await _fetch_scores("MLB", sports_skills.get_mlb_scores(date=yesterday), "⚾")
 
-            if standings.get("status") == "ok" and standings.get("standings"):
-                report_sections.append("### NBA Standings (Top 5)\n")
+        # If no sport is in season, say so
+        if not any(
+            sports_skills.is_sport_in_season(s) for s in ("nba", "nfl", "nhl", "mlb")
+        ):
+            report_sections.append("*No major sports leagues currently in season.*\n\n")
 
-                top_standings = standings["standings"][:5]
-                standings_count += len(top_standings)
-                for team in top_standings:
-                    rank = team.get("rank", "?")
-                    name = team.get("team", "Unknown")
-                    wins = team.get("wins", 0)
-                    losses = team.get("losses", 0)
-
-                    report_sections.append(f"{rank}. **{name}** - {wins}W-{losses}L\n")
-
-                report_sections.append("\n")
-                sources_used.append("API-Sports (NBA Standings)")
-            elif "rate limit" not in standings.get("message", "").lower():
-                log.debug("No NBA standings available")
-        except asyncio.TimeoutError:
-            log.error("NBA standings timeout")
-        except Exception as e:
-            log.error(f"NBA standings error: {e}")
+        # Standings for in-season sports (pick the most prominent active sport)
+        standings_sport = next(
+            (s for s in ("nba", "nfl", "nhl", "mlb") if sports_skills.is_sport_in_season(s)),
+            None,
+        )
+        if standings_sport:
+            sport_labels = {"nba": ("🏀", "NBA"), "nfl": ("🏈", "NFL"), "nhl": ("🏒", "NHL"), "mlb": ("⚾", "MLB")}
+            emoji, label = sport_labels[standings_sport]
+            try:
+                standings = await asyncio.wait_for(
+                    sports_skills.get_team_standings(sport=standings_sport),
+                    timeout=15,
+                )
+                if standings.get("status") == "ok" and standings.get("standings"):
+                    report_sections.append(f"### {emoji} {label} Standings (Top 5)\n")
+                    for team in standings["standings"][:5]:
+                        rank = team.get("rank", "?")
+                        name = team.get("team", "Unknown")
+                        wins = team.get("wins", 0)
+                        losses = team.get("losses", 0)
+                        report_sections.append(f"{rank}. **{name}** - {wins}W-{losses}L\n")
+                    report_sections.append("\n")
+                    sources_used.append(f"API-Sports ({label} Standings)")
+                    standings_count += len(standings["standings"][:5])
+                elif "rate limit" not in standings.get("message", "").lower():
+                    log.debug(f"No {label} standings available")
+            except asyncio.TimeoutError:
+                log.error(f"{label} standings timeout")
+            except Exception as e:
+                log.error(f"{label} standings error: {e}")
 
     # ========== FINANCIAL SUMMARY SECTION ==========
     if "finance" in topics or "entertainment" in topics:
