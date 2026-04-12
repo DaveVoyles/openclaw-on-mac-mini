@@ -13,7 +13,7 @@ Covers:
 """
 
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -40,12 +40,12 @@ sys.modules.setdefault("google.genai.types", _genai_mock.types)
 from llm.providers import (  # noqa: E402
     _CB_THRESHOLD,
     _CB_TIMEOUT,
+    ProviderResponse,
     _is_open,
     _record_failure,
     _record_success,
     call_provider,
     reset_circuit,
-    ProviderResponse,
 )
 
 

@@ -1,10 +1,9 @@
 """Tests for model_routing_policy mini-model fast-path additions."""
-import pytest
 from model_routing_policy import (
-    ModelRoute,
-    copilot_model_for_message,
-    classify_query,
     MINI_MODEL_MAX_TOKENS,
+    ModelRoute,
+    classify_query,
+    copilot_model_for_message,
 )
 
 

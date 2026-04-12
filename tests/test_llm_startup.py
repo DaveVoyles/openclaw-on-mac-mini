@@ -19,8 +19,6 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Path to startup.py source
 # ---------------------------------------------------------------------------

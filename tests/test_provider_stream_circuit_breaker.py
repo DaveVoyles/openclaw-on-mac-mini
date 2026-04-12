@@ -40,11 +40,9 @@ from llm.providers import (  # noqa: E402
     _CB_TIMEOUT,
     _is_open,
     _record_failure,
-    _record_success,
     call_provider_stream,
     reset_circuit,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -356,7 +354,7 @@ class TestChunksYieldedOnSuccess:
 
         async def empty_stream(*args, **kwargs):
             return
-            yield  # noqa: unreachable — makes it a generator
+            yield  # noqa: F704 — makes it a generator
 
         monkeypatch.setattr(_p, "_stream_openai", empty_stream)
 

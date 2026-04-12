@@ -726,8 +726,6 @@ async def chat_stream(
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
         try:
-            import os
-
             from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
             from model_router import classify_query, is_ollama_alive
             _ollama_up = await is_ollama_alive()

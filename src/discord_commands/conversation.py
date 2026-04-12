@@ -72,6 +72,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
         )
         try:
             from llm.providers import COPILOT_PROXY_ENABLED
+            proxy_status = "🟢 Enabled" if COPILOT_PROXY_ENABLED else "🔴 Disabled"
             embed.add_field(name="Copilot Proxy", value=proxy_status, inline=False)
         except Exception as exc:
             log.debug("Copilot proxy status check failed: %s", exc)
