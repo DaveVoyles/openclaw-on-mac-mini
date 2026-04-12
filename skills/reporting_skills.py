@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import datetime as dt
 import logging
+import os
 import re
 from difflib import SequenceMatcher
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import discord
 
@@ -139,6 +141,128 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
         return float(default)
 
 
+def _get_reporting_reference_context() -> tuple[dt.datetime, str]:
+    """Return the local datetime context used for relative-date sports prompts."""
+    tz_name = (os.getenv("TZ") or "America/New_York").strip()
+    try:
+        return dt.datetime.now(ZoneInfo(tz_name)), tz_name
+    except ZoneInfoNotFoundError:
+        local_now = dt.datetime.now().astimezone()
+        fallback_name = getattr(local_now.tzinfo, "key", str(local_now.tzinfo or "local"))
+        return local_now, fallback_name
+
+
+def _detect_competition_qualifier(*parts: str) -> str:
+    text = " ".join(part for part in parts if part).lower()
+    if re.search(r"\bmen(?:'s|s)?\b", text):
+        return "men's"
+    if re.search(r"\bwomen(?:'s|s)?\b", text):
+        return "women's"
+    return ""
+
+
+def _normalize_direct_sports_provider_answer(raw_text: str, *, provider_label: str) -> str:
+    """Clean a direct provider answer so it can be returned without extra synthesis."""
+    text = (raw_text or "").strip()
+    if not text or text.startswith(("❌", "⚠️")):
+        return ""
+    if text.startswith("**Perplexity AI Answer:**"):
+        text = text[len("**Perplexity AI Answer:**") :].strip()
+    if re.search(
+        r"\b(women'?s|division\s+ii|division\s+iii|dii\b|diii\b|non-di|non d1|naia|mcla|club)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        return ""
+    url_count = len(re.findall(r"https?://\S+", text))
+    if len(text) < 120 and "**Sources:**" not in text and "http" not in text:
+        return ""
+    if _count_markdown_table_items(text) < 5:
+        return ""
+    if len(_extract_distinct_source_domains(text)) < 2:
+        return ""
+    if url_count < 2:
+        return ""
+    return f"{text}\n\n_via {provider_label}_"
+
+
+async def _try_direct_sports_provider_answer(
+    *,
+    user_query: str,
+    subject: str,
+    reference_date_label: str,
+    reference_timezone: str,
+) -> str:
+    """Use a strong provider directly for broad same-day sports schedules when available."""
+    from skills.search_skills import search_web
+
+    provider_query = (
+        f"Today is {reference_date_label} in {reference_timezone}. "
+        f"User request: {user_query or subject}. "
+        "Create a concise same-day sports watch guide. "
+        "Only include NCAA Division I men's lacrosse games. Exclude women's games, Division II, Division III, NAIA, club, MCLA, and pro leagues. "
+        "If a source is not clearly NCAA Division I men's lacrosse, omit it. "
+        "Return the broad full schedule with all confirmed games, not just ranked, televised, or marquee matchups. "
+        "Start with one short overview sentence, then a markdown table with columns "
+        "Time (ET) | Matchup | Watch | Notes. "
+        "List as many confirmed games as you can find in chronological order, preserve rankings when sources include them, "
+        "include non-ranked games throughout the slate rather than clustering only the headline windows, "
+        "use compact network labels (for example ESPN+, ESPNU, ACCN, BTN, BTN+, CBS Sports Network, FloSports, YouTube), "
+        "and use TBD when watch info is not confirmed. "
+        "After the table, add 2-4 short notes on marquee windows or coverage gaps, then a Sources section."
+    )
+    result = await asyncio.wait_for(
+        search_web(provider_query, num_results=10, provider="perplexity"),
+        timeout=45,
+    )
+    return _normalize_direct_sports_provider_answer(result, provider_label="perplexity-direct")
+
+
+def _normalize_direct_provider_answer(raw_text: str, *, provider_label: str) -> str:
+    """Light normalization for a general direct provider answer.
+
+    Strips the Perplexity header prefix, rejects error strings, and appends
+    the provider attribution suffix so the answer_policy can detect it.
+    """
+    text = (raw_text or "").strip()
+    if not text or text.startswith(("❌", "⚠️")):
+        return ""
+    if text.startswith("**Perplexity AI Answer:**"):
+        text = text[len("**Perplexity AI Answer:**"):].strip()
+    if len(text) < 80:
+        return ""
+    return f"{text}\n\n_via {provider_label}_"
+
+
+async def generate_news_report(*, query: str) -> str:
+    """Return current-events / news headlines via Perplexity without LLM rewriting.
+
+    Designed to be returned directly (bypassing Gemini synthesis) when the
+    answer_policy detects the ``_via perplexity-direct_`` marker.
+    """
+    from skills.search_skills import search_web
+
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    date_label = now_utc.strftime("%A, %B %-d, %Y")
+    provider_query = (
+        f"Today is {date_label} UTC. "
+        f"User request: {query}. "
+        "Provide an up-to-date, factual summary with sourced bullet points or a short structured answer. "
+        "Include specific facts, numbers, and named sources where relevant. "
+        "Do not speculate about future events. "
+        "End with a Sources section listing URLs."
+    )
+    try:
+        result = await asyncio.wait_for(
+            search_web(provider_query, num_results=10, provider="perplexity"),
+            timeout=45,
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
+        log.warning("generate_news_report Perplexity call failed: %s", exc)
+        return ""
+    return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
+
+
 def _extract_day_window(
     text: str,
     *,
@@ -153,6 +277,8 @@ def _extract_day_window(
         match = re.search(r"\bnext\s+(\d{1,2})\s+days?\b", lowered)
         if match:
             return max(minimum, min(int(match.group(1)), maximum))
+        if "today" in lowered or "tonight" in lowered:
+            return max(minimum, min(1, maximum))
         if "tomorrow" in lowered:
             return max(minimum, min(2, maximum))
         if "this weekend" in lowered or "weekend" in lowered:
@@ -990,6 +1116,7 @@ def _merge_ranked_with_parsed_rows(
     parsed_rows: list[dict[str, str]],
     *,
     max_rows: int = 24,
+    dedupe: bool = True,
 ) -> list[dict[str, str]]:
     """Recover distinct events that may have been collapsed upstream, then de-duplicate safely."""
     merged: list[dict[str, str]] = []
@@ -1005,6 +1132,8 @@ def _merge_ranked_with_parsed_rows(
                 break
         if len(merged) >= max_rows:
             break
+    if not dedupe:
+        return merged
     return _filter_near_duplicate_evidence_rows(merged)
 
 
@@ -1219,9 +1348,22 @@ async def generate_sports_watch_report(
         days=days,
     )
     lookahead = max(1, min(int(inferred["days"]), 14))
+    competition_qualifier = _detect_competition_qualifier(
+        query,
+        str(inferred.get("league") or ""),
+        str(inferred.get("sport") or ""),
+    )
+    qualified_sport = " ".join(
+        part
+        for part in (
+            competition_qualifier,
+            str(inferred.get("sport") or "").strip(),
+        )
+        if part
+    ).strip()
     base_query = build_sports_watch_query(
         query=query,
-        sport=str(inferred["sport"]),
+        sport=qualified_sport or str(inferred["sport"]),
         league=str(inferred["league"]),
         team=str(inferred["team"]),
         days=lookahead,
@@ -1233,23 +1375,85 @@ async def generate_sports_watch_report(
         phrase in (query or "").lower()
         for phrase in ("recap", "results", "final", "scoreboard", "last weekend")
     )
-    weekend_mode = "weekend" in (query or "").lower()
+    query_lower = (query or "").lower()
+    weekend_mode = "weekend" in query_lower
+    structured_same_day_mode = (
+        not query_lower.strip()
+        and lookahead == 1
+        and not recap_mode
+        and not str(inferred.get("team") or "").strip()
+    )
+    same_day_mode = any(phrase in query_lower for phrase in ("today", "tonight")) or structured_same_day_mode
+    broad_subject = " ".join(
+        part
+        for part in (
+            str(inferred.get("league") or "").strip(),
+            qualified_sport,
+        )
+        if part
+    ).strip()
+    full_slate_mode = (
+        not str(inferred.get("team") or "").strip()
+        and (
+            same_day_mode
+            or "all games" in query_lower
+            or "full schedule" in query_lower
+            or "full slate" in query_lower
+        )
+    )
+    query_num_results = 15 if full_slate_mode else 10
+    query_min_results = 8 if full_slate_mode else 5
+    reference_now, reference_timezone = _get_reporting_reference_context()
+    date_hint = reference_now.strftime("%B %d %Y")
+    reference_date_label = reference_now.strftime("%A, %B %d, %Y")
+    subject = (
+        query.strip()
+        or " ".join(
+            bit for bit in (
+                str(inferred["team"]),
+                str(inferred["league"]),
+                qualified_sport or str(inferred["sport"]),
+            ) if bit
+        ).strip()
+        or "Upcoming games"
+    )
+
+    if full_slate_mode and same_day_mode and not str(inferred.get("team") or "").strip():
+        try:
+            direct_provider_answer = await _try_direct_sports_provider_answer(
+                user_query=query.strip(),
+                subject=subject,
+                reference_date_label=reference_date_label,
+                reference_timezone=reference_timezone,
+            )
+        except asyncio.TimeoutError:
+            direct_provider_answer = ""
+        except Exception as exc:
+            log.debug("Direct sports provider answer failed: %s", exc)
+            direct_provider_answer = ""
+        if direct_provider_answer:
+            return direct_provider_answer
+
+    if structured_same_day_mode and broad_subject:
+        search_query = f"{broad_subject} today all games schedule"
+        if include_watch_info:
+            search_query += " TV schedule where to watch streaming ESPN NCAA"
 
     search_queries: list[str] = [search_query]
     if weekend_mode:
         search_queries.extend([f"{search_query} Saturday", f"{search_query} Sunday"])
     if recap_mode:
         search_queries.append(f"{search_query} all games final scores")
-    if not str(inferred.get("team") or "").strip():
-        broad_subject = " ".join(
-            part
-            for part in (
-                str(inferred.get("league") or "").strip(),
-                str(inferred.get("sport") or "").strip(),
+    if broad_subject:
+        if full_slate_mode:
+            search_queries.extend(
+                [
+                    f"{broad_subject} today all games schedule {date_hint}",
+                    f"{broad_subject} today TV schedule ESPN ESPN+ all games {date_hint}",
+                    f"{broad_subject} today scoreboard all games {date_hint}",
+                ]
             )
-            if part
-        ).strip()
-        if broad_subject:
+        elif not str(inferred.get("team") or "").strip():
             search_queries.append(
                 f"{broad_subject} {'weekend results all games' if recap_mode else f'next {lookahead} days all games schedule'}"
             )
@@ -1263,8 +1467,8 @@ async def generate_sports_watch_report(
             result = await asyncio.wait_for(
                 search_web(
                     q,
-                    num_results=10,
-                    min_results=5,
+                    num_results=query_num_results,
+                    min_results=query_min_results,
                     retry_on_low_results=True,
                     expand_query=True,
                     expansion_context="sports_recap",
@@ -1291,34 +1495,46 @@ async def generate_sports_watch_report(
     search_results = "\n\n---\n\n".join(search_chunks)
     parsed_rows = _parse_search_evidence_rows(search_results)
     ranked_evidence = _rank_search_evidence_rows(parsed_rows)
-    evidence_rows = _merge_ranked_with_parsed_rows(ranked_evidence, parsed_rows, max_rows=28)
+    evidence_rows = _merge_ranked_with_parsed_rows(
+        ranked_evidence,
+        parsed_rows,
+        max_rows=60 if full_slate_mode else 28,
+        dedupe=not full_slate_mode,
+    )
     if not evidence_rows:
         evidence_rows = _filter_near_duplicate_evidence_rows(parsed_rows)
     evidence_health = _summarize_evidence_health(evidence_rows)
-    ranked_evidence_context = _format_ranked_evidence_context(evidence_rows, max_items=14)
+    ranked_evidence_context = _format_ranked_evidence_context(
+        evidence_rows,
+        max_items=40 if full_slate_mode else 14,
+    )
     fallback_applied = False
     initial_source_count = len(_extract_distinct_source_domains(search_results))
     initial_matchup_mentions = _estimate_matchup_mentions(search_results)
-    needs_strong_coverage = weekend_mode or recap_mode
+    needs_strong_coverage = weekend_mode or recap_mode or full_slate_mode
     if needs_strong_coverage and (initial_source_count < 2 or initial_matchup_mentions < max(4, lookahead * 2)):
         fallback_applied = True
-        fallback_query = " ".join(
-            part
-            for part in (
-                str(inferred.get("league") or "").strip(),
-                str(inferred.get("sport") or "").strip(),
-                "weekend all games final scores" if recap_mode else f"next {max(lookahead, 7)} days all games schedule",
-            )
-            if part
-        ).strip()
-        for provider in ("serper", "duckduckgo", ""):
+        fallback_query = (
+            f"{broad_subject} today all games TV schedule scoreboard {date_hint}".strip()
+            if full_slate_mode and broad_subject
+            else " ".join(
+                part
+                for part in (
+                    str(inferred.get("league") or "").strip(),
+                    str(inferred.get("sport") or "").strip(),
+                    "weekend all games final scores" if recap_mode else f"next {max(lookahead, 7)} days all games schedule",
+                )
+                if part
+            ).strip()
+        )
+        for provider in ("perplexity", "serper", "duckduckgo", ""):
             try:
                 fallback_results = await asyncio.wait_for(
                     search_web(
                         fallback_query,
-                        num_results=10,
+                        num_results=query_num_results,
                         provider=provider,
-                        min_results=4,
+                        min_results=max(4, query_min_results - 1),
                         retry_on_low_results=True,
                         expand_query=True,
                         expansion_context="sports_recap",
@@ -1337,28 +1553,19 @@ async def generate_sports_watch_report(
             search_chunks.append(f"### Query: {fallback_query}\n### Provider override: {provider or 'auto'}\n{normalized}")
         search_results = "\n\n---\n\n".join(search_chunks)
 
-    subject = (
-        query.strip()
-        or " ".join(
-            bit for bit in (
-                str(inferred["team"]),
-                str(inferred["league"]),
-                str(inferred["sport"]),
-            ) if bit
-        ).strip()
-        or "Upcoming games"
-    )
     evidence_matchup_mentions = _estimate_matchup_mentions(search_results)
     target_rows = 0
-    if weekend_mode or recap_mode:
+    if weekend_mode or recap_mode or full_slate_mode:
         # Use evidence-driven row targets for fuller recap output when broad requests
         # ask for league/weekend coverage (e.g. "this weekend's games").
         target_rows = max(6, min(20, evidence_matchup_mentions))
-        if not str(inferred.get("team") or "").strip():
+        if full_slate_mode and not str(inferred.get("team") or "").strip():
+            target_rows = max(target_rows, 10)
+        elif not str(inferred.get("team") or "").strip():
             target_rows = max(target_rows, 10 if weekend_mode else 8)
 
     watch_instruction = (
-        "Include a Watch column with TV channel, streaming service, or 'TBD' when not available."
+        "Include a Watch column with compact network abbreviations (for example ESPN+, ESPNU, ACCN, BTN, BTN+, CBS Sports Network, FloSports, YouTube), or 'TBD' when not available."
         if include_watch_info
         else "Include a Notes column instead of Watch information."
     )
@@ -1367,26 +1574,44 @@ async def generate_sports_watch_report(
         if recap_mode
         else ""
     )
+    row_target_step = "4a" if (full_slate_mode and include_watch_info) else "3a"
     row_target_instruction = (
-        f"3a. Target at least {target_rows} distinct game rows when evidence supports that many games.\n"
+        f"{row_target_step}. Target at least {target_rows} distinct game rows when evidence supports that many games.\n"
         if target_rows > 0
+        else ""
+    )
+    overview_instruction = (
+        "2. Add one short overview sentence that estimates the full slate size when inferable, highlights the busiest TV windows, and calls out 2-4 marquee or ranked matchups.\n"
+        if full_slate_mode and include_watch_info
+        else ""
+    )
+    window_label = "today" if same_day_mode else ("this weekend" if weekend_mode else f"next {lookahead} days")
+    reference_instruction = (
+        f"Reference date: {reference_date_label} ({reference_timezone}). Interpret relative date phrases such as 'today' and 'tonight' using that local date and timezone.\n"
+    )
+    same_day_guardrail = (
+        "For same-day schedule requests, do not shift the answer to a different calendar day unless the evidence explicitly says the games are tomorrow.\n"
+        if same_day_mode
         else ""
     )
 
     prompt = (
         f"Create a concise sports watch guide for: {subject}\n"
-        f"Window: {'this weekend' if weekend_mode else f'next {lookahead} days'}.\n"
+        f"Window: {window_label}.\n"
+        f"{reference_instruction}"
+        f"{same_day_guardrail}"
         f"{recap_instruction}"
         f"{watch_instruction}\n\n"
         "Output requirements:\n"
         "1. Start with a one-line heading.\n"
-        "2. Provide a markdown table with columns Date | Matchup | Time/Result | Watch | Notes | Sources.\n"
-        "3. Deduplicate duplicate listings across search snippets and include as many distinct games as supported by evidence.\n"
+        f"{overview_instruction}"
+        "3. Provide a markdown table with columns Date | Matchup | Time/Result | Watch | Notes | Sources.\n"
+        "4. Sort rows chronologically, preserve ranking indicators in the Matchup cell when the evidence includes them (for example #3 Princeton), and deduplicate duplicate listings across search snippets.\n"
         f"{row_target_instruction}"
-        "4. Add 2-4 short notes for uncertainties, ranked games, or streaming caveats.\n"
-        "5. Do not invent watch details; use TBD when the source does not say.\n\n"
+        "5. Add 2-4 short notes covering marquee games, streaming caveats, or coverage gaps.\n"
+        "6. Do not invent watch details; use TBD when the source does not say.\n\n"
         f"Prioritized evidence (highest trust/freshness first):\n{ranked_evidence_context}\n\n"
-        f"Search results:\n{search_results[:20000]}"
+        f"Search results:\n{search_results[:40000] if full_slate_mode else search_results[:20000]}"
     )
 
     try:
@@ -1417,6 +1642,10 @@ async def generate_sports_watch_report(
         subject=subject,
         lookahead_days=lookahead,
     )
+    if full_slate_mode:
+        expected_items = max(expected_items, 8)
+        min_sources = max(min_sources, 3)
+        context_label = "same-day full-slate sports schedule"
     source_feedback = _build_source_diversity_feedback(source_count=source_count, min_sources=min_sources)
     partial_coverage = (
         item_count < expected_items

@@ -68,10 +68,12 @@ from .chat import (  # noqa: F401
 def is_configured() -> bool:
     """Return True if at least one LLM backend is configured.
 
-    Reads GOOGLE_API_KEY and LOCAL_LLM_ENABLED from this package's namespace
-    so that tests can patch them with ``monkeypatch.setattr(llm, ...)``.
+    Checks Gemini (GOOGLE_API_KEY), local LLM (LOCAL_LLM_ENABLED), and
+    the Copilot proxy (COPILOT_PROXY_URL) so that Copilot-only deployments
+    are not incorrectly blocked.
     """
-    return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED
+    from model_router import COPILOT_PROXY_ENABLED  # local import avoids circular deps
+    return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
 from .context import (  # noqa: F401
     _CONTEXT_LIMITS,
     _auto_recall_context,

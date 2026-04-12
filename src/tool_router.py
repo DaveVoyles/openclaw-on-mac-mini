@@ -53,6 +53,17 @@ _INTENT_HINTS: dict[str, tuple[str, ...]] = {
         "ncaa",
         "espn",
     ),
+    "generate_news_report": (
+        "what's in the news",
+        "latest news",
+        "news today",
+        "current events",
+        "headlines",
+        "breaking news",
+        "what happened today",
+        "what's going on",
+        "top stories",
+    ),
     "create_status_report": (
         "how's everything",
         "status report",

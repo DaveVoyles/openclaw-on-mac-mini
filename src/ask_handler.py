@@ -42,13 +42,16 @@ from bot_formatting import (
 from bot_formatting import (
     split_response as _split_response,
 )
+from bot_formatting import (
+    strip_placeholder_table_rows as _strip_placeholder_table_rows,
+)
 from config import cfg
 from constants import EMBED_SPLIT_LIMIT, MAX_FILE_SIZE
 from llm import SUPPORTED_IMAGE_MIMES, get_rate_info
 from llm import chat as llm_chat  # noqa: F401 — available if needed
 from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
-from memory import get_model_preference
+from memory import get_model_preference, get_routing_profile
 from memory import store as conversation_store
 from quality_helpers import (
     _append_explainability_footer,
@@ -98,7 +101,7 @@ async def handle_ask(
 
     if not llm_is_configured():
         await interaction.response.send_message(
-            "⚠️ LLM not configured. Set `GOOGLE_API_KEY` in your `.env` file.",
+            "⚠️ LLM not configured. Set `GOOGLE_API_KEY` (Gemini), `COPILOT_PROXY_URL` (Copilot), or `LOCAL_LLM_ENABLED=true` in your `.env` file.",
             ephemeral=True,
         )
         return
@@ -241,6 +244,7 @@ async def handle_ask(
     response_text = ""
     model_used = "unknown"
     model_pref = model.value if model else get_model_preference(interaction.user.id)
+    user_routing_profile = get_routing_profile(interaction.user.id)
     context_controls = _build_ask_context_controls(
         scope=scope.value if scope else None,
         reset_context=reset_context,
@@ -307,7 +311,7 @@ async def handle_ask(
         _routing_notes: list[str] = []
         _context_explainability_note = ""
         _final_meta: dict[str, Any] = {}
-        _model_labels = {"auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini", "openai": "GPT-4o", "anthropic": "Claude"}
+        _model_labels = {"auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini", "openai": "GPT-4o", "anthropic": "Claude", "copilot": "Copilot"}
         await _think(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
         last_edit = 0.0
         display_question = question if len(question) < 200 else question[:197] + "..."
@@ -349,6 +353,7 @@ async def handle_ask(
                 on_partial_chunk=_handle_partial_chunk,
                 update_history=_update_history,
                 context_controls=context_controls,
+                routing_profile=user_routing_profile,
             )
             response_text = result.response_text
             model_used = result.model_used
@@ -378,6 +383,7 @@ async def handle_ask(
                     on_partial_chunk=_handle_partial_chunk,
                     update_history=_update_history,
                     context_controls=context_controls,
+                    routing_profile=user_routing_profile,
                 )
 
             repair_result = await _run_quality_auto_repair(
@@ -451,6 +457,14 @@ async def handle_ask(
         response_text += guardrail_note
     if thread_hint:
         response_text += thread_hint
+
+    # Append model attribution note to response body
+    if model_used and model_used not in ("error", "timeout", "unknown"):
+        _attr_model = model_used.replace("models/", "")
+        response_text += f"\n\n*🤖 Model: {_attr_model}*"
+
+    # Strip table rows that are pure placeholders like [Opponent], [Time]
+    response_text = _strip_placeholder_table_rows(response_text)
 
     # Optional image fallback for large/complex tables
     table_image_file = None

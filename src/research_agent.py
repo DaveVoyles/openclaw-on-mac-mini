@@ -653,10 +653,29 @@ class ResearchAgent:
         return []
 
     async def _synthesize(self, query: str, data: str) -> str:
-        """Ask Gemini to synthesize all research data into a report."""
+        """Synthesize all research data into a report.
+
+        Prefers the Copilot proxy for text-only synthesis to save Gemini quota;
+        falls back to Gemini thinking mode when Copilot is unavailable.
+        """
         try:
-            from llm import chat_deep
+            from model_router import COPILOT_PROXY_ENABLED, chat_openai
+            from model_routing_policy import select_research_synthesis_route
+
+            route = select_research_synthesis_route(copilot_available=COPILOT_PROXY_ENABLED)
             prompt = _SYNTHESIS_PROMPT.format(query=query, data=data)
+
+            if route.provider == "copilot":
+                log.debug("Research synthesis → Copilot (%s)", route.reason)
+                text = await chat_openai(
+                    prompt,
+                    [],
+                    "You are a thorough research analyst. Synthesize the provided data into a well-structured report.",
+                )
+                return text or ""
+
+            log.debug("Research synthesis → Gemini (%s)", route.reason)
+            from llm import chat_deep
             text, _ = await chat_deep(prompt)
             return text
         except Exception as e:
@@ -675,11 +694,19 @@ class ResearchAgent:
             "Follow-up questions (one per line, no numbering or bullets):"
         )
         try:
-            from llm import chat_deep
-            text, _ = await chat_deep(prompt)
+            from model_router import COPILOT_PROXY_ENABLED
+            from model_routing_policy import select_research_synthesis_route
+
+            route = select_research_synthesis_route(copilot_available=COPILOT_PROXY_ENABLED)
+            if route.provider == "copilot":
+                from model_router import chat_openai
+                text = await chat_openai(prompt, [], "You are a concise research assistant.")
+            else:
+                from llm import chat_deep
+                text, _ = await chat_deep(prompt)
             lines = [
                 ln.strip().lstrip("0123456789.-) ")
-                for ln in text.strip().split("\n")
+                for ln in (text or "").strip().split("\n")
                 if ln.strip()
             ]
             return lines[:3]

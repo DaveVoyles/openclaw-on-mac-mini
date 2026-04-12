@@ -166,13 +166,21 @@ def _init_gemini_model(
     thinking_budget: int | None = None,
     with_tools: bool = True,
     tool_declarations: list[dict[str, Any]] | None = None,
+    system_prompt: str | None = None,
 ) -> _ModelConfig:
-    """Create a _ModelConfig holding model name + generation config."""
+    """Create a _ModelConfig holding model name + generation config.
+
+    Args:
+        system_prompt: Override the default loaded system prompt. Pass an empty
+                       string to suppress the system prompt entirely, or a custom
+                       string to use instead (e.g. for worker sub-agents).
+    """
     if not GOOGLE_API_KEY:
         raise RuntimeError("GOOGLE_API_KEY not set. Add it to your .env file.")
 
+    effective_prompt = _load_system_prompt() if system_prompt is None else system_prompt
     config_kwargs: dict[str, Any] = {
-        "system_instruction": _load_system_prompt(),
+        "system_instruction": effective_prompt,
         "max_output_tokens": max_tokens,
         "temperature": temperature,
     }
@@ -277,3 +285,57 @@ async def _record_usage(response) -> None:
                 await spending_tracker.record(inp, out)
     except Exception as e:
         log.warning("Failed to record token usage: %s", e)
+
+
+async def quick_generate(
+    prompt: str,
+    *,
+    max_tokens: int = 300,
+    temperature: float = 0.1,
+) -> str:
+    """Fire a single-turn completion using the best available provider.
+
+    Intended for narrow, non-streaming tasks (fact extraction, goal detection,
+    error diagnosis).  Prefers the Copilot proxy (GPT-4o) when available to
+    save Gemini quota; falls back to Gemini when Copilot is unavailable.
+
+    Returns the response text, or an empty string when no backend is
+    configured or when generation fails.
+    """
+    # -- Copilot / OpenAI-compatible path --------------------------------
+    try:
+        from model_router import COPILOT_PROXY_ENABLED, chat_openai  # local import
+        if COPILOT_PROXY_ENABLED:
+            reply = await chat_openai(
+                prompt,
+                [],
+                "You are a concise assistant.  Reply with just the requested information.",
+                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+            return (reply or "").strip()
+    except Exception as exc:
+        log.debug("quick_generate Copilot path failed, falling back to Gemini: %s", exc)
+
+    # -- Gemini fallback --------------------------------------------------
+    if not _client:
+        return ""
+    try:
+        loop = asyncio.get_running_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: _client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=genai.types.GenerateContentConfig(
+                    max_output_tokens=max_tokens,
+                    temperature=temperature,
+                ),
+            ),
+        )
+        await _record_usage(response)
+        return (response.text or "").strip()
+    except Exception as exc:
+        log.warning("quick_generate failed: %s", exc)
+        return ""

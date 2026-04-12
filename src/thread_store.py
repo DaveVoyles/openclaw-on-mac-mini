@@ -432,7 +432,7 @@ async def auto_title_thread(thread_id: int) -> Optional[str]:
         )
         title, _ = await chat_deep(prompt)
         title = title.strip().strip('"\'')[:60]
-        if title:
+        if title and not title.startswith(("⚠️", "❌")):
             await set_thread_title(thread_id, title)
             log.info("Auto-titled thread %d: %s", thread_id, title)
             return title

@@ -30,12 +30,13 @@ from llm_patterns import (
     _VAGUE_RESPONSE_RE,
     _gemma_response_seems_valid,
     _needs_tools,
+    _provider_response_seems_valid,
     _reflect_on_response,
 )
 from llm_ratelimit import rate_limiter as _rate_limiter
-from llm_tools import _extract_final_text, _extract_history, _run_tool_loop
 from skills import SKILLS
 from tool_health import circuit_breaker as _gemini_circuit
+from tool_orchestration import build_tool_provider_context
 from tool_router import route_tool_declarations
 from trace_context import get_trace_id
 
@@ -47,12 +48,14 @@ from .context import (
     _format_context_explainability_note,
     _merge_structured_context_controls,
     _strip_recalled_prefix,
-    _to_content,
     _trim_history,
 )
 from .tool_execution import _ollama_available, _try_local_model
 
 _GEMINI_CIRCUIT_KEY = "gemini"
+_RECOVERY_LOCAL_TIMEOUT_SECONDS = 25.0
+_RECOVERY_COPILOT_TIMEOUT_SECONDS = 20.0
+_RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS = 30.0
 
 log = logging.getLogger("openclaw.llm")
 
@@ -84,11 +87,12 @@ async def _gemini_chat(
             model.model_name if hasattr(model, "model_name") else "unknown",
         )
 
-    gemini_history = [_to_content(msg) for msg in history]
-
-    chat_session = _client.chats.create(
-        model=model.model_name, config=model.config, history=gemini_history,
+    provider_context = build_tool_provider_context(
+        "gemini",
+        model=model,
+        history=history,
     )
+    chat_session = provider_context.session
 
     try:
         loop = asyncio.get_running_loop()
@@ -98,6 +102,8 @@ async def _gemini_chat(
         )
         await _record_usage(response)
 
+        from llm_tools import _run_tool_loop
+
         response, rounds = await _run_tool_loop(
             chat_session, response,
             max_rounds=max_tool_rounds,
@@ -106,11 +112,21 @@ async def _gemini_chat(
             label=label,
         )
 
-        text = _extract_final_text(response, rounds, chat_session)
+        text = provider_context.adapter.extract_final_text(
+            response,
+            rounds,
+            chat_session,
+            max_rounds=max_tool_rounds,
+        )
         text = await _reflect_on_response(text, user_message, rounds)
 
-        updated_history = _extract_history(chat_session)
-        model_name = model.model_name if hasattr(model, "model_name") else "unknown"
+        updated_history = provider_context.adapter.extract_history(chat_session)
+        if getattr(response, "direct_final_text", ""):
+            updated_history = provider_context.adapter.merge_direct_final_history(
+                updated_history,
+                text,
+            )
+        model_name = provider_context.model_name
 
         _gemini_circuit.record_success(_GEMINI_CIRCUIT_KEY)
         return text, updated_history, model_name
@@ -192,6 +208,233 @@ def _apply_route_hints(model_message: str, route_info: dict[str, Any]) -> str:
     return hint_block + model_message
 
 
+def _provider_model_label(provider: str, *, message: str = "") -> str:
+    import os
+
+    if provider == "copilot":
+        from model_router import copilot_model_for_message
+
+        return f"copilot/{copilot_model_for_message(message)}"
+    if provider == "anthropic":
+        return f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
+    return f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
+
+
+def _finalize_provider_reply(
+    reply: str | None,
+    *,
+    provider: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    model_label_override: str | None = None,
+) -> tuple[list[dict], str] | None:
+    if not reply or not _provider_response_seems_valid(reply, provider=provider):
+        return None
+    updated = history + [
+        {"role": "user", "parts": [cleaned_user_message]},
+        {"role": "model", "parts": [reply]},
+    ]
+    return updated, model_label_override or _provider_model_label(provider, message=cleaned_user_message)
+
+
+def _copilot_model_candidates(message: str) -> list[str]:
+    import os
+
+    from model_router import copilot_model_for_message
+
+    candidates: list[str] = []
+    for candidate in (
+        copilot_model_for_message(message),
+        os.getenv("OPENAI_MODEL", "gpt-4o"),
+        os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5"),
+    ):
+        candidate = str(candidate or "").strip()
+        if candidate and candidate not in candidates:
+            candidates.append(candidate)
+    return candidates
+
+
+async def _try_copilot_proxy_reply(
+    *,
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    context: str,
+    timeout: float | None = None,
+) -> tuple[str, list[dict], str] | None:
+    from model_router import COPILOT_PROXY_ENABLED, chat_openai
+
+    if not COPILOT_PROXY_ENABLED:
+        return None
+
+    system_prompt = _load_system_prompt()
+    candidates = _copilot_model_candidates(cleaned_user_message)
+    per_attempt_timeout = (
+        max(timeout / max(len(candidates), 1), 1.0)
+        if timeout
+        else None
+    )
+
+    for candidate in candidates:
+        try:
+            request = chat_openai(
+                model_message,
+                history,
+                system_prompt,
+                model=candidate,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKENS,
+            )
+            reply = (
+                await asyncio.wait_for(request, timeout=per_attempt_timeout)
+                if per_attempt_timeout is not None
+                else await request
+            )
+        except asyncio.TimeoutError:
+            log.warning(
+                "Copilot proxy model %s timed out during %s",
+                candidate,
+                context,
+            )
+            continue
+        except Exception as exc:
+            log.warning(
+                "Copilot proxy model %s failed during %s (%s): %s",
+                candidate,
+                context,
+                type(exc).__name__,
+                exc,
+            )
+            continue
+
+        finalized = _finalize_provider_reply(
+            reply,
+            provider="copilot",
+            cleaned_user_message=cleaned_user_message,
+            history=history,
+            model_label_override=f"copilot/{candidate}",
+        )
+        if finalized is not None:
+            updated, model_label = finalized
+            return reply, updated, model_label
+        if reply:
+            log.info(
+                "Copilot proxy model %s returned placeholder reply during %s; trying next candidate",
+                candidate,
+                context,
+            )
+        else:
+            log.warning(
+                "Copilot proxy model %s returned no reply during %s; trying next candidate",
+                candidate,
+                context,
+            )
+    return None
+
+
+async def _recover_stream_provider_failure(
+    *,
+    failed_provider: str,
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    routing_notes: list[str],
+    reason: str,
+) -> tuple[str, list[dict], str, bool]:
+    """Best-effort recovery when a primary provider is unavailable."""
+    provider_label = (failed_provider or "provider").strip() or "provider"
+    provider_display = provider_label.capitalize()
+    try:
+        fallback = await asyncio.wait_for(
+            _try_local_model(model_message, history),
+            timeout=_RECOVERY_LOCAL_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        log.warning(
+            "Local Gemini recovery timed out after %.1fs (%s)",
+            _RECOVERY_LOCAL_TIMEOUT_SECONDS,
+            reason,
+        )
+        fallback = None
+    if fallback is not None:
+        updated = history + [
+            {"role": "user", "parts": [cleaned_user_message]},
+            {"role": "model", "parts": [fallback]},
+        ]
+        routing_notes.append(f"{provider_display} unavailable → local fallback ({reason})")
+        return fallback, updated, OLLAMA_MODEL, False
+
+    try:
+        result = await _try_copilot_proxy_reply(
+            model_message=model_message,
+            cleaned_user_message=cleaned_user_message,
+            history=history,
+            context=f"{provider_label} recovery ({reason})",
+            timeout=_RECOVERY_COPILOT_TIMEOUT_SECONDS,
+        )
+        if result is not None:
+            reply, updated, model_label = result
+            routing_notes.append(f"{provider_display} unavailable → Copilot proxy ({reason})")
+            return reply, updated, model_label, False
+    except (ImportError, KeyError) as exc:
+        log.debug("Copilot proxy recovery unavailable: %s", exc)
+    except Exception as exc:
+        log.warning("Copilot proxy recovery failed (%s): %s", type(exc).__name__, exc)
+
+    try:
+        declarations = _get_tool_declarations()
+        routed_declarations, _ = route_tool_declarations(cleaned_user_message, declarations)
+        selected_names = {
+            str(item.get("name", "")).strip()
+            for item in routed_declarations
+            if isinstance(item, dict)
+        }
+        if "generate_sports_watch_report" in selected_names:
+            from skills.reporting_skills import generate_sports_watch_report
+
+            direct_reply = await asyncio.wait_for(
+                generate_sports_watch_report(query=cleaned_user_message),
+                timeout=_RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS,
+            )
+            if direct_reply and not direct_reply.startswith("❌"):
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [direct_reply]},
+                ]
+                routing_notes.append(f"{provider_display} unavailable → direct sports skill ({reason})")
+                return direct_reply, updated, "direct-sports-skill", False
+        elif "generate_news_report" in selected_names:
+            from skills.reporting_skills import generate_news_report
+
+            direct_reply = await asyncio.wait_for(
+                generate_news_report(query=cleaned_user_message),
+                timeout=_RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS,
+            )
+            if direct_reply and not direct_reply.startswith("❌"):
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [direct_reply]},
+                ]
+                routing_notes.append(f"{provider_display} unavailable → direct news skill ({reason})")
+                return direct_reply, updated, "direct-news-skill", False
+    except asyncio.TimeoutError:
+        log.warning(
+            "Direct sports recovery timed out after %.1fs (%s)",
+            _RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS,
+            reason,
+        )
+    except Exception as exc:
+        log.debug("Direct sports recovery unavailable (%s): %s", type(exc).__name__, exc)
+
+    routing_notes.append(f"{provider_display} unavailable ({reason})")
+    return (
+        f"⚠️ {provider_display} is temporarily unavailable right now. Please try again in a moment.",
+        history,
+        "unavailable",
+        False,
+    )
+
+
 async def chat_stream(
     user_message: str,
     history: list[dict] | None = None,
@@ -200,6 +443,7 @@ async def chat_stream(
     model_preference: str = "auto",
     tool_declarations: list[dict[str, Any]] | None = None,
     context_controls: dict[str, Any] | None = None,
+    routing_profile: str = "",
 ):
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
     log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
@@ -282,62 +526,118 @@ async def chat_stream(
         try:
             import os
 
-            from model_router import chat_anthropic, chat_openai, classify_query, is_ollama_alive
+            from model_router import (
+                COPILOT_PROXY_ENABLED,
+                chat_anthropic,
+                chat_openai,
+                classify_query,
+                is_ollama_alive,
+            )
             _ollama_up = await is_ollama_alive()
             route = classify_query(
                 cleaned_user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
                 has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
+                copilot_available=COPILOT_PROXY_ENABLED,
                 needs_tools=_needs_tools(cleaned_user_message),
                 ollama_alive=_ollama_up,
+                routing_profile=routing_profile,
             )
+            _routing_notes.append(f"Auto route: {route.reason}")
 
-            if route.model_type == "openai":
-                system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                if reply:
+            if route.model_type == "copilot":
+                result = await _try_copilot_proxy_reply(
+                    model_message=model_message,
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                    context="auto-route",
+                )
+                if result is not None:
+                    reply, updated, model_label = result
+                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                    return
+                log.warning("Copilot auto-route exhausted candidates, falling through to Gemini")
+
+            elif route.model_type == "ollama":
+                reply = await _try_local_model(model_message, history, force=True)
+                if reply is not None:
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    yield reply, True, {"model_used": f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, **metadata}
+                    yield reply, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, **metadata}
                     return
+                log.warning("Ollama auto-route returned empty, falling through to Gemini")
+
+            elif route.model_type == "openai":
+                system_prompt = _load_system_prompt()
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                finalized = _finalize_provider_reply(
+                    reply,
+                    provider="openai",
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                )
+                if finalized is not None:
+                    updated, model_label = finalized
+                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                    return
+                if reply:
+                    log.info("OpenAI route returned placeholder reply, falling through to Gemini")
 
             elif route.model_type == "anthropic":
                 system_prompt = _load_system_prompt()
                 reply = await chat_anthropic(model_message, history, system_prompt,
                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                if reply:
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [reply]},
-                    ]
-                    yield reply, True, {"model_used": f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}", "updated_history": updated, "needs_tools": False, **metadata}
+                finalized = _finalize_provider_reply(
+                    reply,
+                    provider="anthropic",
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                )
+                if finalized is not None:
+                    updated, model_label = finalized
+                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                     return
+                if reply:
+                    log.info("Anthropic route returned placeholder reply, falling through to Gemini")
         except Exception as e:
             log.debug("Multi-model routing failed (non-fatal, stream): %s", e)
 
     # Forced OpenAI / Anthropic mode
-    if model_preference in ("openai", "anthropic"):
+    if model_preference in ("openai", "anthropic", "copilot"):
         try:
-            import os
-
             from model_router import chat_anthropic, chat_openai
-            system_prompt = _load_system_prompt()
+            provider_name = model_preference
             if model_preference == "openai":
+                system_prompt = _load_system_prompt()
                 reply = await chat_openai(model_message, history, system_prompt,
                                           temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                model_label = f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
-            else:
+            elif model_preference == "anthropic":
+                system_prompt = _load_system_prompt()
                 reply = await chat_anthropic(model_message, history, system_prompt,
                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                model_label = f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
-            if reply:
-                updated = history + [
-                    {"role": "user", "parts": [cleaned_user_message]},
-                    {"role": "model", "parts": [reply]},
-                ]
+            else:
+                result = await _try_copilot_proxy_reply(
+                    model_message=model_message,
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                    context="forced-copilot",
+                )
+                if result is not None:
+                    reply, updated, model_label = result
+                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                    return
+                reply = None
+            finalized = _finalize_provider_reply(
+                reply,
+                provider=provider_name,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+            )
+            if finalized is not None:
+                updated, model_label = finalized
                 yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                 return
             log.info("%s call failed, falling back to Gemini", model_preference)
@@ -373,20 +673,17 @@ async def chat_stream(
     # Rate-limit pre-check
     if not _rate_limiter.check():
         try:
-            from model_router import COPILOT_PROXY_ENABLED, chat_openai
-            if COPILOT_PROXY_ENABLED:
-                system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                if reply and _gemma_response_seems_valid(reply):
-                    import os
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [reply]},
-                    ]
-                    _routing_notes.append("Gemini rate-limited → used Copilot proxy")
-                    yield reply, True, {"model_used": f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}", "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
-                    return
+            result = await _try_copilot_proxy_reply(
+                model_message=model_message,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                context="rate-limit-recovery",
+            )
+            if result is not None:
+                reply, updated, model_label = result
+                _routing_notes.append("Gemini rate-limited → used Copilot proxy")
+                yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
+                return
         except (ImportError, KeyError) as exc:
             log.debug("Copilot proxy fallback unavailable: %s", exc)
         except Exception as exc:
@@ -430,15 +727,16 @@ async def chat_stream(
         )
     except Exception as exc:
         log.warning("Gemini failed in stream mode (%s), trying local fallback: %s", type(exc).__name__, exc)
-        fallback = await _try_local_model(model_message, history, force=True)
-        if fallback is not None:
-            updated = history + [
-                {"role": "user", "parts": [cleaned_user_message]},
-                {"role": "model", "parts": [fallback]},
-            ]
-            yield fallback, True, {"model_used": OLLAMA_MODEL, "updated_history": updated, "needs_tools": False, "routing_notes": _routing_notes, **metadata}
-            return
-        raise
+        text, updated_history, model_name, needs_tools = await _recover_stream_provider_failure(
+            failed_provider="gemini",
+            model_message=model_message,
+            cleaned_user_message=cleaned_user_message,
+            history=history,
+            routing_notes=_routing_notes,
+            reason="primary",
+        )
+        yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": needs_tools, "routing_notes": _routing_notes, **metadata}
+        return
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
 
     if not _gemma_response_seems_valid(text):
@@ -449,42 +747,83 @@ async def chat_stream(
             "USE the available tools (e.g. nas_list_folder, search_web, browse_url) to "
             "find the answer, then respond with the actual results."
         )
-        text, updated_history, model_name = await _gemini_chat(
-            retry_msg, history, model,
-            on_tool_call=on_tool_call,
-            parallel_tools=True,
-            label="LLM-retry",
-        )
-        updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, retry_msg)
+        try:
+            text, updated_history, model_name = await _gemini_chat(
+                retry_msg, history, model,
+                on_tool_call=on_tool_call,
+                parallel_tools=True,
+                label="LLM-retry",
+            )
+            updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, retry_msg)
+        except Exception as exc:
+            log.warning("Gemini retry failed (%s): %s", type(exc).__name__, exc)
+            text, updated_history, model_name, needs_tools = await _recover_stream_provider_failure(
+                failed_provider="gemini",
+                model_message=retry_msg,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                routing_notes=_routing_notes,
+                reason="retry",
+            )
+            yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": needs_tools, "routing_notes": _routing_notes, **metadata}
+            return
+    response_invalid = not _gemma_response_seems_valid(text)
+    if response_invalid:
+        log.warning("Retry still returned placeholder/hallucination for: %s", cleaned_user_message)
+        _routing_notes.append("Retry response remained placeholder")
 
     # Auto-escalate vague responses to web search
     if (
-        _VAGUE_RESPONSE_RE.search(text)
-        and _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip())
+        response_invalid
+        or (
+            _VAGUE_RESPONSE_RE.search(text)
+            and _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip())
+        )
     ):
-        log.info("Auto-escalating to web search for: %s", cleaned_user_message)
-        search_fn = SKILLS.get("search_web")
-        if search_fn is not None:
-            try:
-                search_results = await search_fn(cleaned_user_message)
-                if search_results and search_results.strip():
-                    enhanced_msg = (
-                        f"{model_message}\n\n"
-                        "Here are fresh web search results to help answer the question:\n"
-                        f"{search_results}\n\n"
-                        "Use these results to give a thorough, factual answer."
-                    )
-                    text, updated_history, model_name = await _gemini_chat(
-                        enhanced_msg, history, model,
-                        on_tool_call=on_tool_call,
-                        parallel_tools=True,
-                        label="LLM-escalate",
-                    )
-                    updated_history = _strip_recalled_prefix(
-                        updated_history, cleaned_user_message, enhanced_msg,
-                    )
-            except Exception as exc:
-                log.warning("Auto-escalation web search failed: %s", exc)
+        if _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip()):
+            log.info("Auto-escalating to web search for: %s", cleaned_user_message)
+            search_fn = SKILLS.get("search_web")
+            if search_fn is not None:
+                try:
+                    search_results = await search_fn(cleaned_user_message)
+                    if search_results and search_results.strip():
+                        enhanced_msg = (
+                            f"{model_message}\n\n"
+                            "Here are fresh web search results to help answer the question:\n"
+                            f"{search_results}\n\n"
+                            "Use these results to give a thorough, factual answer."
+                        )
+                        try:
+                            text, updated_history, model_name = await _gemini_chat(
+                                enhanced_msg, history, model,
+                                on_tool_call=on_tool_call,
+                                parallel_tools=True,
+                                label="LLM-escalate",
+                            )
+                            updated_history = _strip_recalled_prefix(
+                                updated_history, cleaned_user_message, enhanced_msg,
+                            )
+                            response_invalid = not _gemma_response_seems_valid(text)
+                        except Exception as exc:
+                            log.warning("Gemini web escalation failed (%s): %s", type(exc).__name__, exc)
+                            text, updated_history, model_name, _ = await _recover_stream_provider_failure(
+                                failed_provider="gemini",
+                                model_message=enhanced_msg,
+                                cleaned_user_message=cleaned_user_message,
+                                history=history,
+                                routing_notes=_routing_notes,
+                                reason="web-escalation",
+                            )
+                            response_invalid = model_name == "unavailable"
+                except Exception as exc:
+                    log.warning("Auto-escalation web search failed: %s", exc)
+
+    if response_invalid:
+        text = (
+            "⚠️ I couldn't complete that live lookup cleanly just now. "
+            "Please try again in a moment or ask a narrower question."
+        )
+        _routing_notes.append("Returned explicit fallback after invalid retry")
 
     yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes, **metadata}
     return
@@ -497,6 +836,7 @@ async def chat(
     on_tool_call: Any | None = None,
     model_preference: str = "auto",
     tool_declarations: list[dict[str, Any]] | None = None,
+    routing_profile: str = "",
 ) -> tuple[str, list[dict], str]:
     """
     Send a message and return (response_text, updated_history, model_used).
@@ -545,63 +885,111 @@ async def chat(
         try:
             import os
 
-            from model_router import chat_anthropic, chat_openai, classify_query, is_ollama_alive
+            from model_router import (
+                COPILOT_PROXY_ENABLED,
+                chat_anthropic,
+                chat_openai,
+                classify_query,
+                is_ollama_alive,
+            )
             _ollama_up = await is_ollama_alive()
             route = classify_query(
                 cleaned_user_message,
                 has_openai_key=bool(os.getenv("OPENAI_API_KEY")),
                 has_anthropic_key=bool(os.getenv("ANTHROPIC_API_KEY")),
+                copilot_available=COPILOT_PROXY_ENABLED,
                 needs_tools=_needs_tools(cleaned_user_message),
                 ollama_alive=_ollama_up,
+                routing_profile=routing_profile,
             )
             log.debug("Model router: %s", route)
 
-            if route.model_type == "openai":
-                system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                if reply:
+            if route.model_type == "copilot":
+                result = await _try_copilot_proxy_reply(
+                    model_message=model_message,
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                    context="auto-route",
+                )
+                if result is not None:
+                    reply, updated, model_label = result
+                    return reply, updated, model_label
+                log.warning("Copilot auto-route exhausted candidates, falling through to default routing")
+
+            elif route.model_type == "ollama":
+                reply = await _try_local_model(model_message, history, force=True)
+                if reply is not None:
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [reply]},
                     ]
-                    return reply, updated, f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
+                    return reply, updated, OLLAMA_MODEL
+                log.warning("Ollama auto-route returned empty, falling through to default routing")
+
+            elif route.model_type == "openai":
+                system_prompt = _load_system_prompt()
+                reply = await chat_openai(model_message, history, system_prompt,
+                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
+                finalized = _finalize_provider_reply(
+                    reply,
+                    provider="openai",
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                )
+                if finalized is not None:
+                    updated, model_label = finalized
+                    return reply, updated, model_label
                 log.info("OpenAI call failed, falling through to default routing")
 
             elif route.model_type == "anthropic":
                 system_prompt = _load_system_prompt()
                 reply = await chat_anthropic(model_message, history, system_prompt,
                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                if reply:
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [reply]},
-                    ]
-                    return reply, updated, f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
+                finalized = _finalize_provider_reply(
+                    reply,
+                    provider="anthropic",
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                )
+                if finalized is not None:
+                    updated, model_label = finalized
+                    return reply, updated, model_label
                 log.info("Anthropic call failed, falling through to default routing")
         except Exception as e:
             log.debug("Multi-model routing failed (non-fatal): %s", e)
 
     # Forced OpenAI / Anthropic mode
-    if model_preference in ("openai", "anthropic"):
+    if model_preference in ("openai", "anthropic", "copilot"):
         try:
-            import os
-
             from model_router import chat_anthropic, chat_openai
-            system_prompt = _load_system_prompt()
+            provider_name = model_preference
             if model_preference == "openai":
+                system_prompt = _load_system_prompt()
                 reply = await chat_openai(model_message, history, system_prompt,
                                           temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                model_label = f"openai/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
-            else:
+            elif model_preference == "anthropic":
+                system_prompt = _load_system_prompt()
                 reply = await chat_anthropic(model_message, history, system_prompt,
                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                model_label = f"anthropic/{os.getenv('ANTHROPIC_MODEL', 'claude-sonnet-4.5')}"
-            if reply:
-                updated = history + [
-                    {"role": "user", "parts": [cleaned_user_message]},
-                    {"role": "model", "parts": [reply]},
-                ]
+            else:
+                result = await _try_copilot_proxy_reply(
+                    model_message=model_message,
+                    cleaned_user_message=cleaned_user_message,
+                    history=history,
+                    context="forced-copilot",
+                )
+                if result is not None:
+                    reply, updated, model_label = result
+                    return reply, updated, model_label
+                reply = None
+            finalized = _finalize_provider_reply(
+                reply,
+                provider=provider_name,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+            )
+            if finalized is not None:
+                updated, model_label = finalized
                 return reply, updated, model_label
             log.info("%s call failed, falling back to Gemini", model_preference)
         except Exception as e:
@@ -646,35 +1034,17 @@ async def chat(
             )
         except Exception as exc:
             log.warning("Gemini failed in forced mode (%s), trying local fallback: %s", type(exc).__name__, exc)
-            fallback = await _try_local_model(model_message, history, force=True)
-            if fallback is not None:
-                updated = history + [
-                    {"role": "user", "parts": [cleaned_user_message]},
-                    {"role": "model", "parts": [fallback]},
-                ]
-                return fallback, updated, OLLAMA_MODEL
-            raise
+            text, updated_history, model_name, _ = await _recover_stream_provider_failure(
+                failed_provider="gemini",
+                model_message=model_message,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                routing_notes=[],
+                reason="forced",
+            )
+            return text, updated_history, model_name
         updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
         return text, updated_history, model_name
-
-    # Auto mode: Copilot for simple queries, Gemini for tool queries
-    if not _needs_tools(cleaned_user_message):
-        try:
-            from model_router import COPILOT_PROXY_ENABLED, chat_openai
-            if COPILOT_PROXY_ENABLED:
-                system_prompt = _load_system_prompt()
-                reply = await chat_openai(model_message, history, system_prompt,
-                                          temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
-                if reply:
-                    import os
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [reply]},
-                    ]
-                    return reply, updated, f"copilot/{os.getenv('OPENAI_MODEL', 'gpt-4o')}"
-                log.info("Copilot proxy failed, falling through to Gemini")
-        except Exception as e:
-            log.debug("Copilot proxy failed: %s", e)
 
     # Gemini path
     if not _rate_limiter.check():
@@ -702,21 +1072,27 @@ async def chat(
         )
     except Exception as exc:
         log.warning("Gemini failed in auto mode (%s), trying local fallback: %s", type(exc).__name__, exc)
-        fallback = await _try_local_model(model_message, history, force=True)
-        if fallback is not None:
-            updated = history + [
-                {"role": "user", "parts": [cleaned_user_message]},
-                {"role": "model", "parts": [fallback]},
-            ]
-            return fallback, updated, OLLAMA_MODEL
-        raise
+        text, updated_history, model_name, _ = await _recover_stream_provider_failure(
+            failed_provider="gemini",
+            model_message=model_message,
+            cleaned_user_message=cleaned_user_message,
+            history=history,
+            routing_notes=[],
+            reason="auto",
+        )
+        return text, updated_history, model_name
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
     return text, updated_history, model_name
 
 
 def is_configured() -> bool:
-    """Return True if a Google API key is set (Gemini) OR local LLM is enabled."""
-    return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED
+    """Return True if at least one LLM backend is configured.
+
+    Checks Gemini, local LLM, and Copilot proxy so Copilot-only
+    deployments are not incorrectly blocked with "LLM not configured".
+    """
+    from model_router import COPILOT_PROXY_ENABLED  # local import avoids circular deps
+    return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
 
 
 def get_rate_info() -> str:
@@ -741,22 +1117,33 @@ async def chat_deep(
         log.warning("Thinking model unavailable, falling back to standard model: %s", exc)
         model = await _get_model()
 
-    text, updated_history, _ = await _gemini_chat(
-        user_message,
-        history,
-        model,
-        on_tool_call=on_tool_call,
-        parallel_tools=False,
-        max_tool_rounds=MAX_TOOL_ROUNDS * 2,
-        label="Deep research",
-    )
-
-    return text, updated_history
+    try:
+        text, updated_history, _ = await _gemini_chat(
+            user_message,
+            history,
+            model,
+            on_tool_call=on_tool_call,
+            parallel_tools=False,
+            max_tool_rounds=MAX_TOOL_ROUNDS * 2,
+            label="Deep research",
+        )
+        return text, updated_history
+    except Exception as exc:
+        log.warning("Gemini failed in deep research (%s): %s", type(exc).__name__, exc)
+        text, updated_history, _, _ = await _recover_stream_provider_failure(
+            failed_provider="gemini",
+            model_message=user_message,
+            cleaned_user_message=user_message,
+            history=history,
+            routing_notes=[],
+            reason="deep-research",
+        )
+        return text, updated_history
 
 
 async def summarize_conversation(history: list[dict]) -> str:
     """Produce a 3-5 sentence summary of a conversation history for long-term memory."""
-    if not GOOGLE_API_KEY or not history:
+    if not history:
         return ""
 
     lines = []
@@ -778,6 +1165,18 @@ async def summarize_conversation(history: list[dict]) -> str:
     )
 
     try:
+        from model_router import COPILOT_PROXY_ENABLED, chat_openai
+        from model_routing_policy import select_summarization_route
+
+        route = select_summarization_route(copilot_available=COPILOT_PROXY_ENABLED)
+        log.debug("Conversation summary route: %s (%s)", route.provider, route.reason)
+
+        if route.provider == "copilot":
+            result = await chat_openai(prompt, history=[], system_prompt="", temperature=0.2, max_tokens=300)
+            if result:
+                return result.strip()
+
+        # Gemini fallback
         response = await asyncio.to_thread(
             _client.models.generate_content,
             model=MODEL_NAME,
