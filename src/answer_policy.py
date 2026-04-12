@@ -63,6 +63,7 @@ _REMOTE_PROVIDER_PLACEHOLDER_RE = re.compile(
 
 _DIRECT_RETURN_MARKERS: dict[str, list[str]] = {
     "generate_sports_watch_report": ["_via perplexity-direct_"],
+    "generate_sports_scores_report": ["_via perplexity-direct_"],
     "generate_news_report": ["_via perplexity-direct_"],
     "generate_weather_report": ["_via perplexity-direct_"],
     "generate_finance_report": ["_via perplexity-direct_"],

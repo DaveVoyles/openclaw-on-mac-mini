@@ -451,6 +451,63 @@ def select_sports_route(query: str) -> SportsRouteDecision:
 
 
 # ---------------------------------------------------------------------------
+# Sports scores / results route selection
+# ---------------------------------------------------------------------------
+
+_SPORTS_SCORES_PATTERNS = _re.compile(
+    r"\b("
+    r"(?:final\s+score|score\s+of|game\s+result|match\s+result)"
+    r"|(?:did\s+(?:the\s+)?[a-z][\w\s]{1,30}(?:win|lose|beat|fall\s+to))"
+    r"|(?:who\s+won(?:\s+(?:last\s+night|yesterday|this\s+morning|the\s+[\w\s]{1,25}(?:game|match|series|championship|title|race|tournament))))"
+    r"|who\s+won\?"
+    r"|(?:(?:last\s+night|yesterday|this\s+morning).{0,30}(?:game|match|score))"
+    r"|(?:(?:game|match|score).{0,30}(?:last\s+night|yesterday))"
+    r"|(?:recap\s+(?:the\s+)?(?:game|match|series))"
+    r"|what\s+(?:was\s+)?the\s+(?:final\s+)?score"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SportsScoresRouteDecision:
+    """Routing decision for sports scores / historical results queries."""
+
+    prefer_perplexity: bool
+    tool_name: str  # "generate_sports_scores_report" when matched, "" otherwise
+    reason: str
+
+
+def select_sports_scores_route(query: str) -> SportsScoresRouteDecision:
+    """Decide whether a query should be fast-pathed to the sports scores skill.
+
+    Matches historical game result vocabulary — distinct from schedule/watch-guide
+    queries handled by ``select_sports_route()``.  When matched, callers should
+    prefer ``generate_sports_scores_report`` which returns a Perplexity answer
+    directly without Gemini synthesis.
+
+    Args:
+        query: The raw user query string.
+
+    Returns:
+        A ``SportsScoresRouteDecision`` with ``prefer_perplexity=True`` and
+        ``tool_name="generate_sports_scores_report"`` when matched, or
+        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
+    """
+    if _SPORTS_SCORES_PATTERNS.search(query or ""):
+        return SportsScoresRouteDecision(
+            prefer_perplexity=True,
+            tool_name="generate_sports_scores_report",
+            reason="query matches sports scores / results pattern → Perplexity direct",
+        )
+    return SportsScoresRouteDecision(
+        prefer_perplexity=False,
+        tool_name="",
+        reason="no sports scores pattern detected",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Research synthesis route selection
 # ---------------------------------------------------------------------------
 

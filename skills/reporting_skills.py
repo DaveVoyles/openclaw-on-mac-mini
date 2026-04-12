@@ -319,6 +319,40 @@ async def generate_finance_report(*, query: str) -> str:
     return answer
 
 
+async def generate_sports_scores_report(*, query: str) -> str:
+    """Return historical sports game scores/results via Perplexity without LLM rewriting.
+
+    Distinct from generate_sports_watch_report (upcoming schedule).  This skill
+    handles past-result queries: "did the Lakers win?", "what was the final score
+    of the [team] game?", "who won last night?".
+
+    Designed to be returned directly (bypassing Gemini synthesis) when the
+    answer_policy detects the ``_via perplexity-direct_`` marker.
+    """
+    from skills.search_skills import search_web
+
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    date_label = now_utc.strftime("%A, %B %-d, %Y")
+    provider_query = (
+        f"Today is {date_label} UTC. "
+        f"User request: {query}. "
+        "Provide final scores, results, and standings for the specific game(s) asked about. "
+        "Include team names, final score, game date, and key stats or highlights if available. "
+        "Format as a compact markdown table when multiple games are involved. "
+        "Do not speculate or predict — only report confirmed results. "
+        "End with a Sources section listing URLs."
+    )
+    try:
+        result = await asyncio.wait_for(
+            search_web(provider_query, num_results=10, provider="perplexity"),
+            timeout=45,
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
+        log.warning("generate_sports_scores_report Perplexity call failed: %s", exc)
+        return ""
+    return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
+
+
 def _extract_day_window(
     text: str,
     *,
@@ -1822,6 +1856,7 @@ async def generate_box_office_report(
                 retry_on_low_results=True,
                 expand_query=True,
                 expansion_context="news_recap",
+                provider="perplexity",
             ),
             timeout=45,
         )

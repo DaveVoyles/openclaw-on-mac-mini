@@ -6,7 +6,7 @@ import math
 import platform
 import re
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import aiohttp
@@ -14,6 +14,11 @@ import discord
 from aiohttp import web
 
 from http_session import SessionManager as _SessionManager
+from openclaw_cli_sessions import export_session as export_cli_session
+from openclaw_cli_sessions import list_sessions as list_cli_sessions
+from openclaw_cli_sessions import load_watch_state as load_cli_watch_state
+from openclaw_cli_sessions import queue_watch_intervention as queue_cli_watch_intervention
+from openclaw_cli_sessions import require_session as require_cli_session
 from spending import get_quota_status, get_response_stats
 from spending import tracker as spending_tracker
 
@@ -351,14 +356,549 @@ def _serialize_approval(req, now_epoch: int) -> dict:
         "request_id": getattr(req, "request_id", ""),
         "action": getattr(req, "action", ""),
         "target": getattr(req, "target", ""),
+        "detail": _preview_text(getattr(req, "detail", ""), limit=220),
         "risk_level": getattr(getattr(req, "risk_level", None), "value", "UNKNOWN"),
         "requester_name": getattr(req, "requester_name", "unknown"),
         "resolver_name": getattr(req, "resolver_name", None),
+        "session_id": getattr(req, "session_id", ""),
+        "plan_id": getattr(req, "plan_id", ""),
+        "task_id": getattr(req, "task_id", ""),
         "age_seconds": age_seconds,
         "status": status,
         "created_at": created_at,
         "resolved_at": now_epoch if status in {"approved", "denied", "expired"} else None,
     }
+
+
+def _serialize_cli_session(session) -> dict[str, object]:
+    """Normalize a local CLI session for dashboard display."""
+    return {
+        "session_id": getattr(session, "session_id", ""),
+        "title": getattr(session, "title", ""),
+        "cwd": getattr(session, "cwd", ""),
+        "files": list(getattr(session, "files", []) or []),
+        "plan_id": getattr(session, "plan_id", ""),
+        "task_id": getattr(session, "task_id", ""),
+        "status": getattr(session, "status", "active"),
+        "created_at": getattr(session, "created_at", ""),
+        "updated_at": getattr(session, "updated_at", ""),
+        "last_command": getattr(session, "last_command", ""),
+        "last_summary": getattr(session, "last_summary", ""),
+        "command_count": int(getattr(session, "command_count", 0) or 0),
+        "file_edit_count": int(getattr(session, "file_edit_count", 0) or 0),
+        "output_count": int(getattr(session, "output_count", 0) or 0),
+        "automation_mode": getattr(session, "automation_mode", ""),
+        "automation_status": getattr(session, "automation_status", ""),
+        "watch_interval_seconds": int(getattr(session, "watch_interval_seconds", 0) or 0),
+        "checkpoint_count": int(getattr(session, "checkpoint_count", 0) or 0),
+        "last_checkpoint_at": getattr(session, "last_checkpoint_at", ""),
+    }
+
+
+def _serialize_schedule_task(task) -> dict[str, object]:
+    """Normalize scheduler task fields for the dashboard APIs."""
+    cron_expr = getattr(task, "cron_expression", "") or ""
+    interval = int(getattr(task, "interval_minutes", 0) or 0)
+    cron_hour = int(getattr(task, "cron_hour", -1) or -1)
+    cron_minute = int(getattr(task, "cron_minute", 0) or 0)
+
+    if cron_expr:
+        schedule_human = _cron_to_human(cron_expr)
+    elif interval > 0:
+        if interval >= 1440:
+            schedule_human = f"Every {interval // 1440} day(s)"
+        elif interval >= 60:
+            schedule_human = f"Every {interval // 60} hour(s)"
+        else:
+            schedule_human = f"Every {interval} min"
+    elif cron_hour >= 0:
+        schedule_human = f"Daily at {cron_hour:02d}:{cron_minute:02d}"
+    else:
+        schedule_human = "On demand"
+
+    return {
+        "id": getattr(task, "task_id", ""),
+        "name": getattr(task, "action", "") or "unknown",
+        "interval": interval,
+        "cron_expression": cron_expr,
+        "cron_hour": cron_hour,
+        "cron_minute": cron_minute,
+        "schedule_human": schedule_human,
+        "prompt": getattr(task, "prompt", "") or "",
+        "last_run": getattr(task, "last_run", "") or "",
+        "last_result": getattr(task, "last_result", "") or "",
+        "next_run": getattr(task, "next_run_str", ""),
+        "enabled": bool(getattr(task, "enabled", True)),
+        "created_by": getattr(task, "created_by", "") or "",
+        "run_count": int(getattr(task, "run_count", 0) or 0),
+        "args": str(getattr(task, "args", {}) or {})[:160],
+    }
+
+
+def _preview_text(value: object, *, limit: int = 160) -> str:
+    compact = " ".join(str(value or "").split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
+
+
+def _humanize_status(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "Unknown"
+    return text.replace("_", " ").replace("-", " ").title()
+
+
+def _plan_step_counts(steps: list[object]) -> tuple[int, int, dict[str, int]]:
+    counts = Counter(str(getattr(step, "status", "pending") or "pending") for step in steps)
+    completed = 0
+    for step in steps:
+        if bool(getattr(step, "is_complete", False)) or str(getattr(step, "status", "") or "").strip() in {"done", "failed", "skipped"}:
+            completed += 1
+    return completed, len(steps), dict(counts)
+
+
+def _serialize_plan_step(step) -> dict[str, object]:
+    return {
+        "num": _safe_non_negative_int(getattr(step, "num", 0), default=0),
+        "description": str(getattr(step, "description", "") or ""),
+        "status": str(getattr(step, "status", "pending") or "pending"),
+        "status_label": _humanize_status(getattr(step, "status", "pending")),
+        "output_preview": _preview_text(getattr(step, "output", ""), limit=240),
+        "worker_id": str(getattr(step, "worker_id", "") or ""),
+        "depends_on": list(getattr(step, "depends_on", []) or []),
+    }
+
+
+def _serialize_plan(plan, *, detail: bool = False, linked_sessions: list[dict[str, object]] | None = None) -> dict[str, object]:
+    steps = list(getattr(plan, "steps", []) or [])
+    lessons = list(getattr(plan, "lessons", []) or [])
+    context = getattr(plan, "context", {}) or {}
+    completed, total, step_counts = _plan_step_counts(steps)
+    current_step = next((step for step in steps if str(getattr(step, "status", "") or "") == "in-progress"), None)
+
+    payload = {
+        "plan_id": str(getattr(plan, "plan_id", "") or ""),
+        "goal": str(getattr(plan, "goal", "") or ""),
+        "status": str(getattr(plan, "status", "in-progress") or "in-progress"),
+        "status_label": _humanize_status(getattr(plan, "status", "in-progress")),
+        "initiator": str(getattr(plan, "initiator", "") or ""),
+        "channel_id": _safe_non_negative_int(getattr(plan, "channel_id", 0), default=0),
+        "created_at": str(getattr(plan, "created_at", "") or ""),
+        "updated_at": str(getattr(plan, "updated_at", "") or ""),
+        "progress": {
+            "completed": completed,
+            "total": total,
+            "label": f"{completed}/{total}" if total else "0/0",
+        },
+        "step_counts": step_counts,
+        "context_keys": sorted(str(key) for key in context.keys())[:20],
+        "lessons_count": len(lessons),
+        "linked_session_count": len(linked_sessions or []),
+        "current_step": _serialize_plan_step(current_step) if current_step is not None else None,
+    }
+    if detail:
+        payload["steps"] = [_serialize_plan_step(step) for step in steps]
+        payload["lessons"] = [str(item) for item in lessons[:20]]
+        payload["context"] = {
+            str(key): _preview_text(value, limit=400)
+            for key, value in list(context.items())[:20]
+        }
+    return payload
+
+
+def _load_plan_object(plan_id: str):
+    normalized = str(plan_id or "").strip()
+    if not normalized:
+        return None
+    try:
+        from agent_loop import load_plan as load_agent_plan
+    except Exception as exc:
+        log.debug("Plan loader unavailable for %s: %s", normalized, exc)
+        return None
+    try:
+        return load_agent_plan(normalized)
+    except Exception as exc:
+        log.debug("Failed to load plan %s: %s", normalized, exc)
+        return None
+
+
+def _list_plan_objects(status_filter: str = "in-progress") -> list[object]:
+    normalized = str(status_filter or "in-progress").strip() or "in-progress"
+    try:
+        from agent_loop import list_plans as list_agent_plans
+    except Exception as exc:
+        log.debug("Plan listing unavailable: %s", exc)
+        return []
+    try:
+        return list(list_agent_plans(normalized))
+    except Exception as exc:
+        log.debug("Plan listing failed for %s: %s", normalized, exc)
+        return []
+
+
+def _linked_session_payloads(
+    *,
+    plan_id: str = "",
+    task_id: str = "",
+    sessions: list[dict[str, object]] | None = None,
+    limit: int = 20,
+) -> list[dict[str, object]]:
+    normalized_plan = str(plan_id or "").strip()
+    normalized_task = str(task_id or "").strip()
+    source_sessions = sessions
+    if source_sessions is None:
+        source_sessions = [_serialize_cli_session(session) for session in list_cli_sessions(limit=max(limit, 200))]
+
+    matches: list[dict[str, object]] = []
+    for session in source_sessions:
+        session_plan = str(session.get("plan_id", "") or "").strip()
+        session_task = str(session.get("task_id", "") or "").strip()
+        if normalized_plan and session_plan == normalized_plan:
+            matches.append(session)
+        elif normalized_task and session_task == normalized_task:
+            matches.append(session)
+    return matches[: max(1, limit)]
+
+
+def _mission_status_group(status: str) -> str:
+    mapping = {
+        "backlog": "pending",
+        "in_progress": "active",
+        "review": "review",
+        "done": "done",
+        "permanent": "active",
+    }
+    return mapping.get(str(status or "").strip(), "pending")
+
+
+def _load_mission_control_tasks() -> list[dict[str, object]]:
+    try:
+        from mission_control import _load_tasks as load_mission_tasks
+
+        payload = load_mission_tasks()
+        records = payload.get("tasks", []) if isinstance(payload, dict) else []
+        return [item for item in records if isinstance(item, dict)]
+    except Exception as exc:
+        log.debug("Mission Control tasks unavailable: %s", exc)
+        return []
+
+
+def _serialize_mission_control_task(
+    task: dict[str, object],
+    *,
+    detail: bool = False,
+    linked_sessions: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    subtasks = [item for item in (task.get("subtasks", []) or []) if isinstance(item, dict)]
+    comments = [item for item in (task.get("comments", []) or []) if isinstance(item, dict)]
+    completed_subtasks = sum(1 for item in subtasks if item.get("done"))
+    status = str(task.get("status", "backlog") or "backlog")
+    task_id = str(task.get("id", "") or "").strip()
+    last_comment = comments[-1] if comments else {}
+    updated_at = str(
+        task.get("updated_at")
+        or task.get("updatedAt")
+        or last_comment.get("created_at")
+        or last_comment.get("createdAt")
+        or last_comment.get("timestamp")
+        or ""
+    )
+
+    payload = {
+        "id": task_id,
+        "source": "mission-control",
+        "source_label": "Mission Control",
+        "title": str(task.get("title", task_id or "Untitled") or task_id or "Untitled"),
+        "status": status,
+        "status_label": _humanize_status(status),
+        "status_group": _mission_status_group(status),
+        "summary": _preview_text(task.get("description") or last_comment.get("text") or "", limit=180),
+        "description": _preview_text(task.get("description") or "", limit=400) if detail else _preview_text(task.get("description") or "", limit=180),
+        "priority": str(task.get("priority", "") or ""),
+        "priority_label": _humanize_status(task.get("priority", "")) if task.get("priority") else "",
+        "created_at": str(task.get("created_at") or task.get("createdAt") or ""),
+        "updated_at": updated_at,
+        "subtask_progress": {
+            "completed": completed_subtasks,
+            "total": len(subtasks),
+            "label": f"{completed_subtasks}/{len(subtasks)}" if subtasks else "0/0",
+        },
+        "comments_count": len(comments),
+        "enabled": True,
+        "schedule_human": "",
+        "next_run": "",
+        "run_count": 0,
+        "linked_session_count": len(linked_sessions or []),
+    }
+    if detail:
+        payload["subtasks"] = [
+            {
+                "title": str(item.get("title", "") or ""),
+                "done": bool(item.get("done")),
+            }
+            for item in subtasks
+        ]
+        payload["comments_preview"] = [
+            {
+                "author": str(item.get("author", "") or ""),
+                "text": _preview_text(item.get("text") or "", limit=200),
+            }
+            for item in comments[-5:]
+        ]
+    return payload
+
+
+def _serialize_scheduler_control_task(
+    task,
+    *,
+    detail: bool = False,
+    linked_sessions: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    payload = _serialize_schedule_task(task)
+    status = "paused"
+    if payload.get("enabled"):
+        status = "overdue" if str(payload.get("next_run", "") or "").strip().lower() == "overdue" else "scheduled"
+    control_payload = {
+        **payload,
+        "source": "scheduled",
+        "source_label": "Scheduler",
+        "title": str(payload.get("name", payload.get("id", "")) or payload.get("id", "")),
+        "status": status,
+        "status_label": _humanize_status(status),
+        "status_group": "paused" if status == "paused" else ("overdue" if status == "overdue" else "active"),
+        "summary": _preview_text(payload.get("prompt") or payload.get("args") or payload.get("last_result") or "", limit=180),
+        "created_at": str(getattr(task, "created_at", "") or ""),
+        "updated_at": str(payload.get("last_run") or getattr(task, "created_at", "") or ""),
+        "linked_session_count": len(linked_sessions or []),
+    }
+    if detail:
+        control_payload["last_result_preview"] = _preview_text(payload.get("last_result") or "", limit=240)
+    return control_payload
+
+
+def _normalize_task_source(source: object) -> str:
+    normalized = str(source or "").strip().lower()
+    if normalized in {"mission", "mission-control", "mission_control", "mc"}:
+        return "mission-control"
+    if normalized in {"scheduled", "schedule", "scheduler"}:
+        return "scheduled"
+    return ""
+
+
+def _resolve_task_status(
+    task_id: str,
+    *,
+    source: str = "",
+    detail: bool = False,
+    sessions: list[dict[str, object]] | None = None,
+) -> dict[str, object] | None:
+    normalized_id = str(task_id or "").strip()
+    if not normalized_id:
+        return None
+
+    linked_sessions = _linked_session_payloads(task_id=normalized_id, sessions=sessions, limit=20)
+
+    def _mission_lookup() -> dict[str, object] | None:
+        task = next(
+            (item for item in _load_mission_control_tasks() if str(item.get("id", "") or "").strip() == normalized_id),
+            None,
+        )
+        if task is None:
+            return None
+        return _serialize_mission_control_task(task, detail=detail, linked_sessions=linked_sessions)
+
+    def _schedule_lookup() -> dict[str, object] | None:
+        try:
+            from scheduler import scheduler
+        except Exception as exc:
+            log.debug("Scheduler task lookup unavailable for %s: %s", normalized_id, exc)
+            return None
+        try:
+            task = scheduler.get(normalized_id)
+            if task is None and hasattr(scheduler, "list_tasks"):
+                task = next((item for item in scheduler.list_tasks() if getattr(item, "task_id", "") == normalized_id), None)
+        except Exception as exc:
+            log.debug("Failed to resolve scheduled task %s: %s", normalized_id, exc)
+            return None
+        if task is None:
+            return None
+        return _serialize_scheduler_control_task(task, detail=detail, linked_sessions=linked_sessions)
+
+    preferred = _normalize_task_source(source)
+    if preferred == "mission-control":
+        return _mission_lookup()
+    if preferred == "scheduled":
+        return _schedule_lookup()
+    if normalized_id.startswith("sched-"):
+        return _schedule_lookup() or _mission_lookup()
+    return _mission_lookup() or _schedule_lookup()
+
+
+def _list_unified_task_statuses(
+    *,
+    limit: int = 40,
+    source_filter: str = "all",
+    sessions: list[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
+    normalized_source = _normalize_task_source(source_filter)
+    items: list[dict[str, object]] = []
+
+    if normalized_source in {"", "mission-control"}:
+        for record in _load_mission_control_tasks():
+            task_id = str(record.get("id", "") or "").strip()
+            linked = _linked_session_payloads(task_id=task_id, sessions=sessions, limit=20) if task_id else []
+            items.append(_serialize_mission_control_task(record, linked_sessions=linked))
+
+    if normalized_source in {"", "scheduled"}:
+        try:
+            from scheduler import scheduler
+
+            for task in scheduler.list_tasks():
+                task_id = str(getattr(task, "task_id", "") or "").strip()
+                linked = _linked_session_payloads(task_id=task_id, sessions=sessions, limit=20) if task_id else []
+                items.append(_serialize_scheduler_control_task(task, linked_sessions=linked))
+        except Exception as exc:
+            log.debug("Scheduled task list unavailable: %s", exc)
+
+    priority = {
+        "overdue": 0,
+        "active": 1,
+        "review": 2,
+        "pending": 3,
+        "paused": 4,
+        "done": 5,
+    }
+    items.sort(
+        key=lambda item: (
+            priority.get(str(item.get("status_group", "") or ""), 9),
+            str(item.get("updated_at", "") or ""),
+            str(item.get("title", "") or ""),
+        )
+    )
+    return items[: max(1, limit)]
+
+
+_WATCH_INSIGHTS_LIMIT = 5
+
+
+def _build_watch_insights(watch_state: dict) -> dict[str, object]:
+    """Derive compact, operator-friendly watch insight fields from a watch_state dict.
+
+    Returns recent completed checkpoints, retry history, the latest checkpoint
+    summary, and the active phase/attempt so operators can scan progress quickly.
+    """
+    if not isinstance(watch_state, dict):
+        return {}
+
+    raw_checkpoints = [cp for cp in list(watch_state.get("checkpoints") or []) if isinstance(cp, dict)]
+    recent_checkpoints: list[dict[str, object]] = [
+        {
+            "poll": int(cp.get("poll") or 0),
+            "status": str(cp.get("status") or ""),
+            "summary": str(cp.get("summary") or cp.get("last_message") or "")[:200],
+            "phase": str(cp.get("phase") or ""),
+            "completed_at": str(cp.get("completed_at") or cp.get("updated_at") or ""),
+            "attempt_count": len(list(cp.get("attempts") or [])),
+        }
+        for cp in raw_checkpoints[-_WATCH_INSIGHTS_LIMIT:]
+    ]
+
+    raw_retries = [r for r in list(watch_state.get("retry_history") or []) if isinstance(r, dict)]
+    retry_history: list[dict[str, object]] = [
+        {
+            "poll": int(r.get("poll") or 0),
+            "attempt": int(r.get("attempt") or 0),
+            "error": str(r.get("error") or "")[:200],
+            "transient": bool(r.get("transient")),
+            "created_at": str(r.get("created_at") or ""),
+        }
+        for r in raw_retries[-_WATCH_INSIGHTS_LIMIT:]
+    ]
+
+    active = watch_state.get("active_checkpoint")
+    active_phase = ""
+    active_attempt = 0
+    if isinstance(active, dict) and active:
+        active_phase = str(active.get("phase") or "")
+        active_attempt = len(list(active.get("attempts") or []))
+
+    return {
+        "recent_checkpoints": recent_checkpoints,
+        "retry_history": retry_history,
+        "latest_checkpoint_summary": str(watch_state.get("last_summary") or "")[:200],
+        "active_phase": active_phase,
+        "active_attempt": active_attempt,
+        "poll_count": int(watch_state.get("poll_count") or 0),
+        "retry_limit": int(watch_state.get("retry_limit") or 0),
+    }
+
+
+def _list_enriched_session_payloads(*, limit: int = 20, lookup_limit: int = 200) -> list[dict[str, object]]:
+    raw_sessions = list_cli_sessions(limit=max(limit, lookup_limit))
+    session_payloads = [_serialize_cli_session(session) for session in raw_sessions]
+    plan_cache: dict[str, dict[str, object] | None] = {}
+    task_cache: dict[str, dict[str, object] | None] = {}
+
+    enriched: list[dict[str, object]] = []
+    for payload in session_payloads[: max(1, limit)]:
+        item = dict(payload)
+        plan_id = str(item.get("plan_id", "") or "").strip()
+        task_id = str(item.get("task_id", "") or "").strip()
+        if plan_id:
+            if plan_id not in plan_cache:
+                plan_obj = _load_plan_object(plan_id)
+                plan_cache[plan_id] = _serialize_plan(plan_obj) if plan_obj is not None else None
+            plan_summary = plan_cache.get(plan_id)
+            if plan_summary:
+                item["plan_goal"] = plan_summary.get("goal", "")
+                item["plan_status"] = plan_summary.get("status", "")
+                item["plan_progress"] = plan_summary.get("progress", {}).get("label", "")
+        if task_id:
+            if task_id not in task_cache:
+                task_cache[task_id] = _resolve_task_status(task_id, sessions=session_payloads)
+            task_summary = task_cache.get(task_id)
+            if task_summary:
+                item["task_title"] = task_summary.get("title", "")
+                item["task_status"] = task_summary.get("status", "")
+                item["task_source"] = task_summary.get("source", "")
+        watch_state = load_cli_watch_state(str(item.get("session_id", "") or "").strip())
+        if isinstance(watch_state, dict):
+            item["watch_status"] = str(watch_state.get("status", "") or "")
+            item["last_error"] = str(watch_state.get("last_error", "") or "")
+            item["failure_count"] = _safe_non_negative_int(watch_state.get("failure_count"), default=0)
+            item["consecutive_failures"] = _safe_non_negative_int(
+                watch_state.get("consecutive_failures"),
+                default=0,
+            )
+            item["pending_intervention_count"] = sum(
+                1
+                for entry in list(watch_state.get("interventions") or [])
+                if isinstance(entry, dict) and str(entry.get("status") or "") == "pending"
+            )
+            progress_log = [entry for entry in list(watch_state.get("progress_log") or []) if isinstance(entry, dict)]
+            if progress_log:
+                item["last_progress_message"] = str(progress_log[-1].get("message", "") or "")
+            active_checkpoint = watch_state.get("active_checkpoint")
+            if isinstance(active_checkpoint, dict) and active_checkpoint:
+                item["active_phase"] = str(active_checkpoint.get("phase", "") or "")
+        enriched.append(item)
+    return enriched
+
+
+def _list_serialized_plans(
+    *,
+    limit: int = 10,
+    status_filter: str = "in-progress",
+    sessions: list[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for plan in _list_plan_objects(status_filter):
+        plan_id = str(getattr(plan, "plan_id", "") or "").strip()
+        linked = _linked_session_payloads(plan_id=plan_id, sessions=sessions, limit=20) if plan_id else []
+        items.append(_serialize_plan(plan, linked_sessions=linked))
+    items.sort(key=lambda item: str(item.get("updated_at", "") or ""), reverse=True)
+    return items[: max(1, limit)]
 
 
 async def api_approvals_handler(request: web.Request) -> web.Response:
@@ -412,6 +952,266 @@ async def api_approval_decision_handler(request: web.Request) -> web.Response:
 
     now_epoch = int(time.time())
     return web.json_response({"ok": True, "request": _serialize_approval(resolved, now_epoch)})
+
+
+async def api_plans_handler(request: web.Request) -> web.Response:
+    """List persisted agent-loop plans for dashboard control-plane views."""
+    limit_raw = request.query.get("limit", "10")
+    status_filter = str(request.query.get("status", "in-progress") or "in-progress").strip() or "in-progress"
+    try:
+        limit = max(1, min(int(limit_raw), 100))
+    except ValueError:
+        limit = 10
+
+    session_payloads = _list_enriched_session_payloads(limit=max(limit, 50))
+    plans = _list_serialized_plans(limit=limit, status_filter=status_filter, sessions=session_payloads)
+    return web.json_response(
+        {
+            "plans": plans,
+            "meta": {
+                "count": len(plans),
+                "status": status_filter,
+                "statuses": dict(Counter(str(item.get("status", "") or "") for item in plans)),
+            },
+        }
+    )
+
+
+async def api_plan_detail_handler(request: web.Request) -> web.Response:
+    """Return full detail for a persisted plan plus linked session/task context."""
+    plan_id = str(request.match_info.get("plan_id", "")).strip()
+    if not plan_id:
+        return web.json_response({"ok": False, "error": "Missing plan_id"}, status=400)
+
+    plan = _load_plan_object(plan_id)
+    if plan is None:
+        return web.json_response({"ok": False, "error": f"Plan '{plan_id}' was not found"}, status=404)
+
+    session_payloads = _list_enriched_session_payloads(limit=200)
+    linked_sessions = _linked_session_payloads(plan_id=plan_id, sessions=session_payloads, limit=20)
+
+    linked_tasks: list[dict[str, object]] = []
+    seen_task_ids: set[str] = set()
+    for session in linked_sessions:
+        task_id = str(session.get("task_id", "") or "").strip()
+        if not task_id or task_id in seen_task_ids:
+            continue
+        resolved = _resolve_task_status(task_id, sessions=session_payloads)
+        if resolved is not None:
+            linked_tasks.append(resolved)
+            seen_task_ids.add(task_id)
+
+    return web.json_response(
+        {
+            "ok": True,
+            "plan": _serialize_plan(plan, detail=True, linked_sessions=linked_sessions),
+            "linked_sessions": linked_sessions,
+            "linked_tasks": linked_tasks,
+        }
+    )
+
+
+async def api_task_status_handler(request: web.Request) -> web.Response:
+    """Return Mission Control and scheduler tasks in one normalized dashboard shape."""
+    limit_raw = request.query.get("limit", "20")
+    source_filter = str(request.query.get("source", "all") or "all").strip() or "all"
+    try:
+        limit = max(1, min(int(limit_raw), 200))
+    except ValueError:
+        limit = 20
+
+    session_payloads = _list_enriched_session_payloads(limit=200)
+    tasks = _list_unified_task_statuses(limit=limit, source_filter=source_filter, sessions=session_payloads)
+    return web.json_response(
+        {
+            "tasks": tasks,
+            "meta": {
+                "count": len(tasks),
+                "source": source_filter,
+                "sources": dict(Counter(str(item.get("source", "") or "") for item in tasks)),
+            },
+        }
+    )
+
+
+async def api_task_status_detail_handler(request: web.Request) -> web.Response:
+    """Return normalized detail for a Mission Control or scheduled task."""
+    source = str(request.match_info.get("source", "")).strip()
+    task_id = str(request.match_info.get("task_id", "")).strip()
+    if not task_id:
+        return web.json_response({"ok": False, "error": "Missing task_id"}, status=400)
+
+    session_payloads = _list_enriched_session_payloads(limit=200)
+    task = _resolve_task_status(task_id, source=source, detail=True, sessions=session_payloads)
+    if task is None:
+        return web.json_response({"ok": False, "error": f"Task '{task_id}' was not found"}, status=404)
+
+    linked_sessions = _linked_session_payloads(task_id=task_id, sessions=session_payloads, limit=20)
+    linked_plans: list[dict[str, object]] = []
+    seen_plan_ids: set[str] = set()
+    for session in linked_sessions:
+        plan_id = str(session.get("plan_id", "") or "").strip()
+        if not plan_id or plan_id in seen_plan_ids:
+            continue
+        plan = _load_plan_object(plan_id)
+        if plan is not None:
+            linked_plans.append(
+                _serialize_plan(
+                    plan,
+                    linked_sessions=_linked_session_payloads(plan_id=plan_id, sessions=session_payloads, limit=20),
+                )
+            )
+            seen_plan_ids.add(plan_id)
+
+    return web.json_response(
+        {
+            "ok": True,
+            "task": task,
+            "linked_sessions": linked_sessions,
+            "linked_plans": linked_plans,
+        }
+    )
+
+
+async def api_agent_sessions_handler(request: web.Request) -> web.Response:
+    """List local terminal-agent sessions for dashboard supervision."""
+    limit_raw = request.query.get("limit", "20")
+    try:
+        limit = max(1, min(int(limit_raw), 100))
+    except ValueError:
+        limit = 20
+
+    payload = _list_enriched_session_payloads(limit=limit)
+    return web.json_response(
+        {
+            "sessions": payload,
+            "meta": {
+                "count": len(payload),
+                "active": sum(
+                    1
+                    for item in payload
+                    if item.get("automation_status") in {"watching", "running", "waiting"}
+                    or item.get("status") == "active"
+                ),
+            },
+        }
+    )
+
+
+async def api_agent_session_detail_handler(request: web.Request) -> web.Response:
+    """Return a full local CLI session export."""
+    session_id = str(request.match_info.get("session_id", "")).strip()
+    if not session_id:
+        return web.json_response({"ok": False, "error": "Missing session_id"}, status=400)
+    try:
+        payload = export_cli_session(session_id)
+    except FileNotFoundError:
+        return web.json_response({"ok": False, "error": f"Session '{session_id}' was not found"}, status=404)
+
+    session_payload = dict(payload.get("session") or {})
+    session_payloads = _list_enriched_session_payloads(limit=200)
+    plan_id = str(session_payload.get("plan_id", "") or "").strip()
+    task_id = str(session_payload.get("task_id", "") or "").strip()
+
+    plan_summary = None
+    if plan_id:
+        plan = _load_plan_object(plan_id)
+        if plan is not None:
+            linked_plan_sessions = _linked_session_payloads(plan_id=plan_id, sessions=session_payloads, limit=20)
+            plan_summary = _serialize_plan(plan, detail=True, linked_sessions=linked_plan_sessions)
+            session_payload["plan_goal"] = plan_summary.get("goal", "")
+            session_payload["plan_status"] = plan_summary.get("status", "")
+            session_payload["plan_progress"] = plan_summary.get("progress", {}).get("label", "")
+    else:
+        linked_plan_sessions = []
+
+    task_summary = _resolve_task_status(task_id, detail=True, sessions=session_payloads) if task_id else None
+    if task_summary is not None:
+        session_payload["task_title"] = task_summary.get("title", "")
+        session_payload["task_status"] = task_summary.get("status", "")
+        session_payload["task_source"] = task_summary.get("source", "")
+
+    raw_watch_state = payload.get("watch_state")
+    watch_insights = _build_watch_insights(raw_watch_state) if isinstance(raw_watch_state, dict) else {}
+
+    return web.json_response(
+        {
+            "ok": True,
+            **payload,
+            "session": session_payload,
+            "plan": plan_summary,
+            "task": task_summary,
+            "linked_plan_sessions": linked_plan_sessions,
+            "supports_interventions": bool(raw_watch_state),
+            "watch_insights": watch_insights,
+        }
+    )
+
+
+async def api_agent_session_intervention_handler(request: web.Request) -> web.Response:
+    """Queue a safe watch/session intervention from the dashboard."""
+    session_id = str(request.match_info.get("session_id", "")).strip()
+    action = str(request.match_info.get("action", "")).strip().lower()
+    if not session_id:
+        return web.json_response({"ok": False, "error": "Missing session_id"}, status=400)
+    if not action:
+        return web.json_response({"ok": False, "error": "Missing action"}, status=400)
+
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        payload = {}
+
+    try:
+        require_cli_session(session_id)
+    except FileNotFoundError:
+        return web.json_response({"ok": False, "error": f"Session '{session_id}' was not found"}, status=404)
+
+    watch_state = load_cli_watch_state(session_id)
+    if not isinstance(watch_state, dict):
+        return web.json_response({"ok": False, "error": "This session has no watch state to control"}, status=409)
+
+    status = str(watch_state.get("status", "") or "").strip().lower()
+    if status in {"completed", "interrupted"}:
+        return web.json_response(
+            {"ok": False, "error": f"Watch session is already {status or 'finished'}"},
+            status=409,
+        )
+
+    actor = str(
+        payload.get("actor")
+        or request.headers.get("X-OpenClaw-Actor")
+        or payload.get("resolver_name")
+        or "dashboard"
+    ).strip()[:120]
+    reason = str(payload.get("reason") or "").strip()[:240]
+
+    try:
+        intervention = queue_cli_watch_intervention(
+            session_id,
+            action=action,
+            actor=actor or "dashboard",
+            reason=reason,
+        )
+    except ValueError as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    refreshed = export_cli_session(session_id)
+    refreshed_watch = refreshed.get("watch_state") if isinstance(refreshed, dict) else {}
+    pending_count = sum(
+        1
+        for entry in list((refreshed_watch or {}).get("interventions") or [])
+        if isinstance(entry, dict) and str(entry.get("status") or "") == "pending"
+    )
+    return web.json_response(
+        {
+            "ok": True,
+            "intervention": intervention,
+            "pending_count": pending_count,
+            "session": refreshed.get("session", {}) if isinstance(refreshed, dict) else {},
+            "watch_state": refreshed_watch if isinstance(refreshed_watch, dict) else {},
+        }
+    )
 
 
 async def api_status_handler(request):
@@ -1074,6 +1874,9 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
     except Exception as exc:
         log.debug("Daily token stats failed: %s", exc)
 
+    control_plane_sessions = _list_enriched_session_payloads(limit=200)
+    recent_sessions = control_plane_sessions[:5]
+
     payload = {
         "version": VERSION,
         "uptime_seconds": round(uptime_s, 1),
@@ -1119,6 +1922,9 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
         "activity": activity,
         "model_usage": model_usage,
         "response_stats": get_response_stats(),
+        "agent_sessions": recent_sessions,
+        "active_plans": _list_serialized_plans(limit=5, sessions=control_plane_sessions),
+        "task_statuses": _list_unified_task_statuses(limit=10, sessions=control_plane_sessions),
     }
     return web.json_response(payload)
 
@@ -1459,49 +2265,67 @@ async def api_threads_handler(request: web.Request) -> web.Response:
 async def api_schedules_handler(request):
     """Return scheduled tasks for the dashboard."""
     try:
-        schedules_file = Path("/memory/schedules.json")
-        if not schedules_file.exists():
-            return web.json_response({"tasks": []})
-        tasks = json.loads(schedules_file.read_text())
-        clean = []
-        for t in tasks:
-            name = t.get("action") or t.get("skill_name") or t.get("name") or "unknown"
+        from scheduler import scheduler
 
-            cron_expr = t.get("cron_expression") or t.get("cron") or ""
-            interval = t.get("interval_minutes", t.get("interval", 0))
-            cron_hour = t.get("cron_hour", -1)
-            cron_minute = t.get("cron_minute", 0)
-
-            if cron_expr:
-                schedule_human = _cron_to_human(cron_expr)
-            elif interval and interval > 0:
-                if interval >= 1440:
-                    schedule_human = f"Every {interval // 1440} day(s)"
-                elif interval >= 60:
-                    schedule_human = f"Every {interval // 60} hour(s)"
-                else:
-                    schedule_human = f"Every {interval} min"
-            elif cron_hour >= 0:
-                schedule_human = f"Daily at {cron_hour:02d}:{cron_minute:02d}"
-            else:
-                schedule_human = "On demand"
-
-            clean.append({
-                "id": t.get("task_id", t.get("id", "")),
-                "name": name,
-                "interval": interval,
-                "cron_expression": cron_expr,
-                "schedule_human": schedule_human,
-                "prompt": t.get("prompt", ""),
-                "last_run": t.get("last_run", 0),
-                "next_run": t.get("next_run", 0),
-                "enabled": t.get("enabled", True),
-                "args": str(t.get("args", t.get("args_json", {})))[:80],
-            })
-        return web.json_response({"tasks": clean})
+        tasks = [_serialize_schedule_task(task) for task in scheduler.list_tasks()]
+        return web.json_response({"tasks": tasks})
     except Exception as exc:
         log.debug("Schedules API failed: %s", exc)
         return web.json_response({"tasks": []})
+
+
+async def api_schedule_toggle_handler(request):
+    """Toggle a scheduled task enabled state from the dashboard."""
+    task_id = str(request.match_info.get("task_id", "")).strip()
+    if not task_id:
+        return web.json_response({"ok": False, "error": "Missing task_id"}, status=400)
+    try:
+        from scheduler import scheduler
+
+        new_state = scheduler.toggle(task_id)
+        if new_state is None:
+            return web.json_response({"ok": False, "error": f"Task '{task_id}' not found"}, status=404)
+        task = scheduler.get(task_id)
+        return web.json_response({"ok": True, "task": _serialize_schedule_task(task)})
+    except Exception as exc:
+        log.debug("Schedule toggle failed: %s", exc)
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
+
+
+async def api_schedule_update_handler(request):
+    """Update a scheduled task from the dashboard."""
+    task_id = str(request.match_info.get("task_id", "")).strip()
+    if not task_id:
+        return web.json_response({"ok": False, "error": "Missing task_id"}, status=400)
+    try:
+        payload = await request.json()
+    except json.JSONDecodeError:
+        return web.json_response({"ok": False, "error": "Invalid JSON payload"}, status=400)
+
+    try:
+        from scheduler import scheduler
+
+        interval_raw = payload.get("interval_minutes")
+        cron_hour_raw = payload.get("cron_hour")
+        cron_minute_raw = payload.get("cron_minute")
+        updated = scheduler.update(
+            task_id,
+            action=str(payload["name"]).strip() if payload.get("name") is not None else None,
+            prompt=str(payload["prompt"]).strip() if payload.get("prompt") is not None else None,
+            cron_expression=str(payload["cron_expression"]).strip() if payload.get("cron_expression") is not None else None,
+            interval_minutes=None if interval_raw in (None, "") else int(interval_raw),
+            cron_hour=None if cron_hour_raw in (None, "") else int(cron_hour_raw),
+            cron_minute=None if cron_minute_raw in (None, "") else int(cron_minute_raw),
+            enabled=None if payload.get("enabled") is None else bool(payload.get("enabled")),
+        )
+        if updated is None:
+            return web.json_response({"ok": False, "error": f"Task '{task_id}' not found"}, status=404)
+        return web.json_response({"ok": True, "task": _serialize_schedule_task(updated)})
+    except (TypeError, ValueError) as exc:
+        return web.json_response({"ok": False, "error": str(exc)}, status=400)
+    except Exception as exc:
+        log.debug("Schedule update failed: %s", exc)
+        return web.json_response({"ok": False, "error": str(exc)}, status=500)
 
 
 async def api_schedule_delete_handler(request):
@@ -2008,8 +2832,9 @@ async def api_agent_ask_handler(request: web.Request) -> web.Response:
 
     Body (JSON):
         prompt   (str, required)  — the user's question or command
-        model    (str, optional)  — model preference: "auto" | "gemini" | "openai" | "anthropic" | "local"
+        model    (str, optional)  — model preference: "auto" | "gemini" | "openai" | "anthropic" | "local" | "copilot"
         history  (list, optional) — prior conversation turns [{"role": ..., "content": ...}]
+        user_name (str, optional) — logical caller label used for ask context/audit attribution
 
     Returns JSON:
         response  (str)  — assistant reply text
@@ -2027,23 +2852,87 @@ async def api_agent_ask_handler(request: web.Request) -> web.Response:
 
     model_pref = body.get("model", "auto")
     history: list[dict] = body.get("history") or []
+    if not isinstance(history, list):
+        return web.json_response({"error": "history must be a list"}, status=400)
+    user_name = str(body.get("user_name") or "Dashboard").strip() or "Dashboard"
 
     try:
-        from llm.chat import chat as llm_chat
-        result = await llm_chat(
+        from ask_orchestrator import run_ask_stream
+        from llm import chat_stream as llm_chat_stream
+        from quality_helpers import (
+            _build_ask_recovery_block,
+            _run_quality_auto_repair,
+            _safe_score_answer_quality,
+            _with_requested_item_target,
+        )
+        latest_history = list(history)
+
+        def _update_history(updated_history: list[dict]) -> None:
+            nonlocal latest_history
+            latest_history = updated_history
+
+        result = await run_ask_stream(
+            llm_stream=llm_chat_stream,
             user_message=prompt,
             history=history,
-            user_name="Dashboard",
+            user_name=user_name,
             model_preference=model_pref,
+            channel_id=None,
+            thread_id=None,
+            user_id=user_name,
+            update_history=_update_history,
+            context_controls=None,
         )
-        # chat() returns (response_text, updated_history, metadata_dict)
-        if isinstance(result, tuple):
-            response_text, _hist, meta = result
-        else:
-            response_text, meta = result, {}
+        response_text = str(result.response_text or "").strip()
+        model_used = str(result.model_used or model_pref)
+        final_meta = _with_requested_item_target(result.final_meta, question=prompt)
+        quality_meta = _safe_score_answer_quality(
+            response_text,
+            final_meta=final_meta,
+            context="ask",
+        )
 
-        model_used = meta.get("model_used", model_pref) if isinstance(meta, dict) else model_pref
-        tokens = meta.get("total_tokens", 0) if isinstance(meta, dict) else 0
+        async def _run_retry_stream(retry_prompt: str):
+            # Phase 21: Cross-provider quality retry — switch to Copilot when Gemini gave low quality.
+            _retry_pref = (
+                "copilot" if (model_used or "").startswith("gemini") else model_pref
+            )
+            return await run_ask_stream(
+                llm_stream=llm_chat_stream,
+                user_message=retry_prompt,
+                history=latest_history,
+                user_name=user_name,
+                model_preference=_retry_pref,
+                channel_id=None,
+                thread_id=None,
+                user_id=user_name,
+                update_history=_update_history,
+                context_controls=None,
+            )
+
+        repair_result = await _run_quality_auto_repair(
+            question=prompt,
+            response_text=response_text,
+            model_used=model_used,
+            final_meta=final_meta,
+            quality_meta=quality_meta,
+            context="ask",
+            run_retry_stream=_run_retry_stream,
+            think_hook=None,
+        )
+        response_text = str(repair_result["response_text"])
+        model_used = str(repair_result["model_used"])
+        final_meta = dict(repair_result["final_meta"])
+
+        recovery_block = _build_ask_recovery_block(final_meta)
+        if recovery_block and "Recovery note" not in response_text:
+            response_text = f"{response_text.rstrip()}{recovery_block}"
+
+        tokens_raw = final_meta.get("total_tokens", 0) if isinstance(final_meta, dict) else 0
+        try:
+            tokens = int(tokens_raw or 0)
+        except (TypeError, ValueError):
+            tokens = 0
 
         return web.json_response({
             "response": response_text,

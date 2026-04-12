@@ -370,12 +370,17 @@ async def handle_ask(
                 context="ask",
             )
             async def _run_retry_stream(retry_question: str) -> Any:
+                # Phase 21: Cross-provider quality retry — if Gemini produced a low-quality
+                # answer, retry with Copilot for a genuinely different response.
+                _retry_pref = (
+                    "copilot" if (model_used or "").startswith("gemini") else model_pref
+                )
                 return await run_ask_stream(
                     llm_stream=llm_chat_stream,
                     user_message=retry_question,
                     history=conv.history,
                     user_name=str(interaction.user.display_name),
-                    model_preference=model_pref,
+                    model_preference=_retry_pref,
                     channel_id=context_channel_id,
                     thread_id=context_thread_id,
                     user_id=str(interaction.user.id),
