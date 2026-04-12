@@ -53,16 +53,25 @@ _STUB_MODULES = [
 # fully resolved when the cleanup runs in certain xdist workers).
 _SAVED_MODULES = {name: sys.modules[name] for name in _STUB_MODULES if name in sys.modules}
 
+# Always install fresh stubs for every listed module — do NOT use setdefault.
+# Many modules in _STUB_MODULES (audit, ask_orchestrator, constants, config,
+# approvals, llm, memory, etc.) are mutated at module-level below with
+# `import X as _stub; _stub.attr = MagicMock()`.  If the real module is
+# already in sys.modules (imported transitively by an earlier test file),
+# setdefault is a no-op and those mutations permanently corrupt the real module,
+# breaking tests in later files.  By always installing a fresh throwaway stub
+# here, mutations only ever touch the stub.  The cleanup block below correctly
+# restores the originals via _SAVED_MODULES or re-imports from disk.
 for _mod_name in _STUB_MODULES:
-    sys.modules.setdefault(_mod_name, _make_mock_module(_mod_name))
-
-# ask_orchestrator must always be a fresh stub, even if it was already imported
-# by an earlier test file.  Module-level code below assigns MagicMock to its
-# attributes (lines ~176, ~185); if _orch_stub is the *real* module those
-# assignments permanently mutate it and break tests/test_ask_orchestrator.py
-# which imports normalize_model_preference at collection time.  Forcing a fresh
-# stub here ensures we only ever patch the throwaway MagicMock, not the real module.
-sys.modules["ask_orchestrator"] = _make_mock_module("ask_orchestrator")
+    # discord must keep setdefault — it's a real installed package imported by
+    # channel_profile_state and other modules via `from discord.ext import commands`.
+    # Force-replacing it with a mock breaks those imports.  All other modules are
+    # safe to force-replace because they're first-party modules whose real
+    # implementations aren't needed until after ask_handler is imported.
+    if "discord" in _mod_name:
+        sys.modules.setdefault(_mod_name, _make_mock_module(_mod_name))
+    else:
+        sys.modules[_mod_name] = _make_mock_module(_mod_name)
 
 # Patch specific attributes we care about BEFORE importing ask_handler
 import types as _types
