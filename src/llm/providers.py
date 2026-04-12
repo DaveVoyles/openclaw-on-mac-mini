@@ -55,8 +55,20 @@ COPILOT_PROXY_URL: str = os.getenv("COPILOT_PROXY_URL", "")
 COPILOT_PROXY_ENABLED: bool = COPILOT_PROXY_URL != ""
 _proxy_healthy: bool = True
 
+# Configurable fallback chain: primary provider is prepended at call time.
+_FALLBACK_CHAIN_RAW = os.getenv("PROVIDER_FALLBACK_CHAIN", "copilot,ollama")
+_FALLBACK_CHAIN: list[str] = [p.strip() for p in _FALLBACK_CHAIN_RAW.split(",") if p.strip()]
+
 # Populated by chat_openai / chat_anthropic before they return; read by call_provider.
 _last_usage: dict = {"input_tokens": 0, "output_tokens": 0}
+
+# Cumulative token counts for this process lifetime; updated by call_provider().
+_cumulative_tokens: dict[str, int] = {"input": 0, "output": 0}
+
+
+def token_usage_summary() -> dict:
+    """Return cumulative input/output tokens seen this process lifetime."""
+    return dict(_cumulative_tokens)
 
 # ---------------------------------------------------------------------------
 # Proxy health check
@@ -457,21 +469,26 @@ async def call_provider(
         _last_usage.update(input_tokens=0, output_tokens=0)
         raw = await chat_openai(message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens)
         latency_ms = (_time.monotonic() - t0) * 1000
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
-    if provider == "anthropic":
+        resp = ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
+    elif provider == "anthropic":
         model_name = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
         t0 = _time.monotonic()
         _last_usage.update(input_tokens=0, output_tokens=0)
         raw = await chat_anthropic(message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens)
         latency_ms = (_time.monotonic() - t0) * 1000
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
-    if provider == "copilot":
+        resp = ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
+    elif provider == "copilot":
         # copilot uses openai-compat with proxy URL
         model_name = model or os.getenv("OPENAI_MODEL", "gpt-4o")
         t0 = _time.monotonic()
         _last_usage.update(input_tokens=0, output_tokens=0)
         raw = await chat_openai(message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens)
         latency_ms = (_time.monotonic() - t0) * 1000
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
-    log.warning("call_provider: unknown provider %r", provider)
-    return ProviderResponse(text=None, provider=provider, model=model, latency_ms=0.0)
+        resp = ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
+    else:
+        log.warning("call_provider: unknown provider %r", provider)
+        return ProviderResponse(text=None, provider=provider, model=model, latency_ms=0.0)
+    if resp.text is not None:
+        _cumulative_tokens["input"] += resp.input_tokens
+        _cumulative_tokens["output"] += resp.output_tokens
+    return resp
