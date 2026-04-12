@@ -508,6 +508,64 @@ def select_sports_scores_route(query: str) -> SportsScoresRouteDecision:
 
 
 # ---------------------------------------------------------------------------
+# Entertainment / streaming route selection
+# ---------------------------------------------------------------------------
+
+_ENTERTAINMENT_PATTERNS = _re.compile(
+    r"\b("
+    r"(?:movies?\s+(?:in\s+theaters?|playing|out\s+now|this\s+week(?:end)?))"
+    r"|(?:what(?:'s|\s+is)\s+(?:new|playing|on|streaming)\s+(?:on\s+)?(?:netflix|hulu|hbo|disney\+?|apple\s+tv\+?|paramount\+?|peacock|max|prime\s+video))"
+    r"|(?:(?:new\s+)?(?:releases?|arrivals?|titles?)\s+(?:on|to)\s+(?:netflix|hulu|hbo|disney\+?|apple\s+tv\+?|paramount\+?|peacock|max|prime\s+video))"
+    r"|rotten\s+tomatoes"
+    r"|metacritic\s+score"
+    r"|(?:is\s+.{1,40}\s+(?:worth\s+watching|good|worth\s+it|worth\s+the\s+hype))"
+    r"|what\s+to\s+watch\s+(?:this\s+week(?:end)?|tonight|today)"
+    r"|streaming\s+(?:this\s+week(?:end)?|releases?|new|now)"
+    r"|(?:now\s+(?:streaming|playing|in\s+theaters?))"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class EntertainmentRouteDecision:
+    """Routing decision for entertainment / streaming queries."""
+
+    prefer_perplexity: bool
+    tool_name: str  # "generate_entertainment_report" when matched, "" otherwise
+    reason: str
+
+
+def select_entertainment_route(query: str) -> EntertainmentRouteDecision:
+    """Decide whether a query should be fast-pathed to the entertainment skill.
+
+    Matches movies-in-theaters, streaming service new arrivals, critic score
+    lookups, and "what to watch" queries.  When matched, callers should prefer
+    ``generate_entertainment_report`` which returns a Perplexity answer directly
+    without Gemini synthesis.
+
+    Args:
+        query: The raw user query string.
+
+    Returns:
+        An ``EntertainmentRouteDecision`` with ``prefer_perplexity=True`` and
+        ``tool_name="generate_entertainment_report"`` when matched, or
+        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
+    """
+    if _ENTERTAINMENT_PATTERNS.search(query or ""):
+        return EntertainmentRouteDecision(
+            prefer_perplexity=True,
+            tool_name="generate_entertainment_report",
+            reason="query matches entertainment / streaming pattern → Perplexity direct",
+        )
+    return EntertainmentRouteDecision(
+        prefer_perplexity=False,
+        tool_name="",
+        reason="no entertainment pattern detected",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Research synthesis route selection
 # ---------------------------------------------------------------------------
 

@@ -353,6 +353,42 @@ async def generate_sports_scores_report(*, query: str) -> str:
     return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
 
 
+async def generate_entertainment_report(*, query: str) -> str:
+    """Return movies, streaming, and entertainment info via Perplexity without LLM rewriting.
+
+    Handles queries like: "what movies are in theaters?", "what's new on Netflix?",
+    "Rotten Tomatoes score for X", "what to watch this weekend", "streaming releases".
+
+    Designed to be returned directly (bypassing Gemini synthesis) when the
+    answer_policy detects the ``_via perplexity-direct_`` marker.
+    """
+    from skills.search_skills import search_web
+
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    date_label = now_utc.strftime("%A, %B %-d, %Y")
+    provider_query = (
+        f"Today is {date_label} UTC. "
+        f"User request: {query}. "
+        "Provide an up-to-date entertainment summary covering movies in theaters, new streaming releases, "
+        "critic scores (Rotten Tomatoes, Metacritic), and where to watch when relevant. "
+        "Format as a compact markdown table or structured list. "
+        "Include specific titles, ratings, and streaming platforms. "
+        "End with a Sources section listing URLs."
+    )
+    try:
+        result = await asyncio.wait_for(
+            search_web(provider_query, num_results=10, provider="perplexity"),
+            timeout=45,
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
+        log.warning("generate_entertainment_report Perplexity call failed: %s", exc)
+        return ""
+    answer = _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
+    if not answer:
+        return "❌ Could not retrieve entertainment information. Try again shortly."
+    return answer
+
+
 def _extract_day_window(
     text: str,
     *,
@@ -663,7 +699,7 @@ async def generate_channel_recap_report(
         response, _, model_used = await asyncio.wait_for(
             llm_chat(
                 user_message=prompt,
-                model_preference="auto",
+                model_preference="copilot",
                 tool_declarations=[],
             ),
             timeout=90,

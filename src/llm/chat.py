@@ -923,6 +923,7 @@ async def chat(
                 select_realtime_route,
                 select_sports_route,
                 select_sports_scores_route,
+                select_entertainment_route,
             )
             rt_route = select_realtime_route(cleaned_user_message)
             if rt_route.prefer_perplexity:
@@ -968,6 +969,21 @@ async def chat(
                         {"role": "model", "parts": [sc_reply]},
                     ]
                     return sc_reply, updated, "perplexity-direct"
+            # Phase 22: Entertainment / streaming fast-path.
+            en_route = select_entertainment_route(cleaned_user_message)
+            if en_route.prefer_perplexity:
+                log.debug("Entertainment fast-path matched: %s", en_route.reason)
+                from skills.reporting_skills import generate_entertainment_report
+                en_reply = await asyncio.wait_for(
+                    generate_entertainment_report(query=cleaned_user_message),
+                    timeout=30.0,
+                )
+                if en_reply and not en_reply.startswith("❌"):
+                    updated = history + [
+                        {"role": "user", "parts": [cleaned_user_message]},
+                        {"role": "model", "parts": [en_reply]},
+                    ]
+                    return en_reply, updated, "perplexity-direct"
         except Exception as _rt_exc:
             log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
 

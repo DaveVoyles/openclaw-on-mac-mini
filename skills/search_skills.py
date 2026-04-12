@@ -81,6 +81,38 @@ close_session = _sessions.close
 
 PERPLEXITY_API_KEY = _cfg.perplexity_api_key
 
+# ---------------------------------------------------------------------------
+# Perplexity result cache — short TTL to avoid duplicate API calls for
+# back-to-back queries on the same topic within a session.
+# ---------------------------------------------------------------------------
+
+_PERPLEXITY_CACHE_TTL_SECONDS = 300  # 5 minutes
+_perplexity_cache: dict[str, tuple[str, float]] = {}  # key → (result, timestamp)
+
+
+def _perplexity_cache_key(query: str) -> str:
+    """Normalize query to a stable cache key."""
+    return query.lower().strip()[:200]
+
+
+def _perplexity_cache_get(query: str) -> str | None:
+    """Return cached result if fresh, else None."""
+    key = _perplexity_cache_key(query)
+    entry = _perplexity_cache.get(key)
+    if entry and (time.monotonic() - entry[1]) < _PERPLEXITY_CACHE_TTL_SECONDS:
+        log.debug("Perplexity cache hit for query: %.60s", query)
+        return entry[0]
+    return None
+
+
+def _perplexity_cache_set(query: str, result: str) -> None:
+    """Store result in cache, evicting entries beyond 100."""
+    if len(_perplexity_cache) >= 100:
+        # Evict oldest entry
+        oldest_key = min(_perplexity_cache, key=lambda k: _perplexity_cache[k][1])
+        del _perplexity_cache[oldest_key]
+    _perplexity_cache[_perplexity_cache_key(query)] = (result, time.monotonic())
+
 FIRECRAWL_API_KEY = _cfg.firecrawl_api_key
 FIRECRAWL_API_URL = "https://api.firecrawl.dev/v1"
 
@@ -264,7 +296,13 @@ async def search_web(
         if provider == "perplexity":
             if not PERPLEXITY_API_KEY:
                 return "⚠️ Perplexity API key not configured."
-            return await _perplexity_search(query, num_results) or "❌ Perplexity returned no results."
+            cached = _perplexity_cache_get(query)
+            if cached:
+                return cached
+            result = await _perplexity_search(query, num_results) or "❌ Perplexity returned no results."
+            if not result.startswith("❌"):
+                _perplexity_cache_set(query, result)
+            return result
         elif provider == "firecrawl":
             if not FIRECRAWL_API_KEY:
                 return "⚠️ Firecrawl API key not configured."
