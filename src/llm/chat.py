@@ -57,6 +57,8 @@ _GEMINI_CIRCUIT_KEY = "gemini"
 _RECOVERY_LOCAL_TIMEOUT_SECONDS = 25.0
 _RECOVERY_COPILOT_TIMEOUT_SECONDS = 20.0
 _RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS = 30.0
+# Minimum accumulated chars between partial-chunk yields when PROVIDER_STREAM=1.
+_PROVIDER_STREAM_PARTIAL_INTERVAL = 200
 
 log = logging.getLogger("openclaw.llm")
 
@@ -372,6 +374,78 @@ async def _try_copilot_proxy_reply(
     return None
 
 
+async def _stream_copilot_chunks(
+    *,
+    model_message: str,
+    cleaned_user_message: str,
+    history: list[dict],
+    context: str,
+    model_override: str | None = None,
+):
+    """Async generator for PROVIDER_STREAM=1 copilot proxy path.
+
+    Yields ``(accumulated_partial, False, {})`` every _PROVIDER_STREAM_PARTIAL_INTERVAL chars
+    while the provider streams, then ``(final_reply, True, {"model_used": ..., "updated_history": ...})``
+    when complete.  Yields nothing if the proxy is disabled or all candidates fail so the
+    caller can fall through to the next provider naturally.
+    """
+    from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream
+    if not COPILOT_PROXY_ENABLED:
+        return
+
+    system_prompt = _load_system_prompt()
+    candidates = [model_override] if model_override else _copilot_model_candidates(cleaned_user_message)
+
+    for candidate in candidates:
+        accumulated = ""
+        last_yield_len = 0
+        try:
+            async for chunk in call_provider_stream(
+                "copilot",
+                model_message,
+                history=history,
+                system_prompt=system_prompt,
+                model=candidate,
+                temperature=TEMPERATURE,
+                max_tokens=MAX_TOKENS,
+            ):
+                accumulated += chunk
+                if len(accumulated) - last_yield_len >= _PROVIDER_STREAM_PARTIAL_INTERVAL:
+                    yield accumulated, False, {}
+                    last_yield_len = len(accumulated)
+        except Exception as exc:
+            log.warning(
+                "Copilot stream candidate %s failed (%s): %s",
+                candidate, context, exc,
+            )
+            continue
+
+        reply = accumulated or None
+        finalized = _finalize_provider_reply(
+            reply,
+            provider="copilot",
+            cleaned_user_message=cleaned_user_message,
+            history=history,
+            model_label_override=f"copilot/{candidate}",
+        )
+        if finalized is not None:
+            updated, model_label = finalized
+            if reply and "_via " not in reply:
+                reply = reply + f"\n\n_via {_format_model_label(candidate)}_"
+            yield reply, True, {"model_used": model_label, "updated_history": updated}
+            return
+        if reply:
+            log.info(
+                "Copilot stream candidate %s returned placeholder reply (%s); trying next",
+                candidate, context,
+            )
+        else:
+            log.warning(
+                "Copilot stream candidate %s returned no reply (%s); trying next",
+                candidate, context,
+            )
+
+
 async def _recover_stream_provider_failure(
     *,
     failed_provider: str,
@@ -618,17 +692,34 @@ async def chat_stream(
             if COPILOT_PROXY_ENABLED:
                 coding_route = select_coding_route(cleaned_user_message)
                 if coding_route.matches:
-                    result = await _try_copilot_proxy_reply(
-                        model_message=model_message,
-                        cleaned_user_message=cleaned_user_message,
-                        history=history,
-                        context="coding-fast-path",
-                    )
-                    if result is not None:
-                        reply, updated, model_label = result
-                        _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
-                        yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
-                        return
+                    if os.getenv("PROVIDER_STREAM", "").strip() == "1":
+                        _got_final = False
+                        async for _txt, _is_final, _smeta in _stream_copilot_chunks(
+                            model_message=model_message,
+                            cleaned_user_message=cleaned_user_message,
+                            history=history,
+                            context="coding-fast-path",
+                        ):
+                            if _is_final:
+                                _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                                yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(_routing_notes), **metadata}
+                                _got_final = True
+                                break
+                            yield _txt, False, {}
+                        if _got_final:
+                            return
+                    else:
+                        result = await _try_copilot_proxy_reply(
+                            model_message=model_message,
+                            cleaned_user_message=cleaned_user_message,
+                            history=history,
+                            context="coding-fast-path",
+                        )
+                        if result is not None:
+                            reply, updated, model_label = result
+                            _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                            yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                            return
         except Exception as _fp_exc:
             log.warning("Stream coding fast-path failed, falling through to standard routing: %s", _fp_exc)
 
@@ -655,18 +746,36 @@ async def chat_stream(
             if route.model_type == "copilot":
                 if route.model:
                     _routing_notes.append(f"mini-model: {route.model}")
-                result = await _try_copilot_proxy_reply(
-                    model_message=model_message,
-                    cleaned_user_message=cleaned_user_message,
-                    history=history,
-                    context="auto-route",
-                    model_override=route.model or None,
-                )
-                if result is not None:
-                    reply, updated, model_label = result
-                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-                log.warning("Copilot auto-route exhausted candidates, falling through to Gemini")
+                if os.getenv("PROVIDER_STREAM", "").strip() == "1":
+                    _got_final = False
+                    async for _txt, _is_final, _smeta in _stream_copilot_chunks(
+                        model_message=model_message,
+                        cleaned_user_message=cleaned_user_message,
+                        history=history,
+                        context="auto-route",
+                        model_override=route.model or None,
+                    ):
+                        if _is_final:
+                            yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, "routing_notes": list(_routing_notes), **metadata}
+                            _got_final = True
+                            break
+                        yield _txt, False, {}
+                    if _got_final:
+                        return
+                    log.warning("Copilot auto-route exhausted candidates, falling through to Gemini")
+                else:
+                    result = await _try_copilot_proxy_reply(
+                        model_message=model_message,
+                        cleaned_user_message=cleaned_user_message,
+                        history=history,
+                        context="auto-route",
+                        model_override=route.model or None,
+                    )
+                    if result is not None:
+                        reply, updated, model_label = result
+                        yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                        return
+                    log.warning("Copilot auto-route exhausted candidates, falling through to Gemini")
 
             elif route.model_type == "ollama":
                 reply = await _try_local_model(model_message, history, force=True)
@@ -729,17 +838,34 @@ async def chat_stream(
                 reply = await chat_anthropic(model_message, history, system_prompt,
                                              temperature=TEMPERATURE, max_tokens=MAX_TOKENS)
             else:
-                result = await _try_copilot_proxy_reply(
-                    model_message=model_message,
-                    cleaned_user_message=cleaned_user_message,
-                    history=history,
-                    context="forced-copilot",
-                )
-                if result is not None:
-                    reply, updated, model_label = result
-                    yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-                reply = None
+                if os.getenv("PROVIDER_STREAM", "").strip() == "1":
+                    _got_final = False
+                    async for _txt, _is_final, _smeta in _stream_copilot_chunks(
+                        model_message=model_message,
+                        cleaned_user_message=cleaned_user_message,
+                        history=history,
+                        context="forced-copilot",
+                    ):
+                        if _is_final:
+                            yield _txt, True, {"model_used": _smeta["model_used"], "updated_history": _smeta["updated_history"], "needs_tools": False, **metadata}
+                            _got_final = True
+                            break
+                        yield _txt, False, {}
+                    if _got_final:
+                        return
+                    reply = None
+                else:
+                    result = await _try_copilot_proxy_reply(
+                        model_message=model_message,
+                        cleaned_user_message=cleaned_user_message,
+                        history=history,
+                        context="forced-copilot",
+                    )
+                    if result is not None:
+                        reply, updated, model_label = result
+                        yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                        return
+                    reply = None
             finalized = _finalize_provider_reply(
                 reply,
                 provider=provider_name,

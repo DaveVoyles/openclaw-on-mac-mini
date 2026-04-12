@@ -349,6 +349,12 @@ async def handle_message(
                     message.author.id, flow_channel.id, str(message.author.display_name),
                 )
 
+            # Set up streaming placeholder when PROVIDER_STREAM=1.
+            from bot import PROVIDER_STREAM, make_discord_stream_handler
+            _on_partial, _get_placeholder = (
+                make_discord_stream_handler(flow_channel) if PROVIDER_STREAM else (None, lambda: None)
+            )
+
             result = await run_ask_stream(
                 llm_stream=llm_chat_stream,
                 user_message=user_question,
@@ -360,7 +366,16 @@ async def handle_message(
                 user_id=str(message.author.id),
                 update_history=_update_history,
                 routing_profile=user_routing_profile,
+                on_partial_chunk=_on_partial,
             )
+
+            # Remove the streaming placeholder before sending the formatted final reply.
+            _placeholder_msg = _get_placeholder()
+            if _placeholder_msg is not None:
+                try:
+                    await _placeholder_msg.delete()
+                except Exception:
+                    pass
             response_text = result.response_text
             model_used = result.model_used
 

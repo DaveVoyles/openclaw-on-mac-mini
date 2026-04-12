@@ -129,6 +129,10 @@ AUDIT_DIR = Path(os.getenv("AUDIT_DIR", "/audit"))
 LOG_DIR = Path(os.getenv("LOG_DIR", "/logs"))
 CONFIG_DIR = Path(os.getenv("CONFIG_DIR", "/config"))
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
+# When set to "1", the bot sends a "thinking…" placeholder and edits it as
+# LLM chunks arrive rather than waiting for the full response.
+PROVIDER_STREAM = os.getenv("PROVIDER_STREAM", "").strip() == "1"
+_STREAM_DISCORD_EDIT_INTERVAL = 200  # min chars between placeholder edits
 
 # ---------------------------------------------------------------------------
 # Channel role architecture — prevents context bleed between workflows
@@ -168,6 +172,50 @@ def _resolve_channel_thread_scope(
         elif lock.get("mode") == "channel":
             resolved_thread_id = None
     return resolved_channel_id, resolved_thread_id
+
+
+def make_discord_stream_handler(channel: Any) -> tuple[
+    Any,  # on_partial_chunk coroutine callable
+    Any,  # get_placeholder callable → discord.Message | None
+]:
+    """Return ``(on_partial_chunk, get_placeholder)`` for streaming Discord messages.
+
+    ``on_partial_chunk(chunk_text)`` — call with each partial accumulated text.
+      * Sends a "⏳ thinking…" placeholder on the first invocation.
+      * Edits the placeholder embed every ``_STREAM_DISCORD_EDIT_INTERVAL`` chars.
+      * Silently ignores Discord errors so the final buffered send still works.
+
+    ``get_placeholder()`` — returns the placeholder :class:`discord.Message` (or
+    ``None`` if no chunk arrived yet), so the caller can delete it before sending
+    the formatted final response.
+    """
+    _placeholder: list[Any] = []
+    _last_edit_len: list[int] = [0]
+
+    async def _on_partial_chunk(chunk_text: str) -> None:
+        if not chunk_text:
+            return
+        try:
+            if not _placeholder:
+                msg = await channel.send("⏳ *thinking…*")
+                _placeholder.append(msg)
+                _last_edit_len[0] = 0
+
+            if len(chunk_text) - _last_edit_len[0] < _STREAM_DISCORD_EDIT_INTERVAL:
+                return
+
+            preview = chunk_text[:1950]
+            suffix = "…" if len(chunk_text) > 1950 else "\n\n*⏳ streaming…*"
+            embed = discord.Embed(description=preview + suffix, color=discord.Color.purple())
+            await _placeholder[0].edit(embed=embed)
+            _last_edit_len[0] = len(chunk_text)
+        except Exception as exc:
+            log.debug("Stream placeholder update failed: %s", exc)
+
+    def _get_placeholder() -> Any | None:
+        return _placeholder[0] if _placeholder else None
+
+    return _on_partial_chunk, _get_placeholder
 
 
 async def _load_channel_config() -> None:

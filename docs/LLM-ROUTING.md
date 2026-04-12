@@ -355,3 +355,5 @@ Wave 2 (after wave 1):            #7 (needs #6), #10 (needs #6), #4 (needs #3),
                                   #14 (needs #13), #16 (needs #10)
 Wave 3 (after wave 2):            #12 (needs #2), #17 (needs #2), #18 (needs #6, #7)
 ```
+
+| r30 | **Extend PROVIDER_STREAM partial-chunk yields to Gemini and Ollama paths** — `_stream_copilot_chunks()` (task r30) wired progressive Discord placeholder-edits for the Copilot proxy path only; the Gemini streaming SDK (`generate_content_stream`) and Ollama (`/api/generate` chunked JSON) both natively support incremental tokens but `chat_stream` still awaits a complete response before yielding; refactor the Gemini and Ollama paths in `chat_stream` to yield `(partial_text, False, {})` as tokens arrive so the `on_partial_chunk` → Discord edit chain works for all providers; measure edit-rate to stay within Discord's 5 edits per 5 s limit and tune `_STREAM_DISCORD_EDIT_INTERVAL` accordingly | Medium | `src/llm/chat.py` | r30 | 📋 Proposed |
