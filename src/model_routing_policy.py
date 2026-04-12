@@ -587,8 +587,11 @@ def select_web_search_route(query: str) -> WebSearchRouteDecision:
 # ---------------------------------------------------------------------------
 
 import asyncio as _asyncio
+import json as _json
 import logging as _logging
 import os as _os
+import pathlib as _pathlib
+import time as _time_mod
 
 # Query-type patterns used by the two-tier classifier (mirrors model_router.py)
 _CLASSIFY_CODE_PATTERN = _re.compile(
@@ -628,6 +631,39 @@ _LLM_CLASSIFY_PROMPT = (
 _VALID_LLM_CATEGORIES = frozenset({"coding", "vision", "search", "math", "general"})
 
 _policy_logger = _logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Mini-model eval logging (MINI_MODEL_EVAL=1)
+# ---------------------------------------------------------------------------
+
+_MINI_EVAL_ENABLED = _os.getenv("MINI_MODEL_EVAL", "false").lower() in ("1", "true", "yes")
+_MINI_EVAL_PATH = _pathlib.Path(_os.getenv("MINI_MODEL_EVAL_PATH", "data/mini_model_eval.jsonl"))
+
+
+def log_mini_model_eval(
+    message: str,
+    selected_model: str,
+    threshold_words: int,
+    query_type: str = "unknown",
+) -> None:
+    """Append an eval record when mini-model fast-path fires (or nearly fires)."""
+    if not _MINI_EVAL_ENABLED:
+        return
+    word_count = len((message or "").split())
+    entry = {
+        "ts": _time_mod.time(),
+        "word_count": word_count,
+        "threshold": threshold_words,
+        "selected_model": selected_model,
+        "query_type": query_type,
+        "message_preview": message[:120],
+    }
+    try:
+        _MINI_EVAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with _MINI_EVAL_PATH.open("a") as f:
+            f.write(_json.dumps(entry) + "\n")
+    except OSError as exc:
+        _policy_logger.debug("Mini eval log write failed: %s", exc)
 
 
 async def _classify_text_with_llm(text: str) -> str | None:
@@ -853,10 +889,24 @@ def copilot_model_for_message(message: str, profile: str) -> str:
 
     token_count = len((message or "").split())
     if token_count > MINI_MODEL_MAX_TOKENS:
+        # Log near-boundary cases (within 1.5× threshold) for threshold tuning.
+        if token_count <= MINI_MODEL_MAX_TOKENS * 1.5:
+            log_mini_model_eval(
+                message,
+                selected_model="full",
+                threshold_words=MINI_MODEL_MAX_TOKENS,
+                query_type="over_threshold",
+            )
         return ""
 
     # Exclude coding queries — a short code snippet deserves the full model.
     if _CLASSIFY_CODE_PATTERN.search(message or ""):
         return ""
 
+    log_mini_model_eval(
+        message,
+        selected_model=_MINI_MODEL,
+        threshold_words=MINI_MODEL_MAX_TOKENS,
+        query_type="mini_selected",
+    )
     return _MINI_MODEL

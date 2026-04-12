@@ -388,6 +388,52 @@ async def _health_llm_handler(request: web.Request) -> web.Response:
     )
 
 
+async def _health_llm_circuit_handler(request: web.Request) -> web.Response:
+    """GET /health/llm/circuit — lightweight circuit-breaker state only."""
+    from llm.providers import _circuit, _is_open
+
+    _known_providers = {"copilot", "openai", "anthropic", "ollama"}
+    circuit_state = {
+        p: {"open": _is_open(p)}
+        for p in sorted(_known_providers | set(_circuit.keys()))
+    }
+    return web.json_response(circuit_state)
+
+
+async def _health_llm_reset_handler(request: web.Request) -> web.Response:
+    """POST /health/llm/reset — reset circuit-breaker state for one or all providers.
+
+    Query params:
+        provider (optional): name of a single provider to reset; omit to reset all.
+
+    Returns:
+        {"reset": [<provider>, ...], "circuit_state": {...}}
+    """
+    auth_error = _require_api_action_auth(request)
+    if auth_error is not None:
+        return auth_error
+
+    from llm.providers import PROVIDER_FALLBACK_CHAIN, _circuit, _is_open, reset_circuit
+
+    provider_param = request.rel_url.query.get("provider")
+    _known_providers = {"copilot", "openai", "anthropic", "ollama"}
+    all_providers = sorted(_known_providers | set(_circuit.keys()) | set(PROVIDER_FALLBACK_CHAIN))
+
+    if provider_param:
+        reset_circuit(provider_param)
+        reset_list = [provider_param]
+    else:
+        for p in all_providers:
+            reset_circuit(p)
+        reset_list = all_providers
+
+    circuit_state = {
+        p: {"open": _is_open(p)}
+        for p in sorted(_known_providers | set(_circuit.keys()) | set(PROVIDER_FALLBACK_CHAIN))
+    }
+    return web.json_response({"reset": reset_list, "circuit_state": circuit_state})
+
+
 async def _health_memory_handler(request: web.Request) -> web.Response:
     """Check memory subsystem health (ChromaDB, QMD, threads DB)."""
     checks: dict[str, str] = {}
@@ -481,6 +527,8 @@ async def start_health_server(bot) -> web.AppRunner:
     setup_dashboard(app, require_action_auth=_require_api_action_auth)
     app.router.add_get("/health", _health_handler)
     app.router.add_get("/health/llm", _health_llm_handler)
+    app.router.add_get("/health/llm/circuit", _health_llm_circuit_handler)
+    app.router.add_post("/health/llm/reset", _health_llm_reset_handler)
     app.router.add_get("/health/memory", _health_memory_handler)
     app.router.add_get("/health/services", _health_services_handler)
     app.router.add_get("/metrics", _metrics_handler)
