@@ -265,12 +265,32 @@ def _strip_ascii_tables(text: str) -> str:
     return "\n".join(result)
 
 
+def _dedupe_sources_section(text: str) -> str:
+    """Remove duplicate Sources sections from Perplexity output.
+
+    Perplexity sometimes returns an inline numbered-reference block
+    (e.g. '[1] https://...') AND a plain 'Sources:\\n...' block.
+    Keep only whichever appears first; strip the second one.
+    """
+    # Patterns that start a sources block
+    sources_re = re.compile(
+        r"^(sources?\s*:?\s*$|sources?\s*\n[-\d\[\]])",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    matches = list(sources_re.finditer(text))
+    if len(matches) < 2:
+        return text
+    # Keep everything up to (and including) the first block; drop the second
+    second_start = matches[1].start()
+    return text[:second_start].rstrip()
+
+
 def _normalize_direct_provider_answer(raw_text: str, *, provider_label: str) -> str:
     """Light normalization for a general direct provider answer.
 
     Strips the Perplexity header prefix, rejects error strings, converts
-    ASCII/markdown tables to Discord-friendly text, and appends the provider
-    attribution suffix so the answer_policy can detect it.
+    ASCII/markdown tables to Discord-friendly text, deduplicates Sources
+    sections, and appends the provider attribution suffix.
     """
     text = (raw_text or "").strip()
     if not text or text.startswith(("❌", "⚠️")):
@@ -278,6 +298,7 @@ def _normalize_direct_provider_answer(raw_text: str, *, provider_label: str) -> 
     if text.startswith("**Perplexity AI Answer:**"):
         text = text[len("**Perplexity AI Answer:**"):].strip()
     text = _strip_ascii_tables(text)
+    text = _dedupe_sources_section(text)
     if len(text) < 80:
         return ""
     return f"{text}\n\n_via {provider_label}_"
@@ -427,7 +448,10 @@ async def generate_sports_scores_report(*, query: str) -> str:
         f"User request: {query}. "
         "Provide final scores, results, and standings for the specific game(s) asked about. "
         "Include team names, final score, game date, and key stats or highlights if available. "
-        "Format as a compact markdown table when multiple games are involved. "
+        "Format results as a bullet list (do NOT use markdown or ASCII tables) — one game per entry like:\n"
+        "**Team A vs Team B** — Final: 105-98\n"
+        "• Date: April 12\n"
+        "• Key stats: Player X had 30 pts, Player Y had 12 reb\n"
         "Do not speculate or predict — only report confirmed results. "
         "End with a Sources section listing URLs."
     )
@@ -460,7 +484,11 @@ async def generate_entertainment_report(*, query: str) -> str:
         f"User request: {query}. "
         "Provide an up-to-date entertainment summary covering movies in theaters, new streaming releases, "
         "critic scores (Rotten Tomatoes, Metacritic), and where to watch when relevant. "
-        "Format as a compact markdown table or structured list. "
+        "Format as a structured list (do NOT use markdown or ASCII tables) — one title per entry like:\n"
+        "**Movie/Show Title** (Platform or Theater)\n"
+        "• Rating: 92% RT / 8.1 IMDb\n"
+        "• Genre: Action\n"
+        "• Notes: Opening weekend, directed by X\n"
         "Include specific titles, ratings, and streaming platforms. "
         "End with a Sources section listing URLs."
     )
