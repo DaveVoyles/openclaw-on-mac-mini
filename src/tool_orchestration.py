@@ -163,7 +163,10 @@ class GeminiToolAdapter:
     def extract_tool_calls(self, response: Any) -> list[ToolCallRequest]:
         try:
             all_parts = response.candidates[0].content.parts
-        except (IndexError, AttributeError):
+        except (IndexError, AttributeError, TypeError):
+            return []
+
+        if all_parts is None:
             return []
 
         return [
@@ -247,7 +250,7 @@ class GeminiToolAdapter:
         history = []
         for content in session.get_history():
             parts = []
-            for part in content.parts:
+            for part in (content.parts or []):
                 if hasattr(part, "text") and part.text:
                     parts.append(part.text)
                 elif hasattr(part, "function_call") and part.function_call and part.function_call.name:

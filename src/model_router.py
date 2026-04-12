@@ -238,7 +238,7 @@ async def chat_openai(
             data = await resp.json()
             content = data["choices"][0]["message"]["content"]
             if COPILOT_PROXY_ENABLED:
-                from spending import spending_tracker
+                from spending import tracker as spending_tracker
                 await spending_tracker.record_copilot(model=model)
             return content
     except Exception as e:
