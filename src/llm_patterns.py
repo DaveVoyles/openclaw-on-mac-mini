@@ -96,7 +96,18 @@ _VAGUE_RESPONSE_RE = re.compile(
 )
 
 _FACTUAL_QUESTION_RE = re.compile(
-    r"^(who|what|when|where|how|is|are|was|were|did|does|do|can|could|will|has|have)\b",
+    r"^(who|what|when|where|how|is|are|was|were|did|does|do|will|has|have)\b",
+    re.IGNORECASE,
+)
+
+# Matches requests asking the bot to STORE / REMEMBER information (not a factual lookup).
+# These should bypass the hallucination check — a natural-language acknowledgment IS valid.
+_MEMORY_STORE_RE = re.compile(
+    r"\b(remember|memorize|save|store|note|log|record|keep\s+track\s+of|make\s+a\s+note)\b"
+    r".{0,60}\b(this|that|these|those|fact|facts|info|information|preference|detail|criteria)\b"
+    r"|\b(can\s+you|please|could\s+you)\b.{0,40}\b(remember|memorize|save|store|note)\b"
+    r"|\bremember\s+(that|those|this|these|my|the)\b"
+    r"|\b(add|update)\s+(to\s+)?(my\s+)?(memory|preferences?|profile)\b",
     re.IGNORECASE,
 )
 

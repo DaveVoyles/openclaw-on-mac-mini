@@ -27,6 +27,7 @@ from llm_client import (
 )
 from llm_patterns import (
     _FACTUAL_QUESTION_RE,
+    _MEMORY_STORE_RE,
     _VAGUE_RESPONSE_RE,
     _gemma_response_seems_valid,
     _needs_tools,
@@ -877,14 +878,27 @@ async def chat_stream(
         return
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
 
-    if not _gemma_response_seems_valid(text):
+    # Memory-store requests (e.g. "remember these facts") produce natural-language
+    # acknowledgments that superficially match hallucination patterns.  Skip the
+    # hallucination check entirely for these — calling remember_fact or saying
+    # "I've saved that" are both valid responses.
+    _is_memory_store = bool(_MEMORY_STORE_RE.search(cleaned_user_message))
+
+    if not _is_memory_store and not _gemma_response_seems_valid(text):
         log.warning("Post-response hallucination detected, retrying with explicit tool instruction")
-        retry_msg = (
-            f"{model_message}\n\n"
-            "IMPORTANT: You have tool access. Do NOT say 'let me search' or 'one moment'. "
-            "USE the available tools (e.g. nas_list_folder, search_web, browse_url) to "
-            "find the answer, then respond with the actual results."
-        )
+        if _is_memory_store:
+            retry_msg = (
+                f"{model_message}\n\n"
+                "IMPORTANT: Call the remember_fact tool to save this information. "
+                "Do not describe what you will do — just call the tool now."
+            )
+        else:
+            retry_msg = (
+                f"{model_message}\n\n"
+                "IMPORTANT: You have tool access. Do NOT say 'let me search' or 'one moment'. "
+                "USE the available tools (e.g. nas_list_folder, search_web, browse_url) to "
+                "find the answer, then respond with the actual results."
+            )
         try:
             text, updated_history, model_name = await _gemini_chat(
                 retry_msg, history, model,
@@ -905,17 +919,20 @@ async def chat_stream(
             )
             yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": needs_tools, "routing_notes": _routing_notes, **metadata}
             return
-    response_invalid = not _gemma_response_seems_valid(text)
+    response_invalid = not _is_memory_store and not _gemma_response_seems_valid(text)
     if response_invalid:
         log.warning("Retry still returned placeholder/hallucination for: %s", cleaned_user_message)
         _routing_notes.append("Retry response remained placeholder")
 
-    # Auto-escalate vague responses to web search
+    # Auto-escalate vague responses to web search (but never for memory-store requests)
     if (
-        response_invalid
-        or (
-            _VAGUE_RESPONSE_RE.search(text)
-            and _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip())
+        not _is_memory_store
+        and (
+            response_invalid
+            or (
+                _VAGUE_RESPONSE_RE.search(text)
+                and _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip())
+            )
         )
     ):
         if _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip()):
