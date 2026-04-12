@@ -61,6 +61,21 @@ _RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS = 30.0
 log = logging.getLogger("openclaw.llm")
 
 
+def _format_model_label(model: str | None) -> str:
+    """Return a human-readable model attribution label, e.g. 'GPT-4o', 'Gemini 2.5 Flash'."""
+    m = (model or "unknown").replace("models/", "").strip()
+    if m.startswith("gemini-"):
+        return "Gemini " + m[len("gemini-"):].replace("-", " ").title()
+    if m.startswith("gpt-"):
+        suffix = m[4:]
+        # Preserve capitalisation: "4o", "4o-mini" → "4o" / "4o-mini"
+        return f"GPT-{suffix}"
+    if m.startswith("claude-"):
+        parts = m[len("claude-"):].split("-")
+        return "Claude " + " ".join(p.title() for p in parts)
+    return m.replace("-", " ").title()
+
+
 async def _gemini_chat(
     user_message: str,
     history: list[dict],
@@ -132,7 +147,7 @@ async def _gemini_chat(
         _gemini_circuit.record_success(_GEMINI_CIRCUIT_KEY)
         # Phase 15: append provider attribution for direct (non-tool) answers.
         if rounds == 0 and text and "_via " not in text:
-            text = text + "\n\n_via gemini_"
+            text = text + f"\n\n_via {_format_model_label(model_name)}_"
         return text, updated_history, model_name
 
     except Exception:
@@ -322,7 +337,7 @@ async def _try_copilot_proxy_reply(
             updated, model_label = finalized
             # Phase 15: append provider attribution so users can see which model answered.
             if reply and "_via " not in reply:
-                reply = reply + "\n\n_via copilot_"
+                reply = reply + f"\n\n_via {_format_model_label(candidate)}_"
             return reply, updated, model_label
         if reply:
             log.info(

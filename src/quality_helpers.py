@@ -617,7 +617,7 @@ def _build_ask_recovery_block(final_meta: dict[str, Any] | None) -> str | None:
     answer_quality = answer_quality if isinstance(answer_quality, dict) else {}
 
     status = str(answer_quality.get("status", "")).strip().lower()
-    if status not in {"medium", "low"} and not runtime_constrained:
+    if status not in {"low"} and not runtime_constrained:
         return None
 
     item_count = answer_quality.get("item_count")
@@ -627,7 +627,10 @@ def _build_ask_recovery_block(final_meta: dict[str, Any] | None) -> str | None:
     evidence = answer_quality.get("evidence_completeness")
     evidence_low = isinstance(evidence, (int, float)) and float(evidence) < 0.6
 
-    if shortfall <= 0 and status != "low" and not evidence_low and not runtime_constrained:
+    # Only show recovery block when there's a concrete numeric shortfall (user asked for N
+    # items but fewer were delivered) or runtime is constrained. General "low" quality on
+    # conversational or search responses doesn't warrant a user-visible warning.
+    if shortfall <= 0 and not runtime_constrained:
         return None
 
     if shortfall > 0 and has_numeric_target:
@@ -738,7 +741,12 @@ async def _run_quality_auto_repair(
     )
 
     status = str(quality_meta.get("status", "unknown"))
-    eligible = status == "low" and model_used != "error" and max_attempts > 0
+    eligible = (
+        status == "low"
+        and model_used != "error"
+        and max_attempts > 0
+        and len((question or "").strip()) > 10  # skip repair for short follow-ups like "yes/no/ok"
+    )
 
     current_meta = _with_requested_item_target(final_meta, question=question)
     requested_item_count = current_meta.get("requested_item_count")
