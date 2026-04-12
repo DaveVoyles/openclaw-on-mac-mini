@@ -24,6 +24,7 @@ def record(
     success: bool,
     query_type: str = "unknown",
     tokens_used: int = 0,
+    retry_count: int = 0,
 ) -> None:
     """Append one routing event to the JSONL audit log (no-op if disabled)."""
     if not _ENABLED:
@@ -36,6 +37,7 @@ def record(
         "success": success,
         "query_type": query_type,
         "tokens": tokens_used,
+        "retry_count": retry_count,
     }
     try:
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)

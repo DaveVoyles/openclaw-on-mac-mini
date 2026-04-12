@@ -39,6 +39,7 @@ class ProviderResponse:
     latency_ms: float
     input_tokens: int = 0
     output_tokens: int = 0
+    retry_count: int = 0
 
     def __str__(self) -> str:
         """Allow existing callers that do ``str(result)`` to keep working."""
@@ -67,7 +68,7 @@ _OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 _OLLAMA_DEFAULT_MODEL = os.getenv("OLLAMA_DEFAULT_MODEL", "gemma3:4b")
 
 # Populated by chat_openai / chat_anthropic before they return; read by call_provider.
-_last_usage: dict = {"input_tokens": 0, "output_tokens": 0}
+_last_usage: dict = {"input_tokens": 0, "output_tokens": 0, "retry_count": 0}
 
 # Cumulative token counts for this process lifetime; updated by call_provider().
 _cumulative_tokens: dict[str, int] = {"input": 0, "output": 0}
@@ -181,11 +182,12 @@ async def _call_with_retry(
     provider: str,
     attempts: int = _RETRY_ATTEMPTS,
     base_delay: float = _RETRY_BASE_DELAY,
-):
+) -> tuple:
     """Call coro_factory() up to *attempts* times with exponential backoff on transient errors.
 
     *coro_factory* is a zero-arg callable that returns a new coroutine each call.
-    Returns the result of the first successful call, or raises the last exception.
+    Returns ``(result, attempt)`` where *attempt* is 0 for first-try success.
+    Raises the last exception if all attempts fail.
 
     Transient errors (retried): :class:`aiohttp.ClientConnectionError`,
     :class:`asyncio.TimeoutError`, and :class:`aiohttp.ClientResponseError` with
@@ -197,7 +199,8 @@ async def _call_with_retry(
     last_exc: Exception | None = None
     for attempt in range(attempts):
         try:
-            return await coro_factory()
+            result = await coro_factory()
+            return result, attempt
         except aiohttp.ClientResponseError as exc:
             if exc.status not in _TRANSIENT_STATUS:
                 raise  # permanent error — don't retry
@@ -355,7 +358,8 @@ async def chat_openai(
                 resp.raise_for_status()
                 return await resp.json()
 
-        data = await _call_with_retry(_do_openai_post, "openai")
+        data, _retry = await _call_with_retry(_do_openai_post, "openai")
+        _last_usage["retry_count"] = _retry
         content = data["choices"][0]["message"]["content"]
         _record_success("openai")
         # Record token usage
@@ -520,7 +524,8 @@ async def chat_anthropic(
                 resp.raise_for_status()
                 return await resp.json()
 
-        data = await _call_with_retry(_do_anthropic_post, "anthropic")
+        data, _retry = await _call_with_retry(_do_anthropic_post, "anthropic")
+        _last_usage["retry_count"] = _retry
         content_blocks = data.get("content", [])
         content = " ".join(
             b["text"] for b in content_blocks if b.get("type") == "text"
@@ -590,7 +595,8 @@ async def chat_ollama(
                     r.raise_for_status()
                     return await r.json()
 
-        data = await _call_with_retry(_do_ollama_post, "ollama")
+        data, _retry = await _call_with_retry(_do_ollama_post, "ollama")
+        _last_usage["retry_count"] = _retry
         text = data.get("message", {}).get("content")
         inp = data.get("prompt_eval_count", 0)
         out = data.get("eval_count", 0)
@@ -679,30 +685,30 @@ async def _call_one(
     if provider in ("openai", "copilot"):
         model_name = model or os.getenv("OPENAI_MODEL", "gpt-4o")
         t0 = _time.monotonic()
-        _last_usage.update(input_tokens=0, output_tokens=0)
+        _last_usage.update(input_tokens=0, output_tokens=0, retry_count=0)
         raw = await chat_openai(message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens)
         latency_ms = (_time.monotonic() - t0) * 1000
         if raw is None:
             return None
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
+        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"], retry_count=_last_usage["retry_count"])
     if provider == "anthropic":
         model_name = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
         t0 = _time.monotonic()
-        _last_usage.update(input_tokens=0, output_tokens=0)
+        _last_usage.update(input_tokens=0, output_tokens=0, retry_count=0)
         raw = await chat_anthropic(message, history, system_prompt, model=model_name, temperature=temperature, max_tokens=max_tokens)
         latency_ms = (_time.monotonic() - t0) * 1000
         if raw is None:
             return None
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
+        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"], retry_count=_last_usage["retry_count"])
     if provider == "ollama":
         model_name = model or _OLLAMA_DEFAULT_MODEL
         t0 = _time.monotonic()
-        _last_usage.update(input_tokens=0, output_tokens=0)
+        _last_usage.update(input_tokens=0, output_tokens=0, retry_count=0)
         raw = await chat_ollama(message, history, system_prompt, model=model_name, temperature=temperature)
         latency_ms = (_time.monotonic() - t0) * 1000
         if raw is None:
             return None
-        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"])
+        return ProviderResponse(text=raw, provider=provider, model=model_name, latency_ms=latency_ms, input_tokens=_last_usage["input_tokens"], output_tokens=_last_usage["output_tokens"], retry_count=_last_usage["retry_count"])
     log.warning("_call_one: unknown provider %r", provider)
     return None
 

@@ -483,6 +483,7 @@ async def handle_ask(
             latency_ms=_telem_latency,
             success=model_used not in ("error", "timeout"),
             query_type=_routing_notes[0] if _routing_notes else "unknown",
+            retry_count=getattr(result, "retry_count", 0),
         )
     except Exception as _telem_exc:
         log.debug("Telemetry record failed: %s", _telem_exc)

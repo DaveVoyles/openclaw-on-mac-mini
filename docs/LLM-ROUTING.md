@@ -59,11 +59,15 @@ src/llm/chat.py  ──  _resolve_non_gemini_reply()
 
 | File | Responsibility | Lines |
 |------|---------------|-------|
-| `src/llm/providers.py` | **All non-Gemini HTTP calls.** `chat_openai`, `chat_anthropic`, `chat_openai_vision`, `call_provider()` unified dispatch | 259 |
-| `src/model_router.py` | **Backwards-compat shim only.** Re-exports `ModelRoute`, `classify_query`, `copilot_model_for_message`, `is_ollama_alive` from `model_routing_policy` and `chat_openai`, `chat_anthropic`, `chat_openai_vision`, `COPILOT_PROXY_*` from `llm/providers` | ~18 |
-| `src/model_routing_policy.py` | **Provider selection policy + query classification.** `select_auto_route()`, `select_tool_route()`, web-search/coding/sports fast-path selectors, `classify_query()`, `is_ollama_alive()`, `copilot_model_for_message()`, `ModelRoute` | ~698 |
-| `src/llm/chat.py` | **Orchestration.** `chat_stream()`, `chat()`, `chat_deep()`. Calls `_resolve_non_gemini_reply()` first; falls through to `_gemini_chat()` | 1236 |
-| `src/llm_client.py` | **Gemini SDK setup.** Model config, tool declarations, `quick_generate()` | 341 |
+| `src/llm/providers.py` | **All non-Gemini HTTP calls.** `chat_openai`, `chat_anthropic`, `chat_openai_vision`, `chat_ollama`, streaming variants, `call_provider()`, `call_provider_stream()`, `ProviderResponse`, circuit breaker, retry, failover chain, audit telemetry, startup scan | 1 035 |
+| `src/llm/telemetry.py` | Audit log writer, `rotate_audit_log()`, env-var constants | 96 |
+| `src/llm/__init__.py` | `__getattr__` lazy loader (breaks circular import chain); re-exports `call_provider`, `call_provider_stream`, `ProviderResponse`, streaming fns | 121 |
+| `src/model_router.py` | **Backwards-compat shim only.** Re-exports routing symbols from `model_routing_policy` and provider symbols from `llm.providers` | 392 |
+| `src/model_routing_policy.py` | **Provider selection policy + query classification.** `select_auto_route()` (with mini-model fast-path), `select_tool_route()`, `classify_query_llm()`, `AutoRouteDecision`, `ModelRoute` | 862 |
+| `src/llm/chat.py` | **Orchestration.** `chat_stream()`, `chat()`, `chat_deep()`. Calls `_resolve_non_gemini_reply()` first; falls through to `_gemini_chat()` | 1 381 |
+| `src/llm_client.py` | **Gemini SDK setup.** `quick_generate()` via `call_provider("copilot", ...)` | 344 |
+| `src/discord_commands/providers.py` | `/providers` slash command — live availability, latency, circuit-breaker state | 54 |
+| `src/discord_commands/routing.py` | `/routing` slash command — active profile, fallback chain, mini-model config | 81 |
 
 ---
 
@@ -74,28 +78,29 @@ src/llm/chat.py  ──  _resolve_non_gemini_reply()
 `_resolve_non_gemini_reply()` in `chat.py` tries routes in priority order:
 
 ```
-1. model_preference == "auto"
-   └── select_web_search_route(model_message)
-         prefer_search=True  →  generate_web_search_report()  [Perplexity]
+1. Mini-model fast-path (auto, <= MINI_TOKEN_THRESHOLD tokens, no tools, no recalled_context)
+   └── call_provider("copilot", model_override=OPENAI_MINI_MODEL)
 
-2. model_preference == "auto" and not recalled_context
-   └── COPILOT_PROXY_ENABLED and select_coding_route(query)
-         matches=True  →  _try_copilot_proxy_reply()  [Copilot]
+2. model_preference == "auto"
+   └── select_web_search_route()  →  prefer_search=True  →  Perplexity
 
-3. model_preference == "auto"
-   └── classify_query()  →  ModelRoute.model_type
+3. model_preference == "auto" and not recalled_context
+   └── select_coding_route()  →  matches=True  →  _try_copilot_proxy_reply()
+
+4. model_preference == "auto"
+   └── classify_query() / classify_query_llm()  →  ModelRoute.model_type
          "copilot"    →  _try_copilot_proxy_reply()
-         "ollama"     →  _try_local_model()
-         "openai"     →  providers.chat_openai()
-         "anthropic"  →  providers.chat_anthropic()
+         "ollama"     →  call_provider("ollama", ...)
+         "openai"     →  call_provider("openai", ...)
+         "anthropic"  →  call_provider("anthropic", ...)
 
-4. model_preference in ("openai", "anthropic", "copilot")
-   └── Direct forced-provider call
+5. model_preference in ("openai", "anthropic", "copilot")
+   └── Direct forced-provider call via call_provider()
 
-5. model_preference == "local"
-   └── _try_local_model() (Ollama/Gemma)
+6. model_preference == "local"
+   └── call_provider("ollama", ...)
 
-6. None matched → returns None → caller falls through to Gemini
+7. None matched → returns None → caller falls through to Gemini
 ```
 
 ### 2. Routing policy profiles
@@ -127,22 +132,48 @@ This is the **single place** where non-Gemini HTTP calls happen. Add new provide
 COPILOT_PROXY_URL: str        # env COPILOT_PROXY_URL
 COPILOT_PROXY_ENABLED: bool   # True when proxy URL is set
 
-async def chat_openai(message, history, system_prompt, *, model, temperature, max_tokens) -> str | None
-async def chat_anthropic(message, history, system_prompt, *, model, temperature, max_tokens) -> str | None
-async def chat_openai_vision(message, image_bytes, mime_type, *, model, temperature, max_tokens) -> str | None
+@dataclass
+class ProviderResponse:
+    text: str | None
+    provider: str
+    model: str
+    latency_ms: float
+    input_tokens: int
+    output_tokens: int
 
-async def call_provider(provider, message, history, system_prompt, **kw) -> str | None
-# provider: "openai" | "anthropic" | "copilot"
+async def call_provider(provider, message, history, system_prompt, **kw) -> ProviderResponse
+async def call_provider_stream(provider, message, history, system_prompt, **kw) -> AsyncIterator[str]
+
+async def chat_openai(...)   -> str | None
+async def chat_anthropic(...)-> str | None
+async def chat_openai_vision(...) -> str | None
+async def chat_ollama(...)   -> str | None
+async def chat_ollama_stream(...) -> AsyncIterator[str]
+
+async def scan_providers()   -> dict[str, dict]   # {provider: {available, latency_ms}}
+async def check_proxy_health() -> None            # sets _proxy_healthy flag
+
+def token_usage_summary() -> dict                 # {total: {...}, by_provider: {...}}
+def reset_token_usage(provider=None) -> None
 ```
+
+### Reliability features
+
+| Feature | How it works |
+|---------|-------------|
+| **Circuit breaker** | `_is_open(provider)` fast-fails after N consecutive failures; auto-resets after timeout |
+| **Retry with backoff** | `_call_with_retry(coro, retries=2, base_delay=1.0)` handles 429/502/503 |
+| **Failover chain** | `PROVIDER_FALLBACK_CHAIN` env var (default `copilot,ollama`); walks chain on `text=None` |
+| **Audit log** | Every successful call appends a JSONL line to `data/routing_audit.jsonl` |
+| **Async token isolation** | `_last_usage` is a `contextvars.ContextVar` — no cross-contamination under concurrency |
 
 ### Copilot proxy routing
 
 When `COPILOT_PROXY_ENABLED`:
-- OpenAI calls route through the proxy URL with `COPILOT_PROXY_TOKEN`
-- Anthropic calls also route through the proxy (OpenAI-compatible format)
-- The proxy serves both GPT-4o and Claude models
+- OpenAI and Anthropic calls route through `COPILOT_PROXY_URL` with `COPILOT_PROXY_TOKEN`
+- The proxy serves both GPT-4o and Claude models via OpenAI-compatible format
 
-`model_router.py` re-exports all three functions for backwards compatibility — existing callers don't need to change import paths.
+`model_router.py` re-exports all symbols for backwards compatibility.
 
 ---
 
@@ -273,7 +304,7 @@ CodingRouteDecision(matches: bool, reason: str)
 | 31 | **`call_provider_stream()` circuit breaker tests** — `call_provider_stream()` has its own `_is_open` guard and `_record_failure`/`_record_success` calls but is entirely untested; add `tests/test_provider_stream_circuit_breaker.py` covering: yields nothing when circuit is open, records failure on exception and opens circuit after N errors, records success on clean stream completion, half-open after timeout, per-provider isolation; use `monkeypatch` on `time.monotonic` and an `AsyncMock` async-generator for the underlying chat fn | Low | `tests/test_provider_stream_circuit_breaker.py` | 23 | ✅ Done |
 | 37 | **Circuit breaker state SSE endpoint** — expose a `/api/circuit-breaker` Server-Sent Events endpoint (or a polling REST endpoint) that pushes live circuit state (`provider`, `is_open`, `failures`, `open_until`) for all tracked providers; enables real-time dashboard widgets and alerting without polling `scan_providers()`; implement as a new `src/cogs/circuit_breaker_api.py` aiohttp route mounted on the existing bot HTTP server | Low | `src/cogs/circuit_breaker_api.py`, `src/llm/providers.py` | 34 | 📋 Proposed |
 | 38 | **Unit tests for `startup.scan_providers()`** — add `tests/test_llm_startup.py` with pytest tests covering: happy path (all 4 providers available), copilot disabled via `COPILOT_PROXY_ENABLED=False`, Ollama exception swallowed, partial availability (only OpenAI key set), and log format verification that `_log_availability_summary` emits ✅/❌ per provider; use `AsyncMock` for async fns, `monkeypatch` for env vars | Low | `tests/test_llm_startup.py` | 16 | ✅ Done |
-| 32 | **Retry metrics in telemetry audit log** — `_call_with_retry` logs retry attempts at WARNING but never surfaces them in `data/routing_audit.jsonl`; add a `retry_count: int` field to `ProviderResponse` (default 0) and have `_call_with_retry` return `(result, attempt_count)` so `call_provider()` can populate it; record `retry_count` in the JSONL line emitted by task #14; enables alerting and dashboarding on provider reliability trends | Medium | `src/llm/providers.py` | 7, 14 | 📋 Proposed |
+| 34 | **Retry metrics in telemetry audit log** — `_call_with_retry` logs retry attempts at WARNING but never surfaces them in `data/routing_audit.jsonl`; add a `retry_count: int` field to `ProviderResponse` (default 0) and have `_call_with_retry` return `(result, attempt_count)` so `call_provider()` can populate it; record `retry_count` in the JSONL line emitted by task #14; enables alerting and dashboarding on provider reliability trends | Medium | `src/llm/providers.py` | 7, 14 | ✅ Done |
 | 32 | **`copilot_model_for_message()` A/B quality gate** — `copilot_model_for_message()` now gates the mini model on word count + a single regex, but has no quality feedback loop; add an optional `MINI_MODEL_EVAL=1` mode that logs side-by-side completions (full model vs mini) for short queries to `data/mini_model_eval.jsonl`, plus a `scripts/mini_model_eval_summary.py` that computes token savings and flags responses where the mini model is ≥20% shorter (a proxy for truncation); lets operators tune `MINI_MODEL_MAX_TOKENS` with real traffic data | Low | `src/model_routing_policy.py`, `scripts/mini_model_eval_summary.py` | 15 | ✅ Done |
 | 33 | **Migrate remaining `from model_router import` call sites to `llm.providers`** — audit found 8 active call sites that still import `chat_openai`, `chat_openai_vision`, `chat_anthropic`, and `COPILOT_PROXY_ENABLED` directly from `model_router` (`llm/chat.py` ×5, `llm/context.py`, `llm_client.py`, `llm/response.py`, `research_agent.py`, `llm_patterns.py`); once task #26 resolves the `llm/__init__ → llm_tools` circular import, replace each `from model_router import X` with `from llm.providers import X` and then delete the `# compat` stubs from `model_router.py`, completing the consolidation started in task #17 | Medium | `src/llm/chat.py`, `src/llm/context.py`, `src/llm_client.py`, `src/llm/response.py`, `src/research_agent.py`, `src/llm_patterns.py`, `src/model_router.py` | 24, 26 | ✅ Done |
 | 34 | **Integration tests for provider failover chain** — extract `_call_one(provider, ...)` private helper from `call_provider()` and add automatic fallback walking over `_FALLBACK_CHAIN`; write `tests/test_provider_fallback.py` with 5 tests: success-first-try, falls-back-on-None, all-fail-returns-null, fallback-logs-warning, contextvar-isolation (concurrent gather); update circuit breaker tests to patch `_FALLBACK_CHAIN=[]` where they assumed no fallback | Medium | `src/llm/providers.py`, `tests/test_provider_fallback.py`, `tests/test_provider_circuit_breaker.py` | 18, 23 | ✅ Done |
@@ -286,7 +317,7 @@ CodingRouteDecision(matches: bool, reason: str)
 | 41 | **Move `from skills import SKILLS` in `llm/chat.py` to a lazy import** — `llm/chat.py` still imports `SKILLS` at module level (line 39), which forces the entire `skills` package to load whenever `llm.chat` is imported; move it to a function-level import inside `_run_function_call()` (or whichever function uses it), so `llm/chat.py` is safe to import at module level in test/dev environments; this completes the cleanup started in task #26 and removes the last module-level `skills` import from the `llm` package | Low | `src/llm/chat.py` | 26 | ⬜ Open |
 | 42 | **`call_provider_with_fallback()` telemetry integration** — `call_provider_with_fallback()` delegates to `call_provider()` which already emits routing audit entries; but the top-level failover attempt list and final outcome (how many providers were tried, which succeeded) are not recorded; add a structured audit entry after the loop (both on success and exhaustion) so operators can track failover frequency and identify which secondary providers are being relied on in production | Low | `src/llm/providers.py`, `src/llm/telemetry.py` | 18, 14 | 📋 Proposed |
 | 43 | **`scan_providers()` latency instrumentation** — `scan_providers()` returns a `dict[str, bool]` but discards timing data; record each provider's ping latency (ms) alongside the bool result in a `dict[str, dict]` (e.g. `{"copilot": {"ok": True, "latency_ms": 42}}`); expose a `get_provider_latency()` helper and log latencies in `_log_availability_summary`; enables surfacing slow providers in the `/providers` slash command and dashboards; depends on #38 (the new tests cover the updated return shape) | Low | `src/llm/startup.py`, `tests/test_llm_startup.py` | 38 | ✅ Done |
-| 43 | **Telemetry alert latency threshold** — extend `scripts/telemetry_alert.py` with `--max-latency MS` (default: 2000) and `--latency-percentile` (default: p95) flags; compute per-provider latency at the chosen percentile over the rolling window and exit 1 with an alert message if any provider exceeds the threshold; allows the same cron/CI job that checks success rates to also catch providers that are responding too slowly, without requiring a separate monitoring stack | Low | `scripts/telemetry_alert.py` | 29 | 📋 Proposed |
+| 43 | **Telemetry alert latency threshold** — extend `scripts/telemetry_alert.py` with `--max-latency MS` (default: 2000) and `--latency-percentile` (default: p95) flags; compute per-provider latency at the chosen percentile over the rolling window and exit 1 with an alert message if any provider exceeds the threshold; allows the same cron/CI job that checks success rates to also catch providers that are responding too slowly, without requiring a separate monitoring stack | Low | `scripts/telemetry_alert.py` | 29 | ✅ Done |
 | 44 | **`rotate_audit_log()` configurable interval via env var** — `_audit_log_rotation_loop()` in `bot.py` sleeps a hardcoded 3600 s; read `AUDIT_ROTATE_INTERVAL` (seconds, default 3600) from env at startup and pass it to the sleep call; also expose a `rotate_audit_log()` call via the `/admin` slash command so operators can trigger an on-demand rotation without restarting the bot | Low | `src/bot.py`, `src/llm/telemetry.py` | 35 | ✅ Done |
 | 44 | **Remove unused `import os` from `model_router.py`** — after consolidating `COPILOT_PROXY_URL`/`COPILOT_PROXY_ENABLED` to `llm.providers`, `model_router.py` no longer reads any env vars directly; audit remaining `os.*` usage in the file and, if none exist, remove the `import os` line to keep imports clean | Low | `src/model_router.py` | 17 | ⬜ Open |
 | 45 | **Expose mini-model routing note in `/routing` slash command** — now that `routing_notes` records `mini-model: <model>` entries (Task #40), surface them in the `/routing debug` command output so operators can see at-a-glance when a request was handled by the mini-model fast-path rather than the full model selection flow; depends on #40 | Low | `src/commands/routing.py` | 40 | ⬜ Open |
@@ -294,7 +325,7 @@ CodingRouteDecision(matches: bool, reason: str)
 | 46 | **Unit tests for `scan_providers()` latency shape** — now that `scan_providers()` returns `dict[str, dict]` with `available` and `latency_ms` keys (Task #38/43), add `tests/test_scan_providers_latency.py` with pytest cases: latency is a positive float when provider is reachable, `latency_ms` is `None` when provider is unavailable, all four provider keys are always present, concurrent timing ensures pings run in parallel (total wall time < sum of individual pings), and `bot.py` startup loop correctly reads `info["available"]` from the dict; use `AsyncMock` with a simulated `asyncio.sleep` delay to drive latency values | Low | `tests/test_scan_providers_latency.py`, `src/llm/providers.py` | 43 | 🔄 In Progress — Agent t46-stream-tests |
 | 47 | **Expose `token_usage_summary()` via HTTP health endpoint** — `token_usage_summary()` now returns `{"total": {...}, "by_provider": {...}}`; surface this in the existing web health handler (e.g. `/health/llm`) so operators can inspect live token-burn rates per provider without needing direct Python access; the handler already calls provider introspection functions, so this is a small additive change; include a `reset_token_usage()` call on startup so metrics reflect the current process lifetime only | Low | `src/discord_web.py`, `src/llm/providers.py` | 25 | ✅ Done |
 | 48 | **Update `test_model_selection.py` patches from `model_router.*` to `llm.providers.*`** — the test suite currently patches `model_router.chat_openai`, `model_router.chat_anthropic`, and `model_router.COPILOT_PROXY_ENABLED` to mock provider calls in `llm/chat.py`; now that the call sites import directly from `llm.providers`, these patches have no effect and the tests rely on the compat shim being in sync; replace all `patch("model_router.chat_openai", ...)`, `patch("model_router.chat_anthropic", ...)`, and `patch("model_router.COPILOT_PROXY_ENABLED", ...)` with `patch("llm.providers.chat_openai", ...)` etc. in `tests/test_model_selection.py` (and any other test file using `model_router.*` patches) to ensure the mocks actually intercept the production code paths | Low | `tests/test_model_selection.py` | 33 | ✅ Done |
-| 49 | **Unit tests for `start_proxy_health_loop()` / `stop_proxy_health_loop()`** — add `tests/test_proxy_health_loop.py` with async tests: (1) `start_proxy_health_loop()` returns an `asyncio.Task` and calling it a second time returns the same task (idempotent); (2) `stop_proxy_health_loop()` cancels the task and sets `_health_task = None`; (3) after stop, calling start again creates a fresh task; (4) the loop calls `check_proxy_health()` after each `PROXY_HEALTH_INTERVAL` sleep and swallows exceptions without crashing; use `AsyncMock` + `monkeypatch` on `asyncio.sleep` to drive the loop without real delays | Low | `tests/test_proxy_health_loop.py` | 27 | 📋 Proposed |
+| 49 | **Unit tests for `start_proxy_health_loop()` / `stop_proxy_health_loop()`** — add `tests/test_proxy_health_loop.py` with async tests: (1) `start_proxy_health_loop()` returns an `asyncio.Task` and calling it a second time returns the same task (idempotent); (2) `stop_proxy_health_loop()` cancels the task and sets `_health_task = None`; (3) after stop, calling start again creates a fresh task; (4) the loop calls `check_proxy_health()` after each `PROXY_HEALTH_INTERVAL` sleep and swallows exceptions without crashing; use `AsyncMock` + `monkeypatch` on `asyncio.sleep` to drive the loop without real delays | Low | `tests/test_proxy_health_loop.py` | 27 | ✅ Done |
 | 49 | **Unit tests for `_AUDIT_ROTATE_INTERVAL` env-var wiring** — add `tests/test_audit_rotate_interval.py` with cases: (1) default value is 3600 when env var is unset, (2) custom value (e.g. 60) is picked up when `AUDIT_ROTATE_INTERVAL=60` is set before import, (3) `bot.py`'s `_audit_log_rotation_loop` sleeps the configured interval by mocking `asyncio.sleep` and asserting it is called with `_AUDIT_ROTATE_INTERVAL` not the literal 3600; ensures the env-var wiring introduced in task #44 is regression-tested | Low | `tests/test_audit_rotate_interval.py`, `src/llm/telemetry.py` | 44 | ✅ Done |
 | 51 | **Export streaming functions via `llm/__init__.py`** — add `chat_ollama_stream`, `call_provider_stream`, `call_provider`, and `ProviderResponse` to the `_LAZY_EXPORTS` dict in `src/llm/__init__.py` so callers can do `from llm import call_provider_stream` without importing from `llm.providers` directly; note `chat_openai_stream`/`chat_anthropic_stream` do not exist as public functions (only private `_stream_openai`/`_stream_anthropic`) so only real public symbols are exported | Low | `src/llm/__init__.py` | — | ✅ Done |
 | 52 | **Add `chat_openai_stream` and `chat_anthropic_stream` public wrappers in `llm/providers.py`** — `_stream_openai` and `_stream_anthropic` are private async generators used internally by `call_provider_stream`; expose them as public `chat_openai_stream(messages, ...)` and `chat_anthropic_stream(messages, ...)` functions with the same signature convention as `chat_ollama_stream` so external callers can stream directly from a single provider without going through `call_provider_stream`; once added, export them via `llm/__init__.py` lazy loader (complement to task #51) | Low | `src/llm/providers.py`, `src/llm/__init__.py` | 51 | ⬜ Open |
@@ -305,10 +336,13 @@ CodingRouteDecision(matches: bool, reason: str)
 | 54 | **Standardise module-level `import os` alias to `_os` in `providers.py`** — the file currently uses the unaliased `import os` while all other stdlib imports (`json as _json`, `time as _time`) use the underscore-prefix convention; rename the module-level import to `import os as _os` and update all ~25 call sites (`os.getenv(...)` → `_os.getenv(...)`) so the import style is consistent throughout the module; no behaviour change, pure style hygiene; depends on #52 being merged first | Low | `src/llm/providers.py` | 52 | ⬜ Open |
 | 53 | **Add `POST /health/llm/reset` endpoint to reset token counters at runtime** — now that `/health/llm` exposes live token usage, operators need a way to reset counters without restarting the bot; add a `POST /health/llm/reset` route in `src/discord_web.py` that calls `reset_token_usage()` (optionally scoped to a single provider via `?provider=` query param) and returns the zeroed-out summary; protect the endpoint with the existing `_require_api_action_auth` guard so only authenticated callers can reset metrics | Low | `src/discord_web.py` | 47 | 📋 Proposed |
 | 55 | **Unit tests for `telemetry.record()` disabled / enabled paths** — add `tests/test_telemetry_record.py` covering: (1) `record()` is a no-op when `_ENABLED=False` (no file written); (2) when `_ENABLED=True`, calling `record()` appends a valid JSONL line to `_LOG_PATH` with all expected fields; (3) `record()` swallows write exceptions without raising; (4) `tail()` returns the last N records as parsed dicts; (5) `summarise()` returns the no-records message when given an empty list; patches `_LOG_PATH` and `_ENABLED` via `monkeypatch.setattr` so real files are never touched | Low | `tests/test_telemetry_record.py` | 49 | ⬜ Open |
+| 56 | **Unit tests for `telemetry_alert.py` latency and success-rate logic** — add `tests/test_telemetry_alert.py` with pytest cases covering: (1) `percentile()` returns correct value for p50/p95/p99 on a known sorted list; (2) `compute_latencies()` groups values by provider correctly; (3) `--max-latency` flag triggers exit 1 and prints the correct provider line when p95 exceeds the limit; (4) combined success-rate failure and latency failure both appear in output and exit is still 1; (5) all-OK path exits 0 and prints the combined summary line; (6) `--latency-percentile 50` uses median instead of p95; drives all cases via `subprocess.run` or by importing `main()` with `monkeypatch` on `sys.argv`; depends on task #43 | Low | `tests/test_telemetry_alert.py` | 43 | 📋 Proposed |
 
 | 50 | **Unit tests for `chat_openai_stream` and `chat_anthropic_stream`** — add `tests/test_provider_streaming.py` with 6 tests: (1) openai SSE tokens yielded in order, (2) `[DONE]` sentinel causes clean stop, (3) malformed JSON lines skipped with valid tokens still yielded, (4) proxy URL used when `COPILOT_PROXY_ENABLED=True`, (5) anthropic `content_block_delta` events yield tokens, (6) `message_stop` event causes clean termination | Low | `tests/test_provider_streaming.py` | 1, 27 | 🔄 In Progress — Agent t50-stream-tests |
 | 56 | **Fix remaining `test_model_selection.py` failures caused by missing `SKILLS` attribute and stale Gemini routing assumptions** — after task #48 corrected the provider patches, 6 tests still fail: two raise `AttributeError: module 'llm.chat' has no attribute 'SKILLS'` (the tests patch `llm.chat.SKILLS` but the attribute no longer lives there after a refactor), and four stream tests get a real Gemini response instead of the mocked Copilot reply because `COPILOT_PROXY_ENABLED` is checked outside the inline-import scope; fix by (1) updating `SKILLS` patch targets to the correct module (likely `skills.reporting_skills` or wherever the constant now lives), and (2) auditing `chat_stream` routing logic to ensure the `COPILOT_PROXY_ENABLED` guard reads from the patched `llm.providers` namespace at call time, not an earlier-bound local | Low | `tests/test_model_selection.py` | 48 | 📋 Proposed |
 | 57 | **`scripts/mini_model_eval_summary.py` — eval log analyser** — `log_mini_model_eval()` (task #32) writes `data/mini_model_eval.jsonl` but there is no tool to read it; add `scripts/mini_model_eval_summary.py` that reads the JSONL log and prints: (1) total mini-model selections vs near-miss "full" selections, (2) word-count histogram (bins: ≤10, 11-25, 26-50, 51-75, >75), (3) estimated token savings assuming mini-model costs 0.15× full-model; the script should accept `--path` (override log path), `--tail N` (last N records only), and `--json` (output raw summary as JSON for dashboarding); this completes the original task #32 scope which specified the summary script | Low | `scripts/mini_model_eval_summary.py` | 32 | 📋 Proposed |
+| 58 | **Integration tests for `check_proxy_health()` against a local HTTP stub** — complement the unit tests in `tests/test_proxy_health_loop.py` (task #49) with `tests/test_proxy_health_integration.py` that drives the real `check_proxy_health()` function end-to-end using `pytest-aiohttp`'s `aiohttp_server` fixture: (1) server returns HTTP 200 → `proxy_is_healthy()` becomes `True`; (2) server returns HTTP 503 → `proxy_is_healthy()` becomes `False`; (3) server closes the connection (no response) → `_proxy_healthy` becomes `False` and no exception propagates; (4) `check_proxy_health(timeout=0.01)` with a server that sleeps 0.5 s → returns `False` without hanging; patches `COPILOT_PROXY_URL` via `monkeypatch.setenv` and reloads the module so the real URL points at the local stub; validates the actual HTTP logic that the unit tests skip | Low | `tests/test_proxy_health_integration.py` | 49 | 📋 Proposed |
+| 59 | **Unit tests for `retry_count` telemetry propagation** — task #34 added `retry_count` to `ProviderResponse` and `_call_with_retry`, but has no dedicated tests; add `tests/test_retry_telemetry.py` covering: (1) `_call_with_retry` returns `(result, 0)` on first-try success; (2) returns `(result, 1)` after one transient failure (HTTP 429); (3) raises after all retries exhausted; (4) `_call_one("openai", …)` sets `resp.retry_count=0` on success and `resp.retry_count=1` after one retry; (5) `telemetry.record()` writes `"retry_count": N` to the JSONL entry; use `aioresponses` or `AsyncMock` to inject HTTP 429 → 200 sequences | Low | `tests/test_retry_telemetry.py` | 34 | 📋 Proposed |
 
 ### Suggested dispatch waves
 
