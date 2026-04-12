@@ -639,6 +639,23 @@ async def chat_stream(
                     ]
                     yield fn_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
                     return
+            # Phase 29: Copilot fast-path for coding/programming queries
+            from model_router import COPILOT_PROXY_ENABLED
+            from model_routing_policy import select_coding_route
+            if COPILOT_PROXY_ENABLED:
+                coding_route = select_coding_route(cleaned_user_message)
+                if coding_route.matches:
+                    result = await _try_copilot_proxy_reply(
+                        model_message=model_message,
+                        cleaned_user_message=cleaned_user_message,
+                        history=history,
+                        context="coding-fast-path",
+                    )
+                    if result is not None:
+                        reply, updated, model_label = result
+                        _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                        yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
+                        return
         except Exception as _fp_exc:
             log.warning("Stream fast-path failed, falling through to standard routing: %s", _fp_exc)
 
@@ -1103,6 +1120,22 @@ async def chat(
                         {"role": "model", "parts": [fn_reply]},
                     ]
                     return fn_reply, updated, "perplexity-direct"
+            # Phase 29: Copilot fast-path for coding/programming queries
+            from model_router import COPILOT_PROXY_ENABLED
+            from model_routing_policy import select_coding_route
+            if COPILOT_PROXY_ENABLED:
+                coding_route = select_coding_route(cleaned_user_message)
+                if coding_route.matches:
+                    result = await _try_copilot_proxy_reply(
+                        model_message=model_message,
+                        cleaned_user_message=cleaned_user_message,
+                        history=history,
+                        context="coding-fast-path",
+                    )
+                    if result is not None:
+                        reply, updated, model_label = result
+                        _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                        return reply, updated, model_label
         except Exception as _rt_exc:
             log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
 
@@ -1312,10 +1345,11 @@ async def chat(
     # Phase 28: Quality retry gate — if Gemini returns a low-quality answer and
     # Copilot is available, retry once with Copilot before returning.
     try:
-        from answer_policy import is_low_quality
+        from answer_policy import is_low_quality, record_quality_retry
         from model_router import COPILOT_PROXY_ENABLED
         if is_low_quality(text) and COPILOT_PROXY_ENABLED:
             log.info("Quality retry gate triggered — Gemini reply too short/vague, trying Copilot")
+            record_quality_retry()
             copilot_result = await _try_copilot_proxy_reply(
                 model_message=model_message,
                 cleaned_user_message=cleaned_user_message,
@@ -1331,6 +1365,9 @@ async def chat(
         log.debug("Quality retry gate skipped: %s", _qr_exc)
 
     return text, updated_history, model_name
+
+
+def is_configured() -> bool:
     """Return True if at least one LLM backend is configured.
 
     Checks Gemini, local LLM, and Copilot proxy so Copilot-only

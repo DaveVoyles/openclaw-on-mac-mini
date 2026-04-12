@@ -1616,6 +1616,13 @@
             <summary style="cursor:pointer;color:var(--muted);font-size:0.82rem">Last 10 Responses</summary>
             <div id="resp-sparkline" style="display:flex;align-items:flex-end;gap:3px;height:60px;padding-top:0.5rem"></div>
           </details>
+          <details style="margin-top:0.5rem">
+            <summary style="cursor:pointer;color:var(--muted);font-size:0.82rem">Per-provider latency</summary>
+            <div id="resp-by-model" style="margin-top:0.5rem;font-size:0.82rem"></div>
+          </details>
+          <div style="margin-top:0.75rem;font-size:0.82rem;color:var(--muted)">
+            Quality retries: <span id="resp-quality-retries" style="color:var(--gold);font-weight:bold">—</span> <span style="color:var(--muted)">(session)</span>
+          </div>
         </div>
 
         <!-- Memory Health (Auto-Dream) -->
@@ -2437,7 +2444,7 @@
 
         <div class="footer">
           OpenClaw &mdash; built with Heritage Blue &#128153; &mdash;
-          <span id="refresh-ts"></span>
+          <span id="refresh-ts"></span> &mdash; ⟳ <span id="refresh-countdown">60s</span>
         </div>
       </div>
       <!-- /app -->
@@ -2627,6 +2634,10 @@
         const pplxCache = sp.perplexity_cache || {hits: 0, live_entries: 0};
         document.getElementById("sp-pplx-cache-hits").textContent = (pplxCache.hits || 0).toLocaleString();
         document.getElementById("sp-pplx-cache-size").textContent = `${pplxCache.live_entries || 0} live`;
+
+        // Quality retry counter
+        const qrEl = document.getElementById('resp-quality-retries');
+        if (qrEl) qrEl.textContent = (sp.quality_retries || 0).toLocaleString();
 
         // Firecrawl stats
         const fc = sp.firecrawl || {calls: 0, pages_scraped: 0, total_cost_usd: 0};
@@ -4048,7 +4059,18 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadChannelProfileRecommendations({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
+      let _refreshCountdown = 60;
+      function _resetCountdown() {
+          _refreshCountdown = 60;
+          const el = document.getElementById('refresh-countdown');
+          if (el) el.textContent = '60s';
+      }
+      setInterval(() => {
+          _refreshCountdown = Math.max(0, _refreshCountdown - 1);
+          const el = document.getElementById('refresh-countdown');
+          if (el) el.textContent = _refreshCountdown + 's';
+      }, 1000);
+      setInterval(() => { _resetCountdown(); refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadChannelProfileRecommendations({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -4172,14 +4194,41 @@
               const last10 = data.last_10 || [];
               if (last10.length === 0) {
                   container.innerHTML = '<span style="color:var(--muted);font-size:0.78rem">No data yet</span>';
-                  return;
+              } else {
+                  const maxVal = Math.max(...last10, 1);
+                  container.innerHTML = last10.map(ms => {
+                      const pct = Math.max(5, (ms / maxVal) * 100);
+                      const color = ms > (data.p95_ms || Infinity) ? 'var(--orange)' : 'var(--spirit-blue)';
+                      return '<div style="flex:1;background:' + color + ';height:' + pct + '%;border-radius:2px 2px 0 0;min-width:8px" title="' + ms + ' ms"></div>';
+                  }).join('');
               }
-              const maxVal = Math.max(...last10, 1);
-              container.innerHTML = last10.map(ms => {
-                  const pct = Math.max(5, (ms / maxVal) * 100);
-                  const color = ms > (data.p95_ms || Infinity) ? 'var(--orange)' : 'var(--spirit-blue)';
-                  return '<div style="flex:1;background:' + color + ';height:' + pct + '%;border-radius:2px 2px 0 0;min-width:8px" title="' + ms + ' ms"></div>';
-              }).join('');
+
+              // Per-model breakdown
+              const byModel = data.by_model || {};
+              const byModelEl = document.getElementById('resp-by-model');
+              if (byModelEl) {
+                  const entries = Object.entries(byModel).sort((a, b) => b[1].count - a[1].count);
+                  if (entries.length === 0) {
+                      byModelEl.innerHTML = '<span style="color:var(--muted)">No data yet</span>';
+                  } else {
+                      byModelEl.innerHTML = '<table style="width:100%;border-collapse:collapse">' +
+                          '<thead><tr>' +
+                          '<th style="text-align:left;color:var(--muted);font-weight:normal;padding:0.2rem 0.4rem">Provider</th>' +
+                          '<th style="text-align:right;color:var(--muted);font-weight:normal;padding:0.2rem 0.4rem">Calls</th>' +
+                          '<th style="text-align:right;color:var(--muted);font-weight:normal;padding:0.2rem 0.4rem">Avg ms</th>' +
+                          '<th style="text-align:right;color:var(--muted);font-weight:normal;padding:0.2rem 0.4rem">P95 ms</th>' +
+                          '</tr></thead><tbody>' +
+                          entries.map(([model, s]) =>
+                              '<tr>' +
+                              '<td style="padding:0.2rem 0.4rem">' + esc(model) + '</td>' +
+                              '<td style="text-align:right;padding:0.2rem 0.4rem;color:var(--muted)">' + s.count + '</td>' +
+                              '<td style="text-align:right;padding:0.2rem 0.4rem;color:var(--spirit-blue)">' + (s.avg_ms || 0).toLocaleString() + '</td>' +
+                              '<td style="text-align:right;padding:0.2rem 0.4rem;color:var(--gold)">' + (s.p95_ms || 0).toLocaleString() + '</td>' +
+                              '</tr>'
+                          ).join('') +
+                          '</tbody></table>';
+                  }
+              }
           }).catch(() => {});
       }
 

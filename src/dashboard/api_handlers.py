@@ -58,6 +58,15 @@ def _get_perplexity_cache_stats() -> dict:
         return {"size": 0, "live_entries": 0, "hits": 0, "ttl_seconds": 300}
 
 
+def _get_quality_retry_count() -> int:
+    """Return quality retry count from answer_policy without hard-importing."""
+    try:
+        from answer_policy import get_quality_retry_count
+        return get_quality_retry_count()
+    except Exception:
+        return 0
+
+
 def _normalize_event_counts(raw_counts: object) -> dict[str, int]:
     if not isinstance(raw_counts, dict):
         return {}
@@ -1923,6 +1932,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "firecrawl": sp._data.get("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}}),
             "copilot": sp._data.get("copilot", {"calls": 0, "daily": {}}),
             "perplexity_cache": _get_perplexity_cache_stats(),
+            "quality_retries": _get_quality_retry_count(),
         },
         "daily_tokens": daily_tokens,
         "skills": skills_list,

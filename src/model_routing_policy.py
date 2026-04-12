@@ -682,6 +682,67 @@ def select_finance_route(query: str) -> FinanceRouteDecision:
 
 
 # ---------------------------------------------------------------------------
+# Coding / programming route selection  (Phase 29)
+# ---------------------------------------------------------------------------
+
+_CODING_PATTERNS = _re.compile(
+    r"\b("
+    r"(?:debug(?:ging)?|fix\s+(?:the\s+)?(?:bug|error|issue|code|this))"
+    r"|(?:refactor(?:ing)?)"
+    r"|(?:implement(?:ing)?)"
+    r"|(?:write\s+(?:a\s+)?(?:function|class|script|test|method|module|program|snippet))"
+    r"|(?:code\s+review)"
+    r"|(?:syntax\s+error)"
+    r"|(?:traceback|stack\s+trace)"
+    r"|(?:import\s+error|module\s+not\s+found|nameerror|typeerror|valueerror|attributeerror|keyerror|indexerror)"
+    r"|(?:how\s+(?:do\s+i|to)\s+(?:write|code|implement|create|build|fix|debug))"
+    r"|(?:python|javascript|typescript|rust|golang|java\b|c\+\+|c#|kotlin|swift|ruby|php|bash|shell\s+script|sql|react|vue|angular|django|fastapi|flask|node(?:\.js)?)"
+    r"|(?:async(?:hronous)?|await|coroutine|decorator|lambda|generator|iterator|recursion)"
+    r"|(?:unit\s+test|pytest|jest|mocha|test\s+case)"
+    r"|(?:git\s+(?:commit|merge|rebase|branch|push|pull|diff|blame|stash))"
+    r"|(?:docker(?:file)?|kubernetes|k8s|container)"
+    r"|(?:api\s+(?:endpoint|route|call|request|response)|rest(?:ful)?|graphql)"
+    r"|(?:regex|regular\s+expression)"
+    r"|(?:linting|type\s+hints?|mypy|eslint|prettier)"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class CodingRouteDecision:
+    """Routing decision for coding / programming queries."""
+
+    matches: bool
+    reason: str
+
+
+def select_coding_route(query: str) -> CodingRouteDecision:
+    """Decide whether a query should be fast-pathed to the Copilot proxy.
+
+    Matches debugging, refactoring, implementation requests, language keywords,
+    and common programming error types. When matched, callers should route to
+    ``_try_copilot_proxy_reply`` (only when ``COPILOT_PROXY_ENABLED``).
+
+    Args:
+        query: The raw user query string.
+
+    Returns:
+        A ``CodingRouteDecision`` with ``matches=True`` when the query is a
+        coding/programming query, ``matches=False`` otherwise.
+    """
+    if _CODING_PATTERNS.search(query or ""):
+        return CodingRouteDecision(
+            matches=True,
+            reason="coding/programming query → Copilot",
+        )
+    return CodingRouteDecision(
+        matches=False,
+        reason="no coding pattern detected",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Research synthesis route selection
 # ---------------------------------------------------------------------------
 

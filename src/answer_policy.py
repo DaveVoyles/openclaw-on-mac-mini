@@ -20,7 +20,26 @@ __all__ = [
     "response_seems_valid",
     "should_return_directly",
     "is_low_quality",
+    "record_quality_retry",
+    "get_quality_retry_count",
 ]
+
+# ---------------------------------------------------------------------------
+# Quality retry counter
+# ---------------------------------------------------------------------------
+
+_quality_retry_count: int = 0
+
+
+def record_quality_retry() -> None:
+    """Increment counter when quality retry gate fires."""
+    global _quality_retry_count
+    _quality_retry_count += 1
+
+
+def get_quality_retry_count() -> int:
+    """Return the number of quality retries fired this session."""
+    return _quality_retry_count
 
 # ---------------------------------------------------------------------------
 # Gemma hallucination patterns

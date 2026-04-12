@@ -368,6 +368,22 @@ def get_response_stats() -> dict:
         return {"count": 0, "avg_ms": 0, "p50_ms": 0, "p95_ms": 0, "p99_ms": 0, "last_10": []}
     times = sorted(r["ms"] for r in _response_times)
     n = len(times)
+
+    # Per-model breakdown
+    per_model: dict[str, list[float]] = {}
+    for entry in _response_times:
+        m = entry.get("model", "unknown")
+        per_model.setdefault(m, []).append(entry["ms"])
+    by_model = {}
+    for m, ms_list in per_model.items():
+        ms_sorted = sorted(ms_list)
+        mn = len(ms_sorted)
+        by_model[m] = {
+            "count": mn,
+            "avg_ms": round(sum(ms_sorted) / mn, 0),
+            "p95_ms": round(ms_sorted[int(mn * 0.95)], 0) if mn >= 20 else round(ms_sorted[-1], 0),
+        }
+
     return {
         "count": n,
         "avg_ms": round(sum(times) / n, 0),
@@ -375,6 +391,7 @@ def get_response_stats() -> dict:
         "p95_ms": round(times[int(n * 0.95)], 0) if n >= 20 else round(times[-1], 0),
         "p99_ms": round(times[int(n * 0.99)], 0) if n >= 100 else round(times[-1], 0),
         "last_10": [round(r["ms"], 0) for r in list(_response_times)[-10:]],
+        "by_model": by_model,
     }
 
 
