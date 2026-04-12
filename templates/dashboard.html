@@ -1322,11 +1322,10 @@
               <span style="color: var(--text); font-weight: 700; font-size: 0.95rem;">Value Unlocked</span>
             </div>
             <div style="color: var(--muted); font-size: 0.82rem; line-height: 1.6;">
-              <strong style="color: var(--mint-green);">$0/month cost</strong> with free-tier APIs delivering
-              <strong style="color: var(--gold);">$500-700/month value</strong> in premium data.
+              <strong style="color: var(--mint-green);"><span id="vu-total-cost">$0.00</span> total API spend</strong> across all providers
               <br>
-              <strong style="color: var(--spirit-blue);">225 total queries/day</strong> across all providers
-              • <strong style="color: var(--text);">24+ new skills</strong> added
+              <strong style="color: var(--spirit-blue);">Real-time data</strong> from Perplexity, Firecrawl, Gemini &amp; Copilot
+              • <strong style="color: var(--text);"><span id="vu-skill-count">—</span> skills</strong> available
               • <strong style="color: var(--mint-green);">107 new tests</strong> (100% pass rate)
               • <strong style="color: var(--gold);">1,800+ lines</strong> of new documentation
             </div>
@@ -1569,7 +1568,7 @@
             </div>
             <div style="color: var(--muted); font-size: 0.82rem; line-height: 1.6;">
               <strong style="color: var(--gold);">Live command index</strong> (runtime source of truth)
-              • <strong style="color: var(--spirit-blue);">165+ skills</strong> (was 141)
+              • <strong style="color: var(--spirit-blue);"><span id="pi-skill-count">—</span> skills</strong> (was 141)
               • <strong style="color: var(--mint-green);">11 APIs</strong> (was 4)
               • <strong style="color: var(--text);">1,167+ tests</strong> (was 767)
               <br>
@@ -2352,7 +2351,7 @@
             "
           >
             Autonomous capabilities the AI uses behind the scenes when answering
-            your <code>/ask</code> queries. <strong style="color: var(--gold);">165+ total skills</strong> including 24+ from v0.12.0 for news (3), sports (4), finance (4), digests (11), synthesis (4), trends (6+), plus Phase 3 & 4 additions for Polygon.io, Trakt.tv, Fitbit, workflows, exports, plugins, and metrics.
+            your <code>/ask</code> queries. <strong style="color: var(--gold);"><span id="skills-desc-count">—</span> total skills</strong> including 24+ from v0.12.0 for news (3), sports (4), finance (4), digests (11), synthesis (4), trends (6+), plus Phase 3 &amp; 4 additions for Polygon.io, Trakt.tv, Fitbit, workflows, exports, plugins, and metrics.
             Most of the time you can just ask in plain English and let OpenClaw pick
             the right ones for you.
           </p>
@@ -2634,6 +2633,14 @@
         document.getElementById("qs-pplx-calls").textContent = (pplx.calls || 0).toLocaleString();
         document.getElementById("qs-total-cost").textContent = `$${totalCost.toFixed(4)}`;
         document.getElementById("qs-copilot-calls").textContent = (cop.calls || 0).toLocaleString();
+
+        // Value Unlocked + Phase Impact cards — replace hardcoded skill counts and spend
+        const totalSpend = (sp.total_cost || 0) + (pplx.total_cost_usd || 0) + (fc.total_cost_usd || 0);
+        const skillCount = d.skill_count || 0;
+        document.getElementById("vu-total-cost").textContent = `$${totalSpend.toFixed(2)}`;
+        document.getElementById("vu-skill-count").textContent = skillCount.toLocaleString();
+        document.getElementById("pi-skill-count").textContent = skillCount.toLocaleString();
+        document.getElementById("skills-desc-count").textContent = skillCount.toLocaleString();
 
         // Daily chart
         const days = Object.entries(sp.daily)
