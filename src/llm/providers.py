@@ -125,6 +125,41 @@ def proxy_is_healthy() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Proxy health background loop
+# ---------------------------------------------------------------------------
+
+_PROXY_HEALTH_INTERVAL = float(os.getenv("PROXY_HEALTH_INTERVAL", "60.0"))
+_health_task: asyncio.Task | None = None
+
+
+async def _proxy_health_loop() -> None:
+    """Background loop re-pinging proxy every PROXY_HEALTH_INTERVAL seconds."""
+    while True:
+        await asyncio.sleep(_PROXY_HEALTH_INTERVAL)
+        try:
+            await check_proxy_health()
+        except Exception as exc:
+            log.debug("Proxy health loop error (non-fatal): %s", exc)
+
+
+def start_proxy_health_loop() -> asyncio.Task:
+    """Start the background health loop; safe to call multiple times (idempotent)."""
+    global _health_task
+    if _health_task is None or _health_task.done():
+        _health_task = asyncio.get_event_loop().create_task(_proxy_health_loop())
+        log.info("Proxy health loop started (interval=%.0fs)", _PROXY_HEALTH_INTERVAL)
+    return _health_task
+
+
+def stop_proxy_health_loop() -> None:
+    """Cancel the background loop (for clean shutdown / tests)."""
+    global _health_task
+    if _health_task and not _health_task.done():
+        _health_task.cancel()
+    _health_task = None
+
+
+# ---------------------------------------------------------------------------
 # Shared HTTP session
 # ---------------------------------------------------------------------------
 

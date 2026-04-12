@@ -464,13 +464,16 @@ class OpenClawBot(commands.Bot):
         except Exception as exc:
             log.warning("Provider scan failed: %s", exc)
 
-        # Schedule hourly audit log rotation background task
-        async def _audit_log_rotation_loop() -> None:
-            while True:
-                await asyncio.sleep(3600)
-                try:
-                    from llm.telemetry import rotate_audit_log
+        from llm.providers import start_proxy_health_loop
+        start_proxy_health_loop()
 
+        # Schedule audit log rotation background task (interval via AUDIT_ROTATE_INTERVAL env var)
+        async def _audit_log_rotation_loop() -> None:
+            from llm.telemetry import _AUDIT_ROTATE_INTERVAL, rotate_audit_log
+
+            while True:
+                await asyncio.sleep(_AUDIT_ROTATE_INTERVAL)
+                try:
                     await rotate_audit_log()
                 except Exception as exc:  # noqa: BLE001
                     log.debug("Audit log rotation failed: %s", exc)
