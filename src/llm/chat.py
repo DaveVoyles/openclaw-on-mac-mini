@@ -1308,10 +1308,29 @@ async def chat(
         )
         return text, updated_history, model_name
     updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, model_message)
+
+    # Phase 28: Quality retry gate — if Gemini returns a low-quality answer and
+    # Copilot is available, retry once with Copilot before returning.
+    try:
+        from answer_policy import is_low_quality
+        from model_router import COPILOT_PROXY_ENABLED
+        if is_low_quality(text) and COPILOT_PROXY_ENABLED:
+            log.info("Quality retry gate triggered — Gemini reply too short/vague, trying Copilot")
+            copilot_result = await _try_copilot_proxy_reply(
+                model_message=model_message,
+                cleaned_user_message=cleaned_user_message,
+                history=history,
+                context="quality-retry",
+            )
+            if copilot_result is not None:
+                cp_reply, cp_updated, cp_label = copilot_result
+                if not is_low_quality(cp_reply):
+                    return cp_reply, cp_updated, cp_label
+                log.info("Quality retry Copilot reply also low quality — keeping Gemini answer")
+    except Exception as _qr_exc:
+        log.debug("Quality retry gate skipped: %s", _qr_exc)
+
     return text, updated_history, model_name
-
-
-def is_configured() -> bool:
     """Return True if at least one LLM backend is configured.
 
     Checks Gemini, local LLM, and Copilot proxy so Copilot-only

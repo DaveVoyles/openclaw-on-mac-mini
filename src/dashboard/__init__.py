@@ -6,6 +6,9 @@ Re-exports all public symbols for backward compatibility so that
 """
 
 from .api_handlers import (  # noqa: F401
+    api_agent_session_detail_handler,
+    api_agent_session_intervention_handler,
+    api_agent_sessions_handler,
     api_approval_decision_handler,
     api_approvals_handler,
     api_channel_memory_action_handler,
@@ -19,6 +22,8 @@ from .api_handlers import (  # noqa: F401
     api_goals_handler,
     api_knowledge_graph_handler,
     api_memories_handler,
+    api_plan_detail_handler,
+    api_plans_handler,
     api_quality_eval_handler,
     api_quality_metrics_handler,
     api_quota_status_handler,
@@ -26,6 +31,8 @@ from .api_handlers import (  # noqa: F401
     api_response_stats_handler,
     api_runs_handler,
     api_schedule_delete_handler,
+    api_schedule_toggle_handler,
+    api_schedule_update_handler,
     api_schedules_handler,
     api_search_stats_handler,
     api_skill_stats_handler,
@@ -33,12 +40,18 @@ from .api_handlers import (  # noqa: F401
     api_sms_settings_handler,
     api_sms_status_handler,
     api_status_handler,
+    api_task_status_detail_handler,
+    api_task_status_handler,
     api_threads_handler,
     api_topology_handler,
 )
 from .html_handlers import (  # noqa: F401
     dashboard_handler,
     guide_handler,
+    openclaw_cli_download_handler,
+    openclaw_cli_installer_handler,
+    openclaw_cli_remote_installer_handler,
+    openclaw_cli_support_download_handler,
     terminal_handler,
 )
 from .routes import setup_dashboard  # noqa: F401
@@ -46,6 +59,11 @@ from .routes import setup_dashboard  # noqa: F401
 __all__ = [
     "setup_dashboard",
     # API handlers
+    "api_agent_session_intervention_handler",
+    "api_agent_session_detail_handler",
+    "api_agent_sessions_handler",
+    "api_plan_detail_handler",
+    "api_plans_handler",
     "api_approvals_handler",
     "api_approval_decision_handler",
     "api_config_status_handler",
@@ -66,6 +84,8 @@ __all__ = [
     "api_response_stats_handler",
     "api_runs_handler",
     "api_schedule_delete_handler",
+    "api_schedule_toggle_handler",
+    "api_schedule_update_handler",
     "api_schedules_handler",
     "api_search_stats_handler",
     "api_sms_history_handler",
@@ -73,10 +93,16 @@ __all__ = [
     "api_sms_status_handler",
     "api_skill_stats_handler",
     "api_status_handler",
+    "api_task_status_detail_handler",
+    "api_task_status_handler",
     "api_threads_handler",
     "api_topology_handler",
     # HTML handlers
     "dashboard_handler",
     "guide_handler",
+    "openclaw_cli_download_handler",
+    "openclaw_cli_installer_handler",
+    "openclaw_cli_remote_installer_handler",
+    "openclaw_cli_support_download_handler",
     "terminal_handler",
 ]

@@ -40,20 +40,18 @@ _STUB_MODULES = [
     "trace_context",
     "vector_store",
     "rules_engine",
-    "user_profile",
-    "fact_extractor",
-    "goal_tracker",
-    "error_tracker",
+    # user_profile, fact_extractor, goal_tracker, error_tracker are lazily
+    # imported inside ask_handler functions (not at module level), so they do
+    # NOT need to be stubbed here. Stubbing them here caused sys.modules
+    # pollution that broke tests in sibling xdist workers.
     "spending",
     "table_renderer",
 ]
 
-# Record which modules are ALREADY in sys.modules as real modules BEFORE we
-# stub anything.  The restore loop below will pop+reimport all stubs after
-# ask_handler is loaded.  The two test files collected before us (test_approvals.py
-# and test_bot_core.py) have their specific tests fixed to work with the new
-# module objects via the `_restore_pre_cached_modules` fixture.
-_PRE_CACHED_REAL = {name for name in _STUB_MODULES if name in sys.modules}
+# Save originals BEFORE installing stubs so we can restore them reliably
+# without needing to re-import from disk (which can fail if sys.path isn't
+# fully resolved when the cleanup runs in certain xdist workers).
+_SAVED_MODULES = {name: sys.modules[name] for name in _STUB_MODULES if name in sys.modules}
 
 for _mod_name in _STUB_MODULES:
     sys.modules.setdefault(_mod_name, _make_mock_module(_mod_name))
@@ -128,6 +126,7 @@ _mem_obj.get.return_value = None  # set later in _reset_stubs
 _mem_obj.cleanup_expired = MagicMock()
 _memory_stub.store = _mem_obj
 _memory_stub.get_model_preference = MagicMock(return_value="auto")
+_memory_stub.get_routing_profile = MagicMock(return_value="auto")
 # Add attributes expected by conftest._patch_memory_dirs
 _memory_stub.MEMORY_DIR = MagicMock()
 _memory_stub.THREADS_DIR = MagicMock()
@@ -145,6 +144,7 @@ _fmt_stub.extract_image_url = MagicMock(return_value=None)
 _fmt_stub.format_markdown_for_discord = MagicMock(side_effect=lambda x: x)
 _fmt_stub.format_tables_for_context = MagicMock(side_effect=lambda x, **kw: x)
 _fmt_stub.split_response = MagicMock(return_value=["chunk1"])
+_fmt_stub.strip_placeholder_table_rows = MagicMock(side_effect=lambda x: x)
 
 import bot_attachments as _attach_stub
 
@@ -228,17 +228,21 @@ for _rm in [
     "approvals", "ask_orchestrator", "audit", "bot_attachments",
     "bot_formatting", "config", "constants", "llm", "llm.context",
     "memory", "quality_helpers", "response_actions", "runtime_state",
-    "trace_context", "vector_store", "rules_engine", "user_profile",
-    "fact_extractor", "goal_tracker", "error_tracker", "spending",
+    "trace_context", "vector_store", "rules_engine", "spending",
     "table_renderer",
 ]:
-    try:
-        # importlib.import_module returns the cached stub — delete first to force
-        # a real fresh import from disk.
+    if _rm in _SAVED_MODULES:
+        # Restore the original module object directly — avoids re-import failures
+        # that can leave sys.modules[name] as None in some xdist worker setups.
+        sys.modules[_rm] = _SAVED_MODULES[_rm]
+    else:
+        # Module was freshly stubbed (wasn't real before); remove the stub so
+        # subsequent files in this worker get a clean fresh import from disk.
         sys.modules.pop(_rm, None)
-        sys.modules[_rm] = _importlib.import_module(_rm)
-    except Exception:
-        pass  # leave mock in place if real module can't load
+        try:
+            sys.modules[_rm] = _importlib.import_module(_rm)
+        except Exception:
+            pass  # leave absent — will be imported fresh on demand
 
 # ---------------------------------------------------------------------------
 # Patch channel_profile_state.get_channel_roles / get_channel_prompts to avoid
