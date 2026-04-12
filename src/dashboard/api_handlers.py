@@ -1912,6 +1912,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "daily": sp.daily,
             "perplexity": sp._data.get("perplexity", {"calls": 0, "total_cost_usd": 0.0, "daily": {}}),
             "firecrawl": sp._data.get("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}}),
+            "copilot": sp._data.get("copilot", {"calls": 0, "daily": {}}),
         },
         "daily_tokens": daily_tokens,
         "skills": skills_list,

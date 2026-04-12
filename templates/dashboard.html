@@ -655,7 +655,7 @@
             ><span class="btn-icon">&#128218;</span> Guide</a
           >
           <a class="btn" href="/terminal" target="_blank"
-            ><span class="btn-icon">&#9000;</span> Terminal</a
+            ><span class="btn-icon">&#9000;</span> Terminal / CLI</a
           >
           <button class="btn btn-refresh" onclick="refreshData(this)">
             <span class="btn-icon">&#8635;</span> Refresh
@@ -1995,6 +1995,35 @@
           <div id="schedules-list"></div>
         </div>
 
+        <div class="card">
+          <h2>🗺️ Active Plans</h2>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
+            Live agent-loop plans with progress, linked sessions, and task drilldowns.
+          </p>
+          <div id="plans-list"></div>
+          <pre id="plan-detail" style="display:none;margin-top:0.8rem;padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto"></pre>
+        </div>
+
+        <div class="card">
+          <h2>📋 Unified Task Status</h2>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
+            Mission Control and scheduler tasks normalized into one supervision queue.
+          </p>
+          <div id="task-status-list"></div>
+          <pre id="task-status-detail" style="display:none;margin-top:0.8rem;padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto"></pre>
+        </div>
+
+        <div class="card">
+          <h2>🖥️ Terminal Agent Sessions</h2>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.6rem">
+            Recent autonomous CLI sessions, linked plans/tasks, and saved outputs.
+          </p>
+          <div id="agent-sessions-list"></div>
+          <pre id="agent-session-detail" style="display:none;margin-top:0.8rem;padding:0.9rem 1rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px;white-space:pre-wrap;word-break:break-word;max-height:260px;overflow:auto"></pre>
+          <div id="agent-session-watch-insights" style="display:none;margin-top:0.6rem"></div>
+          <div id="agent-session-actions" style="display:none;margin-top:0.65rem"></div>
+        </div>
+
         <!-- Approvals Control Plane -->
         <div class="card">
           <h2>🛡️ Approvals Control Plane</h2>
@@ -2280,20 +2309,20 @@
           <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(104, 172, 229, 0.05); border: 1px solid rgba(104, 172, 229, 0.15); border-radius: 0.5rem;">
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; font-size: 0.8rem;">
               <div style="text-align: center;">
-                <div style="font-size: 1.8rem; font-weight: 700; color: var(--spirit-blue);">11</div>
-                <div style="color: var(--muted);">Premium APIs</div>
+                <div id="qs-gemini-calls" style="font-size: 1.8rem; font-weight: 700; color: var(--spirit-blue);">—</div>
+                <div style="color: var(--muted);">Gemini Calls</div>
               </div>
               <div style="text-align: center;">
-                <div style="font-size: 1.8rem; font-weight: 700; color: var(--mint-green);">235+</div>
-                <div style="color: var(--muted);">Daily Queries</div>
+                <div id="qs-pplx-calls" style="font-size: 1.8rem; font-weight: 700; color: var(--mint-green);">—</div>
+                <div style="color: var(--muted);">Perplexity Searches</div>
               </div>
               <div style="text-align: center;">
-                <div style="font-size: 1.8rem; font-weight: 700; color: var(--gold);">$0</div>
-                <div style="color: var(--muted);">Monthly Cost</div>
+                <div id="qs-total-cost" style="font-size: 1.8rem; font-weight: 700; color: var(--gold);">—</div>
+                <div style="color: var(--muted);">Total Spent</div>
               </div>
               <div style="text-align: center;">
-                <div style="font-size: 1.8rem; font-weight: 700; color: var(--orange);">$850+</div>
-                <div style="color: var(--muted);">Est. Value</div>
+                <div id="qs-copilot-calls" style="font-size: 1.8rem; font-weight: 700; color: var(--orange);">—</div>
+                <div style="color: var(--muted);">Copilot Calls (free)</div>
               </div>
             </div>
           </div>
@@ -2597,6 +2626,14 @@
         fcPagesEl.textContent = `${fcPages} / 500`;
         fcPagesEl.style.color = fcPages >= 450 ? 'var(--danger,#f85149)' : fcPages >= 300 ? '#ff9800' : 'var(--mint-green)';
         document.getElementById("sp-fc-cost").textContent = `$${(fc.total_cost_usd || 0).toFixed(4)}`;
+
+        // Quota card hero stats (real data)
+        const cop = sp.copilot || {calls: 0};
+        const totalCost = (sp.total_cost || 0) + (pplx.total_cost_usd || 0) + (fc.total_cost_usd || 0);
+        document.getElementById("qs-gemini-calls").textContent = (sp.calls || 0).toLocaleString();
+        document.getElementById("qs-pplx-calls").textContent = (pplx.calls || 0).toLocaleString();
+        document.getElementById("qs-total-cost").textContent = `$${totalCost.toFixed(4)}`;
+        document.getElementById("qs-copilot-calls").textContent = (cop.calls || 0).toLocaleString();
 
         // Daily chart
         const days = Object.entries(sp.daily)
@@ -3967,6 +4004,9 @@
           loadGoals();
           loadResearch();
           loadSchedules();
+          loadPlans();
+          loadTaskStatuses();
+          loadAgentSessions();
           loadApprovals();
           loadRunTimeline();
           loadQualityEvals();
@@ -3990,7 +4030,7 @@
       })();
 
       // Auto-refresh every 60s
-      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadChannelProfileRecommendations({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
+      setInterval(() => { refreshData(null); loadMemories(); loadThreads(); loadGoals(); loadResearch(); loadSchedules(); loadPlans(); loadTaskStatuses(); loadAgentSessions(); loadApprovals(); loadRunTimeline(); loadQualityEvals(); loadQualityMetrics(); loadErrors(); loadResponseStats(); loadDreamHealth(); loadSearchStats(); loadQuotaStatus(); loadSkillStats(); loadConfigStatus(); loadSmsPanel(); loadChannelMemoryInspector({ quietIfMissing: true }); loadChannelProfileRecommendations({ quietIfMissing: true }); loadTopology(); refreshStatus(); }, 60000);
 
       // D-5: Live Status Banner
       function refreshStatus() {
@@ -4196,16 +4236,21 @@
               });
       }
 
+      let _scheduleItems = [];
+      let _planItems = [];
+      let _taskStatusItems = [];
+
       // D-4: Scheduled Tasks
       function loadSchedules() {
           fetch('/api/schedules').then(r => r.json()).then(data => {
               const el = document.getElementById('schedules-list');
-              if (!data.tasks || data.tasks.length === 0) {
+              _scheduleItems = data.tasks || [];
+              if (_scheduleItems.length === 0) {
                   el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No scheduled tasks. Use /schedule in Discord.</p>';
                   return;
               }
-              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th id="type-col-header" style="cursor:help;text-decoration:underline dotted;position:relative" data-tooltip="Skill = runs a built-in automation function (e.g. health check, backup)\nPrompt = sends a text prompt to the AI for a freeform response">Type &#9432;</th><th>Status</th><th>Details</th><th></th></tr></thead><tbody>' +
-                  data.tasks.map(t => {
+              el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Schedule</th><th id="type-col-header" style="cursor:help;text-decoration:underline dotted;position:relative" data-tooltip="Skill = runs a built-in automation function (e.g. health check, backup)\nPrompt = sends a text prompt to the AI for a freeform response">Type &#9432;</th><th>Status</th><th>Details</th><th>Actions</th></tr></thead><tbody>' +
+                  _scheduleItems.map(t => {
                       const schedule = t.schedule_human || (
                           t.cron_expression ? `<code>${esc(t.cron_expression)}</code>` :
                                       t.interval >= 1440 ? `Every ${Math.round(t.interval/1440)}d` :
@@ -4215,21 +4260,390 @@
                           ? 'Prompt: Sends this text to the AI each run and returns its freeform response'
                           : 'Skill: Runs a built-in automation function (e.g. health_check, docker_status)';
                       const type = `<span class="type-tip" data-tooltip="${typeTooltip}" style="cursor:help">${typeLabel}</span>`;
-                      const status = t.enabled ? '🟢' : '⏸️';
-                      const details = t.prompt ? esc(t.prompt).substring(0, 60) + (t.prompt.length > 60 ? '…' : '') : esc(t.args);
+                      const status = t.enabled ? '🟢 enabled' : '⏸️ paused';
+                      const details = t.prompt
+                          ? esc(t.prompt).substring(0, 80) + (t.prompt.length > 80 ? '…' : '')
+                          : esc(t.args || '');
+                      const nextRun = t.next_run ? ` • next: ${esc(t.next_run)}` : '';
                       const taskId = esc(t.id || t.name);
+                      const toggleLabel = t.enabled ? 'Pause' : 'Resume';
                       return `<tr id="task-row-${taskId}">
                           <td><code>${esc(t.name)}</code></td>
                           <td>${schedule}</td>
                           <td>${type}</td>
                           <td>${status}</td>
-                          <td style="font-size:0.75rem;color:var(--muted)">${details}</td>
-                          <td><button onclick="deleteTask('${taskId}')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem" title="Delete task">✕</button></td>
+                          <td style="font-size:0.75rem;color:var(--muted)">${details}${nextRun}</td>
+                          <td style="white-space:nowrap">
+                            <button onclick="editTask('${taskId}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem;margin-right:0.25rem" title="Edit task">Edit</button>
+                            <button onclick="toggleTask('${taskId}')" style="background:rgba(241,196,0,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem;margin-right:0.25rem" title="Toggle task">${toggleLabel}</button>
+                            <button onclick="deleteTask('${taskId}')" style="background:var(--danger,#f85149);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem" title="Delete task">✕</button>
+                          </td>
                       </tr>`;
                   }).join('') + '</tbody></table>';
-              // Attach tooltip listeners to Type column elements
               _attachTypeTooltips();
           }).catch(() => {});
+      }
+
+      function toggleTask(taskId) {
+        fetch(`/api/schedules/${encodeURIComponent(taskId)}/toggle`, {
+          method: 'POST',
+          headers: _actionAuthHeaders('dashboard-ui'),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (!data.ok) {
+              alert(data.error || 'Failed to toggle task');
+              return;
+            }
+            loadSchedules();
+            loadTaskStatuses();
+          })
+          .catch(err => alert('Failed to toggle task: ' + err));
+      }
+
+      function editTask(taskId) {
+        const task = (_scheduleItems || []).find(item => (item.id || item.name) === taskId);
+        if (!task) {
+          alert('Task not found');
+          return;
+        }
+        const nextName = prompt('Task name / action:', task.name || '');
+        if (nextName === null) return;
+        const nextPrompt = prompt('Prompt (leave blank for skill tasks):', task.prompt || '');
+        if (nextPrompt === null) return;
+        const nextCron = prompt('Cron expression (blank to keep existing):', task.cron_expression || '');
+        if (nextCron === null) return;
+        const intervalRaw = prompt('Interval minutes (blank for none):', task.interval ? String(task.interval) : '');
+        if (intervalRaw === null) return;
+        const payload = {
+          name: nextName,
+          prompt: nextPrompt,
+          cron_expression: nextCron,
+          interval_minutes: intervalRaw === '' ? '' : Number(intervalRaw),
+          enabled: !!task.enabled,
+        };
+        fetch(`/api/schedules/${encodeURIComponent(taskId)}`, {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, _actionAuthHeaders('dashboard-ui')),
+          body: JSON.stringify(payload),
+        })
+          .then(r => r.json())
+          .then(data => {
+            if (!data.ok) {
+              alert(data.error || 'Failed to update task');
+              return;
+            }
+            loadSchedules();
+            loadTaskStatuses();
+          })
+          .catch(err => alert('Failed to update task: ' + err));
+      }
+
+      function loadPlans() {
+        fetch('/api/plans?status=in-progress&limit=10').then(r => r.json()).then(data => {
+          const el = document.getElementById('plans-list');
+          const detail = document.getElementById('plan-detail');
+          if (detail) detail.style.display = 'none';
+          _planItems = data.plans || [];
+          if (_planItems.length === 0) {
+            el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No active persisted plans yet.</p>';
+            return;
+          }
+          el.innerHTML = '<table style="width:100%"><thead><tr><th>Plan</th><th>Status</th><th>Progress</th><th>Updated</th><th>Links</th><th></th></tr></thead><tbody>' +
+            _planItems.map(plan => {
+              const links = `${Number(plan.linked_session_count || 0)} sess${plan.current_step ? ` • step ${Number((plan.current_step || {}).num || 0)}` : ''}`;
+              return `<tr>
+                <td><code>${esc(plan.plan_id || '')}</code><div style="color:var(--muted);font-size:0.75rem">${esc(plan.goal || '')}</div></td>
+                <td style="font-size:0.75rem;color:var(--muted)">${esc(plan.status_label || plan.status || '—')}</td>
+                <td style="font-size:0.75rem;color:var(--muted)">${esc(((plan.progress || {}).label) || '0/0')}</td>
+                <td style="font-size:0.75rem;color:var(--muted)">${esc(plan.updated_at || '')}</td>
+                <td style="font-size:0.75rem;color:var(--muted)">${esc(links)}</td>
+                <td><button onclick="showPlan('${esc(plan.plan_id || '')}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem">View</button></td>
+              </tr>`;
+            }).join('') + '</tbody></table>';
+        }).catch(() => {});
+      }
+
+      function showPlan(planId) {
+        fetch(`/api/plans/${encodeURIComponent(planId)}`)
+          .then(r => r.json())
+          .then(data => {
+            if (!data.ok) {
+              alert(data.error || 'Failed to load plan');
+              return;
+            }
+            const detail = document.getElementById('plan-detail');
+            const plan = data.plan || {};
+            const linkedSessions = data.linked_sessions || [];
+            const linkedTasks = data.linked_tasks || [];
+            detail.textContent =
+              `Plan: ${plan.plan_id || ''}\n` +
+              `Goal: ${plan.goal || ''}\n` +
+              `Status: ${plan.status_label || plan.status || '—'}\n` +
+              `Progress: ${((plan.progress || {}).label) || '0/0'}\n` +
+              `Initiator: ${plan.initiator || '—'}\n` +
+              `Current step: ${((plan.current_step || {}).description) || '—'}\n` +
+              `Linked sessions: ${linkedSessions.map(item => item.session_id || '').filter(Boolean).join(', ') || 'none'}\n` +
+              `Linked tasks: ${linkedTasks.map(item => `${item.source_label || item.source || ''} ${item.id || ''}`).join(', ') || 'none'}\n\n` +
+              (plan.steps || []).map(step => `Step ${step.num || 0} [${step.status_label || step.status || 'pending'}] ${step.description || ''}${step.output_preview ? `\n  → ${step.output_preview}` : ''}`).join('\n');
+            detail.style.display = 'block';
+          })
+          .catch(err => alert('Failed to load plan: ' + err));
+      }
+
+      function loadTaskStatuses() {
+        fetch('/api/tasks?limit=20').then(r => r.json()).then(data => {
+          const el = document.getElementById('task-status-list');
+          const detail = document.getElementById('task-status-detail');
+          if (detail) detail.style.display = 'none';
+          _taskStatusItems = data.tasks || [];
+          if (_taskStatusItems.length === 0) {
+            el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No Mission Control or scheduler tasks found.</p>';
+            return;
+          }
+          el.innerHTML = '<table style="width:100%"><thead><tr><th>Task</th><th>Source</th><th>Status</th><th>Summary</th><th>Links</th><th></th></tr></thead><tbody>' +
+            _taskStatusItems.map(task => {
+              const meta = [task.priority ? `priority: ${task.priority}` : '', task.schedule_human ? task.schedule_human : '', task.next_run ? `next: ${task.next_run}` : '']
+                .filter(Boolean)
+                .join(' • ');
+              return `<tr>
+                <td><code>${esc(task.id || '')}</code><div style="color:var(--muted);font-size:0.75rem">${esc(task.title || '')}</div></td>
+                <td style="font-size:0.75rem;color:var(--muted)">${esc(task.source_label || task.source || '—')}</td>
+                <td style="font-size:0.75rem;color:var(--muted)">${esc(task.status_label || task.status || '—')}</td>
+                <td style="font-size:0.75rem;color:var(--muted)">${esc(task.summary || meta || '—')}</td>
+                <td style="font-size:0.75rem;color:var(--muted)">${Number(task.linked_session_count || 0)} sess${meta ? ` • ${esc(meta)}` : ''}</td>
+                <td><button onclick="showTaskStatus('${esc(task.source || '')}','${esc(task.id || '')}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem">View</button></td>
+              </tr>`;
+            }).join('') + '</tbody></table>';
+        }).catch(() => {});
+      }
+
+      function showTaskStatus(source, taskId) {
+        fetch(`/api/tasks/${encodeURIComponent(source)}/${encodeURIComponent(taskId)}`)
+          .then(r => r.json())
+          .then(data => {
+            if (!data.ok) {
+              alert(data.error || 'Failed to load task');
+              return;
+            }
+            const detail = document.getElementById('task-status-detail');
+            const task = data.task || {};
+            const linkedSessions = data.linked_sessions || [];
+            const linkedPlans = data.linked_plans || [];
+            const subtasks = task.subtasks || [];
+            const comments = task.comments_preview || [];
+            detail.textContent =
+              `Task: ${task.id || ''}\n` +
+              `Title: ${task.title || ''}\n` +
+              `Source: ${task.source_label || task.source || '—'}\n` +
+              `Status: ${task.status_label || task.status || '—'}\n` +
+              `Summary: ${task.summary || '—'}\n` +
+              `Priority / schedule: ${task.priority || task.schedule_human || '—'}\n` +
+              `Linked sessions: ${linkedSessions.map(item => item.session_id || '').filter(Boolean).join(', ') || 'none'}\n` +
+              `Linked plans: ${linkedPlans.map(item => item.plan_id || '').filter(Boolean).join(', ') || 'none'}\n\n` +
+              (subtasks.length ? `Subtasks:\n${subtasks.map(item => `- ${item.done ? '✅' : '⬜'} ${item.title || ''}`).join('\n')}\n\n` : '') +
+              (comments.length ? `Recent comments:\n${comments.map(item => `- ${item.author || 'unknown'}: ${item.text || ''}`).join('\n')}` : (task.last_result_preview ? `Last result:\n${task.last_result_preview}` : ''));
+            detail.style.display = 'block';
+          })
+          .catch(err => alert('Failed to load task: ' + err));
+      }
+
+      function loadAgentSessions() {
+          fetch('/api/agent/sessions?limit=10').then(r => r.json()).then(data => {
+              const el = document.getElementById('agent-sessions-list');
+              const detail = document.getElementById('agent-session-detail');
+              const actions = document.getElementById('agent-session-actions');
+              if (detail) detail.style.display = 'none';
+              if (actions) {
+                actions.style.display = 'none';
+                actions.innerHTML = '';
+              }
+              const sessions = data.sessions || [];
+              if (sessions.length === 0) {
+                  el.innerHTML = '<p class="muted-text" style="color:var(--muted);text-align:center;padding:1rem">No terminal CLI sessions yet. Run <code>openclaw analyze</code>, <code>openclaw research</code>, <code>openclaw write</code>, or <code>openclaw watch</code>.</p>';
+                  return;
+              }
+              el.innerHTML = '<table style="width:100%"><thead><tr><th>Session</th><th>Updated</th><th>Scope</th><th>Automation</th><th>Counts</th><th></th></tr></thead><tbody>' +
+                sessions.map(s => {
+                  const scopeParts = [
+                    s.plan_id ? `plan ${s.plan_id}${s.plan_goal ? ` • ${s.plan_goal}` : ''}` : '',
+                    s.task_id ? `${s.task_source || 'task'} ${s.task_id}${s.task_title ? ` • ${s.task_title}` : ''}` : '',
+                  ].filter(Boolean);
+                  const scope = esc(scopeParts.join(' • ') || s.cwd || '');
+                  const counts = `${Number(s.command_count || 0)} cmd • ${Number(s.output_count || 0)} out • ${Number(s.file_edit_count || 0)} edit • ${Number(s.checkpoint_count || 0)} cp`;
+                  const watchHints = [
+                    Number(s.pending_intervention_count || 0) > 0 ? `${Number(s.pending_intervention_count || 0)} ctl` : '',
+                    Number(s.failure_count || 0) > 0 ? `${Number(s.failure_count || 0)} fail` : '',
+                    s.last_progress_message ? s.last_progress_message : '',
+                  ].filter(Boolean).join(' • ');
+                  const automation = s.automation_mode
+                    ? `${esc(s.automation_mode)} • ${esc(s.automation_status || 'active')}${Number(s.watch_interval_seconds || 0) > 0 ? ` • ${Number(s.watch_interval_seconds || 0)}s` : ''}`
+                    : '—';
+                  return `<tr>
+                    <td><code>${esc(s.session_id || '')}</code><div style="color:var(--muted);font-size:0.75rem">${esc(s.title || '')}</div></td>
+                    <td style="color:var(--muted)">${esc(s.updated_at || '')}</td>
+                    <td style="font-size:0.75rem;color:var(--muted)">${scope}</td>
+                    <td style="font-size:0.75rem;color:var(--muted)">${automation}</td>
+                    <td style="font-size:0.75rem;color:var(--muted)">${counts}${watchHints ? `<div>${esc(watchHints)}</div>` : ''}</td>
+                    <td><button onclick="showAgentSession('${esc(s.session_id || '')}')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:0.75rem">View</button></td>
+                  </tr>`;
+                }).join('') + '</tbody></table>';
+          }).catch(() => {});
+      }
+
+      function showAgentSession(sessionId) {
+        fetch(`/api/agent/sessions/${encodeURIComponent(sessionId)}`)
+          .then(r => r.json())
+          .then(data => {
+            if (!data.ok) {
+              alert(data.error || 'Failed to load session');
+              return;
+            }
+            const detail = document.getElementById('agent-session-detail');
+            const actions = document.getElementById('agent-session-actions');
+            const insightsEl = document.getElementById('agent-session-watch-insights');
+            const session = data.session || {};
+            const plan = data.plan || {};
+            const task = data.task || {};
+            const events = data.events || [];
+            const outputs = data.outputs || [];
+            const watchState = data.watch_state || {};
+            const watchInsights = data.watch_insights || {};
+            const recentProgress = (watchState.progress_log || []).slice(-5).map(entry => `- [${entry.phase || 'step'}] ${entry.message || ''}`);
+            const interventions = (watchState.interventions || []).slice(-5).map(entry => `- ${entry.action || 'action'} [${entry.status || 'pending'}] ${entry.actor || 'dashboard'}${entry.reason ? ` • ${entry.reason}` : ''}`);
+            detail.textContent =
+              `Session: ${session.session_id || ''}\n` +
+              `Title: ${session.title || ''}\n` +
+              `Updated: ${session.updated_at || ''}\n` +
+              `CWD: ${session.cwd || ''}\n` +
+              `Plan: ${session.plan_id || '—'}${session.plan_goal ? ` • ${session.plan_goal}` : ''}${session.plan_status ? ` • ${session.plan_status}` : ''}${session.plan_progress ? ` • ${session.plan_progress}` : ''}\n` +
+              `Task: ${session.task_id || '—'}${session.task_title ? ` • ${session.task_title}` : ''}${session.task_status ? ` • ${session.task_status}` : ''}${session.task_source ? ` • ${session.task_source}` : ''}\n` +
+              `Automation: ${session.automation_mode || '—'} ${session.automation_status ? `(${session.automation_status})` : ''}\n` +
+              `Checkpoint count: ${Number(session.checkpoint_count || 0)}\n` +
+              `Watch goal: ${watchState.goal || plan.goal || '—'}\n` +
+              `Watch last output: ${watchState.last_output_path || '—'}\n` +
+              `Watch status: ${watchState.status || session.watch_status || session.automation_status || '—'}\n` +
+              `Failures: ${Number(watchState.failure_count || session.failure_count || 0)} total / ${Number(watchState.consecutive_failures || session.consecutive_failures || 0)} consecutive\n` +
+              `Last error: ${watchState.last_error || session.last_error || '—'}\n` +
+              `Outputs: ${outputs.map(o => o.name).join(', ') || 'none'}\n` +
+              `Plan sessions: ${(data.linked_plan_sessions || []).map(item => item.session_id || '').filter(Boolean).join(', ') || 'none'}\n` +
+              `Current plan step: ${((plan.current_step || {}).description) || '—'}\n` +
+              `Task summary: ${task.summary || task.last_result_preview || '—'}\n` +
+              `Recent progress:\n${recentProgress.join('\n') || 'none'}\n` +
+              `Interventions:\n${interventions.join('\n') || 'none'}\n\n` +
+              events.slice(-8).map(event => `[${event.created_at || ''}] ${event.kind || 'event'}: ${event.content || ''}`).join('\n');
+            detail.style.display = 'block';
+
+            // Watch insights panel — checkpoint timeline + retry history
+            if (insightsEl) {
+              const checkpoints = watchInsights.recent_checkpoints || [];
+              const retries = watchInsights.retry_history || [];
+              const hasInsights = checkpoints.length > 0 || retries.length > 0 || watchInsights.active_phase;
+              if (hasInsights) {
+                const cpStatusColor = s => ({ completed: 'var(--mint-green,#3fb950)', interrupted: '#f9c74f', running: '#68ace5', failed: 'var(--danger,#f85149)' }[s] || 'var(--muted)');
+                const cpRows = checkpoints.length > 0
+                  ? checkpoints.map(cp =>
+                      `<tr>
+                        <td style="color:var(--muted);white-space:nowrap">poll ${esc(String(cp.poll ?? ''))}</td>
+                        <td style="color:${cpStatusColor(cp.status)};font-weight:600;white-space:nowrap">${esc(cp.status || '—')}</td>
+                        <td style="color:var(--muted);font-size:0.75rem;white-space:nowrap">${esc(cp.phase || '—')}</td>
+                        <td style="color:var(--fg,#e6edf3);font-size:0.78rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(cp.summary || '')}">${esc(cp.summary || '—')}</td>
+                        <td style="color:var(--muted);font-size:0.72rem;white-space:nowrap">${esc(cp.completed_at || '')}</td>
+                      </tr>`).join('')
+                  : `<tr><td colspan="5" style="color:var(--muted);font-size:0.78rem">No completed checkpoints yet</td></tr>`;
+
+                const rtRows = retries.length > 0
+                  ? retries.map(r =>
+                      `<tr>
+                        <td style="color:var(--muted);white-space:nowrap">poll ${esc(String(r.poll ?? ''))}</td>
+                        <td style="color:var(--muted);white-space:nowrap">attempt ${esc(String(r.attempt ?? ''))}</td>
+                        <td style="color:${r.transient ? '#f9c74f' : 'var(--danger,#f85149)'};white-space:nowrap;font-size:0.75rem">${r.transient ? 'transient' : 'hard'}</td>
+                        <td style="color:var(--fg,#e6edf3);font-size:0.78rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.error || '')}">${esc(r.error || '—')}</td>
+                        <td style="color:var(--muted);font-size:0.72rem;white-space:nowrap">${esc(r.created_at || '')}</td>
+                      </tr>`).join('')
+                  : `<tr><td colspan="5" style="color:var(--muted);font-size:0.78rem">No retries recorded</td></tr>`;
+
+                const activeBadge = watchInsights.active_phase
+                  ? `<span style="margin-left:0.5rem;padding:0.1rem 0.5rem;background:rgba(104,172,229,0.15);border-radius:4px;color:#68ace5;font-size:0.75rem">active: ${esc(watchInsights.active_phase)}${watchInsights.active_attempt ? ` (attempt ${watchInsights.active_attempt})` : ''}</span>`
+                  : '';
+                const pollBadge = watchInsights.poll_count != null
+                  ? `<span style="margin-left:0.5rem;color:var(--muted);font-size:0.75rem">polls: ${esc(String(watchInsights.poll_count))}</span>`
+                  : '';
+                const latestSummary = watchInsights.latest_checkpoint_summary
+                  ? `<div style="margin-bottom:0.5rem;padding:0.4rem 0.6rem;background:rgba(63,185,80,0.08);border-left:3px solid var(--mint-green,#3fb950);border-radius:3px;font-size:0.8rem;color:var(--fg,#e6edf3)">${esc(watchInsights.latest_checkpoint_summary)}</div>`
+                  : '';
+
+                insightsEl.innerHTML = `
+                  <div style="padding:0.7rem 0.9rem;background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:8px">
+                    <div style="font-size:0.8rem;font-weight:600;color:var(--fg,#e6edf3);margin-bottom:0.5rem">⏱ Watch Insights${activeBadge}${pollBadge}</div>
+                    ${latestSummary}
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem;font-weight:600">Checkpoint Timeline</div>
+                    <div style="overflow-x:auto;max-height:130px;overflow-y:auto;margin-bottom:0.6rem">
+                      <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+                        <thead><tr style="color:var(--muted);font-size:0.72rem">
+                          <th style="text-align:left;padding:2px 6px 4px 0">Poll</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">Status</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">Phase</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">Summary</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">Completed</th>
+                        </tr></thead>
+                        <tbody>${cpRows}</tbody>
+                      </table>
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:0.3rem;font-weight:600">Retry History</div>
+                    <div style="overflow-x:auto;max-height:110px;overflow-y:auto">
+                      <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+                        <thead><tr style="color:var(--muted);font-size:0.72rem">
+                          <th style="text-align:left;padding:2px 6px 4px 0">Poll</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">Attempt</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">Type</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">Error</th>
+                          <th style="text-align:left;padding:2px 6px 4px 0">When</th>
+                        </tr></thead>
+                        <tbody>${rtRows}</tbody>
+                      </table>
+                    </div>
+                  </div>`;
+                insightsEl.style.display = 'block';
+              } else {
+                insightsEl.style.display = 'none';
+                insightsEl.innerHTML = '';
+              }
+            }
+
+            const isWatchSession = Boolean(data.supports_interventions && (watchState.mode || session.automation_mode));
+            const watchStatus = String(watchState.status || session.watch_status || session.automation_status || '').toLowerCase();
+            if (actions) {
+              if (isWatchSession && !['completed', 'interrupted'].includes(watchStatus)) {
+                actions.style.display = 'flex';
+                actions.style.gap = '0.5rem';
+                actions.innerHTML = `
+                  <button onclick="submitSessionIntervention('${esc(session.session_id || '')}','force-checkpoint')" style="background:rgba(104,172,229,0.2);color:#fff;border:none;border-radius:6px;padding:0.35rem 0.7rem;cursor:pointer">Force checkpoint</button>
+                  <button onclick="submitSessionIntervention('${esc(session.session_id || '')}','graceful-stop')" style="background:rgba(248,81,73,0.18);color:#fff;border:none;border-radius:6px;padding:0.35rem 0.7rem;cursor:pointer">Graceful stop</button>
+                `;
+              } else {
+                actions.style.display = 'none';
+                actions.innerHTML = '';
+              }
+            }
+          })
+          .catch(err => alert('Failed to load session: ' + err));
+      }
+
+      function submitSessionIntervention(sessionId, action) {
+        if (!sessionId || !action) return;
+        fetch(`/api/agent/sessions/${encodeURIComponent(sessionId)}/interventions/${encodeURIComponent(action)}`, {
+          method: 'POST',
+          headers: _actionAuthHeaders('dashboard-ui'),
+          body: JSON.stringify({ actor: 'dashboard-ui' }),
+        }).then(r => r.json()).then(data => {
+          if (!data.ok) {
+            alert(data.error || 'Failed to queue intervention');
+            return;
+          }
+          showAgentSession(sessionId);
+          loadAgentSessions();
+        }).catch(err => alert('Failed to queue intervention: ' + err));
       }
 
       function approvalRiskColor(risk) {
@@ -4266,9 +4680,12 @@
                   pending.forEach(req => {
                       const tr = document.createElement('tr');
                       const age = req.age_seconds ? `${Math.max(0, req.age_seconds)}s` : '—';
+                      const context = [req.session_id ? `sess ${req.session_id}` : '', req.plan_id ? `plan ${req.plan_id}` : '', req.task_id ? `task ${req.task_id}` : '']
+                        .filter(Boolean)
+                        .join(' • ');
                       tr.innerHTML = `<td><code>${esc(req.request_id || '')}</code></td>
                           <td style="color:${approvalRiskColor(req.risk_level)};font-weight:600">${esc(req.risk_level || 'UNKNOWN')}</td>
-                          <td><code>${esc(req.action || '')}</code> <span style="color:var(--muted)">${esc(req.target || '')}</span></td>
+                          <td><code>${esc(req.action || '')}</code> <span style="color:var(--muted)">${esc(req.target || '')}</span>${context ? `<div style="color:var(--muted);font-size:0.72rem">${esc(context)}</div>` : ''}${req.detail ? `<div style="color:var(--muted);font-size:0.72rem">${esc(req.detail)}</div>` : ''}</td>
                           <td>${esc(req.requester_name || 'unknown')}</td>
                           <td style="color:var(--muted)">${esc(age)}</td>
                           <td style="white-space:nowrap">
@@ -4287,15 +4704,18 @@
                   rEmpty.style.display = 'block';
               } else {
                   rEmpty.style.display = 'none';
-                  historical.forEach(req => {
-                      const ts = req.resolved_at || req.created_at;
-                      const when = ts ? new Date(ts * 1000).toLocaleString() : '—';
-                      const tr = document.createElement('tr');
-                      tr.innerHTML = `<td style="color:var(--muted)">${esc(when)}</td>
-                          <td style="color:${approvalRiskColor(req.risk_level)};font-weight:600">${esc(req.risk_level || 'UNKNOWN')}</td>
-                          <td><code>${esc(req.action || '')}</code> <span style="color:var(--muted)">${esc(req.target || '')}</span></td>
-                          <td style="color:${approvalStatusColor(req.status)};font-weight:600">${esc((req.status || '').toUpperCase())}</td>
-                          <td>${esc(req.resolver_name || 'system')}</td>`;
+                   historical.forEach(req => {
+                       const ts = req.resolved_at || req.created_at;
+                       const when = ts ? new Date(ts * 1000).toLocaleString() : '—';
+                       const context = [req.session_id ? `sess ${req.session_id}` : '', req.plan_id ? `plan ${req.plan_id}` : '', req.task_id ? `task ${req.task_id}` : '']
+                         .filter(Boolean)
+                         .join(' • ');
+                       const tr = document.createElement('tr');
+                       tr.innerHTML = `<td style="color:var(--muted)">${esc(when)}</td>
+                           <td style="color:${approvalRiskColor(req.risk_level)};font-weight:600">${esc(req.risk_level || 'UNKNOWN')}</td>
+                           <td><code>${esc(req.action || '')}</code> <span style="color:var(--muted)">${esc(req.target || '')}</span>${context ? `<div style="color:var(--muted);font-size:0.72rem">${esc(context)}</div>` : ''}</td>
+                           <td style="color:${approvalStatusColor(req.status)};font-weight:600">${esc((req.status || '').toUpperCase())}</td>
+                           <td>${esc(req.resolver_name || 'system')}</td>`;
                       rBody.appendChild(tr);
                   });
               }
@@ -4504,6 +4924,7 @@
             if (data.ok) {
               const row = document.getElementById(`task-row-${taskId}`);
               if (row) row.remove();
+              loadTaskStatuses();
             } else {
               alert(data.message || 'Failed to delete task');
             }
