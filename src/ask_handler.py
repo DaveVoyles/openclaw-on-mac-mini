@@ -51,6 +51,7 @@ from llm import SUPPORTED_IMAGE_MIMES, get_rate_info
 from llm import chat as llm_chat  # noqa: F401 — available if needed
 from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
+from llm_patterns import _MEMORY_STORE_RE
 from memory import get_model_preference, get_routing_profile
 from memory import store as conversation_store
 from quality_helpers import (
@@ -364,6 +365,7 @@ async def handle_ask(
             if not _context_explainability_note:
                 _routing_notes.extend(result.context_badges)
 
+            _is_memory_store = bool(_MEMORY_STORE_RE.search(question))
             quality_meta = _safe_score_answer_quality(
                 response_text,
                 final_meta=_final_meta,
@@ -415,7 +417,7 @@ async def handle_ask(
             if isinstance(final_quality, dict) and final_quality.get("status") == "low":
                 _routing_notes.append("Quality: low confidence")
             recovery_block = _build_ask_recovery_block(_final_meta)
-            if recovery_block and "Recovery note" not in response_text:
+            if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
                 response_text = f"{response_text.rstrip()}{recovery_block}"
             log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
 

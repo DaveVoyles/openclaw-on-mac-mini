@@ -23,6 +23,7 @@ from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
 from memory import get_model_preference, get_routing_profile, store as conversation_store
 from permissions import ALLOWED_USER_IDS
+from llm_patterns import _MEMORY_STORE_RE
 from quality_helpers import (
     _append_explainability_footer,
     _build_ask_recovery_block,
@@ -364,6 +365,7 @@ async def handle_message(
             model_used = result.model_used
 
             final_meta: dict[str, Any] = _with_requested_item_target(result.final_meta, question=user_question)
+            _is_memory_store = bool(_MEMORY_STORE_RE.search(user_question))
             quality_meta = _safe_score_answer_quality(
                 response_text,
                 final_meta=final_meta,
@@ -395,7 +397,7 @@ async def handle_message(
             response_text = str(repair_result["response_text"])
             final_meta = dict(repair_result["final_meta"])
             recovery_block = _build_ask_recovery_block(final_meta)
-            if recovery_block and "Recovery note" not in response_text:
+            if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
                 response_text = f"{response_text.rstrip()}{recovery_block}"
             log.info(
                 "message ask quality status=%s path=%s",
