@@ -56,6 +56,14 @@ _SAVED_MODULES = {name: sys.modules[name] for name in _STUB_MODULES if name in s
 for _mod_name in _STUB_MODULES:
     sys.modules.setdefault(_mod_name, _make_mock_module(_mod_name))
 
+# ask_orchestrator must always be a fresh stub, even if it was already imported
+# by an earlier test file.  Module-level code below assigns MagicMock to its
+# attributes (lines ~176, ~185); if _orch_stub is the *real* module those
+# assignments permanently mutate it and break tests/test_ask_orchestrator.py
+# which imports normalize_model_preference at collection time.  Forcing a fresh
+# stub here ensures we only ever patch the throwaway MagicMock, not the real module.
+sys.modules["ask_orchestrator"] = _make_mock_module("ask_orchestrator")
+
 # Patch specific attributes we care about BEFORE importing ask_handler
 import types as _types
 
