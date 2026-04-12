@@ -19,6 +19,7 @@ import re
 __all__ = [
     "response_seems_valid",
     "should_return_directly",
+    "is_low_quality",
 ]
 
 # ---------------------------------------------------------------------------
@@ -117,3 +118,39 @@ def should_return_directly(tool_name: str, result: str) -> bool:
         return False
     text = str(result or "")
     return any(marker in text for marker in markers)
+
+
+# ---------------------------------------------------------------------------
+# Quality gate
+# ---------------------------------------------------------------------------
+
+_LOW_QUALITY_RE = re.compile(
+    r"\bi\s+(don'?t|do\s+not)\s+(know|have\s+(enough|that|the))\b"
+    r"|\bi'?m\s+(unable|not\s+able)\s+to\b"
+    r"|\bi\s+can'?t\s+(answer|help|provide|tell)\b"
+    r"|\bI\s+cannot\s+(answer|help|provide|access|retrieve)\b"
+    r"|\bno\s+information\s+(is\s+)?available\b"
+    r"|\bI\s+lack\s+(the\s+)?(knowledge|access|information)\b",
+    re.IGNORECASE,
+)
+
+_MIN_QUALITY_LENGTH = 80  # chars — shorter responses are almost always unhelpful
+
+
+def is_low_quality(text: str) -> bool:
+    """Return True when *text* looks like a low-quality or unhelpful response.
+
+    Criteria (any one triggers):
+    - Shorter than ``_MIN_QUALITY_LENGTH`` characters (likely a non-answer)
+    - Matches ``_LOW_QUALITY_RE`` — phrases like "I don't know", "I'm unable to"
+    - Starts with a standard error prefix (❌, ⚠️)
+
+    Used by the quality-retry gate in ``chat()`` to decide whether to try an
+    alternative provider before returning the response to the user.
+    """
+    stripped = (text or "").strip()
+    if len(stripped) < _MIN_QUALITY_LENGTH:
+        return True
+    if stripped.startswith(("❌", "⚠️")):
+        return True
+    return bool(_LOW_QUALITY_RE.search(stripped))
