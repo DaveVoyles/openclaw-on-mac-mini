@@ -115,7 +115,7 @@ async def extract_rule(user_message: str, bot_response: str) -> str:
         "Rule:"
     )
     try:
-        response, _, _ = await chat(prompt, model_preference="gemini")
+        response, _, _ = await chat(prompt, model_preference="auto")
         rule = response.strip().strip('"').strip("'")
         log.info("Extracted rule: %s", rule)
         return rule

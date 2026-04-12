@@ -129,7 +129,7 @@ async def _do_review(interaction: discord.Interaction, text: str, mode: str, fil
         text = text[:8000] + "\n\n[Text truncated to 8000 characters]"
 
     response_text, _, model = await chat(
-        prompt_template.format(text=text), model_preference="gemini"
+        prompt_template.format(text=text), model_preference="auto"
     )
 
     embed = discord.Embed(

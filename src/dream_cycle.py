@@ -679,7 +679,7 @@ async def _generate_insights(index: dict, changes: dict) -> list[str]:
 
     try:
         from llm import chat
-        response, _, _ = await chat(prompt, model_preference="gemini")
+        response, _, _ = await chat(prompt, model_preference="auto")
         insights = []
         for line in response.strip().splitlines():
             line = line.strip().lstrip("-•*").strip()

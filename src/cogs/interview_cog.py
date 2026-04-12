@@ -40,7 +40,7 @@ async def _generate_questions(goal: str) -> list[str]:
         "Questions should be specific to the goal and not generic.\n"
         "Return ONLY the questions, one per line, no numbering, no extra text."
     )
-    text, _, _ = await chat(prompt, model_preference="gemini")
+    text, _, _ = await chat(prompt, model_preference="auto")
     return [line.strip() for line in text.strip().split("\n") if line.strip()][:5]
 
 
@@ -162,7 +162,7 @@ class InterviewCog(commands.Cog):
             "addresses their goal.\n"
             "Be specific — use the details they provided. Format it clearly with headers if appropriate."
         )
-        text, _, model = await chat(prompt, model_preference="gemini")
+        text, _, model = await chat(prompt, model_preference="auto")
         return text, model
 
     @app_commands.command(

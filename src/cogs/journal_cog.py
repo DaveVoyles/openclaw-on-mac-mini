@@ -226,7 +226,7 @@ class JournalCog(commands.Cog):
                 "Generate a thoughtful, open-ended daily journal prompt. "
                 "Keep it to 1-2 sentences. Be creative and varied — cover themes like "
                 "reflection, gratitude, goals, creativity, or relationships.",
-                model_preference="gemini",
+                model_preference="auto",
             )
             embed = discord.Embed(
                 title="✍️ Journal Prompt",

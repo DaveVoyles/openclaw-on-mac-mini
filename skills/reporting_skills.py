@@ -263,6 +263,62 @@ async def generate_news_report(*, query: str) -> str:
     return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
 
 
+async def generate_weather_report(*, query: str) -> str:
+    """Return a weather report sourced directly from Perplexity."""
+    from skills.search_skills import search_web
+
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    date_label = now_utc.strftime("%A, %B %-d, %Y")
+    provider_query = (
+        f"Today is {date_label} UTC. "
+        f"User request: {query}. "
+        "Provide an up-to-date, factual weather summary with current conditions and forecast. "
+        "Include specific temperatures, precipitation chances, and conditions where relevant. "
+        "Do not speculate. "
+        "End with a Sources section listing URLs."
+    )
+    try:
+        result = await asyncio.wait_for(
+            search_web(provider_query, num_results=10, provider="perplexity"),
+            timeout=45,
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
+        log.warning("generate_weather_report Perplexity call failed: %s", exc)
+        return "❌ Could not retrieve weather information. Try again shortly."
+    answer = _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
+    if not answer:
+        return "❌ Could not retrieve weather information. Try again shortly."
+    return answer
+
+
+async def generate_finance_report(*, query: str) -> str:
+    """Return a market/finance report sourced directly from Perplexity."""
+    from skills.search_skills import search_web
+
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    date_label = now_utc.strftime("%A, %B %-d, %Y")
+    provider_query = (
+        f"Today is {date_label} UTC. "
+        f"User request: {query}. "
+        "Provide an up-to-date, factual financial or market summary with sourced data. "
+        "Include specific prices, percentages, and named sources where relevant. "
+        "Do not speculate about future market movements. "
+        "End with a Sources section listing URLs."
+    )
+    try:
+        result = await asyncio.wait_for(
+            search_web(provider_query, num_results=10, provider="perplexity"),
+            timeout=45,
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
+        log.warning("generate_finance_report Perplexity call failed: %s", exc)
+        return "❌ Could not retrieve financial data. Try again shortly."
+    answer = _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
+    if not answer:
+        return "❌ Could not retrieve financial data. Try again shortly."
+    return answer
+
+
 def _extract_day_window(
     text: str,
     *,

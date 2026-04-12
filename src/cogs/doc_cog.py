@@ -72,7 +72,7 @@ async def _llm_chat(prompt: str) -> str:
     """Send a prompt to the LLM and return the response text."""
     from llm.chat import chat
 
-    response_text, _history, _model = await chat(prompt, model_preference="gemini")
+    response_text, _history, _model = await chat(prompt, model_preference="auto")
     return response_text
 
 

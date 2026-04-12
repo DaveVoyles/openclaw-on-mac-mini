@@ -1,5 +1,6 @@
 """Tests for hybrid model selection (model_preference routing)."""
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -61,6 +62,16 @@ class TestModelPreference:
         result = memory.set_model_preference(12345, "gpt4")
         assert "❌" in result
         assert "Invalid" in result
+
+    def test_set_preference_copilot(self, tmp_path, monkeypatch):
+        import memory
+        import memory_preferences
+        monkeypatch.setattr(memory, "_PREFS_DIR", tmp_path / "prefs")
+        monkeypatch.setattr(memory_preferences, "_PREFS_DIR", tmp_path / "prefs")
+        result = memory.set_model_preference(12345, "copilot")
+        assert "✅" in result
+        assert "Copilot" in result
+        assert memory.get_model_preference(12345) == "copilot"
 
     def test_preference_persists_to_disk(self, tmp_path, monkeypatch):
         import memory
@@ -260,18 +271,116 @@ class TestChatModelPreference:
 
         chat_module = sys.modules['llm.chat']
 
+        with (
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Copilot response"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+        ):
+            mock_rl.check.return_value = True
+            text, hist, model = await llm.chat("hello", model_preference="auto")
+            assert text.startswith("Copilot response")
+            assert model.startswith("copilot/")
+
+    @pytest.mark.asyncio
+    async def test_chat_auto_retries_second_copilot_candidate_before_gemini(self):
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+
+        with (
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude fallback response"]),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+        ):
+            mock_rl.check.return_value = True
+            text, _hist, model = await llm.chat("hello", model_preference="auto")
+
+        assert text.startswith("Claude fallback response")
+        assert model.startswith("copilot/")
+
+    @pytest.mark.asyncio
+    async def test_chat_auto_respects_gemini_first_routing_profile(self):
+        import sys
+
+        import llm
+        import model_routing_policy
+
+        chat_module = sys.modules["llm.chat"]
+
+        with (
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch.object(model_routing_policy.cfg, "routing_profile", "gemini-first"),
+            patch("model_router.chat_openai", new_callable=AsyncMock) as mock_openai,
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+        ):
+            mock_rl.check.return_value = True
+            text, _hist, model = await llm.chat("hello", model_preference="auto")
+
+        assert text == "Gemini response"
+        assert model == "gemini-2.5-flash"
+        mock_openai.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_chat_auto_balanced_profile_uses_ollama_for_simple_chat(self):
+        import sys
+
+        import llm
+        import model_routing_policy
+
+        chat_module = sys.modules["llm.chat"]
+
+        with (
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
+            patch.object(model_routing_policy.cfg, "routing_profile", "balanced"),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value="Hello from Gemma!"),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock) as mock_gemini,
+        ):
+            text, _hist, model = await llm.chat("hello", model_preference="auto")
+
+        assert text == "Hello from Gemma!"
+        assert model == llm.OLLAMA_MODEL
+        mock_gemini.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_chat_auto_rejects_copilot_placeholder_and_falls_through_to_gemini(self):
+        """Placeholder Copilot replies should not be returned as final answers in auto mode."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules['llm.chat']
+
         mock_model = MagicMock()
         with (
-            patch("model_router.COPILOT_PROXY_ENABLED", False),
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch.object(chat_module, "_get_model", new_callable=AsyncMock, return_value=mock_model),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
             mock_rl.check.return_value = True
             text, hist, model = await llm.chat("hello", model_preference="auto")
             assert text == "Gemini response"
-            # Ollama should NOT be called in auto mode
-            assert not hasattr(llm._try_local_model, "assert_called")
+            assert model == "gemini-2.5-flash"
+
+    @pytest.mark.asyncio
+    async def test_chat_copilot_preference_uses_proxy(self):
+        import llm
+
+        with (
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Copilot direct response"),
+        ):
+            text, _hist, model = await llm.chat("hello", model_preference="copilot")
+
+        assert text.startswith("Copilot direct response")
+        assert model.startswith("copilot/")
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +459,404 @@ class TestChatStreamModelPreference:
             # Local model should NOT be called
             mock_local.assert_not_called()
             assert any("Gemini answer" in c[0] for c in chunks)
+
+    @pytest.mark.asyncio
+    async def test_stream_invalid_retry_escalates_with_web_results(self):
+        """Placeholder responses should escalate instead of leaking to callers."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+        search_fn = AsyncMock(return_value="Overnight events: NAS healthy, queue empty.")
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=[
+                    ("One moment while I look that up.", [], "gemini-2.5-flash"),
+                    ("Let me check that for you.", [], "gemini-2.5-flash"),
+                    ("Overnight summary: NAS healthy and the queue is empty.", [], "gemini-2.5-flash"),
+                ],
+            ),
+            patch.object(chat_module, "SKILLS", {"search_web": search_fn}),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("what happened overnight?", model_preference="gemini"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0] == "Overnight summary: NAS healthy and the queue is empty."
+        assert "Retry response remained placeholder" in chunks[-1][2]["routing_notes"]
+        search_fn.assert_awaited_once_with("what happened overnight?")
+
+    @pytest.mark.asyncio
+    async def test_stream_auto_openai_placeholder_falls_through_to_gemini(self):
+        """Auto-routed OpenAI placeholder replies should not be yielded as final output."""
+        import sys
+        from types import SimpleNamespace
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch("model_router.classify_query", return_value=SimpleNamespace(model_type="openai")),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
+            patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("show me today's games", model_preference="auto"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0] == "Gemini response"
+        assert chunks[-1][2]["model_used"] == "gemini-2.5-flash"
+
+    @pytest.mark.asyncio
+    async def test_stream_auto_non_tool_prefers_copilot_when_available(self):
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Copilot stream response"),
+            patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("hello there", model_preference="auto"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0].startswith("Copilot stream response")
+        assert chunks[-1][2]["model_used"].startswith("copilot/")
+
+    @pytest.mark.asyncio
+    async def test_stream_auto_retries_second_copilot_candidate_before_gemini(self):
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude stream fallback"]),
+            patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("hello there", model_preference="auto"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0].startswith("Claude stream fallback")
+        assert chunks[-1][2]["model_used"].startswith("copilot/")
+
+    @pytest.mark.asyncio
+    async def test_stream_invalid_retry_without_search_returns_fallback(self):
+        """If retry stays invalid and no search tool exists, return a clear fallback."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=[
+                    ("One moment while I look that up.", [], "gemini-2.5-flash"),
+                    ("Let me check that for you.", [], "gemini-2.5-flash"),
+                ],
+            ),
+            patch.object(chat_module, "SKILLS", {}),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("what happened overnight?", model_preference="gemini"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert "couldn't complete that live lookup cleanly" in chunks[-1][0]
+        assert "Returned explicit fallback after invalid retry" in chunks[-1][2]["routing_notes"]
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_gemini_failure_returns_graceful_message(self):
+        """Primary Gemini failures should not bubble up as exceptions to callers."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("what happened overnight?", model_preference="gemini"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert "Gemini is temporarily unavailable" in chunks[-1][0]
+        assert chunks[-1][2]["model_used"] == "unavailable"
+        assert "Gemini unavailable (primary)" in chunks[-1][2]["routing_notes"]
+
+    @pytest.mark.asyncio
+    async def test_stream_retry_gemini_failure_returns_graceful_message(self):
+        """Retry Gemini failures should not bubble up as exceptions to callers."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(
+                chat_module,
+                "_gemini_chat",
+                new_callable=AsyncMock,
+                side_effect=[
+                    ("One moment while I look that up.", [], "gemini-2.5-flash"),
+                    RuntimeError("Gemini circuit breaker is open"),
+                ],
+            ),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("what happened overnight?", model_preference="gemini"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert "Gemini is temporarily unavailable" in chunks[-1][0]
+        assert chunks[-1][2]["model_used"] == "unavailable"
+        assert "Gemini unavailable (retry)" in chunks[-1][2]["routing_notes"]
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_gemini_failure_uses_copilot_after_local_fails(self):
+        """Gemini failures should fall through to Copilot when local recovery is unavailable."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("what happened overnight?", model_preference="gemini"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0].startswith("Recovered through Copilot.")
+        assert chunks[-1][2]["model_used"].startswith("copilot/")
+        assert "Gemini unavailable → Copilot proxy (primary)" in chunks[-1][2]["routing_notes"]
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_gemini_failure_uses_direct_sports_skill_when_routed(self):
+        """Sports asks should recover through the direct sports skill when Gemini is unavailable."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
+            patch("model_router.COPILOT_PROXY_ENABLED", False),
+            patch.object(chat_module, "_get_tool_declarations", return_value=[{"name": "generate_sports_watch_report"}]),
+            patch.object(chat_module, "route_tool_declarations", return_value=([{"name": "generate_sports_watch_report"}], {})),
+            patch("skills.reporting_skills.generate_sports_watch_report", new_callable=AsyncMock, return_value="Direct sports answer"),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream(
+                "Show me the schedule for the men's division 1 college lacrosse games today",
+                model_preference="gemini",
+            ):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0] == "Direct sports answer"
+        assert chunks[-1][2]["model_used"] == "direct-sports-skill"
+        assert "Gemini unavailable → direct sports skill (primary)" in chunks[-1][2]["routing_notes"]
+
+    @pytest.mark.asyncio
+    async def test_chat_auto_gemini_failure_uses_copilot_after_local_fails(self):
+        """chat() should also recover through Copilot when Gemini is unavailable."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
+        ):
+            mock_rl.check.return_value = True
+            text, _hist, model = await llm.chat("what happened overnight?", model_preference="auto")
+
+        assert text.startswith("Recovered through Copilot.")
+        assert model.startswith("copilot/")
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_gemini_failure_uses_copilot_after_local_timeout(self):
+        """A slow local recovery should time out and still fall through to Copilot."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+
+        async def local_timeout(*_args, **_kwargs):
+            raise asyncio.TimeoutError()
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, side_effect=local_timeout),
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream("what happened overnight?", model_preference="gemini"):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0].startswith("Recovered through Copilot.")
+        assert chunks[-1][2]["model_used"].startswith("copilot/")
+
+    @pytest.mark.asyncio
+    async def test_stream_primary_gemini_failure_accepts_copilot_realtime_limitation_reply(self):
+        """Copilot recovery replies should not be filtered with Gemma's hallucination regex."""
+        import sys
+
+        import llm
+
+        chat_module = sys.modules["llm.chat"]
+        mock_model = MagicMock()
+        mock_model.model_name = "gemini-2.5-flash"
+        fallback_reply = "I don't have access to real-time sports schedules in this fallback mode."
+
+        with (
+            patch.object(chat_module, "GOOGLE_API_KEY", "test-key"),
+            patch.object(chat_module, "_rate_limiter") as mock_rl,
+            patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
+            patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
+            patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
+            patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
+            patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
+            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("model_router.chat_openai", new_callable=AsyncMock, return_value=fallback_reply),
+        ):
+            mock_rl.check.return_value = True
+            chunks = []
+            async for text, is_final, meta in llm.chat_stream(
+                "Show me the schedule for the men's division 1 college lacrosse games today",
+                model_preference="gemini",
+            ):
+                chunks.append((text, is_final, meta))
+
+        assert chunks[-1][1] is True
+        assert chunks[-1][0].startswith(fallback_reply)
+        assert chunks[-1][2]["model_used"].startswith("copilot/")
+        assert "Gemini unavailable → Copilot proxy (primary)" in chunks[-1][2]["routing_notes"]
 
 
 # ---------------------------------------------------------------------------

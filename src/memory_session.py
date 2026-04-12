@@ -123,7 +123,7 @@ async def create_session_handover(
             f"Conversation:\n{transcript}"
         )
 
-        response, _, _ = await chat(prompt, model_preference="gemini")
+        response, _, _ = await chat(prompt, model_preference="auto")
         if not response or "no handover needed" in response.lower():
             return None
 

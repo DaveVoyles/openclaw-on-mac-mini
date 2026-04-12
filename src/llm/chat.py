@@ -129,6 +129,9 @@ async def _gemini_chat(
         model_name = provider_context.model_name
 
         _gemini_circuit.record_success(_GEMINI_CIRCUIT_KEY)
+        # Phase 15: append provider attribution for direct (non-tool) answers.
+        if rounds == 0 and text and "_via " not in text:
+            text = text + "\n\n_via gemini_"
         return text, updated_history, model_name
 
     except Exception:
@@ -316,6 +319,9 @@ async def _try_copilot_proxy_reply(
         )
         if finalized is not None:
             updated, model_label = finalized
+            # Phase 15: append provider attribution so users can see which model answered.
+            if reply and "_via " not in reply:
+                reply = reply + "\n\n_via copilot_"
             return reply, updated, model_label
         if reply:
             log.info(
@@ -417,6 +423,34 @@ async def _recover_stream_provider_failure(
                 ]
                 routing_notes.append(f"{provider_display} unavailable → direct news skill ({reason})")
                 return direct_reply, updated, "direct-news-skill", False
+        elif "generate_weather_report" in selected_names:
+            from skills.reporting_skills import generate_weather_report
+
+            direct_reply = await asyncio.wait_for(
+                generate_weather_report(query=cleaned_user_message),
+                timeout=_RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS,
+            )
+            if direct_reply and not direct_reply.startswith("❌"):
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [direct_reply]},
+                ]
+                routing_notes.append(f"{provider_display} unavailable → direct weather skill ({reason})")
+                return direct_reply, updated, "direct-weather-skill", False
+        elif "generate_finance_report" in selected_names:
+            from skills.reporting_skills import generate_finance_report
+
+            direct_reply = await asyncio.wait_for(
+                generate_finance_report(query=cleaned_user_message),
+                timeout=_RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS,
+            )
+            if direct_reply and not direct_reply.startswith("❌"):
+                updated = history + [
+                    {"role": "user", "parts": [cleaned_user_message]},
+                    {"role": "model", "parts": [direct_reply]},
+                ]
+                routing_notes.append(f"{provider_display} unavailable → direct finance skill ({reason})")
+                return direct_reply, updated, "direct-finance-skill", False
     except asyncio.TimeoutError:
         log.warning(
             "Direct sports recovery timed out after %.1fs (%s)",
@@ -879,6 +913,29 @@ async def chat(
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
         model_message = cleaned_user_message
+
+    # Phase 12: Perplexity fast-path for real-time / current-events queries.
+    # Only fires when routing is auto AND we have no recalled context (not mid-conversation),
+    # so we don't hijack follow-up questions that need conversation history.
+    if model_preference == "auto" and not recalled_context:
+        try:
+            from model_routing_policy import select_realtime_route
+            rt_route = select_realtime_route(cleaned_user_message)
+            if rt_route.prefer_perplexity:
+                log.debug("Realtime fast-path matched: %s", rt_route.reason)
+                from skills.reporting_skills import generate_news_report
+                rt_reply = await asyncio.wait_for(
+                    generate_news_report(query=cleaned_user_message),
+                    timeout=30.0,
+                )
+                if rt_reply and not rt_reply.startswith("❌"):
+                    updated = history + [
+                        {"role": "user", "parts": [cleaned_user_message]},
+                        {"role": "model", "parts": [rt_reply]},
+                    ]
+                    return rt_reply, updated, "perplexity-direct"
+        except Exception as _rt_exc:
+            log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
 
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
