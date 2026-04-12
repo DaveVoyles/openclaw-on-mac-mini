@@ -338,13 +338,22 @@ def _require_api_action_auth(request: web.Request) -> web.Response | None:
 async def _health_llm_handler(request: web.Request) -> web.Response:
     """Check LLM provider availability, token usage, and circuit-breaker state."""
     # Lazy import to avoid circular imports at module load time.
-    from llm.providers import (
-        COPILOT_PROXY_ENABLED,
-        _circuit,
-        _is_open,
-        proxy_is_healthy,
-        token_usage_summary,
-    )
+    try:
+        from llm.providers import (
+            COPILOT_PROXY_ENABLED,
+            _circuit,
+            _is_open,
+            proxy_is_healthy,
+            token_usage_summary,
+        )
+        _providers_available = True
+    except (ImportError, Exception):
+        COPILOT_PROXY_ENABLED = False
+        _circuit: dict = {}
+        _is_open = lambda p: False  # noqa: E731
+        proxy_is_healthy = lambda: False  # noqa: E731
+        token_usage_summary = lambda: {}  # noqa: E731
+        _providers_available = False
 
     checks: dict[str, str] = {}
 

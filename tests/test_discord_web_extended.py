@@ -753,10 +753,17 @@ class TestHealthLlmHandler:
         monkeypatch.setenv("GOOGLE_API_KEY", "key")
         req, _ = _make_request()
 
+        _providers_mock = MagicMock(
+            COPILOT_PROXY_ENABLED=True,
+            _circuit={},
+            _is_open=lambda p: False,
+            proxy_is_healthy=lambda: True,
+            token_usage_summary=lambda: {"total": {}, "by_provider": {}},
+        )
         with patch("discord_web.aiohttp.ClientSession", side_effect=Exception("err")):
             with patch.dict("sys.modules", {
                 "config": MagicMock(cfg=MagicMock(ollama_url="http://localhost:11434")),
-                "model_router": MagicMock(COPILOT_PROXY_ENABLED=True),
+                "llm.providers": _providers_mock,
             }):
                 resp = await mod._health_llm_handler(req)
                 data = json.loads(resp.body)
@@ -766,10 +773,17 @@ class TestHealthLlmHandler:
         monkeypatch.setenv("GOOGLE_API_KEY", "key")
         req, _ = _make_request()
 
+        _providers_mock = MagicMock(
+            COPILOT_PROXY_ENABLED=False,
+            _circuit={},
+            _is_open=lambda p: False,
+            proxy_is_healthy=lambda: False,
+            token_usage_summary=lambda: {"total": {}, "by_provider": {}},
+        )
         with patch("discord_web.aiohttp.ClientSession", side_effect=Exception("err")):
             with patch.dict("sys.modules", {
                 "config": MagicMock(cfg=MagicMock(ollama_url="http://localhost:11434")),
-                "model_router": MagicMock(COPILOT_PROXY_ENABLED=False),
+                "llm.providers": _providers_mock,
             }):
                 resp = await mod._health_llm_handler(req)
                 data = json.loads(resp.body)
@@ -779,10 +793,10 @@ class TestHealthLlmHandler:
         monkeypatch.setenv("GOOGLE_API_KEY", "key")
         req, _ = _make_request()
 
-        # Setting sys.modules["model_router"] = None causes ImportError on
-        # `from model_router import ...` regardless of suite state.
+        # Setting sys.modules["llm.providers"] = None causes ImportError on
+        # `from llm.providers import ...` regardless of suite state.
         with patch("discord_web.aiohttp.ClientSession", side_effect=Exception("err")):
-            with patch.dict("sys.modules", {"model_router": None}):
+            with patch.dict("sys.modules", {"llm.providers": None}):
                 resp = await mod._health_llm_handler(req)
                 data = json.loads(resp.body)
                 assert data["checks"]["copilot_proxy"] == "unconfigured"
@@ -791,10 +805,17 @@ class TestHealthLlmHandler:
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
         req, _ = _make_request()
 
+        _providers_mock = MagicMock(
+            COPILOT_PROXY_ENABLED=False,
+            _circuit={},
+            _is_open=lambda p: False,
+            proxy_is_healthy=lambda: False,
+            token_usage_summary=lambda: {"total": {}, "by_provider": {}},
+        )
         with patch("discord_web.aiohttp.ClientSession", side_effect=Exception("err")):
             with patch.dict("sys.modules", {
                 "config": MagicMock(cfg=MagicMock(ollama_url="http://localhost:11434")),
-                "model_router": MagicMock(COPILOT_PROXY_ENABLED=False),
+                "llm.providers": _providers_mock,
             }):
                 resp = await mod._health_llm_handler(req)
                 assert resp.status == 503
