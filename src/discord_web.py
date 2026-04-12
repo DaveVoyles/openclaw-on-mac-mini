@@ -357,8 +357,7 @@ async def _health_llm_handler(request: web.Request) -> web.Response:
 
     # Copilot proxy
     try:
-        from model_router import COPILOT_PROXY_ENABLED
-        checks["copilot_proxy"] = "ok" if COPILOT_PROXY_ENABLED else "unconfigured"
+        from llm.providers import COPILOT_PROXY_ENABLED
     except Exception:
         checks["copilot_proxy"] = "unconfigured"
 

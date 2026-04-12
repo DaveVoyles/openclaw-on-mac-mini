@@ -635,6 +635,7 @@ async def chat_stream(
                 needs_tools=_needs_tools(cleaned_user_message),
                 ollama_alive=_ollama_up,
                 routing_profile=routing_profile,
+                recalled_context=bool(recalled_context),
             )
             _routing_notes.append(f"Auto route: {route.reason}")
 
@@ -1052,6 +1053,7 @@ async def chat(
                 needs_tools=_needs_tools(cleaned_user_message),
                 ollama_alive=_ollama_up,
                 routing_profile=routing_profile,
+                recalled_context=bool(recalled_context),
             )
             log.debug("Model router: %s", route)
 

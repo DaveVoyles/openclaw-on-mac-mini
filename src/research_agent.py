@@ -661,6 +661,7 @@ class ResearchAgent:
         try:
             from llm.providers import COPILOT_PROXY_ENABLED
             from model_router import chat_openai
+            from model_routing_policy import select_research_synthesis_route
 
             route = select_research_synthesis_route(copilot_available=COPILOT_PROXY_ENABLED)
             prompt = _SYNTHESIS_PROMPT.format(query=query, data=data)
@@ -694,7 +695,7 @@ class ResearchAgent:
             "Follow-up questions (one per line, no numbering or bullets):"
         )
         try:
-            from llm.providers import COPILOT_PROXY_ENABLED
+            from llm.providers import COPILOT_PROXY_ENABLED, chat_openai
             if COPILOT_PROXY_ENABLED:
                 text = await chat_openai(prompt, [], "You are a concise research assistant.")
             else:

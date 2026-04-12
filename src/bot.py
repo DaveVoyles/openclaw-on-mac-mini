@@ -791,6 +791,13 @@ async def ask_cmd(
     await handle_ask(interaction, question, attachment, model, scope, reset_context, anchor)
 
 
+@bot.tree.command(name="metrics", description="Show last 20 routing telemetry events (provider, model, latency)")
+async def metrics_cmd(interaction: discord.Interaction) -> None:
+    """Display a brief routing telemetry summary."""
+    from ask_handler import handle_metrics  # lazy to avoid circular import
+    await handle_metrics(interaction)
+
+
 # ---------------------------------------------------------------------------
 # Thread follow-up listener — treat messages in bot-created threads as /ask
 # ---------------------------------------------------------------------------

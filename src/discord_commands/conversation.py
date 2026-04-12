@@ -71,8 +71,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
             color=EmbedColors.INFO,
         )
         try:
-            from model_router import COPILOT_PROXY_ENABLED
-            proxy_status = "🟢 Copilot proxy: online" if COPILOT_PROXY_ENABLED else "⚪ Copilot proxy: not configured"
+            from llm.providers import COPILOT_PROXY_ENABLED
             embed.add_field(name="Copilot Proxy", value=proxy_status, inline=False)
         except Exception as exc:
             log.debug("Copilot proxy status check failed: %s", exc)

@@ -59,7 +59,8 @@ async def analyze_image(
 
     import os
 
-    from model_router import COPILOT_PROXY_ENABLED, chat_openai_vision
+    from llm.providers import COPILOT_PROXY_ENABLED
+    from model_router import chat_openai_vision
 
     route = select_multimodal_route(
         copilot_available=COPILOT_PROXY_ENABLED,

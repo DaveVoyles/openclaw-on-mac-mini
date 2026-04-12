@@ -51,6 +51,7 @@ from llm import SUPPORTED_IMAGE_MIMES, get_rate_info
 from llm import chat as llm_chat  # noqa: F401 — available if needed
 from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
+from llm import telemetry as _telemetry
 from llm_patterns import _MEMORY_STORE_RE
 from memory import get_model_preference, get_routing_profile
 from memory import store as conversation_store
@@ -472,6 +473,20 @@ async def handle_ask(
         _attr_model = model_used.replace("models/", "")
         response_text += f"\n\n*🤖 Model: {_attr_model}*"
 
+    # Routing telemetry audit record (Task #14)
+    try:
+        _telem_provider = model_used.split("/")[0] if model_used not in ("error", "timeout", "unknown") else model_used
+        _telem_latency = (time.monotonic() - _ask_start) * 1000
+        _telemetry.record(
+            provider=_telem_provider,
+            model=model_used,
+            latency_ms=_telem_latency,
+            success=model_used not in ("error", "timeout"),
+            query_type=_routing_notes[0] if _routing_notes else "unknown",
+        )
+    except Exception as _telem_exc:
+        log.debug("Telemetry record failed: %s", _telem_exc)
+
     # Strip table rows that are pure placeholders like [Opponent], [Time]
     response_text = _strip_placeholder_table_rows(response_text)
 
@@ -775,3 +790,11 @@ async def handle_ask(
                 log.debug("Goal tracking failed (non-critical): %s", e)
 
     asyncio.get_running_loop().create_task(_post_response_learning())
+
+
+async def handle_metrics(interaction: discord.Interaction) -> None:
+    """Handler for /metrics — shows last 20 routing telemetry entries."""
+    await interaction.response.defer(ephemeral=True)
+    records = _telemetry.tail(20)
+    summary = _telemetry.summarise(records)
+    await interaction.followup.send(summary, ephemeral=True)

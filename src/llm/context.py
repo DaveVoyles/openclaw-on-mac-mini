@@ -350,7 +350,8 @@ async def _generate_context_summary(turns: list[dict]) -> str:
         temperature=0.1,
     )
 
-    from model_router import COPILOT_PROXY_ENABLED, chat_openai
+    from llm.providers import COPILOT_PROXY_ENABLED
+    from model_router import chat_openai
 
     route = select_summarization_route(copilot_available=COPILOT_PROXY_ENABLED)
     log.debug("Context summarization route: %s (%s)", route.provider, route.reason)

@@ -115,6 +115,7 @@ def classify_query(
     model_preference: str = "auto",
     ollama_alive: bool = True,
     routing_profile: str = "",
+    recalled_context: bool = False,
 ) -> ModelRoute:
     """Classify a query and return the optimal model route.
 
@@ -168,6 +169,9 @@ def classify_query(
         is_creative=bool(_CREATIVE_PATTERN.search(message or "")),
         is_analysis=bool(_ANALYSIS_PATTERN.search(message or "")),
         routing_profile=routing_profile,
+        text=message or "",
+        has_tools=needs_tools,
+        recalled_context=recalled_context,
     )
     return ModelRoute(decision.provider, decision.reason)
 
