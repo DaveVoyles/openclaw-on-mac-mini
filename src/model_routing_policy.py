@@ -170,15 +170,16 @@ def select_auto_route(
 ) -> AutoRouteDecision:
     profile = normalize_routing_profile(routing_profile)
 
-    # Fast-path: cheap mini-model for short queries
+    # Fast-path: cheap mini-model for short queries (copilot-first profile only)
     token_count = len(text.split())  # rough word count as proxy
     if (
         token_count <= _MINI_TOKEN_THRESHOLD
         and not has_tools
         and not recalled_context
         and copilot_available
+        and profile == "copilot-first"
     ):
-        return AutoRouteDecision("copilot", f"mini-model fast-path (≤{_MINI_TOKEN_THRESHOLD} tokens)", profile)
+        return AutoRouteDecision("copilot", f"copilot mini-model fast-path (≤{_MINI_TOKEN_THRESHOLD} tokens)", profile)
 
     registry = build_provider_capability_registry(
         has_openai_key=has_openai_key,
