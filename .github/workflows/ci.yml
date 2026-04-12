@@ -27,7 +27,7 @@ jobs:
             python-version: "3.12"
             memory-dir: /home/runner/openclaw-test
           - os: [self-hosted, macOS]
-            python-version: "3.12"
+            python-version: "3.14"
             memory-dir: /tmp/openclaw-test
 
     steps:
