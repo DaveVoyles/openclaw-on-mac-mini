@@ -72,7 +72,7 @@ def is_configured() -> bool:
     the Copilot proxy (COPILOT_PROXY_URL) so that Copilot-only deployments
     are not incorrectly blocked.
     """
-    from model_router import COPILOT_PROXY_ENABLED  # local import avoids circular deps
+    from llm.providers import COPILOT_PROXY_ENABLED  # local import avoids circular deps
     return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
 from .context import (  # noqa: F401
     _CONTEXT_LIMITS,

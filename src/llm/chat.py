@@ -281,8 +281,8 @@ async def _try_copilot_proxy_reply(
     context: str,
     timeout: float | None = None,
 ) -> tuple[str, list[dict], str] | None:
-    from model_router import COPILOT_PROXY_ENABLED, chat_openai
-
+    from llm.providers import COPILOT_PROXY_ENABLED
+    from model_router import chat_openai
     if not COPILOT_PROXY_ENABLED:
         return None
 
@@ -595,7 +595,7 @@ async def chat_stream(
     # Copilot fast-path for coding/programming queries — separate from web-search path.
     if model_preference == "auto" and not recalled_context:
         try:
-            from model_router import COPILOT_PROXY_ENABLED
+            from llm.providers import COPILOT_PROXY_ENABLED
             from model_routing_policy import select_coding_route
             if COPILOT_PROXY_ENABLED:
                 coding_route = select_coding_route(cleaned_user_message)
@@ -1013,7 +1013,7 @@ async def chat(
     # Copilot fast-path for coding/programming queries — separate from web-search path.
     if model_preference == "auto" and not recalled_context:
         try:
-            from model_router import COPILOT_PROXY_ENABLED
+            from llm.providers import COPILOT_PROXY_ENABLED
             from model_routing_policy import select_coding_route
             if COPILOT_PROXY_ENABLED:
                 coding_route = select_coding_route(cleaned_user_message)
@@ -1238,7 +1238,7 @@ async def chat(
     # Copilot is available, retry once with Copilot before returning.
     try:
         from answer_policy import is_low_quality, record_quality_retry
-        from model_router import COPILOT_PROXY_ENABLED
+        from llm.providers import COPILOT_PROXY_ENABLED
         if is_low_quality(text) and COPILOT_PROXY_ENABLED:
             log.info("Quality retry gate triggered — Gemini reply too short/vague, trying Copilot")
             record_quality_retry()
@@ -1265,7 +1265,7 @@ def is_configured() -> bool:
     Checks Gemini, local LLM, and Copilot proxy so Copilot-only
     deployments are not incorrectly blocked with "LLM not configured".
     """
-    from model_router import COPILOT_PROXY_ENABLED  # local import avoids circular deps
+    from llm.providers import COPILOT_PROXY_ENABLED  # local import avoids circular deps
     return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
 
 
@@ -1339,7 +1339,8 @@ async def summarize_conversation(history: list[dict]) -> str:
     )
 
     try:
-        from model_router import COPILOT_PROXY_ENABLED, chat_openai
+        from llm.providers import COPILOT_PROXY_ENABLED
+        from model_router import chat_openai
         from model_routing_policy import select_summarization_route
 
         route = select_summarization_route(copilot_available=COPILOT_PROXY_ENABLED)

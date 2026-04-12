@@ -304,7 +304,8 @@ async def quick_generate(
     """
     # -- Copilot / OpenAI-compatible path --------------------------------
     try:
-        from model_router import COPILOT_PROXY_ENABLED, chat_openai  # local import
+        from llm.providers import COPILOT_PROXY_ENABLED
+        from model_router import chat_openai  # local import
         if COPILOT_PROXY_ENABLED:
             reply = await chat_openai(
                 prompt,
