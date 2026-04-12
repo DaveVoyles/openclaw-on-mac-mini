@@ -121,6 +121,17 @@ class SpendingTracker:
             log.info("Perplexity: +1 call ($%.4f) — total $%.4f (%d calls)",
                      cost_per_query, pplx["total_cost_usd"], pplx["calls"])
 
+    async def record_copilot(self, model: str = "gpt-4o"):
+        """Record a Copilot proxy call. Proxy usage is free ($0), but count is tracked."""
+        async with self._lock:
+            today = datetime.date.today().isoformat()
+            cop = self._data.setdefault("copilot", {"calls": 0, "daily": {}})
+            cop["calls"] += 1
+            day = cop["daily"].setdefault(today, {"calls": 0})
+            day["calls"] += 1
+            self._maybe_flush_sync()
+            log.info("Copilot: +1 call [%s] — total %d calls", model, cop["calls"])
+
     async def record_firecrawl(self, pages: int = 1, action: str = "scrape"):
         """Record a Firecrawl API call. Free tier: 500 pages/month. ~$0.004/page on paid."""
         cost_per_page = 0.004
@@ -242,6 +253,7 @@ class SpendingTracker:
         total_tokens = d["total_input_tokens"] + d["total_output_tokens"]
         pplx = d.get("perplexity", {"calls": 0, "total_cost_usd": 0.0})
         fc = d.get("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0})
+        cop = d.get("copilot", {"calls": 0})
 
         # Combined cost
         combined_cost = d["total_cost_usd"] + pplx.get("total_cost_usd", 0.0) + fc.get("total_cost_usd", 0.0)
@@ -271,9 +283,13 @@ class SpendingTracker:
             f"  Calls:  {d['calls']:,}",
             f"  Cost:   ${d['total_cost_usd']:.4f}",
             f"  Tokens: {total_tokens:,} ({d['total_input_tokens']:,} in / {d['total_output_tokens']:,} out)",
+            "",
+            "**🤖 Copilot Proxy:**",
+            f"  Calls:  {cop.get('calls', 0):,}",
+            "  Cost:   $0.00 (free)",
         ]
 
-        total_calls = d["calls"] + pplx.get("calls", 0) + fc.get("calls", 0)
+        total_calls = d["calls"] + pplx.get("calls", 0) + fc.get("calls", 0) + cop.get("calls", 0)
         if total_calls > 0:
             avg_cost = combined_cost / total_calls
             lines.append("")

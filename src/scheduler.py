@@ -224,6 +224,39 @@ class TaskScheduler:
         self._save()
         return task.enabled
 
+    def update(
+        self,
+        task_id: str,
+        *,
+        action: str | None = None,
+        prompt: str | None = None,
+        cron_expression: str | None = None,
+        interval_minutes: int | None = None,
+        cron_hour: int | None = None,
+        cron_minute: int | None = None,
+        enabled: bool | None = None,
+    ) -> Optional[ScheduledTask]:
+        """Update mutable task fields and persist the change."""
+        task = self._tasks.get(task_id)
+        if task is None:
+            return None
+        if action is not None:
+            task.action = action
+        if prompt is not None:
+            task.prompt = prompt
+        if cron_expression is not None:
+            task.cron_expression = cron_expression
+        if interval_minutes is not None:
+            task.interval_minutes = max(0, int(interval_minutes))
+        if cron_hour is not None:
+            task.cron_hour = int(cron_hour)
+        if cron_minute is not None:
+            task.cron_minute = int(cron_minute)
+        if enabled is not None:
+            task.enabled = bool(enabled)
+        self._save()
+        return task
+
     def list_tasks(self) -> list[ScheduledTask]:
         """Return all tasks sorted by ID."""
         return sorted(self._tasks.values(), key=lambda t: t.task_id)
@@ -347,7 +380,7 @@ class TaskScheduler:
 
                     response_text, _, model_used = await chat(
                         task.prompt,
-                        model_preference="gemini",
+                        model_preference="auto",
                     )
                     result = response_text or "No response from LLM"
                     task.last_result = str(result)[:500]
@@ -384,7 +417,7 @@ class TaskScheduler:
 
                     async def _retry_prompt(_p=_captured_prompt):
                         from llm import chat
-                        await asyncio.wait_for(chat(_p, model_preference="gemini"), timeout=300)
+                        await asyncio.wait_for(chat(_p, model_preference="auto"), timeout=300)
 
                     self._retry_queue.append(_RetryTask(
                         fn=_retry_prompt,

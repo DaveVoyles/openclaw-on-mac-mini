@@ -395,6 +395,62 @@ def select_realtime_route(query: str) -> RealtimeRouteDecision:
 
 
 # ---------------------------------------------------------------------------
+# Sports schedule / watch-guide route selection
+# ---------------------------------------------------------------------------
+
+_SPORTS_SCHEDULE_PATTERNS = _re.compile(
+    r"\b("
+    r"(?:lacrosse|football|basketball|baseball|hockey|soccer|tennis|golf"
+    r"|volleyball|wrestling|swimming|track|rowing|crew|rugby|cricket"
+    r"|softball|field\s+hockey|water\s+polo|cross\s+country|gymnastics"
+    r"|nfl|nba|nhl|mlb|mls|ncaa|college)\s+"
+    r"(?:game|games|match|matches|schedule|today|tonight|this\s+week|watch)"
+    r"|(?:games?|matches?|schedule)\s+(?:today|tonight|this\s+week)"
+    r"|what\s+(?:games?|sports?)\s+(?:are|is)\s+(?:on|today|tonight|playing)"
+    r"|watch\s+guide"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SportsRouteDecision:
+    """Routing decision for sports schedule / watch-guide queries."""
+
+    prefer_perplexity: bool
+    tool_name: str  # "generate_sports_watch_report" when matched, "" otherwise
+    reason: str
+
+
+def select_sports_route(query: str) -> SportsRouteDecision:
+    """Decide whether a query should be fast-pathed to the sports watch skill.
+
+    Matches sports schedule vocabulary.  When matched, callers should prefer
+    ``generate_sports_watch_report`` which returns a Perplexity answer directly
+    (marked ``_via perplexity-direct_``) without Gemini synthesis.
+
+    Args:
+        query: The raw user query string.
+
+    Returns:
+        A ``SportsRouteDecision`` with ``prefer_perplexity=True`` and
+        ``tool_name="generate_sports_watch_report"`` when matched, or
+        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
+    """
+    if _SPORTS_SCHEDULE_PATTERNS.search(query or ""):
+        return SportsRouteDecision(
+            prefer_perplexity=True,
+            tool_name="generate_sports_watch_report",
+            reason="query matches sports schedule / watch-guide pattern → Perplexity direct",
+        )
+    return SportsRouteDecision(
+        prefer_perplexity=False,
+        tool_name="",
+        reason="no sports schedule pattern detected",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Research synthesis route selection
 # ---------------------------------------------------------------------------
 

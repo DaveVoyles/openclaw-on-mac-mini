@@ -919,7 +919,7 @@ async def chat(
     # so we don't hijack follow-up questions that need conversation history.
     if model_preference == "auto" and not recalled_context:
         try:
-            from model_routing_policy import select_realtime_route
+            from model_routing_policy import select_realtime_route, select_sports_route
             rt_route = select_realtime_route(cleaned_user_message)
             if rt_route.prefer_perplexity:
                 log.debug("Realtime fast-path matched: %s", rt_route.reason)
@@ -934,6 +934,21 @@ async def chat(
                         {"role": "model", "parts": [rt_reply]},
                     ]
                     return rt_reply, updated, "perplexity-direct"
+            # Phase 18: Sports schedule fast-path — same guard as news path above.
+            sp_route = select_sports_route(cleaned_user_message)
+            if sp_route.prefer_perplexity:
+                log.debug("Sports fast-path matched: %s", sp_route.reason)
+                from skills.reporting_skills import generate_sports_watch_report
+                sp_reply = await asyncio.wait_for(
+                    generate_sports_watch_report(query=cleaned_user_message),
+                    timeout=35.0,
+                )
+                if sp_reply and not sp_reply.startswith("❌"):
+                    updated = history + [
+                        {"role": "user", "parts": [cleaned_user_message]},
+                        {"role": "model", "parts": [sp_reply]},
+                    ]
+                    return sp_reply, updated, "perplexity-direct"
         except Exception as _rt_exc:
             log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
 

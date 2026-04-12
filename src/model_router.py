@@ -3,10 +3,10 @@ OpenClaw Model Router — Phase 8: Multi-Model Smart Routing
 Classifies query types and routes to the optimal model backend.
 
 Routing strategy:
-  - Code-heavy queries → OpenAI GPT-4 or Anthropic Claude (if keys available)
+  - Code-heavy non-tool queries → Copilot/Claude first when proxy is enabled
   - Multimodal (images) → Gemini (best multimodal support)
-  - Research / deep analysis → Gemini thinking model
-  - Simple chat → Ollama/Gemma (free, fast, private)
+  - Research / deep analysis → Copilot first when proxy is enabled
+  - Simple chat → Copilot first when proxy is enabled, else Ollama/Gemma
   - Tool-requiring → Gemini (native function calling)
   - Everything else → Gemini (reliable default)
 """
@@ -21,6 +21,7 @@ from typing import Optional
 import aiohttp
 
 from http_session import SessionManager as _SessionManager
+from model_routing_policy import select_auto_route, select_tool_route
 
 _router_sessions = _SessionManager(timeout=60, name="model-router")
 
@@ -89,11 +90,18 @@ class ModelRoute:
     __slots__ = ("model_type", "reason")
 
     def __init__(self, model_type: str, reason: str):
-        self.model_type = model_type  # "gemini", "ollama", "openai", "anthropic"
+        self.model_type = model_type  # "gemini", "ollama", "openai", "anthropic", "copilot"
         self.reason = reason
 
     def __repr__(self):
         return f"ModelRoute({self.model_type!r}, {self.reason!r})"
+
+
+def copilot_model_for_message(message: str) -> str:
+    """Choose the proxy model to use for a Copilot-routed message."""
+    if _CODE_PATTERN.search(message or ""):
+        return os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
+    return os.getenv("OPENAI_MODEL", "gpt-4o")
 
 
 def classify_query(
@@ -101,10 +109,12 @@ def classify_query(
     *,
     has_openai_key: bool = False,
     has_anthropic_key: bool = False,
+    copilot_available: bool = False,
     has_image: bool = False,
     needs_tools: bool = False,
     model_preference: str = "auto",
     ollama_alive: bool = True,
+    routing_profile: str = "",
 ) -> ModelRoute:
     """Classify a query and return the optimal model route.
 
@@ -112,11 +122,12 @@ def classify_query(
     1. Explicit user preference (not "auto") → honor it
     2. Image attached → Gemini (best multimodal)
     3. Needs tools → Gemini (native function calling)
-    4. Code query + Claude available → Anthropic (best code quality)
-    5. Creative writing + GPT available → OpenAI (strong creative)
-    6. Analysis/research → Gemini (good reasoning + tools)
-    7. Simple chat → Ollama (free, fast) — falls back to Gemini if Ollama is down
-    8. Default → Gemini
+    4. Non-tool ask + Copilot proxy available → Copilot-first path
+    5. Code query + Claude available → Anthropic (best code quality)
+    6. Creative writing + GPT available → OpenAI (strong creative)
+    7. Analysis/research → Gemini
+    8. Simple chat → Ollama (free, fast) — falls back to Gemini if Ollama is down
+    9. Default → Gemini
     """
     # Honor explicit preference
     if model_preference == "local":
@@ -125,9 +136,13 @@ def classify_query(
         return ModelRoute("ollama", "user preference: local")
     if model_preference == "gemini":
         return ModelRoute("gemini", "user preference: gemini")
-    if model_preference == "openai" and has_openai_key:
+    if model_preference == "copilot":
+        if copilot_available:
+            return ModelRoute("copilot", "user preference: copilot")
+        return ModelRoute("gemini", "user preference: copilot but proxy unavailable — fallback to Gemini")
+    if model_preference == "openai" and (has_openai_key or copilot_available):
         return ModelRoute("openai", "user preference: openai")
-    if model_preference == "anthropic" and has_anthropic_key:
+    if model_preference == "anthropic" and (has_anthropic_key or copilot_available):
         return ModelRoute("anthropic", "user preference: anthropic")
 
     # Image → Gemini (best multimodal)
@@ -136,30 +151,25 @@ def classify_query(
 
     # Tool-requiring → Gemini
     if needs_tools:
-        return ModelRoute("gemini", "requires tool/function calling")
+        tool_decision = select_tool_route(
+            has_openai_key=has_openai_key,
+            has_anthropic_key=has_anthropic_key,
+            copilot_available=copilot_available,
+            ollama_alive=ollama_alive,
+        )
+        return ModelRoute(tool_decision.provider, tool_decision.reason)
 
-    # Code queries → prefer Claude if available
-    if _CODE_PATTERN.search(message):
-        if has_anthropic_key:
-            return ModelRoute("anthropic", "code query (Claude excels at code)")
-        if has_openai_key:
-            return ModelRoute("openai", "code query (GPT-4 strong at code)")
-        return ModelRoute("gemini", "code query (no alternative keys)")
-
-    # Creative writing → prefer GPT if available
-    if _CREATIVE_PATTERN.search(message):
-        if has_openai_key:
-            return ModelRoute("openai", "creative writing (GPT-4 strong at creative)")
-        return ModelRoute("gemini", "creative writing (no OpenAI key)")
-
-    # Deep analysis → Gemini (can use tools if needed)
-    if _ANALYSIS_PATTERN.search(message):
-        return ModelRoute("gemini", "analysis/research query")
-
-    # Simple chat → Ollama if alive, else Gemini
-    if ollama_alive:
-        return ModelRoute("ollama", "simple conversational query")
-    return ModelRoute("gemini", "simple query — Ollama down, using Gemini")
+    decision = select_auto_route(
+        has_openai_key=has_openai_key,
+        has_anthropic_key=has_anthropic_key,
+        copilot_available=copilot_available,
+        ollama_alive=ollama_alive,
+        is_code=bool(_CODE_PATTERN.search(message or "")),
+        is_creative=bool(_CREATIVE_PATTERN.search(message or "")),
+        is_analysis=bool(_ANALYSIS_PATTERN.search(message or "")),
+        routing_profile=routing_profile,
+    )
+    return ModelRoute(decision.provider, decision.reason)
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +236,84 @@ async def chat_openai(
                 log.warning("OpenAI returned HTTP %d", resp.status)
                 return None
             data = await resp.json()
-            return data["choices"][0]["message"]["content"]
+            content = data["choices"][0]["message"]["content"]
+            if COPILOT_PROXY_ENABLED:
+                from spending import spending_tracker
+                await spending_tracker.record_copilot(model=model)
+            return content
     except Exception as e:
         log.warning("OpenAI call failed: %s", e)
+        return None
+
+
+async def chat_openai_vision(
+    message: str,
+    image_bytes: bytes,
+    mime_type: str,
+    *,
+    model: str = "",
+    temperature: float = 0.7,
+    max_tokens: int = 2000,
+) -> Optional[str]:
+    """Send a message with an inline image via OpenAI's vision API.
+
+    Uses the Copilot proxy when available (GPT-4o-vision), otherwise falls
+    back to the direct OpenAI API.  Returns the response text or ``None`` on
+    failure.
+    """
+    import base64
+    import os
+
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    if not api_key and not COPILOT_PROXY_ENABLED:
+        return None
+
+    model = model or os.getenv("OPENAI_MODEL", "gpt-4o")
+
+    image_b64 = base64.b64encode(image_bytes).decode()
+    user_content = [
+        {"type": "text", "text": message},
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime_type};base64,{image_b64}"},
+        },
+    ]
+
+    messages = [{"role": "user", "content": user_content}]
+
+    if COPILOT_PROXY_ENABLED:
+        base_url = COPILOT_PROXY_URL.rstrip("/")
+        proxy_token = os.getenv("COPILOT_PROXY_TOKEN", api_key or "")
+        headers = {"Content-Type": "application/json"}
+        if proxy_token:
+            headers["Authorization"] = f"Bearer {proxy_token}"
+    else:
+        base_url = "https://api.openai.com/v1"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+    try:
+        session = await _router_sessions.get()
+        async with session.post(
+            f"{base_url}/chat/completions",
+            headers=headers,
+            json={
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=aiohttp.ClientTimeout(total=60),
+        ) as resp:
+            if resp.status != 200:
+                log.warning("OpenAI vision returned HTTP %d", resp.status)
+                return None
+            data = await resp.json()
+            return data["choices"][0]["message"]["content"]
+    except Exception as e:
+        log.warning("OpenAI vision call failed: %s", e)
         return None
 
 

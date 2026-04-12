@@ -421,7 +421,7 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
             f"A: {response[:500]}\n\n"
             f"Return ONLY the 2 questions, one per line, no numbering, no extra text. Keep each under 60 characters."
         )
-        text, _, _ = await chat(prompt, model_preference="gemini")
+        text, _, _ = await chat(prompt, model_preference="auto")
         lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
         return lines[:2]
     except (ImportError, RuntimeError, TimeoutError):

@@ -127,7 +127,7 @@ async def learn_from_message(
         from llm import chat
 
         prompt = _EXTRACT_PROMPT.format(user_message=user_message)
-        response, _, _ = await chat(prompt, model_preference="gemini")
+        response, _, _ = await chat(prompt, model_preference="auto")
 
         # Strip markdown fences if present
         text = response.strip()

@@ -629,7 +629,7 @@ async def generate_channel_recap_report(
         response, _, model_used = await asyncio.wait_for(
             llm_chat(
                 user_message=prompt,
-                model_preference="gemini",
+                model_preference="auto",
                 tool_declarations=[],
             ),
             timeout=90,
@@ -1676,7 +1676,7 @@ async def generate_sports_watch_report(
         response, _, model_used = await asyncio.wait_for(
             llm_chat(
                 user_message=prompt,
-                model_preference="gemini",
+                model_preference="auto",
                 tool_declarations=[],
             ),
             timeout=90,
@@ -1875,7 +1875,7 @@ async def generate_box_office_report(
         response, _, model_used = await asyncio.wait_for(
             llm_chat(
                 user_message=prompt,
-                model_preference="gemini",
+                model_preference="auto",
                 tool_declarations=[],
             ),
             timeout=90,

@@ -351,7 +351,7 @@ async def run_memory_consolidation() -> str:
             "Focus on: key topics discussed, decisions made, research done, and recurring themes.\n\n"
             f"Session summaries:\n{summaries_text}"
         )
-        digest, _, _ = await chat(prompt, model_preference="gemini")
+        digest, _, _ = await chat(prompt, model_preference="auto")
         if digest:
             await vector_store.add_document(
                 vector_store.CONVERSATIONS_COLLECTION,
