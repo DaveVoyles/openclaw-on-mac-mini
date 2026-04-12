@@ -45,7 +45,7 @@ class TestSummarizeConversationRouting:
         with (
             patch("llm.chat.COPILOT_PROXY_ENABLED", True, create=True),
             patch("model_routing_policy.select_summarization_route") as mock_route,
-            patch("model_router.chat_openai", AsyncMock(return_value="  Copilot summary.  ")),
+            patch("llm.providers.chat_openai", AsyncMock(return_value="  Copilot summary.  ")),
         ):
             from model_routing_policy import SummarizationRouteDecision
             mock_route.return_value = SummarizationRouteDecision(provider="copilot", reason="test")
@@ -64,7 +64,7 @@ class TestSummarizeConversationRouting:
 
         with (
             patch("model_routing_policy.select_summarization_route") as mock_route,
-            patch("model_router.chat_openai", AsyncMock(return_value=None)),
+            patch("llm.providers.chat_openai", AsyncMock(return_value=None)),
             patch("llm.chat._client") as mock_client,
             patch("llm.chat.asyncio") as mock_asyncio,
         ):

@@ -86,8 +86,8 @@ class TestAnalyzeImageRouting:
 
         with (
             patch("llm.response.select_multimodal_route") as mock_route,
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai_vision", AsyncMock(return_value="Copilot desc")),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai_vision", AsyncMock(return_value="Copilot desc")),
             patch("llm.response._needs_tools", return_value=False),
         ):
             mock_route.return_value = MultimodalRouteDecision(provider="copilot", reason="test")
@@ -106,7 +106,7 @@ class TestAnalyzeImageRouting:
 
         with (
             patch("llm.response.select_multimodal_route") as mock_route,
-            patch("model_router.chat_openai_vision", AsyncMock(return_value=None)),
+            patch("llm.providers.chat_openai_vision", AsyncMock(return_value=None)),
             patch("llm.response.GOOGLE_API_KEY", "fake-key"),
             patch("llm.response._client") as mock_client,
             patch("llm.response.asyncio") as mock_asyncio,

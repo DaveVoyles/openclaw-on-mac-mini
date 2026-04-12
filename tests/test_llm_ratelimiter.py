@@ -111,7 +111,7 @@ class TestIsConfigured:
         """is_configured() should return False when no API key, local LLM disabled, and no Copilot proxy."""
         with patch("llm.GOOGLE_API_KEY", ""):
             with patch("llm.LOCAL_LLM_ENABLED", False):
-                with patch("model_router.COPILOT_PROXY_ENABLED", False):
+                with patch("llm.providers.COPILOT_PROXY_ENABLED", False):
                     assert is_configured() is False
 
     def test_true_when_api_key_set(self):
@@ -122,7 +122,7 @@ class TestIsConfigured:
         """Copilot proxy being enabled counts as configured even without GOOGLE_API_KEY."""
         with patch("llm.GOOGLE_API_KEY", ""):
             with patch("llm.LOCAL_LLM_ENABLED", False):
-                with patch("model_router.COPILOT_PROXY_ENABLED", True):
+                with patch("llm.providers.COPILOT_PROXY_ENABLED", True):
                     # Phase 8: Copilot proxy now counts as a valid backend.
                     assert is_configured() is True
 

@@ -272,8 +272,8 @@ class TestChatModelPreference:
         chat_module = sys.modules['llm.chat']
 
         with (
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Copilot response"),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Copilot response"),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
@@ -291,8 +291,8 @@ class TestChatModelPreference:
         chat_module = sys.modules["llm.chat"]
 
         with (
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude fallback response"]),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude fallback response"]),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
@@ -312,9 +312,9 @@ class TestChatModelPreference:
         chat_module = sys.modules["llm.chat"]
 
         with (
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
             patch.object(model_routing_policy.cfg, "routing_profile", "gemini-first"),
-            patch("model_router.chat_openai", new_callable=AsyncMock) as mock_openai,
+            patch("llm.providers.chat_openai", new_callable=AsyncMock) as mock_openai,
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
@@ -335,7 +335,7 @@ class TestChatModelPreference:
         chat_module = sys.modules["llm.chat"]
 
         with (
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
             patch.object(model_routing_policy.cfg, "routing_profile", "balanced"),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value="Hello from Gemma!"),
@@ -358,8 +358,8 @@ class TestChatModelPreference:
 
         mock_model = MagicMock()
         with (
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
@@ -374,8 +374,8 @@ class TestChatModelPreference:
         import llm
 
         with (
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Copilot direct response"),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Copilot direct response"),
         ):
             text, _hist, model = await llm.chat("hello", model_preference="copilot")
 
@@ -519,7 +519,7 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
             patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
             patch("model_router.classify_query", return_value=SimpleNamespace(model_type="openai")),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="One moment while I look that up."),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
@@ -545,8 +545,8 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Copilot stream response"),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Copilot stream response"),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
@@ -572,8 +572,8 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_rate_limiter") as mock_rl,
             patch.object(chat_module, "_trim_history", new_callable=AsyncMock, side_effect=lambda history, **_: history),
             patch.object(chat_module, "_auto_recall_context", new_callable=AsyncMock, return_value=""),
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude stream fallback"]),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, side_effect=[None, "Claude stream fallback"]),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, return_value=("Gemini response", [], "gemini-2.5-flash")),
         ):
@@ -710,8 +710,8 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
         ):
             mock_rl.check.return_value = True
             chunks = []
@@ -742,7 +742,7 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
-            patch("model_router.COPILOT_PROXY_ENABLED", False),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", False),
             patch.object(chat_module, "_get_tool_declarations", return_value=[{"name": "generate_sports_watch_report"}]),
             patch.object(chat_module, "route_tool_declarations", return_value=([{"name": "generate_sports_watch_report"}], {})),
             patch("skills.reporting_skills.generate_sports_watch_report", new_callable=AsyncMock, return_value="Direct sports answer"),
@@ -779,8 +779,8 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
             patch.object(chat_module, "_rate_limiter") as mock_rl,
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
         ):
             mock_rl.check.return_value = True
             text, _hist, model = await llm.chat("what happened overnight?", model_preference="auto")
@@ -810,8 +810,8 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, side_effect=local_timeout),
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value="Recovered through Copilot."),
         ):
             mock_rl.check.return_value = True
             chunks = []
@@ -842,8 +842,8 @@ class TestChatStreamModelPreference:
             patch.object(chat_module, "_select_model_for_message", new_callable=AsyncMock, return_value=(mock_model, {})),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock, side_effect=RuntimeError("Gemini circuit breaker is open")),
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value=None),
-            patch("model_router.COPILOT_PROXY_ENABLED", True),
-            patch("model_router.chat_openai", new_callable=AsyncMock, return_value=fallback_reply),
+            patch("llm.providers.COPILOT_PROXY_ENABLED", True),
+            patch("llm.providers.chat_openai", new_callable=AsyncMock, return_value=fallback_reply),
         ):
             mock_rl.check.return_value = True
             chunks = []
