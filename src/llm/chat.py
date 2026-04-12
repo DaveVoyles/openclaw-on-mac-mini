@@ -36,7 +36,6 @@ from llm_patterns import (
     _reflect_on_response,
 )
 from llm_ratelimit import rate_limiter as _rate_limiter
-from skills import SKILLS
 from tool_health import circuit_breaker as _gemini_circuit
 from tool_orchestration import build_tool_provider_context
 from tool_router import route_tool_declarations
@@ -281,15 +280,17 @@ async def _try_copilot_proxy_reply(
     history: list[dict],
     context: str,
     timeout: float | None = None,
+    model_override: str | None = None,
 ) -> tuple[str, list[dict], str] | None:
-    from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream
-    from model_router import chat_openai
+    from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream, chat_openai
     if not COPILOT_PROXY_ENABLED:
         return None
 
     _provider_stream_enabled = os.getenv("PROVIDER_STREAM", "").strip() == "1"
     system_prompt = _load_system_prompt()
-    candidates = _copilot_model_candidates(cleaned_user_message)
+    candidates = [model_override] if model_override else _copilot_model_candidates(cleaned_user_message)
+    if model_override:
+        log.debug("Mini-model fast-path: using %s", model_override)
     per_attempt_timeout = (
         max(timeout / max(len(candidates), 1), 1.0)
         if timeout
@@ -636,13 +637,8 @@ async def chat_stream(
         try:
             import os
 
-            from model_router import (
-                COPILOT_PROXY_ENABLED,
-                chat_anthropic,
-                chat_openai,
-                classify_query,
-                is_ollama_alive,
-            )
+            from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
+            from model_router import classify_query, is_ollama_alive
             _ollama_up = await is_ollama_alive()
             route = classify_query(
                 cleaned_user_message,
@@ -657,11 +653,14 @@ async def chat_stream(
             _routing_notes.append(f"Auto route: {route.reason}")
 
             if route.model_type == "copilot":
+                if route.model:
+                    _routing_notes.append(f"mini-model: {route.model}")
                 result = await _try_copilot_proxy_reply(
                     model_message=model_message,
                     cleaned_user_message=cleaned_user_message,
                     history=history,
                     context="auto-route",
+                    model_override=route.model or None,
                 )
                 if result is not None:
                     reply, updated, model_label = result
@@ -719,7 +718,7 @@ async def chat_stream(
     # Forced OpenAI / Anthropic mode
     if model_preference in ("openai", "anthropic", "copilot"):
         try:
-            from model_router import chat_anthropic, chat_openai
+            from llm.providers import chat_anthropic, chat_openai
             provider_name = model_preference
             if model_preference == "openai":
                 system_prompt = _load_system_prompt()
@@ -909,6 +908,7 @@ async def chat_stream(
     ):
         if _FACTUAL_QUESTION_RE.search(cleaned_user_message.strip()):
             log.info("Auto-escalating to web search for: %s", cleaned_user_message)
+            from skills import SKILLS
             search_fn = SKILLS.get("search_web")
             if search_fn is not None:
                 try:
@@ -1054,13 +1054,8 @@ async def chat(
         try:
             import os
 
-            from model_router import (
-                COPILOT_PROXY_ENABLED,
-                chat_anthropic,
-                chat_openai,
-                classify_query,
-                is_ollama_alive,
-            )
+            from llm.providers import COPILOT_PROXY_ENABLED, chat_anthropic, chat_openai
+            from model_router import classify_query, is_ollama_alive
             _ollama_up = await is_ollama_alive()
             route = classify_query(
                 cleaned_user_message,
@@ -1080,6 +1075,7 @@ async def chat(
                     cleaned_user_message=cleaned_user_message,
                     history=history,
                     context="auto-route",
+                    model_override=route.model or None,
                 )
                 if result is not None:
                     reply, updated, model_label = result
@@ -1131,7 +1127,7 @@ async def chat(
     # Forced OpenAI / Anthropic mode
     if model_preference in ("openai", "anthropic", "copilot"):
         try:
-            from model_router import chat_anthropic, chat_openai
+            from llm.providers import chat_anthropic, chat_openai
             provider_name = model_preference
             if model_preference == "openai":
                 system_prompt = _load_system_prompt()
@@ -1358,8 +1354,7 @@ async def summarize_conversation(history: list[dict]) -> str:
     )
 
     try:
-        from llm.providers import COPILOT_PROXY_ENABLED
-        from model_router import chat_openai
+        from llm.providers import COPILOT_PROXY_ENABLED, chat_openai
         from model_routing_policy import select_summarization_route
 
         route = select_summarization_route(copilot_available=COPILOT_PROXY_ENABLED)

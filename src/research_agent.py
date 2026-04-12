@@ -659,8 +659,7 @@ class ResearchAgent:
         falls back to Gemini thinking mode when Copilot is unavailable.
         """
         try:
-            from llm.providers import COPILOT_PROXY_ENABLED
-            from model_router import chat_openai
+            from llm.providers import COPILOT_PROXY_ENABLED, chat_openai
             from model_routing_policy import select_research_synthesis_route
 
             route = select_research_synthesis_route(copilot_available=COPILOT_PROXY_ENABLED)

@@ -42,6 +42,7 @@ class AutoRouteDecision:
     provider: str
     reason: str
     profile: str
+    model_override: str | None = None  # optional model name to use instead of default
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,7 +186,12 @@ def select_auto_route(
         and profile == "copilot-first"
         and not is_code
     ):
-        return AutoRouteDecision("copilot", f"copilot mini-model fast-path (≤{_MINI_TOKEN_THRESHOLD} tokens)", profile)
+        return AutoRouteDecision(
+            "copilot",
+            f"copilot mini-model fast-path (≤{_MINI_TOKEN_THRESHOLD} tokens)",
+            profile,
+            model_override=_MINI_MODEL,
+        )
 
     registry = build_provider_capability_registry(
         has_openai_key=has_openai_key,
@@ -804,7 +810,7 @@ def classify_query(
         has_tools=needs_tools,
         recalled_context=recalled_context,
     )
-    model_hint = _MINI_MODEL if "mini-model fast-path" in decision.reason else ""
+    model_hint = decision.model_override or ""
     return ModelRoute(decision.provider, decision.reason, model=model_hint)
 
 

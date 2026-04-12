@@ -451,6 +451,32 @@ class OpenClawBot(commands.Bot):
         except Exception as exc:
             log.warning("Failed to start metrics collector: %s", exc)
 
+        # Startup provider capability scan
+        try:
+            from llm.startup import scan_providers
+
+            provider_status = await scan_providers()
+            available = [p for p, info in provider_status.items() if info["available"]]
+            unavailable = [p for p, info in provider_status.items() if not info["available"]]
+            log.info("Providers available: %s", ", ".join(available) or "none")
+            if unavailable:
+                log.warning("Providers unavailable: %s", ", ".join(unavailable))
+        except Exception as exc:
+            log.warning("Provider scan failed: %s", exc)
+
+        # Schedule hourly audit log rotation background task
+        async def _audit_log_rotation_loop() -> None:
+            while True:
+                await asyncio.sleep(3600)
+                try:
+                    from llm.telemetry import rotate_audit_log
+
+                    await rotate_audit_log()
+                except Exception as exc:  # noqa: BLE001
+                    log.debug("Audit log rotation failed: %s", exc)
+
+        asyncio.create_task(_audit_log_rotation_loop(), name="audit-log-rotation")
+
     async def on_ready(self) -> None:
         """Initialize bot on connection to Discord.
 

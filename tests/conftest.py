@@ -135,3 +135,15 @@ def _mock_llm_model_init(monkeypatch):
         monkeypatch.setattr(llm_client, "_init_gemini_model", mock_init_gemini)
     except Exception:
         pass  # Module not imported yet, that's fine
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _trigger_lazy_llm_loads():
+    """Trigger lazy loading of llm submodules to populate sys.modules for tests."""
+    try:
+        import llm
+        # Access lazy-loaded submodules via __getattr__ to populate sys.modules
+        _ = llm.chat
+        _ = llm.chat_stream
+    except Exception:
+        pass  # If skills import fails, that's OK; tests will handle their own imports

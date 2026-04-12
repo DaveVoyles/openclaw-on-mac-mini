@@ -56,9 +56,12 @@ COPILOT_PROXY_URL: str = os.getenv("COPILOT_PROXY_URL", "")
 COPILOT_PROXY_ENABLED: bool = COPILOT_PROXY_URL != ""
 _proxy_healthy: bool = False  # set by check_proxy_health() at startup
 
-# Configurable fallback chain: primary provider is prepended at call time.
-_FALLBACK_CHAIN_RAW = os.getenv("PROVIDER_FALLBACK_CHAIN", "copilot,ollama")
-_FALLBACK_CHAIN: list[str] = [p.strip() for p in _FALLBACK_CHAIN_RAW.split(",") if p.strip()]
+_DEFAULT_CHAIN: list[str] = ["copilot", "openai", "anthropic"]
+PROVIDER_FALLBACK_CHAIN: list[str] = [
+    p.strip()
+    for p in os.getenv("PROVIDER_FALLBACK_CHAIN", "copilot,openai,anthropic").split(",")
+    if p.strip()
+]
 
 _OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 _OLLAMA_DEFAULT_MODEL = os.getenv("OLLAMA_DEFAULT_MODEL", "gemma3:4b")
@@ -68,11 +71,25 @@ _last_usage: dict = {"input_tokens": 0, "output_tokens": 0}
 
 # Cumulative token counts for this process lifetime; updated by call_provider().
 _cumulative_tokens: dict[str, int] = {"input": 0, "output": 0}
+_tokens_by_provider: dict[str, dict[str, int]] = {}  # provider -> {"input": N, "output": N}
 
 
 def token_usage_summary() -> dict:
-    """Return cumulative input/output tokens seen this process lifetime."""
-    return dict(_cumulative_tokens)
+    """Return cumulative token usage: totals + per-provider breakdown."""
+    return {
+        "total": dict(_cumulative_tokens),
+        "by_provider": {p: dict(v) for p, v in _tokens_by_provider.items()},
+    }
+
+
+def reset_token_usage(provider: str | None = None) -> None:
+    """Reset token counters; pass a provider name to clear only that provider's entry."""
+    if provider:
+        _tokens_by_provider.pop(provider, None)
+        # Note: cannot easily undo per-provider contribution to totals; best effort
+    else:
+        _cumulative_tokens.update({"input": 0, "output": 0})
+        _tokens_by_provider.clear()
 
 # ---------------------------------------------------------------------------
 # Proxy health check
@@ -560,6 +577,49 @@ async def chat_ollama(
         return None
 
 
+async def chat_ollama_stream(
+    prompt: str,
+    history: list[dict],
+    system: str = "",
+    model: str | None = None,
+) -> AsyncGenerator[str, None]:
+    """Yield text chunks from Ollama streaming API (stream=true)."""
+    url = f"{_OLLAMA_BASE_URL}/api/chat"
+    messages: list[dict] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.extend(history)
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {
+        "model": model or _OLLAMA_DEFAULT_MODEL,
+        "messages": messages,
+        "stream": True,
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url, json=payload, timeout=aiohttp.ClientTimeout(total=120)
+        ) as r:
+            r.raise_for_status()
+            async for line in r.content:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    chunk = _json.loads(line)
+                    token = chunk.get("message", {}).get("content", "")
+                    if token:
+                        yield token
+                    if chunk.get("done"):
+                        _last_usage.update(
+                            input_tokens=chunk.get("prompt_eval_count", 0),
+                            output_tokens=chunk.get("eval_count", 0),
+                        )
+                        break
+                except (_json.JSONDecodeError, KeyError):
+                    continue
+
+
 # ---------------------------------------------------------------------------
 # Unified dispatch
 # ---------------------------------------------------------------------------
@@ -622,14 +682,14 @@ async def call_provider(
     temperature: float = 0.7,
     max_tokens: int = 2000,
 ) -> ProviderResponse:
-    """Route to the right provider, walking ``_FALLBACK_CHAIN`` on failure.
+    """Route to the right provider, walking ``PROVIDER_FALLBACK_CHAIN`` on failure.
 
     Always returns a :class:`ProviderResponse`; ``resp.text`` is ``None`` when
     every provider in the chain failed (circuit open, API error, unknown, etc.).
     """
     seen: set[str] = set()
     chain: list[str] = []
-    for p in [provider] + _FALLBACK_CHAIN:
+    for p in [provider] + PROVIDER_FALLBACK_CHAIN:
         if p not in seen:
             seen.add(p)
             chain.append(p)
@@ -641,6 +701,9 @@ async def call_provider(
                 log.warning("call_provider: %s failed, using fallback provider %s", provider, p)
             _cumulative_tokens["input"] += resp.input_tokens
             _cumulative_tokens["output"] += resp.output_tokens
+            by = _tokens_by_provider.setdefault(resp.provider, {"input": 0, "output": 0})
+            by["input"] += resp.input_tokens
+            by["output"] += resp.output_tokens
             return resp
         if i == 0 and len(chain) > 1:
             log.warning("call_provider: %s returned None, trying fallback chain", provider)
@@ -648,9 +711,43 @@ async def call_provider(
     return ProviderResponse(text=None, provider=provider, model=model, latency_ms=0.0)
 
 
+async def call_provider_with_fallback(
+    prompt: str,
+    *,
+    history: list | None = None,
+    system_prompt: str = "",
+    model: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 1024,
+    chain: list[str] | None = None,
+) -> Optional[ProviderResponse]:
+    """Try providers in order; return first successful ProviderResponse.
+
+    Uses PROVIDER_FALLBACK_CHAIN env var order by default.
+    Skips providers whose circuit is open.
+    Returns None only if all providers fail.
+    """
+    providers_to_try = chain or PROVIDER_FALLBACK_CHAIN
+    for provider in providers_to_try:
+        if _is_open(provider):
+            log.debug("Failover: skipping %s (circuit open)", provider)
+            continue
+        result = await call_provider(
+            provider, prompt, history or [], system_prompt,
+            model=model or "", temperature=temperature, max_tokens=max_tokens,
+        )
+        if result and result.text:
+            log.debug("Failover: %s succeeded", provider)
+            return result
+        log.debug("Failover: %s returned empty/None, trying next", provider)
+    log.warning("Failover: all providers exhausted (%s)", providers_to_try)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Streaming generators
 # ---------------------------------------------------------------------------
+
 
 async def _stream_openai(
     provider: str,
@@ -822,6 +919,21 @@ async def call_provider_stream(
             ):
                 yield chunk
             _record_success(provider)
+        elif provider == "ollama":
+            _last_usage.update(input_tokens=0, output_tokens=0)
+            async for chunk in chat_ollama_stream(
+                prompt, history or [], system_prompt, model
+            ):
+                yield chunk
+            _record_success(provider)
+            inp = _last_usage["input_tokens"]
+            out = _last_usage["output_tokens"]
+            if inp or out:
+                _cumulative_tokens["input"] += inp
+                _cumulative_tokens["output"] += out
+                by = _tokens_by_provider.setdefault(provider, {"input": 0, "output": 0})
+                by["input"] += inp
+                by["output"] += out
         else:
             log.warning("call_provider_stream: unknown provider %r", provider)
     except Exception as exc:
@@ -829,9 +941,22 @@ async def call_provider_stream(
         log.warning("Stream error from %s: %s", provider, exc)
 
 
-async def scan_providers() -> dict[str, bool]:
-    """Run parallel lightweight pings to all configured providers. Returns availability map."""
+async def scan_providers() -> dict[str, dict]:
+    """Run parallel lightweight pings to all configured providers.
+
+    Returns a mapping of provider name to ``{"available": bool, "latency_ms": float | None}``.
+    ``latency_ms`` is ``None`` when the provider is unavailable.
+    """
     import asyncio as _asyncio
+
+    async def _timed_ping(coro) -> tuple[bool, float | None]:
+        t0 = _time.monotonic()
+        try:
+            ok = await coro
+        except Exception:
+            ok = False
+        latency_ms = round((_time.monotonic() - t0) * 1000, 1) if ok else None
+        return bool(ok), latency_ms
 
     async def _ping_copilot() -> bool:
         if not COPILOT_PROXY_ENABLED:
@@ -856,16 +981,21 @@ async def scan_providers() -> dict[str, bool]:
 
         return bool(_os.getenv("ANTHROPIC_API_KEY"))
 
-    copilot, ollama, openai, anthropic = await _asyncio.gather(
-        _ping_copilot(),
-        _ping_ollama(),
-        _ping_openai(),
-        _ping_anthropic(),
+    results = await _asyncio.gather(
+        _timed_ping(_ping_copilot()),
+        _timed_ping(_ping_ollama()),
+        _timed_ping(_ping_openai()),
+        _timed_ping(_ping_anthropic()),
         return_exceptions=True,
     )
+
+    def _unpack(r) -> tuple[bool, float | None]:
+        if isinstance(r, BaseException):
+            return False, None
+        return r  # type: ignore[return-value]
+
+    names = ("copilot", "ollama", "openai", "anthropic")
     return {
-        "copilot": copilot is True,
-        "ollama": ollama is True,
-        "openai": openai is True,
-        "anthropic": anthropic is True,
+        name: {"available": ok, "latency_ms": lat}
+        for name, (ok, lat) in zip(names, (_unpack(r) for r in results))
     }

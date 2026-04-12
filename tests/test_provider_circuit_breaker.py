@@ -169,6 +169,8 @@ class TestCallProviderCircuitGuard:
         import llm.providers as _providers_mod
 
         monkeypatch.setattr(_providers_mod, "chat_openai", mock_chat)
+        # Disable the fallback chain so no other provider is attempted
+        monkeypatch.setattr(_providers_mod, "PROVIDER_FALLBACK_CHAIN", [])
 
         resp = await call_provider(
             "openai", "hello", [], "you are helpful"
@@ -188,6 +190,8 @@ class TestCallProviderCircuitGuard:
         import llm.providers as _providers_mod
 
         monkeypatch.setattr(_providers_mod, "chat_openai", mock_chat)
+        # Disable the fallback chain so no other provider is attempted
+        monkeypatch.setattr(_providers_mod, "PROVIDER_FALLBACK_CHAIN", [])
 
         resp = await call_provider("openai", "hi", [], "sys")
 

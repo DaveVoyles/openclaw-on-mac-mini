@@ -29,12 +29,9 @@ from config import cfg as _router_cfg
 
 log = logging.getLogger("openclaw.model_router")
 
-# Copilot proxy configuration
-# When COPILOT_PROXY_URL is set, OpenAI and Anthropic calls route through it
-# Both constants are also defined in llm/providers.py; callers still importing
-# from here are preserved for backward compat until fully migrated. # compat
-COPILOT_PROXY_URL = os.getenv("COPILOT_PROXY_URL", "")
-COPILOT_PROXY_ENABLED = COPILOT_PROXY_URL != ""  # compat — also in llm.providers
+# Copilot proxy configuration — single source of truth is llm.providers
+# Re-exported here for backward compat with any remaining callers.
+from llm.providers import COPILOT_PROXY_ENABLED, COPILOT_PROXY_URL  # re-export  # noqa: E402
 
 # Ollama health-check state (cached for 30 s)
 _OLLAMA_URL = _router_cfg.ollama_url

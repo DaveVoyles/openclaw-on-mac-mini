@@ -13,6 +13,8 @@ _LOG_PATH = pathlib.Path(
     os.getenv("ROUTING_TELEMETRY_PATH", str(pathlib.Path(__file__).resolve().parent.parent.parent / "data" / "routing_audit.jsonl"))
 )
 _ENABLED = os.getenv("ROUTING_TELEMETRY", "false").lower() in ("1", "true", "yes")
+_AUDIT_MAX_LINES = int(os.getenv("AUDIT_MAX_LINES", "10000"))
+_AUDIT_KEEP_LINES = int(os.getenv("AUDIT_KEEP_LINES", "8000"))
 
 
 def record(
@@ -39,8 +41,22 @@ def record(
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _LOG_PATH.open("a") as f:
             f.write(json.dumps(entry) + "\n")
-    except OSError as exc:
+    except Exception as exc:  # noqa: BLE001
         log.debug("Telemetry write failed: %s", exc)
+
+
+async def rotate_audit_log() -> None:
+    """Trim routing_audit.jsonl to _AUDIT_KEEP_LINES if over _AUDIT_MAX_LINES. Safe to call anytime."""
+    try:
+        if not _LOG_PATH.exists():
+            return
+        with _LOG_PATH.open() as f:
+            lines = f.readlines()
+        if len(lines) > _AUDIT_MAX_LINES:
+            with _LOG_PATH.open("w") as f:
+                f.writelines(lines[-_AUDIT_KEEP_LINES:])
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def tail(n: int = 20) -> list[dict]:

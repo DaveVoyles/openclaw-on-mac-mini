@@ -47,22 +47,52 @@ from llm_patterns import (  # noqa: F401
 )
 from llm_ratelimit import RateLimiter  # noqa: F401
 from llm_ratelimit import rate_limiter as _rate_limiter  # noqa: F401
-from llm_tools import (  # noqa: F401
-    _execute_function_call,
-    _extract_final_text,
-    _extract_history,
-    _run_tool_loop,
-)
 
-# Re-exports from package sub-modules
-from .chat import (  # noqa: F401
-    _gemini_chat,
-    chat,
-    chat_deep,
-    chat_stream,
-    get_rate_info,
-    summarize_conversation,
-)
+# ---------------------------------------------------------------------------
+# Lazy re-exports — breaks the circular import chain:
+#   llm/__init__.py → llm_tools/llm.chat/llm.response/llm.tool_execution
+#                   → skills (ModuleNotFoundError in test/dev)
+#
+# Modules that are safe to import eagerly (no transitive skills import):
+#   llm_client, llm_patterns, llm_ratelimit, llm.context
+# Modules that require lazy loading (import llm_tools → skills):
+#   llm_tools, llm.chat, llm.response, llm.tool_execution
+# ---------------------------------------------------------------------------
+_LAZY_EXPORTS: dict[str, str] = {
+    # from llm_tools
+    "_execute_function_call": "llm_tools",
+    "_extract_final_text": "llm_tools",
+    "_extract_history": "llm_tools",
+    "_run_tool_loop": "llm_tools",
+    # from llm.chat
+    "_gemini_chat": "llm.chat",
+    "chat": "llm.chat",
+    "chat_deep": "llm.chat",
+    "chat_stream": "llm.chat",
+    "get_rate_info": "llm.chat",
+    "summarize_conversation": "llm.chat",
+    # from llm.response
+    "SUPPORTED_IMAGE_MIMES": "llm.response",
+    "analyze_document": "llm.response",
+    "analyze_image": "llm.response",
+    "analyze_image_with_tools": "llm.response",
+    # from llm.tool_execution
+    "_chat_ollama": "llm.tool_execution",
+    "_get_ollama_session": "llm.tool_execution",
+    "_ollama_available": "llm.tool_execution",
+    "_try_local_model": "llm.tool_execution",
+    "close_sessions": "llm.tool_execution",
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_EXPORTS:
+        import importlib
+        module = importlib.import_module(_LAZY_EXPORTS[name])
+        value = getattr(module, name)
+        globals()[name] = value  # cache so subsequent lookups skip __getattr__
+        return value
+    raise AttributeError(f"module 'llm' has no attribute {name!r}")
 
 
 def is_configured() -> bool:
@@ -83,17 +113,4 @@ from .context import (  # noqa: F401
     _strip_recalled_prefix,
     _to_content,
     _trim_history,
-)
-from .response import (  # noqa: F401
-    SUPPORTED_IMAGE_MIMES,
-    analyze_document,
-    analyze_image,
-    analyze_image_with_tools,
-)
-from .tool_execution import (  # noqa: F401
-    _chat_ollama,
-    _get_ollama_session,
-    _ollama_available,
-    _try_local_model,
-    close_sessions,
 )
