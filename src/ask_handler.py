@@ -51,7 +51,6 @@ from llm import SUPPORTED_IMAGE_MIMES, get_rate_info
 from llm import chat as llm_chat  # noqa: F401 — available if needed
 from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
-from llm import telemetry as _telemetry
 from llm_patterns import _MEMORY_STORE_RE
 from memory import get_model_preference, get_routing_profile
 from memory import store as conversation_store
@@ -475,6 +474,7 @@ async def handle_ask(
 
     # Routing telemetry audit record (Task #14)
     try:
+        from llm import telemetry as _telemetry
         _telem_provider = model_used.split("/")[0] if model_used not in ("error", "timeout", "unknown") else model_used
         _telem_latency = (time.monotonic() - _ask_start) * 1000
         _telemetry.record(
@@ -795,6 +795,7 @@ async def handle_ask(
 async def handle_metrics(interaction: discord.Interaction) -> None:
     """Handler for /metrics — shows last 20 routing telemetry entries."""
     await interaction.response.defer(ephemeral=True)
+    from llm import telemetry as _telemetry
     records = _telemetry.tail(20)
     summary = _telemetry.summarise(records)
     await interaction.followup.send(summary, ephemeral=True)
