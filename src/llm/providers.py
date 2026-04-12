@@ -6,11 +6,12 @@ Handles OpenAI, Anthropic, and Copilot-proxy HTTP calls.
 
 import asyncio
 import dataclasses
+import json as _json
 import logging
 import os
 import random
 import time as _time
-from typing import Optional
+from typing import AsyncGenerator, Optional
 
 import aiohttp
 
@@ -492,3 +493,184 @@ async def call_provider(
         _cumulative_tokens["input"] += resp.input_tokens
         _cumulative_tokens["output"] += resp.output_tokens
     return resp
+
+
+# ---------------------------------------------------------------------------
+# Streaming generators
+# ---------------------------------------------------------------------------
+
+async def _stream_openai(
+    provider: str,
+    prompt: str,
+    history: list | None,
+    system_prompt: str,
+    model: str | None,
+    temperature: float,
+    max_tokens: int,
+) -> AsyncGenerator[str, None]:
+    """Yield text chunks from OpenAI / Copilot-proxy streaming API (SSE)."""
+    global _proxy_healthy  # noqa: PLW0603
+    api_key = os.getenv("OPENAI_API_KEY", "")
+    use_proxy = COPILOT_PROXY_ENABLED and _proxy_healthy
+
+    if provider == "copilot" or use_proxy:
+        base_url = COPILOT_PROXY_URL.rstrip("/")
+        proxy_token = os.getenv("COPILOT_PROXY_TOKEN", api_key or "")
+        headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "text/event-stream"}
+        if proxy_token:
+            headers["Authorization"] = f"Bearer {proxy_token}"
+    else:
+        if not api_key:
+            return
+        base_url = "https://api.openai.com/v1"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        }
+
+    model_name = model or os.getenv("OPENAI_MODEL", "gpt-4o")
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
+    for msg in (history or [])[-10:]:
+        role = "assistant" if msg["role"] == "model" else msg["role"]
+        content = " ".join(p for p in msg["parts"] if isinstance(p, str))
+        if content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+
+    session = await _provider_sessions.get()
+    async with session.post(
+        f"{base_url}/chat/completions",
+        headers=headers,
+        json={
+            "model": model_name,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        },
+        timeout=aiohttp.ClientTimeout(total=120),
+    ) as resp:
+        resp.raise_for_status()
+        async for raw_line in resp.content:
+            line = raw_line.decode("utf-8", errors="replace").strip()
+            if not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                data = _json.loads(payload)
+                chunk = (data["choices"][0].get("delta") or {}).get("content") or ""
+                if chunk:
+                    yield chunk
+            except Exception:  # noqa: BLE001
+                continue
+
+
+async def _stream_anthropic(
+    prompt: str,
+    history: list | None,
+    system_prompt: str,
+    model: str | None,
+    temperature: float,
+    max_tokens: int,
+) -> AsyncGenerator[str, None]:
+    """Yield text chunks from Anthropic streaming API (SSE).
+
+    When a Copilot proxy is configured, routes through it (OpenAI-compat)
+    instead of calling Anthropic directly.
+    """
+    if COPILOT_PROXY_ENABLED:
+        async for chunk in _stream_openai(
+            "copilot", prompt, history, system_prompt,
+            model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5"),
+            temperature, max_tokens,
+        ):
+            yield chunk
+        return
+
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        return
+
+    model_name = model or os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
+    messages: list[dict] = []
+    for msg in (history or [])[-10:]:
+        role = "assistant" if msg["role"] == "model" else msg["role"]
+        content = " ".join(p for p in msg["parts"] if isinstance(p, str))
+        if content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": prompt})
+
+    session = await _provider_sessions.get()
+    async with session.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+            "Accept": "text/event-stream",
+        },
+        json={
+            "model": model_name,
+            "system": system_prompt,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "stream": True,
+        },
+        timeout=aiohttp.ClientTimeout(total=120),
+    ) as resp:
+        resp.raise_for_status()
+        async for raw_line in resp.content:
+            line = raw_line.decode("utf-8", errors="replace").strip()
+            if not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            try:
+                data = _json.loads(payload)
+                if data.get("type") == "content_block_delta":
+                    chunk = (data.get("delta") or {}).get("text") or ""
+                    if chunk:
+                        yield chunk
+            except Exception:  # noqa: BLE001
+                continue
+
+
+async def call_provider_stream(
+    provider: str,
+    prompt: str,
+    *,
+    history: list | None = None,
+    system_prompt: str = "",
+    model: str | None = None,
+    temperature: float = 0.7,
+    max_tokens: int = 1024,
+) -> AsyncGenerator[str, None]:
+    """Stream text chunks from a non-Gemini provider. Yields str chunks.
+
+    Circuit-breaker aware: yields nothing when the provider circuit is open.
+    Records success/failure in the circuit breaker after the stream ends.
+    """
+    if _is_open(provider):
+        log.debug("Circuit open for %s — skipping stream", provider)
+        return
+    try:
+        if provider in ("openai", "copilot"):
+            async for chunk in _stream_openai(
+                provider, prompt, history, system_prompt, model, temperature, max_tokens
+            ):
+                yield chunk
+            _record_success(provider)
+        elif provider == "anthropic":
+            async for chunk in _stream_anthropic(
+                prompt, history, system_prompt, model, temperature, max_tokens
+            ):
+                yield chunk
+            _record_success(provider)
+        else:
+            log.warning("call_provider_stream: unknown provider %r", provider)
+    except Exception as exc:
+        _record_failure(provider)
+        log.warning("Stream error from %s: %s", provider, exc)

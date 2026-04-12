@@ -4,6 +4,7 @@ Core LLM chat logic — chat(), chat_stream(), chat_deep(), summarize_conversati
 
 import asyncio
 import logging
+import os
 from typing import Any
 
 from google import genai
@@ -281,11 +282,12 @@ async def _try_copilot_proxy_reply(
     context: str,
     timeout: float | None = None,
 ) -> tuple[str, list[dict], str] | None:
-    from llm.providers import COPILOT_PROXY_ENABLED
+    from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream
     from model_router import chat_openai
     if not COPILOT_PROXY_ENABLED:
         return None
 
+    _provider_stream_enabled = os.getenv("PROVIDER_STREAM", "").strip() == "1"
     system_prompt = _load_system_prompt()
     candidates = _copilot_model_candidates(cleaned_user_message)
     per_attempt_timeout = (
@@ -296,19 +298,34 @@ async def _try_copilot_proxy_reply(
 
     for candidate in candidates:
         try:
-            request = chat_openai(
-                model_message,
-                history,
-                system_prompt,
-                model=candidate,
-                temperature=TEMPERATURE,
-                max_tokens=MAX_TOKENS,
-            )
-            reply = (
-                await asyncio.wait_for(request, timeout=per_attempt_timeout)
-                if per_attempt_timeout is not None
-                else await request
-            )
+            if _provider_stream_enabled:
+                # Collect stream chunks into a full reply (same return type as non-stream path)
+                chunks: list[str] = []
+                async for chunk in call_provider_stream(
+                    "copilot",
+                    model_message,
+                    history=history,
+                    system_prompt=system_prompt,
+                    model=candidate,
+                    temperature=TEMPERATURE,
+                    max_tokens=MAX_TOKENS,
+                ):
+                    chunks.append(chunk)
+                reply: str | None = "".join(chunks) or None
+            else:
+                request = chat_openai(
+                    model_message,
+                    history,
+                    system_prompt,
+                    model=candidate,
+                    temperature=TEMPERATURE,
+                    max_tokens=MAX_TOKENS,
+                )
+                reply = (
+                    await asyncio.wait_for(request, timeout=per_attempt_timeout)
+                    if per_attempt_timeout is not None
+                    else await request
+                )
         except asyncio.TimeoutError:
             log.warning(
                 "Copilot proxy model %s timed out during %s",
