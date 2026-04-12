@@ -2,6 +2,20 @@
 
 Topic-specific templates for OpenClaw's weekly recap system.
 
+## Quick Reference
+
+| Template | Emoji | Focus | Key Data |
+|----------|-------|-------|----------|
+| `entertainment` | 🎬 | Hollywood & Streaming | Box office, streaming news, studio stocks (DIS, NFLX, WBD, PARA) |
+| `sports` | 🏀 | NBA & Basketball | Recent games, standings, upcoming matchups, headlines |
+| `tech` | 💻 | Tech Industry | Headlines, FAANG+ stocks, product launches, funding |
+| `finance` | 💰 | Markets & Economy | Indices (SPY, QQQ, DIA), top movers, sector sentiment |
+| `everything` | 🌍 | All Categories | Condensed cross-category summary |
+
+**Usage:** `/ask Generate an entertainment recap for the last 7 days`
+
+---
+
 ## Overview
 
 Recap templates provide predefined configurations for generating topic-specific weekly recaps across five key areas:

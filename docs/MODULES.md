@@ -2,7 +2,7 @@
 
 Quick reference for all source files. Consult this before exploring the codebase.
 
-## Core Modules (src/\*.py) — 60 files
+## Core Modules (src/\*.py) — 144 files
 
 | File                    | Purpose                                                                  | Key Exports                                                          |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
@@ -39,6 +39,9 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `nas.py`                | Synology DSM REST API queries (storage, health, alerts)                  | `get_nas_storage_health()`, `get_nas_alerts()`                       |
 | `network.py`            | Network status, Tailscale VPN, DNS, speed test                           | `get_network_status()`, `get_tailscale_status()`, `run_speed_test()` |
 | `obsidian_writer.py`    | Markdown + YAML frontmatter writer to Obsidian vault                     | `save_to_vault()`, `build_frontmatter()`                             |
+| `openclaw_cli.py`       | Terminal launcher for interactive chat and authenticated `/api/agent/ask` requests | `main()`, `invoke_openclaw()`, `run_chat()`                          |
+| `openclaw_cli_actions.py` | CLI shell execution, risk-aware approvals, and diffable file edits                | `run_shell_command()`, `request_cli_approval()`, `replace_text_in_file()` |
+| `openclaw_cli_sessions.py` | Local CLI session persistence, workspace context capture, and saved outputs       | `create_session()`, `list_sessions()`, `collect_workspace_context()` |
 | `ontology_skills.py`    | Graph memory via ontology ClawHub script                                 | `add_fact()`, `query_graph()`, `list_entities()`                     |
 | `overseerr.py`          | Overseerr media request management API                                   | `get_overseerr_requests()`, `update_request_status()`                |
 | `permissions.py`        | Role-based permission checks and access control (90 lines)               | `check_permission()`, `is_allowed()`                                 |
@@ -137,6 +140,7 @@ The `skills/` package contains the core skill modules plus 13 ClawHub skill bund
 | `test_monitor_skills.py`     | URL monitoring skills                                                           |
 | `test_nas.py`                | NAS integration                                                                 |
 | `test_network.py`            | Network diagnostics                                                             |
+| `test_openclaw_cli.py`       | Terminal launcher defaults, request building, and chat behavior                 |
 | `test_permissions.py`        | Permission checks                                                               |
 | `test_qmd.py`                | Quick Memory Discovery                                                          |
 | `test_real_estate.py`        | Real estate search skills                                                       |

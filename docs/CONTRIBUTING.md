@@ -375,3 +375,19 @@ with SHA-256 content hashing and diff-based alerting.
 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
 ```
+
+---
+
+## Pull Request Process
+
+1. **Create a feature branch:** `git checkout -b feature/your-feature-name`
+2. **Make changes**, write tests, update docs
+3. **Run the full test suite:** `.venv/bin/python -m pytest tests/ --override-ini="addopts=" -q && .venv/bin/ruff check src/ tests/`
+4. **Push and create PR on GitHub**
+
+### PR Guidelines
+
+- Write clear, descriptive PR titles
+- Reference related issues (e.g., "Fixes #123")
+- Ensure CI passes before requesting review
+- Keep PRs focused — one logical change per PR
