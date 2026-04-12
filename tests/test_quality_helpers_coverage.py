@@ -494,8 +494,20 @@ class TestBuildAskRecoveryBlock:
         meta = {"answer_quality": {"status": "high"}}
         assert _build_ask_recovery_block(meta) is None
 
-    def test_low_quality_returns_block(self):
+    def test_low_quality_without_shortfall_returns_none(self):
+        # General low quality (no numeric shortfall, not constrained) should NOT show recovery block
         meta = {"answer_quality": {"status": "low"}}
+        result = _build_ask_recovery_block(meta)
+        assert result is None
+
+    def test_low_quality_with_shortfall_returns_block(self):
+        meta = {
+            "answer_quality": {
+                "status": "low",
+                "item_count": 1,
+                "requested_item_count": 5,
+            }
+        }
         result = _build_ask_recovery_block(meta)
         assert result is not None
         assert "Recovery note" in result

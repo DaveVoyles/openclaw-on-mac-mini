@@ -611,12 +611,13 @@ class TestBuildAskRecoveryBlock:
         assert result is None
 
     def test_returns_block_when_status_low(self):
-        """Low status returns a recovery block string."""
+        """Low status with numeric shortfall returns a recovery block string."""
         result = mod._build_ask_recovery_block({
             "answer_quality": {
                 "status": "low",
                 "score": 25,
                 "item_count": 2,
+                "requested_item_count": 10,
                 "evidence_completeness": 0.3,
             }
         })

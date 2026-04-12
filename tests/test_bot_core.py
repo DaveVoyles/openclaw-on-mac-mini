@@ -317,7 +317,7 @@ class TestQualityAutoRepair:
             raise AssertionError("retry should not run for high quality")
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="gemini",
             final_meta={},
@@ -342,7 +342,7 @@ class TestQualityAutoRepair:
             raise AssertionError("retry should not run for ineligible result")
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="error",
             final_meta={},
@@ -410,7 +410,7 @@ class TestQualityAutoRepair:
             )
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="gemini",
             final_meta={},
@@ -445,7 +445,7 @@ class TestQualityAutoRepair:
             )
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="gemini",
             final_meta={},
@@ -480,7 +480,7 @@ class TestQualityAutoRepair:
             )
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="gemini",
             final_meta={},
@@ -505,7 +505,7 @@ class TestQualityAutoRepair:
             raise RuntimeError("retry-failed")
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="gemini",
             final_meta={},
@@ -548,7 +548,7 @@ class TestLatencyAwareBudgeting:
             raise AssertionError("retry should be disabled under high load")
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="gemini",
             final_meta={},
@@ -578,7 +578,7 @@ class TestLatencyAwareBudgeting:
             )
 
         result = await mod._run_quality_auto_repair(
-            question="q",
+            question="find me listings in broomall please",
             response_text="original",
             model_used="gemini",
             final_meta={},
