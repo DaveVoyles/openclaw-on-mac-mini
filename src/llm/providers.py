@@ -768,8 +768,10 @@ async def call_provider_with_fallback(
     Skips providers whose circuit is open.
     Returns None only if all providers fail.
     """
+    _tel_enabled = os.getenv("ROUTING_TELEMETRY", "false").lower() in ("1", "true", "yes")
+
     providers_to_try = chain or PROVIDER_FALLBACK_CHAIN
-    for provider in providers_to_try:
+    for retry_count, provider in enumerate(providers_to_try):
         if _is_open(provider):
             log.debug("Failover: skipping %s (circuit open)", provider)
             continue
@@ -779,8 +781,28 @@ async def call_provider_with_fallback(
         )
         if result and result.text:
             log.debug("Failover: %s succeeded", provider)
+            if _tel_enabled:
+                import llm.telemetry as _telemetry  # noqa: PLC0415
+                _telemetry.record(
+                    provider=result.provider,
+                    model=result.model,
+                    latency_ms=result.latency_ms,
+                    success=True,
+                    tokens_used=result.input_tokens + result.output_tokens,
+                    retry_count=retry_count,
+                )
             return result
         log.debug("Failover: %s returned empty/None, trying next", provider)
+        if _tel_enabled:
+            import llm.telemetry as _telemetry  # noqa: PLC0415
+            _telemetry.record(
+                provider=result.provider if result else provider,
+                model=result.model if result else (model or ""),
+                latency_ms=result.latency_ms if result else 0.0,
+                success=False,
+                tokens_used=0,
+                retry_count=retry_count,
+            )
     log.warning("Failover: all providers exhausted (%s)", providers_to_try)
     return None
 
