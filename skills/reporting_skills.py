@@ -218,17 +218,66 @@ async def _try_direct_sports_provider_answer(
     return _normalize_direct_sports_provider_answer(result, provider_label="perplexity-direct")
 
 
+def _strip_ascii_tables(text: str) -> str:
+    """Convert ASCII/markdown tables to Discord-friendly bullet lines.
+
+    Discord does not render markdown tables or ASCII box-drawing tables.
+    This function detects table structures (pipe-delimited rows or +---+ borders)
+    and replaces them with plain text so the content stays readable.
+    """
+    lines = text.split("\n")
+    result: list[str] = []
+    headers: list[str] = []
+    in_table = False
+
+    for line in lines:
+        stripped = line.strip()
+        # ASCII box border line (e.g. +----+----+)
+        if re.match(r"^\+[-=+]+\+", stripped):
+            in_table = True
+            continue
+        # Markdown table separator (e.g. |---|---|)
+        if re.match(r"^\|[-: |]+\|$", stripped):
+            in_table = True
+            continue
+        # Pipe-delimited row
+        if stripped.startswith("|") and stripped.endswith("|"):
+            cells = [c.strip() for c in stripped[1:-1].split("|")]
+            if not headers:
+                headers = cells
+                in_table = True
+                continue
+            # Map cells to headers as "**Header:** value" pairs
+            parts = []
+            for i, cell in enumerate(cells):
+                if cell:
+                    label = headers[i] if i < len(headers) else ""
+                    parts.append(f"**{label}:** {cell}" if label else cell)
+            if parts:
+                result.append("• " + " | ".join(parts))
+            continue
+        # Non-table line — reset headers if we were mid-table
+        if in_table:
+            headers = []
+            in_table = False
+        result.append(line)
+
+    return "\n".join(result)
+
+
 def _normalize_direct_provider_answer(raw_text: str, *, provider_label: str) -> str:
     """Light normalization for a general direct provider answer.
 
-    Strips the Perplexity header prefix, rejects error strings, and appends
-    the provider attribution suffix so the answer_policy can detect it.
+    Strips the Perplexity header prefix, rejects error strings, converts
+    ASCII/markdown tables to Discord-friendly text, and appends the provider
+    attribution suffix so the answer_policy can detect it.
     """
     text = (raw_text or "").strip()
     if not text or text.startswith(("❌", "⚠️")):
         return ""
     if text.startswith("**Perplexity AI Answer:**"):
         text = text[len("**Perplexity AI Answer:**"):].strip()
+    text = _strip_ascii_tables(text)
     if len(text) < 80:
         return ""
     return f"{text}\n\n_via {provider_label}_"
@@ -338,10 +387,15 @@ async def generate_property_search_report(*, query: str) -> str:
         f"Today is {date_label}. "
         f"Real estate search request: {query}. "
         "Find specific current home listings or property information matching the stated criteria. "
-        "Include property addresses, asking prices, bedroom/bathroom counts, square footage, "
-        "and notable features where available. Include direct listing links (Zillow, Redfin, etc.) "
-        "when possible. Focus on real, currently-listed properties — not general market analysis. "
-        "End with a Sources section listing URLs."
+        "Format each listing as a numbered entry like this (do NOT use markdown tables or ASCII tables):\n"
+        "**1. 123 Main St, Springfield PA 19064**\n"
+        "• Price: $385,000\n"
+        "• Beds/Baths: 3 bed / 2 bath\n"
+        "• Sq Ft: 1,850\n"
+        "• Features: Updated kitchen, large backyard\n"
+        "• Link: https://zillow.com/...\n\n"
+        "List at least 3 properties. Only include real, currently-listed properties — not general market analysis. "
+        "End with a short Sources section listing URLs."
     )
     try:
         result = await asyncio.wait_for(
