@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "openclaw"
 version = "0.6.0"
@@ -15,6 +19,14 @@ classifiers = [
     "Topic :: Communications :: Chat",
     "Topic :: Home Automation",
 ]
+
+[project.scripts]
+openclaw = "openclaw_cli:main"
+openclaw-cli = "openclaw_cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = ["openclaw_cli"]
 
 [tool.pytest.ini_options]
 # Discover tests in the tests/ directory

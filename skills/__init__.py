@@ -25,7 +25,12 @@ _CONTAINER_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,128}$")
 # ---------------------------------------------------------------------------
 
 
-from utils import truncate as _truncate
+from utils import truncate as _truncate_text
+
+
+def _truncate(text: str, limit: int = 1900) -> str:
+    """Preserve the skills module's historical truncate(limit=1900) behavior."""
+    return _truncate_text(text, limit)
 
 # ---------------------------------------------------------------------------
 # 6.1  Docker & Container Management

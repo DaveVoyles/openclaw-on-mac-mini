@@ -206,3 +206,97 @@ class TestExtractFinalText:
         resp.prompt_feedback = None
         text = mod._extract_final_text(resp, 0, None)
         assert "Fallback from candidates" in text
+
+    def test_response_text_none_with_null_candidate_parts(self):
+        """Gemini may return content.parts=None; fallback should treat that as empty."""
+        resp = MagicMock()
+        type(resp).text = property(lambda self: (_ for _ in ()).throw(ValueError("blocked")))
+        resp.candidates = [MagicMock()]
+        resp.candidates[0].content.parts = None
+        resp.prompt_feedback = None
+
+        text = mod._extract_final_text(resp, 0, None)
+
+        assert text == "I processed your request but the model returned no text content."
+
+
+class TestRunToolLoop:
+    @pytest.mark.asyncio
+    async def test_backfills_sports_query_from_latest_user_message(self):
+        response = MagicMock()
+        part = MagicMock()
+        part.function_call = MagicMock()
+        part.function_call.name = "generate_sports_watch_report"
+        part.function_call.args = {"days": 1, "league": "NCAA Division 1", "sport": "lacrosse"}
+        response.candidates = [MagicMock()]
+        response.candidates[0].content.parts = [part]
+
+        user_part = MagicMock()
+        user_part.text = "User's question: Show me the schedule for the men's division 1 college lacrosse games today"
+        history_item = MagicMock()
+        history_item.role = "user"
+        history_item.parts = [user_part]
+
+        next_response = MagicMock()
+        next_response.candidates = [MagicMock()]
+        next_response.candidates[0].content.parts = []
+
+        chat_session = MagicMock()
+        chat_session.get_history.return_value = [history_item]
+        chat_session.send_message.return_value = next_response
+
+        with (
+            patch.object(mod, "_execute_function_call", new_callable=AsyncMock, return_value="sports result") as execute_call,
+            patch.object(mod, "_rate_limiter") as mock_rl,
+        ):
+            mock_rl.record = MagicMock()
+            mock_rl.check.return_value = True
+
+            await mod._run_tool_loop(
+                chat_session,
+                response,
+                max_rounds=3,
+                parallel=True,
+                label="LLM",
+            )
+
+        called_name, called_args = execute_call.await_args.args
+        assert called_name == "generate_sports_watch_report"
+        assert called_args["query"] == "Show me the schedule for the men's division 1 college lacrosse games today"
+
+    @pytest.mark.asyncio
+    async def test_returns_direct_sports_provider_result_without_model_rewrite(self):
+        response = MagicMock()
+        part = MagicMock()
+        part.function_call = MagicMock()
+        part.function_call.name = "generate_sports_watch_report"
+        part.function_call.args = {}
+        response.candidates = [MagicMock()]
+        response.candidates[0].content.parts = [part]
+
+        chat_session = MagicMock()
+
+        with (
+            patch.object(
+                mod,
+                "_execute_function_call",
+                new_callable=AsyncMock,
+                return_value="| Time (ET) | Matchup | Watch | Notes |\n| --- | --- | --- | --- |\n\n_via perplexity-direct_",
+            ),
+            patch.object(mod, "_rate_limiter") as mock_rl,
+        ):
+            mock_rl.record = MagicMock()
+            mock_rl.check.return_value = True
+
+            final_response, rounds = await mod._run_tool_loop(
+                chat_session,
+                response,
+                max_rounds=3,
+                parallel=True,
+                label="LLM",
+            )
+
+        assert getattr(final_response, "direct_final_text", "") != ""
+        assert "_via perplexity-direct_" in final_response.text
+        assert rounds == 1
+        chat_session.send_message.assert_not_called()

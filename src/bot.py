@@ -757,18 +757,19 @@ from bot_attachments import (
 @app_commands.describe(
     question="Your question or request",
     attachment="Optional image or document to include in your question",
-    model="LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude). Alias: claude → anthropic",
+    model="LLM routing: auto (active profile), local (Gemma), gemini (cloud), openai (GPT-4o), anthropic (Claude), or copilot (enterprise proxy). Alias: claude → anthropic",
     scope="Context scope: current channel/thread, cross-channel, or prior-report anchor mode",
     reset_context="Reset the current anchor context before recall (optional)",
     anchor="Optional anchor override ID. Use 'none' to disable anchor targeting",
 )
 @app_commands.choices(
     model=[
-        app_commands.Choice(name="🔄 Auto (Copilot → Gemini)", value="auto"),
+        app_commands.Choice(name="🔄 Auto (routing profile)", value="auto"),
         app_commands.Choice(name="🏠 Local (Gemma/Ollama)", value="local"),
         app_commands.Choice(name="☁️ Gemini (cloud)", value="gemini"),
         app_commands.Choice(name="🟢 OpenAI (GPT-4o)", value="openai"),
         app_commands.Choice(name="🟣 Anthropic (Claude)", value="anthropic"),
+        app_commands.Choice(name="🟦 Copilot (enterprise proxy)", value="copilot"),
     ],
     scope=[
         app_commands.Choice(name="Current channel/thread", value="current"),

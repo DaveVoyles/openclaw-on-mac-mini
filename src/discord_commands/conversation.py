@@ -7,7 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from audit import audit_log
-from memory import get_model_preference, set_model_preference
+from memory import get_model_preference, get_routing_profile, set_model_preference, set_routing_profile
 from memory import store as conversation_store
 from permissions import require_auth
 from ui_components import EmbedColors
@@ -39,18 +39,34 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
     @require_auth
     async def model_show_cmd(interaction: discord.Interaction):
         pref = get_model_preference(interaction.user.id)
+        user_profile = get_routing_profile(interaction.user.id)
         labels = {
-            "auto": "🔄 Auto (Copilot → Gemini)",
+            "auto": "🔄 Auto (routing profile)",
             "local": "🏠 Local (Gemma/Ollama)",
             "gemini": "☁️ Gemini (cloud)",
             "openai": "🟢 OpenAI (GPT-4o)",
             "anthropic": "🟣 Anthropic (Claude)",
+            "copilot": "🟦 Copilot (enterprise proxy)",
         }
+        profile_labels = {
+            "copilot-first": "🟦 Copilot-first",
+            "balanced": "⚖️ Balanced",
+            "gemini-first": "☁️ Gemini-first",
+            "cost-saver": "💰 Cost-saver",
+        }
+        from config import cfg
+        system_profile = cfg.routing_profile or "copilot-first"
+        profile_display = (
+            f"{profile_labels.get(user_profile, user_profile)} *(your override)*"
+            if user_profile
+            else f"{profile_labels.get(system_profile, system_profile)} *(system default)*"
+        )
         embed = discord.Embed(
             title="🤖 Model Preference",
-            description=f"**Current:** {labels.get(pref, pref)}\n\n"
-            "**Auto routing order:** Copilot proxy (free) → Gemini (tools) → Ollama (last resort)\n\n"
-            "Use `/model set` to change.\n"
+            description=f"**Model:** {labels.get(pref, pref)}\n\n"
+            f"**Routing profile:** {profile_display}\n\n"
+            "Auto mode follows the routing profile for non-tool asks and keeps Gemini for tool-native flows.\n\n"
+            "Use `/model set` to change provider · `/profile set` to change routing profile.\n"
             "Use `/ask model:` to override per-message.",
             color=EmbedColors.INFO,
         )
@@ -74,11 +90,12 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
     @model_group.command(name="set", description="Set your default LLM routing preference")
     @app_commands.describe(preference="Which model to use by default")
     @app_commands.choices(preference=[
-        app_commands.Choice(name="🔄 Auto — Copilot first, then Gemini (default)", value="auto"),
+        app_commands.Choice(name="🔄 Auto — follow active routing profile", value="auto"),
         app_commands.Choice(name="🏠 Local — Gemma/Ollama (free, no tools)", value="local"),
         app_commands.Choice(name="☁️ Gemini — cloud (tools, best quality)", value="gemini"),
         app_commands.Choice(name="🟢 OpenAI — GPT-4o via Copilot", value="openai"),
         app_commands.Choice(name="🟣 Anthropic — Claude via Copilot", value="anthropic"),
+        app_commands.Choice(name="🟦 Copilot — enterprise proxy", value="copilot"),
     ])
     @require_auth
     async def model_set_cmd(interaction: discord.Interaction, preference: app_commands.Choice[str]):
@@ -92,6 +109,63 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
         audit_log(interaction.user, "model_set", detail=preference.value)
 
     bot.tree.add_command(model_group)
+
+    # ------------------------------------------------------------------
+    # /profile show | set
+    # ------------------------------------------------------------------
+
+    profile_group = app_commands.Group(name="profile", description="View or change your auto-routing profile")
+
+    @profile_group.command(name="show", description="Show your current routing profile")
+    @require_auth
+    async def profile_show_cmd(interaction: discord.Interaction):
+        user_profile = get_routing_profile(interaction.user.id)
+        from config import cfg
+        system_profile = cfg.routing_profile or "copilot-first"
+        profile_labels = {
+            "copilot-first": "🟦 Copilot-first — Copilot for non-tool asks, Gemini for tools",
+            "balanced": "⚖️ Balanced — best provider per query type",
+            "gemini-first": "☁️ Gemini-first — Gemini preferred for everything",
+            "cost-saver": "💰 Cost-saver — local Ollama first, Gemini only when needed",
+        }
+        if user_profile:
+            description = (
+                f"**Your profile:** {profile_labels.get(user_profile, user_profile)}\n\n"
+                f"System default: `{system_profile}` *(overridden by your setting)*"
+            )
+        else:
+            description = (
+                f"**Active profile:** {profile_labels.get(system_profile, system_profile)} *(system default)*\n\n"
+                "Use `/profile set` to choose your own routing profile."
+            )
+        embed = discord.Embed(
+            title="🔀 Routing Profile",
+            description=description,
+            color=EmbedColors.INFO,
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @profile_group.command(name="set", description="Set your auto-routing profile")
+    @app_commands.describe(profile="How OpenClaw should route non-tool asks in auto mode")
+    @app_commands.choices(profile=[
+        app_commands.Choice(name="🟦 Copilot-first — Copilot for non-tool asks, Gemini for tools", value="copilot-first"),
+        app_commands.Choice(name="⚖️ Balanced — best provider per query type", value="balanced"),
+        app_commands.Choice(name="☁️ Gemini-first — Gemini preferred for everything", value="gemini-first"),
+        app_commands.Choice(name="💰 Cost-saver — local Ollama first, Gemini only when needed", value="cost-saver"),
+    ])
+    @require_auth
+    async def profile_set_cmd(interaction: discord.Interaction, profile: app_commands.Choice[str]):
+        result = set_routing_profile(interaction.user.id, profile.value)
+        is_err = result.startswith("❌")
+        embed = discord.Embed(
+            title="⚙️ Routing Profile Updated" if not is_err else "❌ Update Failed",
+            description=result,
+            color=discord.Color.red() if is_err else discord.Color.green(),
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        audit_log(interaction.user, "profile_set", detail=profile.value)
+
+    bot.tree.add_command(profile_group)
 
     # ------------------------------------------------------------------
     # /save, /resume, /threads, /threads-search, /forget

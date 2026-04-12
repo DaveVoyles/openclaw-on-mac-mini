@@ -2,18 +2,15 @@
 OpenClaw LLM Tools — tool execution loop, caching, and response extraction.
 """
 
-import asyncio
 import hashlib
 import logging
 import time
 from typing import Any
 
-from google import genai
-
 from llm_client import MAX_TOOL_ROUNDS, _record_usage
 from llm_ratelimit import rate_limiter as _rate_limiter
 from skills import SKILLS
-from trace_context import get_trace_id
+from tool_orchestration import GeminiToolAdapter, ToolOrchestrator
 
 log = logging.getLogger("openclaw.llm.tools")
 
@@ -113,6 +110,15 @@ async def _execute_function_call(name: str, args: dict) -> str:
         return f"Error executing {name}: {e}"
 
 
+def _should_return_tool_result_directly(name: str, result: str) -> bool:
+    """Return True when *result* from *name* should bypass LLM synthesis.
+
+    Delegates to the centralized answer policy.
+    """
+    from answer_policy import should_return_directly
+    return should_return_directly(name, result)
+
+
 # ---------------------------------------------------------------------------
 # Shared tool-calling loop (used by chat and chat_deep)
 # ---------------------------------------------------------------------------
@@ -137,79 +143,21 @@ async def _run_tool_loop(
     round — matching the sequential research pattern that's easier to
     follow in Discord progress updates.
     """
-    loop = asyncio.get_running_loop()
-    rounds = 0
-
-    while rounds < max_rounds:
-        # Collect function_call parts from this response
-        try:
-            all_parts = response.candidates[0].content.parts
-        except (IndexError, AttributeError):
-            break
-
-        function_calls = [
-            (part.function_call.name, dict(part.function_call.args) if part.function_call.args else {})
-            for part in all_parts
-            if hasattr(part, "function_call") and part.function_call and part.function_call.name
-        ]
-
-        if not function_calls:
-            break
-
-        # In sequential mode, process only the first call per round
-        if not parallel:
-            function_calls = function_calls[:1]
-
-        log.info("%s function call(s) [round %d] trace=%s: %s", label, rounds + 1,
-                 get_trace_id(), ", ".join(f"{n}({a})" for n, a in function_calls))
-
-        # Fire progress callbacks (before execution — with args)
-        if on_tool_call:
-            for fn_name, fn_args in function_calls:
-                try:
-                    await on_tool_call(fn_name, rounds + 1, args=fn_args)
-                except Exception as exc:
-                    log.debug("on_tool_call callback failed: %s", exc)
-
-        # Execute tool calls
-        results = await asyncio.gather(*[
-            _execute_function_call(fn_name, fn_args)
-            for fn_name, fn_args in function_calls
-        ])
-
-        # Fire progress callbacks (after execution — with result preview)
-        if on_tool_call:
-            for (fn_name, _), result in zip(function_calls, results):
-                try:
-                    await on_tool_call(fn_name, rounds + 1, result_preview=result[:200])
-                except Exception as exc:
-                    log.debug("on_tool_call result callback failed: %s", exc)
-
-        # Rate-limit check before sending results back
-        _rate_limiter.record()
-        if not _rate_limiter.check():
-            # Build a fake text-only response — caller handles this
-            return response, rounds + 1
-
-        # Send all function results back to the model
-        response_parts = [
-            genai.types.Part(
-                function_response=genai.types.FunctionResponse(
-                    name=fn_name,
-                    response={"result": result},
-                )
-            )
-            for (fn_name, _), result in zip(function_calls, results)
-        ]
-
-        response = await loop.run_in_executor(
-            None,
-            lambda parts=response_parts: chat_session.send_message(parts),
-        )
-        await _record_usage(response)
-        rounds += 1
-
-    return response, rounds
+    orchestrator = ToolOrchestrator(
+        adapter=GeminiToolAdapter(),
+        execute_tool_call=_execute_function_call,
+        rate_limiter=_rate_limiter,
+        record_usage=_record_usage,
+        should_return_tool_result_directly=_should_return_tool_result_directly,
+    )
+    return await orchestrator.run(
+        chat_session,
+        response,
+        max_rounds=max_rounds,
+        on_tool_call=on_tool_call,
+        parallel=parallel,
+        label=label,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -218,40 +166,13 @@ async def _run_tool_loop(
 
 
 def _extract_final_text(response, rounds: int, chat_session) -> str:
-    """Pull the final answer text out of *response*, requesting synthesis if needed."""
-    try:
-        text = response.text or ""
-    except (AttributeError, ValueError):
-        try:
-            parts = response.candidates[0].content.parts
-            text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
-        except Exception as exc:
-            log.debug("Response text extraction fallback failed: %s", exc)
-            text = ""
-
-        if not text and rounds >= MAX_TOOL_ROUNDS:
-            log.info("Tool round limit hit with no synthesis — requesting forced summary")
-            try:
-                _rate_limiter.record()
-                synthesis_response = chat_session.send_message(
-                    "You have reached the maximum number of tool calls. "
-                    "Please synthesize everything you have gathered so far "
-                    "into a final, helpful answer for the user. "
-                    "Do not call any more tools."
-                )
-                # Note: usage recording must happen in the caller for async compat
-                text = synthesis_response.text
-            except Exception as e:
-                log.error("Forced synthesis failed: %s", e)
-
-        if not text:
-            text = "I processed your request but the model returned no text content."
-            if hasattr(response, "prompt_feedback") and response.prompt_feedback:
-                text += f" (Safety/Blocked: {response.prompt_feedback})"
-
-    if rounds >= MAX_TOOL_ROUNDS:
-        text += f"\n\n⚠️ *Tool call limit reached ({MAX_TOOL_ROUNDS}) — some sources may not have been checked.*"
-    return text
+    """Compatibility wrapper around the Gemini adapter's final-text extraction."""
+    return GeminiToolAdapter().extract_final_text(
+        response,
+        rounds,
+        chat_session,
+        max_rounds=MAX_TOOL_ROUNDS,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -260,17 +181,10 @@ def _extract_final_text(response, rounds: int, chat_session) -> str:
 
 
 def _extract_history(chat_session) -> list[dict]:
-    """Convert a ChatSession's history to our serializable format."""
-    history = []
-    for content in chat_session.get_history():
-        parts = []
-        for part in content.parts:
-            if hasattr(part, "text") and part.text:
-                parts.append(part.text)
-            elif hasattr(part, "function_call") and part.function_call and part.function_call.name:
-                parts.append(f"[Called {part.function_call.name}]")
-            elif hasattr(part, "function_response") and part.function_response and part.function_response.name:
-                parts.append(f"[Result from {part.function_response.name}]")
-        if parts:
-            history.append({"role": content.role, "parts": parts})
-    return history
+    """Compatibility wrapper around the Gemini adapter's history extraction."""
+    return GeminiToolAdapter().extract_history(chat_session)
+
+
+def _merge_direct_final_history(history: list[dict], text: str) -> list[dict]:
+    """Compatibility wrapper around the Gemini adapter's direct-final history shaping."""
+    return GeminiToolAdapter().merge_direct_final_history(history, text)

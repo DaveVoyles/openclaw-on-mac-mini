@@ -1,7 +1,10 @@
-.PHONY: test test-verbose lint format type-check build clean deploy help
+.PHONY: test test-cli test-verbose lint format type-check build clean deploy help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
+
+test-cli:
+	.venv/bin/python3 -m pytest --noconftest -o addopts='' tests/test_openclaw_cli.py tests/test_dashboard.py -q
 
 test-verbose:
 	.venv/bin/python3 -m pytest tests/ -v --tb=short
@@ -40,6 +43,7 @@ clean:
 help:
 	@echo "Available targets:"
 	@echo "  test          Run pytest (quick, stop on first failure)"
+	@echo "  test-cli      Run standalone CLI/dashboard tests with minimal pytest bootstrap"
 	@echo "  test-verbose  Run pytest with verbose output"
 	@echo "  lint          Run ruff linter"
 	@echo "  format        Auto-fix formatting with ruff"

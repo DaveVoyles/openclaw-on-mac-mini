@@ -21,7 +21,7 @@ from bot_formatting import (
 from config import cfg
 from llm import chat_stream as llm_chat_stream
 from llm import is_configured as llm_is_configured
-from memory import get_model_preference, store as conversation_store
+from memory import get_model_preference, get_routing_profile, store as conversation_store
 from permissions import ALLOWED_USER_IDS
 from quality_helpers import (
     _append_explainability_footer,
@@ -330,6 +330,7 @@ async def handle_message(
         )
 
         model_pref = get_model_preference(message.author.id)
+        user_routing_profile = get_routing_profile(message.author.id)
         from llm import _needs_tools as llm_needs_tools
         model_pref, _ = normalize_model_preference(user_question, model_pref, llm_needs_tools)
 
@@ -357,6 +358,7 @@ async def handle_message(
                 thread_id=scoped_thread_id,
                 user_id=str(message.author.id),
                 update_history=_update_history,
+                routing_profile=user_routing_profile,
             )
             response_text = result.response_text
             model_used = result.model_used
@@ -378,6 +380,7 @@ async def handle_message(
                     thread_id=scoped_thread_id,
                     user_id=str(message.author.id),
                     update_history=_update_history,
+                    routing_profile=user_routing_profile,
                 )
 
             repair_result = await _run_quality_auto_repair(

@@ -17,6 +17,9 @@ Key architectural patterns:
 flowchart LR
     U[Discord User] --> D[Discord API/Gateway]
     D --> BOT[src/bot.py\n/ask + orchestration]
+    CLI[CLI Client\nOpenClaw / openclaw\nsrc/openclaw_cli.py] --> WEB[src/discord_web.py\nhealth + dashboard API host]
+    CLI --> CLISTATE[src/openclaw_cli_sessions.py\nlocal CLI sessions]
+    CLI --> CLIACT[src/openclaw_cli_actions.py\nshell + file actions]
 
     BOT --> ORCH[src/ask_orchestrator.py\nrun_ask_stream()]
     ORCH --> LLM[src/llm/chat.py\nchat_stream()]
@@ -70,6 +73,7 @@ sequenceDiagram
 | Discord bot runtime | Command handling, `/ask` orchestration, response formatting, per-user context | `src/bot.py`, `src/ask_orchestrator.py`, `src/discord_commands/` |
 | LLM routing + tool execution | Model selection, tool declaration routing, tool loop execution | `src/llm/chat.py`, `src/model_router.py`, `src/tool_router.py`, `src/llm_tools.py` |
 | Web API + dashboard | Health/metrics endpoints and dashboard JSON/HTML APIs | `src/discord_web.py`, `src/dashboard/routes.py`, `src/dashboard/api_handlers.py` |
+| CLI client | Local/remote terminal access via authenticated ask API, interactive chat defaults, one-shot prompts, repo/file-aware analyze flows, tracked shell/file actions, and resumable local sessions | `src/openclaw_cli.py`, `src/openclaw_cli_sessions.py`, `src/openclaw_cli_actions.py`, `scripts/openclaw_cli.py`, installer launchers (`openclaw`, `OpenClaw`) |
 | Scheduler + background loops | Cron/interval jobs, proactive monitors, reminder/briefing loops | `src/scheduler.py`, `src/discord_background.py` |
 | Worker agents | Delegated sub-task execution for complex asks via tool calls | `src/worker_agent.py` |
 | Memory stores | Conversation history, semantic recall, structured memory/thread persistence | `src/memory.py`, `src/vector_store.py`, `src/thread_store.py`, `src/qmd.py` |
@@ -458,7 +462,7 @@ graph TB
 | **Container health alerts**     | `discord_background.py` (every 5 min) → `list_containers()` + `check_gluetun_vpn()` → filter unhealthy/exited/VPN down → Discord `#alerts` embed                                  |
 | **Scheduled research**          | `scheduler.py` cron → `schedule_research_report(topic, cron)` → `research_agent.py` → Discord thread + vault                                     |
 | **API quota dashboard**         | Browser → `:8765/api/quota-status` → `spending.py` `get_quota_status()` → JSON; dashboard card auto-refreshes                                    |
-| **Dashboard**                   | Browser → `:8765/dashboard` → `discord_web.py` + `dashboard/routes.py` → HTML page + `/api/dashboard` JSON + `/api/quota-status`                                           |
+| **Dashboard**                   | Browser → `:8765/dashboard` → `discord_web.py` + `dashboard/routes.py` → HTML page + `/api/dashboard` JSON + `/api/quota-status`; control-plane views: `/api/plans` (agent-loop plans), `/api/tasks` (unified Mission Control + scheduler tasks), `/api/agent/sessions` (terminal CLI sessions — click a session for plan/task linkage, progress log, intervention history, and Watch Insights: per-poll checkpoint timeline + retry history) |
 | **Background autonomy**         | `worker_agent.py` → spawns fresh Gemini session → `llm` runtime (`llm/chat.py` + tool loop) → skills                                                                             |
 | **RSS feeds**                   | `scheduler.py` (periodic) → `rss_skills.py` → external feeds → `data/memory/rss_feeds.json` → LLM summarization → Discord notification                     |
 | **URL change detection**        | `scheduler.py` (periodic) → `monitor_skills.py` → `_fetch_text()` → SHA-256 compare → `data/memory/url_snapshots.json` → alert on diff                     |

@@ -116,12 +116,30 @@ _GEMMA_HALLUCINATION_RE = re.compile(
     re.IGNORECASE,
 )
 
+_REMOTE_PROVIDER_PLACEHOLDER_RE = re.compile(
+    r"\bone\s+moment\b"
+    r"|\bi'?ll\s+(?:retrieve|check|look|search|find|locate|browse|pull)\b"
+    r"|\blet\s+me\s+(?:retrieve|check|look(?:\s+that)?\s+up|search|find|locate|browse|pull)\b",
+    re.IGNORECASE,
+)
+
 
 def _gemma_response_seems_valid(reply: str) -> bool:
-    """Return True if the Gemma response is genuine and not a tool-use hallucination."""
-    if len(reply.strip()) < 10:
-        return False
-    return not bool(_GEMMA_HALLUCINATION_RE.search(reply))
+    """Return True if the Gemma response is genuine and not a tool-use hallucination.
+
+    Delegates to the centralized answer policy.
+    """
+    from answer_policy import response_seems_valid
+    return response_seems_valid(reply, provider="gemma")
+
+
+def _provider_response_seems_valid(reply: str, *, provider: str) -> bool:
+    """Validate fallback responses with provider-aware guardrails.
+
+    Delegates to the centralized answer policy.
+    """
+    from answer_policy import response_seems_valid
+    return response_seems_valid(reply, provider=provider)
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +154,10 @@ async def _reflect_on_response(
 ) -> str:
     """Self-evaluate a response and refine if issues are found.
 
-    Only runs for complex responses (tool calls involved). Uses a lightweight
-    Gemini call to check for errors, contradictions, or missing information.
+    Only runs for complex responses (tool calls involved). Routes the reflection
+    call through the best available provider (Copilot when available, Gemini
+    otherwise) rather than always consuming Gemini quota for meta-tasks.
+
     Returns the original or improved text.
     """
     text = text or ""
@@ -150,48 +170,68 @@ async def _reflect_on_response(
     if len(text) < 50 or text.startswith("❌") or text.startswith("⚠️"):
         return text
 
+    reflection_prompt = (
+        "You are a quality reviewer. Examine this AI response to a user query.\n"
+        "IMPORTANT: This AI assistant HAS tool access and CAN execute actions like "
+        "searching folders, checking services, and browsing the web. If the response "
+        "reports results from a tool call (e.g. 'no items found', 'search completed'), "
+        "do NOT change it to say 'I cannot access' or 'I don't have the ability to'. "
+        "The tool was already executed and the result is accurate.\n\n"
+        f"USER QUERY: {user_message}\n\n"
+        f"AI RESPONSE:\n{text}\n\n"
+        "Check for:\n"
+        "1. Factual errors or contradictions\n"
+        "2. Missing important information the user asked for\n"
+        "3. Misinterpreted data or tool results\n"
+        "4. Confusing or unclear explanations\n\n"
+        "If the response is good, reply with EXACTLY: LGTM\n"
+        "If you find issues, reply with a corrected version of the response "
+        "(just the improved response, no meta-commentary)."
+    )
+
     try:
-        reflection_config = genai.types.GenerateContentConfig(
-            max_output_tokens=MAX_TOKENS,
-            temperature=0.2,  # Low temperature for careful evaluation
-        )
+        from model_router import COPILOT_PROXY_ENABLED, chat_openai
+        from model_routing_policy import select_reflection_route
 
-        reflection_prompt = (
-            "You are a quality reviewer. Examine this AI response to a user query.\n"
-            "IMPORTANT: This AI assistant HAS tool access and CAN execute actions like "
-            "searching folders, checking services, and browsing the web. If the response "
-            "reports results from a tool call (e.g. 'no items found', 'search completed'), "
-            "do NOT change it to say 'I cannot access' or 'I don't have the ability to'. "
-            "The tool was already executed and the result is accurate.\n\n"
-            f"USER QUERY: {user_message}\n\n"
-            f"AI RESPONSE:\n{text}\n\n"
-            "Check for:\n"
-            "1. Factual errors or contradictions\n"
-            "2. Missing important information the user asked for\n"
-            "3. Misinterpreted data or tool results\n"
-            "4. Confusing or unclear explanations\n\n"
-            "If the response is good, reply with EXACTLY: LGTM\n"
-            "If you find issues, reply with a corrected version of the response "
-            "(just the improved response, no meta-commentary)."
-        )
+        route = select_reflection_route(copilot_available=COPILOT_PROXY_ENABLED)
+        log.debug("Reflection route: %s (%s)", route.provider, route.reason)
 
-        loop = asyncio.get_running_loop()
-        _rate_limiter.record()
-        response = await loop.run_in_executor(
-            None,
-            lambda: _client.models.generate_content(
-                model=MODEL_NAME, contents=reflection_prompt,
-                config=reflection_config,
-            ),
-        )
-        await _record_usage(response)
+        reflection: str | None = None
 
-        reflection = response.text.strip()
+        if route.provider == "copilot":
+            reflection = await chat_openai(
+                reflection_prompt,
+                history=[],
+                system_prompt="",
+                temperature=0.2,
+                max_tokens=MAX_TOKENS,
+            )
+
+        if reflection is None:
+            # Fall back to direct Gemini call
+            reflection_config = genai.types.GenerateContentConfig(
+                max_output_tokens=MAX_TOKENS,
+                temperature=0.2,
+            )
+            loop = asyncio.get_running_loop()
+            _rate_limiter.record()
+            response = await loop.run_in_executor(
+                None,
+                lambda: _client.models.generate_content(
+                    model=MODEL_NAME, contents=reflection_prompt,
+                    config=reflection_config,
+                ),
+            )
+            await _record_usage(response)
+            reflection = response.text.strip()
+
+        if not reflection:
+            return text
+
         if reflection.upper() == "LGTM" or reflection.upper().startswith("LGTM"):
             log.debug("Reflection: response passed self-evaluation")
             return text
 
-        # The reflection produced an improved version
         # Safeguard: if reflection is much shorter, it over-summarized — keep original
         if len(reflection) < len(text) * 0.5 and len(text) > 100:
             log.info("Reflection: discarded (%.0f%% shorter than original — likely over-summarized)",

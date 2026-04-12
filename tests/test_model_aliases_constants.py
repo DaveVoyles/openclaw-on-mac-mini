@@ -77,7 +77,7 @@ class TestNormalizeModelInput:
         assert MODEL_INPUT_ALIASES["claude"] == "anthropic"
 
     def test_valid_preferences_are_set(self):
-        assert VALID_MODEL_PREFERENCES == {"auto", "local", "gemini", "openai", "anthropic"}
+        assert VALID_MODEL_PREFERENCES == {"auto", "local", "gemini", "openai", "anthropic", "copilot"}
 
 
 # ---------------------------------------------------------------------------

@@ -87,9 +87,12 @@ ALERT_CHANNEL_ID=channel_id_for_notifications
 ```bash
 GOOGLE_API_KEY=AIzaSy...your_key_here
 LLM_MODEL=gemini-2.5-flash
+ROUTING_PROFILE=copilot-first
 LLM_MAX_TOKENS=8192
 LLM_TEMPERATURE=0.7
 ```
+
+`ROUTING_PROFILE` controls auto-routing for non-tool asks. Supported values: `copilot-first`, `balanced`, `gemini-first`, `cost-saver`.
 
 **Free tier limits:**
 - 15 requests/minute

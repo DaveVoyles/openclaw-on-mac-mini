@@ -39,9 +39,9 @@ Total documented commands: **134**
 
 | Command | Description |
 | --- | --- |
-| `/ask <question> [model] [scope] [reset_context] [anchor]` | AI-powered query — auto-routes to Gemini (tools) or Ollama (chat). Context controls are first-class slash options: scope (current/cross-channel/prior-report), reset_context, and anchor override ('none' disables anchor). Legacy inline flags (e.g. --cross-channel, --reset-context, --anchor, --no-anchor) still work. |
+| `/ask <question> [model] [scope] [reset_context] [anchor]` | AI-powered query — auto mode follows the active routing profile for non-tool asks and keeps Gemini for tool-native flows. Context controls are first-class slash options: scope (current/cross-channel/prior-report), reset_context, and anchor override ('none' disables anchor). Legacy inline flags (e.g. --cross-channel, --reset-context, --anchor, --no-anchor) still work. |
 | `/model show` | Show your current LLM routing preference and Ollama status. |
-| `/model set <preference>` | Set your default LLM routing: auto (smart), local (Gemma), gemini (cloud), openai (GPT-4o), or anthropic (Claude). Alias accepted: claude → anthropic. |
+| `/model set <preference>` | Set your default LLM routing: auto (routing profile), local (Gemma), gemini (cloud), openai (GPT-4o), anthropic (Claude), or copilot (enterprise proxy). Alias accepted: claude → anthropic. |
 | `/research <query> [deep:true]` | Deep multi-step research — Discord thread, planned sub-queries, 4-tier search (Perplexity → Tavily → DDG → Bing Lite), source ranking, cross-referencing, confidence levels, synthesized report with methodology section |
 | `/weather [location]` | Current conditions + 3-day forecast for any location (default: WEATHER_DEFAULT_LOCATION env var) |
 | `/clear` | Clear active conversation history |

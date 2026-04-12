@@ -1802,15 +1802,216 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
           <td>HTML</td>
           <td>This guide page.</td>
         </tr>
+        <tr>
+          <td><code>/terminal</code></td>
+          <td>HTML</td>
+          <td>Terminal cheat sheet for shell workflows, aliases, and OpenClaw shortcuts.</td>
+        </tr>
+        <tr>
+          <td><code>/api/agent/ask</code></td>
+          <td>JSON</td>
+          <td>Authenticated ask endpoint used by terminal and programmatic clients.</td>
+        </tr>
+        <tr>
+          <td><code>/api/agent/sessions</code></td>
+          <td>JSON</td>
+          <td>List local terminal-agent CLI sessions. Query: <code>?limit=N</code>. Returns session metadata including automation status, checkpoint counts, and watch-mode details.</td>
+        </tr>
+        <tr>
+          <td><code>/api/agent/sessions/{session_id}</code></td>
+          <td>JSON</td>
+          <td>Full export for a single CLI session, including linked plan and task summaries.</td>
+        </tr>
+        <tr>
+          <td><code>/api/plans</code></td>
+          <td>JSON</td>
+          <td>List persisted agent-loop plans. Query: <code>?status=in-progress|all|completed|interrupted</code> and <code>?limit=N</code>. Includes per-plan step counts and linked session refs.</td>
+        </tr>
+        <tr>
+          <td><code>/api/plans/{plan_id}</code></td>
+          <td>JSON</td>
+          <td>Full detail for a plan: all steps with statuses, linked sessions, and associated task summaries.</td>
+        </tr>
+        <tr>
+          <td><code>/api/tasks</code></td>
+          <td>JSON</td>
+          <td>Unified task status view combining Mission Control tasks and scheduled jobs. Query: <code>?source=all|mission_control|scheduler</code> and <code>?limit=N</code>.</td>
+        </tr>
+        <tr>
+          <td><code>/api/tasks/{source}/{task_id}</code></td>
+          <td>JSON</td>
+          <td>Normalized detail for a single task (Mission Control or scheduler), with linked sessions and plan summaries.</td>
+        </tr>
       </table>
 
       <h3>External Access</h3>
       <p>
         All endpoints are accessible externally via the Synology reverse proxy:
       </p>
-      <pre><code>https://openclaw.davevoyles.synology.me/dashboard
+        <pre><code>https://openclaw.davevoyles.synology.me/dashboard
 https://openclaw.davevoyles.synology.me/health
 https://openclaw.davevoyles.synology.me/guide</code></pre>
+
+      <h3>Terminal CLI Access</h3>
+      <p>
+        OpenClaw is not limited to Discord. You can talk to the same
+        authenticated ask pipeline from a terminal on this Mac Mini or another
+        Mac over Tailscale by launching <code>OpenClaw</code> (or
+        <code>openclaw</code>) plus the <a href="/terminal">Terminal reference</a>.
+      </p>
+
+        <div class="card">
+          <h3 style="margin-top: 0">&#9000; Quick Setup</h3>
+          <pre><code># 1) Install the standalone CLI from the running OpenClaw service
+#    (LAN example shown; over Tailscale use http://100.116.47.67:8765/install)
+curl -fsSL http://192.168.1.93:8765/install | bash
+
+# 2) Reload your shell
+source ~/.zshrc   # or ~/.bashrc if bash was selected
+
+# 3) Start an interactive session
+OpenClaw
+
+# 4) Or ask one question directly
+openclaw "what changed overnight?"
+
+# 5) Analyze a repo or file set
+openclaw analyze --cwd ~/openclaw @README.md "summarize the current project"
+
+# 6) Run research or writing flows
+openclaw research "best Python async patterns in 2026"
+openclaw write --title "Weekly recap" "Draft the report"
+openclaw watch --cwd ~/openclaw --on-change --iterations 5 @README.md "watch for regressions"
+
+# 7) Verify the service is reachable
+openclaw --health</code></pre>
+        <p>
+          The standalone installer is also exposed at the short alias
+          <code>/install</code>. It downloads the core CLI module set from the
+          dashboard, installs an
+          <code>openclaw</code> launcher in <code>~/.local/bin</code>, keeps
+          <code>openclaw-cli</code> as a compatibility wrapper, auto-detects
+          <strong>zsh</strong> vs <strong>bash</strong> (or accepts
+          <code>--shell</code> / <code>--rc-file</code>), writes
+          <code>OPENCLAW_URL</code>, and sources a lightweight aliases file that exposes <code>OpenClaw</code>,
+          <code>oc-ask</code>, <code>oc-chat</code>, <code>oc-health</code>, and
+          <code>oc-dash</code>. If the OpenClaw token is missing, it can also
+          store it in macOS Keychain under <code>OpenClaw CLI</code>.
+        </p>
+        <p>
+          <strong>Post-install verification:</strong> the installer now runs
+          <code>openclaw --health</code> automatically and surfaces a clear
+          pass/fail result. If you only want to write the launcher files, use
+          <code>bash -s -- --skip-verify</code>.
+        </p>
+        <p>
+          <strong>Command model:</strong> <code>OpenClaw</code> is the preferred
+          interactive launcher, while <code>openclaw</code> is the canonical
+          executable for one-shot and packaged usage. The older
+          <code>oc-ask</code> / <code>oc-chat</code> shortcuts still work as
+          compatibility helpers.
+        </p>
+        <p>
+          <strong>Supported shells:</strong> the installer currently auto-wires
+          <strong>bash</strong> and <strong>zsh</strong>. If you use fish or
+          another shell, source the generated alias script manually instead of
+          expecting automatic rc-file edits.
+        </p>
+        <p>
+          <strong>Chat controls &amp; hybrid REPL:</strong> launch <code>OpenClaw</code> for an
+          interactive session. The REPL accepts both natural-language prompts and slash commands
+          in the same input stream — slash commands are dispatched locally before the LLM sees the input.
+          Use <code>/help</code> to print the full in-REPL reference,
+          <code>/clear</code> to reset the current conversation history (the session stays active),
+          <code>/autoroute [on|off]</code> to show or toggle high-confidence freeform auto-routing,
+          <code>/rollback last</code> to restore the newest recoverable routed edit checkpoint,
+          and <code>/quit</code> to exit.
+          Inspect the active session with <code>/session</code> (compact summary: ID, plan/task linkage,
+          file count, automation state) or <code>/context</code> (cwd, tracked files, linked plan/task IDs,
+          plus a bounded preview of the grounding that the next <code>/analyze</code>,
+          <code>/write</code>, or <code>/research</code> action will inherit).
+          Use <code>/outputs</code> to list saved session artifacts with 1-based indices, then
+          <code>/outputs 1</code> or <code>/outputs report.md</code> to preview one inline. Use
+          <code>/events [n]</code> to review recent session events, including structured
+          <code>route</code> entries when OpenClaw auto-routes a freeform prompt.
+          Quoted or fenced shell snippets can now route more precisely into <code>/exec</code>, and
+          edit-style prompts that clearly express append/replace intent can route into structured
+          <code>/edit</code> calls when the file target is clear.
+          High-confidence ordered prompts can decompose into linked plans that auto-run step-by-step
+          with inline <code>[step/total]</code> progress after the plan is attached to the session.
+          Linked plan, task, and current-step context can further sharpen routing, including explicit
+          references like <code>step 2</code> or <code>step three</code> when matching linked plan data is available.
+          High/critical routed <code>/exec</code> and <code>/edit</code> steps still require approval,
+          automatic rollback currently supports text file edits only, exec checkpoints stay manual-recovery only,
+          and only the newest five routed checkpoints are retained.
+          <code>/plan [&lt;id&gt;|unlink]</code> and <code>/task [&lt;id&gt;|unlink]</code> still link
+          immediately, but now report whether the target was confirmed when local validation sources
+          are available; if the current install lacks those validation sources, the REPL still links the
+          ID and explicitly says validation was unavailable. If the router still lacks enough context, the prompt
+          conservatively stays in normal chat instead of forcing a tool action.
+          Pass a prompt directly to <code>openclaw</code> for one-shot usage, or run
+          <code>openclaw --health</code> for a quick connectivity check. Add
+          <code>--json</code> if you want the raw health payload instead of the
+          summarized diagnostic output.
+        </p>
+        <p>
+          <strong>Agent workflows — CLI subcommands and in-REPL equivalents:</strong>
+          The same agent actions are available both as top-level <code>openclaw</code> subcommands
+          and as slash commands inside an interactive session (where they automatically inherit the
+          active cwd, tracked files, and plan/task linkage).
+          <code>openclaw analyze</code> / <code>/analyze &lt;goal&gt;</code> — workspace-aware analysis;
+          <code>openclaw research</code> / <code>/research &lt;query&gt;</code> — long-form sourced research report saved to the session;
+          <code>openclaw write</code> / <code>/write &lt;task&gt;</code> — saved markdown drafts;
+          <code>openclaw watch</code> — bounded resumable automation with checkpoints (CLI-only; no in-REPL equivalent);
+          <code>openclaw exec</code> / <code>/exec [--] &lt;command&gt;</code> — tracked shell commands with risk-aware approval prompts (supports <code>--plan-id</code> / <code>--task-id</code> tagging on the CLI form);
+          <code>openclaw edit</code> / <code>/edit &lt;path&gt; [--content TEXT] [--append TEXT]</code> — diffable file edits (CLI form also accepts <code>--plan-id</code> / <code>--task-id</code>).
+          When auto-route is enabled, high-confidence freeform prompts can jump directly into these same handlers and OpenClaw announces the selected slash command inline.
+          That includes better extraction from quoted/fenced commands plus more structured append/replace edit routing when the request is explicit.
+          If the router is unsure, the prompt safely stays in normal chat. Routed <code>/exec</code> and <code>/edit</code> still go through the normal approval checks, so auto-routing never bypasses approvals.
+          Use
+          <code>openclaw session list</code>, <code>openclaw session show &lt;session-id&gt;</code>,
+          <code>openclaw session resume</code>, or
+          <code>openclaw watch --resume &lt;session-id&gt;</code>
+          to continue prior work. <code>session show</code> prints full metadata including plan/task linkage, tracked files, automation state, and watch checkpoint + retry history.
+        </p>
+        <p>
+          <strong>Dashboard linkage:</strong> recent terminal sessions now appear
+          on the dashboard with automation status and checkpoint visibility.
+          Clicking a session loads plan/task linkage, recent progress log,
+          intervention history, and the <strong>Watch Insights</strong> panel —
+          a per-poll checkpoint timeline and retry history. The
+          Scheduled Tasks card can pause, resume, and update cron/prompt
+          jobs directly from the browser.
+        </p>
+        <p>
+          <strong>If Mac Mini SSH is denied on the laptop:</strong> run
+          <code>curl -fsSL http://192.168.1.93:8765/install-remote | bash</code>
+          locally on the MacBook once. That installer enables Remote Login if
+          needed, authorizes the Mac Mini SSH key, and installs the CLI even if
+          the laptop does not have an <code>~/openclaw</code> checkout.
+        </p>
+        <p>
+          <strong>Security note:</strong> <code>OPENCLAW_TOKEN</code> authorizes
+          dashboard action endpoints, so prefer Tailscale or LAN access instead
+          of exposing that token over a public hostname.
+        </p>
+        <p>
+          <strong>Non-macOS auth:</strong> if you are launching the CLI from
+          Linux, Windows, or WSL, macOS Keychain is not available. Run
+          <code>openclaw auth login</code> to save a local CLI token, or set
+          <code>OPENCLAW_TOKEN</code> (or <code>DASHBOARD_API_TOKEN</code>) in
+          your shell environment. Use <code>openclaw auth status</code> to see
+          which source is active and <code>openclaw auth logout</code> to clear
+          stored credentials.
+        </p>
+      </div>
+
+      <div class="tip">
+        <strong>What lives where?</strong> <code>/terminal</code> is the shell
+        cheat sheet (tmux, Docker, aliases, Ollama). This guide section is the
+        service-side setup for talking to OpenClaw itself from the terminal via
+        <code>/api/agent/ask</code>.
+      </div>
 
       <!-- 13. Tips -->
       <h2 id="tips">19. Power User Tips</h2>
@@ -1882,6 +2083,61 @@ https://openclaw.davevoyles.synology.me/guide</code></pre>
 /ask Remember that I rotated the Sonarr API key today
 /ask Send me an email summary at you@example.com (requires AgentMail setup)
 /ask What's the NAS IP? (recalls from memory if stored)</code></pre>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-top: 0">&#9878; OpenClaw vs. Copilot CLI</h3>
+        <p>
+          Both tools are useful, but they solve different problems. OpenClaw is
+          your persistent operations layer; Copilot CLI is your high-autonomy
+          local coding/operator agent.
+        </p>
+        <table>
+          <tr>
+            <th>Situation</th>
+            <th>Prefer</th>
+            <th>Why</th>
+          </tr>
+          <tr>
+            <td>Scheduled jobs, recurring reports, background health checks</td>
+            <td><strong>OpenClaw</strong></td>
+            <td>It stays running, remembers context, and can notify you in Discord without an open terminal.</td>
+          </tr>
+          <tr>
+            <td>Home-lab orchestration with approvals and audit trail</td>
+            <td><strong>OpenClaw</strong></td>
+            <td>It already has alerts, approval gates, scheduling, and infrastructure-specific skills.</td>
+          </tr>
+          <tr>
+            <td>One-off repo edits, refactors, local debugging, file/app manipulation</td>
+            <td><strong>Copilot CLI</strong></td>
+            <td>Enterprise agents operate directly on your machine with a tighter local edit/run loop.</td>
+          </tr>
+          <tr>
+            <td>Ad-hoc coding tasks where you want immediate filesystem changes</td>
+            <td><strong>Copilot CLI</strong></td>
+            <td>It is optimized for interactive development work, code generation, and quick iteration.</td>
+          </tr>
+          <tr>
+            <td>Build it once, then run or monitor it forever</td>
+            <td><strong>Use both</strong></td>
+            <td>Let Copilot CLI generate/debug the script or config, then let OpenClaw schedule it, watch it, and report on it.</td>
+          </tr>
+        </table>
+        <p>
+          <strong>Rule of thumb:</strong> use OpenClaw when you want
+          persistence, approvals, monitoring, Discord/mobile access, or memory
+          across sessions. Use Copilot CLI when you want the fastest path to
+          changing code, running commands, and manipulating the local machine in
+          real time.
+        </p>
+        <p>
+          That gap is getting smaller: OpenClaw's terminal client now has
+          resumable local sessions, repo/file-aware <code>analyze</code>,
+          first-class <code>research</code> and <code>write</code> flows, tracked
+          <code>exec</code>/<code>edit</code> actions, and dashboard visibility
+          for terminal runs.
+        </p>
       </div>
 
       <div class="card">
@@ -3514,6 +3770,38 @@ Division 1 men's lacrosse games this week and post a table.
             <td>
               View and resume saved conversation threads directly from the
               dashboard without using Discord commands.
+            </td>
+          </tr>
+          <tr>
+            <td>Active Plans</td>
+            <td>
+              Control-plane view backed by <code>/api/plans</code>. Lists persisted agent-loop plans
+              with goal, status, step progress (e.g. 3/5), and links to the sessions and tasks tied to each plan.
+              Filter by status: <em>in-progress</em>, <em>completed</em>, <em>interrupted</em>.
+              Click a plan to load full step detail from <code>/api/plans/{plan_id}</code>.
+            </td>
+          </tr>
+          <tr>
+            <td>Unified Task Status</td>
+            <td>
+              Control-plane view backed by <code>/api/tasks</code>. Combines Mission Control tasks
+              and scheduler jobs into one normalized list with status, source, last-run time, and
+              links to associated plans and CLI sessions. Filter by <em>source</em>
+              (<code>all</code>, <code>mission_control</code>, <code>scheduler</code>).
+            </td>
+          </tr>
+          <tr>
+            <td>Terminal Agent Sessions</td>
+            <td>
+              Control-plane view backed by <code>/api/agent/sessions</code>. Shows recent local
+              terminal CLI sessions with automation mode, automation status
+              (<em>watching</em>, <em>running</em>, <em>waiting</em>), watch-mode checkpoint
+              counts, last checkpoint timestamp, and links to associated plans and tasks.
+              Click a session to load the full export from <code>/api/agent/sessions/{session_id}</code>,
+              including plan/task linkage, recent progress log, intervention history, and the
+              <strong>Watch Insights</strong> panel — a per-poll checkpoint timeline
+              (poll index, phase, status, summary) and a retry history table
+              (poll, attempt, transient/hard error type).
             </td>
           </tr>
         </table>

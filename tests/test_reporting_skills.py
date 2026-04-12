@@ -59,6 +59,15 @@ def test_infer_sports_request_extracts_slots_from_plain_english():
     assert slots["days"] == 5
 
 
+def test_infer_sports_request_treats_today_as_same_day_window():
+    slots = mod.infer_sports_request(
+        "Show me the schedule for the men's division 1 college lacrosse games today"
+    )
+    assert slots["sport"] == "lacrosse"
+    assert slots["league"] == "NCAA Division 1"
+    assert slots["days"] == 1
+
+
 def test_infer_report_request_extracts_format_and_window_hints():
     slots = mod.infer_report_request(
         "Give me the box office financials and new releases for the last week in table form with emojis."
@@ -352,6 +361,400 @@ async def test_generate_sports_watch_report_weekend_warns_on_partial_coverage(mo
     assert "Status: ⚠️ **Partial coverage**" in result
     assert ("recap_fallback_activation", "sports_recap") in events
     assert ("recap_partial_coverage_warning", "sports_recap") in events
+
+
+@pytest.mark.asyncio
+async def test_generate_sports_watch_report_today_full_slate_prefers_direct_perplexity_answer(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    async def fake_search_web(query: str, num_results: int = 5, provider: str = "", **kwargs):
+        calls.append(
+            {
+                "query": query,
+                "num_results": num_results,
+                "provider": provider,
+                "kwargs": kwargs,
+            }
+        )
+        if provider == "perplexity":
+            return (
+                "**Perplexity AI Answer:**\n"
+                "Today, Saturday, April 11, 2026, is a loaded NCAA Division I men's lacrosse slate with ranked afternoon windows and the Army-Navy rivalry headlining the day.\n\n"
+                "| Time (ET) | Matchup | Watch | Notes |\n"
+                "| --- | --- | --- | --- |\n"
+                "| 12:00 PM | Penn at Princeton | ESPN+ | Ivy matchup |\n"
+                "| 12:00 PM | Johns Hopkins at Ohio State | BTN+ | Big Ten opener |\n"
+                "| 1:00 PM | Michigan at Penn State | BTN+ | Big Ten matchup |\n"
+                "| 2:30 PM | Navy at Army | CBS Sports Network | Rivalry game |\n"
+                "| 4:00 PM | Virginia at Syracuse | ESPNU | Ranked matchup |\n"
+                "| 5:00 PM | North Carolina at Notre Dame | ACCN | Ranked matchup |\n"
+                "| 6:00 PM | Rutgers at Maryland | BTN | Late TV window |\n\n"
+                "**Sources:**\n"
+                "1. https://www.ncaa.com/scoreboard/lacrosse-men/d1\n"
+                "2. https://www.espn.com/college-sports/\n"
+            )
+        return "should not be used"
+
+    async def fake_chat(**_kwargs):
+        raise AssertionError("llm.chat should not run when direct Perplexity output is available")
+
+    monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
+    monkeypatch.setattr(llm, "chat", fake_chat)
+    monkeypatch.setattr(
+        mod,
+        "_get_reporting_reference_context",
+        lambda: (dt.datetime(2026, 4, 11, 14, 0, 0), "America/New_York"),
+    )
+
+    result = await mod.generate_sports_watch_report(
+        query="Show me the schedule for the men's division 1 college lacrosse games today",
+        sport="lacrosse",
+        league="NCAA Division 1",
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["provider"] == "perplexity"
+    assert "Today, Saturday, April 11, 2026" in result
+    assert "| Time (ET) | Matchup | Watch | Notes |" in result
+    assert "## 📎 Coverage Summary" not in result
+    assert "_via perplexity-direct_" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_sports_watch_report_structured_same_day_args_prefer_direct_perplexity(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    async def fake_search_web(query: str, num_results: int = 5, provider: str = "", **kwargs):
+        calls.append(
+            {
+                "query": query,
+                "num_results": num_results,
+                "provider": provider,
+                "kwargs": kwargs,
+            }
+        )
+        if provider == "perplexity":
+            return (
+                "**Perplexity AI Answer:**\n"
+                "Today, Saturday, April 11, 2026, is a loaded NCAA Division I men's lacrosse slate with ranked afternoon windows and the Army-Navy rivalry headlining the day.\n\n"
+                "| Time (ET) | Matchup | Watch | Notes |\n"
+                "| --- | --- | --- | --- |\n"
+                "| 12:00 PM | Penn at Princeton | ESPN+ | Ivy matchup |\n"
+                "| 12:00 PM | Johns Hopkins at Ohio State | BTN+ | Big Ten matchup |\n"
+                "| 1:00 PM | Michigan at Penn State | BTN+ | Big Ten matchup |\n"
+                "| 1:00 PM | Navy at Army | CBS Sports Network | Rivalry game |\n"
+                "| 4:00 PM | Virginia at Syracuse | ESPNU | Ranked matchup |\n\n"
+                "**Sources:**\n"
+                "1. https://www.ncaa.com/scoreboard/lacrosse-men/d1\n"
+                "2. https://www.espn.com/college-sports/\n"
+            )
+        return "should not be used"
+
+    async def fake_chat(**_kwargs):
+        raise AssertionError("llm.chat should not run when structured same-day args hit direct Perplexity")
+
+    monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
+    monkeypatch.setattr(llm, "chat", fake_chat)
+    monkeypatch.setattr(
+        mod,
+        "_get_reporting_reference_context",
+        lambda: (dt.datetime(2026, 4, 11, 14, 0, 0), "America/New_York"),
+    )
+
+    result = await mod.generate_sports_watch_report(
+        query="",
+        sport="lacrosse",
+        league="NCAA Division 1 Men",
+        days=1,
+        include_watch_info=True,
+    )
+
+    assert len(calls) == 1
+    assert calls[0]["provider"] == "perplexity"
+    assert "Only include NCAA Division I men's lacrosse games." in calls[0]["query"]
+    assert "Today, Saturday, April 11, 2026" in result
+    assert "_via perplexity-direct_" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_sports_watch_report_today_full_slate_rejects_direct_answer_without_urls(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    async def fake_search_web(query: str, num_results: int = 5, provider: str = "", **kwargs):
+        calls.append(
+            {
+                "query": query,
+                "num_results": num_results,
+                "provider": provider,
+                "kwargs": kwargs,
+            }
+        )
+        if provider == "perplexity":
+            return (
+                "**Perplexity AI Answer:**\n"
+                "Today is a loaded D1 men's lacrosse slate with many games and marquee rivalries across the country.\n\n"
+                "**Sources:**\n"
+                "Inside Lacrosse, team sites, and scoreboard coverage.\n"
+            )
+        return (
+            "**Web Search Results** (3 of 3 unique):\n"
+            "**1. Navy at Army**\n🔗 <https://www.ncaa.com/game1>\n\n"
+            "**2. Virginia at Syracuse**\n🔗 <https://www.espn.com/game2>\n\n"
+            "**3. North Carolina at Notre Dame**\n🔗 <https://www.insidelacrosse.com/game3>\n\n"
+        )
+
+    async def fake_chat(**kwargs):
+        prompt = kwargs["user_message"]
+        assert "Search results:" in prompt
+        return (
+            "## D1 Men's Lacrosse Today\n\n"
+            "| Date | Matchup | Time/Result | Watch | Notes | Sources |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| Apr 11 | Navy at Army | 2:30 PM ET | CBS Sports Network | Rivalry | ncaa.com |\n"
+            "| Apr 11 | Virginia at Syracuse | 4:00 PM ET | ESPNU | Ranked | espn.com |\n"
+            "| Apr 11 | North Carolina at Notre Dame | 5:00 PM ET | ACCN | Ranked | insidelacrosse.com |\n",
+            [],
+            "test-model",
+        )
+
+    monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
+    monkeypatch.setattr(llm, "chat", fake_chat)
+    monkeypatch.setattr(
+        mod,
+        "_get_reporting_reference_context",
+        lambda: (dt.datetime(2026, 4, 11, 14, 0, 0), "America/New_York"),
+    )
+
+    result = await mod.generate_sports_watch_report(
+        query="Show me the schedule for the men's division 1 college lacrosse games today",
+        sport="lacrosse",
+        league="NCAA Division 1",
+    )
+
+    assert calls[0]["provider"] == "perplexity"
+    assert any(call["provider"] == "" for call in calls[1:])
+    assert "## 📎 Coverage Summary" in result
+    assert "_via test-model_" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_sports_watch_report_today_full_slate_rejects_sparse_direct_answer(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    async def fake_search_web(query: str, num_results: int = 5, provider: str = "", **kwargs):
+        calls.append(
+            {
+                "query": query,
+                "num_results": num_results,
+                "provider": provider,
+                "kwargs": kwargs,
+            }
+        )
+        if provider == "perplexity":
+            return (
+                "**Perplexity AI Answer:**\n"
+                "Several top-ranked Division 1 men's lacrosse teams are in action today.\n\n"
+                "| Time (ET) | Matchup | Watch | Notes |\n"
+                "| --- | --- | --- | --- |\n"
+                "| 2:00 PM | No. 7 Cornell vs. No. 11 Duke | TBD | Neutral site |\n"
+                "| 4:00 PM | No. 13 Virginia at No. 5 Syracuse | ESPNU | Ranked matchup |\n"
+                "| 5:00 PM | No. 1 North Carolina at No. 2 Notre Dame | ACCN | Top-two matchup |\n\n"
+                "**Sources:**\n"
+                "1. https://theacc.com/news/2026/4/10/this-weekend-in-acc-mens-lacrosse.aspx\n"
+                "2. https://gohofstra.com/sports/mens-lacrosse/schedule/2026\n"
+            )
+        return (
+            "**Web Search Results** (5 of 5 unique):\n"
+            "**1. Penn at Princeton**\n🔗 <https://www.ncaa.com/game1>\n\n"
+            "**2. Johns Hopkins at Ohio State**\n🔗 <https://www.espn.com/game2>\n\n"
+            "**3. Michigan at Penn State**\n🔗 <https://btn.com/game3>\n\n"
+            "**4. Navy at Army**\n🔗 <https://www.cbssports.com/game4>\n\n"
+            "**5. Rutgers at Maryland**\n🔗 <https://www.ncaa.com/game5>\n\n"
+        )
+
+    async def fake_chat(**_kwargs):
+        return (
+            "## D1 Men's Lacrosse Today\n\n"
+            "| Date | Matchup | Time/Result | Watch | Notes | Sources |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| Apr 11 | Penn at Princeton | 12:00 PM ET | ESPN+ | Ivy | ncaa.com |\n"
+            "| Apr 11 | Johns Hopkins at Ohio State | 12:00 PM ET | BTN+ | Big Ten | espn.com |\n"
+            "| Apr 11 | Michigan at Penn State | 1:00 PM ET | BTN+ | Big Ten | btn.com |\n"
+            "| Apr 11 | Navy at Army | 2:30 PM ET | CBS Sports Network | Rivalry | cbssports.com |\n"
+            "| Apr 11 | Rutgers at Maryland | 6:00 PM ET | Big Ten Network | Big Ten | ncaa.com |\n",
+            [],
+            "test-model",
+        )
+
+    monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
+    monkeypatch.setattr(llm, "chat", fake_chat)
+    monkeypatch.setattr(
+        mod,
+        "_get_reporting_reference_context",
+        lambda: (dt.datetime(2026, 4, 11, 14, 0, 0), "America/New_York"),
+    )
+
+    result = await mod.generate_sports_watch_report(
+        query="Show me the schedule for the men's division 1 college lacrosse games today",
+        sport="lacrosse",
+        league="NCAA Division 1",
+    )
+
+    assert calls[0]["provider"] == "perplexity"
+    assert any(call["provider"] == "" for call in calls[1:])
+    assert "_via perplexity-direct_" not in result
+    assert "_via test-model_" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_sports_watch_report_today_full_slate_rejects_cross_division_direct_answer(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    async def fake_search_web(query: str, num_results: int = 5, provider: str = "", **kwargs):
+        calls.append(
+            {
+                "query": query,
+                "num_results": num_results,
+                "provider": provider,
+                "kwargs": kwargs,
+            }
+        )
+        if provider == "perplexity":
+            return (
+                "**Perplexity AI Answer:**\n"
+                "NCAA Division I men's lacrosse has a light slate today, though some women's and Division III games also appear in broad source coverage.\n\n"
+                "| Time (ET) | Matchup | Watch | Notes |\n"
+                "| --- | --- | --- | --- |\n"
+                "| 12:00 PM | Penn at Princeton | ESPN+ | Ivy League |\n"
+                "| 12:00 PM | Franklin & Marshall at Muhlenberg | TBD | Division III |\n"
+                "| 3:00 PM | Harvard at Yale | TBD | Ivy League |\n\n"
+                "**Sources:**\n"
+                "1. https://www.ncaa.com/scoreboard/lacrosse-men/d1\n"
+                "2. https://www.espn.com/college-sports/\n"
+            )
+        return (
+            "**Web Search Results** (3 of 3 unique):\n"
+            "**1. Penn at Princeton**\n🔗 <https://www.ncaa.com/game1>\n\n"
+            "**2. Harvard at Yale**\n🔗 <https://ivyleague.com/game2>\n\n"
+            "**3. Hofstra at Drexel**\n🔗 <https://gohofstra.com/game3>\n\n"
+        )
+
+    async def fake_chat(**_kwargs):
+        return (
+            "## D1 Men's Lacrosse Today\n\n"
+            "| Date | Matchup | Time/Result | Watch | Notes | Sources |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| Apr 11 | Penn at Princeton | 12:00 PM ET | ESPN+ | Ivy League | ncaa.com |\n"
+            "| Apr 11 | Harvard at Yale | 3:00 PM ET | TBD | Ivy League | ivyleague.com |\n"
+            "| Apr 11 | Hofstra at Drexel | 12:00 PM ET | TBD | CAA | gohofstra.com |\n",
+            [],
+            "test-model",
+        )
+
+    monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
+    monkeypatch.setattr(llm, "chat", fake_chat)
+    monkeypatch.setattr(
+        mod,
+        "_get_reporting_reference_context",
+        lambda: (dt.datetime(2026, 4, 11, 14, 0, 0), "America/New_York"),
+    )
+
+    result = await mod.generate_sports_watch_report(
+        query="Show me the schedule for the men's division 1 college lacrosse games today",
+        sport="lacrosse",
+        league="NCAA Division 1",
+    )
+
+    assert calls[0]["provider"] == "perplexity"
+    assert any(call["provider"] == "" for call in calls[1:])
+    assert "_via test-model_" in result
+
+
+@pytest.mark.asyncio
+async def test_generate_sports_watch_report_today_full_slate_uses_stronger_queries(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    async def fake_search_web(query: str, num_results: int = 5, provider: str = "", **kwargs):
+        calls.append(
+            {
+                "query": query,
+                "num_results": num_results,
+                "provider": provider,
+                "kwargs": kwargs,
+            }
+        )
+        if provider == "perplexity":
+            return "⚠️ Perplexity API key not configured."
+        if "today all games schedule" in query:
+            return (
+                "**Web Search Results** (3 of 3 unique):\n"
+                "**1. Navy at Army**\n🔗 <https://www.ncaa.com/game1>\n\n"
+                "**2. Virginia at Syracuse**\n🔗 <https://www.espn.com/game2>\n\n"
+                "**3. North Carolina at Notre Dame**\n🔗 <https://www.insidelacrosse.com/game3>\n\n"
+            )
+        return (
+            "**Web Search Results** (1 of 1 unique):\n"
+            "**1. Penn at Princeton**\n🔗 <https://www.espn.com/game4>\n\n"
+        )
+
+    async def fake_chat(**kwargs):
+        prompt = kwargs["user_message"]
+        assert "Window: today." in prompt
+        assert "Reference date: Saturday, April 11, 2026 (America/New_York)." in prompt
+        assert "do not shift the answer to a different calendar day" in prompt
+        assert "Target at least 10 distinct game rows" in prompt
+        assert "estimates the full slate size" in prompt
+        assert "compact network abbreviations" in prompt
+        assert "preserve ranking indicators" in prompt
+        return (
+            "## D1 Men's Lacrosse Today\n\n"
+            "There are at least 8 notable games on today's slate, with Army-Navy and multiple ranked matchups headlining the TV window.\n\n"
+            "| Date | Matchup | Time/Result | Watch | Notes | Sources |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| Apr 11 | Navy at Army | 2:30 PM ET | CBS Sports Network | Rivalry | ncaa.com |\n"
+            "| Apr 11 | Virginia at Syracuse | 4:00 PM ET | ESPNU | Ranked | espn.com |\n"
+            "| Apr 11 | North Carolina at Notre Dame | 5:00 PM ET | ACC Network | Ranked | insidelacrosse.com |\n"
+            "| Apr 11 | Rutgers at Maryland | 6:00 PM ET | Big Ten Network | Big Ten | btn.com |\n"
+            "| Apr 11 | Penn at Princeton | 12:00 PM ET | ESPN+ | Ivy | espn.com |\n"
+            "| Apr 11 | Johns Hopkins at Ohio State | 12:00 PM ET | BTN+ | Big Ten | btn.com |\n"
+            "| Apr 11 | Michigan at Penn State | 1:00 PM ET | BTN+ | Big Ten | btn.com |\n"
+            "| Apr 11 | Duke vs Cornell | 2:00 PM ET | Corrigan Sports | Neutral site | corrigansports.com |\n",
+            [],
+            "test-model",
+        )
+
+    monkeypatch.setattr("skills.search_skills.search_web", fake_search_web)
+    monkeypatch.setattr(llm, "chat", fake_chat)
+    monkeypatch.setattr(
+        mod,
+        "_get_reporting_reference_context",
+        lambda: (dt.datetime(2026, 4, 11, 14, 0, 0), "America/New_York"),
+    )
+
+    result = await mod.generate_sports_watch_report(
+        query="Show me the schedule for the men's division 1 college lacrosse games today",
+        sport="lacrosse",
+        league="NCAA Division 1",
+    )
+
+    search_pipeline_calls = [call for call in calls if call["provider"] != "perplexity"]
+    assert calls[0]["provider"] == "perplexity"
+    assert any("today all games schedule" in str(call["query"]) for call in calls)
+    assert any("men's lacrosse" in str(call["query"]).lower() for call in calls[1:])
+    assert any(call["num_results"] == 15 for call in search_pipeline_calls)
+    assert all(call["kwargs"].get("retry_on_low_results") is True for call in search_pipeline_calls)
+    assert "Context: same-day full-slate sports schedule" in result
+    assert "Items listed: **8** (expected ≥ 8)" in result
+    assert "Source count: **" in result
+
+
+def test_merge_ranked_with_parsed_rows_skips_dedup_for_full_slate_mode():
+    ranked_rows = [
+        {"title": "Navy at Army", "url": "https://a.example/game1", "snippet": "Apr 11 2:30 PM ET"},
+        {"title": "Navy at Army", "url": "https://b.example/game1", "snippet": "Apr 11 2:30 PM ET"},
+    ]
+    merged = mod._merge_ranked_with_parsed_rows(ranked_rows, [], max_rows=10, dedupe=False)
+    assert len(merged) == 2
 
 
 @pytest.mark.asyncio

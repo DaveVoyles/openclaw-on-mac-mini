@@ -11,8 +11,12 @@ before importing.
 """
 
 import json
+import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -51,6 +55,7 @@ if _created_guide:
 
 try:
     import dashboard as mod
+    from dashboard import api_handlers as api_mod
 finally:
     # Clean up symlinks/copies we created
     if _created_dash and _src_dash.exists():
@@ -82,6 +87,56 @@ def _fake_request(
     return req
 
 
+def _write_executable(path: Path, body: str) -> None:
+    path.write_text(body)
+    path.chmod(0o755)
+
+
+def _installer_test_env(tmp_path: Path) -> tuple[Path, Path, dict[str, str]]:
+    home_dir = tmp_path / "home"
+    fake_bin = tmp_path / "fake-bin"
+    home_dir.mkdir()
+    fake_bin.mkdir()
+    env = {**os.environ, "HOME": str(home_dir), "PATH": f"{fake_bin}:{os.environ['PATH']}", "SHELL": "/bin/bash"}
+    return home_dir, fake_bin, env
+
+
+def _stub_openclaw_cli_source(*, health_exit: int = 0, health_payload: dict | None = None) -> str:
+    payload = json.dumps(health_payload or {"status": "ok", "service": "openclaw"})
+    return f"""#!/usr/bin/env python3
+import sys
+
+if "--health" in sys.argv:
+    if {health_exit} != 0:
+        print("health failed", file=sys.stderr)
+        raise SystemExit({health_exit})
+    print({payload!r})
+    raise SystemExit(0)
+
+print("stub openclaw cli")
+"""
+
+
+def _fake_curl_script_for_cli_source(cli_source: str) -> str:
+    return f"""#!/usr/bin/env bash
+set -euo pipefail
+output=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o)
+      output="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+cat >"$output" <<'EOF'
+{cli_source}EOF
+"""
+
+
 # ---------------------------------------------------------------------------
 # Static HTML handlers
 # ---------------------------------------------------------------------------
@@ -99,6 +154,8 @@ class TestDashboardHandler:
         assert "Channel Profile Assistant" in resp.text
         assert "Inspect Scope / Preview" in resp.text
         assert "Workflow Lanes" in resp.text
+        assert "Terminal Agent Sessions" in resp.text
+        assert "agent-sessions-list" in resp.text
         assert "openclaw_api_action_token" in resp.text
         assert "Quality Eval Scorecards" in resp.text
         assert "Discord Answer Quality Telemetry" in resp.text
@@ -122,6 +179,311 @@ class TestGuideHandler:
         assert "Workflow Lanes (Fast Navigation)" in resp.text
         assert "Re-run full research in 24h" in resp.text
         assert "Persistence receipts" in resp.text
+        assert "Terminal CLI Access" in resp.text
+        assert "OpenClaw" in resp.text
+        assert "oc-ask" in resp.text
+        assert "OpenClaw vs. Copilot CLI" in resp.text
+        assert "/install" in resp.text
+        assert "Linux, Windows, or WSL" in resp.text
+        assert "openclaw --health" in resp.text
+        assert "--json" in resp.text
+        assert "--skip-verify" in resp.text
+        assert "openclaw auth login" in resp.text
+        assert "openclaw auth logout" in resp.text
+        assert "openclaw analyze" in resp.text
+        assert "openclaw research" in resp.text
+        assert "openclaw write" in resp.text
+        assert "openclaw exec" in resp.text
+        assert "/rollback last" in resp.text
+        assert "manual-recovery only" in resp.text
+        assert "openclaw session resume" in resp.text
+        assert "bash</strong> and <strong>zsh" in resp.text
+
+
+class TestTerminalHandler:
+    async def test_returns_html(self):
+        req = _fake_request()
+        resp = await mod.terminal_handler(req)
+        assert resp.content_type == "text/html"
+        assert len(resp.text) > 100
+        assert "Preferred launcher" in resp.text
+        assert "Compatibility shortcut" in resp.text
+        assert "openclaw --version" in resp.text
+        assert "OpenClaw" in resp.text
+        assert "OPENCLAW_TOKEN" in resp.text
+        assert "openclaw --health" in resp.text
+        assert "--json" in resp.text
+        assert "--skip-verify" in resp.text
+        assert "openclaw auth login" in resp.text
+        assert "openclaw auth status" in resp.text
+        assert "openclaw analyze" in resp.text
+        assert "openclaw research" in resp.text
+        assert "openclaw write" in resp.text
+        assert "openclaw exec" in resp.text
+        assert "openclaw edit" in resp.text
+        assert "openclaw session list" in resp.text
+        assert "/rollback last" in resp.text
+        assert "manual-recovery only" in resp.text
+        assert "Terminal Agent Sessions" in resp.text
+        assert "bash</code> and <code>zsh</code> are auto-configured" in resp.text
+
+
+class TestCliDownloadHandlers:
+    async def test_cli_python_download_returns_source(self):
+        req = _fake_request()
+        resp = await mod.openclaw_cli_download_handler(req)
+        assert resp.content_type == "text/plain"
+        assert "attachment; filename=\"openclaw_cli.py\"" == resp.headers["Content-Disposition"]
+        assert "class OpenClawCliError" in resp.text
+        assert "def main(" in resp.text
+
+    async def test_cli_support_download_returns_source(self):
+        req = _fake_request()
+        req.match_info = {"name": "openclaw_cli_actions.py"}
+        resp = await mod.openclaw_cli_support_download_handler(req)
+        assert resp.content_type == "text/plain"
+        assert "attachment; filename=\"openclaw_cli_actions.py\"" == resp.headers["Content-Disposition"]
+        assert "class ShellCommandResult" in resp.text
+
+    async def test_cli_installer_download_returns_shell_script(self):
+        req = _fake_request()
+        req.scheme = "http"
+        req.host = "192.168.1.93:8765"
+        resp = await mod.openclaw_cli_installer_handler(req)
+        assert resp.content_type == "text/plain"
+        assert "attachment; filename=\"openclaw-cli-installer.sh\"" == resp.headers["Content-Disposition"]
+        assert "/downloads/openclaw_cli.py" in resp.text
+        assert "/downloads/openclaw-cli-support/openclaw_cli_actions.py" in resp.text
+        assert "/downloads/openclaw-cli-support/openclaw_cli_sessions.py" in resp.text
+        assert "/downloads/openclaw-cli-support/subprocess_utils.py" in resp.text
+        assert "--shell SHELL" in resp.text
+        assert "--skip-verify" in resp.text
+        assert "TARGET_RC_FILE" in resp.text
+        assert 'cat >"$BIN_DIR/openclaw"' in resp.text
+        assert "OpenClaw()" in resp.text
+        assert "--enable-remote-login" in resp.text
+        assert "http://192.168.1.93:8765" in resp.text
+
+    async def test_cli_remote_installer_defaults_remote_login_on(self):
+        req = _fake_request()
+        req.scheme = "http"
+        req.host = "192.168.1.93:8765"
+        resp = await mod.openclaw_cli_remote_installer_handler(req)
+        assert resp.content_type == "text/plain"
+        assert "attachment; filename=\"openclaw-cli-remote-installer.sh\"" == resp.headers["Content-Disposition"]
+        assert "ENABLE_REMOTE_LOGIN=1" in resp.text
+
+    def test_cli_installer_script_runs_end_to_end(self):
+        from dashboard.helpers import build_openclaw_cli_installer
+
+        script_body = build_openclaw_cli_installer("http://example.test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            home_dir, fake_bin, env = _installer_test_env(tmp_path)
+
+            _write_executable(
+                fake_bin / "curl",
+                _fake_curl_script_for_cli_source(_stub_openclaw_cli_source()),
+            )
+
+            installer_path = tmp_path / "installer.sh"
+            installer_path.write_text(script_body)
+            installer_path.chmod(0o755)
+
+            completed = subprocess.run(
+                ["bash", str(installer_path), "--shell", "bash", "--skip-token-prompt"],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True,
+            )
+
+            assert (home_dir / ".local/bin/openclaw").exists()
+            assert (home_dir / ".local/bin/openclaw-cli").exists()
+            assert (home_dir / ".local/share/openclaw-cli/openclaw_aliases.sh").exists()
+            assert (home_dir / ".local/share/openclaw-cli/openclaw_cli_actions.py").exists()
+            assert (home_dir / ".local/share/openclaw-cli/openclaw_cli_sessions.py").exists()
+            assert (home_dir / ".local/share/openclaw-cli/subprocess_utils.py").exists()
+            bashrc = home_dir / ".bashrc"
+            assert bashrc.exists()
+            bashrc_text = bashrc.read_text()
+            assert 'export OPENCLAW_URL="http://example.test"' in bashrc_text
+            assert 'source "' in bashrc_text
+            assert "TARGET_SHELL=bash" in completed.stdout
+            assert "export OPENCLAW_TOKEN" in completed.stdout
+            assert "STATUS=passed" in completed.stdout
+            assert '--url http://example.test --health' in completed.stdout
+
+    def test_cli_installer_reports_download_failures(self):
+        from dashboard.helpers import build_openclaw_cli_installer
+
+        script_body = build_openclaw_cli_installer("http://example.test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            _home_dir, fake_bin, env = _installer_test_env(tmp_path)
+            _write_executable(fake_bin / "curl", "#!/usr/bin/env bash\nexit 22\n")
+
+            installer_path = tmp_path / "installer.sh"
+            installer_path.write_text(script_body)
+            installer_path.chmod(0o755)
+
+            completed = subprocess.run(
+                ["bash", str(installer_path), "--shell", "bash", "--skip-token-prompt"],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+            )
+
+            assert completed.returncode != 0
+            assert "Failed to download OpenClaw CLI support" in completed.stderr
+            assert "http://example.test/downloads/openclaw_cli.py" in completed.stderr
+
+    def test_cli_installer_reports_unwritable_rc_target(self):
+        from dashboard.helpers import build_openclaw_cli_installer
+
+        script_body = build_openclaw_cli_installer("http://example.test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            _home_dir, fake_bin, env = _installer_test_env(tmp_path)
+            locked_dir = tmp_path / "locked"
+            locked_dir.mkdir()
+            locked_dir.chmod(0o500)
+            _write_executable(
+                fake_bin / "curl",
+                _fake_curl_script_for_cli_source(_stub_openclaw_cli_source()),
+            )
+
+            installer_path = tmp_path / "installer.sh"
+            installer_path.write_text(script_body)
+            installer_path.chmod(0o755)
+
+            try:
+                completed = subprocess.run(
+                    [
+                        "bash",
+                        str(installer_path),
+                        "--shell",
+                        "bash",
+                        "--rc-file",
+                        str(locked_dir / "profile"),
+                        "--skip-token-prompt",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    check=False,
+                )
+            finally:
+                locked_dir.chmod(0o700)
+
+            assert completed.returncode != 0
+            assert "Directory is not writable" in completed.stderr
+
+    def test_cli_installer_skip_token_prompt_avoids_keychain_calls(self):
+        from dashboard.helpers import build_openclaw_cli_installer
+
+        script_body = build_openclaw_cli_installer("http://example.test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            _home_dir, fake_bin, env = _installer_test_env(tmp_path)
+            security_marker = tmp_path / "security-called"
+            _write_executable(
+                fake_bin / "curl",
+                _fake_curl_script_for_cli_source(_stub_openclaw_cli_source()),
+            )
+            _write_executable(
+                fake_bin / "security",
+                f"""#!/usr/bin/env bash
+set -euo pipefail
+touch "{security_marker}"
+exit 0
+""",
+            )
+
+            installer_path = tmp_path / "installer.sh"
+            installer_path.write_text(script_body)
+            installer_path.chmod(0o755)
+
+            completed = subprocess.run(
+                ["bash", str(installer_path), "--shell", "bash", "--skip-token-prompt"],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True,
+            )
+
+            assert not security_marker.exists()
+            assert "export OPENCLAW_TOKEN" in completed.stdout
+            assert "STATUS=passed" in completed.stdout
+
+    def test_cli_installer_reports_post_install_verification_failures(self):
+        from dashboard.helpers import build_openclaw_cli_installer
+
+        script_body = build_openclaw_cli_installer("http://example.test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            _home_dir, fake_bin, env = _installer_test_env(tmp_path)
+            _write_executable(
+                fake_bin / "curl",
+                _fake_curl_script_for_cli_source(_stub_openclaw_cli_source(health_exit=9)),
+            )
+
+            installer_path = tmp_path / "installer.sh"
+            installer_path.write_text(script_body)
+            installer_path.chmod(0o755)
+
+            completed = subprocess.run(
+                ["bash", str(installer_path), "--shell", "bash", "--skip-token-prompt"],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=False,
+            )
+
+            assert completed.returncode != 0
+            assert "health failed" in completed.stderr
+            assert "Post-install verification failed" in completed.stderr
+            assert "--url http://example.test --health" in completed.stderr
+
+    def test_cli_installer_skip_verify_bypasses_health_check(self):
+        from dashboard.helpers import build_openclaw_cli_installer
+
+        script_body = build_openclaw_cli_installer("http://example.test")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            _home_dir, fake_bin, env = _installer_test_env(tmp_path)
+            _write_executable(
+                fake_bin / "curl",
+                _fake_curl_script_for_cli_source(_stub_openclaw_cli_source(health_exit=9)),
+            )
+
+            installer_path = tmp_path / "installer.sh"
+            installer_path.write_text(script_body)
+            installer_path.chmod(0o755)
+
+            completed = subprocess.run(
+                [
+                    "bash",
+                    str(installer_path),
+                    "--shell",
+                    "bash",
+                    "--skip-token-prompt",
+                    "--skip-verify",
+                ],
+                capture_output=True,
+                text=True,
+                env=env,
+                check=True,
+            )
+
+            assert "STATUS=skipped" in completed.stdout
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +563,674 @@ class TestApiDashboard:
         payload = json.loads(resp.text)
         assert "commands" in payload and isinstance(payload["commands"], list)
         assert "command_quickstart" in payload and isinstance(payload["command_quickstart"], list)
+        assert "agent_sessions" in payload
+
+
+class TestAgentSessionApis:
+    async def test_agent_sessions_list_returns_local_sessions(self):
+        req = _fake_request(query={"limit": "5"})
+        fake_session = SimpleNamespace(
+            session_id="sess-123",
+            title="Analyze repo",
+            cwd="/tmp/project",
+            files=["/tmp/project/README.md"],
+            plan_id="plan-1",
+            task_id="task-9",
+            status="active",
+            created_at="2026-04-10T12:00:00Z",
+            updated_at="2026-04-10T12:05:00Z",
+            last_command="analyze",
+            last_summary="summarized repo",
+            command_count=3,
+            file_edit_count=1,
+            output_count=2,
+            automation_mode="analyze",
+            automation_status="running",
+            watch_interval_seconds=30,
+            checkpoint_count=2,
+            last_checkpoint_at="2026-04-10T12:04:00Z",
+        )
+
+        with patch.object(api_mod, "list_cli_sessions", return_value=[fake_session]):
+            resp = await api_mod.api_agent_sessions_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["meta"]["count"] == 1
+        assert payload["meta"]["active"] == 1
+        assert payload["sessions"][0]["session_id"] == "sess-123"
+        assert payload["sessions"][0]["plan_id"] == "plan-1"
+        assert payload["sessions"][0]["automation_mode"] == "analyze"
+        assert payload["sessions"][0]["checkpoint_count"] == 2
+
+    async def test_agent_session_detail_returns_export(self):
+        req = _fake_request()
+        req.match_info = {"session_id": "sess-123"}
+
+        with patch.object(
+            api_mod,
+            "export_cli_session",
+            return_value={
+                "session": {"session_id": "sess-123", "checkpoint_count": 2},
+                "events": [{"kind": "analyze", "content": "summarize repo"}],
+                "outputs": [{"name": "report.md"}],
+                "watch_state": {"goal": "watch for regressions"},
+            },
+        ):
+            resp = await api_mod.api_agent_session_detail_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        assert payload["session"]["session_id"] == "sess-123"
+        assert payload["outputs"][0]["name"] == "report.md"
+        assert payload["watch_state"]["goal"] == "watch for regressions"
+        assert "watch_insights" in payload
+        assert isinstance(payload["watch_insights"], dict)
+
+    async def test_agent_session_detail_watch_insights_fields(self):
+        """Session detail exposes structured watch insights derived from watch_state."""
+        req = _fake_request()
+        req.match_info = {"session_id": "sess-watch"}
+
+        fake_watch_state = {
+            "status": "running",
+            "mode": "analyze",
+            "goal": "keep repo healthy",
+            "poll_count": 4,
+            "retry_limit": 3,
+            "last_summary": "Analysis complete — 2 issues flagged",
+            "failure_count": 1,
+            "consecutive_failures": 0,
+            "last_error": "",
+            "progress_log": [],
+            "interventions": [],
+            "checkpoints": [
+                {
+                    "poll": 1,
+                    "status": "completed",
+                    "summary": "First checkpoint done",
+                    "phase": "persist",
+                    "completed_at": "2026-04-10T12:01:00Z",
+                    "attempts": [{"attempt": 1}],
+                },
+                {
+                    "poll": 3,
+                    "status": "completed",
+                    "summary": "Third checkpoint done",
+                    "phase": "request",
+                    "completed_at": "2026-04-10T12:03:00Z",
+                    "attempts": [{"attempt": 1}, {"attempt": 2}],
+                },
+            ],
+            "retry_history": [
+                {
+                    "poll": 2,
+                    "attempt": 1,
+                    "error": "provider timeout",
+                    "transient": True,
+                    "created_at": "2026-04-10T12:02:00Z",
+                },
+            ],
+            "active_checkpoint": {
+                "poll": 4,
+                "status": "running",
+                "phase": "request",
+                "last_message": "Submitting analysis",
+                "attempts": [{"attempt": 1}, {"attempt": 2}],
+                "progress": [],
+            },
+        }
+
+        with patch.object(
+            api_mod,
+            "export_cli_session",
+            return_value={
+                "session": {"session_id": "sess-watch", "checkpoint_count": 3},
+                "events": [],
+                "outputs": [],
+                "watch_state": fake_watch_state,
+            },
+        ):
+            resp = await api_mod.api_agent_session_detail_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        assert payload["supports_interventions"] is True
+
+        insights = payload.get("watch_insights", {})
+        assert isinstance(insights, dict)
+
+        # Recent checkpoints
+        checkpoints = insights["recent_checkpoints"]
+        assert len(checkpoints) == 2
+        assert checkpoints[-1]["poll"] == 3
+        assert checkpoints[-1]["status"] == "completed"
+        assert checkpoints[-1]["summary"] == "Third checkpoint done"
+        assert checkpoints[-1]["phase"] == "request"
+        assert checkpoints[-1]["completed_at"] == "2026-04-10T12:03:00Z"
+        assert checkpoints[-1]["attempt_count"] == 2
+
+        # Retry history
+        retries = insights["retry_history"]
+        assert len(retries) == 1
+        assert retries[0]["poll"] == 2
+        assert retries[0]["attempt"] == 1
+        assert retries[0]["error"] == "provider timeout"
+        assert retries[0]["transient"] is True
+
+        # Latest summary
+        assert insights["latest_checkpoint_summary"] == "Analysis complete — 2 issues flagged"
+
+        # Active phase derived from active_checkpoint
+        assert insights["active_phase"] == "request"
+        assert insights["active_attempt"] == 2
+
+        # Poll / retry_limit scalars
+        assert insights["poll_count"] == 4
+        assert insights["retry_limit"] == 3
+
+    async def test_agent_session_detail_watch_insights_empty_when_no_watch_state(self):
+        """watch_insights is empty dict when session has no watch_state."""
+        req = _fake_request()
+        req.match_info = {"session_id": "sess-plain"}
+
+        with patch.object(
+            api_mod,
+            "export_cli_session",
+            return_value={
+                "session": {"session_id": "sess-plain"},
+                "events": [],
+                "outputs": [],
+            },
+        ):
+            resp = await api_mod.api_agent_session_detail_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        assert payload.get("watch_insights") == {}
+        assert payload.get("supports_interventions") is False
+
+    async def test_build_watch_insights_limits_to_five_entries(self):
+        """_build_watch_insights caps recent_checkpoints and retry_history to 5."""
+        many_checkpoints = [
+            {"poll": i, "status": "completed", "summary": f"cp {i}", "completed_at": "", "attempts": []}
+            for i in range(10)
+        ]
+        many_retries = [
+            {"poll": i, "attempt": 1, "error": f"err {i}", "transient": True, "created_at": ""}
+            for i in range(8)
+        ]
+        watch_state = {
+            "checkpoints": many_checkpoints,
+            "retry_history": many_retries,
+            "last_summary": "",
+            "poll_count": 10,
+            "retry_limit": 3,
+            "active_checkpoint": {},
+        }
+        result = api_mod._build_watch_insights(watch_state)
+        assert len(result["recent_checkpoints"]) == 5
+        assert len(result["retry_history"]) == 5
+        # Last 5 should be the tail entries
+        assert result["recent_checkpoints"][-1]["poll"] == 9
+        assert result["retry_history"][-1]["poll"] == 7
+
+    async def test_agent_session_detail_includes_linked_plan_and_task_context(self):
+        req = _fake_request()
+        req.match_info = {"session_id": "sess-123"}
+        fake_session_summary = SimpleNamespace(
+            session_id="sess-123",
+            title="Analyze repo",
+            cwd="/workspace",
+            files=[],
+            plan_id="plan-77",
+            task_id="task-42",
+            status="active",
+            created_at="2026-04-10T12:00:00Z",
+            updated_at="2026-04-10T12:05:00Z",
+            last_command="analyze",
+            last_summary="summarized repo",
+            command_count=3,
+            file_edit_count=1,
+            output_count=1,
+            automation_mode="watch",
+            automation_status="watching",
+            watch_interval_seconds=30,
+            checkpoint_count=2,
+            last_checkpoint_at="2026-04-10T12:04:00Z",
+        )
+        fake_plan = SimpleNamespace(
+            plan_id="plan-77",
+            goal="Ship control plane",
+            status="in-progress",
+            initiator="user:cli",
+            channel_id=0,
+            created_at="2026-04-10T12:00:00Z",
+            updated_at="2026-04-10T12:05:00Z",
+            lessons=[],
+            context={},
+            steps=[
+                SimpleNamespace(num=1, description="Audit APIs", status="done", output="", worker_id="", depends_on=[], is_complete=True),
+                SimpleNamespace(num=2, description="Wire dashboard", status="in-progress", output="", worker_id="", depends_on=[1], is_complete=False),
+            ],
+        )
+
+        with patch.object(
+            api_mod,
+            "export_cli_session",
+            return_value={
+                "session": {"session_id": "sess-123", "plan_id": "plan-77", "task_id": "task-42", "checkpoint_count": 2},
+                "events": [{"kind": "analyze", "content": "summarize repo"}],
+                "outputs": [{"name": "report.md"}],
+                "watch_state": {"goal": "watch for regressions"},
+            },
+        ), patch.object(api_mod, "list_cli_sessions", return_value=[fake_session_summary]), patch.dict(
+            "sys.modules",
+            {
+                "agent_loop": MagicMock(load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])),
+                "mission_control": MagicMock(
+                    _load_tasks=MagicMock(
+                        return_value={
+                            "tasks": [
+                                {
+                                    "id": "task-42",
+                                    "title": "Review dashboard",
+                                    "status": "in_progress",
+                                    "priority": "high",
+                                    "description": "Validate the new control-plane views.",
+                                    "subtasks": [{"title": "API", "done": True}],
+                                    "comments": [{"author": "Dave", "text": "Looks good"}],
+                                }
+                            ]
+                        }
+                    )
+                ),
+            },
+        ):
+            resp = await api_mod.api_agent_session_detail_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        assert payload["plan"]["plan_id"] == "plan-77"
+        assert payload["plan"]["current_step"]["description"] == "Wire dashboard"
+        assert payload["task"]["id"] == "task-42"
+        assert payload["task"]["source"] == "mission-control"
+        assert payload["session"]["plan_goal"] == "Ship control plane"
+        assert payload["session"]["task_title"] == "Review dashboard"
+
+    async def test_agent_session_intervention_handler_queues_watch_action(self):
+        req = _fake_request(method="POST", json_payload={"reason": "Need fresh output"})
+        req.match_info = {"session_id": "sess-123", "action": "force-checkpoint"}
+        req.headers = {"X-OpenClaw-Actor": "dashboard-ui"}
+
+        with patch.object(api_mod, "require_cli_session", return_value=SimpleNamespace(session_id="sess-123")), patch.object(
+            api_mod,
+            "load_cli_watch_state",
+            return_value={"status": "running", "mode": "analyze", "interventions": []},
+        ), patch.object(
+            api_mod,
+            "queue_cli_watch_intervention",
+            return_value={"request_id": "ctl-1", "action": "force-checkpoint", "status": "pending"},
+        ) as queue_intervention, patch.object(
+            api_mod,
+            "export_cli_session",
+            return_value={"session": {"session_id": "sess-123"}, "watch_state": {"interventions": [{"status": "pending"}]}},
+        ):
+            resp = await api_mod.api_agent_session_intervention_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        assert payload["intervention"]["action"] == "force-checkpoint"
+        assert payload["pending_count"] == 1
+        queue_intervention.assert_called_once()
+
+
+class TestControlPlaneApis:
+    async def test_plans_list_and_detail_include_linked_context(self):
+        req = _fake_request(query={"status": "in-progress", "limit": "5"})
+        detail_req = _fake_request()
+        detail_req.match_info = {"plan_id": "plan-9"}
+        fake_session = SimpleNamespace(
+            session_id="sess-9",
+            title="Plan session",
+            cwd="/workspace",
+            files=[],
+            plan_id="plan-9",
+            task_id="task-9",
+            status="active",
+            created_at="2026-04-10T12:00:00Z",
+            updated_at="2026-04-10T12:10:00Z",
+            last_command="plan",
+            last_summary="working",
+            command_count=1,
+            file_edit_count=0,
+            output_count=0,
+            automation_mode="",
+            automation_status="",
+            watch_interval_seconds=0,
+            checkpoint_count=0,
+            last_checkpoint_at="",
+        )
+        fake_plan = SimpleNamespace(
+            plan_id="plan-9",
+            goal="Add control-plane endpoints",
+            status="in-progress",
+            initiator="user:cli",
+            channel_id=0,
+            created_at="2026-04-10T11:59:00Z",
+            updated_at="2026-04-10T12:10:00Z",
+            lessons=["Keep it additive"],
+            context={"summary": "Dashboard work"},
+            steps=[
+                SimpleNamespace(num=1, description="Add APIs", status="done", output="", worker_id="", depends_on=[], is_complete=True),
+                SimpleNamespace(num=2, description="Add UI", status="in-progress", output="In progress", worker_id="", depends_on=[1], is_complete=False),
+            ],
+        )
+
+        with patch.object(api_mod, "list_cli_sessions", return_value=[fake_session]), patch.dict(
+            "sys.modules",
+            {
+                "agent_loop": MagicMock(load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])),
+                "mission_control": MagicMock(_load_tasks=MagicMock(return_value={"tasks": [{"id": "task-9", "title": "Review", "status": "review"}]})),
+            },
+        ):
+            resp = await api_mod.api_plans_handler(req)
+            detail_resp = await api_mod.api_plan_detail_handler(detail_req)
+
+        payload = json.loads(resp.text)
+        detail_payload = json.loads(detail_resp.text)
+        assert payload["plans"][0]["plan_id"] == "plan-9"
+        assert payload["plans"][0]["linked_session_count"] == 1
+        assert detail_payload["ok"] is True
+        assert detail_payload["plan"]["steps"][1]["description"] == "Add UI"
+        assert detail_payload["linked_sessions"][0]["session_id"] == "sess-9"
+        assert detail_payload["linked_tasks"][0]["id"] == "task-9"
+
+    async def test_unified_task_status_merges_mission_control_and_scheduled_tasks(self):
+        req = _fake_request(query={"limit": "10"})
+        detail_req = _fake_request()
+        detail_req.match_info = {"source": "scheduled", "task_id": "sched-1"}
+        fake_session = SimpleNamespace(
+            session_id="sess-1",
+            title="Scheduler watch",
+            cwd="/workspace",
+            files=[],
+            plan_id="plan-1",
+            task_id="sched-1",
+            status="active",
+            created_at="2026-04-10T12:00:00Z",
+            updated_at="2026-04-10T12:10:00Z",
+            last_command="watch",
+            last_summary="watching",
+            command_count=1,
+            file_edit_count=0,
+            output_count=0,
+            automation_mode="watch",
+            automation_status="watching",
+            watch_interval_seconds=60,
+            checkpoint_count=0,
+            last_checkpoint_at="",
+        )
+        scheduled_task = SimpleNamespace(
+            task_id="sched-1",
+            action="nightly_report",
+            interval_minutes=60,
+            cron_expression="",
+            cron_hour=-1,
+            cron_minute=0,
+            prompt="run nightly report",
+            last_run="2026-04-10T11:00:00Z",
+            last_result="OK",
+            next_run_str="in 50m",
+            enabled=True,
+            created_by="dashboard",
+            created_at="2026-04-10T10:00:00Z",
+            run_count=2,
+            args={"scope": "all"},
+        )
+        fake_scheduler = MagicMock(list_tasks=MagicMock(return_value=[scheduled_task]), get=MagicMock(return_value=scheduled_task))
+        fake_plan = SimpleNamespace(
+            plan_id="plan-1",
+            goal="Control plane",
+            status="in-progress",
+            initiator="user:cli",
+            channel_id=0,
+            created_at="2026-04-10T10:00:00Z",
+            updated_at="2026-04-10T12:10:00Z",
+            lessons=[],
+            context={},
+            steps=[],
+        )
+
+        with patch.object(api_mod, "list_cli_sessions", return_value=[fake_session]), patch.dict(
+            "sys.modules",
+            {
+                "mission_control": MagicMock(
+                    _load_tasks=MagicMock(
+                        return_value={
+                            "tasks": [
+                                {
+                                    "id": "task-1",
+                                    "title": "Mission task",
+                                    "status": "in_progress",
+                                    "priority": "medium",
+                                    "description": "Track review work",
+                                    "subtasks": [{"title": "API", "done": False}],
+                                    "comments": [],
+                                }
+                            ]
+                        }
+                    )
+                ),
+                "scheduler": MagicMock(scheduler=fake_scheduler),
+                "agent_loop": MagicMock(load_plan=MagicMock(return_value=fake_plan), list_plans=MagicMock(return_value=[fake_plan])),
+            },
+        ):
+            resp = await api_mod.api_task_status_handler(req)
+            detail_resp = await api_mod.api_task_status_detail_handler(detail_req)
+
+        payload = json.loads(resp.text)
+        detail_payload = json.loads(detail_resp.text)
+        sources = {item["source"] for item in payload["tasks"]}
+        assert {"mission-control", "scheduled"} <= sources
+        scheduled = next(item for item in payload["tasks"] if item["id"] == "sched-1")
+        assert scheduled["linked_session_count"] == 1
+        assert detail_payload["ok"] is True
+        assert detail_payload["task"]["id"] == "sched-1"
+        assert detail_payload["linked_plans"][0]["plan_id"] == "plan-1"
+
+    def test_serialize_approval_includes_cli_context(self):
+        approval = SimpleNamespace(
+            request_id="req-1",
+            action="shell.exec",
+            target="git status",
+            detail="cwd=/workspace",
+            risk_level=SimpleNamespace(value="HIGH"),
+            requester_name="openclaw-cli",
+            resolver_name=None,
+            session_id="sess-1",
+            plan_id="plan-1",
+            task_id="task-1",
+            age_seconds=12,
+            resolved=False,
+            approved=False,
+            is_expired=False,
+        )
+
+        payload = api_mod._serialize_approval(approval, now_epoch=1_700_000_000)
+
+        assert payload["session_id"] == "sess-1"
+        assert payload["plan_id"] == "plan-1"
+        assert payload["task_id"] == "task-1"
+        assert payload["detail"] == "cwd=/workspace"
+
+
+class TestScheduleDashboardApis:
+    async def test_schedule_toggle_handler_uses_scheduler(self):
+        req = _fake_request(method="POST")
+        req.match_info = {"task_id": "sched-1"}
+        fake_task = SimpleNamespace(
+            task_id="sched-1",
+            action="nightly_report",
+            interval_minutes=60,
+            cron_expression="",
+            cron_hour=-1,
+            cron_minute=0,
+            prompt="",
+            last_run="",
+            last_result="OK",
+            next_run_str="in 60m",
+            enabled=False,
+            created_by="dashboard",
+            run_count=2,
+            args={"scope": "all"},
+        )
+        scheduler_mod = MagicMock(scheduler=MagicMock(toggle=MagicMock(return_value=False), get=MagicMock(return_value=fake_task)))
+
+        with patch.dict("sys.modules", {"scheduler": scheduler_mod}):
+            resp = await api_mod.api_schedule_toggle_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        assert payload["task"]["id"] == "sched-1"
+        assert payload["task"]["enabled"] is False
+
+    async def test_schedule_update_handler_updates_task(self):
+        req = _fake_request(
+            method="POST",
+            json_payload={"name": "nightly_report", "prompt": "run report", "cron_expression": "0 6 * * *", "interval_minutes": ""},
+        )
+        req.match_info = {"task_id": "sched-2"}
+        updated_task = SimpleNamespace(
+            task_id="sched-2",
+            action="nightly_report",
+            interval_minutes=0,
+            cron_expression="0 6 * * *",
+            cron_hour=-1,
+            cron_minute=0,
+            prompt="run report",
+            last_run="",
+            last_result="",
+            next_run_str="Mon 06:00",
+            enabled=True,
+            created_by="dashboard",
+            run_count=0,
+            args={},
+        )
+        fake_scheduler = MagicMock(update=MagicMock(return_value=updated_task))
+
+        with patch.dict("sys.modules", {"scheduler": MagicMock(scheduler=fake_scheduler)}):
+            resp = await api_mod.api_schedule_update_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["ok"] is True
+        fake_scheduler.update.assert_called_once()
+        assert payload["task"]["cron_expression"] == "0 6 * * *"
+
+
+class TestApiAgentAsk:
+    async def test_uses_supplied_user_name(self):
+        fake_stream = MagicMock()
+        fake_run_stream = AsyncMock(
+            return_value=SimpleNamespace(
+                response_text="Done",
+                model_used="gemini",
+                final_meta={"total_tokens": 12},
+            )
+        )
+        fake_with_requested_item_target = MagicMock(side_effect=lambda meta, question: dict(meta))
+        fake_quality_score = MagicMock(return_value={"status": "high", "score": 92})
+        fake_repair = AsyncMock(
+            return_value={
+                "response_text": "Done",
+                "model_used": "gemini",
+                "final_meta": {"total_tokens": 12},
+            }
+        )
+        req = _fake_request(
+            method="POST",
+            json_payload={
+                "prompt": "summarize the overnight alerts",
+                "model": "auto",
+                "history": [{"role": "user", "content": "Earlier"}],
+                "user_name": "CLI user",
+            },
+        )
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "llm": MagicMock(chat_stream=fake_stream),
+                "ask_orchestrator": MagicMock(run_ask_stream=fake_run_stream),
+                "quality_helpers": MagicMock(
+                    _with_requested_item_target=fake_with_requested_item_target,
+                    _safe_score_answer_quality=fake_quality_score,
+                    _run_quality_auto_repair=fake_repair,
+                    _build_ask_recovery_block=MagicMock(return_value=None),
+                ),
+            },
+        ):
+            resp = await api_mod.api_agent_ask_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["response"] == "Done"
+        assert payload["model"] == "gemini"
+        assert payload["tokens"] == 12
+        fake_run_stream.assert_awaited_once()
+        kwargs = fake_run_stream.await_args.kwargs
+        assert kwargs["llm_stream"] is fake_stream
+        assert kwargs["user_message"] == "summarize the overnight alerts"
+        assert kwargs["history"] == [{"role": "user", "content": "Earlier"}]
+        assert kwargs["user_name"] == "CLI user"
+        assert kwargs["model_preference"] == "auto"
+
+    async def test_appends_recovery_block_when_present(self):
+        fake_stream = MagicMock()
+        fake_run_stream = AsyncMock(
+            return_value=SimpleNamespace(
+                response_text="Short answer",
+                model_used="gemini",
+                final_meta={},
+            )
+        )
+        req = _fake_request(
+            method="POST",
+            json_payload={"prompt": "hello"},
+        )
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "llm": MagicMock(chat_stream=fake_stream),
+                "ask_orchestrator": MagicMock(run_ask_stream=fake_run_stream),
+                "quality_helpers": MagicMock(
+                    _with_requested_item_target=MagicMock(side_effect=lambda meta, question: dict(meta)),
+                    _safe_score_answer_quality=MagicMock(return_value={"status": "high"}),
+                    _run_quality_auto_repair=AsyncMock(
+                        return_value={
+                            "response_text": "Short answer",
+                            "model_used": "gemini",
+                            "final_meta": {},
+                        }
+                    ),
+                    _build_ask_recovery_block=MagicMock(return_value="\n\nRecovery note: broaden query."),
+                ),
+            },
+        ):
+            resp = await api_mod.api_agent_ask_handler(req)
+
+        payload = json.loads(resp.text)
+        assert payload["response"].endswith("Recovery note: broaden query.")
+
+    async def test_rejects_non_list_history(self):
+        req = _fake_request(
+            method="POST",
+            json_payload={"prompt": "hello", "history": {"role": "user", "content": "bad"}},
+        )
+
+        resp = await api_mod.api_agent_ask_handler(req)
+        assert resp.status == 400
+        payload = json.loads(resp.text)
+        assert payload["error"] == "history must be a list"
 
 
 class TestQualityMetricsApi:

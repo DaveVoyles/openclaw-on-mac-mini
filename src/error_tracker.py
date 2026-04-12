@@ -240,15 +240,10 @@ async def diagnose_error_pattern(
         "explanation": str,     # Human-readable explanation
     }
     """
-    from google import genai
-
-    from config import cfg
+    from llm_client import quick_generate
 
     _default = {"cause": "unknown", "severity": "low", "fix_type": "manual_required",
                 "fix_target": "", "confidence": 0.0}
-
-    if not cfg.google_api_key:
-        return {**_default, "explanation": "No API key for diagnosis"}
 
     pattern_desc = "\n".join(
         f"- [{p['severity'].upper()}] {p['type']}: {p['detail']}"
@@ -292,22 +287,9 @@ async def diagnose_error_pattern(
     )
 
     try:
-        client = genai.Client(api_key=cfg.google_api_key)
-        import asyncio
-        loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: client.models.generate_content(
-                model=cfg.llm_model,
-                contents=prompt,
-                config=genai.types.GenerateContentConfig(
-                    max_output_tokens=500,
-                    temperature=0.1,
-                ),
-            ),
-        )
-
-        text = response.text.strip()
+        text = await quick_generate(prompt, max_tokens=500, temperature=0.1)
+        if not text:
+            return {**_default, "explanation": "No API key or generation failed"}
         from json_utils import repair_json
         result = repair_json(text)
         if isinstance(result, dict) and "cause" in result:

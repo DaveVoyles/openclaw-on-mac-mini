@@ -527,7 +527,8 @@ url = "https://v1.basketball.api-sports.io/games"
   OLLAMA_URL=http://host.docker.internal:11434
   OLLAMA_MODEL=gemma4:e4b
   LOCAL_LLM_ENABLED=true
-  DEFAULT_MODEL_PREFERENCE=auto  # auto | local | gemini
+  DEFAULT_MODEL_PREFERENCE=auto  # auto | local | gemini | openai | anthropic | copilot
+  ROUTING_PROFILE=copilot-first  # copilot-first | balanced | gemini-first | cost-saver
   ```
 - **Status:** ✅ Active (hybrid routing)
 - **Documentation:** https://ollama.ai/docs

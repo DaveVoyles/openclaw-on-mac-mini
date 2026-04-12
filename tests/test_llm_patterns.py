@@ -79,6 +79,24 @@ class TestGemmaValidation:
         assert mod._gemma_response_seems_valid("   ") is False
 
 
+class TestProviderValidation:
+    @pytest.mark.parametrize("provider", ["copilot", "openai", "anthropic"])
+    def test_remote_provider_allows_realtime_access_language(self, provider):
+        reply = "I don't have access to real-time schedules in this fallback mode."
+        assert mod._provider_response_seems_valid(reply, provider=provider) is True
+
+    @pytest.mark.parametrize("reply", [
+        "One moment while I look that up.",
+        "I'll retrieve the schedule for today's NCAA Division 1 Men's Lacrosse games. Let me find the most up-to-date information from reliable sources. One moment.",
+    ])
+    def test_remote_provider_rejects_promissory_placeholders(self, reply):
+        assert mod._provider_response_seems_valid(reply, provider="copilot") is False
+
+    @pytest.mark.parametrize("reply", ["", "  ", "ok"])
+    def test_remote_provider_still_rejects_empty_or_trivial_reply(self, reply):
+        assert mod._provider_response_seems_valid(reply, provider="copilot") is False
+
+
 # ---------------------------------------------------------------------------
 # Vague response regex
 # ---------------------------------------------------------------------------

@@ -5,9 +5,16 @@ Adds the project root to sys.path so all source modules are importable.
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-import discord
+try:
+    import discord
+except ModuleNotFoundError:  # pragma: no cover - exercised in lightweight CLI test environments
+    class _DiscordInteraction:
+        pass
+
+    discord = SimpleNamespace(Interaction=_DiscordInteraction)
 
 # Make sure the project root and src/ are on the path for all test modules
 PROJECT_ROOT = Path(__file__).parent.parent

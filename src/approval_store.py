@@ -38,6 +38,9 @@ class ApprovalStore:
         requester_name: str,
         channel_id: int,
         detail: str = "",
+        session_id: str = "",
+        plan_id: str = "",
+        task_id: str = "",
     ) -> ApprovalRequest:
         """Create a new approval request and return it."""
         request_id = uuid.uuid4().hex[:8]
@@ -50,6 +53,9 @@ class ApprovalStore:
             requester_name=requester_name,
             channel_id=channel_id,
             detail=detail,
+            session_id=str(session_id or "").strip(),
+            plan_id=str(plan_id or "").strip(),
+            task_id=str(task_id or "").strip(),
         )
         self._pending[request_id] = req
         log.info(

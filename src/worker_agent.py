@@ -7,16 +7,18 @@ a lightweight sub-agent that runs its own tool loop and returns the result.
 Usage pattern:
   - User asks a complex question with multiple independent sub-tasks
   - Main agent calls spawn_worker(goal="...", context="...")
-  - Worker gets a fresh Gemini session, runs tools, returns a clean answer
-  - Main agent synthesizes the worker's result with its own reasoning
+  - Worker gets a fresh Gemini session via the shared adapter/orchestrator path,
+    runs tools through ToolOrchestrator, and returns a clean answer.
+  - Main agent synthesizes the worker's result with its own reasoning.
 
 This enables genuine parallel / delegated work within a single interaction.
+Workers now route through build_tool_provider_context + ToolOrchestrator so they
+automatically benefit from rate limiting, circuit-breaking, usage recording, and
+future multi-provider tool support.
 """
 
 import asyncio
 import logging
-
-from google import genai
 
 log = logging.getLogger("openclaw.worker")
 
@@ -40,8 +42,10 @@ async def spawn_worker(
     """
     Spawn a focused sub-agent to accomplish a specific goal autonomously.
 
-    The worker gets a fresh Gemini chat session with a task-focused system prompt,
-    runs its own parallel tool loop, and returns a clean result string.
+    The worker uses the shared ToolOrchestrator path (build_tool_provider_context
+    + _run_tool_loop) rather than a raw Gemini client, so it benefits from the
+    same rate limiter, circuit breaker, usage recording, and adapter contract as
+    the main chat path.
 
     Args:
         goal:       Clear description of what the worker should accomplish.
@@ -52,19 +56,18 @@ async def spawn_worker(
     Returns:
         The worker's synthesized result as a string.
     """
-    # Import lazily to avoid circular imports at module load time
-
     from llm import (
         GOOGLE_API_KEY,
         MAX_TOKENS,
         MAX_TOOL_ROUNDS,
         MODEL_NAME,
         TEMPERATURE,
-        _build_tools,
-        _execute_function_call,
+        _init_gemini_model,
         _rate_limiter,
         _record_usage,
     )
+    from llm_tools import _run_tool_loop
+    from tool_orchestration import build_tool_provider_context
 
     if not GOOGLE_API_KEY:
         return "❌ Worker: GOOGLE_API_KEY not set."
@@ -74,22 +77,23 @@ async def spawn_worker(
 
     effective_rounds = min(max_rounds, MAX_TOOL_ROUNDS)
 
-    # Build a dedicated worker chat session with its own system prompt
-    client = genai.Client(api_key=GOOGLE_API_KEY)
-    worker_config = genai.types.GenerateContentConfig(
-        system_instruction=_WORKER_SYSTEM_PROMPT,
-        tools=_build_tools(),
-        max_output_tokens=MAX_TOKENS,
-        temperature=max(0.1, TEMPERATURE - 0.2),  # slightly more deterministic
+    # Build a worker-specific model config with its own system prompt and
+    # a slightly lower temperature for more deterministic sub-task results.
+    worker_model = _init_gemini_model(
+        MODEL_NAME,
+        temperature=max(0.1, TEMPERATURE - 0.2),
+        max_tokens=MAX_TOKENS,
+        with_tools=True,
+        system_prompt=_WORKER_SYSTEM_PROMPT,
     )
 
+    # Build the initial message, optionally injecting recent history for context.
     initial_message = goal
     if context:
         initial_message = f"Context: {context}\n\nTask: {goal}"
 
-    # Inject recent conversation history for context inheritance
     if conversation_history:
-        recent = conversation_history[-5:]  # last 5 turns
+        recent = conversation_history[-5:]
         history_lines = []
         for msg in recent:
             role = msg.get("role", "user")
@@ -106,73 +110,36 @@ async def spawn_worker(
     log.info("Worker spawned for goal: %.80s…", goal)
 
     try:
-        chat_session = client.chats.create(
-            model=MODEL_NAME, config=worker_config, history=[],
+        # Create a fresh, adapter-backed session (empty history — each worker is fresh).
+        provider_context = build_tool_provider_context(
+            "gemini",
+            model=worker_model,
+            history=[],
         )
-        loop = asyncio.get_running_loop()
+        chat_session = provider_context.session
 
+        # Send the initial message, then delegate the tool loop to ToolOrchestrator.
+        loop = asyncio.get_running_loop()
         _rate_limiter.record()
         response = await loop.run_in_executor(
             None, lambda: chat_session.send_message(initial_message)
         )
         await _record_usage(response)
 
-        rounds = 0
-        while rounds < effective_rounds:
-            try:
-                all_parts = response.candidates[0].content.parts
-            except (IndexError, AttributeError):
-                break
+        response, rounds = await _run_tool_loop(
+            chat_session,
+            response,
+            max_rounds=effective_rounds,
+            parallel=True,
+            label="Worker",
+        )
 
-            function_calls = [
-                (part.function_call.name, dict(part.function_call.args) if part.function_call.args else {})
-                for part in all_parts
-                if hasattr(part, "function_call") and part.function_call.name
-            ]
-
-            if not function_calls:
-                break
-
-            log.info("Worker tool call(s) [round %d]: %s", rounds + 1,
-                     ", ".join(f for f, _ in function_calls))
-
-            # Execute all tool calls in parallel
-            results = await asyncio.gather(*[
-                _execute_function_call(fn_name, fn_args)
-                for fn_name, fn_args in function_calls
-            ])
-
-            if not _rate_limiter.check():
-                return "⚠️ Worker: rate limit hit mid-task. Partial results unavailable."
-
-            response_parts = [
-                genai.types.Part(
-                    function_response=genai.types.FunctionResponse(
-                        name=fn_name,
-                        response={"result": result},
-                    )
-                )
-                for (fn_name, _), result in zip(function_calls, results)
-            ]
-
-            _rate_limiter.record()
-            response = await loop.run_in_executor(
-                None,
-                lambda parts=response_parts: chat_session.send_message(parts),
-            )
-            await _record_usage(response)
-            rounds += 1
-
-        # Extract final text
-        try:
-            result_text = response.text
-        except (AttributeError, ValueError):
-            result_text = ""
-            try:
-                parts = response.candidates[0].content.parts
-                result_text = "".join(p.text for p in parts if hasattr(p, "text") and p.text)
-            except Exception as exc:
-                log.debug("Worker response text extraction fallback failed: %s", exc)
+        result_text = provider_context.adapter.extract_final_text(
+            response,
+            rounds,
+            chat_session,
+            max_rounds=effective_rounds,
+        )
 
         if not result_text:
             result_text = "Worker completed but returned no output."

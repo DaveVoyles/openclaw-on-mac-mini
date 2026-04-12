@@ -561,6 +561,64 @@ docker compose up -d --build
 docker logs openclaw --tail 30 -f
 ```
 
+### CLI access from this Mac or your other Mac
+
+OpenClaw already exposes an authenticated ask API at `/api/agent/ask`, and the repo now includes a terminal client for it.
+
+```bash
+# 1) Install the standalone CLI from the running OpenClaw service
+#    (LAN example shown; over Tailscale use http://100.116.47.67:8765/install)
+curl -fsSL http://192.168.1.93:8765/install | bash
+
+# 2) Reload your shell
+source ~/.zshrc   # or ~/.bashrc if bash was detected / selected
+
+# 3) Start an interactive session
+OpenClaw
+
+# 4) Or ask one question directly
+openclaw "what changed overnight?"
+
+# 5) Analyze a repo or file set
+openclaw analyze --cwd ~/openclaw @README.md "summarize the repo"
+
+# 6) Run research, writing, or tracked shell actions
+openclaw research "best async Python patterns in 2026"
+openclaw write --title "Weekly recap" "Draft the report"
+openclaw watch --cwd ~/openclaw --on-change --iterations 5 @README.md "watch for repo regressions"
+openclaw exec -- git status
+
+# 7) Verify the service is reachable
+openclaw --health
+```
+
+The standalone installer downloads the **core CLI module set** into `~/.local/share/openclaw-cli`, installs an `openclaw` launcher into `~/.local/bin`, keeps `openclaw-cli` as a compatibility wrapper, auto-detects **zsh** vs **bash** for the target rc file (or accepts `--shell` / `--rc-file`), writes `OPENCLAW_URL`, and sources a lightweight aliases file with `OpenClaw`, `oc-ask`, `oc-chat`, `oc-health`, and `oc-dash`. If the OpenClaw CLI token is not already stored in macOS Keychain, it can also save it under the `OpenClaw CLI` service name.
+
+The installer now also runs a **post-install verification** by calling `openclaw --health` automatically. If you only want the files written without the verification step, use `curl -fsSL http://192.168.1.93:8765/install | bash -s -- --skip-verify`.
+
+`OpenClaw` is the preferred interactive launcher, while `openclaw` is the canonical executable for one-shot and packaged usage. `oc-chat` and `oc-ask` remain supported as compatibility shortcuts. The interactive CLI now keeps readline history between sessions, supports `/help`, warns early if no token is configured, and adds `openclaw --health` for quick reachability checks with clearer diagnostics; use `--json` if you want the raw payload instead of the summarized output. In the hybrid REPL, high-confidence auto-routing is now smarter about quoted/fenced shell commands, structured append/replace edit requests, and linked plan/task/current-step hints (including references like `step 2` when matching plan data exists), while ambiguous prompts still stay in normal chat. The terminal agent now also supports `openclaw analyze` for file/directory-aware work, `openclaw research` for sourced reports, `openclaw write` for saved markdown drafts, `openclaw watch` for bounded resumable automation with saved checkpoints, `openclaw exec` for tracked shell commands, `openclaw edit` for diffable file edits, and `openclaw session list|resume|export` for local session persistence. Recent terminal sessions now show up on the dashboard with automation status and checkpoint visibility, and the Scheduled Tasks card can pause/resume and update cron or prompt jobs directly in the browser. The standalone installer now ships the CLI's core support modules as well; if advanced commands such as `openclaw research` or `openclaw plan` report missing runtime dependencies on a thin install, use the packaged repo install instead. The installer is currently **bash/zsh-focused**; fish users should source the generated launcher script manually instead of expecting automatic rc-file wiring. On Linux, Windows, or WSL, macOS Keychain is not available, so use `openclaw auth login` to store a local CLI token, set `OPENCLAW_TOKEN` / `DASHBOARD_API_TOKEN`, or pass `--token`. For remote access, prefer the Tailscale address over the public reverse-proxy hostname so the admin token stays on your private mesh.
+
+If you are working inside a local repo checkout, you can also install the packaged launcher directly:
+
+```bash
+python -m pip install -e .
+openclaw --version
+openclaw auth status
+make test-cli
+```
+
+For the full shell/install matrix, see [`docs/CLI_QUICKSTART.md`](docs/CLI_QUICKSTART.md).
+
+If the MacBook rejects SSH from the Mac Mini, run this **locally on the MacBook** once:
+
+```bash
+curl -fsSL http://192.168.1.93:8765/install-remote | bash
+source ~/.zshrc   # or ~/.bashrc if bash was selected
+OpenClaw "what changed overnight?"
+```
+
+That installer also enables Remote Login if needed, adds `davevoyles` to the macOS SSH allow-list, trusts the Mac Mini's public key in `~/.ssh/authorized_keys`, and installs the standalone CLI even when `~/openclaw` does not exist on the laptop.
+
 ### Verifying a specific env var is loaded in the container
 
 ```bash
@@ -1037,6 +1095,9 @@ curl -s http://192.168.1.93:8765/health | python3 -m json.tool
 
 # Open the dashboard in your browser
 open http://192.168.1.93:8765/dashboard
+
+# Ask OpenClaw directly from Terminal
+OPENCLAW_URL=http://192.168.1.93:8765 openclaw "give me the morning operator summary"
 ```
 
 Or in Discord:
@@ -1063,6 +1124,13 @@ cat ~/openclaw/data/audit/$(date +%Y-%m-%d).jsonl | python3 -m json.tool
 
 # Check Gemini spending data directly
 cat ~/openclaw/data/memory/spending.json | python3 -m json.tool
+
+# Hit the ask API directly if you want to debug the CLI path
+curl -s \
+  -H "Authorization: Bearer $OPENCLAW_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"summarize the latest errors","model":"auto"}' \
+  http://192.168.1.93:8765/api/agent/ask | python3 -m json.tool
 ```
 
 Or in Discord:

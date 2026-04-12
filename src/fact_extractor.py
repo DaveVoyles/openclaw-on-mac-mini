@@ -3,7 +3,6 @@ OpenClaw Fact Extractor — Automatic memory from conversations.
 Extracts memorable facts from user messages and stores them in QMD + ChromaDB.
 """
 
-import asyncio
 import hashlib
 import logging
 import re
@@ -52,12 +51,7 @@ async def extract_and_store_facts(
 
     Returns list of extracted facts (for logging/debugging).
     """
-    from google import genai
-
-    from config import cfg
-
-    if not cfg.google_api_key:
-        return []
+    from llm_client import quick_generate
 
     extraction_prompt = (
         "You are a memory extraction system. From the following conversation turn, "
@@ -75,21 +69,9 @@ async def extract_and_store_facts(
     )
 
     try:
-        client = genai.Client(api_key=cfg.google_api_key)
-        loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: client.models.generate_content(
-                model=cfg.llm_model,
-                contents=extraction_prompt,
-                config=genai.types.GenerateContentConfig(
-                    max_output_tokens=300,
-                    temperature=0.1,
-                ),
-            ),
-        )
+        from llm_client import quick_generate
 
-        text = response.text.strip()
+        text = await quick_generate(extraction_prompt, max_tokens=300, temperature=0.1)
         if not text or text.upper() == "NONE":
             return []
 

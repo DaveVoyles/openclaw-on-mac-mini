@@ -3,7 +3,6 @@ OpenClaw Goal Tracker — Phase 16: Proactive Goal Tracking
 Detects statements of intent from conversations and tracks them as active goals.
 """
 
-import asyncio
 import json
 import logging
 import re
@@ -56,12 +55,7 @@ async def extract_and_store_goal(
     Uses LLM to extract a concise goal statement.
     Returns the goal text if one was extracted, None otherwise.
     """
-    from google import genai
-
-    from config import cfg
-
-    if not cfg.google_api_key:
-        return None
+    from llm_client import quick_generate
 
     prompt = (
         "Extract the user's goal or intention from this message as a single "
@@ -74,21 +68,7 @@ async def extract_and_store_goal(
     )
 
     try:
-        client = genai.Client(api_key=cfg.google_api_key)
-        loop = asyncio.get_running_loop()
-        response = await loop.run_in_executor(
-            None,
-            lambda: client.models.generate_content(
-                model=cfg.llm_model,
-                contents=prompt,
-                config=genai.types.GenerateContentConfig(
-                    max_output_tokens=150,
-                    temperature=0.1,
-                ),
-            ),
-        )
-
-        goal_text = response.text.strip().split("\n")[0].strip()  # Take first line only
+        goal_text = (await quick_generate(prompt, max_tokens=150, temperature=0.1)).split("\n")[0].strip()
         if not goal_text or goal_text.upper() == "NONE" or len(goal_text) < 10:
             return None
 

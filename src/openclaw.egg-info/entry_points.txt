@@ -1,0 +1,3 @@
+[console_scripts]
+openclaw = openclaw_cli:main
+openclaw-cli = openclaw_cli:main

@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: openclaw
+Version: 0.6.0
+Summary: Autonomous AI Discord bot for home automation, media management, and system monitoring
+Author: Dave Voyles
+License-Expression: MIT
+Keywords: discord,bot,ai,home-automation,media-server
+Classifier: Development Status :: 4 - Beta
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Framework :: AsyncIO
+Classifier: Topic :: Communications :: Chat
+Classifier: Topic :: Home Automation
+Requires-Python: >=3.12

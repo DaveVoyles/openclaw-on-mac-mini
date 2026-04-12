@@ -20,7 +20,13 @@ from llm_client import (
 )
 from llm_patterns import _needs_tools
 from llm_ratelimit import rate_limiter as _rate_limiter
-from llm_tools import _extract_final_text, _extract_history, _run_tool_loop
+from llm_tools import (
+    _extract_final_text,
+    _extract_history,
+    _merge_direct_final_history,
+    _run_tool_loop,
+)
+from model_routing_policy import select_multimodal_route
 
 from .context import _to_content, _trim_history
 
@@ -40,9 +46,7 @@ async def analyze_image(
     history: list[dict] | None = None,
     on_tool_call: Any | None = None,
 ) -> str:
-    """Analyze an image using Gemini's multimodal vision capabilities."""
-    if not GOOGLE_API_KEY:
-        return "❌ GOOGLE_API_KEY not configured."
+    """Analyze an image, routing to Copilot vision when available."""
     if mime_type not in SUPPORTED_IMAGE_MIMES:
         return f"❌ Unsupported image type: {mime_type}"
 
@@ -52,6 +56,25 @@ async def analyze_image(
             history=history, on_tool_call=on_tool_call,
         )
         return text
+
+    import os
+
+    from model_router import COPILOT_PROXY_ENABLED, chat_openai_vision
+
+    route = select_multimodal_route(
+        copilot_available=COPILOT_PROXY_ENABLED,
+        has_openai_key=bool(os.getenv("OPENAI_API_KEY", "")),
+    )
+    log.debug("Image analysis route: %s (%s)", route.provider, route.reason)
+
+    if route.provider in ("copilot", "openai"):
+        result = await chat_openai_vision(prompt, image_bytes, mime_type, max_tokens=MAX_TOKENS)
+        if result:
+            return result
+
+    # Gemini fallback (also the only path when tools are not needed and Copilot/OpenAI unavailable)
+    if not GOOGLE_API_KEY:
+        return "❌ GOOGLE_API_KEY not configured."
 
     try:
         image_part = genai.types.Part(
@@ -135,6 +158,8 @@ async def analyze_image_with_tools(
 
     text = _extract_final_text(response, rounds, chat_session)
     updated_history = _extract_history(chat_session)
+    if getattr(response, "direct_final_text", ""):
+        updated_history = _merge_direct_final_history(updated_history, text)
 
     return text, updated_history
 

@@ -79,6 +79,32 @@ def format_markdown_for_discord(text: str) -> str:
     return "\n".join(result)
 
 
+# Pattern: a table cell that is entirely a bracketed placeholder, e.g. [Time], [Opponent]
+# (Not a citation like [1] and not a Markdown link [text](url))
+_PLACEHOLDER_CELL_RE = re.compile(r"^\[[A-Za-z][A-Za-z0-9 _/-]{1,40}\]$")
+
+
+def _table_row_is_placeholder(row_line: str) -> bool:
+    """Return True if a table row contains 2+ cells that are pure bracket placeholders."""
+    stripped = row_line.strip()
+    if not (stripped.startswith("|") and stripped.endswith("|")):
+        return False
+    cells = [c.strip() for c in stripped.strip("|").split("|")]
+    placeholder_count = sum(1 for c in cells if _PLACEHOLDER_CELL_RE.match(c))
+    return placeholder_count >= 2
+
+
+def strip_placeholder_table_rows(text: str) -> str:
+    """Remove table data rows where 2+ cells are bracket placeholders like [Time] or [Opponent]."""
+    lines = text.split("\n")
+    result: list[str] = []
+    for line in lines:
+        if _table_row_is_placeholder(line):
+            continue
+        result.append(line)
+    return "\n".join(result)
+
+
 def _is_markdown_table_separator(line: str) -> bool:
     stripped = line.strip()
     return stripped.startswith("|") and all(c in "|-: " for c in stripped.replace("|", ""))

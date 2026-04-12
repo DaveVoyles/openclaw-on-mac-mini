@@ -15,6 +15,7 @@ bot:
 llm:
   primary_model: "gemini-2.5-flash"
   fallback_model: "gpt-4o-mini"
+  routing_profile: "copilot-first" # copilot-first | balanced | gemini-first | cost-saver
   # copilot_proxy_url: ""  # Set COPILOT_PROXY_URL env var to route through Copilot proxy
   max_tokens: 4096
   temperature: 0.7

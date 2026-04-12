@@ -91,6 +91,7 @@ class _Config:
     # -- LLM (Gemini) ---------------------------------------------------------
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
     llm_model: str = os.getenv("LLM_MODEL", _llm.get("primary_model", "gemini-2.5-flash"))
+    routing_profile: str = os.getenv("ROUTING_PROFILE", _llm.get("routing_profile", "copilot-first"))
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", str(_llm.get("max_tokens", 8192))))
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", str(_llm.get("temperature", 0.7))))
     llm_rpm_limit: int = int(os.getenv("LLM_RPM_LIMIT", str(_rate_limits.get("per_minute", 60))))
@@ -314,6 +315,11 @@ class _Config:
             issues.append(f"⚠️ llm_max_tool_rounds={self.llm_max_tool_rounds} out of range 1-30")
         if not (1 <= self.conversation_ttl_minutes <= 1440):
             issues.append(f"⚠️ conversation_ttl_minutes={self.conversation_ttl_minutes} out of range 1-1440")
+        if self.routing_profile not in {"copilot-first", "balanced", "gemini-first", "cost-saver"}:
+            issues.append(
+                "⚠️ routing_profile="
+                f"{self.routing_profile} is not recognized; expected copilot-first, balanced, gemini-first, or cost-saver"
+            )
 
         # --- Optional but recommended ---
         if not self.perplexity_api_key:

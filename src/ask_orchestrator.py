@@ -414,7 +414,7 @@ def normalize_model_preference(
 ) -> tuple[str, bool]:
     """Return effective model preference and whether local mode was upgraded."""
     model_preference = normalize_model_input(model_preference)
-    if model_preference == "local" and needs_tools_fn(user_message):
+    if model_preference in {"local", "copilot"} and needs_tools_fn(user_message):
         return "gemini", True
     return model_preference, False
 
@@ -434,6 +434,7 @@ async def run_ask_stream(
     on_finalized: Callable[[str, str], None] | None = None,
     update_history: Callable[[list[dict[str, Any]]], None] | None = None,
     context_controls: dict[str, Any] | None = None,
+    routing_profile: str = "",
 ) -> AskStreamResult:
     """Run the LLM stream pipeline and return final /ask orchestration metadata."""
     result = AskStreamResult()
@@ -445,6 +446,7 @@ async def run_ask_stream(
             on_tool_call=on_tool_call,
             model_preference=model_preference,
             context_controls=context_controls,
+            routing_profile=routing_profile,
         ):
             if isinstance(meta, dict):
                 badge = meta.get("context_badge")

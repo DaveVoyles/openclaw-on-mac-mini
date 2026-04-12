@@ -40,6 +40,16 @@ def test_normalize_model_preference_maps_claude_alias_to_anthropic():
     assert upgraded is False
 
 
+def test_normalize_model_preference_upgrades_copilot_when_tools_required():
+    model, upgraded = normalize_model_preference(
+        "check my calendar tomorrow",
+        "copilot",
+        lambda message: "calendar" in message,
+    )
+    assert model == "gemini"
+    assert upgraded is True
+
+
 @pytest.mark.asyncio
 async def test_run_ask_stream_collects_metadata_and_updates_history():
     saved_history: list[list[dict]] = []

@@ -16,6 +16,7 @@ from google import genai
 
 from config import cfg
 from llm_client import MODEL_NAME, _client
+from model_routing_policy import select_summarization_route
 
 log = logging.getLogger("openclaw.llm")
 
@@ -348,6 +349,18 @@ async def _generate_context_summary(turns: list[dict]) -> str:
         max_output_tokens=500,
         temperature=0.1,
     )
+
+    from model_router import COPILOT_PROXY_ENABLED, chat_openai
+
+    route = select_summarization_route(copilot_available=COPILOT_PROXY_ENABLED)
+    log.debug("Context summarization route: %s (%s)", route.provider, route.reason)
+
+    if route.provider == "copilot":
+        summary = await chat_openai(prompt, history=[], system_prompt="", temperature=0.1, max_tokens=500)
+        if summary:
+            return summary.strip()
+        # Fall through to Gemini if Copilot returns None
+
     loop = asyncio.get_running_loop()
     response = await loop.run_in_executor(
         None,

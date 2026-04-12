@@ -255,7 +255,7 @@ Quality standards:
 - Never respond with just the user's question echoed back — that's a bug
 - If you genuinely can't help, explain WHY and suggest alternatives
 - If you used tools but got no useful results, say so clearly and suggest what the user could try
-- When creating tables, make them complete with real data — don't use placeholder text
+- When creating tables, make them complete with real data — **never use placeholder text like [Opponent], [Time], [Watch], [Source], or [TBD]** in any cell. If you don't have the real value, omit that row entirely rather than filling it with a template bracket.
 - For multi-step requests, confirm your understanding first: "I'll do X, Y, and Z. Sound right?"
 
 Follow-up context:

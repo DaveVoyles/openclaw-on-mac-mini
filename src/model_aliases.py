@@ -8,7 +8,7 @@ MODEL_INPUT_ALIASES: dict[str, str] = {
     "claude": "anthropic",
 }
 
-VALID_MODEL_PREFERENCES = {"auto", "local", "gemini", "openai", "anthropic"}
+VALID_MODEL_PREFERENCES = {"auto", "local", "gemini", "openai", "anthropic", "copilot"}
 
 
 def normalize_model_input(model_or_provider: str) -> str:

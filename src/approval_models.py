@@ -36,6 +36,9 @@ class ApprovalRequest:
     resolver_id: int | None = None
     resolver_name: str | None = None
     detail: str = ""             # Extra context (dry-run output, etc.)
+    session_id: str = ""
+    plan_id: str = ""
+    task_id: str = ""
 
     @property
     def is_expired(self) -> bool:
