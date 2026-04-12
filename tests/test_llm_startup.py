@@ -19,10 +19,26 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import AsyncMock, patch
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Path to startup.py source
 # ---------------------------------------------------------------------------
 _STARTUP_PATH = str(Path(__file__).parent.parent / "src" / "llm" / "startup.py")
+
+_STUB_KEYS = ("llm", "llm.providers", "llm.startup", "model_routing_policy")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_sys_modules():
+    """Restore stub modules after each test so they don't leak to other test files."""
+    saved = {k: sys.modules.get(k) for k in _STUB_KEYS}
+    yield
+    for k, v in saved.items():
+        if v is None:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v
 
 
 # ---------------------------------------------------------------------------
@@ -47,18 +63,28 @@ def _build_stubs(copilot_enabled: bool = True, ollama_result=True):
     return providers, mrp
 
 
-def _load_startup(providers_stub, mrp_stub):
-    """Install stubs and load startup.py fresh via spec loader."""
-    # Build a minimal llm package that exposes providers as an attribute
+def _load_startup(providers_stub, mrp_stub, monkeypatch=None):
+    """Install stubs and load startup.py fresh via spec loader.
+
+    Uses monkeypatch when available so sys.modules entries are automatically
+    restored after each test, preventing stub pollution across test files.
+    """
     llm_pkg = ModuleType("llm")
     llm_pkg.__path__ = [str(Path(_STARTUP_PATH).parent)]
     llm_pkg.__package__ = "llm"
     llm_pkg.providers = providers_stub
 
-    sys.modules["llm"] = llm_pkg
-    sys.modules["llm.providers"] = providers_stub
-    sys.modules["model_routing_policy"] = mrp_stub
-    sys.modules.pop("llm.startup", None)
+    if monkeypatch is not None:
+        monkeypatch.setitem(sys.modules, "llm", llm_pkg)
+        monkeypatch.setitem(sys.modules, "llm.providers", providers_stub)
+        monkeypatch.setitem(sys.modules, "model_routing_policy", mrp_stub)
+        if "llm.startup" in sys.modules:
+            monkeypatch.delitem(sys.modules, "llm.startup")
+    else:
+        sys.modules["llm"] = llm_pkg
+        sys.modules["llm.providers"] = providers_stub
+        sys.modules["model_routing_policy"] = mrp_stub
+        sys.modules.pop("llm.startup", None)
 
     spec = importlib.util.spec_from_file_location("llm.startup", _STARTUP_PATH)
     mod = importlib.util.module_from_spec(spec)
@@ -80,7 +106,7 @@ class TestScanProvidersHappyPath:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=True, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -94,7 +120,7 @@ class TestScanProvidersHappyPath:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=True, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -106,7 +132,7 @@ class TestScanProvidersHappyPath:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=True, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -119,7 +145,7 @@ class TestScanProvidersHappyPath:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=True, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -134,7 +160,7 @@ class TestScanProvidersHappyPath:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=True, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -153,7 +179,7 @@ class TestCopilotDisabled:
         providers, mrp = _build_stubs(copilot_enabled=False, ollama_result=True)
         # Even though check_proxy_health returns True, copilot must be False
         providers.check_proxy_health = AsyncMock(return_value=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -164,7 +190,7 @@ class TestCopilotDisabled:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=False, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -175,7 +201,7 @@ class TestCopilotDisabled:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=False, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -188,7 +214,7 @@ class TestCopilotDisabled:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs(copilot_enabled=False, ollama_result=True)
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         await startup.scan_providers()
 
@@ -206,7 +232,7 @@ class TestOllamaException:
             copilot_enabled=True,
             ollama_result=ConnectionRefusedError("Ollama down"),
         )
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -220,7 +246,7 @@ class TestOllamaException:
             copilot_enabled=True,
             ollama_result=ConnectionRefusedError("Ollama down"),
         )
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -235,7 +261,7 @@ class TestOllamaException:
             copilot_enabled=True,
             ollama_result=RuntimeError("Unexpected Ollama error"),
         )
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         # Must not raise
         result = await startup.scan_providers()
@@ -249,7 +275,7 @@ class TestOllamaException:
             copilot_enabled=True,
             ollama_result=ConnectionRefusedError("Ollama down"),
         )
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -266,7 +292,7 @@ class TestPartialAvailability:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         providers, mrp = _build_stubs()
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -278,7 +304,7 @@ class TestPartialAvailability:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         providers, mrp = _build_stubs()
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -290,7 +316,7 @@ class TestPartialAvailability:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "ant-test")
 
         providers, mrp = _build_stubs()
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -303,7 +329,7 @@ class TestPartialAvailability:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         providers, mrp = _build_stubs()
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         result = await startup.scan_providers()
 
@@ -411,7 +437,7 @@ class TestLogFormat:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         providers, mrp = _build_stubs()
-        startup = _load_startup(providers, mrp)
+        startup = _load_startup(providers, mrp, monkeypatch)
 
         with patch.object(startup, "_log_availability_summary") as mock_log:
             await startup.scan_providers()
