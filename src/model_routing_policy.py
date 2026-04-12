@@ -566,6 +566,122 @@ def select_entertainment_route(query: str) -> EntertainmentRouteDecision:
 
 
 # ---------------------------------------------------------------------------
+# Weather query route selection
+# ---------------------------------------------------------------------------
+
+_WEATHER_PATTERNS = _re.compile(
+    r"\b("
+    r"(?:what(?:'s|\s+is)\s+the\s+weather)"
+    r"|(?:weather\s+(?:today|tonight|this\s+week(?:end)?|tomorrow|forecast|in|for|at|right\s+now|currently|conditions?))"
+    r"|(?:(?:current\s+)?(?:temperature|temp|conditions?)\s+(?:in|at|for|outside))"
+    r"|(?:is\s+it\s+(?:going\s+to\s+)?(?:rain|snow|hot|cold|warm|humid|sunny|cloudy|windy)\b)"
+    r"|(?:will\s+it\s+(?:rain|snow|be\s+(?:hot|cold|warm|sunny|cloudy|windy)))"
+    r"|(?:how\s+(?:hot|cold|warm|rainy|snowy|windy)\s+(?:is\s+it|will\s+it\s+be))"
+    r"|(?:(?:rain|snow|thunder(?:storm)?|hurricane|tornado|blizzard|heatwave)\s+(?:forecast|warning|watch|expected|coming))"
+    r"|(?:umbrella|jacket|coat)\s+(?:today|tomorrow|needed)"
+    r"|weather\s+report"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class WeatherRouteDecision:
+    """Routing decision for weather queries."""
+
+    prefer_perplexity: bool
+    tool_name: str  # "generate_weather_report" when matched, "" otherwise
+    reason: str
+
+
+def select_weather_route(query: str) -> WeatherRouteDecision:
+    """Decide whether a query should be fast-pathed to the weather skill.
+
+    Matches current conditions, forecasts, and weather-related planning queries.
+    When matched, callers should prefer ``generate_weather_report`` which returns
+    a Perplexity answer directly without Gemini synthesis.
+
+    Args:
+        query: The raw user query string.
+
+    Returns:
+        A ``WeatherRouteDecision`` with ``prefer_perplexity=True`` and
+        ``tool_name="generate_weather_report"`` when matched, or
+        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
+    """
+    if _WEATHER_PATTERNS.search(query or ""):
+        return WeatherRouteDecision(
+            prefer_perplexity=True,
+            tool_name="generate_weather_report",
+            reason="query matches weather / forecast pattern → Perplexity direct",
+        )
+    return WeatherRouteDecision(
+        prefer_perplexity=False,
+        tool_name="",
+        reason="no weather pattern detected",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Finance / markets query route selection
+# ---------------------------------------------------------------------------
+
+_FINANCE_PATTERNS = _re.compile(
+    r"\b("
+    r"(?:stock\s+(?:price|prices?|market|markets?|news|update|today|performance|forecast))"
+    r"|(?:(?:current|today(?:'s)?|live)\s+(?:stock|market|share|index|crypto)\s*(?:price|prices?|value|update)?)"
+    r"|(?:(?:how\s+is|how\s+are|what(?:'s|\s+is))\s+(?:the\s+)?(?:market|markets?|nasdaq|s&p|dow|nyse|crypto)\s+(?:doing|today|now|performing|trading))"
+    r"|(?:(?:nasdaq|s&p\s*500|dow\s+jones?|nyse|russell)\s+(?:today|now|this\s+week|performance|update|forecast))"
+    r"|(?:(?:bitcoin|btc|ethereum|eth|crypto(?:currency)?)\s+(?:price|prices?|today|now|update|forecast|market))"
+    r"|(?:market\s+(?:open|close|update|recap|summary|report|news|today|this\s+week))"
+    r"|(?:earnings?\s+(?:report|announcement|release|today|this\s+week|results?))"
+    r"|(?:(?:interest|mortgage|fed|federal\s+reserve)\s+(?:rate|rates?))"
+    r"|(?:inflation\s+(?:rate|data|report|today|update|news))"
+    r"|financial\s+(?:news|update|report|market|summary)"
+    r")\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class FinanceRouteDecision:
+    """Routing decision for finance / market queries."""
+
+    prefer_perplexity: bool
+    tool_name: str  # "generate_finance_report" when matched, "" otherwise
+    reason: str
+
+
+def select_finance_route(query: str) -> FinanceRouteDecision:
+    """Decide whether a query should be fast-pathed to the finance skill.
+
+    Matches stock prices, market updates, crypto prices, earnings reports, and
+    macroeconomic data queries. When matched, callers should prefer
+    ``generate_finance_report`` which returns a Perplexity answer directly
+    without Gemini synthesis.
+
+    Args:
+        query: The raw user query string.
+
+    Returns:
+        A ``FinanceRouteDecision`` with ``prefer_perplexity=True`` and
+        ``tool_name="generate_finance_report"`` when matched, or
+        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
+    """
+    if _FINANCE_PATTERNS.search(query or ""):
+        return FinanceRouteDecision(
+            prefer_perplexity=True,
+            tool_name="generate_finance_report",
+            reason="query matches finance / market pattern → Perplexity direct",
+        )
+    return FinanceRouteDecision(
+        prefer_perplexity=False,
+        tool_name="",
+        reason="no finance pattern detected",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Research synthesis route selection
 # ---------------------------------------------------------------------------
 

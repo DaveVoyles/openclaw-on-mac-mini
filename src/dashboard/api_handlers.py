@@ -49,6 +49,15 @@ def _safe_non_negative_int(value: object, default: int = 0) -> int:
     return max(0, parsed)
 
 
+def _get_perplexity_cache_stats() -> dict:
+    """Return Perplexity cache stats without hard-importing at module level."""
+    try:
+        from skills.search_skills import get_perplexity_cache_stats
+        return get_perplexity_cache_stats()
+    except Exception:
+        return {"size": 0, "live_entries": 0, "hits": 0, "ttl_seconds": 300}
+
+
 def _normalize_event_counts(raw_counts: object) -> dict[str, int]:
     if not isinstance(raw_counts, dict):
         return {}
@@ -1913,6 +1922,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             "perplexity": sp._data.get("perplexity", {"calls": 0, "total_cost_usd": 0.0, "daily": {}}),
             "firecrawl": sp._data.get("firecrawl", {"calls": 0, "pages_scraped": 0, "total_cost_usd": 0.0, "daily": {}}),
             "copilot": sp._data.get("copilot", {"calls": 0, "daily": {}}),
+            "perplexity_cache": _get_perplexity_cache_stats(),
         },
         "daily_tokens": daily_tokens,
         "skills": skills_list,

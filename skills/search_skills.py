@@ -88,6 +88,7 @@ PERPLEXITY_API_KEY = _cfg.perplexity_api_key
 
 _PERPLEXITY_CACHE_TTL_SECONDS = 300  # 5 minutes
 _perplexity_cache: dict[str, tuple[str, float]] = {}  # key → (result, timestamp)
+_perplexity_cache_hits: int = 0  # session hit counter
 
 
 def _perplexity_cache_key(query: str) -> str:
@@ -97,10 +98,12 @@ def _perplexity_cache_key(query: str) -> str:
 
 def _perplexity_cache_get(query: str) -> str | None:
     """Return cached result if fresh, else None."""
+    global _perplexity_cache_hits
     key = _perplexity_cache_key(query)
     entry = _perplexity_cache.get(key)
     if entry and (time.monotonic() - entry[1]) < _PERPLEXITY_CACHE_TTL_SECONDS:
         log.debug("Perplexity cache hit for query: %.60s", query)
+        _perplexity_cache_hits += 1
         return entry[0]
     return None
 
@@ -112,6 +115,22 @@ def _perplexity_cache_set(query: str, result: str) -> None:
         oldest_key = min(_perplexity_cache, key=lambda k: _perplexity_cache[k][1])
         del _perplexity_cache[oldest_key]
     _perplexity_cache[_perplexity_cache_key(query)] = (result, time.monotonic())
+
+
+def get_perplexity_cache_stats() -> dict:
+    """Return current Perplexity cache statistics for dashboard display."""
+    import time as _time
+    now = _time.monotonic()
+    live_entries = sum(
+        1 for (_, ts) in _perplexity_cache.values()
+        if (now - ts) < _PERPLEXITY_CACHE_TTL_SECONDS
+    )
+    return {
+        "size": len(_perplexity_cache),
+        "live_entries": live_entries,
+        "hits": _perplexity_cache_hits,
+        "ttl_seconds": _PERPLEXITY_CACHE_TTL_SECONDS,
+    }
 
 FIRECRAWL_API_KEY = _cfg.firecrawl_api_key
 FIRECRAWL_API_URL = "https://api.firecrawl.dev/v1"

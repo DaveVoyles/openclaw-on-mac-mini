@@ -1857,6 +1857,14 @@
                 <span class="stat-label">🔮 Perplexity Cost</span
                 ><span class="stat-value" id="sp-pplx-cost" style="color: var(--gold)">$0.00</span>
               </div>
+              <div class="stat-row">
+                <span class="stat-label">🔮 Cache Hits</span
+                ><span class="stat-value" id="sp-pplx-cache-hits">0</span>
+              </div>
+              <div class="stat-row">
+                <span class="stat-label">🔮 Cache Size</span
+                ><span class="stat-value" id="sp-pplx-cache-size">0 live</span>
+              </div>
             </div>
             <div style="border-top: 1px solid var(--border); margin: 0.75rem 0; padding-top: 0.75rem">
               <div class="stat-row">
@@ -2616,6 +2624,9 @@
         const pplx = sp.perplexity || {calls: 0, total_cost_usd: 0};
         document.getElementById("sp-pplx-calls").textContent = (pplx.calls || 0).toLocaleString();
         document.getElementById("sp-pplx-cost").textContent = `$${(pplx.total_cost_usd || 0).toFixed(2)}`;
+        const pplxCache = sp.perplexity_cache || {hits: 0, live_entries: 0};
+        document.getElementById("sp-pplx-cache-hits").textContent = (pplxCache.hits || 0).toLocaleString();
+        document.getElementById("sp-pplx-cache-size").textContent = `${pplxCache.live_entries || 0} live`;
 
         // Firecrawl stats
         const fc = sp.firecrawl || {calls: 0, pages_scraped: 0, total_cost_usd: 0};
