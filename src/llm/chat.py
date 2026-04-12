@@ -540,7 +540,8 @@ async def chat_stream(
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
         model_message = cleaned_user_message
-    # Add metadata for cross-channel or anchor mode
+    # TODO: prepend channel_context_prefix(channel_name) here once channel_name is
+    # threaded into chat_stream (e.g. via context_controls["channel_name"] from the Discord layer).
     metadata = {}
     metadata["context_quality"] = dict(context_quality)
     explainability = _build_context_explainability(
@@ -571,115 +572,29 @@ async def chat_stream(
         metadata["context_mode"] = "followup-anchor"
         metadata["context_badge"] = "🧷 Follow-up anchor"
 
-    # Property search fast-path — fires even with recalled_context so saved criteria
-    # (price range, location, property taxes) are incorporated via model_message.
+    # Unified web-search fast-path — uses model_message so recalled context (saved
+    # preferences like price range, location) is included in the search query.
     if model_preference == "auto":
         try:
-            from model_routing_policy import select_property_search_route
-            prop_route = select_property_search_route(cleaned_user_message)
-            if prop_route.prefer_perplexity:
-                log.info("Property search fast-path matched: %s", prop_route.reason)
-                from skills.reporting_skills import generate_property_search_report
-                # Use model_message (includes recalled context) so saved preferences are searched
-                prop_reply = await asyncio.wait_for(
-                    generate_property_search_report(query=model_message or cleaned_user_message),
-                    timeout=45.0,
-                )
-                if prop_reply and not prop_reply.startswith("❌"):
+            from model_routing_policy import select_web_search_route
+            web_route = select_web_search_route(model_message)
+            if web_route.prefer_search:
+                log.info("chat_stream web_search_route reason=%s", web_route.reason)
+                from skills.reporting_skills import generate_web_search_report
+                web_reply = await generate_web_search_report(model_message)
+                if web_reply and not web_reply.startswith("❌"):
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [prop_reply]},
+                        {"role": "model", "parts": [web_reply]},
                     ]
-                    yield prop_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
+                    yield web_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
                     return
-        except Exception as _prop_exc:
-            log.warning("Property search fast-path failed, falling through: %s", _prop_exc)
+        except Exception as _web_exc:
+            log.warning("Stream web-search fast-path failed, falling through: %s", _web_exc)
 
-    # Phase 25: Perplexity fast-paths for real-time queries (mirrors chat() routing).
-    # Only fires when routing is auto AND no recalled context (not mid-conversation).
+    # Copilot fast-path for coding/programming queries — separate from web-search path.
     if model_preference == "auto" and not recalled_context:
         try:
-            from model_routing_policy import (
-                select_entertainment_route,
-                select_finance_route,
-                select_realtime_route,
-                select_sports_route,
-                select_sports_scores_route,
-                select_weather_route,
-            )
-            rt_route = select_realtime_route(cleaned_user_message)
-            if rt_route.prefer_perplexity:
-                from skills.reporting_skills import generate_news_report
-                rt_reply = await asyncio.wait_for(
-                    generate_news_report(query=cleaned_user_message), timeout=30.0)
-                if rt_reply and not rt_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [rt_reply]},
-                    ]
-                    yield rt_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-            sp_route = select_sports_route(cleaned_user_message)
-            if sp_route.prefer_perplexity:
-                from skills.reporting_skills import generate_sports_watch_report
-                sp_reply = await asyncio.wait_for(
-                    generate_sports_watch_report(query=cleaned_user_message), timeout=35.0)
-                if sp_reply and not sp_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [sp_reply]},
-                    ]
-                    yield sp_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-            sc_route = select_sports_scores_route(cleaned_user_message)
-            if sc_route.prefer_perplexity:
-                from skills.reporting_skills import generate_sports_scores_report
-                sc_reply = await asyncio.wait_for(
-                    generate_sports_scores_report(query=cleaned_user_message), timeout=30.0)
-                if sc_reply and not sc_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [sc_reply]},
-                    ]
-                    yield sc_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-            en_route = select_entertainment_route(cleaned_user_message)
-            if en_route.prefer_perplexity:
-                from skills.reporting_skills import generate_entertainment_report
-                en_reply = await asyncio.wait_for(
-                    generate_entertainment_report(query=cleaned_user_message), timeout=30.0)
-                if en_reply and not en_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [en_reply]},
-                    ]
-                    yield en_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-            wt_route = select_weather_route(cleaned_user_message)
-            if wt_route.prefer_perplexity:
-                from skills.reporting_skills import generate_weather_report
-                wt_reply = await asyncio.wait_for(
-                    generate_weather_report(query=cleaned_user_message), timeout=30.0)
-                if wt_reply and not wt_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [wt_reply]},
-                    ]
-                    yield wt_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-            fn_route = select_finance_route(cleaned_user_message)
-            if fn_route.prefer_perplexity:
-                from skills.reporting_skills import generate_finance_report
-                fn_reply = await asyncio.wait_for(
-                    generate_finance_report(query=cleaned_user_message), timeout=30.0)
-                if fn_reply and not fn_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [fn_reply]},
-                    ]
-                    yield fn_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
-                    return
-            # Phase 29: Copilot fast-path for coding/programming queries
             from model_router import COPILOT_PROXY_ENABLED
             from model_routing_policy import select_coding_route
             if COPILOT_PROXY_ENABLED:
@@ -697,7 +612,7 @@ async def chat_stream(
                         yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                         return
         except Exception as _fp_exc:
-            log.warning("Stream fast-path failed, falling through to standard routing: %s", _fp_exc)
+            log.warning("Stream coding fast-path failed, falling through to standard routing: %s", _fp_exc)
 
     # Multi-model routing (Phase 8)
     if model_preference == "auto":
@@ -1073,132 +988,31 @@ async def chat(
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
         model_message = cleaned_user_message
+    # TODO: prepend channel_context_prefix(channel_name) here once channel_name is
+    # threaded into chat() (e.g. via context_controls["channel_name"] from the Discord layer).
 
-    # Property search fast-path — fires even with recalled_context so saved criteria
-    # (price range, location, property taxes) are incorporated via model_message.
+    # Unified web-search fast-path — uses model_message so recalled context (saved
+    # preferences like price range, location) is included in the search query.
     if model_preference == "auto":
         try:
-            from model_routing_policy import select_property_search_route
-            prop_route = select_property_search_route(cleaned_user_message)
-            if prop_route.prefer_perplexity:
-                log.info("Property search fast-path matched: %s", prop_route.reason)
-                from skills.reporting_skills import generate_property_search_report
-                prop_reply = await asyncio.wait_for(
-                    generate_property_search_report(query=model_message or cleaned_user_message),
-                    timeout=45.0,
-                )
-                if prop_reply and not prop_reply.startswith("❌"):
+            from model_routing_policy import select_web_search_route
+            web_route = select_web_search_route(model_message)
+            if web_route.prefer_search:
+                log.info("chat web_search_route reason=%s", web_route.reason)
+                from skills.reporting_skills import generate_web_search_report
+                web_reply = await generate_web_search_report(model_message)
+                if web_reply and not web_reply.startswith("❌"):
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [prop_reply]},
+                        {"role": "model", "parts": [web_reply]},
                     ]
-                    return prop_reply, updated, "perplexity-direct"
-        except Exception as _prop_exc:
-            log.warning("Property search fast-path failed, falling through: %s", _prop_exc)
+                    return web_reply, updated, "perplexity-direct"
+        except Exception as _web_exc:
+            log.warning("chat web-search fast-path failed, falling through: %s", _web_exc)
 
-    # Phase 12: Perplexity fast-path for real-time / current-events queries.
-    # Only fires when routing is auto AND we have no recalled context (not mid-conversation),
-    # so we don't hijack follow-up questions that need conversation history.
+    # Copilot fast-path for coding/programming queries — separate from web-search path.
     if model_preference == "auto" and not recalled_context:
         try:
-            from model_routing_policy import (
-                select_entertainment_route,
-                select_finance_route,
-                select_realtime_route,
-                select_sports_route,
-                select_sports_scores_route,
-                select_weather_route,
-            )
-            rt_route = select_realtime_route(cleaned_user_message)
-            if rt_route.prefer_perplexity:
-                log.debug("Realtime fast-path matched: %s", rt_route.reason)
-                from skills.reporting_skills import generate_news_report
-                rt_reply = await asyncio.wait_for(
-                    generate_news_report(query=cleaned_user_message),
-                    timeout=30.0,
-                )
-                if rt_reply and not rt_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [rt_reply]},
-                    ]
-                    return rt_reply, updated, "perplexity-direct"
-            # Phase 18: Sports schedule fast-path — same guard as news path above.
-            sp_route = select_sports_route(cleaned_user_message)
-            if sp_route.prefer_perplexity:
-                log.debug("Sports fast-path matched: %s", sp_route.reason)
-                from skills.reporting_skills import generate_sports_watch_report
-                sp_reply = await asyncio.wait_for(
-                    generate_sports_watch_report(query=cleaned_user_message),
-                    timeout=35.0,
-                )
-                if sp_reply and not sp_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [sp_reply]},
-                    ]
-                    return sp_reply, updated, "perplexity-direct"
-            # Phase 19: Sports scores / historical results fast-path.
-            sc_route = select_sports_scores_route(cleaned_user_message)
-            if sc_route.prefer_perplexity:
-                log.debug("Sports scores fast-path matched: %s", sc_route.reason)
-                from skills.reporting_skills import generate_sports_scores_report
-                sc_reply = await asyncio.wait_for(
-                    generate_sports_scores_report(query=cleaned_user_message),
-                    timeout=30.0,
-                )
-                if sc_reply and not sc_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [sc_reply]},
-                    ]
-                    return sc_reply, updated, "perplexity-direct"
-            # Phase 22: Entertainment / streaming fast-path.
-            en_route = select_entertainment_route(cleaned_user_message)
-            if en_route.prefer_perplexity:
-                log.debug("Entertainment fast-path matched: %s", en_route.reason)
-                from skills.reporting_skills import generate_entertainment_report
-                en_reply = await asyncio.wait_for(
-                    generate_entertainment_report(query=cleaned_user_message),
-                    timeout=30.0,
-                )
-                if en_reply and not en_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [en_reply]},
-                    ]
-                    return en_reply, updated, "perplexity-direct"
-            # Phase 25: Weather fast-path.
-            wt_route = select_weather_route(cleaned_user_message)
-            if wt_route.prefer_perplexity:
-                log.debug("Weather fast-path matched: %s", wt_route.reason)
-                from skills.reporting_skills import generate_weather_report
-                wt_reply = await asyncio.wait_for(
-                    generate_weather_report(query=cleaned_user_message),
-                    timeout=30.0,
-                )
-                if wt_reply and not wt_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [wt_reply]},
-                    ]
-                    return wt_reply, updated, "perplexity-direct"
-            # Phase 25: Finance / markets fast-path.
-            fn_route = select_finance_route(cleaned_user_message)
-            if fn_route.prefer_perplexity:
-                log.debug("Finance fast-path matched: %s", fn_route.reason)
-                from skills.reporting_skills import generate_finance_report
-                fn_reply = await asyncio.wait_for(
-                    generate_finance_report(query=cleaned_user_message),
-                    timeout=30.0,
-                )
-                if fn_reply and not fn_reply.startswith("❌"):
-                    updated = history + [
-                        {"role": "user", "parts": [cleaned_user_message]},
-                        {"role": "model", "parts": [fn_reply]},
-                    ]
-                    return fn_reply, updated, "perplexity-direct"
-            # Phase 29: Copilot fast-path for coding/programming queries
             from model_router import COPILOT_PROXY_ENABLED
             from model_routing_policy import select_coding_route
             if COPILOT_PROXY_ENABLED:

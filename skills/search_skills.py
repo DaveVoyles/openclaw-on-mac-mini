@@ -25,7 +25,6 @@ from channel_profiles import resolve_retrieval_profile_settings
 from config import TIMEOUT_DEFAULT, TIMEOUT_SLOW
 from config import cfg as _cfg
 from http_session import SessionManager
-from runtime_state import get_effective_channel_profile
 from search_provider import get_stats, retry_once
 
 log = logging.getLogger("openclaw.search_skills")
@@ -246,12 +245,7 @@ async def search_web(
     provider = provider.lower().strip()
     expansion_context = (expansion_context or "").strip()
 
-    channel_profile = get_effective_channel_profile()
-    profile_settings = resolve_retrieval_profile_settings(
-        query=query,
-        expansion_context=expansion_context,
-        channel_profile=channel_profile,
-    )
+    profile_settings = resolve_retrieval_profile_settings(query)
     use_profile_defaults = (
         min_results == 1
         and not retry_on_low_results

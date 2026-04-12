@@ -253,68 +253,28 @@ async def test_e2e_incident_summary_search_surfaces_conflicts_with_quality_warni
     assert "⚠️ Only 3 unique results found (target: 4)." in result
 
 
-@pytest.mark.parametrize(
-    ("query", "expansion_context", "expected_profile"),
-    [
-        ("division 1 lacrosse games this weekend", "", "sports"),
-        ("top gaming stories this week", "", "gaming"),
-        ("latest breaking headlines in tech", "", "news"),
-        ("service outage and deployment rollback guidance", "", "engineering"),
-        ("what should I work on tonight", "", "general"),
-    ],
-)
-def test_resolve_retrieval_profile_settings_selects_expected_topic_profile(
-    query: str,
-    expansion_context: str,
-    expected_profile: str,
-):
-    settings = retrieval_profiles.resolve_retrieval_profile_settings(
-        query=query,
-        expansion_context=expansion_context,
-        channel_profile={},
-    )
-    assert settings["profile_name"] == expected_profile
+def test_resolve_retrieval_profile_settings_returns_default_profile():
+    settings = retrieval_profiles.resolve_retrieval_profile_settings("any query")
+    assert settings["min_results"] == 3
+    assert settings["expand_query"] is False
+    assert settings["topic_class"] == "general"
 
 
-def test_resolve_retrieval_profile_settings_clamps_and_rejects_invalid_overrides():
+def test_resolve_retrieval_profile_settings_channel_name_ignored():
     settings = retrieval_profiles.resolve_retrieval_profile_settings(
-        query="sports recap",
-        expansion_context="sports",
-        channel_profile={
-            "retrieval_profile": "sports",
-            "retrieval_min_results_override": 999,
-            "retrieval_max_query_variants_override": -4,
-            "retrieval_provider_attempt_cap_override": "bad",
-        },
+        "sports recap", channel_name="sports"
     )
-    assert settings["profile_name"] == "sports"
-    assert settings["min_results"] == 8
-    assert settings["max_query_variants"] == 1
-    assert settings["provider_attempt_cap"] == 5
-    assert "retrieval_provider_attempt_cap_override" in settings["override_rejections"]
+    assert settings["topic_class"] == "general"
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("retrieval_profile", "expected_min_results", "expected_context"),
-    [
-        ("sports", 4, "sports_recap"),
-        ("news", 3, "news_recap"),
-        ("gaming", 6, "gaming_recap"),
-        ("engineering", 3, "engineering_ops"),
-        ("general", 2, "general"),
-    ],
-)
-async def test_search_web_applies_channel_profile_defaults_to_reliable_path(
+async def test_search_web_applies_default_profile_to_reliable_path(
     monkeypatch,
     _disable_script_providers,
-    retrieval_profile: str,
-    expected_min_results: int,
-    expected_context: str,
 ):
+    """Simplified profile always returns min_results=3 with no expansion_context."""
     captured: dict[str, object] = {}
 
-    monkeypatch.setattr(mod, "get_effective_channel_profile", lambda: {"retrieval_profile": retrieval_profile})
     monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **_: None)
 
     async def fake_reliable(**kwargs):
@@ -326,9 +286,10 @@ async def test_search_web_applies_channel_profile_defaults_to_reliable_path(
     result = await mod.search_web("query with defaults only")
 
     assert result == "ok"
-    assert captured["min_results"] == expected_min_results
-    assert captured["expansion_context"] == expected_context
+    assert captured["min_results"] == 3
+    assert captured["expansion_context"] == ""
     assert captured["provider_attempt_cap"] >= 3
+
 
 
 def test_rank_hits_for_evidence_prioritizes_trusted_and_fresh_sources():
@@ -368,7 +329,6 @@ async def test_search_web_applies_effective_budget_for_high_load(monkeypatch, _d
     captured: dict[str, object] = {}
     events: list[tuple[str, str]] = []
 
-    monkeypatch.setattr(mod, "get_effective_channel_profile", lambda: {"retrieval_profile": "sports"})
     monkeypatch.setattr(
         mod,
         "get_latency_load_snapshot",
@@ -385,10 +345,10 @@ async def test_search_web_applies_effective_budget_for_high_load(monkeypatch, _d
     result = await mod.search_web("division 1 lacrosse recap")
 
     assert result == "ok"
-    assert captured["min_results"] == 3
+    assert captured["min_results"] == 2
     assert captured["max_query_variants"] == 1
     assert captured["provider_attempt_cap"] == 2
-    assert ("search_budget_tightened_for_latency", "sports_recap") in events
+    assert ("search_budget_tightened_for_latency", "search") in events
 
 
 @pytest.mark.asyncio
@@ -396,7 +356,6 @@ async def test_search_web_uses_failsafe_budget_when_metrics_missing(monkeypatch,
     captured: dict[str, object] = {}
     events: list[tuple[str, str]] = []
 
-    monkeypatch.setattr(mod, "get_effective_channel_profile", lambda: {"retrieval_profile": "general"})
     monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda command_hint="search": None)
     monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="search": events.append((event, context)))
 
@@ -409,7 +368,7 @@ async def test_search_web_uses_failsafe_budget_when_metrics_missing(monkeypatch,
     result = await mod.search_web("simple query")
 
     assert result == "ok"
-    assert captured["min_results"] == 2
-    assert captured["max_query_variants"] == 1
-    assert captured["provider_attempt_cap"] == 3
-    assert ("search_budget_metrics_missing", "general") in events
+    assert captured["min_results"] == 3
+    assert captured["max_query_variants"] == 2
+    assert captured["provider_attempt_cap"] == 4
+    assert ("search_budget_metrics_missing", "search") in events

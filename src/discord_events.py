@@ -397,6 +397,8 @@ async def handle_message(
             response_text = str(repair_result["response_text"])
             final_meta = dict(repair_result["final_meta"])
             recovery_block = _build_ask_recovery_block(final_meta)
+            if model_used == "perplexity-direct":
+                recovery_block = None
             if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
                 response_text = f"{response_text.rstrip()}{recovery_block}"
             log.info(

@@ -417,6 +417,8 @@ async def handle_ask(
             if isinstance(final_quality, dict) and final_quality.get("status") == "low":
                 _routing_notes.append("Quality: low confidence")
             recovery_block = _build_ask_recovery_block(_final_meta)
+            if model_used == "perplexity-direct":
+                recovery_block = None
             if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
                 response_text = f"{response_text.rstrip()}{recovery_block}"
             log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))

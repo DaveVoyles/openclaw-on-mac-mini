@@ -304,8 +304,8 @@ def _normalize_direct_provider_answer(raw_text: str, *, provider_label: str) -> 
     return f"{text}\n\n_via {provider_label}_"
 
 
-async def generate_news_report(*, query: str) -> str:
-    """Return current-events / news headlines via Perplexity without LLM rewriting.
+async def generate_web_search_report(query: str, *, provider: str = "perplexity") -> str:
+    """Generic web search — works for news, sports, weather, finance, property, entertainment.
 
     Designed to be returned directly (bypassing Gemini synthesis) when the
     answer_policy detects the ``_via perplexity-direct_`` marker.
@@ -317,192 +317,22 @@ async def generate_news_report(*, query: str) -> str:
     provider_query = (
         f"Today is {date_label} UTC. "
         f"User request: {query}. "
-        "Provide an up-to-date, factual summary with sourced bullet points or a short structured answer. "
-        "Include specific facts, numbers, and named sources where relevant. "
-        "Do not speculate about future events. "
-        "End with a Sources section listing URLs."
-    )
-    try:
-        result = await asyncio.wait_for(
-            search_web(provider_query, num_results=10, provider="perplexity"),
-            timeout=45,
-        )
-    except (asyncio.TimeoutError, Exception) as exc:
-        log.warning("generate_news_report Perplexity call failed: %s", exc)
-        return ""
-    return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
-
-
-async def generate_weather_report(*, query: str) -> str:
-    """Return a weather report sourced directly from Perplexity."""
-    from skills.search_skills import search_web
-
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    date_label = now_utc.strftime("%A, %B %-d, %Y")
-    provider_query = (
-        f"Today is {date_label} UTC. "
-        f"User request: {query}. "
-        "Provide an up-to-date, factual weather summary with current conditions and forecast. "
-        "Include specific temperatures, precipitation chances, and conditions where relevant. "
+        "Provide a direct, helpful, up-to-date answer with sourced bullet points. "
+        "Include specific facts, figures, and links where relevant. "
         "Do not speculate. "
         "End with a Sources section listing URLs."
     )
     try:
         result = await asyncio.wait_for(
-            search_web(provider_query, num_results=10, provider="perplexity"),
+            search_web(provider_query, num_results=10, provider=provider),
             timeout=45,
         )
     except (asyncio.TimeoutError, Exception) as exc:
-        log.warning("generate_weather_report Perplexity call failed: %s", exc)
-        return "❌ Could not retrieve weather information. Try again shortly."
+        log.warning("generate_web_search_report search failed: %s", exc)
+        return "I couldn't find current results for that. Try rephrasing your question."
     answer = _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
     if not answer:
-        return "❌ Could not retrieve weather information. Try again shortly."
-    return answer
-
-
-async def generate_finance_report(*, query: str) -> str:
-    """Return a market/finance report sourced directly from Perplexity."""
-    from skills.search_skills import search_web
-
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    date_label = now_utc.strftime("%A, %B %-d, %Y")
-    provider_query = (
-        f"Today is {date_label} UTC. "
-        f"User request: {query}. "
-        "Provide an up-to-date, factual financial or market summary with sourced data. "
-        "Include specific prices, percentages, and named sources where relevant. "
-        "Do not speculate about future market movements. "
-        "End with a Sources section listing URLs."
-    )
-    try:
-        result = await asyncio.wait_for(
-            search_web(provider_query, num_results=10, provider="perplexity"),
-            timeout=45,
-        )
-    except (asyncio.TimeoutError, Exception) as exc:
-        log.warning("generate_finance_report Perplexity call failed: %s", exc)
-        return "❌ Could not retrieve financial data. Try again shortly."
-    answer = _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
-    if not answer:
-        return "❌ Could not retrieve financial data. Try again shortly."
-    return answer
-
-
-async def generate_property_search_report(*, query: str) -> str:
-    """Return real estate / property search results via Perplexity without Gemini synthesis.
-
-    Designed to bypass the Gemini tool-round chain for home/property search queries.
-    The ``query`` parameter should be ``model_message`` (which includes any recalled
-    user context such as price range, location preferences, and tax criteria) so that
-    saved preferences are incorporated into the search.
-
-    Designed to be returned directly (bypassing Gemini synthesis) when the
-    answer_policy detects the ``_via perplexity-direct_`` marker.
-    """
-    from skills.search_skills import search_web
-
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    date_label = now_utc.strftime("%A, %B %-d, %Y")
-    provider_query = (
-        f"Today is {date_label}. "
-        f"Real estate search request: {query}. "
-        "Find specific current home listings or property information matching the stated criteria. "
-        "Format each listing as a numbered entry like this (do NOT use markdown tables or ASCII tables):\n"
-        "**1. 123 Main St, Springfield PA 19064**\n"
-        "• Price: $385,000\n"
-        "• Beds/Baths: 3 bed / 2 bath\n"
-        "• Sq Ft: 1,850\n"
-        "• Features: Updated kitchen, large backyard\n"
-        "• Link: https://zillow.com/...\n\n"
-        "List at least 3 properties. Only include real, currently-listed properties — not general market analysis. "
-        "End with a short Sources section listing URLs."
-    )
-    try:
-        result = await asyncio.wait_for(
-            search_web(provider_query, num_results=10, provider="perplexity"),
-            timeout=45,
-        )
-    except (asyncio.TimeoutError, Exception) as exc:
-        log.warning("generate_property_search_report search failed: %s", exc)
-        return ""
-    return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
-
-
-async def generate_sports_scores_report(*, query: str) -> str:
-    """Return historical sports game scores/results via Perplexity without LLM rewriting.
-
-    Distinct from generate_sports_watch_report (upcoming schedule).  This skill
-    handles past-result queries: "did the Lakers win?", "what was the final score
-    of the [team] game?", "who won last night?".
-
-    Designed to be returned directly (bypassing Gemini synthesis) when the
-    answer_policy detects the ``_via perplexity-direct_`` marker.
-    """
-    from skills.search_skills import search_web
-
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    date_label = now_utc.strftime("%A, %B %-d, %Y")
-    provider_query = (
-        f"Today is {date_label} UTC. "
-        f"User request: {query}. "
-        "Provide final scores, results, and standings for the specific game(s) asked about. "
-        "Include team names, final score, game date, and key stats or highlights if available. "
-        "Format results as a bullet list (do NOT use markdown or ASCII tables) — one game per entry like:\n"
-        "**Team A vs Team B** — Final: 105-98\n"
-        "• Date: April 12\n"
-        "• Key stats: Player X had 30 pts, Player Y had 12 reb\n"
-        "Do not speculate or predict — only report confirmed results. "
-        "End with a Sources section listing URLs."
-    )
-    try:
-        result = await asyncio.wait_for(
-            search_web(provider_query, num_results=10, provider="perplexity"),
-            timeout=45,
-        )
-    except (asyncio.TimeoutError, Exception) as exc:
-        log.warning("generate_sports_scores_report Perplexity call failed: %s", exc)
-        return ""
-    return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
-
-
-async def generate_entertainment_report(*, query: str) -> str:
-    """Return movies, streaming, and entertainment info via Perplexity without LLM rewriting.
-
-    Handles queries like: "what movies are in theaters?", "what's new on Netflix?",
-    "Rotten Tomatoes score for X", "what to watch this weekend", "streaming releases".
-
-    Designed to be returned directly (bypassing Gemini synthesis) when the
-    answer_policy detects the ``_via perplexity-direct_`` marker.
-    """
-    from skills.search_skills import search_web
-
-    now_utc = dt.datetime.now(dt.timezone.utc)
-    date_label = now_utc.strftime("%A, %B %-d, %Y")
-    provider_query = (
-        f"Today is {date_label} UTC. "
-        f"User request: {query}. "
-        "Provide an up-to-date entertainment summary covering movies in theaters, new streaming releases, "
-        "critic scores (Rotten Tomatoes, Metacritic), and where to watch when relevant. "
-        "Format as a structured list (do NOT use markdown or ASCII tables) — one title per entry like:\n"
-        "**Movie/Show Title** (Platform or Theater)\n"
-        "• Rating: 92% RT / 8.1 IMDb\n"
-        "• Genre: Action\n"
-        "• Notes: Opening weekend, directed by X\n"
-        "Include specific titles, ratings, and streaming platforms. "
-        "End with a Sources section listing URLs."
-    )
-    try:
-        result = await asyncio.wait_for(
-            search_web(provider_query, num_results=10, provider="perplexity"),
-            timeout=45,
-        )
-    except (asyncio.TimeoutError, Exception) as exc:
-        log.warning("generate_entertainment_report Perplexity call failed: %s", exc)
-        return ""
-    answer = _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
-    if not answer:
-        return "❌ Could not retrieve entertainment information. Try again shortly."
+        return "I couldn't find current results for that. Try rephrasing your question."
     return answer
 
 

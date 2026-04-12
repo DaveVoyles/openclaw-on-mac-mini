@@ -345,55 +345,6 @@ def select_multimodal_route(
 
 import re as _re
 
-_REALTIME_PATTERNS = _re.compile(
-    r"\b("
-    r"news|headline|breaking|current\s+event"
-    r"|what.s\s+(happening|going\s+on|in\s+the\s+news)"
-    r"|latest|today.s\s+(news|headline|story|update)"
-    r"|top\s+stor(?:y|ies)"
-    r")\b",
-    _re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class RealtimeRouteDecision:
-    """Routing decision for real-time / current-events queries."""
-
-    prefer_perplexity: bool
-    tool_name: str  # "generate_news_report" when matched, "" otherwise
-    reason: str
-
-
-def select_realtime_route(query: str) -> RealtimeRouteDecision:
-    """Decide whether a query should be routed to Perplexity for real-time data.
-
-    Matches news, headlines, and current-events vocabulary.  When matched,
-    callers should prefer the ``generate_news_report`` skill which returns
-    a Perplexity answer directly (marked ``_via perplexity-direct_``) without
-    Gemini synthesis.
-
-    Args:
-        query: The raw user query string.
-
-    Returns:
-        A ``RealtimeRouteDecision`` with ``prefer_perplexity=True`` and
-        ``tool_name="generate_news_report"`` when matched, or
-        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
-    """
-    if _REALTIME_PATTERNS.search(query or ""):
-        return RealtimeRouteDecision(
-            prefer_perplexity=True,
-            tool_name="generate_news_report",
-            reason="query matches real-time / current-events pattern → Perplexity direct",
-        )
-    return RealtimeRouteDecision(
-        prefer_perplexity=False,
-        tool_name="",
-        reason="no real-time pattern detected",
-    )
-
-
 # ---------------------------------------------------------------------------
 # Sports schedule / watch-guide route selection
 # ---------------------------------------------------------------------------
@@ -447,237 +398,6 @@ def select_sports_route(query: str) -> SportsRouteDecision:
         prefer_perplexity=False,
         tool_name="",
         reason="no sports schedule pattern detected",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Sports scores / results route selection
-# ---------------------------------------------------------------------------
-
-_SPORTS_SCORES_PATTERNS = _re.compile(
-    r"\b("
-    r"(?:final\s+score|score\s+of|game\s+result|match\s+result)"
-    r"|(?:did\s+(?:the\s+)?[a-z][\w\s]{1,30}(?:win|lose|beat|fall\s+to))"
-    r"|(?:who\s+won(?:\s+(?:last\s+night|yesterday|this\s+morning|the\s+[\w\s]{1,25}(?:game|match|series|championship|title|race|tournament))))"
-    r"|who\s+won\?"
-    r"|(?:(?:last\s+night|yesterday|this\s+morning).{0,30}(?:game|match|score))"
-    r"|(?:(?:game|match|score).{0,30}(?:last\s+night|yesterday))"
-    r"|(?:recap\s+(?:the\s+)?(?:game|match|series))"
-    r"|what\s+(?:was\s+)?the\s+(?:final\s+)?score"
-    r")\b",
-    _re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class SportsScoresRouteDecision:
-    """Routing decision for sports scores / historical results queries."""
-
-    prefer_perplexity: bool
-    tool_name: str  # "generate_sports_scores_report" when matched, "" otherwise
-    reason: str
-
-
-def select_sports_scores_route(query: str) -> SportsScoresRouteDecision:
-    """Decide whether a query should be fast-pathed to the sports scores skill.
-
-    Matches historical game result vocabulary — distinct from schedule/watch-guide
-    queries handled by ``select_sports_route()``.  When matched, callers should
-    prefer ``generate_sports_scores_report`` which returns a Perplexity answer
-    directly without Gemini synthesis.
-
-    Args:
-        query: The raw user query string.
-
-    Returns:
-        A ``SportsScoresRouteDecision`` with ``prefer_perplexity=True`` and
-        ``tool_name="generate_sports_scores_report"`` when matched, or
-        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
-    """
-    if _SPORTS_SCORES_PATTERNS.search(query or ""):
-        return SportsScoresRouteDecision(
-            prefer_perplexity=True,
-            tool_name="generate_sports_scores_report",
-            reason="query matches sports scores / results pattern → Perplexity direct",
-        )
-    return SportsScoresRouteDecision(
-        prefer_perplexity=False,
-        tool_name="",
-        reason="no sports scores pattern detected",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Entertainment / streaming route selection
-# ---------------------------------------------------------------------------
-
-_ENTERTAINMENT_PATTERNS = _re.compile(
-    r"\b("
-    r"(?:movies?\s+(?:in\s+theaters?|playing|out\s+now|this\s+week(?:end)?))"
-    r"|(?:what(?:'s|\s+is)\s+(?:new|playing|on|streaming)\s+(?:on\s+)?(?:netflix|hulu|hbo|disney\+?|apple\s+tv\+?|paramount\+?|peacock|max|prime\s+video))"
-    r"|(?:(?:new\s+)?(?:releases?|arrivals?|titles?)\s+(?:on|to)\s+(?:netflix|hulu|hbo|disney\+?|apple\s+tv\+?|paramount\+?|peacock|max|prime\s+video))"
-    r"|rotten\s+tomatoes"
-    r"|metacritic\s+score"
-    r"|(?:is\s+.{1,40}\s+(?:worth\s+watching|good|worth\s+it|worth\s+the\s+hype))"
-    r"|what\s+to\s+watch\s+(?:this\s+week(?:end)?|tonight|today)"
-    r"|streaming\s+(?:this\s+week(?:end)?|releases?|new|now)"
-    r"|(?:now\s+(?:streaming|playing|in\s+theaters?))"
-    r")\b",
-    _re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class EntertainmentRouteDecision:
-    """Routing decision for entertainment / streaming queries."""
-
-    prefer_perplexity: bool
-    tool_name: str  # "generate_entertainment_report" when matched, "" otherwise
-    reason: str
-
-
-def select_entertainment_route(query: str) -> EntertainmentRouteDecision:
-    """Decide whether a query should be fast-pathed to the entertainment skill.
-
-    Matches movies-in-theaters, streaming service new arrivals, critic score
-    lookups, and "what to watch" queries.  When matched, callers should prefer
-    ``generate_entertainment_report`` which returns a Perplexity answer directly
-    without Gemini synthesis.
-
-    Args:
-        query: The raw user query string.
-
-    Returns:
-        An ``EntertainmentRouteDecision`` with ``prefer_perplexity=True`` and
-        ``tool_name="generate_entertainment_report"`` when matched, or
-        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
-    """
-    if _ENTERTAINMENT_PATTERNS.search(query or ""):
-        return EntertainmentRouteDecision(
-            prefer_perplexity=True,
-            tool_name="generate_entertainment_report",
-            reason="query matches entertainment / streaming pattern → Perplexity direct",
-        )
-    return EntertainmentRouteDecision(
-        prefer_perplexity=False,
-        tool_name="",
-        reason="no entertainment pattern detected",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Weather query route selection
-# ---------------------------------------------------------------------------
-
-_WEATHER_PATTERNS = _re.compile(
-    r"\b("
-    r"(?:what(?:'s|\s+is)\s+the\s+weather)"
-    r"|(?:weather\s+(?:today|tonight|this\s+week(?:end)?|tomorrow|forecast|in|for|at|right\s+now|currently|conditions?))"
-    r"|(?:(?:current\s+)?(?:temperature|temp|conditions?)\s+(?:in|at|for|outside))"
-    r"|(?:is\s+it\s+(?:going\s+to\s+)?(?:rain|snow|hot|cold|warm|humid|sunny|cloudy|windy)\b)"
-    r"|(?:will\s+it\s+(?:rain|snow|be\s+(?:hot|cold|warm|sunny|cloudy|windy)))"
-    r"|(?:how\s+(?:hot|cold|warm|rainy|snowy|windy)\s+(?:is\s+it|will\s+it\s+be))"
-    r"|(?:(?:rain|snow|thunder(?:storm)?|hurricane|tornado|blizzard|heatwave)\s+(?:forecast|warning|watch|expected|coming))"
-    r"|(?:umbrella|jacket|coat)\s+(?:today|tomorrow|needed)"
-    r"|weather\s+report"
-    r")\b",
-    _re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class WeatherRouteDecision:
-    """Routing decision for weather queries."""
-
-    prefer_perplexity: bool
-    tool_name: str  # "generate_weather_report" when matched, "" otherwise
-    reason: str
-
-
-def select_weather_route(query: str) -> WeatherRouteDecision:
-    """Decide whether a query should be fast-pathed to the weather skill.
-
-    Matches current conditions, forecasts, and weather-related planning queries.
-    When matched, callers should prefer ``generate_weather_report`` which returns
-    a Perplexity answer directly without Gemini synthesis.
-
-    Args:
-        query: The raw user query string.
-
-    Returns:
-        A ``WeatherRouteDecision`` with ``prefer_perplexity=True`` and
-        ``tool_name="generate_weather_report"`` when matched, or
-        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
-    """
-    if _WEATHER_PATTERNS.search(query or ""):
-        return WeatherRouteDecision(
-            prefer_perplexity=True,
-            tool_name="generate_weather_report",
-            reason="query matches weather / forecast pattern → Perplexity direct",
-        )
-    return WeatherRouteDecision(
-        prefer_perplexity=False,
-        tool_name="",
-        reason="no weather pattern detected",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Finance / markets query route selection
-# ---------------------------------------------------------------------------
-
-_FINANCE_PATTERNS = _re.compile(
-    r"\b("
-    r"(?:stock\s+(?:price|prices?|market|markets?|news|update|today|performance|forecast))"
-    r"|(?:(?:current|today(?:'s)?|live)\s+(?:stock|market|share|index|crypto)\s*(?:price|prices?|value|update)?)"
-    r"|(?:(?:how\s+is|how\s+are|what(?:'s|\s+is))\s+(?:the\s+)?(?:market|markets?|nasdaq|s&p|dow|nyse|crypto)\s+(?:doing|today|now|performing|trading))"
-    r"|(?:(?:nasdaq|s&p\s*500|dow\s+jones?|nyse|russell)\s+(?:today|now|this\s+week|performance|update|forecast))"
-    r"|(?:(?:bitcoin|btc|ethereum|eth|crypto(?:currency)?)\s+(?:price|prices?|today|now|update|forecast|market))"
-    r"|(?:market\s+(?:open|close|update|recap|summary|report|news|today|this\s+week))"
-    r"|(?:earnings?\s+(?:report|announcement|release|today|this\s+week|results?))"
-    r"|(?:(?:interest|mortgage|fed|federal\s+reserve)\s+(?:rate|rates?))"
-    r"|(?:inflation\s+(?:rate|data|report|today|update|news))"
-    r"|financial\s+(?:news|update|report|market|summary)"
-    r")\b",
-    _re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class FinanceRouteDecision:
-    """Routing decision for finance / market queries."""
-
-    prefer_perplexity: bool
-    tool_name: str  # "generate_finance_report" when matched, "" otherwise
-    reason: str
-
-
-def select_finance_route(query: str) -> FinanceRouteDecision:
-    """Decide whether a query should be fast-pathed to the finance skill.
-
-    Matches stock prices, market updates, crypto prices, earnings reports, and
-    macroeconomic data queries. When matched, callers should prefer
-    ``generate_finance_report`` which returns a Perplexity answer directly
-    without Gemini synthesis.
-
-    Args:
-        query: The raw user query string.
-
-    Returns:
-        A ``FinanceRouteDecision`` with ``prefer_perplexity=True`` and
-        ``tool_name="generate_finance_report"`` when matched, or
-        ``prefer_perplexity=False`` and an empty ``tool_name`` otherwise.
-    """
-    if _FINANCE_PATTERNS.search(query or ""):
-        return FinanceRouteDecision(
-            prefer_perplexity=True,
-            tool_name="generate_finance_report",
-            reason="query matches finance / market pattern → Perplexity direct",
-        )
-    return FinanceRouteDecision(
-        prefer_perplexity=False,
-        tool_name="",
-        reason="no finance pattern detected",
     )
 
 
@@ -742,52 +462,6 @@ def select_coding_route(query: str) -> CodingRouteDecision:
     )
 
 
-# ---------------------------------------------------------------------------
-# Property / real-estate search route selection
-# ---------------------------------------------------------------------------
-
-_PROPERTY_SEARCH_PATTERNS = _re.compile(
-    r"\b(find|show|list|search|get|look\s+up)\b.{0,50}"
-    r"\b(home|homes|house|houses|property|properties|listing|listings|apartment|apartments|condo|condos|townhome|townhouse)\b"
-    r"|\b(home|homes|house|houses|property|properties|listing|listings|apartment|apartments|condo|condos|townhome)\b.{0,50}"
-    r"\b(find|available|for\s+sale|on\s+the\s+market|buy|purchase)\b"
-    r"|\b(homes?|houses?|properties|listings?)\s+(for\s+sale|in\s+\w+)\b"
-    r"|\b(zillow|redfin|trulia)\b"
-    r"|\breal[\s-]?estate\b.{0,40}\b(search|find|list|show|look)\b",
-    _re.IGNORECASE,
-)
-
-
-@dataclass(frozen=True, slots=True)
-class PropertySearchRouteDecision:
-    """Routing decision for property / real-estate search queries."""
-
-    prefer_perplexity: bool
-    reason: str
-
-
-def select_property_search_route(query: str) -> PropertySearchRouteDecision:
-    """Decide whether a query should be fast-pathed to a direct property search.
-
-    Matches home/property search vocabulary.  When matched, callers should
-    route to ``generate_property_search_report`` which uses Perplexity/Serper
-    directly rather than spawning 5+ Gemini tool rounds.
-
-    Critically, this fast-path should run **even when recalled_context is
-    populated** so that saved user criteria (price range, location, taxes) are
-    incorporated into the Perplexity query via ``model_message``.
-    """
-    if _PROPERTY_SEARCH_PATTERNS.search(query or ""):
-        return PropertySearchRouteDecision(
-            prefer_perplexity=True,
-            reason="property/real-estate search → Perplexity direct (bypasses Gemini tool rounds)",
-        )
-    return PropertySearchRouteDecision(
-        prefer_perplexity=False,
-        reason="no property search pattern detected",
-    )
-
-
 
 @dataclass(frozen=True, slots=True)
 class ResearchSynthesisRouteDecision:
@@ -821,3 +495,57 @@ def select_research_synthesis_route(
         provider="gemini",
         reason="Copilot unavailable; falling back to Gemini thinking model for synthesis",
     )
+
+
+# ---------------------------------------------------------------------------
+# Generic web-search route selection
+# ---------------------------------------------------------------------------
+
+_WEB_SEARCH_PATTERNS = _re.compile(
+    r"\b(search|find|look(ing)?\s+up|what('s|\s+is)|who('s|\s+is)|when|where|how\s+(much|many)|"
+    r"news|latest|current|today|recent|price|cost|weather|forecast|score|match|game|"
+    r"home[s]?\s+(for\s+sale|listing)|real\s+estate|buy|rent|stock|market|movie|film|"
+    r"show|episode|actor|sport|team|player|result|standings|transfer|deal|rumor)\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class WebSearchRouteDecision:
+    """Routing decision for queries that benefit from live web data."""
+
+    prefer_search: bool
+    reason: str
+
+
+def select_web_search_route(query: str) -> WebSearchRouteDecision:
+    """Return prefer_search=True for any query that benefits from live web data.
+
+    Matches broad web-search vocabulary (news, prices, weather, sports, etc.)
+    and question forms.  Callers should prefer ``generate_web_search_report``
+    which returns a Perplexity answer directly (marked ``_via perplexity-direct_``)
+    without Gemini synthesis.
+
+    Args:
+        query: The raw user query string.
+
+    Returns:
+        A ``WebSearchRouteDecision`` with ``prefer_search=True`` when matched,
+        or ``prefer_search=False`` otherwise.
+    """
+    q = (query or "").strip()
+    if not q:
+        return WebSearchRouteDecision(prefer_search=False, reason="empty query")
+    if _WEB_SEARCH_PATTERNS.search(q):
+        return WebSearchRouteDecision(
+            prefer_search=True,
+            reason="matched web-search pattern",
+        )
+    # Also trigger for queries that look like questions
+    if q.endswith("?") or _re.match(
+        r"^(what|who|where|when|why|how|can|does|is|are|show|find|get)\b",
+        q,
+        _re.IGNORECASE,
+    ):
+        return WebSearchRouteDecision(prefer_search=True, reason="question form")
+    return WebSearchRouteDecision(prefer_search=False, reason="no web-search signal")
