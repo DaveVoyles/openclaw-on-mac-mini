@@ -15,6 +15,7 @@ _LOG_PATH = pathlib.Path(
 _ENABLED = os.getenv("ROUTING_TELEMETRY", "false").lower() in ("1", "true", "yes")
 _AUDIT_MAX_LINES = int(os.getenv("AUDIT_MAX_LINES", "10000"))
 _AUDIT_KEEP_LINES = int(os.getenv("AUDIT_KEEP_LINES", "8000"))
+_AUDIT_ROTATE_INTERVAL = int(os.getenv("AUDIT_ROTATE_INTERVAL", "3600"))
 
 
 def record(
