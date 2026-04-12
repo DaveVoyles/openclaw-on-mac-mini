@@ -336,7 +336,16 @@ def _require_api_action_auth(request: web.Request) -> web.Response | None:
 
 
 async def _health_llm_handler(request: web.Request) -> web.Response:
-    """Check LLM provider availability."""
+    """Check LLM provider availability, token usage, and circuit-breaker state."""
+    # Lazy import to avoid circular imports at module load time.
+    from llm.providers import (
+        COPILOT_PROXY_ENABLED,
+        _circuit,
+        _is_open,
+        proxy_is_healthy,
+        token_usage_summary,
+    )
+
     checks: dict[str, str] = {}
 
     # Ollama
@@ -356,16 +365,25 @@ async def _health_llm_handler(request: web.Request) -> web.Response:
     checks["gemini"] = "ok" if os.getenv("GOOGLE_API_KEY") else "unconfigured"
 
     # Copilot proxy
-    try:
-        from llm.providers import COPILOT_PROXY_ENABLED
-        checks["copilot_proxy"] = "ok" if COPILOT_PROXY_ENABLED else "unconfigured"
-    except Exception:
-        checks["copilot_proxy"] = "unconfigured"
+    checks["copilot_proxy"] = "ok" if COPILOT_PROXY_ENABLED else "unconfigured"
+
+    # Circuit-breaker state for all known providers (plus any that have tripped).
+    _known_providers = {"copilot", "openai", "anthropic", "ollama"}
+    circuit_state = {
+        p: {"open": _is_open(p)}
+        for p in sorted(_known_providers | set(_circuit.keys()))
+    }
 
     any_ok = any(v == "ok" for v in checks.values())
     status_code = 200 if any_ok else 503
     return web.json_response(
-        {"status": "ok" if any_ok else "down", "checks": checks},
+        {
+            "status": "ok" if any_ok else "down",
+            "proxy_healthy": proxy_is_healthy(),
+            "checks": checks,
+            "token_usage": token_usage_summary(),
+            "circuit_state": circuit_state,
+        },
         status=status_code,
     )
 
