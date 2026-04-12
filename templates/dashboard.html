@@ -1855,7 +1855,7 @@
               </div>
               <div class="stat-row">
                 <span class="stat-label">🔮 Perplexity Cost</span
-                ><span class="stat-value" id="sp-pplx-cost" style="color: var(--gold)">$0.0000</span>
+                ><span class="stat-value" id="sp-pplx-cost" style="color: var(--gold)">$0.00</span>
               </div>
             </div>
             <div style="border-top: 1px solid var(--border); margin: 0.75rem 0; padding-top: 0.75rem">
@@ -1869,7 +1869,7 @@
               </div>
               <div class="stat-row">
                 <span class="stat-label">🔥 Firecrawl Cost</span
-                ><span class="stat-value" id="sp-fc-cost" style="color: var(--gold)">$0.0000</span>
+                ><span class="stat-value" id="sp-fc-cost" style="color: var(--gold)">$0.00</span>
               </div>
             </div>
             <div class="stat-row" style="margin-top: 0.75rem">
@@ -2584,9 +2584,9 @@
         // Spending
         const sp = d.spending;
         document.getElementById("sp-cost").textContent =
-          `$${sp.total_cost.toFixed(4)}`;
+          `$${sp.total_cost.toFixed(2)}`;
         document.getElementById("sp-budget").textContent =
-          `$${sp.budget_remaining.toFixed(4)} / $${sp.budget_limit.toFixed(2)}`;
+          `$${sp.budget_remaining.toFixed(2)} / $${sp.budget_limit.toFixed(2)}`;
         const pct = sp.budget_pct;
         const bar = document.getElementById("sp-bar");
         bar.style.width = Math.max(pct, 2) + "%";
@@ -2602,7 +2602,7 @@
           sp.calls.toLocaleString();
         if (sp.calls > 0) {
           const avg = sp.total_cost / sp.calls;
-          document.getElementById("sp-avg").textContent = `$${avg.toFixed(6)}`;
+          document.getElementById("sp-avg").textContent = `$${avg.toFixed(2)}`;
           document.getElementById("sp-remaining").textContent =
             avg > 0
               ? `~${Math.floor(sp.budget_remaining / avg).toLocaleString()}`
@@ -2615,7 +2615,7 @@
         // Perplexity stats
         const pplx = sp.perplexity || {calls: 0, total_cost_usd: 0};
         document.getElementById("sp-pplx-calls").textContent = (pplx.calls || 0).toLocaleString();
-        document.getElementById("sp-pplx-cost").textContent = `$${(pplx.total_cost_usd || 0).toFixed(4)}`;
+        document.getElementById("sp-pplx-cost").textContent = `$${(pplx.total_cost_usd || 0).toFixed(2)}`;
 
         // Firecrawl stats
         const fc = sp.firecrawl || {calls: 0, pages_scraped: 0, total_cost_usd: 0};
@@ -2624,14 +2624,14 @@
         const fcPagesEl = document.getElementById("sp-fc-pages");
         fcPagesEl.textContent = `${fcPages} / 500`;
         fcPagesEl.style.color = fcPages >= 450 ? 'var(--danger,#f85149)' : fcPages >= 300 ? '#ff9800' : 'var(--mint-green)';
-        document.getElementById("sp-fc-cost").textContent = `$${(fc.total_cost_usd || 0).toFixed(4)}`;
+        document.getElementById("sp-fc-cost").textContent = `$${(fc.total_cost_usd || 0).toFixed(2)}`;
 
         // Quota card hero stats (real data)
         const cop = sp.copilot || {calls: 0};
         const totalCost = (sp.total_cost || 0) + (pplx.total_cost_usd || 0) + (fc.total_cost_usd || 0);
         document.getElementById("qs-gemini-calls").textContent = (sp.calls || 0).toLocaleString();
         document.getElementById("qs-pplx-calls").textContent = (pplx.calls || 0).toLocaleString();
-        document.getElementById("qs-total-cost").textContent = `$${totalCost.toFixed(4)}`;
+        document.getElementById("qs-total-cost").textContent = `$${totalCost.toFixed(2)}`;
         document.getElementById("qs-copilot-calls").textContent = (cop.calls || 0).toLocaleString();
 
         // Value Unlocked + Phase Impact cards — replace hardcoded skill counts and spend
@@ -2652,7 +2652,7 @@
           chartEl.innerHTML = "";
           days.reverse().forEach(([day, v]) => {
             const p = (v.cost_usd / maxCost) * 100;
-            chartEl.innerHTML += `<div class="chart-bar"><span class="chart-label">${day.slice(5)}</span><div class="chart-bar-inner" style="width:${Math.max(p, 2)}%"></div><span class="chart-value">$${v.cost_usd.toFixed(4)} &middot; ${v.calls} calls</span></div>`;
+            chartEl.innerHTML += `<div class="chart-bar"><span class="chart-label">${day.slice(5)}</span><div class="chart-bar-inner" style="width:${Math.max(p, 2)}%"></div><span class="chart-value">$${v.cost_usd.toFixed(2)} &middot; ${v.calls} calls</span></div>`;
           });
         }
 
