@@ -743,8 +743,51 @@ def select_coding_route(query: str) -> CodingRouteDecision:
 
 
 # ---------------------------------------------------------------------------
-# Research synthesis route selection
+# Property / real-estate search route selection
 # ---------------------------------------------------------------------------
+
+_PROPERTY_SEARCH_PATTERNS = _re.compile(
+    r"\b(find|show|list|search|get|look\s+up)\b.{0,50}"
+    r"\b(home|homes|house|houses|property|properties|listing|listings|apartment|apartments|condo|condos|townhome|townhouse)\b"
+    r"|\b(home|homes|house|houses|property|properties|listing|listings|apartment|apartments|condo|condos|townhome)\b.{0,50}"
+    r"\b(find|available|for\s+sale|on\s+the\s+market|buy|purchase)\b"
+    r"|\b(homes?|houses?|properties|listings?)\s+(for\s+sale|in\s+\w+)\b"
+    r"|\b(zillow|redfin|trulia)\b"
+    r"|\breal[\s-]?estate\b.{0,40}\b(search|find|list|show|look)\b",
+    _re.IGNORECASE,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class PropertySearchRouteDecision:
+    """Routing decision for property / real-estate search queries."""
+
+    prefer_perplexity: bool
+    reason: str
+
+
+def select_property_search_route(query: str) -> PropertySearchRouteDecision:
+    """Decide whether a query should be fast-pathed to a direct property search.
+
+    Matches home/property search vocabulary.  When matched, callers should
+    route to ``generate_property_search_report`` which uses Perplexity/Serper
+    directly rather than spawning 5+ Gemini tool rounds.
+
+    Critically, this fast-path should run **even when recalled_context is
+    populated** so that saved user criteria (price range, location, taxes) are
+    incorporated into the Perplexity query via ``model_message``.
+    """
+    if _PROPERTY_SEARCH_PATTERNS.search(query or ""):
+        return PropertySearchRouteDecision(
+            prefer_perplexity=True,
+            reason="property/real-estate search → Perplexity direct (bypasses Gemini tool rounds)",
+        )
+    return PropertySearchRouteDecision(
+        prefer_perplexity=False,
+        reason="no property search pattern detected",
+    )
+
+
 
 @dataclass(frozen=True, slots=True)
 class ResearchSynthesisRouteDecision:

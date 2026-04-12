@@ -88,6 +88,7 @@ _DIRECT_RETURN_MARKERS: dict[str, list[str]] = {
     "generate_news_report": ["_via perplexity-direct_"],
     "generate_weather_report": ["_via perplexity-direct_"],
     "generate_finance_report": ["_via perplexity-direct_"],
+    "generate_property_search_report": ["_via perplexity-direct_"],
 }
 
 

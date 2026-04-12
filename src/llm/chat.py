@@ -571,6 +571,30 @@ async def chat_stream(
         metadata["context_mode"] = "followup-anchor"
         metadata["context_badge"] = "🧷 Follow-up anchor"
 
+    # Property search fast-path — fires even with recalled_context so saved criteria
+    # (price range, location, property taxes) are incorporated via model_message.
+    if model_preference == "auto":
+        try:
+            from model_routing_policy import select_property_search_route
+            prop_route = select_property_search_route(cleaned_user_message)
+            if prop_route.prefer_perplexity:
+                log.info("Property search fast-path matched: %s", prop_route.reason)
+                from skills.reporting_skills import generate_property_search_report
+                # Use model_message (includes recalled context) so saved preferences are searched
+                prop_reply = await asyncio.wait_for(
+                    generate_property_search_report(query=model_message or cleaned_user_message),
+                    timeout=45.0,
+                )
+                if prop_reply and not prop_reply.startswith("❌"):
+                    updated = history + [
+                        {"role": "user", "parts": [cleaned_user_message]},
+                        {"role": "model", "parts": [prop_reply]},
+                    ]
+                    yield prop_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
+                    return
+        except Exception as _prop_exc:
+            log.warning("Property search fast-path failed, falling through: %s", _prop_exc)
+
     # Phase 25: Perplexity fast-paths for real-time queries (mirrors chat() routing).
     # Only fires when routing is auto AND no recalled context (not mid-conversation).
     if model_preference == "auto" and not recalled_context:
@@ -1049,6 +1073,28 @@ async def chat(
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
         model_message = cleaned_user_message
+
+    # Property search fast-path — fires even with recalled_context so saved criteria
+    # (price range, location, property taxes) are incorporated via model_message.
+    if model_preference == "auto":
+        try:
+            from model_routing_policy import select_property_search_route
+            prop_route = select_property_search_route(cleaned_user_message)
+            if prop_route.prefer_perplexity:
+                log.info("Property search fast-path matched: %s", prop_route.reason)
+                from skills.reporting_skills import generate_property_search_report
+                prop_reply = await asyncio.wait_for(
+                    generate_property_search_report(query=model_message or cleaned_user_message),
+                    timeout=45.0,
+                )
+                if prop_reply and not prop_reply.startswith("❌"):
+                    updated = history + [
+                        {"role": "user", "parts": [cleaned_user_message]},
+                        {"role": "model", "parts": [prop_reply]},
+                    ]
+                    return prop_reply, updated, "perplexity-direct"
+        except Exception as _prop_exc:
+            log.warning("Property search fast-path failed, falling through: %s", _prop_exc)
 
     # Phase 12: Perplexity fast-path for real-time / current-events queries.
     # Only fires when routing is auto AND we have no recalled context (not mid-conversation),

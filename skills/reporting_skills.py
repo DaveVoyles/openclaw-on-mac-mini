@@ -319,6 +319,41 @@ async def generate_finance_report(*, query: str) -> str:
     return answer
 
 
+async def generate_property_search_report(*, query: str) -> str:
+    """Return real estate / property search results via Perplexity without Gemini synthesis.
+
+    Designed to bypass the Gemini tool-round chain for home/property search queries.
+    The ``query`` parameter should be ``model_message`` (which includes any recalled
+    user context such as price range, location preferences, and tax criteria) so that
+    saved preferences are incorporated into the search.
+
+    Designed to be returned directly (bypassing Gemini synthesis) when the
+    answer_policy detects the ``_via perplexity-direct_`` marker.
+    """
+    from skills.search_skills import search_web
+
+    now_utc = dt.datetime.now(dt.timezone.utc)
+    date_label = now_utc.strftime("%A, %B %-d, %Y")
+    provider_query = (
+        f"Today is {date_label}. "
+        f"Real estate search request: {query}. "
+        "Find specific current home listings or property information matching the stated criteria. "
+        "Include property addresses, asking prices, bedroom/bathroom counts, square footage, "
+        "and notable features where available. Include direct listing links (Zillow, Redfin, etc.) "
+        "when possible. Focus on real, currently-listed properties — not general market analysis. "
+        "End with a Sources section listing URLs."
+    )
+    try:
+        result = await asyncio.wait_for(
+            search_web(provider_query, num_results=10, provider="perplexity"),
+            timeout=45,
+        )
+    except (asyncio.TimeoutError, Exception) as exc:
+        log.warning("generate_property_search_report search failed: %s", exc)
+        return ""
+    return _normalize_direct_provider_answer(result, provider_label="perplexity-direct")
+
+
 async def generate_sports_scores_report(*, query: str) -> str:
     """Return historical sports game scores/results via Perplexity without LLM rewriting.
 
