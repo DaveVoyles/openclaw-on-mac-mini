@@ -31,8 +31,10 @@ log = logging.getLogger("openclaw.model_router")
 
 # Copilot proxy configuration
 # When COPILOT_PROXY_URL is set, OpenAI and Anthropic calls route through it
+# Both constants are also defined in llm/providers.py; callers still importing
+# from here are preserved for backward compat until fully migrated. # compat
 COPILOT_PROXY_URL = os.getenv("COPILOT_PROXY_URL", "")
-COPILOT_PROXY_ENABLED = COPILOT_PROXY_URL != ""
+COPILOT_PROXY_ENABLED = COPILOT_PROXY_URL != ""  # compat — also in llm.providers
 
 # Ollama health-check state (cached for 30 s)
 _OLLAMA_URL = _router_cfg.ollama_url
@@ -179,9 +181,14 @@ def classify_query(
 # ---------------------------------------------------------------------------
 # Alternative model backends (OpenAI, Anthropic)
 # ---------------------------------------------------------------------------
+# Alternative model backends (OpenAI, Anthropic)
+# NOTE: chat_openai / chat_openai_vision / chat_anthropic are also defined in
+# llm/providers.py.  Callers that still import from model_router are preserved
+# here as backward-compat shims until those sites are migrated. # compat
+# ---------------------------------------------------------------------------
 
 
-async def chat_openai(
+async def chat_openai(  # compat — also in llm.providers
     message: str,
     history: list[dict],
     system_prompt: str,
@@ -250,7 +257,7 @@ async def chat_openai(
         return None
 
 
-async def chat_openai_vision(
+async def chat_openai_vision(  # compat — also in llm.providers
     message: str,
     image_bytes: bytes,
     mime_type: str,
@@ -321,7 +328,7 @@ async def chat_openai_vision(
         return None
 
 
-async def chat_anthropic(
+async def chat_anthropic(  # compat — also in llm.providers
     message: str,
     history: list[dict],
     system_prompt: str,
