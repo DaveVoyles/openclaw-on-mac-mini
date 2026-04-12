@@ -9,6 +9,9 @@ from config import cfg
 
 _MINI_MODEL = _os.getenv("OPENAI_MINI_MODEL", "gpt-4o-mini")
 _MINI_TOKEN_THRESHOLD = int(_os.getenv("MINI_TOKEN_THRESHOLD", "25"))
+# Separate threshold used by copilot_model_for_message() — defaults higher (50 words)
+# so the helper is slightly more generous than the internal select_auto_route gate.
+MINI_MODEL_MAX_TOKENS = int(_os.getenv("MINI_MODEL_MAX_TOKENS", "50"))
 
 VALID_ROUTING_PROFILES = {
     "copilot-first",
@@ -170,7 +173,9 @@ def select_auto_route(
 ) -> AutoRouteDecision:
     profile = normalize_routing_profile(routing_profile)
 
-    # Fast-path: cheap mini-model for short queries (copilot-first profile only)
+    # Fast-path: cheap mini-model for short queries (copilot-first profile only).
+    # Coding queries are intentionally excluded so the full-capability model is
+    # used where quality matters most.
     token_count = len(text.split())  # rough word count as proxy
     if (
         token_count <= _MINI_TOKEN_THRESHOLD
@@ -178,6 +183,7 @@ def select_auto_route(
         and not recalled_context
         and copilot_available
         and profile == "copilot-first"
+        and not is_code
     ):
         return AutoRouteDecision("copilot", f"copilot mini-model fast-path (≤{_MINI_TOKEN_THRESHOLD} tokens)", profile)
 
@@ -674,15 +680,27 @@ async def classify_query_llm(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 class ModelRoute:
-    """Represents a model routing decision produced by :func:`classify_query`."""
+    """Represents a model routing decision produced by :func:`classify_query`.
 
-    __slots__ = ("model_type", "reason")
+    Attributes:
+        model_type: Provider key (``"copilot"``, ``"gemini"``, ``"ollama"``, …).
+        reason: Human-readable explanation of why this route was chosen.
+        model: Specific model identifier to request from the provider.  Empty
+            string means "use the provider default".  Set to ``OPENAI_MINI_MODEL``
+            on the mini-model fast-path so callers can forward the hint to the
+            provider without inspecting *reason*.
+    """
 
-    def __init__(self, model_type: str, reason: str) -> None:
+    __slots__ = ("model_type", "reason", "model")
+
+    def __init__(self, model_type: str, reason: str, model: str = "") -> None:
         self.model_type = model_type
         self.reason = reason
+        self.model = model
 
     def __repr__(self) -> str:
+        if self.model:
+            return f"ModelRoute({self.model_type!r}, {self.reason!r}, model={self.model!r})"
         return f"ModelRoute({self.model_type!r}, {self.reason!r})"
 
 
@@ -786,4 +804,53 @@ def classify_query(
         has_tools=needs_tools,
         recalled_context=recalled_context,
     )
-    return ModelRoute(decision.provider, decision.reason)
+    model_hint = _MINI_MODEL if "mini-model fast-path" in decision.reason else ""
+    return ModelRoute(decision.provider, decision.reason, model=model_hint)
+
+
+def copilot_model_for_message(message: str, profile: str) -> str:
+    """Return the specific Copilot model identifier to use for *message*.
+
+    Implements the mini-model fast-path: short, non-coding queries on the
+    ``"copilot-first"`` profile are sent to the cheap mini model
+    (``OPENAI_MINI_MODEL``, default ``"gpt-4o-mini"``) instead of the default
+    full-capability proxy model.  Vision queries are excluded implicitly because
+    image attachments are handled upstream before this helper is called.
+
+    Args:
+        message: The raw user message string.
+        profile: Routing profile name (e.g. ``"copilot-first"``).
+
+    Returns:
+        The model identifier string (e.g. ``"gpt-4o-mini"``) when the fast-path
+        applies, or an empty string to signal "use the provider default".
+
+    Examples:
+        Fast-path fires for a short, casual message on copilot-first profile::
+
+            >>> copilot_model_for_message("what time is it?", "copilot-first")
+            'gpt-4o-mini'
+
+        Fast-path is skipped for a coding query even when it is short::
+
+            >>> copilot_model_for_message("fix this python function", "copilot-first")
+            ''
+
+        Fast-path is skipped for non-copilot-first profiles::
+
+            >>> copilot_model_for_message("hello", "gemini-first")
+            ''
+    """
+    profile = normalize_routing_profile(profile)
+    if profile != "copilot-first":
+        return ""
+
+    token_count = len((message or "").split())
+    if token_count > MINI_MODEL_MAX_TOKENS:
+        return ""
+
+    # Exclude coding queries — a short code snippet deserves the full model.
+    if _CLASSIFY_CODE_PATTERN.search(message or ""):
+        return ""
+
+    return _MINI_MODEL
