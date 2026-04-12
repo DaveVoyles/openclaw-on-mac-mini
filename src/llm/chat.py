@@ -1134,7 +1134,7 @@ async def chat(
                     )
                     if result is not None:
                         reply, updated, model_label = result
-                        _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                        log.debug("Coding fast-path → Copilot (%s)", coding_route.reason)
                         return reply, updated, model_label
         except Exception as _rt_exc:
             log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
