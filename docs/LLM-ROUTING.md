@@ -1,0 +1,255 @@
+# OpenClaw — LLM Routing & Provider Architecture
+
+This document describes the simplified model-routing and provider-calling layer introduced in April 2026. Read it before touching anything in `src/llm/`, `src/model_router.py`, or `src/model_routing_policy.py`.
+
+---
+
+## 🤖 Agent Fleet Instructions
+
+The [Proposed Future Improvements](#proposed-future-improvements) section at the bottom of this doc is a **backlog for a fleet of agents**. An orchestrator agent should manage the fleet using the rules below.
+
+### How the fleet works
+
+1. **Orchestrator** reads the backlog table, checks the `Status` column, and dispatches available tasks to worker agents in parallel — respecting the dependency notes in each row.
+2. **Before starting a task**, a worker agent updates its row's `Status` to `🔄 In Progress — Agent <name>` so no other agent picks up the same task.
+3. **After completing a task**, the worker updates `Status` to `✅ Done`.
+4. **Orchestrator** verifies done tasks (lint + pytest) then dispatches the next wave.
+
+### Orchestrator prompt template
+
+> "You are orchestrating the LLM routing improvements backlog defined in `docs/LLM-ROUTING.md` in the OpenClaw repo at `/Users/davevoyles/openclaw`. Read the Proposed Future Improvements table. Dispatch all tasks whose Status is `⬜ Open` and whose dependencies are `✅ Done` as parallel background agents. Each agent must update the Status column in this file when it claims a task and again when it finishes. Run `ruff check` + `pytest` after each wave and fix any regressions before proceeding."
+
+### Worker agent rules
+
+- **Claim your task before writing any code** — update the Status cell in this file first.
+- Scope is strictly the files listed in the **Where** column. Do not touch others.
+- Run `cd /Users/davevoyles/openclaw/src && /Users/davevoyles/openclaw/.venv/bin/python -m py_compile <file>` to verify syntax before marking done.
+- If blocked, set Status to `🚫 Blocked — <reason>` and stop.
+
+---
+
+## Overview
+
+The LLM subsystem routes every user message to the best available provider — Gemini, Copilot proxy (GPT-4o / Claude), Ollama, or Perplexity — and then calls that provider's API. These two concerns (routing and calling) were previously tangled across four files. They are now cleanly separated.
+
+```
+User message
+     │
+     ▼
+src/llm/chat.py  ──  _resolve_non_gemini_reply()
+     │                       │
+     │              ┌────────┴────────────────────────┐
+     │              │         routing decision         │
+     │              │  src/model_router.py             │
+     │              │   classify_query()               │
+     │              │      └─ model_routing_policy.py  │
+     │              │           select_auto_route()    │
+     │              │           select_tool_route()    │
+     │              └─────────────────────────────────┘
+     │
+     ├── perplexity-direct  →  skills/reporting_skills.py
+     ├── copilot/openai/anthropic  →  src/llm/providers.py
+     ├── ollama  →  src/llm/tool_execution.py (_try_local_model)
+     └── gemini  →  src/llm/chat.py (_gemini_chat)
+```
+
+---
+
+## File Map
+
+| File | Responsibility | Lines |
+|------|---------------|-------|
+| `src/llm/providers.py` | **All non-Gemini HTTP calls.** `chat_openai`, `chat_anthropic`, `chat_openai_vision`, `call_provider()` unified dispatch | 259 |
+| `src/model_router.py` | **Backwards-compat shim only.** Re-exports `ModelRoute`, `classify_query`, `copilot_model_for_message`, `is_ollama_alive` from `model_routing_policy` and `chat_openai`, `chat_anthropic`, `chat_openai_vision`, `COPILOT_PROXY_*` from `llm/providers` | ~18 |
+| `src/model_routing_policy.py` | **Provider selection policy + query classification.** `select_auto_route()`, `select_tool_route()`, web-search/coding/sports fast-path selectors, `classify_query()`, `is_ollama_alive()`, `copilot_model_for_message()`, `ModelRoute` | ~698 |
+| `src/llm/chat.py` | **Orchestration.** `chat_stream()`, `chat()`, `chat_deep()`. Calls `_resolve_non_gemini_reply()` first; falls through to `_gemini_chat()` | 1236 |
+| `src/llm_client.py` | **Gemini SDK setup.** Model config, tool declarations, `quick_generate()` | 341 |
+
+---
+
+## Routing Flow
+
+### 1. Fast-path selection (before Gemini)
+
+`_resolve_non_gemini_reply()` in `chat.py` tries routes in priority order:
+
+```
+1. model_preference == "auto"
+   └── select_web_search_route(model_message)
+         prefer_search=True  →  generate_web_search_report()  [Perplexity]
+
+2. model_preference == "auto" and not recalled_context
+   └── COPILOT_PROXY_ENABLED and select_coding_route(query)
+         matches=True  →  _try_copilot_proxy_reply()  [Copilot]
+
+3. model_preference == "auto"
+   └── classify_query()  →  ModelRoute.model_type
+         "copilot"    →  _try_copilot_proxy_reply()
+         "ollama"     →  _try_local_model()
+         "openai"     →  providers.chat_openai()
+         "anthropic"  →  providers.chat_anthropic()
+
+4. model_preference in ("openai", "anthropic", "copilot")
+   └── Direct forced-provider call
+
+5. model_preference == "local"
+   └── _try_local_model() (Ollama/Gemma)
+
+6. None matched → returns None → caller falls through to Gemini
+```
+
+### 2. Routing policy profiles
+
+`select_auto_route()` in `model_routing_policy.py` honours the `routing_profile` setting:
+
+| Profile | Behaviour |
+|---------|-----------|
+| `copilot-first` *(default)* | Copilot proxy for all non-tool queries when available |
+| `balanced` | Code→Copilot, creative→OpenAI, analysis→Copilot, chat→Ollama |
+| `gemini-first` | Always Gemini, ignores other providers |
+| `cost-saver` | Ollama first, Copilot fallback, no paid API calls |
+
+Set via `ROUTING_PROFILE` env var or `cfg.routing_profile`.
+
+### 3. Provider selection for tools
+
+Tool-requiring queries always go to Gemini (native function calling). `select_tool_route()` picks the first available native-tool provider from: Gemini → Anthropic → OpenAI → Copilot → Ollama.
+
+---
+
+## The Provider Layer (`src/llm/providers.py`)
+
+This is the **single place** where non-Gemini HTTP calls happen. Add new providers here.
+
+### Key exports
+
+```python
+COPILOT_PROXY_URL: str        # env COPILOT_PROXY_URL
+COPILOT_PROXY_ENABLED: bool   # True when proxy URL is set
+
+async def chat_openai(message, history, system_prompt, *, model, temperature, max_tokens) -> str | None
+async def chat_anthropic(message, history, system_prompt, *, model, temperature, max_tokens) -> str | None
+async def chat_openai_vision(message, image_bytes, mime_type, *, model, temperature, max_tokens) -> str | None
+
+async def call_provider(provider, message, history, system_prompt, **kw) -> str | None
+# provider: "openai" | "anthropic" | "copilot"
+```
+
+### Copilot proxy routing
+
+When `COPILOT_PROXY_ENABLED`:
+- OpenAI calls route through the proxy URL with `COPILOT_PROXY_TOKEN`
+- Anthropic calls also route through the proxy (OpenAI-compatible format)
+- The proxy serves both GPT-4o and Claude models
+
+`model_router.py` re-exports all three functions for backwards compatibility — existing callers don't need to change import paths.
+
+---
+
+## Dataclasses
+
+### `RouteDecision` (unified)
+
+```python
+@dataclass(frozen=True, slots=True)
+class RouteDecision:
+    provider: str   # "gemini" | "copilot" | "openai" | "anthropic" | "ollama"
+    reason: str     # human-readable explanation for logs
+```
+
+Returned by: `select_auto_route()`, `select_tool_route()`, `select_reflection_route()`, `select_summarization_route()`, `select_multimodal_route()`.
+
+### Specialised route decisions (kept separate — different fields)
+
+```python
+WebSearchRouteDecision(prefer_search: bool, reason: str)
+CodingRouteDecision(matches: bool, reason: str)
+SportsRouteDecision(prefer_perplexity: bool, tool_name: str, reason: str)
+```
+
+---
+
+## Adding a New Provider
+
+1. Add the HTTP caller to `src/llm/providers.py`:
+   ```python
+   async def chat_newprovider(message, history, system_prompt, *, model="", ...) -> str | None:
+       ...
+   ```
+
+2. Add a branch to `call_provider()` in the same file:
+   ```python
+   if provider == "newprovider":
+       return await chat_newprovider(...)
+   ```
+
+3. Register availability in `select_auto_route()` in `model_routing_policy.py`:
+   ```python
+   newprovider_available = bool(os.getenv("NEWPROVIDER_API_KEY") or copilot_available)
+   ```
+
+4. Add routing logic in `classify_query()` in `model_router.py` if it needs its own `ModelRoute` type, or just let it flow through `call_provider()`.
+
+5. Add a `ProviderCapabilities`-style guard in `select_tool_route()` if the provider supports native tools.
+
+---
+
+## History / What Changed (April 2026)
+
+Before this refactoring the LLM layer had two problems:
+
+**Problem 1 — Wrong module responsibility.**
+`chat_openai`, `chat_anthropic`, and `chat_openai_vision` (actual HTTP callers) lived inside `model_router.py` (a routing module). They were imported via scattered local `from model_router import chat_openai` calls in 7 different files.
+
+**Problem 2 — Duplicated dispatch logic.**
+`chat_stream()` and `chat()` each contained five identical routing blocks (~165 lines each). Any change had to be made twice.
+
+**What was done:**
+
+| Change | Before | After |
+|--------|--------|-------|
+| Provider HTTP callers | In `model_router.py` | In `src/llm/providers.py` |
+| `model_router.py` size | 384 lines | 222 lines |
+| Routing blocks in `chat_stream` + `chat` | 10 blocks (5×2, duplicated) | 1 shared `_resolve_non_gemini_reply()` |
+| `llm/chat.py` size | 1366 lines | 1236 lines |
+| `*RouteDecision` dataclasses | 6 identical-field classes | 1 `RouteDecision` + 3 specialised |
+| `model_routing_policy.py` size | 551 lines | 481 lines |
+
+Additionally, `build_provider_capability_registry()` and `_prefer_specialized_non_tool_route()` (both only called from `select_auto_route()`) were inlined, removing two unnecessary function hops.
+
+---
+
+## Proposed Future Improvements
+
+> **Fleet instructions are at the top of this document.** Orchestrator: dispatch open tasks in parallel waves. Workers: claim a task by updating its Status cell before writing any code.
+
+| # | Task | Impact | Where | Depends On | Status |
+|---|------|--------|-------|------------|--------|
+| 1 | **Streaming support** — add `chat_openai_stream()` / `chat_anthropic_stream()` to unlock true token streaming for non-Gemini providers; wire into `_try_copilot_proxy_reply()` | High | `src/llm/providers.py`, `src/llm/chat.py` | — | ⬜ Open |
+| 2 | **Merge `model_router.py` → `model_routing_policy.py`** — router is now 3 functions + stubs; merging removes a file and one import hop; stubs become re-exports in `__init__.py` | Medium | `src/model_router.py`, `src/model_routing_policy.py`, `src/llm/__init__.py` | — | ✅ Done |
+| 3 | **Route `quick_generate()` through `call_provider()`** — `llm_client.py` has its own inline Copilot fast-path duplicating `providers.py` logic | Medium | `src/llm_client.py` | — | ✅ Done |
+| 4 | **LLM-based intent detection** — replace ~150 lines of hand-crafted regex in `classify_query()` + `select_coding_route()` + `select_web_search_route()` with `quick_generate("needs live web data? yes/no")` calls; ~200ms latency cost, better accuracy | High | `src/model_router.py`, `src/model_routing_policy.py` | 3 | ✅ Done |
+| 5 | **Expose routing reason in Discord** — surface `RouteDecision.reason` as a footer in verbose mode (e.g. `_Routed via: Copilot — coding query_`) | Low | `src/ask_orchestrator.py` or `src/bot.py` | — | ✅ Done |
+| 6 | **Circuit breaker for non-Gemini providers** — Gemini has `_gemini_circuit` via `tool_health.py`; add a `_provider_circuit` dict keyed by provider name inside `providers.py` to fast-fail after repeated failures | Medium | `src/llm/providers.py` | — | ✅ Done |
+| 7 | **Retry with exponential backoff** — add `_call_with_retry(coro, *, retries=2, base_delay=1.0)` wrapper in `providers.py`; handles HTTP 429/502/503 transparently; reduces unnecessary Gemini fallbacks | Medium | `src/llm/providers.py` | 6 | ✅ Done |
+| 8 | **Standardise token recording** — `providers.py` only calls `spending_tracker.record_copilot()` for proxy calls; parse `usage` block from all API responses and record for direct OpenAI/Anthropic calls too | Low | `src/llm/providers.py` | — | ✅ Done |
+| 9 | **Route `context.py` summarization through `call_provider()`** — `src/llm/context.py` line 353 still has stray `from model_router import chat_openai`; replace with `call_provider("copilot", ...)` | Low | `src/llm/context.py` | — | ✅ Done |
+| 10 | **Dynamic Copilot proxy health-check** — `COPILOT_PROXY_ENABLED` is set once at import; add a startup ping (like `is_ollama_alive()`) that sets `_proxy_reachable` flag; check it in `call_provider()` to fast-fail when proxy URL is set but unreachable | Medium | `src/llm/providers.py` | 6 | ✅ Done |
+| 11 | **Route `summarize_conversation()` through `call_provider()`** — `llm/chat.py` line 1188 imports `COPILOT_PROXY_ENABLED` + `chat_openai` from `model_router` inline; replace with `call_provider("copilot", ...)` | Low | `src/llm/chat.py` | — | ✅ Done |
+| 12 | **Remove `_router_sessions` from `model_router.py`** — `SessionManager` was kept after provider functions moved out; `is_ollama_alive()` only needs a lightweight aiohttp session; removes the `http_session` import entirely | Low | `src/model_router.py` | 2 | ✅ Done |
+
+| 13 | **`ProviderResponse` envelope** — wrap `call_provider()` return in a typed `ProviderResponse(text, provider, model, latency_ms, input_tokens, output_tokens)` dataclass instead of bare `str \| None`; removes implicit None checks, enables telemetry | High | `src/llm/providers.py` | — | 🔄 In Progress — r13-provider-resp |
+| 14 | **Routing telemetry / audit log** — after each `call_provider()` call, append a JSON line to `data/routing_audit.jsonl` with timestamp, query_hash, provider, model, latency_ms, token counts; expose aggregated summary at `/metrics` | Medium | `src/llm/providers.py`, `src/discord_web.py` | 13 | ⬜ Open |
+| 15 | **Flash / mini-model fast-path** — in `select_auto_route()`, if query is ≤ 25 tokens, no tools needed, and no recalled_context, route to `gpt-4o-mini` (set via `OPENAI_MINI_MODEL` env var) to cut cost on trivial questions | Medium | `src/model_routing_policy.py`, `src/llm/providers.py` | — | ⬜ Open |
+| 16 | **Startup capability scan** — on bot boot, run parallel lightweight pings to Copilot proxy, Ollama, and check API key presence for OpenAI/Anthropic; log a one-line summary `Providers available: copilot=✓ ollama=✓ openai=✗` so misconfig is surfaced immediately | Medium | `src/llm/providers.py`, `src/bot.py` | 10 | ⬜ Open |
+| 17 | **Consolidate `COPILOT_PROXY_ENABLED` into `providers.py`** — 15 files currently do `from model_router import COPILOT_PROXY_ENABLED`; move the constant (and its env-var logic) to `providers.py`; `model_router.py` re-exports it for compat | Medium | `src/llm/providers.py`, `src/model_router.py`, all 15 import sites | 2 | ⬜ Open |
+| 18 | **Provider failover chain** — add a configurable `PROVIDER_FALLBACK_CHAIN` env var (default `copilot,ollama,gemini`); if the primary provider returns `None`, `call_provider()` walks the chain automatically before the caller falls through to Gemini | High | `src/llm/providers.py` | 6, 7 | ⬜ Open |
+
+### Suggested dispatch waves
+
+```
+Wave 1 (no deps — all parallel):  #1, #2, #3, #5, #6, #8, #9, #11, #13, #15
+Wave 2 (after wave 1):            #7 (needs #6), #10 (needs #6), #4 (needs #3),
+                                  #14 (needs #13), #16 (needs #10)
+Wave 3 (after wave 2):            #12 (needs #2), #17 (needs #2), #18 (needs #6, #7)
+```
