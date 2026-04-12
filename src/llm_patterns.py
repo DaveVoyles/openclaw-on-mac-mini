@@ -96,7 +96,7 @@ _VAGUE_RESPONSE_RE = re.compile(
 )
 
 _FACTUAL_QUESTION_RE = re.compile(
-    r"^(who|what|when|where|how|is|are|was|were|did|does|do|will|has|have)\b",
+    r"^(who|what|when|where|how|is|are|was|were|did|does|do|can|could|will|has|have)\b",
     re.IGNORECASE,
 )
 
