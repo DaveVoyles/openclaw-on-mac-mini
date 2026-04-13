@@ -166,6 +166,7 @@
       </div>
 
       <div class="toc">
+        <a href="#openclaw">&#9654; OpenClaw</a>
         <a href="#iterm2">&#9654; iTerm2</a>
         <a href="#tmux">&#9654; tmux</a>
         <a href="#history">&#9654; Shell history (atuin)</a>
@@ -174,10 +175,98 @@
         <a href="#http-tools">&#9654; HTTP &amp; YAML (xh / yq)</a>
         <a href="#git">&#9654; Git (delta)</a>
         <a href="#docker">&#9654; Docker</a>
-        <a href="#openclaw">&#9654; OpenClaw</a>
         <a href="#system">&#9654; System utilities</a>
         <a href="#ai">&#9654; Ollama / AI</a>
         <a href="#workflows">&#9654; Common workflows</a>
+      </div>
+
+
+      <!-- OpenClaw CLI reference -->
+      <h2 id="openclaw">&#129408; OpenClaw <span class="badge badge-both">&#10003; both</span></h2>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Commands &amp; shortcuts</h3>
+          <table>
+            <tr><td><code>OpenClaw</code></td><td class="muted">Interactive launcher — starts terminal chat (capital O, no arguments)</td></tr>
+            <tr><td><code>openclaw "prompt"</code></td><td class="muted">One-shot mode — ask a single question and return to the shell</td></tr>
+            <tr><td><code>openclaw analyze --cwd . @README.md "summarize the repo"</code></td><td class="muted">Work against a directory or explicit file targets with a resumable session</td></tr>
+            <tr><td><code>openclaw research "topic"</code></td><td class="muted">Run the built-in research agent and save a report into the session outputs</td></tr>
+            <tr><td><code>openclaw write --title "Draft" "task"</code></td><td class="muted">Draft markdown content and save it as a session output or explicit file</td></tr>
+            <tr><td><code>openclaw watch --cwd . --on-change --iterations 5 "watch for regressions"</code></td><td class="muted">Run a bounded automation loop with saved checkpoints and resume support</td></tr>
+            <tr><td><code>openclaw exec -- git status</code></td><td class="muted">Run a tracked shell command with risk-aware approval prompts for higher-risk actions</td></tr>
+            <tr><td><code>openclaw exec --plan-id &lt;id&gt; -- make test</code></td><td class="muted">Tag the command to a plan; <code>--task-id &lt;id&gt;</code> also accepted</td></tr>
+            <tr><td><code>openclaw edit notes.md --content "# Title"</code></td><td class="muted">Preview or apply a text edit with unified diff output</td></tr>
+            <tr><td><code>openclaw edit notes.md --plan-id &lt;id&gt; --task-id &lt;id&gt;</code></td><td class="muted">Edit with plan/task linkage recorded in the session</td></tr>
+            <tr><td><code>openclaw session list</code></td><td class="muted">List recent autonomous CLI sessions</td></tr>
+            <tr><td><code>openclaw session show &lt;session-id&gt;</code></td><td class="muted">Print full session metadata: plan/task linkage, tracked files, automation state, watch checkpoint and retry history</td></tr>
+            <tr><td><code>openclaw plan list</code></td><td class="muted">List agent-loop plans (add <code>--status all|in-progress|completed|interrupted</code> to filter)</td></tr>
+            <tr><td><code>openclaw plan create "goal"</code></td><td class="muted">Create a new plan and print its <code>plan_id</code> (requires full install)</td></tr>
+            <tr><td><code>openclaw plan resume &lt;plan_id&gt;</code></td><td class="muted">Resume an interrupted plan from its next pending step</td></tr>
+            <tr><td><code>openclaw plan cancel &lt;plan_id&gt;</code></td><td class="muted">Cancel an active plan safely (marks interrupted; resumable later)</td></tr>
+            <tr><td><code>openclaw --version</code></td><td class="muted">Verify the packaged launcher is installed and on PATH</td></tr>
+            <tr><td><code>openclaw --health</code></td><td class="muted">Quick reachability check with summarized diagnostics; add <code>--json</code> for the raw payload</td></tr>
+            <tr><td><code>openclaw auth login</code></td><td class="muted">Store a CLI token for future use (macOS Keychain on Mac, local credential file elsewhere)</td></tr>
+            <tr><td><code>openclaw auth status</code></td><td class="muted">Show which token source the CLI will currently use</td></tr>
+            <tr><td><code>openclaw auth logout</code></td><td class="muted">Remove persisted CLI credentials</td></tr>
+            <tr><td><code>OPENCLAW_TOKEN=... openclaw "prompt"</code></td><td class="muted">Manual auth path for Linux, Windows, WSL, or any shell without macOS Keychain</td></tr>
+            <tr><td><code>oc-health</code></td><td class="muted">Curl /health endpoint — pretty-printed JSON</td></tr>
+            <tr><td><code>oc-ask "prompt"</code></td><td class="muted">Compatibility shortcut for <code>openclaw ask</code></td></tr>
+            <tr><td><code>oc-chat</code></td><td class="muted">Compatibility shortcut for <code>openclaw chat</code></td></tr>
+            <tr><td><code>oc-logs</code></td><td class="muted">Last 50 lines + follow</td></tr>
+            <tr><td><code>oc-restart</code></td><td class="muted">Rebuild &amp; restart compose stack</td></tr>
+            <tr><td><code>oc-dash</code></td><td class="muted">Open dashboard in browser</td></tr>
+            <tr><td><code>curl … | bash -s -- --skip-verify</code></td><td class="muted">Install without the post-install <code>openclaw --health</code> smoke check</td></tr>
+            <tr><td><code>curl -fsSL http://192.168.1.93:8765/install-remote | bash</code></td><td class="muted">Fix MacBook SSH trust + install CLI in one step</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <h3>Hybrid REPL &mdash; in-session slash commands</h3>
+          <p class="muted" style="margin-bottom:0.6rem">Available inside <code>OpenClaw</code> / <code>openclaw chat</code>. Natural-language prompts and slash commands coexist; slash commands are handled locally before the LLM sees the input, high-confidence freeform action prompts can auto-route into the matching slash handler, routed extraction is smarter about quoted/fenced shell commands plus append/replace-style edit requests, and high-confidence ordered prompts can decompose into linked plans that auto-run step-by-step with inline progress.</p>
+          <table>
+            <tr><td><code>/help</code></td><td class="muted">Print the full in-REPL command reference</td></tr>
+            <tr><td><code>/clear</code></td><td class="muted">Reset current conversation history (session stays active)</td></tr>
+            <tr><td><code>/quit</code></td><td class="muted">Exit the REPL and return to the shell</td></tr>
+            <tr><td><code>/autoroute [on|off]</code></td><td class="muted">Show or toggle whether high-confidence freeform prompts auto-route to in-REPL actions</td></tr>
+            <tr><td><code>/session</code></td><td class="muted">Show compact session summary: ID, plan/task linkage, file count, automation state</td></tr>
+            <tr><td><code>/context</code></td><td class="muted">Show active cwd, tracked files, linked plan/task IDs, and a bounded preview of the grounding for the next analyze/write/research-style action</td></tr>
+            <tr><td><code>/outputs</code></td><td class="muted">List saved session outputs with 1-based indices</td></tr>
+            <tr><td><code>/outputs &lt;index&gt;</code> / <code>/outputs &lt;filename&gt;</code></td><td class="muted">Preview a saved artifact inline by index or filename</td></tr>
+            <tr><td><code>/rollback last</code></td><td class="muted">Restore the newest routed safety checkpoint when auto-rollback is available (currently text file edits only)</td></tr>
+            <tr><td><code>/events [n]</code></td><td class="muted">Show recent session events, including structured route records for auto-routed prompts</td></tr>
+            <tr><td><code>/plan [&lt;id&gt;|unlink]</code></td><td class="muted">Show, link, or unlink a plan; reports confirmed vs. validation-unavailable when local validation sources are missing</td></tr>
+            <tr><td><code>/task [&lt;id&gt;|unlink]</code></td><td class="muted">Show, link, or unlink a task; reports confirmed vs. validation-unavailable when local validation sources are missing</td></tr>
+            <tr><td><code>/analyze &lt;goal&gt;</code></td><td class="muted">Run a workspace-aware analysis using the current session context</td></tr>
+            <tr><td><code>/research &lt;query&gt;</code></td><td class="muted">Run the research agent; report is saved into the session outputs</td></tr>
+            <tr><td><code>/write &lt;task&gt;</code></td><td class="muted">Generate a markdown document and save it as a session artifact</td></tr>
+            <tr><td><code>/exec [--] &lt;command&gt;</code></td><td class="muted">Run a shell command with risk-aware approval prompts and session tracking</td></tr>
+            <tr><td><code>/edit &lt;path&gt; [--content TEXT] [--append TEXT]</code></td><td class="muted">Inspect or write a file; shows a unified diff before applying</td></tr>
+          </table>
+          <ul class="muted" style="margin-top:0.7rem;margin-bottom:0;padding-left:1.1rem;line-height:1.8;font-size:0.82rem">
+            <li><code>/outputs</code> lists saved session artifacts (1-based index); <code>/outputs 1</code> or <code>/outputs recap.md</code> previews one inline.</li>
+            <li><code>/context</code> shows a bounded preview of the exact grounding the next <code>/analyze</code>, <code>/write</code>, or <code>/research</code> action will inherit.</li>
+            <li><strong>Auto-routing:</strong> high-confidence single-action prompts jump straight into the matching slash handler — OpenClaw prints a short route announcement. Quoted/fenced shell snippets route into <code>/exec</code>; explicit append/replace wording routes into <code>/edit</code> when the file target is clear.</li>
+            <li><strong>Plan decomposition:</strong> ordered multi-action prompts can become a linked plan attached to the session, run step-by-step with <code>[step/total]</code> progress. Linked plan/task/step grounding also sharpens route selection (e.g. "step 2" resolves against the active plan).</li>
+            <li>Ambiguous prompts — or missing grounding — stay in normal chat. Use <code>/autoroute off</code> / <code>/autoroute on</code> to toggle per session.</li>
+            <li><strong>Safety:</strong> high/critical <code>/exec</code> and <code>/edit</code> steps still require approval. <code>/rollback last</code> restores the newest routed edit checkpoint (text files only; exec checkpoints are manual-recovery). Only the newest 5 checkpoints are kept.</li>
+            <li><code>/events</code> records each routed turn as a structured session event.</li>
+            <li><code>/plan</code> and <code>/task</code> link immediately and report whether local validation confirmed the target.</li>
+          </ul>
+        </div>
+        <div class="card" style="grid-column: 1 / -1">
+          <h3>Common workflows</h3>
+          <table>
+            <tr><td>Deploy update</td><td class="muted"><code>cdopen &rarr; gp &rarr; oc-restart &rarr; oc-logs</code></td></tr>
+            <tr><td>Check health</td><td class="muted"><code>oc-health</code> or <code>http GET http://192.168.1.93:8765/health</code></td></tr>
+            <tr><td>Start interactive CLI</td><td class="muted"><code>OpenClaw</code></td></tr>
+            <tr><td>Ask from terminal</td><td class="muted"><code>openclaw "summarize the latest alerts"</code></td></tr>
+            <tr><td>Resume prior work</td><td class="muted"><code>openclaw session resume &lt;session-id&gt;</code> or <code>openclaw watch --resume &lt;session-id&gt;</code></td></tr>
+            <tr><td>Browse terminal-agent history</td><td class="muted">Dashboard → <strong>Terminal Agent Sessions</strong>; click a session to expand plan/task linkage, recent progress, and the <strong>Watch Insights</strong> panel (checkpoint timeline + retry history)</td></tr>
+            <tr><td>Shell support boundary</td><td class="muted"><code>bash</code> and <code>zsh</code> are auto-configured; fish or other shells should source the generated alias script manually</td></tr>
+            <tr><td>Remote laptop setup</td><td class="muted"><code>curl -fsSL http://192.168.1.93:8765/install-remote | bash</code></td></tr>
+            <tr><td>Tail logs</td><td class="muted"><code>oc-logs</code> — or use <code>lzd</code> for full TUI</td></tr>
+          </table>
+        </div>
       </div>
 
       <!-- iTerm2 -->
@@ -390,95 +479,6 @@
           </table>
         </div>
       </div>
-
-      <!-- OpenClaw CLI reference -->
-      <h2 id="openclaw">&#129408; OpenClaw <span class="badge badge-both">&#10003; both</span></h2>
-
-      <div class="grid">
-        <div class="card">
-          <h3>Commands &amp; shortcuts</h3>
-          <table>
-            <tr><td><code>OpenClaw</code></td><td class="muted">Interactive launcher — starts terminal chat (capital O, no arguments)</td></tr>
-            <tr><td><code>openclaw "prompt"</code></td><td class="muted">One-shot mode — ask a single question and return to the shell</td></tr>
-            <tr><td><code>openclaw analyze --cwd . @README.md "summarize the repo"</code></td><td class="muted">Work against a directory or explicit file targets with a resumable session</td></tr>
-            <tr><td><code>openclaw research "topic"</code></td><td class="muted">Run the built-in research agent and save a report into the session outputs</td></tr>
-            <tr><td><code>openclaw write --title "Draft" "task"</code></td><td class="muted">Draft markdown content and save it as a session output or explicit file</td></tr>
-            <tr><td><code>openclaw watch --cwd . --on-change --iterations 5 "watch for regressions"</code></td><td class="muted">Run a bounded automation loop with saved checkpoints and resume support</td></tr>
-            <tr><td><code>openclaw exec -- git status</code></td><td class="muted">Run a tracked shell command with risk-aware approval prompts for higher-risk actions</td></tr>
-            <tr><td><code>openclaw exec --plan-id &lt;id&gt; -- make test</code></td><td class="muted">Tag the command to a plan; <code>--task-id &lt;id&gt;</code> also accepted</td></tr>
-            <tr><td><code>openclaw edit notes.md --content "# Title"</code></td><td class="muted">Preview or apply a text edit with unified diff output</td></tr>
-            <tr><td><code>openclaw edit notes.md --plan-id &lt;id&gt; --task-id &lt;id&gt;</code></td><td class="muted">Edit with plan/task linkage recorded in the session</td></tr>
-            <tr><td><code>openclaw session list</code></td><td class="muted">List recent autonomous CLI sessions</td></tr>
-            <tr><td><code>openclaw session show &lt;session-id&gt;</code></td><td class="muted">Print full session metadata: plan/task linkage, tracked files, automation state, watch checkpoint and retry history</td></tr>
-            <tr><td><code>openclaw plan list</code></td><td class="muted">List agent-loop plans (add <code>--status all|in-progress|completed|interrupted</code> to filter)</td></tr>
-            <tr><td><code>openclaw plan create "goal"</code></td><td class="muted">Create a new plan and print its <code>plan_id</code> (requires full install)</td></tr>
-            <tr><td><code>openclaw plan resume &lt;plan_id&gt;</code></td><td class="muted">Resume an interrupted plan from its next pending step</td></tr>
-            <tr><td><code>openclaw plan cancel &lt;plan_id&gt;</code></td><td class="muted">Cancel an active plan safely (marks interrupted; resumable later)</td></tr>
-            <tr><td><code>openclaw --version</code></td><td class="muted">Verify the packaged launcher is installed and on PATH</td></tr>
-            <tr><td><code>openclaw --health</code></td><td class="muted">Quick reachability check with summarized diagnostics; add <code>--json</code> for the raw payload</td></tr>
-            <tr><td><code>openclaw auth login</code></td><td class="muted">Store a CLI token for future use (macOS Keychain on Mac, local credential file elsewhere)</td></tr>
-            <tr><td><code>openclaw auth status</code></td><td class="muted">Show which token source the CLI will currently use</td></tr>
-            <tr><td><code>openclaw auth logout</code></td><td class="muted">Remove persisted CLI credentials</td></tr>
-            <tr><td><code>OPENCLAW_TOKEN=... openclaw "prompt"</code></td><td class="muted">Manual auth path for Linux, Windows, WSL, or any shell without macOS Keychain</td></tr>
-            <tr><td><code>oc-health</code></td><td class="muted">Curl /health endpoint — pretty-printed JSON</td></tr>
-            <tr><td><code>oc-ask "prompt"</code></td><td class="muted">Compatibility shortcut for <code>openclaw ask</code></td></tr>
-            <tr><td><code>oc-chat</code></td><td class="muted">Compatibility shortcut for <code>openclaw chat</code></td></tr>
-            <tr><td><code>oc-logs</code></td><td class="muted">Last 50 lines + follow</td></tr>
-            <tr><td><code>oc-restart</code></td><td class="muted">Rebuild &amp; restart compose stack</td></tr>
-            <tr><td><code>oc-dash</code></td><td class="muted">Open dashboard in browser</td></tr>
-            <tr><td><code>curl … | bash -s -- --skip-verify</code></td><td class="muted">Install without the post-install <code>openclaw --health</code> smoke check</td></tr>
-            <tr><td><code>curl -fsSL http://192.168.1.93:8765/install-remote | bash</code></td><td class="muted">Fix MacBook SSH trust + install CLI in one step</td></tr>
-          </table>
-        </div>
-        <div class="card">
-          <h3>Hybrid REPL &mdash; in-session slash commands</h3>
-          <p class="muted" style="margin-bottom:0.6rem">Available inside <code>OpenClaw</code> / <code>openclaw chat</code>. Natural-language prompts and slash commands coexist; slash commands are handled locally before the LLM sees the input, high-confidence freeform action prompts can auto-route into the matching slash handler, routed extraction is smarter about quoted/fenced shell commands plus append/replace-style edit requests, and high-confidence ordered prompts can decompose into linked plans that auto-run step-by-step with inline progress.</p>
-          <table>
-            <tr><td><code>/help</code></td><td class="muted">Print the full in-REPL command reference</td></tr>
-            <tr><td><code>/clear</code></td><td class="muted">Reset current conversation history (session stays active)</td></tr>
-            <tr><td><code>/quit</code></td><td class="muted">Exit the REPL and return to the shell</td></tr>
-            <tr><td><code>/autoroute [on|off]</code></td><td class="muted">Show or toggle whether high-confidence freeform prompts auto-route to in-REPL actions</td></tr>
-            <tr><td><code>/session</code></td><td class="muted">Show compact session summary: ID, plan/task linkage, file count, automation state</td></tr>
-            <tr><td><code>/context</code></td><td class="muted">Show active cwd, tracked files, linked plan/task IDs, and a bounded preview of the grounding for the next analyze/write/research-style action</td></tr>
-            <tr><td><code>/outputs</code></td><td class="muted">List saved session outputs with 1-based indices</td></tr>
-            <tr><td><code>/outputs &lt;index&gt;</code> / <code>/outputs &lt;filename&gt;</code></td><td class="muted">Preview a saved artifact inline by index or filename</td></tr>
-            <tr><td><code>/rollback last</code></td><td class="muted">Restore the newest routed safety checkpoint when auto-rollback is available (currently text file edits only)</td></tr>
-            <tr><td><code>/events [n]</code></td><td class="muted">Show recent session events, including structured route records for auto-routed prompts</td></tr>
-            <tr><td><code>/plan [&lt;id&gt;|unlink]</code></td><td class="muted">Show, link, or unlink a plan; reports confirmed vs. validation-unavailable when local validation sources are missing</td></tr>
-            <tr><td><code>/task [&lt;id&gt;|unlink]</code></td><td class="muted">Show, link, or unlink a task; reports confirmed vs. validation-unavailable when local validation sources are missing</td></tr>
-            <tr><td><code>/analyze &lt;goal&gt;</code></td><td class="muted">Run a workspace-aware analysis using the current session context</td></tr>
-            <tr><td><code>/research &lt;query&gt;</code></td><td class="muted">Run the research agent; report is saved into the session outputs</td></tr>
-            <tr><td><code>/write &lt;task&gt;</code></td><td class="muted">Generate a markdown document and save it as a session artifact</td></tr>
-            <tr><td><code>/exec [--] &lt;command&gt;</code></td><td class="muted">Run a shell command with risk-aware approval prompts and session tracking</td></tr>
-            <tr><td><code>/edit &lt;path&gt; [--content TEXT] [--append TEXT]</code></td><td class="muted">Inspect or write a file; shows a unified diff before applying</td></tr>
-          </table>
-          <ul class="muted" style="margin-top:0.7rem;margin-bottom:0;padding-left:1.1rem;line-height:1.8;font-size:0.82rem">
-            <li><code>/outputs</code> lists saved session artifacts (1-based index); <code>/outputs 1</code> or <code>/outputs recap.md</code> previews one inline.</li>
-            <li><code>/context</code> shows a bounded preview of the exact grounding the next <code>/analyze</code>, <code>/write</code>, or <code>/research</code> action will inherit.</li>
-            <li><strong>Auto-routing:</strong> high-confidence single-action prompts jump straight into the matching slash handler — OpenClaw prints a short route announcement. Quoted/fenced shell snippets route into <code>/exec</code>; explicit append/replace wording routes into <code>/edit</code> when the file target is clear.</li>
-            <li><strong>Plan decomposition:</strong> ordered multi-action prompts can become a linked plan attached to the session, run step-by-step with <code>[step/total]</code> progress. Linked plan/task/step grounding also sharpens route selection (e.g. "step 2" resolves against the active plan).</li>
-            <li>Ambiguous prompts — or missing grounding — stay in normal chat. Use <code>/autoroute off</code> / <code>/autoroute on</code> to toggle per session.</li>
-            <li><strong>Safety:</strong> high/critical <code>/exec</code> and <code>/edit</code> steps still require approval. <code>/rollback last</code> restores the newest routed edit checkpoint (text files only; exec checkpoints are manual-recovery). Only the newest 5 checkpoints are kept.</li>
-            <li><code>/events</code> records each routed turn as a structured session event.</li>
-            <li><code>/plan</code> and <code>/task</code> link immediately and report whether local validation confirmed the target.</li>
-          </ul>
-        </div>
-        <div class="card" style="grid-column: 1 / -1">
-          <h3>Common workflows</h3>
-          <table>
-            <tr><td>Deploy update</td><td class="muted"><code>cdopen &rarr; gp &rarr; oc-restart &rarr; oc-logs</code></td></tr>
-            <tr><td>Check health</td><td class="muted"><code>oc-health</code> or <code>http GET http://192.168.1.93:8765/health</code></td></tr>
-            <tr><td>Start interactive CLI</td><td class="muted"><code>OpenClaw</code></td></tr>
-            <tr><td>Ask from terminal</td><td class="muted"><code>openclaw "summarize the latest alerts"</code></td></tr>
-            <tr><td>Resume prior work</td><td class="muted"><code>openclaw session resume &lt;session-id&gt;</code> or <code>openclaw watch --resume &lt;session-id&gt;</code></td></tr>
-            <tr><td>Browse terminal-agent history</td><td class="muted">Dashboard → <strong>Terminal Agent Sessions</strong>; click a session to expand plan/task linkage, recent progress, and the <strong>Watch Insights</strong> panel (checkpoint timeline + retry history)</td></tr>
-            <tr><td>Shell support boundary</td><td class="muted"><code>bash</code> and <code>zsh</code> are auto-configured; fish or other shells should source the generated alias script manually</td></tr>
-            <tr><td>Remote laptop setup</td><td class="muted"><code>curl -fsSL http://192.168.1.93:8765/install-remote | bash</code></td></tr>
-            <tr><td>Tail logs</td><td class="muted"><code>oc-logs</code> — or use <code>lzd</code> for full TUI</td></tr>
-          </table>
-        </div>
-      </div>
-
       <!-- System -->
       <h2 id="system">&#128296; System Utilities <span class="badge badge-both">&#10003; both</span></h2>
       <div class="grid">
