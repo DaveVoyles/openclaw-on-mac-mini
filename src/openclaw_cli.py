@@ -4451,6 +4451,17 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_update(ctx: ChatCommandContext) -> str:  # noqa: ARG001
+    """/update — self-upgrade openclaw via pip without leaving the REPL."""
+    import argparse as _argparse
+    handle_update_command(_argparse.Namespace())
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print("[dim]Restart openclaw to use the new version.[/]")
+    else:
+        print("Restart openclaw to use the new version.")
+    return _CMD_CONTINUE
+
+
 def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
@@ -4474,6 +4485,13 @@ def build_chat_command_registry() -> ChatCommandRegistry:
             description="Exit the CLI",
             handler=_cmd_quit,
             aliases=("exit",),
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="update",
+            description="Self-upgrade openclaw via pip",
+            handler=_cmd_update,
         )
     )
     registry.register(
@@ -4590,6 +4608,7 @@ def print_chat_help() -> None:
         ("/help",                          "Show this help"),
         ("/clear",                         "Reset the current conversation history"),
         ("/quit",                          "Exit the CLI"),
+        ("/update",                        "Self-upgrade openclaw via pip"),
         ("/session",                       "Show current session summary"),
         ("/context",                       "Show effective session grounding preview"),
         ("/cwd [path]",                    "Show or switch the session working directory"),
