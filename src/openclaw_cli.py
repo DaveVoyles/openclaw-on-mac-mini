@@ -664,76 +664,34 @@ def _standalone_install_dir() -> str | None:
     return None
 
 
-def _update_standalone_install(
-    install_dir: str,
-    pip_cmd: list[str],
-    *,
-    latest: str,
-    current: str,
-    output_json: bool = False,
-) -> int:
-    """Update a standalone install by downloading the wheel and extracting files.
+def _update_standalone_install(install_dir: str, *, current: str) -> int:
+    """Show a helpful sync message for standalone (bash-shim) installs.
 
-    Uses ``pip download --no-deps`` which fetches the wheel without installing
-    it — not blocked by PEP 668 on externally-managed environments.
+    Standalone installs are not distributed via PyPI — the CLI files live in
+    ~/.local/share/openclaw-cli/ and are synced directly from the source repo.
+    The PyPI 'openclaw' package is the cmdop SDK wrapper and does not contain
+    the CLI files.
     """
-    import tempfile
-    import zipfile as _zipfile
-
-    if _RICH_AVAILABLE and _IS_TTY and not output_json:
-        _RICH_CONSOLE.print(
-            f"[bold cyan]🦞 Updating openclaw[/]  "
-            f"[dim]{current}[/] [dim]→[/] [bold green]{latest}[/]"
-            f"  [dim](standalone install)[/]"
+    if _RICH_AVAILABLE and _IS_TTY:
+        body = _RichText()
+        body.append("This is a standalone install", style="bold")
+        body.append(" — CLI files are not distributed via PyPI.\n\n", style="dim")
+        body.append("To update, sync from your development machine:\n", style="dim")
+        body.append(
+            "  scp openclaw_cli.py macbook:~/.local/share/openclaw-cli/\n",
+            style="bold cyan",
         )
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        dl_cmd = pip_cmd + [
-            "download", "--no-deps", "--dest", tmpdir,
-            f"openclaw=={latest}",
-        ]
-        dl_result = subprocess.run(dl_cmd, capture_output=True)
-        if dl_result.returncode != 0:
-            err = dl_result.stderr.decode(errors="replace")
-            if _RICH_AVAILABLE and _IS_TTY and not output_json:
-                _RICH_ERR.print(f"[bold red]✗ download failed:[/] {err}")
-            else:
-                print(f"✗ download failed: {err}", file=sys.stderr)
-            return 1
-
-        wheels = sorted(Path(tmpdir).glob("*.whl"))
-        if not wheels:
-            if _RICH_AVAILABLE and _IS_TTY and not output_json:
-                _RICH_ERR.print("[bold red]✗[/] no wheel found in download")
-            else:
-                print("✗ no wheel found in download", file=sys.stderr)
-            return 1
-
-        updated: list[str] = []
-        with _zipfile.ZipFile(wheels[0]) as whl:
-            for entry in whl.namelist():
-                basename = Path(entry).name
-                dest = Path(install_dir) / basename
-                if dest.exists() and basename.endswith(".py"):
-                    with whl.open(entry) as src:
-                        dest.write_bytes(src.read())
-                    updated.append(basename)
-
-        if not updated:
-            if _RICH_AVAILABLE and _IS_TTY and not output_json:
-                _RICH_ERR.print("[yellow]⚠[/] no matching files found in wheel")
-            else:
-                print("⚠ no matching files found in wheel", file=sys.stderr)
-            return 1
-
-        if _RICH_AVAILABLE and _IS_TTY and not output_json:
-            _RICH_CONSOLE.print(
-                f"[bold green]✓ Done[/]  —  openclaw [dim]{current}[/] → [bold green]{latest}[/]  "
-                f"[dim]({', '.join(updated)} updated in-place)[/]"
-            )
-        else:
-            print(f"✓ Done — openclaw {current} → {latest}  ({', '.join(updated)} updated)")
-        return 0
+        body.append("\nOr run ", style="dim")
+        body.append("openclaw update", style="bold cyan")
+        body.append(" from the Mac Mini after pulling the latest changes.", style="dim")
+        _RICH_CONSOLE.print(_RichPanel(body, title="[yellow]⬆  standalone update[/]", border_style="yellow", padding=(0, 1)))
+    else:
+        print(
+            "Standalone install — files are not on PyPI.\n"
+            "Sync from your dev machine:\n"
+            "  scp openclaw_cli.py macbook:~/.local/share/openclaw-cli/"
+        )
+    return 0
 
 
 def handle_update_command(_args: argparse.Namespace) -> int:
@@ -759,19 +717,12 @@ def handle_update_command(_args: argparse.Namespace) -> int:
     # Instead, download the wheel and extract files directly into the install dir.
     install_dir = _standalone_install_dir()
     if install_dir:
-        return _update_standalone_install(
-            install_dir, pip_cmd, latest=latest, current=current
-        )
+        return _update_standalone_install(install_dir, current=current)
 
     # Standard pip install path (venv or user site-packages).
     in_venv = sys.prefix != sys.base_prefix
     user_flag = [] if in_venv else ["--user"]
     install_cmd = pip_cmd + ["install", "--upgrade"] + user_flag
-
-    current = cli_version()
-    # Fetch latest from PyPI before running pip so we can display it reliably
-    # after the install (importlib.metadata is cached for the running process).
-    latest = _fetch_latest_pypi_version() or "latest"
 
     if _RICH_AVAILABLE and _IS_TTY:
         _RICH_CONSOLE.print(
