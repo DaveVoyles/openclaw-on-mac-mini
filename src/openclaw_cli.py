@@ -465,20 +465,95 @@ def _fetch_latest_pypi_version(timeout: float = 3.0) -> str | None:
         return None
 
 
+def _find_pip() -> list[str] | None:
+    """Return the first usable pip invocation, or None if pip is unavailable.
+
+    Tries ``sys.executable -m pip`` first so that the same virtual-environment
+    that is running openclaw is used for the upgrade, then falls back to the
+    common ``pip``/``pip3`` shims on PATH.
+    """
+    candidates: list[list[str]] = [
+        [sys.executable, "-m", "pip"],   # same venv/interpreter as running process
+        ["pip3"],
+        ["pip"],
+        ["python3", "-m", "pip"],
+        ["python", "-m", "pip"],
+    ]
+    for cmd in candidates:
+        try:
+            result = subprocess.run(
+                cmd + ["--version"],
+                capture_output=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                return cmd
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+    return None
+
+
 def _print_update_notice(current: str, latest: str) -> None:
     """Print a styled update-available notice."""
     if _RICH_AVAILABLE and _IS_TTY:
         _RICH_CONSOLE.print(
             f"[bold yellow]⬆  Update available:[/] openclaw [dim]{current}[/]"
             f" → [bold green]{latest}[/]"
-            f"  [dim]Run:[/] [cyan]pip install --upgrade openclaw[/]"
+            f"  [dim]Run:[/] [cyan]openclaw update[/]"
         )
     else:
         print(
             f"⬆  Update available: openclaw {current} → {latest}"
-            f"  |  pip install --upgrade openclaw",
+            f"  |  openclaw update",
             file=sys.stderr,
         )
+
+
+def handle_update_command(_args: argparse.Namespace) -> int:
+    """Self-update openclaw via pip."""
+    pip_cmd = _find_pip()
+    if pip_cmd is None:
+        msg = (
+            "Could not find pip, pip3, or 'python -m pip'.\n"
+            "Install pip first:  https://pip.pypa.io/en/stable/installation/\n"
+            "Then run:  pip install --upgrade openclaw"
+        )
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_ERR.print(f"[bold red]error:[/] {msg}")
+        else:
+            print(f"error: {msg}", file=sys.stderr)
+        return 1
+
+    current = cli_version()
+    # Fetch latest from PyPI before running pip so we can display it reliably
+    # after the install (importlib.metadata is cached for the running process).
+    latest = _fetch_latest_pypi_version() or "latest"
+    pip_display = " ".join(pip_cmd)
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(
+            f"[bold cyan]🦞 Updating openclaw[/] [dim](current: {current})[/]\n"
+            f"[dim]Running:[/] [cyan]{pip_display} install --upgrade openclaw[/]\n"
+        )
+    else:
+        print(f"Updating openclaw (current: {current})...")
+
+    result = subprocess.run(pip_cmd + ["install", "--upgrade", "openclaw"])
+
+    if result.returncode == 0:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(
+                f"\n[bold green]✓ openclaw updated[/] [dim]{current}[/] → [bold green]{latest}[/]"
+            )
+        else:
+            print(f"\n✓ openclaw updated {current} → {latest}")
+    else:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_ERR.print("\n[bold red]✗ Update failed.[/] Check the output above.")
+        else:
+            print("\n✗ Update failed. Check the output above.", file=sys.stderr)
+
+    return result.returncode
 
 
 def check_for_update(*, timeout: float = 3.0) -> None:
@@ -5092,6 +5167,7 @@ def build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("--yes", action="store_true", help="Auto-approve high-risk edits")
     edit_parser.add_argument("--plan-id", help="Optional related plan identifier")
     edit_parser.add_argument("--task-id", help="Optional related task identifier")
+    subparsers.add_parser("update", help="Upgrade openclaw to the latest version from PyPI")
     return parser
 
 
@@ -5111,11 +5187,17 @@ def main(argv: list[str] | None = None) -> int:
         "watch",
         "exec",
         "edit",
+        "update",
     }
 
-    # Start update check in background so it doesn't block startup.
-    _update_thread = threading.Thread(target=check_for_update, daemon=True)
-    _update_thread.start()
+    # Skip background update check when the user is explicitly running `openclaw update`.
+    _skip_update_check = bool(raw_argv and raw_argv[0] == "update")
+    if not _skip_update_check:
+        # Start update check in background so it doesn't block startup.
+        _update_thread: threading.Thread | None = threading.Thread(target=check_for_update, daemon=True)
+        _update_thread.start()
+    else:
+        _update_thread = None
 
     if raw_argv and raw_argv[0] not in known_commands and not raw_argv[0].startswith("-"):
         raw_argv = ["ask", *raw_argv]
@@ -5125,14 +5207,16 @@ def main(argv: list[str] | None = None) -> int:
 
     # Wait for the update check to finish (at most ~3 s) so the notice prints
     # before any command output.
-    _update_thread.join(timeout=3.5)
+    if _update_thread is not None:
+        _update_thread.join(timeout=3.5)
 
     try:
         if command == "auth":
             return handle_auth_command(args)
         if command == "session":
             return handle_session_command(args)
-
+        if command == "update":
+            return handle_update_command(args)
         config = build_config(args)
         if command in {"ask", "chat"} and config.session_id:
             require_session(config.session_id)
