@@ -22,7 +22,7 @@ concurrency:
 jobs:
   trivy-docker:
     name: Trivy - Docker Image Scan
-    runs-on: [self-hosted, macOS, ARM64, openclaw]
+    runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
