@@ -19,11 +19,13 @@ from ._helpers import (  # noqa: F401 — re-exported for backward compat
     require_auth,
     truncate_for_embed,
 )
+from .admin import _register_admin_commands
 from .agent import _register_agent_commands
 from .code import _register_code_commands
 from .comms import _register_comms_commands
 from .context_menus import _register_context_menus
 from .conversation import _register_conversation_commands
+from .feedback import _register_feedback_commands
 from .media import _register_media_commands
 from .monitoring import _register_monitoring_commands
 from .patreon import _register_patreon_commands
@@ -46,6 +48,7 @@ def register_commands(bot: commands.Bot) -> None:  # noqa: C901 — large but fl
 
     _register_utility_commands(bot)
     _register_conversation_commands(bot)
+    _register_admin_commands(bot)
     _register_system_commands(bot)
     _register_schedule_commands(bot)
     _register_skills_commands(bot)
@@ -57,6 +60,7 @@ def register_commands(bot: commands.Bot) -> None:  # noqa: C901 — large but fl
     _register_monitoring_commands(bot)
     _register_patreon_commands(bot)
     _register_providers_commands(bot)
+    _register_feedback_commands(bot)
     _register_uptime_kuma_commands(bot)
     _register_context_menus(bot)
 

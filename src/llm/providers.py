@@ -11,7 +11,10 @@ import logging
 import os
 import random
 import time as _time
-from typing import AsyncGenerator, Optional
+from typing import TYPE_CHECKING, AsyncGenerator, Optional
+
+if TYPE_CHECKING:
+    from llm.provider_plugin import ProviderPlugin
 
 import aiohttp
 
@@ -73,13 +76,44 @@ _last_usage: dict = {"input_tokens": 0, "output_tokens": 0, "retry_count": 0}
 # Cumulative token counts for this process lifetime; updated by call_provider().
 _cumulative_tokens: dict[str, int] = {"input": 0, "output": 0}
 _tokens_by_provider: dict[str, dict[str, int]] = {}  # provider -> {"input": N, "output": N}
+_tokens_by_skill: dict[str, dict[str, int]] = {}  # {"search_web": {"input": N, "output": N}}
+
+# Plugin registry: third-party providers registered at runtime
+_plugin_registry: dict[str, "ProviderPlugin"] = {}
+
+
+def register_provider_plugin(name: str, plugin: "ProviderPlugin") -> None:
+    """Register a third-party provider plugin.
+
+    The plugin is consulted by ``call_provider()`` when ``provider=name``
+    and ``name`` is not one of the built-in providers.
+    """
+    from llm.provider_plugin import ProviderPlugin as _PP  # noqa: PLC0415
+    if not isinstance(plugin, _PP):
+        raise TypeError(f"Plugin {plugin!r} does not implement ProviderPlugin protocol")
+    _plugin_registry[name] = plugin
+
+
+def get_registered_providers() -> list[str]:
+    """Return names of all registered third-party providers."""
+    return list(_plugin_registry)
+
+
+def record_skill_tokens(skill_name: str, input_tokens: int, output_tokens: int) -> None:
+    """Record token usage attributed to a named skill. Thread-safe via GIL."""
+    if not skill_name:
+        return
+    entry = _tokens_by_skill.setdefault(skill_name, {"input": 0, "output": 0})
+    entry["input"] += input_tokens
+    entry["output"] += output_tokens
 
 
 def token_usage_summary() -> dict:
-    """Return cumulative token usage: totals + per-provider breakdown."""
+    """Return cumulative token usage: totals + per-provider + per-skill breakdown."""
     return {
         "total": dict(_cumulative_tokens),
         "by_provider": {p: dict(v) for p, v in _tokens_by_provider.items()},
+        "by_skill": {k: dict(v) for k, v in _tokens_by_skill.items()},
     }
 
 
@@ -91,6 +125,7 @@ def reset_token_usage(provider: str | None = None) -> None:
     else:
         _cumulative_tokens.update({"input": 0, "output": 0})
         _tokens_by_provider.clear()
+        _tokens_by_skill.clear()
 
 # ---------------------------------------------------------------------------
 # Proxy health check
@@ -131,6 +166,15 @@ def proxy_is_healthy() -> bool:
 
 _PROXY_HEALTH_INTERVAL = float(os.getenv("PROXY_HEALTH_INTERVAL", "60.0"))
 _health_task: asyncio.Task | None = None
+_DEV_MODE: bool = os.getenv("DEV_MODE", "").lower() in ("1", "true", "yes")
+
+_QUALITY_CHECK: bool = os.getenv("QUALITY_CHECK", "").lower() in ("1", "true", "yes")
+_QUALITY_CHECK_PROMPT = (
+    "You are a quality checker. Answer only YES or NO.\n"
+    "Is the following a complete, helpful, and non-empty response to a user question? "
+    "Answer YES if it looks like a real answer. Answer NO if it is empty, says 'I don't know' "
+    "without explanation, or is clearly truncated.\n\nResponse to check:\n"
+)
 
 
 async def _proxy_health_loop() -> None:
@@ -713,6 +757,19 @@ async def _call_one(
     return None
 
 
+async def _check_response_quality(text: str) -> bool:
+    """Returns True if the response passes quality check, False if it should be retried."""
+    if not _QUALITY_CHECK or not text or len(text.strip()) < 10:
+        return True  # skip check for very short responses (let them through)
+    try:
+        # Import lazily to avoid circular imports
+        from llm_client import quick_generate  # noqa: PLC0415
+        verdict = await quick_generate(_QUALITY_CHECK_PROMPT + text[:500])
+        return verdict is None or "NO" not in verdict.upper()
+    except Exception:  # noqa: BLE001
+        return True  # on error, assume quality is OK
+
+
 async def call_provider(
     provider: str,
     message: str,
@@ -728,6 +785,16 @@ async def call_provider(
     Always returns a :class:`ProviderResponse`; ``resp.text`` is ``None`` when
     every provider in the chain failed (circuit open, API error, unknown, etc.).
     """
+    if _DEV_MODE:
+        _stub_text = f"[DEV MODE — stub response]\nProvider: {provider}\nMessage preview: {str(message)[:80]}"
+        return ProviderResponse(
+            text=_stub_text,
+            provider=provider,
+            model="dev-stub",
+            latency_ms=0.0,
+            input_tokens=0,
+            output_tokens=0,
+        )
     seen: set[str] = set()
     chain: list[str] = []
     for p in [provider] + PROVIDER_FALLBACK_CHAIN:
@@ -737,6 +804,18 @@ async def call_provider(
 
     for i, p in enumerate(chain):
         resp = await _call_one(p, message, history, system_prompt, model=model, temperature=temperature, max_tokens=max_tokens)
+        # Optional quality self-check
+        if _QUALITY_CHECK and resp is not None and resp.text:
+            if not await _check_response_quality(resp.text):
+                log.warning(
+                    "Quality check failed for provider=%s model=%s — response will trigger fallback",
+                    resp.provider, resp.model,
+                )
+                resp = ProviderResponse(
+                    text=None, provider=resp.provider, model=resp.model,
+                    latency_ms=resp.latency_ms, input_tokens=resp.input_tokens,
+                    output_tokens=resp.output_tokens,
+                )
         if resp is not None and resp.text is not None:
             if i > 0:
                 log.warning("call_provider: %s failed, using fallback provider %s", provider, p)
@@ -748,6 +827,24 @@ async def call_provider(
             return resp
         if i == 0 and len(chain) > 1:
             log.warning("call_provider: %s returned None, trying fallback chain", provider)
+
+    # Check plugin registry for unknown providers
+    if provider in _plugin_registry:
+        try:
+            _plugin_text = await _plugin_registry[provider].call(
+                message, history, system_prompt,
+                model=model, temperature=temperature, max_tokens=max_tokens,
+            )
+            return ProviderResponse(
+                text=_plugin_text,
+                provider=provider,
+                model=f"{provider}-plugin",
+                latency_ms=0.0,
+                input_tokens=0,
+                output_tokens=0,
+            )
+        except Exception as _exc:  # noqa: BLE001
+            log.warning("Plugin provider %s raised: %s", provider, _exc)
 
     return ProviderResponse(text=None, provider=provider, model=model, latency_ms=0.0)
 
@@ -968,6 +1065,9 @@ async def call_provider_stream(
     """
     if _is_open(provider):
         log.debug("Circuit open for %s — skipping stream", provider)
+        return
+    if _DEV_MODE:
+        yield f"[DEV MODE — stub stream]\nProvider: {provider}"
         return
     try:
         if provider in ("openai", "copilot"):

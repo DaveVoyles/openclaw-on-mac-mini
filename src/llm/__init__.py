@@ -76,6 +76,8 @@ _LAZY_EXPORTS: dict[str, str] = {
     "analyze_document": "llm.response",
     "analyze_image": "llm.response",
     "analyze_image_with_tools": "llm.response",
+    # from llm.providers
+    "record_skill_tokens": "llm.providers",
     # from llm.tool_execution
     "_chat_ollama": "llm.tool_execution",
     "_get_ollama_session": "llm.tool_execution",

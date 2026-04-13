@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 import re
@@ -350,7 +351,7 @@ async def handle_message(
                 )
 
             # Set up streaming placeholder when PROVIDER_STREAM=1.
-            from bot import PROVIDER_STREAM, make_discord_stream_handler
+            from bot import PROVIDER_STREAM, make_discord_stream_handler, _collect_feedback
             _on_partial, _get_placeholder = (
                 make_discord_stream_handler(flow_channel) if PROVIDER_STREAM else (None, lambda: None)
             )
@@ -452,20 +453,39 @@ async def handle_message(
         )
         chunks = _split_response(response_text)
 
+        _last_sent_msg: discord.Message | None = None
         try:
             for chunk in chunks:
                 embed = discord.Embed(description=chunk, color=discord.Color.purple())
-                await flow_channel.send(embed=embed)
+                _last_sent_msg = await flow_channel.send(embed=embed)
             if table_image_file:
-                await flow_channel.send(file=table_image_file)
+                _last_sent_msg = await flow_channel.send(file=table_image_file)
         except Exception as exc:
             log.warning("Failed to send default ask response in flow channel: %s", exc)
             if flow_channel is not message.channel:
                 for chunk in chunks:
                     embed = discord.Embed(description=chunk, color=discord.Color.purple())
-                    await message.channel.send(embed=embed)
+                    _last_sent_msg = await message.channel.send(embed=embed)
                 if table_image_file:
-                    await message.channel.send(file=table_image_file)
+                    _last_sent_msg = await message.channel.send(file=table_image_file)
+
+        if _last_sent_msg is not None:
+            try:
+                import hashlib as _hashlib
+                _qhash = _hashlib.sha256(user_question.encode()).hexdigest()[:16]
+                _result_meta = getattr(locals().get("result"), "final_meta", {}) or {}
+                _provider = str(_result_meta.get("provider", ""))
+                _skills: list[str] = list(_result_meta.get("skills_invoked", []))
+                _model = getattr(locals().get("result"), "model_used", "")
+                asyncio.ensure_future(_collect_feedback(
+                    bot_message=_last_sent_msg,
+                    query_hash=_qhash,
+                    model=_model,
+                    provider=_provider,
+                    skills=_skills,
+                ))
+            except Exception:
+                pass
 
     audit_action = "thread_followup" if original_bot_owned_thread else "ask_default"
     audit_log(message.author, audit_action, detail=user_question[:200])
