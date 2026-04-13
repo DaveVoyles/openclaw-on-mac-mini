@@ -13,6 +13,7 @@ import shlex
 import socket
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -440,6 +441,56 @@ def cli_version() -> str:
         return metadata.version("openclaw")
     except metadata.PackageNotFoundError:
         return DEFAULT_VERSION
+
+
+def _version_tuple(v: str) -> tuple[int, ...]:
+    """Convert a version string like '2026.3.20' or '0.6.0' to a comparable tuple."""
+    try:
+        return tuple(int(x) for x in v.split("."))
+    except Exception:
+        return (0,)
+
+
+def _fetch_latest_pypi_version(timeout: float = 3.0) -> str | None:
+    """Return the latest openclaw version from PyPI, or None on any error."""
+    try:
+        req = request.Request(
+            "https://pypi.org/pypi/openclaw/json",
+            headers={"Accept": "application/json"},
+        )
+        with request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read())
+            return str(data["info"]["version"])
+    except Exception:
+        return None
+
+
+def _print_update_notice(current: str, latest: str) -> None:
+    """Print a styled update-available notice."""
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(
+            f"[bold yellow]⬆  Update available:[/] openclaw [dim]{current}[/]"
+            f" → [bold green]{latest}[/]"
+            f"  [dim]Run:[/] [cyan]pip install --upgrade openclaw[/]"
+        )
+    else:
+        print(
+            f"⬆  Update available: openclaw {current} → {latest}"
+            f"  |  pip install --upgrade openclaw",
+            file=sys.stderr,
+        )
+
+
+def check_for_update(*, timeout: float = 3.0) -> None:
+    """Check PyPI for a newer openclaw release and print a notice if found.
+
+    Runs synchronously but with a short network timeout so startup is not
+    significantly delayed.  All errors are silently swallowed.
+    """
+    current = cli_version()
+    latest = _fetch_latest_pypi_version(timeout=timeout)
+    if latest and _version_tuple(latest) > _version_tuple(current):
+        _print_update_notice(current, latest)
 
 
 def build_headers(*, token: str, client_name: str) -> dict[str, str]:
@@ -5061,11 +5112,20 @@ def main(argv: list[str] | None = None) -> int:
         "exec",
         "edit",
     }
+
+    # Start update check in background so it doesn't block startup.
+    _update_thread = threading.Thread(target=check_for_update, daemon=True)
+    _update_thread.start()
+
     if raw_argv and raw_argv[0] not in known_commands and not raw_argv[0].startswith("-"):
         raw_argv = ["ask", *raw_argv]
     parser = build_parser()
     args = parser.parse_args(raw_argv)
     command = "health" if getattr(args, "health", False) else args.command or "chat"
+
+    # Wait for the update check to finish (at most ~3 s) so the notice prints
+    # before any command output.
+    _update_thread.join(timeout=3.5)
 
     try:
         if command == "auth":
