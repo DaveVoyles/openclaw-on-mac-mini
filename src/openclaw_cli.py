@@ -2482,19 +2482,40 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
     Returns (cleaned_body, sources) where sources may be None.
 
     Steps:
-      A. Strip trailing ``_via model-name_`` trailer added by some proxied models.
-      B. Extract the Sources section (if present) so it can be rendered separately.
-      C. Strip inline [N] citation markers.
-      D. Unwrap fenced code blocks that contain only pipe-in-bullet table rows.
-      E. Convert pipe-in-bullet table patterns to proper markdown tables.
+      A. Strip recovery note blocks (before anything else so they don't interfere).
+      B. Strip trailing ``_via model-name_`` trailer added by some proxied models.
+      C. Extract the Sources section (if present) so it can be rendered separately.
+      D. Strip inline [N] citation markers.
+      E. Unwrap fenced code blocks that contain only pipe-in-bullet table rows.
+      F. Convert pipe-in-bullet table patterns to proper markdown tables.
     """
-    # A. Strip _via model_ trailer at the very end of the response
-    text = re.sub(r"\n_via [^\n]+_\s*$", "", text.rstrip())
+    # A. Strip server-appended recovery note blocks — do this FIRST before any other
+    # manipulation so the block is always present in text regardless of ordering.
+    # Matches both \n\n and \n before the blockquote opener, and captures until
+    # the blockquote section ends (no more > lines).
+    text = re.sub(
+        r"\n{1,2}> ℹ️ \*\*Recovery note:\*\*\n(?:> [^\n]*\n?)*",
+        "",
+        text,
+    )
+    # Also strip bare-text recovery note blocks (no blockquote markers) in case
+    # the model emits the recovery note without > prefix after some processing.
+    text = re.sub(
+        r"\n{1,2}ℹ️ \*?\*?Recovery note\*?\*?:?[^\n]*\n(?:[^\n]*\n?){0,6}",
+        "",
+        text,
+    )
 
-    # B. Extract Sources / **Sources** block at the end
+    # B. Strip _via model_ trailer — search broadly near the end (last 3 lines)
+    # rather than only at EOF so it's caught even when other trailers follow it.
+    text = re.sub(r"\n_via [^\n]+_[ \t]*(?=\n|$)", "", text)
+    text = text.rstrip()
+
+    # C. Extract Sources / **Sources** block at the end.
+    # Accept either one or two blank lines before the heading.
     sources: str | None = None
     sources_match = re.search(
-        r"\n\n(?:\*\*Sources\*\*|Sources)\s*\n((?:[-\*] .+\n?)+)",
+        r"\n{1,2}(?:\*\*Sources\*\*|Sources)\s*\n((?:[-\*] .+\n?)+)",
         text,
         re.IGNORECASE,
     )
@@ -2502,24 +2523,16 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
         sources = sources_match.group(0).strip()
         text = text[: sources_match.start()].rstrip()
 
-    # C. Strip bare inline citation markers like [1], [2], [12]
+    # D. Strip bare inline citation markers like [1], [2], [12]
     # Guard against stripping markdown link text like [text](url) — only remove
     # patterns where the bracket content is purely digits and not followed by (
     text = re.sub(r"\[(\d{1,2})\](?!\()", "", text)
 
-    # D. Unwrap fenced code blocks that are really pipe-in-bullet tables
+    # E. Unwrap fenced code blocks that are really pipe-in-bullet tables
     text = _unwrap_code_block_tables(text)
 
-    # E. Convert pipe-in-bullet table patterns to real markdown tables
+    # F. Convert pipe-in-bullet table patterns to real markdown tables
     text = _convert_bullet_tables(text)
-
-    # F. Strip server-appended recovery note blocks — these are useful in chat
-    # embeds but add noise in the terminal since they're rendered as blockquotes.
-    text = re.sub(
-        r"\n\n> ℹ️ \*\*Recovery note:\*\*\n(?:> [^\n]*\n?)*",
-        "",
-        text,
-    ).rstrip()
 
     return text, sources
 
