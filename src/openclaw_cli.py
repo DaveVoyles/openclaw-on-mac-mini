@@ -3553,7 +3553,7 @@ def _require_session_or_warn(ctx: ChatCommandContext) -> "SessionSummary | None"
         return None
     session = load_session(ctx.session_id)
     if session is None:
-        print(f"Session '{ctx.session_id}' not found.")
+        _print_error(f"session '{ctx.session_id}' not found")
         _set_command_result(ctx, ok=False, summary=f"session '{ctx.session_id}' not found")
         return None
     return session
@@ -3895,7 +3895,7 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
     try:
         n = int(ctx.args.strip()) if ctx.args.strip() else 5
     except ValueError:
-        print("Usage: /events [n]")
+        _print_error("Usage: /events [n]")
         return _CMD_CONTINUE
     events = load_events(ctx.session_id, limit=n)
     if not events:
@@ -3952,7 +3952,7 @@ def _cmd_autoroute(ctx: ChatCommandContext) -> str:
             print(f"Auto-route: {'ON' if current else 'OFF'} (high-confidence prompts only)")
         return _CMD_CONTINUE
     if raw not in {"on", "off"}:
-        print("Usage: /autoroute [on|off]")
+        _print_error("Usage: /autoroute [on|off]")
         return _CMD_CONTINUE
     enabled = raw == "on"
     update_session(ctx.session_id, repl_auto_route=enabled)
@@ -4044,7 +4044,7 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
 def _cmd_rollback(ctx: ChatCommandContext) -> str:
     """/rollback last — restore the latest routed-action checkpoint when possible."""
     if ctx.args.strip().lower() != "last":
-        print("Usage: /rollback last")
+        _print_error("Usage: /rollback last")
         _set_command_result(ctx, ok=False, summary="invalid rollback selector")
         return _CMD_CONTINUE
     session = _require_session_or_warn(ctx)
@@ -4123,7 +4123,7 @@ def _cmd_analyze(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     goal = ctx.args.strip()
     if not goal:
-        print("Usage: /analyze <goal>")
+        _print_error("Usage: /analyze <goal>")
         _set_command_result(ctx, ok=False, summary="missing analysis goal")
         return _CMD_CONTINUE
     session = _require_session_or_warn(ctx)
@@ -4166,13 +4166,13 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
     """/research <query> — run the research agent using the current session context."""
     query = ctx.args.strip()
     if not query:
-        print("Usage: /research <query>")
+        _print_error("Usage: /research <query>")
         _set_command_result(ctx, ok=False, summary="missing research query")
         return _CMD_CONTINUE
     try:
         from research_agent import ResearchAgent  # type: ignore[import]
     except ImportError:
-        print(missing_feature_hint("openclaw research"))
+        _print_error(missing_feature_hint("openclaw research"))
         _set_command_result(ctx, ok=False, summary="research agent unavailable")
         return _CMD_CONTINUE
     session = _require_session_or_warn(ctx)
@@ -4215,7 +4215,7 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
         metadata={"summary": f"saved research to {output_target}"},
     )
     print(report)
-    print(f"\nsaved: {output_target}")
+    _print_meta_footer(("saved", output_target))
     _set_command_result(ctx, ok=True, summary=f"saved research to {output_target}")
     return _CMD_CONTINUE
 
@@ -4227,7 +4227,7 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     task_text = ctx.args.strip()
     if not task_text:
-        print("Usage: /write <task>")
+        _print_error("Usage: /write <task>")
         _set_command_result(ctx, ok=False, summary="missing writing task")
         return _CMD_CONTINUE
     session = _require_session_or_warn(ctx)
@@ -4258,7 +4258,7 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
         response.response,
     )
     print(response.response)
-    print(f"\nsaved: {output_target}")
+    _print_meta_footer(("saved", output_target))
     ctx.history[:] = load_conversation_history(session.session_id)
     _set_command_result(ctx, ok=True, summary=f"saved draft to {output_target}")
     return _CMD_CONTINUE
@@ -4270,7 +4270,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
     if raw.startswith("-- "):
         raw = raw[3:]
     if not raw:
-        print("Usage: /exec [--] <command>")
+        _print_error("Usage: /exec [--] <command>")
         _set_command_result(ctx, ok=False, summary="missing shell command")
         return _CMD_CONTINUE
     session = _require_session_or_warn(ctx)
@@ -4283,7 +4283,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     if not command_parts:
-        print("Usage: /exec [--] <command>")
+        _print_error("Usage: /exec [--] <command>")
         _set_command_result(ctx, ok=False, summary="missing shell command")
         return _CMD_CONTINUE
     risk_level = infer_command_risk(command_parts)
@@ -4297,7 +4297,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         plan_id=session.plan_id,
         task_id=session.task_id,
     ):
-        print("Shell command not approved.")
+        _print_error("shell command not approved")
         _set_command_result(ctx, ok=False, summary="shell command not approved")
         return _CMD_CONTINUE
     if not _capture_routed_action_checkpoint(
@@ -4338,7 +4338,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
     """/edit <path> [--content <text> | --append <text> | --replace OLD NEW] — inspect or write a file."""
     raw = ctx.args.strip()
     if not raw:
-        print("Usage: /edit <path> [--content <text>] [--append <text>] [--replace OLD NEW]")
+        _print_error("Usage: /edit <path> [--content <text>] [--append <text>] [--replace OLD NEW]")
         _set_command_result(ctx, ok=False, summary="missing edit target")
         return _CMD_CONTINUE
     try:
@@ -4348,7 +4348,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     if not parts:
-        print("Usage: /edit <path> [--content <text>] [--append <text>] [--replace OLD NEW]")
+        _print_error("Usage: /edit <path> [--content <text>] [--append <text>] [--replace OLD NEW]")
         _set_command_result(ctx, ok=False, summary="missing edit target")
         return _CMD_CONTINUE
     path = parts[0]
@@ -4364,7 +4364,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         append_mode = True
     elif rest[:1] == ["--replace"]:
         if len(rest) < 3:
-            print("Usage: /edit <path> [--content <text>] [--append <text>] [--replace OLD NEW]")
+            _print_error("Usage: /edit <path> [--content <text>] [--append <text>] [--replace OLD NEW]")
             _set_command_result(ctx, ok=False, summary="missing replace arguments")
             return _CMD_CONTINUE
         replace_values = rest[1:3]
@@ -4382,20 +4382,26 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             p = Path(resolved)
             if p.exists():
                 lines = p.read_text(errors="replace").splitlines()
-                print(f"{resolved}  ({len(lines)} lines)")
-                for ln in lines[:10]:
-                    print(f"  {ln}")
-                if len(lines) > 10:
-                    print(f"  ... ({len(lines) - 10} more lines)")
+                if _RICH_AVAILABLE and _IS_TTY:
+                    _RICH_CONSOLE.print(f"[bold]{resolved}[/]  [dim]({len(lines)} lines)[/]")
+                    for ln in lines[:10]:
+                        _RICH_CONSOLE.print(f"  [dim]{ln}[/]")
+                    if len(lines) > 10:
+                        _RICH_CONSOLE.print(f"  [dim]… ({len(lines) - 10} more lines)[/]")
+                else:
+                    print(f"{resolved}  ({len(lines)} lines)")
+                    for ln in lines[:10]:
+                        print(f"  {ln}")
+                    if len(lines) > 10:
+                        print(f"  ... ({len(lines) - 10} more lines)")
                 _set_command_result(ctx, ok=True, summary=f"previewed {resolved}")
             else:
-                print(f"File not found: {resolved}")
+                _print_error(f"file not found: {resolved}")
                 _set_command_result(ctx, ok=False, summary=f"file not found: {resolved}")
         except Exception as exc:
-            print(f"error reading {path}: {exc}")
+            _print_error(f"error reading {path}: {exc}")
             _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
-
     risk_level = infer_file_edit_risk(path)
     if not request_cli_approval(
         action="file.edit",
@@ -4407,7 +4413,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         plan_id=session.plan_id,
         task_id=session.task_id,
     ):
-        print("File edit not approved.")
+        _print_error("file edit not approved")
         _set_command_result(ctx, ok=False, summary="file edit not approved")
         return _CMD_CONTINUE
     resolved_path = str(Path(path).expanduser().resolve())
