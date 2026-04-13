@@ -2507,6 +2507,110 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
     return text, sources
 
 
+# ---------------------------------------------------------------------------
+# Smart markdown table renderer — handles wide tables gracefully
+# ---------------------------------------------------------------------------
+
+_MD_TABLE_BLOCK = re.compile(
+    r"(?m)^(\|[^\n]+\n\|[-:| ]+\|(?:\n\|[^\n]+)*)",
+)
+
+
+def _strip_inline_md(text: str) -> str:
+    """Strip common inline markdown markers (bold, italic, code) from a cell string."""
+    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+    text = re.sub(r"\*(.+?)\*", r"\1", text)
+    text = re.sub(r"`(.+?)`", r"\1", text)
+    # Strip stray leading/trailing asterisks not caught above
+    return text.strip().strip("*").strip()
+
+
+def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]] | None:
+    """Parse a markdown table block into (headers, rows). Returns None on failure."""
+    lines = [l for l in block.strip().splitlines() if l.strip()]
+    if len(lines) < 2:
+        return None
+    sep_line = lines[1]
+    if not re.match(r"^\|[-:| ]+\|\s*$", sep_line):
+        return None
+
+    def _parse_row(line: str) -> list[str]:
+        return [_strip_inline_md(p) for p in line.strip().strip("|").split("|")]
+
+    headers = _parse_row(lines[0])
+    rows = [_parse_row(l) for l in lines[2:] if l.strip() and "|" in l]
+    if not headers:
+        return None
+    return headers, rows
+
+
+def _render_md_table_rich(headers: list[str], rows: list[list[str]]) -> None:
+    """Render a parsed markdown table using a Rich Table with sensible column widths.
+
+    When too many columns exist to fit the terminal, the first column wraps
+    (it's usually a label/name) and remaining columns share the available space.
+    """
+    term_cols = shutil.get_terminal_size((120, 24)).columns
+    n = len(headers)
+    if n == 0:
+        return
+
+    # Compute natural width of each column (max of header + values, capped)
+    MAX_COL = 24
+    MIN_COL = 5
+    natural: list[int] = []
+    for i, h in enumerate(headers):
+        cell_max = max((len(r[i]) if i < len(r) else 0) for r in rows) if rows else 0
+        natural.append(max(MIN_COL, min(max(len(h), cell_max), MAX_COL)))
+
+    # Total needed: sum of column widths + 3 chars per column (border + padding)
+    overhead = n * 3 + 1
+    available = term_cols - overhead
+    total_natural = sum(natural)
+
+    if total_natural <= available:
+        col_widths = natural
+    else:
+        # Scale down proportionally, respecting MIN_COL floor
+        scale = max(0.3, available / total_natural)
+        col_widths = [max(MIN_COL, int(w * scale)) for w in natural]
+
+    table = _RichTable(
+        border_style="dim",
+        show_edge=True,
+        pad_edge=True,
+        header_style="bold cyan",
+    )
+    for i, (h, w) in enumerate(zip(headers, col_widths)):
+        # First column (labels/names) folds; numeric columns truncate cleanly
+        overflow_mode = "fold" if i == 0 else "ellipsis"
+        table.add_column(h, max_width=w, overflow=overflow_mode, no_wrap=(i > 0))
+
+    for row in rows:
+        cells = list(row) + [""] * max(0, n - len(row))
+        table.add_row(*cells[:n])
+
+    _RICH_CONSOLE.print(table)
+
+
+def _render_body_with_tables(body: str) -> None:
+    """Render response body, using a smart Rich Table for any markdown table blocks."""
+    last_end = 0
+    for m in _MD_TABLE_BLOCK.finditer(body):
+        pre = body[last_end : m.start()].strip()
+        if pre:
+            _RICH_CONSOLE.print(_RichMarkdown(pre))
+        parsed = _parse_md_table(m.group(0))
+        if parsed:
+            _render_md_table_rich(*parsed)
+        else:
+            _RICH_CONSOLE.print(_RichMarkdown(m.group(0)))
+        last_end = m.end()
+    remaining = body[last_end:].strip()
+    if remaining:
+        _RICH_CONSOLE.print(_RichMarkdown(remaining))
+
+
 def print_response(response: AskResponse, *, output_json: bool, elapsed: float = 0.0) -> None:
     """Render a response to stdout."""
     if output_json:
@@ -2520,7 +2624,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
         if not body.strip():
             body = "_No response text returned._"
         if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(_RichMarkdown(body))
+            _render_body_with_tables(body)
             if sources:
                 _RICH_CONSOLE.print(
                     _RichPanel(
