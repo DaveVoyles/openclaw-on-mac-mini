@@ -2342,33 +2342,63 @@ def _render_markdown_ansi(text: str) -> str:
 
 
 def _is_kv_bullet_group(lines: list[str]) -> bool:
-    """Return True if all lines look like **Key:** value | **Key:** value bullet rows."""
-    kv_pattern = re.compile(r"\*\*[^*]+:\*\*")
+    """Return True if all lines look like pipe-separated key:value bullet rows.
+
+    Accepts both **Key:** value (bold) and plain Key: Value formats, including
+    lines where the whole content is wrapped in italic markers (*...*).
+    """
+    kv_bold_pattern = re.compile(r"\*\*[^*]+:\*\*")
     for line in lines:
-        content = re.sub(r"^[•\-\*]\s+", "", line)
-        if not kv_pattern.search(content):
+        content = re.sub(r"^[•\-\*]\s+", "", line.lstrip())
+        # Strip wrapping italic markers (*content*) around the whole line body
+        content = re.sub(r"^\*(.+)\*$", r"\1", content.strip())
+        if kv_bold_pattern.search(content):
+            continue
+        # Accept plain "Key: value | Key: value" rows — require a colon in the
+        # majority of pipe-segments so we don't misclassify normal prose bullets.
+        segments = [s.strip() for s in content.split(" | ")]
+        if len(segments) < 2:
+            return False
+        colon_count = sum(1 for s in segments if ":" in s)
+        if colon_count < len(segments) // 2 + 1:
             return False
     return True
 
 
 def _bullet_group_to_table(lines: list[str]) -> list[str]:
-    """Convert pipe-in-bullet lines to a markdown table."""
+    """Convert pipe-in-bullet lines to a markdown table.
+
+    Handles both **Key:** value (bold) and plain Key: Value formats.
+    Also strips wrapping italic markers (*...*) that some models add.
+    """
     headers: list[str] = []
     rows: list[list[str]] = []
     for line in lines:
-        content = re.sub(r"^[•\-\*]\s+", "", line)
+        content = re.sub(r"^[•\-\*]\s+", "", line.lstrip())
+        # Strip wrapping italic markers around the whole line body
+        content = re.sub(r"^\*(.+)\*$", r"\1", content.strip())
         parts = [p.strip() for p in content.split(" | ")]
         row_headers: list[str] = []
         row_values: list[str] = []
         for part in parts:
-            # Match **Key:** value  (colon is inside the bold markers)
+            # Strip lone leading asterisks (partial italic markers from the first/last segment)
+            part = re.sub(r"^\*+", "", part).strip()
+            # Match **Key:** value  (bold-colon inside markers)
             m = re.match(r"\*\*([^*:]+):\*\*\s*(.*)", part)
             if m:
                 row_headers.append(m.group(1).strip())
                 row_values.append(m.group(2).strip())
             else:
-                row_headers.append(f"Col{len(row_headers) + 1}")
-                row_values.append(part)
+                # Match plain "Key: value" — split on first colon
+                colon_idx = part.find(":")
+                if colon_idx > 0:
+                    row_headers.append(part[:colon_idx].strip())
+                    # Strip leading asterisks from values (closing italic marker from last segment)
+                    val = re.sub(r"^\*+\s*", "", part[colon_idx + 1:].strip())
+                    row_values.append(val)
+                else:
+                    row_headers.append(f"Col{len(row_headers) + 1}")
+                    row_values.append(part)
         if not headers:
             headers = row_headers
         rows.append(row_values)
@@ -2409,13 +2439,13 @@ def _convert_bullet_tables(text: str) -> str:
     i = 0
     while i < len(lines):
         line = lines[i]
-        bullet_match = re.match(r"^[•\-\*]\s+.+$", line)
+        bullet_match = re.match(r"^\s*[•\-\*]\s+.+$", line)
         if bullet_match and " | " in line:
             group = [line]
             j = i + 1
             while j < len(lines):
                 next_line = lines[j]
-                if re.match(r"^[•\-\*]\s+.+$", next_line) and " | " in next_line:
+                if re.match(r"^\s*[•\-\*]\s+.+$", next_line) and " | " in next_line:
                     group.append(next_line)
                     j += 1
                 else:
@@ -2465,6 +2495,14 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
 
     # E. Convert pipe-in-bullet table patterns to real markdown tables
     text = _convert_bullet_tables(text)
+
+    # F. Strip server-appended recovery note blocks — these are useful in chat
+    # embeds but add noise in the terminal since they're rendered as blockquotes.
+    text = re.sub(
+        r"\n\n> ℹ️ \*\*Recovery note:\*\*\n(?:> [^\n]*\n?)*",
+        "",
+        text,
+    ).rstrip()
 
     return text, sources
 
