@@ -496,15 +496,23 @@ def _find_pip() -> list[str] | None:
 def _print_update_notice(current: str, latest: str) -> None:
     """Print a styled update-available notice."""
     if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(
-            f"[bold yellow]⬆  Update available:[/] openclaw [dim]{current}[/]"
-            f" → [bold green]{latest}[/]"
-            f"  [dim]Run:[/] [cyan]openclaw update[/]"
-        )
+        from rich.panel import Panel as _P
+        from rich.text import Text as _T
+        t = _T()
+        t.append("⬆  Update available", style="bold yellow")
+        t.append("   ", style="")
+        t.append(current, style="dim")
+        t.append("  →  ", style="dim")
+        t.append(latest, style="bold green")
+        t.append("\n   Run: ", style="dim")
+        t.append("openclaw update", style="bold cyan")
+        _RICH_CONSOLE.print(_P(t, border_style="yellow", padding=(0, 1)))
     else:
+        # ANSI fallback — still colorful
         print(
-            f"⬆  Update available: openclaw {current} → {latest}"
-            f"  |  openclaw update",
+            f"\n{_BYE}⬆  Update available!{_R}\n"
+            f"   {_DM}{current}{_R}  →  {_BGR}{latest}{_R}\n"
+            f"   {_DM}Run:{_R} {_BCY}openclaw update{_R}\n",
             file=sys.stderr,
         )
 
@@ -4140,12 +4148,12 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         t.append("🦞 OpenClaw", style="bold cyan")
         t.append("  connected to ", style="dim")
         t.append(config.base_url, style="cyan")
-        t.append("\n  user: ", style="dim")
-        t.append(config.user_name, style="green")
+        t.append("\n  👤 ", style="dim")
+        t.append(config.user_name, style="bold green")
         if session_id:
-            t.append("  ·  session: ", style="dim")
+            t.append("  ·  🗂  session: ", style="dim")
             t.append(session_id[:8] + "…", style="yellow")
-        t.append("\n  ", style="")
+        t.append("\n\n  ", style="")
         t.append("/help", style="bold cyan")
         t.append("  ·  ", style="dim")
         t.append("/autoroute off", style="bold cyan")
@@ -4155,10 +4163,18 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         t.append("/quit", style="bold cyan")
         _RICH_CONSOLE.print(_RichPanel(t, border_style="cyan", padding=(0, 1)))
     else:
+        # ANSI fallback — multi-line and colorful
+        session_line = (
+            f"\n  {_DM}🗂  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
+        )
         print(
-            f"Connected to {config.base_url} as {config.user_name}. "
-            + (f"Session: {session_id}. " if session_id else "")
-            + "Type /help for commands, /autoroute off to keep prompts in chat, /clear to reset history, or /quit to exit."
+            f"\n{_BCY}🦞 OpenClaw{_R}"
+            f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
+            f"\n  {_DM}👤 user:{_R}      {_BGR}{config.user_name}{_R}"
+            f"{session_line}"
+            f"\n"
+            f"\n  {_BCY}/help{_R}  {_DM}·{_R}  {_BCY}/autoroute off{_R}"
+            f"  {_DM}·{_R}  {_BCY}/clear{_R}  {_DM}·{_R}  {_BCY}/quit{_R}\n"
         )
 
 
