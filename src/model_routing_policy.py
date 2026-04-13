@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os as _os
+import random as _random
+import statistics as _statistics
 from dataclasses import dataclass
 
 from config import cfg
@@ -25,6 +27,45 @@ _ROUTING_PROFILE_ALIASES = {
     "gemini_first": "gemini-first",
     "cost_saver": "cost-saver",
 }
+
+
+def _parse_ab_split(env_val: str) -> list[tuple[str, float]]:
+    """Parse 'copilot-first:60,balanced:40' → [('copilot-first', 0.6), ('balanced', 0.4)].
+    Returns empty list if env_val is empty or malformed."""
+    if not env_val.strip():
+        return []
+    try:
+        pairs = []
+        total = 0.0
+        for part in env_val.split(","):
+            profile, weight = part.strip().split(":")
+            pairs.append((profile.strip(), float(weight)))
+            total += float(weight)
+        if total <= 0:
+            return []
+        # Normalize to fractions
+        return [(p, w / total) for p, w in pairs]
+    except (ValueError, AttributeError):
+        return []
+
+
+_ROUTING_AB_SPLIT: list[tuple[str, float]] = _parse_ab_split(
+    _os.getenv("ROUTING_AB_SPLIT", "")
+)
+
+
+def _sample_ab_profile() -> str | None:
+    """Pick a routing profile according to ROUTING_AB_SPLIT weights.
+    Returns None if A/B split is not configured."""
+    if not _ROUTING_AB_SPLIT:
+        return None
+    r = _random.random()
+    cumulative = 0.0
+    for profile, weight in _ROUTING_AB_SPLIT:
+        cumulative += weight
+        if r < cumulative:
+            return profile
+    return _ROUTING_AB_SPLIT[-1][0]  # fallback to last
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +155,37 @@ def build_provider_capability_registry(
     }
 
 
+_LATENCY_SWITCH_THRESHOLD_MS: float = float(_os.getenv("LATENCY_SWITCH_THRESHOLD_MS", "2000"))
+_LATENCY_AUDIT_TAIL: int = int(_os.getenv("LATENCY_AUDIT_TAIL", "100"))
+_AUDIT_LOG_PATH: str = _os.getenv("ROUTING_AUDIT_LOG", "data/routing_audit.jsonl")
+
+
+def _get_provider_p95_latency(provider: str) -> float | None:
+    """Read last N audit log entries and return p95 latency for the given provider.
+    Returns None if insufficient data (< 5 entries) or file missing."""
+    try:
+        import json as _json
+        from pathlib import Path as _Path
+
+        log_path = _Path(_AUDIT_LOG_PATH)
+        if not log_path.exists():
+            return None
+        lines = log_path.read_text().splitlines()[-_LATENCY_AUDIT_TAIL:]
+        latencies = []
+        for line in lines:
+            try:
+                entry = _json.loads(line)
+                if entry.get("provider") == provider and "latency_ms" in entry:
+                    latencies.append(float(entry["latency_ms"]))
+            except (ValueError, KeyError):
+                continue
+        if len(latencies) < 5:
+            return None
+        return _statistics.quantiles(latencies, n=20)[18]  # p95
+    except Exception:
+        return None
+
+
 def _prefer_specialized_non_tool_route(
     *,
     registry: dict[str, ProviderCapabilities],
@@ -174,6 +246,12 @@ def select_auto_route(
 ) -> AutoRouteDecision:
     profile = normalize_routing_profile(routing_profile)
 
+    # A/B split: probabilistically override routing_profile when configured
+    _ab_profile = _sample_ab_profile()
+    if _ab_profile is not None:
+        routing_profile = _ab_profile
+        profile = normalize_routing_profile(routing_profile)
+
     # Fast-path: cheap mini-model for short queries (copilot-first profile only).
     # Coding queries are intentionally excluded so the full-capability model is
     # used where quality matters most.
@@ -201,46 +279,60 @@ def select_auto_route(
     )
 
     if profile == "gemini-first":
-        return AutoRouteDecision("gemini", "routing profile gemini-first", profile)
-
-    if profile == "cost-saver":
+        _decision = AutoRouteDecision("gemini", "routing profile gemini-first", profile)
+    elif profile == "cost-saver":
         if registry["ollama"].available:
-            return AutoRouteDecision("ollama", "routing profile cost-saver: local-first", profile)
-        if registry["copilot"].available:
-            return AutoRouteDecision("copilot", "routing profile cost-saver: proxy fallback", profile)
-        return _prefer_specialized_non_tool_route(
+            _decision = AutoRouteDecision("ollama", "routing profile cost-saver: local-first", profile)
+        elif registry["copilot"].available:
+            _decision = AutoRouteDecision("copilot", "routing profile cost-saver: proxy fallback", profile)
+        else:
+            _decision = _prefer_specialized_non_tool_route(
+                registry=registry,
+                is_code=is_code,
+                is_creative=is_creative,
+                is_analysis=is_analysis,
+                profile=profile,
+            )
+    elif profile == "balanced":
+        _decision = _prefer_specialized_non_tool_route(
             registry=registry,
             is_code=is_code,
             is_creative=is_creative,
             is_analysis=is_analysis,
             profile=profile,
         )
-
-    if profile == "balanced":
-        return _prefer_specialized_non_tool_route(
-            registry=registry,
-            is_code=is_code,
-            is_creative=is_creative,
-            is_analysis=is_analysis,
-            profile=profile,
-        )
-
-    if registry["copilot"].available:
+    elif registry["copilot"].available:
         if is_code:
-            return AutoRouteDecision("copilot", "routing profile copilot-first: code query", profile)
-        if is_creative:
-            return AutoRouteDecision("copilot", "routing profile copilot-first: creative query", profile)
-        if is_analysis:
-            return AutoRouteDecision("copilot", "routing profile copilot-first: analysis query", profile)
-        return AutoRouteDecision("copilot", "routing profile copilot-first: non-tool query", profile)
+            _decision = AutoRouteDecision("copilot", "routing profile copilot-first: code query", profile)
+        elif is_creative:
+            _decision = AutoRouteDecision("copilot", "routing profile copilot-first: creative query", profile)
+        elif is_analysis:
+            _decision = AutoRouteDecision("copilot", "routing profile copilot-first: analysis query", profile)
+        else:
+            _decision = AutoRouteDecision("copilot", "routing profile copilot-first: non-tool query", profile)
+    else:
+        _decision = _prefer_specialized_non_tool_route(
+            registry=registry,
+            is_code=is_code,
+            is_creative=is_creative,
+            is_analysis=is_analysis,
+            profile=profile,
+        )
 
-    return _prefer_specialized_non_tool_route(
-        registry=registry,
-        is_code=is_code,
-        is_creative=is_creative,
-        is_analysis=is_analysis,
-        profile=profile,
-    )
+    # Latency-aware deprioritization: if primary provider is slow, switch to faster alternative
+    _primary = _decision.provider
+    if _primary in ("copilot", "openai", "anthropic"):
+        _p95 = _get_provider_p95_latency(_primary)
+        if _p95 is not None and _p95 > _LATENCY_SWITCH_THRESHOLD_MS:
+            _ollama_p95 = _get_provider_p95_latency("ollama")
+            if _ollama_p95 is not None and _ollama_p95 < _p95 * 0.5:  # 50% faster
+                return AutoRouteDecision(
+                    "ollama",
+                    f"latency-switch: {_primary} p95={_p95:.0f}ms > {_LATENCY_SWITCH_THRESHOLD_MS:.0f}ms threshold",
+                    profile,
+                )
+
+    return _decision
 
 
 def select_tool_route(
@@ -540,6 +632,19 @@ _WEB_SEARCH_PATTERNS = _re.compile(
     _re.IGNORECASE,
 )
 
+# High-confidence search indicators — skip LLM classification when matched
+_HIGH_CONFIDENCE_SEARCH_RE = _re.compile(
+    r"\b("
+    r"today|tonight|right now|currently|live|latest|breaking|"
+    r"current (?:score|price|rate|weather|news|standings|ranking)|"
+    r"(?:this|last) (?:week|month|season|year)|"
+    r"yesterday(?:'s)?|"
+    r"(?:what|who|where|when) (?:is|are|was|were) (?:the )?(?:current|latest|live|today'?s?)|"
+    r"score of|standings|box score|box-score|game results?"
+    r")\b",
+    _re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class WebSearchRouteDecision:
@@ -567,6 +672,9 @@ def select_web_search_route(query: str) -> WebSearchRouteDecision:
     q = (query or "").strip()
     if not q:
         return WebSearchRouteDecision(prefer_search=False, reason="empty query")
+    # High-confidence bypass: skip LLM classification for obviously time-sensitive queries
+    if _HIGH_CONFIDENCE_SEARCH_RE.search(q):
+        return WebSearchRouteDecision(prefer_search=True, reason="classify: regex-bypass")
     if _WEB_SEARCH_PATTERNS.search(q):
         return WebSearchRouteDecision(
             prefer_search=True,
@@ -587,11 +695,13 @@ def select_web_search_route(query: str) -> WebSearchRouteDecision:
 # ---------------------------------------------------------------------------
 
 import asyncio as _asyncio
+import hashlib as _hashlib
 import json as _json
 import logging as _logging
 import os as _os
 import pathlib as _pathlib
 import time as _time_mod
+from collections import OrderedDict
 
 # Query-type patterns used by the two-tier classifier (mirrors model_router.py)
 _CLASSIFY_CODE_PATTERN = _re.compile(
@@ -631,6 +741,19 @@ _LLM_CLASSIFY_PROMPT = (
 _VALID_LLM_CATEGORIES = frozenset({"coding", "vision", "search", "math", "general"})
 
 _policy_logger = _logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# LRU cache for classify_query_llm()
+# ---------------------------------------------------------------------------
+
+_CLASSIFY_CACHE_TTL: float = float(_os.getenv("CLASSIFY_CACHE_TTL", "300"))
+_CLASSIFY_CACHE_MAX: int = 256
+_classify_cache: OrderedDict[str, tuple[str, float]] = OrderedDict()  # key -> (result, timestamp)
+
+
+def clear_classify_cache() -> None:
+    """Clear the query classification cache. Used in tests and /admin commands."""
+    _classify_cache.clear()
 
 # ---------------------------------------------------------------------------
 # Mini-model eval logging (MINI_MODEL_EVAL=1)
@@ -714,7 +837,23 @@ async def classify_query_llm(text: str) -> str | None:
     failure.  Async callers should use this instead of ``classify_query()``
     when they want an explicit LLM-based classification result.
     """
-    return await _classify_text_with_llm(text)
+    _clf_cache_key = _hashlib.sha256(text.strip()[:200].encode()).hexdigest()
+    _clf_now = _time_mod.monotonic()
+    if _clf_cache_key in _classify_cache:
+        _cached_result, _cached_at = _classify_cache[_clf_cache_key]
+        if _clf_now - _cached_at < _CLASSIFY_CACHE_TTL:
+            _classify_cache.move_to_end(_clf_cache_key)  # LRU refresh
+            return _cached_result
+        else:
+            del _classify_cache[_clf_cache_key]
+
+    _clf_result = await _classify_text_with_llm(text)
+
+    if len(_classify_cache) >= _CLASSIFY_CACHE_MAX:
+        _classify_cache.popitem(last=False)
+    _classify_cache[_clf_cache_key] = (_clf_result, _time_mod.monotonic())
+
+    return _clf_result
 
 
 # ---------------------------------------------------------------------------

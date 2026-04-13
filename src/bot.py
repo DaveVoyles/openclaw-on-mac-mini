@@ -9,6 +9,7 @@ discord_background.py, and the web/health server in discord_web.py.
 
 import asyncio
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -133,6 +134,12 @@ ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 # LLM chunks arrive rather than waiting for the full response.
 PROVIDER_STREAM = os.getenv("PROVIDER_STREAM", "").strip() == "1"
 _STREAM_DISCORD_EDIT_INTERVAL = 200  # min chars between placeholder edits
+_SHOW_THINKING_PLACEHOLDER: bool = os.getenv("THINKING_PLACEHOLDER", "1").lower() in ("1", "true", "yes")
+
+# Reaction-based feedback logging (W11-B)
+_FEEDBACK_ENABLED: bool = os.getenv("FEEDBACK_ENABLED", "1").lower() in ("1", "true", "yes")
+_FEEDBACK_LOG_PATH: str = os.getenv("FEEDBACK_LOG", "data/feedback.jsonl")
+_FEEDBACK_TIMEOUT_S: int = int(os.getenv("FEEDBACK_TIMEOUT", "60"))
 
 # ---------------------------------------------------------------------------
 # Channel role architecture — prevents context bleed between workflows
@@ -191,12 +198,34 @@ def make_discord_stream_handler(channel: Any) -> tuple[
     """
     _placeholder: list[Any] = []
     _last_edit_len: list[int] = [0]
+    # Prevents both the immediate task and _on_partial_chunk from sending a placeholder.
+    _placeholder_claimed: list[bool] = [False]
+
+    if _SHOW_THINKING_PLACEHOLDER:
+        async def _send_thinking_placeholder() -> None:
+            if _placeholder_claimed[0]:
+                return
+            _placeholder_claimed[0] = True
+            try:
+                _placeholder_msg = await channel.send("_⏳ Thinking…_")
+                _placeholder.append(_placeholder_msg)
+            except Exception:
+                _placeholder_claimed[0] = False
+
+        try:
+            asyncio.ensure_future(_send_thinking_placeholder())
+        except Exception:
+            pass
 
     async def _on_partial_chunk(chunk_text: str) -> None:
         if not chunk_text:
             return
         try:
             if not _placeholder:
+                if _placeholder_claimed[0]:
+                    # Immediate placeholder task is in flight; skip until it resolves.
+                    return
+                _placeholder_claimed[0] = True
                 msg = await channel.send("⏳ *thinking…*")
                 _placeholder.append(msg)
                 _last_edit_len[0] = 0
@@ -216,6 +245,55 @@ def make_discord_stream_handler(channel: Any) -> tuple[
         return _placeholder[0] if _placeholder else None
 
     return _on_partial_chunk, _get_placeholder
+
+
+async def _collect_feedback(
+    bot_message: discord.Message,
+    query_hash: str,
+    model: str,
+    provider: str,
+    skills: list[str],
+) -> None:
+    """Add reactions to bot_message and wait for user feedback. Non-blocking."""
+    if not _FEEDBACK_ENABLED:
+        return
+    try:
+        await bot_message.add_reaction("👍")
+        await bot_message.add_reaction("👎")
+    except Exception:
+        return
+
+    def check(reaction: discord.Reaction, user: discord.User) -> bool:
+        return (
+            str(reaction.emoji) in ("👍", "👎")
+            and reaction.message.id == bot_message.id
+            and not user.bot
+        )
+
+    try:
+        reaction, _user = await asyncio.wait_for(
+            bot.wait_for("reaction_add", check=check),
+            timeout=_FEEDBACK_TIMEOUT_S,
+        )
+        rating = 1 if str(reaction.emoji) == "👍" else -1
+        entry = {
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "query_hash": query_hash,
+            "model": model,
+            "provider": provider,
+            "skills": skills,
+            "rating": rating,
+        }
+        Path(_FEEDBACK_LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
+        with open(_FEEDBACK_LOG_PATH, "a") as f:
+            f.write(json.dumps(entry) + "\n")
+    except (asyncio.TimeoutError, Exception):
+        pass  # No feedback received — that's fine
+    finally:
+        try:
+            await bot_message.clear_reactions()
+        except Exception:
+            pass
 
 
 async def _load_channel_config() -> None:
