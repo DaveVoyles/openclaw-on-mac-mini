@@ -664,8 +664,8 @@ async def chat_stream(
         metadata["context_mode"] = "followup-anchor"
         metadata["context_badge"] = "🧷 Follow-up anchor"
 
-    # Unified web-search fast-path — uses model_message so recalled context (saved
-    # preferences like price range, location) is included in the search query.
+    # Unified web-search fast-path — uses cleaned_user_message to avoid cross-topic
+    # contamination from recalled context (e.g., lacrosse memories polluting gaming queries).
     if model_preference == "auto":
         try:
             from model_routing_policy import select_web_search_route
@@ -673,7 +673,7 @@ async def chat_stream(
             if web_route.prefer_search:
                 log.info("chat_stream web_search_route reason=%s", web_route.reason)
                 from skills.reporting_skills import generate_web_search_report
-                web_reply = await generate_web_search_report(model_message)
+                web_reply = await generate_web_search_report(cleaned_user_message)
                 if web_reply and not web_reply.startswith("❌"):
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
@@ -1133,8 +1133,8 @@ async def chat(
     # TODO: prepend channel_context_prefix(channel_name) here once channel_name is
     # threaded into chat() (e.g. via context_controls["channel_name"] from the Discord layer).
 
-    # Unified web-search fast-path — uses model_message so recalled context (saved
-    # preferences like price range, location) is included in the search query.
+    # Unified web-search fast-path — uses cleaned_user_message to avoid cross-topic
+    # contamination from recalled context (e.g., lacrosse memories polluting gaming queries).
     if model_preference == "auto":
         try:
             from model_routing_policy import select_web_search_route
@@ -1142,7 +1142,7 @@ async def chat(
             if web_route.prefer_search:
                 log.info("chat web_search_route reason=%s", web_route.reason)
                 from skills.reporting_skills import generate_web_search_report
-                web_reply = await generate_web_search_report(model_message)
+                web_reply = await generate_web_search_report(cleaned_user_message)
                 if web_reply and not web_reply.startswith("❌"):
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
