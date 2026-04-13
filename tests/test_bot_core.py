@@ -396,6 +396,7 @@ class TestQualityAutoRepair:
         events: list[str] = []
         monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
         monkeypatch.setattr(mod, "_quality_retry_improved", lambda **kwargs: True)
+        monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **kwargs: None)
         monkeypatch.setattr(
             mod,
             "_safe_score_answer_quality",
@@ -431,6 +432,7 @@ class TestQualityAutoRepair:
         events: list[str] = []
         monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
         monkeypatch.setattr(mod, "_quality_retry_improved", lambda **kwargs: False)
+        monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **kwargs: None)
         monkeypatch.setattr(
             mod,
             "_safe_score_answer_quality",
@@ -500,6 +502,7 @@ class TestQualityAutoRepair:
     async def test_failed_error_keeps_original_response(self, monkeypatch):
         events: list[str] = []
         monkeypatch.setattr(mod, "_record_quality_metric", lambda event, context="ask": events.append(f"{context}:{event}"))
+        monkeypatch.setattr(mod, "get_latency_load_snapshot", lambda **kwargs: None)
 
         async def _retry_stream(_prompt: str):
             raise RuntimeError("retry-failed")
