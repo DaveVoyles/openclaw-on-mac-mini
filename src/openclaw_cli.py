@@ -1064,6 +1064,23 @@ def _print_session_summary(session: SessionSummary) -> None:
         if session.automation_mode:
             a_status = session.automation_status or "active"
             grid.add_row("🤖 automation", f"[cyan]{session.automation_mode}[/] [dim]({a_status})[/]")
+            # Surface watch state details inline if available
+            try:
+                _w = load_watch_state(session.session_id)
+                if _w:
+                    _polls = int(_w.get("poll_count") or 0)
+                    _max = int(_w.get("max_polls") or 0)
+                    _fails = int(_w.get("failure_count") or 0)
+                    _limit = int(_w.get("retry_limit") or 3)
+                    _poll_str = f"[cyan]{_polls}[/] / {_max or '∞'} polls"
+                    if _fails:
+                        _poll_str += f"  [red]{_fails}/{_limit} failures[/]"
+                    grid.add_row("", _poll_str)
+                    _last_err = str(_w.get("last_error") or "").strip()
+                    if _last_err:
+                        grid.add_row("", f"[red dim]last err: {_last_err[:70]}[/]")
+            except Exception:
+                pass
         _RICH_CONSOLE.print(_RichPanel(grid, border_style="cyan", padding=(0, 1)))
     else:
         print(summarize_session(session))
