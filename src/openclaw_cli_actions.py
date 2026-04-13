@@ -197,11 +197,24 @@ def request_cli_approval(
         )
         return False
 
-    response = str(
-        input_func(
-            f"{risk_level.value} risk action `{action}` on `{target}` requires approval. Proceed? [y/N]: "
-        )
-    ).strip().lower()
+    _is_tty = sys.stdout.isatty()
+    _bold_red   = "\033[1;31m" if _is_tty else ""
+    _bold_yellow = "\033[1;33m" if _is_tty else ""
+    _dim        = "\033[2m"    if _is_tty else ""
+    _reset      = "\033[0m"    if _is_tty else ""
+    risk_val = risk_level.value.upper() if hasattr(risk_level, "value") else str(risk_level).upper()
+    if "CRITICAL" in risk_val:
+        risk_colored = f"{_bold_red}{risk_val}{_reset}"
+        prefix = "⚠️  "
+    else:
+        risk_colored = f"{_bold_yellow}{risk_val}{_reset}"
+        prefix = "⚠️  "
+    prompt = (
+        f"\n{prefix}{risk_colored} risk  {_dim}`{action}`{_reset}"
+        f"  on  {_dim}`{target}`{_reset}"
+        f"\n   Proceed? [y/N]: "
+    )
+    response = str(input_func(prompt)).strip().lower()
     approved = response in {"y", "yes"}
     approval_store.resolve(
         request_id=request.request_id,

@@ -167,6 +167,43 @@ def _print_error(msg: str, *, file: object = None) -> None:
     else:
         print(f"{_BRE}error:{_R} {msg}", file=dest)
 
+
+def _print_shell_result(result: Any) -> None:
+    """Print a shell execution result with colored exit code and dim output blocks."""
+    if _RICH_AVAILABLE and _IS_TTY:
+        exit_ok = result.returncode == 0
+        exit_style = "green" if exit_ok else "bold red"
+        exit_icon = "\u2713" if exit_ok else "\u2717"
+        _RICH_CONSOLE.print(f"[dim]$[/] {result.command}  [dim]\u00b7  cwd:[/] {result.cwd}  [{exit_style}]{exit_icon} exit {result.returncode}[/]")
+        if result.stdout.strip():
+            _RICH_CONSOLE.print(f"[dim]\u2500\u2500\u2500 stdout \u2500\u2500\u2500[/]\n[dim]{result.stdout.rstrip()}[/]")
+        if result.stderr.strip():
+            _RICH_CONSOLE.print(f"[dim]\u2500\u2500\u2500 stderr \u2500\u2500\u2500[/]\n[dim red]{result.stderr.rstrip()}[/]")
+    else:
+        from openclaw_cli_actions import format_shell_result
+        print(format_shell_result(result))
+
+
+def _print_file_edit_result(result: Any) -> None:
+    """Print a file edit result with colored summary and diff when available."""
+    if _RICH_AVAILABLE and _IS_TTY:
+        icon = "✓" if result.changed else "—"
+        style = "green" if result.changed else "dim"
+        _RICH_CONSOLE.print(f"[{style}]{icon}[/] {result.summary}  [dim]{result.path}[/]")
+        if result.diff:
+            _RICH_CONSOLE.print("[dim]─── diff ───[/]")
+            for line in result.diff.splitlines():
+                if line.startswith("+") and not line.startswith("+++"):
+                    _RICH_CONSOLE.print(f"[green]{line}[/]")
+                elif line.startswith("-") and not line.startswith("---"):
+                    _RICH_CONSOLE.print(f"[red]{line}[/]")
+                else:
+                    _RICH_CONSOLE.print(f"[dim]{line}[/]")
+    else:
+        from openclaw_cli_actions import preview_file_result
+        print(preview_file_result(result))
+
+
 TRANSIENT_WATCH_ERROR_MARKERS = (
     "timed out",
     "timeout",
@@ -1638,7 +1675,7 @@ def stop_watch_from_intervention(
     )
     update_session(session.session_id, automation_mode=mode, automation_status="interrupted")
     if not output_json:
-        print(f"\nwatch stopped by dashboard; resume with: openclaw watch --resume {session.session_id}")
+        _print_meta_footer(("resume", f"openclaw watch --resume {session.session_id}"))
     return 0
 
 
@@ -1660,8 +1697,14 @@ def render_watch_iteration(
     if output_json:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return
-    print(f"[watch {iteration}] {mode}: {summary}")
-    print(f"saved: {output_path}")
+    if _RICH_AVAILABLE and _IS_TTY:
+        _MODE_COLORS = {"analyze": "cyan", "research": "blue", "write": "yellow"}
+        mode_color = _MODE_COLORS.get(str(mode).lower(), "white")
+        _RICH_CONSOLE.print(f"\U0001f504 [bold]watch [{iteration}][/]  [{mode_color}]{mode}[/]  [dim]·[/]  {summary}")
+        _print_meta_footer(("saved", output_path))
+    else:
+        print(f"[watch {iteration}] {mode}: {summary}")
+        print(f"saved: {output_path}")
 
 
 def _plan_task_context_snippet(plan_id: str, task_id: str, *, cwd: str | None = None) -> str:
@@ -3779,16 +3822,41 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     events = load_events(ctx.session_id, limit=n)
     if not events:
-        print("No events recorded yet.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]No events recorded yet.[/]")
+        else:
+            print("No events recorded yet.")
         return _CMD_CONTINUE
-    for ev in events:
-        ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
-        kind = str(ev.get("kind") or "").strip()
-        meta = ev.get("metadata") or {}
-        summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
-        content = str(ev.get("content") or "").strip()
-        label = summary or content[:100]
-        print(f"[{ts}] {kind}: {label}")
+    _KIND_COLORS = {
+        "chat": "dim", "prompt": "white", "analyze": "cyan", "research": "blue",
+        "write": "yellow", "exec": "bold yellow", "assistant": "green",
+        "edit": "magenta", "error": "red", "watch": "cyan",
+    }
+    if _RICH_AVAILABLE and _IS_TTY:
+        table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan")
+        table.add_column("Time", style="dim", no_wrap=True)
+        table.add_column("Kind", no_wrap=True)
+        table.add_column("Summary")
+        for ev in events:
+            ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
+            ts_short = ts[11:19] if len(ts) > 10 else ts  # HH:MM:SS portion
+            kind = str(ev.get("kind") or "").strip()
+            meta = ev.get("metadata") or {}
+            summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
+            content = str(ev.get("content") or "").strip()
+            label = (summary or content[:80]).replace("\n", " ")
+            color = _KIND_COLORS.get(kind, "dim")
+            table.add_row(ts_short, f"[{color}]{kind}[/]", label)
+        _RICH_CONSOLE.print(table)
+    else:
+        for ev in events:
+            ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
+            kind = str(ev.get("kind") or "").strip()
+            meta = ev.get("metadata") or {}
+            summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
+            content = str(ev.get("content") or "").strip()
+            label = summary or content[:100]
+            print(f"[{ts}] {kind}: {label}")
     return _CMD_CONTINUE
 
 
@@ -3800,7 +3868,11 @@ def _cmd_autoroute(ctx: ChatCommandContext) -> str:
     raw = ctx.args.strip().lower()
     current = bool(getattr(session, "repl_auto_route", True))
     if not raw:
-        print(f"Auto-route: {'ON' if current else 'OFF'} (high-confidence prompts only)")
+        if _RICH_AVAILABLE and _IS_TTY:
+            state = "[green]✓ ON[/]" if current else "[dim]✗ OFF[/]"
+            _RICH_CONSOLE.print(f"🔀 auto-route: {state}  [dim](high-confidence prompts only)[/]")
+        else:
+            print(f"Auto-route: {'ON' if current else 'OFF'} (high-confidence prompts only)")
         return _CMD_CONTINUE
     if raw not in {"on", "off"}:
         print("Usage: /autoroute [on|off]")
@@ -3813,10 +3885,15 @@ def _cmd_autoroute(ctx: ChatCommandContext) -> str:
         content=f"/autoroute {raw}",
         metadata={"summary": f"auto-route {'enabled' if enabled else 'disabled'}"},
     )
-    if enabled:
-        print("Auto-route enabled for this session.")
+    if _RICH_AVAILABLE and _IS_TTY:
+        state = "[green]✓ ON[/]" if enabled else "[dim]✗ OFF[/]"
+        note = "" if enabled else "  [dim]prompts will stay in chat[/]"
+        _RICH_CONSOLE.print(f"🔀 auto-route → {state}{note}")
     else:
-        print("Auto-route disabled for this session; prompts will stay in chat.")
+        if enabled:
+            print("Auto-route enabled for this session.")
+        else:
+            print("Auto-route disabled for this session; prompts will stay in chat.")
     return _CMD_CONTINUE
 
 
@@ -3827,35 +3904,63 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     outputs = list_saved_outputs(session.session_id, limit=OUTPUT_LIST_LIMIT)
     if not outputs:
-        print("No saved outputs yet.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]No saved outputs yet.[/]")
+        else:
+            print("No saved outputs yet.")
         return _CMD_CONTINUE
 
     token = ctx.args.strip()
     if not token:
-        print(f"saved outputs ({len(outputs)} shown):")
-        for index, item in enumerate(outputs, start=1):
-            name = str(item.get("name") or "").strip()
-            size = _format_byte_count(int(item.get("size_bytes") or 0))
-            modified_at = str(item.get("modified_at") or "").strip()
-            suffix = f"; {modified_at}" if modified_at else ""
-            print(f"  {index}. {name} ({size}{suffix})")
+        if _RICH_AVAILABLE and _IS_TTY:
+            table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan",
+                               caption=f"[dim]{len(outputs)} output(s)[/]")
+            table.add_column("#", style="dim", justify="right", no_wrap=True)
+            table.add_column("Filename", style="bold")
+            table.add_column("Size", style="cyan", justify="right", no_wrap=True)
+            table.add_column("Modified", style="dim", no_wrap=True)
+            for index, item in enumerate(outputs, start=1):
+                name = str(item.get("name") or "").strip()
+                size = _format_byte_count(int(item.get("size_bytes") or 0))
+                modified_at = str(item.get("modified_at") or "").strip()
+                table.add_row(str(index), name, size, modified_at)
+            _RICH_CONSOLE.print(table)
+        else:
+            print(f"saved outputs ({len(outputs)} shown):")
+            for index, item in enumerate(outputs, start=1):
+                name = str(item.get("name") or "").strip()
+                size = _format_byte_count(int(item.get("size_bytes") or 0))
+                modified_at = str(item.get("modified_at") or "").strip()
+                suffix = f"; {modified_at}" if modified_at else ""
+                print(f"  {index}. {name} ({size}{suffix})")
         return _CMD_CONTINUE
 
     preview = load_saved_output_preview(session.session_id, token, max_chars=OUTPUT_PREVIEW_MAX_CHARS)
     if preview is None:
-        print(f"Saved output not found: {token}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[yellow]not found:[/] {token}")
+        else:
+            print(f"Saved output not found: {token}")
         return _CMD_CONTINUE
     name = str(preview.get("name") or "").strip()
     size = _format_byte_count(int(preview.get("size_bytes") or 0))
     modified_at = str(preview.get("modified_at") or "").strip()
-    preview_label = f"saved output preview: {name} ({size}"
-    if modified_at:
-        preview_label += f"; {modified_at}"
-    if preview.get("truncated"):
-        preview_label += f"; preview limited to {OUTPUT_PREVIEW_MAX_CHARS} chars"
-    preview_label += ")"
-    print(preview_label)
-    print(str(preview.get("preview") or ""))
+    trunc_note = f"  [dim]preview limited to {OUTPUT_PREVIEW_MAX_CHARS} chars[/]" if preview.get("truncated") else ""
+    if _RICH_AVAILABLE and _IS_TTY:
+        subtitle = f"[dim]{size}"
+        if modified_at:
+            subtitle += f"  ·  {modified_at}"
+        subtitle += f"[/]{trunc_note}"
+        _RICH_CONSOLE.print(_RichPanel(str(preview.get("preview") or ""), title=f"[bold]{name}[/]  {subtitle}", border_style="dim", padding=(0, 1)))
+    else:
+        preview_label = f"saved output preview: {name} ({size}"
+        if modified_at:
+            preview_label += f"; {modified_at}"
+        if preview.get("truncated"):
+            preview_label += f"; preview limited to {OUTPUT_PREVIEW_MAX_CHARS} chars"
+        preview_label += ")"
+        print(preview_label)
+        print(str(preview.get("preview") or ""))
     return _CMD_CONTINUE
 
 
@@ -3870,7 +3975,10 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     outcome = restore_last_routed_action_checkpoint(session.session_id)
     if outcome is None:
-        print("No routed action checkpoints are available for this session.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]—  no routed action checkpoints available for this session[/]")
+        else:
+            print("No routed action checkpoints are available for this session.")
         _set_command_result(ctx, ok=False, summary="no routed checkpoints")
         return _CMD_CONTINUE
 
@@ -3881,32 +3989,39 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
     status = str(outcome.get("status") or "").strip()
     if status == "restored":
         restored_files = [str(item) for item in outcome.get("restored_files") or []]
-        print(
-            f"Rolled back last routed {action_kind} action via checkpoint {checkpoint_id}. "
-            f"Restored {len(restored_files)} file(s)."
-        )
-        for path in restored_files[:5]:
-            print(f"  restored: {path}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]✓[/] rolled back [dim]{action_kind}[/] via checkpoint [dim]{checkpoint_id}[/]  [cyan]({len(restored_files)} file(s) restored)[/]")
+            for path in restored_files[:5]:
+                _RICH_CONSOLE.print(f"  [dim]↩ {path}[/]")
+        else:
+            print(f"Rolled back last routed {action_kind} action via checkpoint {checkpoint_id}. Restored {len(restored_files)} file(s).")
+            for path in restored_files[:5]:
+                print(f"  restored: {path}")
         _set_command_result(ctx, ok=True, summary=f"rolled back checkpoint {checkpoint_id}")
         return _CMD_CONTINUE
     if status == "already_rolled_back":
-        print(f"Checkpoint {checkpoint_id} for the last routed action was already restored.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[dim]—  checkpoint {checkpoint_id} was already restored[/]")
+        else:
+            print(f"Checkpoint {checkpoint_id} for the last routed action was already restored.")
         _set_command_result(ctx, ok=True, summary=f"checkpoint {checkpoint_id} already restored")
         return _CMD_CONTINUE
     if status == "unsupported":
         workspace_signature = str(checkpoint.get("workspace_signature") or "").strip()
-        print(
-            f"Checkpoint {checkpoint_id} recorded the last routed {action_kind} action, "
-            f"but automatic rollback is unavailable: {reason or 'manual recovery required.'}"
-        )
-        if workspace_signature:
-            print(f"workspace signature before action: {workspace_signature}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[yellow]⚠[/] rollback unavailable for [dim]{checkpoint_id}[/]: {reason or 'manual recovery required'}")
+            if workspace_signature:
+                _RICH_CONSOLE.print(f"  [dim]workspace before action:[/] {workspace_signature}")
+        else:
+            print(f"Checkpoint {checkpoint_id} recorded the last routed {action_kind} action, but automatic rollback is unavailable: {reason or 'manual recovery required.'}")
+            if workspace_signature:
+                print(f"workspace signature before action: {workspace_signature}")
         _set_command_result(ctx, ok=False, summary=f"rollback unavailable for {checkpoint_id}")
         return _CMD_CONTINUE
-    print(
-        f"Rollback failed for checkpoint {checkpoint_id}: "
-        f"{reason or 'unable to restore the latest routed action.'}"
-    )
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(f"[red]✗[/] rollback failed for [dim]{checkpoint_id}[/]: {reason or 'unable to restore the latest routed action'}")
+    else:
+        print(f"Rollback failed for checkpoint {checkpoint_id}: {reason or 'unable to restore the latest routed action.'}")
     _set_command_result(ctx, ok=False, summary=f"rollback failed for {checkpoint_id}")
     return _CMD_CONTINUE
 
@@ -4112,7 +4227,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
             "returncode": result.returncode,
         },
     )
-    print(format_shell_result(result))
+    _print_shell_result(result)
     _set_command_result(
         ctx,
         ok=result.returncode == 0,
@@ -4227,7 +4342,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             "risk_level": risk_level.value,
         },
     )
-    print(preview_file_result(result))
+    _print_file_edit_result(result)
     _set_command_result(ctx, ok=True, summary=result.summary)
     return _CMD_CONTINUE
 
@@ -4412,6 +4527,12 @@ def print_chat_help() -> None:
 
 def handle_auth_command(args: argparse.Namespace) -> int:
     """Handle CLI token login/status/logout flows."""
+    def _auth_print(msg: str, style: str = "") -> None:
+        if _RICH_AVAILABLE and _IS_TTY and style:
+            _RICH_CONSOLE.print(f"[{style}]{msg}[/]")
+        else:
+            print(msg)
+
     if args.auth_command == "login":
         token = str(getattr(args, "token", "") or "").strip()
         if not token:
@@ -4421,21 +4542,36 @@ def handle_auth_command(args: argparse.Namespace) -> int:
         if sys.platform == "darwin":
             write_keychain_token(token)
             delete_saved_token()
-            print(f"Stored OpenClaw token in macOS Keychain under '{KEYCHAIN_SERVICE}'.")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"🔑 [green]✓[/] token stored in macOS Keychain [dim]({KEYCHAIN_SERVICE})[/]")
+            else:
+                print(f"Stored OpenClaw token in macOS Keychain under '{KEYCHAIN_SERVICE}'.")
             return 0
         saved_path = write_saved_token(token)
-        print(f"Stored OpenClaw token in {saved_path}.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"🔑 [green]✓[/] token stored  [dim]{saved_path}[/]")
+        else:
+            print(f"Stored OpenClaw token in {saved_path}.")
         return 0
 
     if args.auth_command == "status":
         resolution = resolve_token_details(getattr(args, "token", None))
-        if resolution.token:
-            print(f"OpenClaw token available via {resolution.source}.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            if resolution.token:
+                _RICH_CONSOLE.print(f"🔑 [green]✓[/] token configured  [dim]via {resolution.source}[/]")
+            else:
+                _RICH_CONSOLE.print("🔑 [dim]✗  no token configured[/]")
+            if sys.platform == "darwin":
+                _RICH_CONSOLE.print(f"   [dim]keychain service:[/]  {KEYCHAIN_SERVICE}")
+            _RICH_CONSOLE.print(f"   [dim]credential file:[/]   {auth_storage_path()}")
         else:
-            print("No OpenClaw token is currently configured.")
-        if sys.platform == "darwin":
-            print(f"Keychain service: {KEYCHAIN_SERVICE}")
-        print(f"Credential file: {auth_storage_path()}")
+            if resolution.token:
+                print(f"OpenClaw token available via {resolution.source}.")
+            else:
+                print("No OpenClaw token is currently configured.")
+            if sys.platform == "darwin":
+                print(f"Keychain service: {KEYCHAIN_SERVICE}")
+            print(f"Credential file: {auth_storage_path()}")
         return 0
 
     if args.auth_command == "logout":
@@ -4445,9 +4581,16 @@ def handle_auth_command(args: argparse.Namespace) -> int:
         if delete_keychain_token():
             removed_locations.append(f"macOS Keychain '{KEYCHAIN_SERVICE}'")
         if removed_locations:
-            print("Removed OpenClaw token from " + ", ".join(removed_locations) + ".")
+            joined = ", ".join(removed_locations)
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"🔑 [green]✓[/] token removed  [dim]{joined}[/]")
+            else:
+                print("Removed OpenClaw token from " + joined + ".")
         else:
-            print("No persisted OpenClaw token was found.")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("🔑 [dim]—  no persisted token was found[/]")
+            else:
+                print("No persisted OpenClaw token was found.")
         return 0
 
     raise OpenClawCliError(f"Unknown auth command: {args.auth_command}")
@@ -4766,7 +4909,7 @@ def handle_analyze_command(args: argparse.Namespace, *, config: CliConfig) -> in
     response = invoke_openclaw(prompt, config=scoped_config, history=load_conversation_history(session.session_id))
     print_response(response, output_json=config.output_json)
     persist_response(session.session_id, goal, response.response)
-    print(f"\nsession: {session.session_id}")
+    _print_meta_footer(("session", session.session_id))
     return 0
 
 
@@ -4819,8 +4962,7 @@ def handle_research_command(args: argparse.Namespace) -> int:
         output_display = str(output_target)
     append_event(session.session_id, kind="assistant", content=report, metadata={"summary": f"saved research to {output_display}"})
     print(report)
-    print(f"\nsaved: {output_display}")
-    print(f"session: {session.session_id}")
+    _print_meta_footer(("saved", output_display), ("session", session.session_id))
     return 0
 
 
@@ -4860,8 +5002,7 @@ def handle_write_command(args: argparse.Namespace, *, config: CliConfig) -> int:
         )
         output_display = str(output_target)
     print(response.response)
-    print(f"\nsaved: {output_display}")
-    print(f"session: {session.session_id}")
+    _print_meta_footer(("saved", output_display), ("session", session.session_id))
     return 0
 
 
@@ -5320,7 +5461,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
         save_watch_state(session.session_id, state)
         update_session(session.session_id, automation_mode=mode, automation_status="interrupted")
         if not config.output_json:
-            print(f"\nwatch stopped; resume with: openclaw watch --resume {session.session_id}")
+            _print_meta_footer(("resume", f"openclaw watch --resume {session.session_id}"))
         return 130
 
     state["status"] = "completed" if max_polls else "idle"
@@ -5333,7 +5474,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
         watch_interval_seconds=interval_seconds,
     )
     if not config.output_json:
-        print(f"session: {session.session_id}")
+        _print_meta_footer(("session", session.session_id))
     return 0
 
 
@@ -5382,8 +5523,8 @@ def handle_exec_command(args: argparse.Namespace) -> int:
             "returncode": result.returncode,
         },
     )
-    print(format_shell_result(result))
-    print(f"\nsession: {session.session_id}")
+    _print_shell_result(result)
+    _print_meta_footer(("session", session.session_id))
     return 0 if result.returncode == 0 else 1
 
 
@@ -5444,8 +5585,8 @@ def handle_edit_command(args: argparse.Namespace) -> int:
             "risk_level": risk_level.value,
         },
     )
-    print(preview_file_result(result))
-    print(f"\nsession: {session.session_id}")
+    _print_file_edit_result(result)
+    _print_meta_footer(("session", session.session_id))
     return 0
 
 
