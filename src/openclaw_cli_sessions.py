@@ -78,6 +78,7 @@ class SessionSummary:
     checkpoint_count: int = 0
     last_checkpoint_at: str = ""
     repl_auto_route: bool = True
+    tags: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         now = _now_iso()

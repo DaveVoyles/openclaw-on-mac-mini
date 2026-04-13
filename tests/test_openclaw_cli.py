@@ -1996,8 +1996,8 @@ class TestActionSlashCommands:
 
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
-        assert "Checkpoint" in out
-        assert "/rollback last" in out
+        # Checkpoint is captured silently — no verbose recovery message printed
+        assert "Checkpoint" not in out
 
     def test_exec_strips_double_dash_prefix(self, capsys, tmp_path, monkeypatch):
         """Verify /exec -- <cmd> drops the leading '--' before dispatching."""

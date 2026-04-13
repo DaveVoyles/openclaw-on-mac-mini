@@ -52,17 +52,31 @@ and will see raw markup tags.
 | `_print_shell_result(rc, stdout, stderr)` | Colored shell output with exit code badge |
 | `_print_file_edit_result(path, diff)` | Unified diff display for `/edit` |
 | `_with_spinner(msg, fn)` | Braille spinner wrapping a blocking call |
+| `_preprocess_response_text(text)` | Clean raw LLM response text before rendering: strips `_via model_` trailers, extracts Sources section, removes inline `[N]` citation markers, converts pipe-in-bullet table patterns to real markdown tables. Returns `(body, sources)` |
+| `_apply_inline_ansi(text)` | Apply bold (`**`), italic (`*`), and inline code (`` ` ``) as ANSI spans. Used by the ANSI markdown fallback renderer. |
+| `_render_markdown_ansi(text)` | Full ANSI markdown renderer (fallback when Rich is absent or TTY not detected at module load). Handles H1–H4 headings, blockquotes (`▌`), fenced code blocks with language border, nested bullets, numbered lists, horizontal rules scaled to terminal width. |
+| `_render_table_ansi(rows)` | Render a list of `[str]` rows as a columnar ANSI table, scaled to terminal width with `…` truncation. |
+| `print_response(response, *, output_json, elapsed=0.0)` | Render a full AI response to stdout. Accepts optional `elapsed` (seconds) to show in the footer as `⏱ Xs  •  N tokens  •  model`. |
 
-### ANSI palette constants (~L90)
+### ANSI palette constants (~L96)
 
 ```python
 _R   = "\033[0m"    # reset
-_BYE = "\033[1;33m" # bold yellow
-_BGR = "\033[1;32m" # bold green
-_BRE = "\033[1;31m" # bold red
-_BCY = "\033[1;36m" # bold cyan
+_B   = "\033[1m"    # bold
 _DM  = "\033[2m"    # dim
+_IT  = "\033[3m"    # italic
+_UL  = "\033[4m"    # underline
+_CY  = "\033[36m"   # cyan
+_GR  = "\033[32m"   # green
 _YE  = "\033[33m"   # yellow
+_RE  = "\033[31m"   # red
+_BCY = "\033[1;36m" # bold cyan
+_BGR = "\033[1;32m" # bold green
+_BYE = "\033[1;33m" # bold yellow
+_BRE = "\033[1;31m" # bold red
+_BBL = "\033[1;34m" # bold blue
+_IT  = "\033[3m"    # italic
+_UL  = "\033[4m"    # underline
 ```
 
 ---
@@ -77,6 +91,10 @@ _YE  = "\033[33m"   # yellow
    "Unknown command" error and loops (does **not** fall through to AI)
 4. If autoroute is on, passes natural-language prompts through `route_repl_prompt()`
 5. Falls through to `invoke_openclaw()` for plain chat
+
+The REPL prompt badge `[autoroute:off]` is shown (dim, in the prompt) whenever
+auto-routing is disabled for the session. Use `/autoroute on` to re-enable.
+Users who see this badge can type `/help` for a full explanation.
 
 ### Slash command registry
 

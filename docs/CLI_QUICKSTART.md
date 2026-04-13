@@ -210,7 +210,7 @@ If you skipped token setup, the CLI now warns before requests are sent.
 Run `/update` from inside the REPL at any time:
 
 ```
-[no-route] openclaw> /update
+[autoroute:off] openclaw> /update
 Updating openclaw 0.6.0 from http://192.168.1.93:8765…
   ↓ openclaw_cli.py  ✓
   ↓ openclaw_cli_actions.py  ✓

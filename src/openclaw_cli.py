@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import difflib
 import getpass
 import json
 import os
 import platform
 import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -54,6 +56,7 @@ from openclaw_cli_sessions import (
     require_session,
     restore_last_routed_action_checkpoint,
     save_output,
+    save_session,
     save_watch_state,
     update_session,
 )
@@ -105,6 +108,9 @@ _BCY = _c("\033[1;36m")  # bold cyan
 _BGR = _c("\033[1;32m")  # bold green
 _BYE = _c("\033[1;33m")  # bold yellow
 _BRE = _c("\033[1;31m")  # bold red
+_BBL = _c("\033[1;34m")  # bold blue
+_IT  = _c("\033[3m")     # italic
+_UL  = _c("\033[4m")     # underline
 
 DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
@@ -124,6 +130,88 @@ OUTPUT_PREVIEW_MAX_CHARS = 4_000
 REPL_ROUTE_AUTO_THRESHOLD = 0.74
 REPL_ROUTE_ANNOUNCEMENT_COMMAND_LIMIT = 80
 REPL_ROUTE_ANNOUNCEMENT_REASON_LIMIT = 72
+
+# ---------------------------------------------------------------------------
+# User preferences — theme, emoji, layout
+# ---------------------------------------------------------------------------
+_OPENCLAW_DIR = Path.home() / ".openclaw"
+_PREFS_FILE = _OPENCLAW_DIR / "prefs.json"
+
+_PREFS: dict[str, Any] = {
+    "theme": "default",   # separator / accent colour
+    "emoji": True,         # show emoji in UI (False → ASCII fallbacks)
+    "layout": "normal",   # "normal" | "compact" (compact hides separator + status bar)
+}
+
+# Maps theme name → Rich rule style + ANSI accent escape code
+_THEMES: dict[str, tuple[str, str]] = {
+    "default":  ("dim blue",    "\033[2;34m"),
+    "green":    ("dim green",   "\033[2;32m"),
+    "yellow":   ("dim yellow",  "\033[2;33m"),
+    "magenta":  ("dim magenta", "\033[2;35m"),
+    "cyan":     ("dim cyan",    "\033[2;36m"),
+    "mono":     ("dim",         "\033[2m"),
+}
+
+# ASCII fallbacks for each emoji used in the UI
+_EMOJI_FALLBACKS: dict[str, str] = {
+    "🦞": "[openclaw]",
+    "💬": ">>",
+    "📍": "@",
+    "💡": "[hint]",
+    "📎": "[src]",
+    "⌨": "[ctrl-c]",
+    "⏱": "[time]",
+    "🗂": "[session]",
+    "👤": "[user]",
+    "⚡": "!",
+}
+
+
+def _load_prefs() -> None:
+    """Load user preferences from ~/.openclaw/prefs.json (silently ignores errors)."""
+    try:
+        if _PREFS_FILE.exists():
+            data = json.loads(_PREFS_FILE.read_text("utf-8"))
+            if isinstance(data, dict):
+                for key in ("theme", "emoji", "layout"):
+                    if key in data:
+                        _PREFS[key] = data[key]
+    except (OSError, json.JSONDecodeError):
+        pass
+
+
+def _save_prefs() -> None:
+    """Persist user preferences to ~/.openclaw/prefs.json (silently ignores errors)."""
+    try:
+        _OPENCLAW_DIR.mkdir(parents=True, exist_ok=True)
+        _PREFS_FILE.write_text(json.dumps(_PREFS, indent=2), "utf-8")
+    except OSError:
+        pass
+
+
+def _e(emoji: str, fallback: str = "") -> str:
+    """Return *emoji* or its ASCII fallback depending on the emoji pref."""
+    if _PREFS.get("emoji", True):
+        return emoji
+    return fallback or _EMOJI_FALLBACKS.get(emoji, "")
+
+
+def _theme_style() -> str:
+    """Return the Rich rule style string for the current theme."""
+    theme = _PREFS.get("theme", "default")
+    rich_style, _ = _THEMES.get(theme, _THEMES["default"])
+    return rich_style
+
+
+def _theme_ansi() -> str:
+    """Return the ANSI escape code for the current theme accent (plain-text path)."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty:
+        return ""
+    theme = _PREFS.get("theme", "default")
+    _, ansi = _THEMES.get(theme, _THEMES["default"])
+    return ansi
 
 
 # ---------------------------------------------------------------------------
@@ -215,7 +303,8 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     Falls back to a direct call when output is not a TTY or when --json output
     is requested so that machine-readable output is never corrupted.
     """
-    if not (_IS_TTY and not output_json):
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not (is_tty and not output_json):
         return fn(*args, **kwargs)
 
     result_holder: list[Any] = []
@@ -352,6 +441,7 @@ class CliConfig:
     client_name: str
     output_json: bool = False
     session_id: str = ""
+    no_stream: bool = False
 
 
 def normalize_base_url(raw_url: str | None) -> str:
@@ -2094,24 +2184,344 @@ def analyze_health_payload(payload: Any) -> tuple[str, bool | None]:
     return "", None
 
 
-def print_response(response: AskResponse, *, output_json: bool) -> None:
+def _render_table_ansi(rows: list[list[str]]) -> list[str]:
+    """Render a list of rows as an ANSI-aligned table, capped to terminal width."""
+    if not rows:
+        return []
+    num_cols = max(len(r) for r in rows)
+
+    def _plain(cell: str) -> str:
+        return re.sub(r"\*\*(.+?)\*\*", r"\1", re.sub(r"\*(.+?)\*", r"\1", cell))
+
+    # Natural column widths from content
+    col_widths = [0] * num_cols
+    for row in rows:
+        for i, cell in enumerate(row[:num_cols]):
+            col_widths[i] = max(col_widths[i], len(_plain(cell)))
+
+    # Cap to terminal width (leave a 4-char margin for the left indent + safety)
+    terminal_width = shutil.get_terminal_size((80, 24)).columns - 4
+    total = sum(col_widths) + num_cols * 3 + 1
+    if total > terminal_width and sum(col_widths) > 0:
+        available = max(num_cols * 6, terminal_width - num_cols * 3 - 1)
+        scale = available / sum(col_widths)
+        col_widths = [max(6, int(w * scale)) for w in col_widths]
+
+    sep_len = min(sum(col_widths) + num_cols * 3 + 1, terminal_width)
+    sep = "  " + _DM + "─" * sep_len + _R
+
+    result = [sep]
+    for row_i, row in enumerate(rows):
+        cells = []
+        for j in range(num_cols):
+            cell = row[j] if j < len(row) else ""
+            plain = _plain(cell)
+            max_w = col_widths[j]
+            if len(plain) > max_w:
+                plain = plain[: max_w - 1] + "…"
+                cell = plain  # use truncated plain for formatting
+            formatted = _apply_inline_ansi(cell)
+            cells.append(formatted + " " * (max_w - len(plain)))
+        result.append("  " + (" │ ".join(cells)).rstrip())
+        if row_i == 0:
+            result.append(sep)
+    result.append(sep)
+    return result
+
+
+def _apply_inline_ansi(text: str) -> str:
+    """Apply inline bold, italic, and code formatting via ANSI codes."""
+    text = re.sub(r"\*\*(.+?)\*\*", lambda m: f"{_B}{m.group(1)}{_R}", text)
+    text = re.sub(r"__(.+?)__", lambda m: f"{_B}{m.group(1)}{_R}", text)
+    text = re.sub(r"\*([^*\n]+?)\*", lambda m: f"{_IT}{m.group(1)}{_R}", text)
+    text = re.sub(r"`([^`\n]+?)`", lambda m: f"{_CY}{m.group(1)}{_R}", text)
+    return text
+
+
+def _render_markdown_ansi(text: str) -> str:
+    """Convert markdown to ANSI-formatted terminal text (fallback when Rich is absent).
+
+    Handles headings (H1–H4), bold/italic/code, blockquotes, tables, bullet
+    lists (including nested), numbered lists, fenced code blocks, and rules.
+    """
+    term_cols = shutil.get_terminal_size((80, 24)).columns
+    rule_width = min(term_cols - 2, 72)
+
+    lines = text.split("\n")
+    result: list[str] = []
+    in_code = False
+    code_lang = ""
+    table_rows: list[list[str]] = []
+
+    def flush_table() -> None:
+        if table_rows:
+            result.extend(_render_table_ansi(table_rows))
+            table_rows.clear()
+
+    for line in lines:
+        # Fenced code blocks
+        if line.startswith("```"):
+            flush_table()
+            if not in_code:
+                in_code = True
+                code_lang = line[3:].strip()
+                lang_label = f" {code_lang} " if code_lang else " code "
+                result.append(f"  {_DM}╭─{lang_label}{'─' * max(0, rule_width - len(lang_label) - 3)}╮{_R}")
+            else:
+                in_code = False
+                result.append(f"  {_DM}╰{'─' * (rule_width - 1)}╯{_R}")
+                code_lang = ""
+            continue
+        if in_code:
+            result.append(f"  {_DM}│{_R} {_CY}{line}{_R}")
+            continue
+
+        # Markdown table rows
+        if line.startswith("|"):
+            stripped = line.strip().strip("|")
+            if re.match(r"^[-| :]+$", stripped):
+                continue  # skip separator row
+            cells = [c.strip() for c in stripped.split("|")]
+            table_rows.append(cells)
+            continue
+        else:
+            flush_table()
+
+        # Horizontal rule
+        if re.match(r"^[-*_]{3,}\s*$", line):
+            result.append(f"{_DM}{'─' * rule_width}{_R}")
+            continue
+
+        # Blockquotes
+        bq = re.match(r"^>\s?(.*)", line)
+        if bq:
+            result.append(f"  {_DM}▌{_R}  {_DM}{_apply_inline_ansi(bq.group(1))}{_R}")
+            continue
+
+        # ATX headings
+        m = re.match(r"^(#{1,6})\s+(.*)", line)
+        if m:
+            level = len(m.group(1))
+            raw = m.group(2)
+            content = _apply_inline_ansi(raw)
+            if level == 1:
+                result.append(f"\n{_B}{_UL}{content}{_R}")
+                result.append("")
+            elif level == 2:
+                result.append(f"\n{_B}{content}{_R}")
+            elif level == 3:
+                result.append(f"{_B}{_DM}{content}{_R}")
+            else:
+                result.append(f"{_DM}{_IT}{content}{_R}")
+            continue
+
+        # Bullet list (supports nested via leading whitespace)
+        bm = re.match(r"^(\s*)[-*•]\s+(.*)", line)
+        if bm:
+            indent = bm.group(1)
+            depth = len(indent) // 2
+            bullet = ("◦" if depth % 2 else "•")
+            result.append(f"  {'  ' * depth}{bullet} {_apply_inline_ansi(bm.group(2))}")
+            continue
+
+        # Numbered list
+        nm = re.match(r"^(\s*)(\d+)\.\s+(.*)", line)
+        if nm:
+            indent = nm.group(1)
+            result.append(f"  {indent}{nm.group(2)}. {_apply_inline_ansi(nm.group(3))}")
+            continue
+
+        result.append(_apply_inline_ansi(line))
+
+    flush_table()
+    return "\n".join(result)
+
+
+def _is_kv_bullet_group(lines: list[str]) -> bool:
+    """Return True if all lines look like **Key:** value | **Key:** value bullet rows."""
+    kv_pattern = re.compile(r"\*\*[^*]+:\*\*")
+    for line in lines:
+        content = re.sub(r"^[•\-\*]\s+", "", line)
+        if not kv_pattern.search(content):
+            return False
+    return True
+
+
+def _bullet_group_to_table(lines: list[str]) -> list[str]:
+    """Convert pipe-in-bullet lines to a markdown table."""
+    headers: list[str] = []
+    rows: list[list[str]] = []
+    for line in lines:
+        content = re.sub(r"^[•\-\*]\s+", "", line)
+        parts = [p.strip() for p in content.split(" | ")]
+        row_headers: list[str] = []
+        row_values: list[str] = []
+        for part in parts:
+            # Match **Key:** value  (colon is inside the bold markers)
+            m = re.match(r"\*\*([^*:]+):\*\*\s*(.*)", part)
+            if m:
+                row_headers.append(m.group(1).strip())
+                row_values.append(m.group(2).strip())
+            else:
+                row_headers.append(f"Col{len(row_headers) + 1}")
+                row_values.append(part)
+        if not headers:
+            headers = row_headers
+        rows.append(row_values)
+    table: list[str] = []
+    table.append("| " + " | ".join(headers) + " |")
+    table.append("|" + "|".join(["---"] * len(headers)) + "|")
+    for row in rows:
+        while len(row) < len(headers):
+            row.append("")
+        table.append("| " + " | ".join(row[: len(headers)]) + " |")
+    return table
+
+
+def _unwrap_code_block_tables(text: str) -> str:
+    """Unwrap fenced code blocks that contain only pipe-in-bullet table rows.
+
+    When the AI wraps a pipe-in-bullet table in triple-backtick fences, Rich
+    renders it as a monospace code block instead of a table.  This step detects
+    those blocks and removes the fences so _convert_bullet_tables can convert them.
+    """
+    def _replace(m: re.Match) -> str:
+        content = m.group(1).strip()
+        non_empty = [l for l in content.split("\n") if l.strip()]
+        if len(non_empty) >= 2 and all(
+            re.match(r"^[•\-\*]\s+.+$", l) and " | " in l
+            for l in non_empty
+        ):
+            return content  # strip the fences
+        return m.group(0)  # leave unchanged
+
+    return re.sub(r"```[^\n]*\n(.*?)```", _replace, text, flags=re.DOTALL)
+
+
+def _convert_bullet_tables(text: str) -> str:
+    """Detect pipe-in-bullet table patterns and convert to proper markdown tables."""
+    lines = text.split("\n")
+    result: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        bullet_match = re.match(r"^[•\-\*]\s+.+$", line)
+        if bullet_match and " | " in line:
+            group = [line]
+            j = i + 1
+            while j < len(lines):
+                next_line = lines[j]
+                if re.match(r"^[•\-\*]\s+.+$", next_line) and " | " in next_line:
+                    group.append(next_line)
+                    j += 1
+                else:
+                    break
+            if len(group) >= 2 and _is_kv_bullet_group(group):
+                result.extend(_bullet_group_to_table(group))
+                i = j
+                continue
+        result.append(line)
+        i += 1
+    return "\n".join(result)
+
+
+def _preprocess_response_text(text: str) -> tuple[str, str | None]:
+    """Clean up raw LLM response text for better CLI rendering.
+
+    Returns (cleaned_body, sources) where sources may be None.
+
+    Steps:
+      A. Strip trailing ``_via model-name_`` trailer added by some proxied models.
+      B. Extract the Sources section (if present) so it can be rendered separately.
+      C. Strip inline [N] citation markers.
+      D. Unwrap fenced code blocks that contain only pipe-in-bullet table rows.
+      E. Convert pipe-in-bullet table patterns to proper markdown tables.
+    """
+    # A. Strip _via model_ trailer at the very end of the response
+    text = re.sub(r"\n_via [^\n]+_\s*$", "", text.rstrip())
+
+    # B. Extract Sources / **Sources** block at the end
+    sources: str | None = None
+    sources_match = re.search(
+        r"\n\n(?:\*\*Sources\*\*|Sources)\s*\n((?:[-\*] .+\n?)+)",
+        text,
+        re.IGNORECASE,
+    )
+    if sources_match:
+        sources = sources_match.group(0).strip()
+        text = text[: sources_match.start()].rstrip()
+
+    # C. Strip bare inline citation markers like [1], [2], [12]
+    # Guard against stripping markdown link text like [text](url) — only remove
+    # patterns where the bracket content is purely digits and not followed by (
+    text = re.sub(r"\[(\d{1,2})\](?!\()", "", text)
+
+    # D. Unwrap fenced code blocks that are really pipe-in-bullet tables
+    text = _unwrap_code_block_tables(text)
+
+    # E. Convert pipe-in-bullet table patterns to real markdown tables
+    text = _convert_bullet_tables(text)
+
+    return text, sources
+
+
+def print_response(response: AskResponse, *, output_json: bool, elapsed: float = 0.0) -> None:
     """Render a response to stdout."""
     if output_json:
         print(json.dumps(response.raw, indent=2, sort_keys=True))
         return
+    # Re-check TTY at call time — module-level _IS_TTY can be False in some
+    # terminal emulators (tmux, iTerm, etc.) even during an interactive session.
+    is_tty = _IS_TTY or sys.stdout.isatty()
     if response.response:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(_RichMarkdown(response.response))
+        body, sources = _preprocess_response_text(response.response)
+        if not body.strip():
+            body = "_No response text returned._"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(_RichMarkdown(body))
+            if sources:
+                _RICH_CONSOLE.print(
+                    _RichPanel(
+                        _RichMarkdown(sources),
+                        title=f"[dim]{_e('📎', '[src]')} Sources[/]",
+                        border_style="dim blue",
+                        padding=(0, 1),
+                    )
+                )
+        elif is_tty:
+            # Rich not available but interactive TTY — use ANSI markdown renderer
+            print(_render_markdown_ansi(body))
+            if sources:
+                term_cols = shutil.get_terminal_size((80, 24)).columns
+                w = min(term_cols - 4, 64)
+                print(f"\n  {_DM}╭─ {_e('📎', '[src]')} Sources {'─' * max(0, w - 12)}╮{_R}")
+                for src_line in sources.strip().splitlines():
+                    rendered = _apply_inline_ansi(src_line)
+                    print(f"  {_DM}│{_R}  {rendered}")
+                print(f"  {_DM}╰{'─' * (w - 1)}╯{_R}")
         else:
-            print(response.response)
-    if response.model or response.tokens:
-        if _RICH_AVAILABLE and _IS_TTY:
+            print(body)
+            if sources:
+                print(f"\n--- Sources ---\n{sources}")
+    if response.model or response.tokens or elapsed > 0:
+        parts: list[str] = []
+        if elapsed > 0:
+            parts.append(f"⏱ {elapsed:.1f}s")
+        if response.tokens:
+            parts.append(f"{response.tokens} tokens")
+        if response.model:
+            parts.append(response.model)
+        footer = "  •  ".join(parts)
+        if _RICH_AVAILABLE and is_tty:
             from rich.rule import Rule as _RichRule
             _RICH_CONSOLE.print(_RichRule(style="dim"))
-            _RICH_CONSOLE.print(f"[dim]model:[/] [cyan]{response.model}[/]  [dim]tokens:[/] [cyan]{response.tokens}[/]")
+            _RICH_CONSOLE.print(f"[dim]{footer}[/]")
+        elif is_tty:
+            print()
+            print(f"{_DM}{footer}{_R}")
         else:
             print()
-            print(f"{_DM}[model: {response.model} | tokens: {response.tokens}]{_R}")
+            print(f"[{footer}]")
 
 
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
@@ -3610,13 +4020,6 @@ def _capture_routed_action_checkpoint(
         _print_error(f"unable to capture safety checkpoint for {_routed_plan_step_label(metadata)}: {exc}")
         _set_command_result(ctx, ok=False, summary=f"checkpoint failed: {exc}")
         return False
-    if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(f"  [green]✓[/] checkpoint [dim]{checkpoint['checkpoint_id']}[/] captured · [dim]use /rollback last to recover[/]")
-    else:
-        print(
-            f"Checkpoint {checkpoint['checkpoint_id']} captured for {_routed_plan_step_label(metadata)}. "
-            "Use /rollback last to recover."
-        )
     return True
 
 
@@ -3625,7 +4028,11 @@ def _cmd_quit(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_help(ctx: ChatCommandContext) -> str:
-    print_chat_help()
+    token = ctx.args.strip().lower()
+    if token.startswith("search "):
+        print_chat_help(search=token[7:].strip())
+    else:
+        print_chat_help()
     return _CMD_CONTINUE
 
 
@@ -4013,9 +4420,9 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
     events = load_events(ctx.session_id, limit=n)
     if not events:
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[dim]No events recorded yet.[/]")
+            _RICH_CONSOLE.print(f"[dim]No events recorded yet.[/]  [dim]Events appear after /analyze, /write, /exec, /edit, or chat turns.[/]")
         else:
-            print("No events recorded yet.")
+            print("No events recorded yet. Events appear after /analyze, /write, /exec, /edit, or chat turns.")
         return _CMD_CONTINUE
     _KIND_COLORS = {
         "chat": "dim", "prompt": "white", "analyze": "cyan", "research": "blue",
@@ -4088,19 +4495,44 @@ def _cmd_autoroute(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_outputs(ctx: ChatCommandContext) -> str:
-    """/outputs [<index>|<filename>] — list or preview saved outputs for the active session."""
+    """/outputs [<index>|<filename>|promote <index> <name>] — list or preview saved outputs."""
     session = _require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
     outputs = list_saved_outputs(session.session_id, limit=OUTPUT_LIST_LIMIT)
     if not outputs:
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[dim]No saved outputs yet.[/]")
+            _RICH_CONSOLE.print("[dim]No saved outputs yet.[/]  [dim]Use /write, /research, or /analyze to generate output.[/]")
         else:
-            print("No saved outputs yet.")
+            print("No saved outputs yet. Use /write, /research, or /analyze to generate output.")
         return _CMD_CONTINUE
 
     token = ctx.args.strip()
+
+    # /outputs promote <index> <name>
+    if token.lower().startswith("promote "):
+        promote_args = token[8:].strip().split(maxsplit=1)
+        if len(promote_args) < 2:
+            print(f"{_BRE}error:{_R} Usage: /outputs promote <index> <stable-name>")
+            return _CMD_CONTINUE
+        idx_str, new_name = promote_args[0], promote_args[1].strip()
+        all_outputs = list_saved_outputs(session.session_id, limit=0)
+        if not idx_str.isdigit() or not (1 <= int(idx_str) <= len(all_outputs)):
+            print(f"{_BRE}error:{_R} Index {idx_str!r} out of range (1–{len(all_outputs)})")
+            return _CMD_CONTINUE
+        src = Path(str(all_outputs[int(idx_str) - 1].get("path") or ""))
+        if not src.exists():
+            print(f"{_BRE}error:{_R} Source file not found: {src}")
+            return _CMD_CONTINUE
+        dst = src.parent / new_name
+        try:
+            import shutil as _shutil
+            _shutil.copy2(src, dst)
+        except OSError as exc:
+            print(f"{_BRE}error:{_R} Could not promote: {exc}")
+            return _CMD_CONTINUE
+        print(f"  {_e('📄', '[promoted]')} {src.name} → {_BCY}{dst}{_R}")
+        return _CMD_CONTINUE
     if not token:
         if _RICH_AVAILABLE and _IS_TTY:
             table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan",
@@ -4155,9 +4587,49 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_rollback(ctx: ChatCommandContext) -> str:
-    """/rollback last — restore the latest routed-action checkpoint when possible."""
-    if ctx.args.strip().lower() != "last":
-        _print_error("Usage: /rollback last")
+    """/rollback [last|list] — restore the latest checkpoint or list all checkpoints."""
+    arg = ctx.args.strip().lower()
+
+    if arg == "list":
+        session = _require_session_or_warn(ctx)
+        if session is None:
+            return _CMD_CONTINUE
+        checkpoints = list_routed_action_checkpoints(session.session_id)
+        if not checkpoints:
+            print(f"  {_DM}No routed action checkpoints recorded for this session.{_R}")
+            print(f"  {_DM}Checkpoints are created automatically when you approve /exec or /edit routes.{_R}")
+            return _CMD_CONTINUE
+        if _RICH_AVAILABLE and _IS_TTY:
+            tbl = _RichTable(show_header=True, header_style="bold", box=None, pad_edge=False)
+            tbl.add_column("#", style="dim", justify="right", min_width=2)
+            tbl.add_column("ID", style="cyan", no_wrap=True, min_width=12)
+            tbl.add_column("Kind", style="dim", no_wrap=True)
+            tbl.add_column("Target", no_wrap=False, max_width=36)
+            tbl.add_column("Recoverable", style="dim", no_wrap=True)
+            for i, cp in enumerate(checkpoints, 1):
+                cp_id = str(cp.get("checkpoint_id") or "")[:12]
+                kind = str(cp.get("action_kind") or "—")
+                target = str(cp.get("target") or "—")[:34]
+                recoverable = "[green]✓[/]" if cp.get("rollback_supported") else "[dim]✗[/]"
+                tbl.add_row(str(i), cp_id, kind, target, recoverable)
+            _RICH_CONSOLE.print()
+            _RICH_CONSOLE.print(tbl)
+            _RICH_CONSOLE.print(f"\n  [dim]Use /rollback last to restore the most recent recoverable checkpoint.[/]\n")
+        else:
+            print(f"\n  Routed action checkpoints ({len(checkpoints)}):\n")
+            print(f"  {'#':>2}  {'ID':<12}  {'Kind':<8}  {'Target':<36}  Recoverable")
+            print(f"  {'─'*2}  {'─'*12}  {'─'*8}  {'─'*36}  ───────────")
+            for i, cp in enumerate(checkpoints, 1):
+                cp_id = str(cp.get("checkpoint_id") or "")[:12]
+                kind = str(cp.get("action_kind") or "—")[:8]
+                target = str(cp.get("target") or "—")[:34]
+                recoverable = "✓" if cp.get("rollback_supported") else "✗"
+                print(f"  {i:>2}  {cp_id:<12}  {kind:<8}  {target:<36}  {recoverable}")
+            print(f"\n  Use /rollback last to restore the most recent recoverable checkpoint.\n")
+        return _CMD_CONTINUE
+
+    if arg != "last":
+        _print_error("Usage: /rollback [last|list]")
         _set_command_result(ctx, ok=False, summary="invalid rollback selector")
         return _CMD_CONTINUE
     session = _require_session_or_warn(ctx)
@@ -4579,6 +5051,489 @@ def _cmd_update(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     return _CMD_CONTINUE
 
 
+def _cmd_theme(ctx: ChatCommandContext) -> str:
+    """Handler for /theme — display or set the UI colour theme."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    token = ctx.args.strip().lower()
+
+    if not token or token == "list":
+        # Show all available themes with a swatch preview
+        print(f"\n  Available themes (current: {_BBO}{_PREFS.get('theme', 'default')}{_R}):\n")
+        for name, (rich_style, ansi_code) in _THEMES.items():
+            marker = " ← current" if name == _PREFS.get("theme", "default") else ""
+            if is_tty:
+                swatch = f"{ansi_code}{'━' * 6}{_R}"
+            else:
+                swatch = "------"
+            print(f"    {_B}{name:<10}{_R} {swatch}{_DM}{marker}{_R}")
+        print(f"\n  Usage: /theme <name>   e.g. /theme green\n")
+        return _CMD_CONTINUE
+
+    if token not in _THEMES:
+        names = "  ".join(_THEMES.keys())
+        print(f"{_BRE}error:{_R} Unknown theme '{token}'. Choose from: {names}")
+        return _CMD_CONTINUE
+
+    _PREFS["theme"] = token
+    _save_prefs()
+    _, ansi_code = _THEMES[token]
+    if is_tty:
+        swatch = f"{ansi_code}{'━' * 8}{_R}"
+    else:
+        swatch = "--------"
+    print(f"  Theme set to {_B}{token}{_R}  {swatch}")
+    return _CMD_CONTINUE
+
+
+def _cmd_emoji(ctx: ChatCommandContext) -> str:
+    """Handler for /emoji — toggle emoji display on or off."""
+    token = ctx.args.strip().lower()
+    if not token:
+        state = "on" if _PREFS.get("emoji", True) else "off"
+        print(f"  Emoji is currently {_B}{state}{_R}. Usage: /emoji on | off")
+        return _CMD_CONTINUE
+    if token == "on":
+        _PREFS["emoji"] = True
+        _save_prefs()
+        print("  Emoji enabled ✓")
+    elif token == "off":
+        _PREFS["emoji"] = False
+        _save_prefs()
+        print("  Emoji disabled — ASCII fallbacks active.")
+    else:
+        print(f"{_BRE}error:{_R} Expected 'on' or 'off', got '{token}'")
+    return _CMD_CONTINUE
+
+
+def _cmd_layout(ctx: ChatCommandContext) -> str:
+    """Handler for /layout — switch layout density."""
+    token = ctx.args.strip().lower()
+    if not token:
+        current = _PREFS.get("layout", "normal")
+        print(f"  Layout is currently {_B}{current}{_R}. Usage: /layout normal | compact")
+        return _CMD_CONTINUE
+    if token not in ("normal", "compact"):
+        print(f"{_BRE}error:{_R} Expected 'normal' or 'compact', got '{token}'")
+        return _CMD_CONTINUE
+    _PREFS["layout"] = token
+    _save_prefs()
+    desc = {
+        "normal":  "separator + status bar visible",
+        "compact": "separator + status bar hidden",
+    }[token]
+    print(f"  Layout set to {_B}{token}{_R} — {desc}")
+    return _CMD_CONTINUE
+
+
+def _session_badges(s: "SessionSummary") -> str:
+    """Build a compact badge string for a session summary row."""
+    parts: list[str] = []
+    if s.status == "active":
+        parts.append("●")
+    else:
+        parts.append("○")
+    if _session_is_stale(s):
+        parts.append("stale")
+    if (s.output_count or 0) > 0:
+        parts.append("outputs")
+    if getattr(s, "tags", []):
+        parts.append(" ".join(f"#{t}" for t in s.tags[:3]))
+    return "  ".join(parts)
+
+
+def _session_is_stale(s: "SessionSummary", days: int = 7) -> bool:
+    try:
+        updated = datetime.fromisoformat(s.updated_at.replace("Z", "+00:00"))
+        age = datetime.now(timezone.utc) - updated
+        return age.days >= days
+    except Exception:
+        return False
+
+
+def _cmd_sessions(ctx: ChatCommandContext) -> str:
+    """/sessions [search QUERY | related] — browse recent sessions."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    token = ctx.args.strip()
+    token_lower = token.lower()
+
+    if token_lower.startswith("open "):
+        target = token[5:].strip()
+        print(f"\n  To resume that session, exit and run:")
+        print(f"    {_BCY}openclaw session resume {target}{_R}\n")
+        return _CMD_CONTINUE
+
+    if token_lower == "related":
+        # Find sessions with cwd or file overlap against the current session
+        if not ctx.session_id:
+            print(f"  {_DM}No active session — start one first.{_R}")
+            return _CMD_CONTINUE
+        curr = load_session(ctx.session_id)
+        if curr is None:
+            print(f"  {_DM}Session not found.{_R}")
+            return _CMD_CONTINUE
+        curr_cwd = (curr.cwd or "").strip()
+        curr_files = set(curr.files or [])
+        all_sessions = list_sessions(limit=100)
+        scored: list[tuple[int, "SessionSummary"]] = []
+        for s in all_sessions:
+            if s.session_id == ctx.session_id:
+                continue
+            score = 0
+            if curr_cwd and s.cwd == curr_cwd:
+                score += 3
+            if curr_files and curr_files & set(s.files or []):
+                score += 2
+            if curr.plan_id and s.plan_id == curr.plan_id:
+                score += 2
+            if curr.task_id and s.task_id == curr.task_id:
+                score += 1
+            if score > 0:
+                scored.append((score, s))
+        scored.sort(key=lambda x: -x[0])
+        if not scored:
+            print(f"  {_DM}No related sessions found (matching cwd, files, plan, or task).{_R}")
+            return _CMD_CONTINUE
+        print(f"\n  Related sessions (top {min(len(scored), 8)}):\n")
+        for _score, s in scored[:8]:
+            short_id = s.session_id[:8] + "…"
+            title = (s.title[:40] + "…") if len(s.title) > 40 else s.title
+            updated = s.updated_at[:10] if s.updated_at else "—"
+            badges = _session_badges(s)
+            badge_str = f"  {_DM}{badges}{_R}" if badges else ""
+            print(f"  {_CY}{short_id}{_R}  {title:<42} {_DM}{updated}{_R}{badge_str}")
+        print(f"\n  Use /sessions open <id> to get resume instructions.\n")
+        return _CMD_CONTINUE
+
+    query = ""
+    if token_lower.startswith("search "):
+        query = token[7:].strip().lower()
+    elif token and not token_lower.startswith("search"):
+        # treat bare word as a search query shorthand
+        query = token_lower
+
+    sessions = list_sessions(limit=50)
+    if query:
+        sessions = [
+            s for s in sessions
+            if query in s.title.lower()
+            or query in s.last_summary.lower()
+            or query in s.session_id.lower()
+            or query in " ".join(getattr(s, "tags", []))
+        ]
+
+    if not sessions:
+        msg = f"No sessions matching '{query}'." if query else "No sessions found."
+        hint = "" if query else f"  Start one with {_BCY}openclaw --session my-project{_R} or just type a question."
+        print(f"  {_DM}{msg}{_R}")
+        if hint:
+            print(hint)
+        return _CMD_CONTINUE
+
+    title_str = "Recent sessions" + (f" matching '{query}'" if query else "")
+    if _RICH_AVAILABLE and is_tty:
+        tbl = _RichTable(title=title_str, show_header=True, header_style="bold", box=None, pad_edge=False)
+        tbl.add_column("ID", style="cyan", no_wrap=True, min_width=10)
+        tbl.add_column("Title", no_wrap=False, min_width=20, max_width=38)
+        tbl.add_column("Cmds", justify="right", style="dim", min_width=4)
+        tbl.add_column("Updated", style="dim", no_wrap=True)
+        tbl.add_column("Badges", style="dim", no_wrap=True)
+        for s in sessions:
+            short_id = s.session_id[:8] + "…"
+            title = (s.title[:36] + "…") if len(s.title) > 36 else s.title
+            updated = s.updated_at[:10] if s.updated_at else "—"
+            badges = _session_badges(s)
+            tbl.add_row(short_id, title, str(s.command_count), updated, badges)
+        _RICH_CONSOLE.print()
+        _RICH_CONSOLE.print(tbl)
+        _RICH_CONSOLE.print(f"\n  [dim]Use /sessions open <id> to get resume instructions.[/]\n")
+    else:
+        print(f"\n  {title_str}:\n")
+        print(f"  {'ID':<10}  {'Title':<36}  {'Cmds':>4}  {'Updated':<10}  Badges")
+        print(f"  {'─'*10}  {'─'*36}  {'─'*4}  {'─'*10}  ──────")
+        for s in sessions:
+            short_id = (s.session_id[:8] + "…")[:10]
+            title = (s.title[:34] + "…") if len(s.title) > 34 else s.title
+            updated = s.updated_at[:10] if s.updated_at else "—"
+            badges = _session_badges(s) or "—"
+            print(f"  {short_id:<10}  {title:<36}  {s.command_count:>4}  {updated:<10}  {badges}")
+        print(f"\n  Use /sessions open <id> to get resume instructions.\n")
+    return _CMD_CONTINUE
+
+
+def _cmd_export(ctx: ChatCommandContext) -> str:
+    """/export [md|json|html] — export the current conversation history to a file."""
+    fmt = ctx.args.strip().lower() or "md"
+    if fmt not in ("md", "markdown", "json", "html"):
+        print(f"{_BRE}error:{_R} Unknown format '{fmt}'. Use: md, json, html")
+        return _CMD_CONTINUE
+
+    history = ctx.history
+    if not history:
+        print(f"  {_DM}No conversation history to export yet.{_R}")
+        return _CMD_CONTINUE
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    session_prefix = ctx.session_id[:8] if ctx.session_id else "session"
+    exported_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    if fmt == "json":
+        content = json.dumps(history, indent=2, ensure_ascii=False)
+        ext = "json"
+    elif fmt == "html":
+        html_turns: list[str] = []
+        for turn in history:
+            role = turn.get("role", "")
+            msg = (turn.get("content") or "").strip().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            # convert **bold** and *italic* for basic readability
+            msg = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", msg)
+            msg = re.sub(r"\*(.+?)\*", r"<em>\1</em>", msg)
+            msg = msg.replace("\n", "<br>\n")
+            label = "You" if role == "user" else "OpenClaw"
+            css_class = "user" if role == "user" else "assistant"
+            html_turns.append(f'<div class="turn {css_class}"><div class="label">{label}</div><div class="content">{msg}</div></div>')
+        turns_html = "\n".join(html_turns)
+        content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OpenClaw Export — {session_prefix}</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; max-width: 860px; margin: 40px auto; color: #222; }}
+  h1 {{ color: #1a5299; }}
+  .meta {{ color: #777; font-size: 0.9em; margin-bottom: 2em; }}
+  .turn {{ margin: 1.5em 0; padding: 1em; border-radius: 6px; }}
+  .user {{ background: #f0f4ff; border-left: 4px solid #4a7fd4; }}
+  .assistant {{ background: #f8f8f8; border-left: 4px solid #888; }}
+  .label {{ font-weight: bold; font-size: 0.85em; color: #555; margin-bottom: 0.5em; }}
+  .content {{ line-height: 1.6; }}
+  strong {{ font-weight: 600; }}
+</style>
+</head>
+<body>
+<h1>🦞 OpenClaw Session</h1>
+<p class="meta">Session: {session_prefix}…  ·  Exported: {exported_at}</p>
+{turns_html}
+</body>
+</html>"""
+        ext = "html"
+    else:
+        lines = [f"# OpenClaw Session Export\n\n*Exported: {exported_at}*\n"]
+        for turn in history:
+            role = turn.get("role", "")
+            msg = (turn.get("content") or "").strip()
+            if role == "user":
+                lines.append(f"\n---\n\n## {_e('👤', '>>>')} You\n\n{msg}\n")
+            else:
+                lines.append(f"\n---\n\n## {_e('🤖', '<<<')} OpenClaw\n\n{msg}\n")
+        content = "\n".join(lines)
+        ext = "md"
+
+    export_dir = Path.home() / "Downloads"
+    try:
+        export_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        export_dir = Path.cwd()
+    out_path = export_dir / f"openclaw_{session_prefix}_{ts}.{ext}"
+    try:
+        out_path.write_text(content, encoding="utf-8")
+    except OSError as exc:
+        print(f"{_BRE}error:{_R} Could not write export: {exc}")
+        return _CMD_CONTINUE
+
+    turns = len([t for t in history if t.get("role") == "user"])
+    print(f"  {_e('📄', '[export]')} Exported {turns} turn{'s' if turns != 1 else ''} → {_BCY}{out_path}{_R}")
+    return _CMD_CONTINUE
+
+
+def _cmd_stats(ctx: ChatCommandContext) -> str:
+    """/stats — show aggregate usage statistics across all sessions."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    sessions = list_sessions(limit=500)
+
+    if not sessions:
+        print(f"  {_DM}No sessions found.{_R}")
+        return _CMD_CONTINUE
+
+    total_sessions = len(sessions)
+    total_commands = sum(s.command_count for s in sessions)
+    total_edits = sum(s.file_edit_count for s in sessions)
+    total_checkpoints = sum(s.checkpoint_count for s in sessions)
+    active = sum(1 for s in sessions if s.status == "active")
+    newest = sessions[0].updated_at[:10] if sessions else "—"
+    oldest = sessions[-1].created_at[:10] if sessions else "—"
+
+    # Most-used cwd roots
+    from collections import Counter
+    cwd_counts: Counter[str] = Counter()
+    for s in sessions:
+        if s.cwd:
+            cwd_counts[s.cwd] += 1
+    top_cwds = cwd_counts.most_common(3)
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table as _RichTableLocal
+        grid = _RichText()
+        grid.append(f"  sessions    ", style="dim")
+        grid.append(f"{total_sessions}", style="bold")
+        grid.append(f"  ({active} active)\n", style="dim")
+        grid.append(f"  commands    ", style="dim")
+        grid.append(f"{total_commands}\n", style="bold")
+        grid.append(f"  file edits  ", style="dim")
+        grid.append(f"{total_edits}\n", style="bold")
+        grid.append(f"  checkpoints ", style="dim")
+        grid.append(f"{total_checkpoints}\n", style="bold")
+        grid.append(f"  date range  ", style="dim")
+        grid.append(f"{oldest}", style="bold")
+        grid.append(f" → ", style="dim")
+        grid.append(f"{newest}\n", style="bold")
+        if top_cwds:
+            grid.append(f"\n  top dirs\n", style="dim")
+            for cwd, count in top_cwds:
+                short = cwd[-45:] if len(cwd) > 45 else cwd
+                if len(cwd) > 45:
+                    short = "…" + short
+                grid.append(f"    {count:>3}×  ", style="dim")
+                grid.append(f"{short}\n", style="cyan")
+        _RICH_CONSOLE.print(_RichPanel(grid, title=f"[bold]{_e('📊', '[stats]')} OpenClaw Stats[/]", border_style="dim", padding=(0, 1)))
+    else:
+        print(f"\n  {_e('📊', '[stats]')} OpenClaw Stats\n")
+        print(f"  sessions    : {total_sessions}  ({active} active)")
+        print(f"  commands    : {total_commands}")
+        print(f"  file edits  : {total_edits}")
+        print(f"  checkpoints : {total_checkpoints}")
+        print(f"  date range  : {oldest} → {newest}")
+        if top_cwds:
+            print(f"\n  top dirs:")
+            for cwd, count in top_cwds:
+                short = ("…" + cwd[-45:]) if len(cwd) > 45 else cwd
+                print(f"    {count:>3}×  {short}")
+        print()
+    return _CMD_CONTINUE
+
+
+def _cmd_tag(ctx: ChatCommandContext) -> str:
+    """/tag [add <tag>|rm <tag>|list] — manage tags on the current session."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+
+    token = ctx.args.strip()
+    token_lower = token.lower()
+
+    if not token or token_lower == "list":
+        tags = list(getattr(session, "tags", []))
+        if tags:
+            tag_str = "  ".join(f"{_CY}#{t}{_R}" for t in tags)
+            print(f"  Tags: {tag_str}")
+        else:
+            print(f"  {_DM}No tags. Use /tag add <name> to add one.{_R}")
+        return _CMD_CONTINUE
+
+    parts = token.split(maxsplit=1)
+    subcmd = parts[0].lower()
+    tag_name = parts[1].strip().lower() if len(parts) > 1 else ""
+
+    if subcmd == "add":
+        if not tag_name:
+            print(f"{_BRE}error:{_R} Usage: /tag add <name>")
+            return _CMD_CONTINUE
+        tags = list(getattr(session, "tags", []))
+        if tag_name not in tags:
+            tags.append(tag_name)
+            session.tags = tags
+            save_session(session)
+            print(f"  Added tag {_CY}#{tag_name}{_R}")
+        else:
+            print(f"  {_DM}Tag #{tag_name} already present.{_R}")
+    elif subcmd == "rm":
+        if not tag_name:
+            print(f"{_BRE}error:{_R} Usage: /tag rm <name>")
+            return _CMD_CONTINUE
+        tags = list(getattr(session, "tags", []))
+        if tag_name in tags:
+            tags.remove(tag_name)
+            session.tags = tags
+            save_session(session)
+            print(f"  Removed tag {_DM}#{tag_name}{_R}")
+        else:
+            print(f"  {_DM}Tag #{tag_name} not found.{_R}")
+    else:
+        print(f"{_BRE}error:{_R} Unknown subcommand '{subcmd}'. Use: add, rm, list")
+    return _CMD_CONTINUE
+
+
+def _cmd_resume(ctx: ChatCommandContext) -> str:
+    """/resume [last] — print resume instructions for the most recent other session."""
+    token = ctx.args.strip().lower()
+    sessions = list_sessions(limit=20)
+    # Exclude current session if active
+    candidates = [s for s in sessions if s.session_id != ctx.session_id]
+    if token and token != "last":
+        # try to match by prefix
+        candidates = [s for s in candidates if s.session_id.startswith(token) or token in s.title.lower()]
+    if not candidates:
+        print(f"  {_DM}No other sessions to resume.{_R}")
+        return _CMD_CONTINUE
+    target = candidates[0]
+    short_id = target.session_id[:8]
+    title = (target.title[:50] + "…") if len(target.title) > 50 else target.title
+    updated = target.updated_at[:10] if target.updated_at else "—"
+    print(f"\n  {_e('📍', '@')} Most recent session:")
+    print(f"    {_B}{title}{_R}  {_DM}({short_id}…  updated {updated}){_R}")
+    print(f"\n  To resume, exit and run:")
+    print(f"    {_BCY}openclaw session resume {target.session_id}{_R}\n")
+    return _CMD_CONTINUE
+
+
+def _cmd_replay(ctx: ChatCommandContext) -> str:
+    """/replay [session-id] — re-print the current or a past session's conversation."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    token = ctx.args.strip()
+
+    if token:
+        # Try to find a session matching the token as id prefix or title substring
+        all_sessions = list_sessions(limit=100)
+        match = next(
+            (s for s in all_sessions
+             if s.session_id.startswith(token) or token.lower() in s.title.lower()),
+            None,
+        )
+        if match is None:
+            print(f"{_BRE}error:{_R} No session found matching '{token}'")
+            return _CMD_CONTINUE
+        history = load_conversation_history(match.session_id, limit_turns=50)
+        header = f"Replay: {match.title[:50]} ({match.session_id[:8]}…)"
+    else:
+        history = ctx.history
+        header = "Replay: current session"
+
+    if not history:
+        print(f"  {_DM}No conversation history to replay.{_R}")
+        return _CMD_CONTINUE
+
+    turns = [(t.get("role", ""), (t.get("content") or "").strip()) for t in history]
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold]{header}[/]\n")
+        for role, msg in turns:
+            if role == "user":
+                _RICH_CONSOLE.print(f"[bold cyan]{_e('👤', 'You')}[/]\n{msg}\n")
+            else:
+                _RICH_CONSOLE.print(_RichRule(style=_theme_style()))
+                _RICH_CONSOLE.print(msg + "\n")
+    else:
+        cols = shutil.get_terminal_size((80, 24)).columns
+        sep = "─" * min(cols - 2, 60)
+        print(f"\n  {header}\n")
+        for role, msg in turns:
+            if role == "user":
+                print(f"\n{_BCY}{_e('👤', 'You')}{_R}\n{msg}\n")
+            else:
+                print(f"\n{_DM}{sep}{_R}")
+                print(f"{msg}\n")
+    return _CMD_CONTINUE
+
+
 def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
@@ -4716,13 +5671,76 @@ def build_chat_command_registry() -> ChatCommandRegistry:
             handler=_cmd_edit,
         )
     )
+    registry.register(
+        SlashCommand(
+            name="theme",
+            description="Get or set the UI colour theme (/theme [name|list])",
+            handler=_cmd_theme,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="emoji",
+            description="Toggle emoji display (/emoji [on|off])",
+            handler=_cmd_emoji,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="layout",
+            description="Switch layout density (/layout [normal|compact])",
+            handler=_cmd_layout,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="sessions",
+            description="Browse recent sessions (/sessions [search QUERY])",
+            handler=_cmd_sessions,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="export",
+            description="Export current conversation to a file (/export [md|json])",
+            handler=_cmd_export,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="stats",
+            description="Show aggregate usage statistics",
+            handler=_cmd_stats,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="tag",
+            description="Manage session tags (/tag [add <tag>|rm <tag>|list])",
+            handler=_cmd_tag,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="resume",
+            description="Print resume instructions for the most-recent other session (/resume [last|id])",
+            handler=_cmd_resume,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="replay",
+            description="Re-print the current or a past session conversation (/replay [session-id])",
+            handler=_cmd_replay,
+        )
+    )
     return registry
 
 
-def print_chat_help() -> None:
-    """Print built-in interactive chat commands."""
+def print_chat_help(*, search: str = "") -> None:
+    """Print built-in interactive chat commands, optionally filtered by *search*."""
     commands = [
-        ("/help",                          "Show this help"),
+        ("/help [search QUERY]",           "Show this help, or filter commands by keyword"),
         ("/clear",                         "Reset the current conversation history"),
         ("/quit",                          "Exit the CLI"),
         ("/update",                        "Self-upgrade openclaw via pip"),
@@ -4734,8 +5752,8 @@ def print_chat_help() -> None:
         ("/files rm <path>",               "Remove a file from tracked files"),
         ("/plan [<id>|unlink]",            "Show or link a plan"),
         ("/task [<id>|unlink]",            "Show or link a task"),
-        ("/outputs [<index>|<filename>]",  "List or preview saved session outputs"),
-        ("/rollback last",                 "Restore latest routed edit checkpoint (text files only)"),
+        ("/outputs [promote <i> <name>]",  "List, preview, or promote saved session outputs"),
+        ("/rollback [last|list]",          "Restore latest checkpoint or list all checkpoints"),
         ("/events [n]",                    "Show last n session events (default 5)"),
         ("/autoroute [on|off]",            "Show or toggle high-confidence REPL auto-routing"),
         ("/analyze <goal>",                "Analyze the session workspace"),
@@ -4743,45 +5761,69 @@ def print_chat_help() -> None:
         ("/write <task>",                  "Generate a markdown document"),
         ("/exec [--] <command>",           "Run a shell command with approval + session tracking"),
         ("/edit <path> [--content TEXT]",  "Inspect or write a file (--append to append)"),
+        ("/theme [name|list]",             "Get or set UI colour theme"),
+        ("/emoji [on|off]",               "Toggle emoji in UI output"),
+        ("/layout [normal|compact]",       "Switch layout density"),
+        ("/sessions [search|related]",     "Browse or search recent sessions; /sessions related"),
+        ("/export [md|json|html]",         "Export conversation history to ~/Downloads"),
+        ("/stats",                         "Show aggregate usage stats across all sessions"),
+        ("/tag [add|rm|list] <tag>",       "Manage tags on the current session"),
+        ("/resume [last|<id>]",            "Print resume instructions for a past session"),
+        ("/replay [session-id]",           "Re-print the current or a past session conversation"),
     ]
+
+    q = search.strip().lower()
+    if q:
+        commands = [(cmd, desc) for cmd, desc in commands if q in cmd.lower() or q in desc.lower()]
+        if not commands:
+            print(f"  {_DM}No commands match '{q}'.{_R}")
+            return
+
     notes = (
         "High-confidence freeform prompts can auto-route to /analyze, /research, /write, /exec, or /edit.\n"
         "Multi-step prompts can decompose into linked plans and auto-run step-by-step with [n/N] progress.\n"
-        "Ambiguous prompts stay in normal chat. High/critical /exec and /edit steps still require approval."
+        "Ambiguous prompts stay in normal chat. High/critical /exec and /edit steps still require approval.\n"
+        "[autoroute:off] in the prompt means auto-routing is disabled — use /autoroute on to re-enable."
     )
     if _RICH_AVAILABLE and _IS_TTY:
+        title = f"[bold cyan]OpenClaw Commands[/bold cyan]" + (f"  [dim]matching '{q}'[/]" if q else "")
         t = _RichTable.grid(padding=(0, 2))
         t.add_column(style="bold cyan", no_wrap=True)
         t.add_column(style="dim")
         for cmd, desc in commands:
             t.add_row(cmd, desc)
-        _RICH_CONSOLE.print(_RichPanel(t, title="[bold cyan]OpenClaw Commands[/bold cyan]", border_style="cyan", padding=(0, 1)))
-        _RICH_CONSOLE.print(f"[dim]{notes}[/dim]")
-        examples = [
-            ("Ask a question",       "What does this repo do?"),
-            ("Analyze a directory",  "openclaw analyze --cwd ./src"),
-            ("Run a command",        "/exec -- git diff HEAD"),
-            ("Research a topic",     "/research latest Python async patterns"),
-            ("Link a plan",          "/plan my-feature-plan"),
-        ]
-        ex_grid = _RichTable.grid(padding=(0, 2))
-        ex_grid.add_column(style="dim")
-        ex_grid.add_column(style="bold cyan")
-        for label, cmd in examples:
-            ex_grid.add_row(label, cmd)
-        _RICH_CONSOLE.print(_RichPanel(ex_grid, title="[bold]Examples[/]", border_style="dim", padding=(0, 1)))
+        _RICH_CONSOLE.print(_RichPanel(t, title=title, border_style="cyan", padding=(0, 1)))
+        if not q:
+            _RICH_CONSOLE.print(f"[dim]{notes}[/dim]")
+            examples = [
+                ("Ask a question",       "What does this repo do?"),
+                ("Analyze a directory",  "openclaw analyze --cwd ./src"),
+                ("Run a command",        "/exec -- git diff HEAD"),
+                ("Research a topic",     "/research latest Python async patterns"),
+                ("Link a plan",          "/plan my-feature-plan"),
+            ]
+            ex_grid = _RichTable.grid(padding=(0, 2))
+            ex_grid.add_column(style="dim")
+            ex_grid.add_column(style="bold cyan")
+            for label, cmd in examples:
+                ex_grid.add_row(label, cmd)
+            _RICH_CONSOLE.print(_RichPanel(ex_grid, title="[bold]Examples[/]", border_style="dim", padding=(0, 1)))
     else:
-        print("Interactive commands:")
+        if q:
+            print(f"  Commands matching '{q}':")
+        else:
+            print("Interactive commands:")
         for cmd, desc in commands:
-            print(f"  {cmd:<38} {desc}")
+            print(f"  {cmd:<42} {desc}")
         print()
-        print(notes)
-        print("\nExamples:")
-        print('  Ask a question         What does this repo do?')
-        print('  Analyze a directory    openclaw analyze --cwd ./src')
-        print('  Run a command          /exec -- git diff HEAD')
-        print('  Research a topic       /research latest Python async patterns')
-        print('  Link a plan            /plan my-feature-plan')
+        if not q:
+            print(notes)
+            print("\nExamples:")
+            print('  Ask a question         What does this repo do?')
+            print('  Analyze a directory    openclaw analyze --cwd ./src')
+            print('  Run a command          /exec -- git diff HEAD')
+            print('  Research a topic       /research latest Python async patterns')
+            print('  Link a plan            /plan my-feature-plan')
 
 
 def handle_auth_command(args: argparse.Namespace) -> int:
@@ -4969,6 +6011,32 @@ def save_shell_history() -> None:
         return
 
 
+def _make_completer(registry: "ChatCommandRegistry") -> "Any":
+    """Return a readline tab-completer for registered slash commands.
+
+    Completes ``/`` prefixes against command names and their aliases.
+    Falls back gracefully — never raises, since readline calls completers
+    during interactive input where exceptions would be swallowed silently.
+    """
+    slash_names = []
+    for cmd in registry.list_commands():
+        slash_names.append("/" + cmd.name)
+        for alias in cmd.aliases:
+            slash_names.append("/" + alias)
+
+    def _completer(text: str, state: int) -> "str | None":
+        try:
+            if text.startswith("/"):
+                matches = [n for n in slash_names if n.startswith(text)]
+            else:
+                matches = []
+            return matches[state] if state < len(matches) else None
+        except Exception:  # noqa: BLE001
+            return None
+
+    return _completer
+
+
 def build_config(args: argparse.Namespace) -> CliConfig:
     """Build resolved CLI config from parsed args and environment."""
     timeout_seconds = max(1, int(args.timeout))
@@ -4981,54 +6049,119 @@ def build_config(args: argparse.Namespace) -> CliConfig:
         client_name=(args.client_name or default_client_name()).strip(),
         output_json=bool(args.json),
         session_id=str(getattr(args, "session", "") or "").strip(),
+        no_stream=bool(getattr(args, "no_stream", False)),
     )
 
 
+def _print_status_bar(
+    *,
+    session_id: str = "",
+    autoroute_on: bool = True,
+    history_len: int = 0,
+) -> None:
+    """Print a compact dim status line below the response.
+
+    Shows session, context size, and autoroute state so the user always has
+    situational awareness without cluttering the response output itself.
+    """
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty:
+        return
+    parts: list[str] = []
+    if session_id:
+        parts.append(f"{_e('📍', '@')} {session_id[:10]}…")
+    turns = history_len // 2  # history contains alternating user/assistant pairs
+    if turns:
+        parts.append(f"{_e('💬', 'msgs:')} {turns} turn{'s' if turns != 1 else ''}")
+    parts.append("autoroute \033[32mon\033[0m" if autoroute_on else "autoroute \033[33moff\033[0m")
+    line = "  ·  ".join(parts)
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"[dim]  {line}[/]")
+    else:
+        print(f"  {_DM}{line}{_R}")
+
+
 def _make_prompt(session_id: str = "", autoroute_on: bool = True) -> str:
-    """Build the REPL prompt string, optionally with session hint or no-route badge."""
-    if _IS_TTY:
+    """Build the REPL prompt string, optionally with session hint or autoroute badge."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if is_tty:
+        name = "\033[1;34mopenclaw\033[0m"  # bold blue
         if not autoroute_on:
-            return f"\033[2m[no-route]\033[0m openclaw> "
+            # Yellow badge so it stands out as a warning-like state
+            return f"{name} \033[33m[autoroute:off]\033[0m ❯ "
         if session_id:
-            short = session_id[:6]
-            return f"openclaw \033[2m({short}…)\033[0m> "
-    return "openclaw> "
+            short = session_id[:8]
+            # Cyan session hint — clearly informational, not a warning
+            return f"{name} \033[36m[{short}…]\033[0m ❯ "
+        return f"{name} ❯ "
+    return "openclaw ❯ "
+
+
+def _print_first_run_tips() -> None:
+    """Print a compact new-session tip panel (shown once, only in TTY mode)."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    tips = [
+        (f"{_e('📁', '[cwd]')} /cwd <path>",       "Set working directory for file context"),
+        (f"{_e('📄', '[files]')} /files add <path>", "Track specific files the AI can reference"),
+        (f"{_e('📋', '[plan]')} /plan <id>",         "Link a plan so routes read it automatically"),
+        (f"{_e('🔍', '[ctx]')} /context",             "See what context the AI currently has"),
+        (f"{_e('💡', '[help]')} /help search <kw>",  "Search commands by keyword"),
+    ]
+    if _RICH_AVAILABLE and is_tty:
+        t = _RichTable.grid(padding=(0, 2))
+        t.add_column(style="bold cyan", no_wrap=True)
+        t.add_column(style="dim")
+        for cmd, desc in tips:
+            t.add_row(cmd, desc)
+        _RICH_CONSOLE.print(_RichPanel(
+            t,
+            title=f"[dim]{_e('🚀', '[new]')} New session — quick tips[/]",
+            border_style="dim",
+            padding=(0, 1),
+        ))
+    else:
+        print(f"\n  {_e('🚀', '[new]')} New session — quick tips:")
+        for cmd, desc in tips:
+            print(f"    {cmd:<32}  {desc}")
+        print()
 
 
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
     if _RICH_AVAILABLE and _IS_TTY:
         t = _RichText()
-        t.append("🦞 OpenClaw", style="bold cyan")
+        t.append(f"{_e('🦞', '[openclaw]')} OpenClaw", style="bold cyan")
         t.append("  connected to ", style="dim")
         t.append(config.base_url, style="cyan")
-        t.append("\n  👤 ", style="dim")
+        t.append(f"\n  {_e('👤', '[user]')} ", style="dim")
         t.append(config.user_name, style="bold green")
         if session_id:
-            t.append("  ·  🗂  session: ", style="dim")
+            t.append(f"  ·  {_e('🗂', '[session]')}  session: ", style="dim")
             t.append(session_id[:8] + "…", style="yellow")
         t.append("\n\n  ", style="")
+        t.append("Type anything to chat", style="dim")
+        t.append(" · ", style="dim")
         t.append("/help", style="bold cyan")
-        t.append("  ·  ", style="dim")
-        t.append("/autoroute off", style="bold cyan")
-        t.append("  ·  ", style="dim")
-        t.append("/clear", style="bold cyan")
-        t.append("  ·  ", style="dim")
+        t.append(" for commands", style="dim")
+        t.append(" · ", style="dim")
         t.append("/quit", style="bold cyan")
+        t.append(" to exit", style="dim")
+        t.append("\n  ", style="")
+        t.append("Auto-routing", style="bold")
+        t.append(" is on — smart prompts route to analyze/research/exec automatically", style="dim")
         _RICH_CONSOLE.print(_RichPanel(t, border_style="cyan", padding=(0, 1)))
     else:
-        # ANSI fallback — multi-line and colorful
         session_line = (
-            f"\n  {_DM}🗂  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
+            f"\n  {_DM}{_e('🗂', '[session]')}  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
         )
         print(
-            f"\n{_BCY}🦞 OpenClaw{_R}"
+            f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}"
             f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
-            f"\n  {_DM}👤 user:{_R}      {_BGR}{config.user_name}{_R}"
+            f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
             f"{session_line}"
             f"\n"
-            f"\n  {_BCY}/help{_R}  {_DM}·{_R}  {_BCY}/autoroute off{_R}"
-            f"  {_DM}·{_R}  {_BCY}/clear{_R}  {_DM}·{_R}  {_BCY}/quit{_R}\n"
+            f"\n  Type anything to chat · {_BCY}/help{_R} for commands · {_BCY}/quit{_R} to exit"
+            f"\n  {_B}Auto-routing{_R} {_DM}is on — smart prompts route to analyze/research/exec automatically{_R}\n"
         )
 
 
@@ -5040,10 +6173,19 @@ def run_chat(
     session_id: str = "",
 ) -> int:
     """Run an interactive chat session against OpenClaw."""
+    _load_prefs()
     history: list[dict[str, str]] = load_conversation_history(session_id) if session_id else []
     registry = build_chat_command_registry()
     load_shell_history()
+    # Wire tab completion for /commands when readline is available.
+    if readline is not None:
+        readline.set_completer(_make_completer(registry))
+        readline.parse_and_bind("tab: complete")
     _print_startup_banner(config, session_id)
+    # First-run checklist: show tips when starting a brand-new empty session
+    _is_tty_startup = _IS_TTY or sys.stdout.isatty()
+    if session_id and not history and _is_tty_startup and not config.output_json:
+        _print_first_run_tips()
     while True:
         try:
             autoroute_on = _session_auto_route_enabled(session_id)
@@ -5051,6 +6193,16 @@ def run_chat(
             prompt = str(input_func(prompt_str)).strip()
         except EOFError:
             print()
+            # Auto-summarize: promote the last user prompt to session title if still generic
+            if session_id and history:
+                _last_prompt = next(
+                    (t["content"] for t in reversed(history) if t.get("role") == "user"), ""
+                )
+                if _last_prompt:
+                    _sess = load_session(session_id)
+                    if _sess and (not _sess.title or _sess.title.startswith("Session ")):
+                        _sess.title = _last_prompt[:60].strip()
+                        save_session(_sess)
             save_shell_history()
             return 0
         except KeyboardInterrupt:
@@ -5061,6 +6213,20 @@ def run_chat(
         if not prompt:
             continue
 
+        # Inline help: /cmd ? prints description without dispatching
+        _help_match = re.match(r"^/(\S+)\s+\?$", prompt)
+        if _help_match:
+            _help_name = _help_match.group(1)
+            _help_cmd = registry._lookup.get(_help_name)
+            if _help_cmd:
+                print(f"  {_BCY}/{_help_cmd.name}{_R}  —  {_help_cmd.description}")
+                if _help_cmd.aliases:
+                    aliases_str = ", ".join(f"{_DM}/{a}{_R}" for a in _help_cmd.aliases)
+                    print(f"  {_DM}aliases:{_R} {aliases_str}")
+            else:
+                print(f"  {_DM}Unknown command /{_help_name} — type /help for a list.{_R}")
+            continue
+
         ctx = ChatCommandContext(history=history, session_id=session_id, config=config)
         result = registry.dispatch(prompt, ctx)
         if result == _CMD_QUIT:
@@ -5069,10 +6235,14 @@ def run_chat(
         if result == _CMD_CONTINUE:
             continue
 
-        # Unknown slash command — don't send to the AI.
+        # Unknown slash command — don't send to the AI; suggest closest match.
         if prompt.startswith("/"):
-            cmd_name = prompt.split()[0]
-            _print_error(f"Unknown command {_BCY}{cmd_name}{_R}. Type {_BCY}/help{_R} for a list.")
+            cmd_name = prompt.split()[0][1:]  # strip leading /
+            _print_error(f"Unknown command {_BCY}/{cmd_name}{_R}. Type {_BCY}/help{_R} for a list.")
+            _known = list(registry._lookup.keys())
+            _suggestions = difflib.get_close_matches(cmd_name, _known, n=1, cutoff=0.6)
+            if _suggestions:
+                print(f"  {_DM}Did you mean {_R}{_BCY}/{_suggestions[0]}{_R}{_DM}?{_R}")
             continue
 
         if autoroute_on:
@@ -5106,12 +6276,44 @@ def run_chat(
                     continue
 
         try:
-            response = ask_func(prompt, config=config, history=list(history))
+            _t0 = time.monotonic()
+            response = _with_spinner(
+                f"{_e('💬', '>>')} Thinking…",
+                ask_func,
+                prompt,
+                config=config,
+                history=list(history),
+                output_json=config.output_json,
+            )
+            _elapsed = time.monotonic() - _t0
+        except KeyboardInterrupt:
+            print(f"\n{_DM}{_e('⌨', '[ctrl-c]')} [interrupted]{_R}")
+            continue
         except OpenClawCliError as exc:
             print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
+            _err_tty = _IS_TTY or sys.stdout.isatty()
+            if _err_tty:
+                print(f"  {_DM}{_e('💡', '[hint]')} /retry to resend  ·  /reset to clear history{_R}")
             continue
 
-        print_response(response, output_json=config.output_json)
+        # Visual separator + status bar (skipped in compact layout)
+        _is_tty = _IS_TTY or sys.stdout.isatty()
+        _compact = _PREFS.get("layout") == "compact"
+        if _is_tty and not config.output_json and not _compact:
+            if _RICH_AVAILABLE:
+                from rich.rule import Rule as _RichRule
+                _RICH_CONSOLE.print(_RichRule(style=_theme_style()))
+            else:
+                cols = shutil.get_terminal_size((80, 24)).columns
+                print(f"{_theme_ansi()}{'─' * min(cols - 2, 60)}{_R}")
+
+        print_response(response, output_json=config.output_json, elapsed=_elapsed)
+        if not config.output_json and not _compact:
+            _print_status_bar(
+                session_id=session_id,
+                autoroute_on=autoroute_on,
+                history_len=len(history),
+            )
         history.extend(
             [
                 {"role": "user", "content": prompt},
@@ -5121,6 +6323,12 @@ def run_chat(
         if session_id:
             append_event(session_id, kind="chat", content=prompt, metadata={"summary": prompt})
             persist_response(session_id, prompt, response.response)
+            # Auto-title: after the first real turn, promote prompt to session title
+            if len(history) == 2:
+                _sess = load_session(session_id)
+                if _sess and (not _sess.title or _sess.title.startswith("Session ")):
+                    _sess.title = prompt[:60].strip()
+                    save_session(_sess)
 
 
 def run_async(coro: Any) -> Any:
@@ -6044,6 +7252,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="HTTP timeout in seconds",
     )
     parser.add_argument("--json", action="store_true", help="Print raw JSON responses")
+    parser.add_argument("--no-stream", dest="no_stream", action="store_true", help="Disable streaming output (batch mode)")
     parser.add_argument("--user-name", help="Logical user label sent to OpenClaw")
     parser.add_argument("--client-name", help="Client/machine label for headers and telemetry")
     parser.add_argument("--session", help="Resume or tag a local CLI session")
