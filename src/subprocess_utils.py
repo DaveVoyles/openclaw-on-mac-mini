@@ -1,5 +1,7 @@
 """Shared async subprocess runner used by skills and analyzer modules."""
 
+from __future__ import annotations
+
 import asyncio
 import os
 from pathlib import Path
