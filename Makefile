@@ -1,4 +1,4 @@
-.PHONY: test test-cli test-verbose lint format type-check build clean deploy help
+.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -32,6 +32,16 @@ deploy:
 	docker compose up -d openclaw
 	@echo "✅ Container redeployed"
 
+deploy-cli:
+	@echo "🚀 Deploying OpenClaw CLI to macbook..."
+	bash scripts/install_openclaw_cli_remote.sh macbook
+	@echo "✅ CLI deployed — run 'make verify-deploy' to confirm"
+
+verify-deploy:
+	@echo "🔍 Checking deployed CLI version on macbook..."
+	@ssh macbook 'python3 -c "import sys; sys.path.insert(0,\"$$HOME/.local/share/openclaw-cli\"); from openclaw_cli import cli_version, _CLI_BUILD; print(\"version:\", cli_version()); print(\"build:\", _CLI_BUILD)"' && \
+	 ssh macbook 'wc -l < $$HOME/.local/share/openclaw-cli/openclaw_cli.py | xargs -I{} echo "lines: {}"'
+
 clean:
 	@echo "🧹 Cleaning..."
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -50,5 +60,7 @@ help:
 	@echo "  type-check    Run type checker (pyright/mypy)"
 	@echo "  build         Build Docker image"
 	@echo "  deploy        Rebuild + restart container (use after git pull/commit)"
+	@echo "  deploy-cli    Deploy CLI Python files to macbook via SSH/SCP"
+	@echo "  verify-deploy Confirm deployed CLI version on macbook"
 	@echo "  clean         Remove __pycache__, .pyc, caches"
 	@echo "  help          Show this help"

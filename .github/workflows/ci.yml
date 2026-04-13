@@ -107,3 +107,28 @@ jobs:
           name: coverage-report-macOS
           path: coverage.xml
           retention-days: 30
+
+  deploy-cli:
+    name: Deploy CLI to macbook
+    needs: test
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
+    # Only deploy on pushes to main (not PRs) and only when tests pass
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy CLI files to macbook
+        run: bash scripts/install_openclaw_cli_remote.sh macbook
+
+      - name: Verify deployed version
+        run: |
+          ssh macbook 'python3 -c "
+          import sys
+          sys.path.insert(0, \"/Users/davevoyles/.local/share/openclaw-cli\")
+          from openclaw_cli import cli_version, _CLI_BUILD
+          print(\"✅ Deployed:\", cli_version())
+          " 2>&1'
+          LINE_COUNT=$(ssh macbook 'wc -l < /Users/davevoyles/.local/share/openclaw-cli/openclaw_cli.py | tr -d " "')
+          echo "✅ Deployed openclaw_cli.py: ${LINE_COUNT} lines"

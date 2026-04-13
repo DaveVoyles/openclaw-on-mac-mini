@@ -121,6 +121,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
+_CLI_BUILD = "wave12"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -664,9 +665,9 @@ def auth_setup_hint(*, platform_name: str | None = None) -> str:
 def cli_version() -> str:
     """Return the installed CLI version when available."""
     try:
-        return metadata.version("openclaw")
+        return f"{metadata.version('openclaw')}+{_CLI_BUILD}"
     except metadata.PackageNotFoundError:
-        return DEFAULT_VERSION
+        return f"{DEFAULT_VERSION}+{_CLI_BUILD}"
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
