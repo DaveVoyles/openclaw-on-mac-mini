@@ -367,16 +367,49 @@
         </div>
       </div>
 
-      <- Standardize all GB formatting to 2 decimal places (*100) with zero-padding OpenClaw -->
+      <!-- OpenClaw CLI reference -->
       <h2 id="openclaw">&#129408; OpenClaw <span class="badge badge-both">&#10003; both</span></h2>
+
+      <!-- Quick start steps -->
+      <div class="card" style="margin-bottom:1.25rem">
+        <h3>How to run OpenClaw</h3>
+        <table>
+          <tr>
+            <td style="width:2rem;text-align:center;color:var(--gold);font-weight:bold">1</td>
+            <td><code>curl -fsSL http://192.168.1.93:8765/install | bash</code></td>
+            <td class="muted">Install once — on LAN. Off-LAN use the Tailscale URL: <code>http://100.116.47.67:8765/install</code></td>
+          </tr>
+          <tr>
+            <td style="text-align:center;color:var(--gold);font-weight:bold">2</td>
+            <td><code>source ~/.zshrc</code>&nbsp;&nbsp;<span class="muted">(or <code>~/.bashrc</code>)</span></td>
+            <td class="muted">Reload your shell so the <code>OpenClaw</code> launcher is on your PATH</td>
+          </tr>
+          <tr>
+            <td style="text-align:center;color:var(--gold);font-weight:bold">3</td>
+            <td><code>OpenClaw</code></td>
+            <td class="muted">Start the interactive terminal chat (capital O, no arguments)</td>
+          </tr>
+          <tr>
+            <td style="text-align:center;color:var(--muted)">—</td>
+            <td><code>openclaw "your question"</code></td>
+            <td class="muted">One-shot mode — ask a single question and return to the shell</td>
+          </tr>
+        </table>
+        <p class="muted" style="margin-top:0.7rem;font-size:0.8rem">
+          <strong style="color:var(--spirit-blue)">OpenClaw</strong> (capital O) is the interactive launcher.
+          <strong style="color:var(--spirit-blue)">openclaw</strong> (lowercase) is the underlying command used for subcommands and one-shot queries.
+          Both are installed by the curl installer above.
+        </p>
+      </div>
+
       <div class="grid">
         <div class="card">
-          <h3>Shortcuts</h3>
+          <h3>Commands &amp; shortcuts</h3>
           <table>
             <tr><td><code>curl -fsSL http://192.168.1.93:8765/install | bash</code></td><td class="muted">Install the standalone core OpenClaw CLI module bundle on any Mac (use Tailscale URL off-LAN)</td></tr>
             <tr><td><code>curl -fsSL http://192.168.1.93:8765/install | bash -s -- --skip-verify</code></td><td class="muted">Install without the automatic post-install <code>openclaw --health</code> smoke check</td></tr>
             <tr><td><code>curl -fsSL http://192.168.1.93:8765/install-remote | bash</code></td><td class="muted">Fix MacBook SSH trust + install CLI locally</td></tr>
-            <tr><td><code>OpenClaw</code></td><td class="muted">Preferred launcher — starts interactive terminal chat</td></tr>
+            <tr><td><code>OpenClaw</code></td><td class="muted">Preferred launcher — starts interactive terminal chat (capital O, no arguments)</td></tr>
             <tr><td><code>openclaw "prompt"</code></td><td class="muted">Ask one question without staying in chat</td></tr>
             <tr><td><code>openclaw analyze --cwd . @README.md "summarize the repo"</code></td><td class="muted">Work against a directory or explicit file targets with a resumable session</td></tr>
             <tr><td><code>openclaw research "topic"</code></td><td class="muted">Run the built-in research agent and save a report into the session outputs</td></tr>
