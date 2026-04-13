@@ -831,18 +831,15 @@ def handle_update_command(_args: argparse.Namespace) -> int:
 
 
 def check_for_update(*, timeout: float = 3.0) -> None:
-    """Check PyPI for a newer openclaw release and print a notice if found.
+    """Check PyPI for a newer openclaw release and cache the result in _latest_version.
 
-    Runs synchronously but with a short network timeout so startup is not
-    significantly delayed.  All errors are silently swallowed.
+    Does NOT print — callers should print the notice from the main thread to avoid
+    interleaving with readline prompts.  All errors are silently swallowed.
     """
     global _latest_version
-    current = cli_version()
     latest = _fetch_latest_pypi_version(timeout=timeout)
     if latest:
         _latest_version = latest
-    if latest and _version_tuple(latest) > _version_tuple(current):
-        _print_update_notice(current, latest)
 
 
 def build_headers(*, token: str, client_name: str) -> dict[str, str]:
@@ -5059,6 +5056,12 @@ def run_chat(
         if result == _CMD_CONTINUE:
             continue
 
+        # Unknown slash command — don't send to the AI.
+        if prompt.startswith("/"):
+            cmd_name = prompt.split()[0]
+            _print_error(f"Unknown command {_BCY}{cmd_name}{_R}. Type {_BCY}/help{_R} for a list.")
+            continue
+
         if autoroute_on:
             route_decision = route_repl_prompt(prompt, session_id=session_id)
             if route_decision.should_auto_execute_plan():
@@ -6164,8 +6167,19 @@ def main(argv: list[str] | None = None) -> int:
     # Skip background update check when the user is explicitly running `openclaw update`.
     _skip_update_check = bool(raw_argv and raw_argv[0] == "update")
     if not _skip_update_check:
-        # Start update check in background so it doesn't block startup.
-        _update_thread: threading.Thread | None = threading.Thread(target=check_for_update, daemon=True)
+        # Run update check synchronously in a thread so we can join it before
+        # drawing the readline prompt. The thread only sets _latest_version;
+        # we print the notice in the main thread after joining so it never
+        # appears interleaved with the REPL prompt.
+        def _update_check_worker() -> None:
+            global _latest_version
+            latest = _fetch_latest_pypi_version(timeout=3.0)
+            if latest:
+                _latest_version = latest
+
+        _update_thread: threading.Thread | None = threading.Thread(
+            target=_update_check_worker, daemon=True
+        )
         _update_thread.start()
     else:
         _update_thread = None
@@ -6176,10 +6190,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(raw_argv)
     command = "health" if getattr(args, "health", False) else args.command or "chat"
 
-    # Wait for the update check to finish (at most ~3 s) so the notice prints
-    # before any command output.
+    # Wait for the update check then print the notice from the main thread,
+    # guaranteeing it appears before any output (including the REPL prompt).
     if _update_thread is not None:
         _update_thread.join(timeout=3.5)
+    current_ver = cli_version()
+    if _latest_version and _version_tuple(_latest_version) > _version_tuple(current_ver):
+        _print_update_notice(current_ver, _latest_version)
 
     try:
         if command == "auth":
