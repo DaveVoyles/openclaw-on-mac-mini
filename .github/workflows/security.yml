@@ -22,7 +22,7 @@ concurrency:
 jobs:
   trivy-docker:
     name: Trivy - Docker Image Scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     timeout-minutes: 30
 
     steps:
@@ -74,7 +74,7 @@ jobs:
 
   trivy-fs:
     name: Trivy - Filesystem Scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     timeout-minutes: 15
 
     steps:
@@ -123,7 +123,7 @@ jobs:
 
   trivy-config:
     name: Trivy - Config Scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     timeout-minutes: 10
 
     steps:
@@ -157,7 +157,7 @@ jobs:
 
   dependency-review:
     name: Dependency Review
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     if: github.event_name == 'pull_request'
 
     steps:
@@ -172,7 +172,7 @@ jobs:
 
   security-report:
     name: Generate Security Report
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     needs: [trivy-docker, trivy-fs, trivy-config]
     if: always()
 
