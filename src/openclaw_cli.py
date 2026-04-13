@@ -662,6 +662,12 @@ def handle_update_command(_args: argparse.Namespace) -> int:
             print(f"error: {msg}", file=sys.stderr)
         return 1
 
+    # Outside a venv (e.g. macOS system Python), we must pass --user to avoid
+    # the PEP 668 "externally-managed-environment" error.
+    in_venv = sys.prefix != sys.base_prefix
+    user_flag = [] if in_venv else ["--user"]
+    install_cmd = pip_cmd + ["install", "--upgrade"] + user_flag
+
     current = cli_version()
     # Fetch latest from PyPI before running pip so we can display it reliably
     # after the install (importlib.metadata is cached for the running process).
@@ -679,7 +685,7 @@ def handle_update_command(_args: argparse.Namespace) -> int:
         def _run_pip() -> None:
             result_holder.append(
                 subprocess.run(
-                    pip_cmd + ["install", "--upgrade", "--quiet", "openclaw"],
+                    install_cmd + ["--quiet", "openclaw"],
                     capture_output=True,
                 )
             )
@@ -718,7 +724,7 @@ def handle_update_command(_args: argparse.Namespace) -> int:
     else:
         # Plain fallback: just run pip with its normal output.
         print(f"Updating openclaw {current} → {latest}…")
-        result = subprocess.run(pip_cmd + ["install", "--upgrade", "openclaw"])
+        result = subprocess.run(install_cmd + ["openclaw"])
         if result.returncode == 0:
             print(f"✓ Done  —  openclaw {current} → {latest}")
         else:
