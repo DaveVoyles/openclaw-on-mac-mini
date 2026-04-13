@@ -357,3 +357,83 @@ Wave 3 (after wave 2):            #12 (needs #2), #17 (needs #2), #18 (needs #6,
 ```
 
 | r30 | **Extend PROVIDER_STREAM partial-chunk yields to Gemini and Ollama paths** — `_stream_copilot_chunks()` (task r30) wired progressive Discord placeholder-edits for the Copilot proxy path only; the Gemini streaming SDK (`generate_content_stream`) and Ollama (`/api/generate` chunked JSON) both natively support incremental tokens but `chat_stream` still awaits a complete response before yielding; refactor the Gemini and Ollama paths in `chat_stream` to yield `(partial_text, False, {})` as tokens arrive so the `on_partial_chunk` → Discord edit chain works for all providers; measure edit-rate to stay within Discord's 5 edits per 5 s limit and tune `_STREAM_DISCORD_EDIT_INTERVAL` accordingly | Medium | `src/llm/chat.py` | r30 | 📋 Proposed |
+
+---
+
+## Proposed Waves 9–11
+
+> **Orchestrator note:** Use a fleet of parallel agents for each wave. One orchestrator manages the fleet. Workers claim a task by updating its Status cell before writing any code. Waves within a wave are all parallel; later waves depend on earlier ones as noted.
+
+### Architectural Context
+
+Before dispatching Wave 9, agents should understand the design intent:
+
+- **Do not build a singleton manager.** `providers.py` already has effective module-level singletons (circuit breakers, `_last_usage` ContextVar, `_cumulative_tokens`). Adding another manager class creates a God-object anti-pattern.
+- **Do build a `RequestTrace` dataclass** (task W9-A below). One instance per request, threaded by reference through `chat()` → skill dispatch → `call_provider()`. Each layer annotates it. This is the key enabler for response transparency and observability.
+- **Ensemble/race routing** (fire 2 providers in parallel, return the fastest) is intentionally deferred — it doubles spend and complicates audit semantics. Improve routing *prediction* first (Wave 10), then revisit.
+
+---
+
+### Wave 9 — Response Transparency
+
+> **Goal:** users know which model answered them and which skills were used. All 4 tasks are parallel.
+
+| # | Task | Impact | Where | Depends On | Status |
+|---|------|--------|-------|------------|--------|
+| W9-A | **`RequestTrace` dataclass** — create `src/llm/trace.py` with `@dataclass class RequestTrace(model_used, provider, skills_invoked: list[str], routing_reason, latency_ms, mini_model_used: bool)`; thread it through `chat()` and `_resolve_non_gemini_reply()` as an optional kwarg (defaults to a fresh instance); populate `provider` and `model_used` from the returned `ProviderResponse` | High | `src/llm/trace.py` (new), `src/llm/chat.py` | — | ⬜ Open |
+| W9-B | **Skill invocation tracking** — in `chat.py`, wherever a skill is invoked inline (e.g., `generate_sports_watch_report`, `generate_web_search_report`, `search_web`), append the canonical skill name to `trace.skills_invoked`; no new infrastructure — instrument the existing `routing_notes` pattern; also set `trace.mini_model_used = True` when the mini-model fast-path fires | Medium | `src/llm/chat.py` | W9-A | ⬜ Open |
+| W9-C | **Rich Discord response footer** — after `chat()` resolves, construct a footer from `RequestTrace`: `_via gpt-4o (copilot) · skills: search_web, weather_`; extend `SHOW_ROUTING_DEBUG` env var: `=1` shows model+provider only, `=2` shows model+provider+skills+latency; suppress footer when trace is empty (e.g. Gemini fallback with no skills) | Medium | `src/llm/chat.py`, `src/bot.py` | W9-A, W9-B | ⬜ Open |
+| W9-D | **`RequestTrace` unit tests** — `tests/test_request_trace.py`: (1) trace is populated after `call_provider()` returns; (2) skill name appended when skill is invoked; (3) footer includes model name when `SHOW_ROUTING_DEBUG=1`; (4) footer includes skills when `SHOW_ROUTING_DEBUG=2`; (5) footer suppressed when debug disabled; use `AsyncMock` for providers | Low | `tests/test_request_trace.py` | W9-A, W9-B, W9-C | ⬜ Open |
+
+---
+
+### Wave 10 — Speed & Latency
+
+> **Goal:** the correct answer arrives faster. W10-A and W10-B are parallel; W10-C is independent.
+
+| # | Task | Impact | Where | Depends On | Status |
+|---|------|--------|-------|------------|--------|
+| W10-A | **Query classification LRU cache** — `classify_query_llm()` costs ~200 ms per call (it fires an LLM); cache results by `sha256(stripped_query[:200])` in a module-level `_classify_cache: dict[str, tuple[str, float]]` (value is `(result, timestamp)`); evict entries older than `CLASSIFY_CACHE_TTL` (default 300 s, env-var overridable); log cache hits in `RequestTrace.routing_reason` as `"classify: cache-hit"`; add a `clear_classify_cache()` helper for tests | High | `src/model_routing_policy.py` | — | ⬜ Open |
+| W10-B | **Perplexity fast-path regex bypass** — `select_web_search_route()` fires both a regex and an LLM classification before routing to Perplexity; add a `_HIGH_CONFIDENCE_SEARCH_RE` pattern (covers "today", "current score", "live", "right now", "latest", "yesterday's", etc.) that, when matched, skips `classify_query_llm()` entirely and returns `prefer_search=True` immediately; log bypass as `"classify: regex-bypass"` in `RequestTrace.routing_reason`; saves 200 ms on high-volume sports/news queries | High | `src/model_routing_policy.py` | — | ⬜ Open |
+| W10-C | **Progressive Discord "thinking" placeholder** — immediately after receiving a user message (before any provider is called), post a `_⏳ Thinking…_` placeholder message; edit it in-place with real content as tokens arrive; eliminates the perceived "silent wait" for the user without reducing actual latency; wire `on_partial_chunk` in `bot.py` to edit the placeholder with each `chat_stream()` yield | Medium | `src/bot.py` | — | ⬜ Open |
+| W10-D | **Provider latency-aware routing** — extend `select_auto_route()` in `model_routing_policy.py` to read cached `scan_providers()` latency data (`get_provider_status()`); if Copilot p95 latency (from last N audit-log entries) exceeds `LATENCY_SWITCH_THRESHOLD_MS` (default 2000 ms), temporarily deprioritise it in favor of Ollama or OpenAI; log reason in `RequestTrace`; auto-reverts when latency recovers; prevents routing to a slow provider when a faster one is available | Medium | `src/model_routing_policy.py`, `src/llm/providers.py` | W9-A | ⬜ Open |
+| W10-E | **Tests for classification cache and regex bypass** — `tests/test_classify_cache.py`: (1) cache returns stored result on second call with same query; (2) cache expires after TTL; (3) `clear_classify_cache()` empties cache; (4) regex bypass fires for known high-confidence patterns; (5) regex bypass does NOT fire for ambiguous queries (LLM still called) | Low | `tests/test_classify_cache.py` | W10-A, W10-B | ⬜ Open |
+
+---
+
+### Wave 11 — Quality & Governance
+
+> **Goal:** understand what's working, tune the system over time. All tasks are parallel.
+
+| # | Task | Impact | Where | Depends On | Status |
+|---|------|--------|-------|------------|--------|
+| W11-A | **Per-skill cost attribution** — extend `token_usage_summary()` to include `"by_skill": {"search_web": {"input": N, "output": N}}` by reading `skills_invoked` from `RequestTrace` at telemetry write time; allows operators to see which skills drive token spend | Low | `src/llm/telemetry.py`, `src/llm/providers.py` | W9-A, W9-B | ⬜ Open |
+| W11-B | **Feedback reaction logging** — after the bot posts a response, add 👍/👎 reactions; if a user reacts within 60 s, write `{timestamp, query_hash, model, provider, skills_invoked, rating: 1/-1}` to `data/feedback.jsonl`; provides ground-truth for future routing tuning without any survey friction | Medium | `src/bot.py` | W9-A | ⬜ Open |
+| W11-C | **`scripts/routing_recommender.py`** — reads last 1000 `data/routing_audit.jsonl` entries, computes per-provider p95 latency + success rate + avg token cost, and prints a Markdown table plus a recommendation sentence (e.g. "Consider switching to `cost-saver` — Copilot p95 latency is 3.2 s vs Ollama 0.8 s"); runs standalone, no bot required | Low | `scripts/routing_recommender.py` | — | ⬜ Open |
+| W11-D | **Routing profile A/B testing mode** — add `ROUTING_AB_SPLIT` env var (e.g. `copilot-first:60,balanced:40`); `select_auto_route()` probabilistically picks a profile weighted by these percentages; logs which profile was chosen in `RequestTrace.routing_reason` and the telemetry audit log; enables controlled comparison of routing profiles on live traffic without a config change | Medium | `src/model_routing_policy.py` | W9-A | ⬜ Open |
+| W11-E | **Model answer quality self-check** — optional `QUALITY_CHECK=1` mode: after a provider returns a response, fire a second `quick_generate()` call asking "Is this a complete, helpful answer? yes/no"; if "no", retry with the next provider in the fallback chain before returning to the user; log check outcome in `RequestTrace`; trade-off: doubles latency when triggered, but prevents obviously-bad answers from reaching the user | High | `src/llm/providers.py`, `src/model_routing_policy.py` | W9-A | ⬜ Open |
+| W11-F | **`/feedback summary` Discord command** — reads `data/feedback.jsonl`, computes thumbs-up rate per provider + per skill, and posts a formatted embed; allows server owners to see which configurations users rate highest without leaving Discord | Low | `src/discord_commands/` | W11-B | ⬜ Open |
+
+---
+
+### Wave 12 — Developer Experience
+
+> **Goal:** easier to add new providers and skills; better local dev loop. All tasks are parallel.
+
+| # | Task | Impact | Where | Depends On | Status |
+|---|------|--------|-------|------------|--------|
+| W12-A | **Provider plugin interface** — define an abstract `ProviderPlugin(ABC)` protocol in `src/llm/provider_plugin.py` with `async def call(...)`, `async def ping(...)`, `async def stream(...)` methods; refactor `providers.py` to load all providers from a registry (`_PROVIDERS: dict[str, ProviderPlugin]`) populated at import time; makes adding a new provider a single-file change (`src/llm/provider_plugins/myprovider.py`) without touching `providers.py` | High | `src/llm/provider_plugin.py` (new), `src/llm/providers.py` | — | ⬜ Open |
+| W12-B | **Local dev mode** — `DEV_MODE=1` env var: route all `call_provider()` calls to a local echo stub (returns the system prompt + "STUB" + first 50 chars of the message) so developers can run the bot without any API keys or Ollama; log clearly in routing footer `_[DEV MODE — stub response]_` | Medium | `src/llm/providers.py` | — | ⬜ Open |
+| W12-C | **`/admin reload-routing`** Discord command — reloads `model_routing_policy.py` via `importlib.reload()` without restarting the bot; useful for tuning routing profiles or regex patterns in production without a deploy cycle; restrict to bot owner | Low | `src/discord_commands/` | — | ⬜ Open |
+| W12-D | **Provider integration test harness** — `scripts/provider_smoke_test.py` sends a fixed test message to each configured provider and prints the response + latency; validates API keys, proxy URL, and Ollama availability end-to-end; usable as a pre-deploy check in CI | Low | `scripts/provider_smoke_test.py` | — | ⬜ Open |
+
+---
+
+### Suggested Wave Dispatch Order
+
+```
+Wave 9 (all parallel, no deps):    W9-A, W9-B, W9-C, W9-D
+Wave 10 (all parallel):            W10-A, W10-B, W10-C, W10-D, W10-E
+Wave 11 (after Wave 9):            W11-A, W11-B, W11-C, W11-D, W11-E, W11-F
+Wave 12 (independent, any time):   W12-A, W12-B, W12-C, W12-D
+```

@@ -9,6 +9,7 @@ from typing import Any
 
 from google import genai
 
+from llm.trace import RequestTrace
 from llm_client import (
     GOOGLE_API_KEY,
     LOCAL_LLM_ENABLED,
@@ -61,6 +62,37 @@ _RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS = 30.0
 _PROVIDER_STREAM_PARTIAL_INTERVAL = 200
 
 log = logging.getLogger("openclaw.llm")
+
+
+def _build_trace_footer(trace: "RequestTrace | None", debug_level: int) -> str:
+    """Build a routing debug footer from a RequestTrace."""
+    if trace is None or debug_level == 0:
+        return ""
+    parts = []
+    if trace.model_used:
+        label = trace.model_used
+        if trace.provider and trace.provider not in label:
+            label = f"{label} ({trace.provider})"
+        if trace.mini_model_used:
+            label = f"{label} ⚡"
+        parts.append(f"via {label}")
+    if debug_level >= 2 and trace.skills_invoked:
+        parts.append(f"skills: {', '.join(trace.skills_invoked)}")
+    if debug_level >= 2 and trace.latency_ms > 0:
+        parts.append(f"{trace.latency_ms:.0f}ms")
+    if not parts:
+        return ""
+    return "\n\n_" + " · ".join(parts) + "_"
+
+
+def _apply_trace_footer(text: str, trace: "RequestTrace | None") -> str:
+    """Append routing debug footer to a reply when SHOW_ROUTING_DEBUG is enabled."""
+    _debug_level = int(os.getenv("SHOW_ROUTING_DEBUG", "0"))
+    if _debug_level > 0:
+        footer = _build_trace_footer(trace, _debug_level)
+        if footer:
+            return text + footer
+    return text
 
 
 def _format_model_label(model: str | None) -> str:
@@ -283,6 +315,7 @@ async def _try_copilot_proxy_reply(
     context: str,
     timeout: float | None = None,
     model_override: str | None = None,
+    trace: RequestTrace | None = None,
 ) -> tuple[str, list[dict], str] | None:
     from llm.providers import COPILOT_PROXY_ENABLED, call_provider_stream, chat_openai
     if not COPILOT_PROXY_ENABLED:
@@ -293,6 +326,8 @@ async def _try_copilot_proxy_reply(
     candidates = [model_override] if model_override else _copilot_model_candidates(cleaned_user_message)
     if model_override:
         log.debug("Mini-model fast-path: using %s", model_override)
+        if trace is not None:
+            trace.mini_model_used = True
     per_attempt_timeout = (
         max(timeout / max(len(candidates), 1), 1.0)
         if timeout
@@ -358,6 +393,9 @@ async def _try_copilot_proxy_reply(
             # Phase 15: append provider attribution so users can see which model answered.
             if reply and "_via " not in reply:
                 reply = reply + f"\n\n_via {_format_model_label(candidate)}_"
+            if trace is not None:
+                trace.provider = "copilot"
+                trace.model_used = candidate
             return reply, updated, model_label
         if reply:
             log.info(
@@ -586,6 +624,7 @@ async def chat_stream(
     tool_declarations: list[dict[str, Any]] | None = None,
     context_controls: dict[str, Any] | None = None,
     routing_profile: str = "",
+    trace: RequestTrace | None = None,
 ):
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
     log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
@@ -675,6 +714,8 @@ async def chat_stream(
                 from skills.reporting_skills import generate_web_search_report
                 web_reply = await generate_web_search_report(cleaned_user_message)
                 if web_reply and not web_reply.startswith("❌"):
+                    if trace is not None:
+                        trace.skills_invoked.append("web_search_report")
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [web_reply]},
@@ -714,10 +755,12 @@ async def chat_stream(
                             cleaned_user_message=cleaned_user_message,
                             history=history,
                             context="coding-fast-path",
+                            trace=trace,
                         )
                         if result is not None:
                             reply, updated, model_label = result
                             _routing_notes.append(f"Coding fast-path → Copilot ({coding_route.reason})")
+                            reply = _apply_trace_footer(reply, trace)
                             yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                             return
         except Exception as _fp_exc:
@@ -768,9 +811,11 @@ async def chat_stream(
                         history=history,
                         context="auto-route",
                         model_override=route.model or None,
+                        trace=trace,
                     )
                     if result is not None:
                         reply, updated, model_label = result
+                        reply = _apply_trace_footer(reply, trace)
                         yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                         return
                     log.warning("Copilot auto-route exhausted candidates, falling through to Gemini")
@@ -858,9 +903,11 @@ async def chat_stream(
                         cleaned_user_message=cleaned_user_message,
                         history=history,
                         context="forced-copilot",
+                        trace=trace,
                     )
                     if result is not None:
                         reply, updated, model_label = result
+                        reply = _apply_trace_footer(reply, trace)
                         yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                         return
                     reply = None
@@ -912,6 +959,7 @@ async def chat_stream(
                 cleaned_user_message=cleaned_user_message,
                 history=history,
                 context="rate-limit-recovery",
+                trace=trace,
             )
             if result is not None:
                 reply, updated, model_label = result
@@ -1038,6 +1086,8 @@ async def chat_stream(
                 try:
                     search_results = await search_fn(cleaned_user_message)
                     if search_results and search_results.strip():
+                        if trace is not None:
+                            trace.skills_invoked.append("search_web")
                         enhanced_msg = (
                             f"{model_message}\n\n"
                             "Here are fresh web search results to help answer the question:\n"
@@ -1076,6 +1126,7 @@ async def chat_stream(
         )
         _routing_notes.append("Returned explicit fallback after invalid retry")
 
+    text = _apply_trace_footer(text, trace)
     yield text, True, {"model_used": model_name, "updated_history": updated_history, "needs_tools": True, "routing_notes": _routing_notes, **metadata}
     return
 
@@ -1088,6 +1139,7 @@ async def chat(
     model_preference: str = "auto",
     tool_declarations: list[dict[str, Any]] | None = None,
     routing_profile: str = "",
+    trace: RequestTrace | None = None,
 ) -> tuple[str, list[dict], str]:
     """
     Send a message and return (response_text, updated_history, model_used).
@@ -1144,6 +1196,8 @@ async def chat(
                 from skills.reporting_skills import generate_web_search_report
                 web_reply = await generate_web_search_report(cleaned_user_message)
                 if web_reply and not web_reply.startswith("❌"):
+                    if trace is not None:
+                        trace.skills_invoked.append("web_search_report")
                     updated = history + [
                         {"role": "user", "parts": [cleaned_user_message]},
                         {"role": "model", "parts": [web_reply]},
@@ -1165,11 +1219,12 @@ async def chat(
                         cleaned_user_message=cleaned_user_message,
                         history=history,
                         context="coding-fast-path",
+                        trace=trace,
                     )
                     if result is not None:
                         reply, updated, model_label = result
                         log.debug("Coding fast-path → Copilot (%s)", coding_route.reason)
-                        return reply, updated, model_label
+                        return _apply_trace_footer(reply, trace), updated, model_label
         except Exception as _rt_exc:
             log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
 
@@ -1200,10 +1255,11 @@ async def chat(
                     history=history,
                     context="auto-route",
                     model_override=route.model or None,
+                    trace=trace,
                 )
                 if result is not None:
                     reply, updated, model_label = result
-                    return reply, updated, model_label
+                    return _apply_trace_footer(reply, trace), updated, model_label
                 log.warning("Copilot auto-route exhausted candidates, falling through to default routing")
 
             elif route.model_type == "ollama":
@@ -1267,10 +1323,11 @@ async def chat(
                     cleaned_user_message=cleaned_user_message,
                     history=history,
                     context="forced-copilot",
+                    trace=trace,
                 )
                 if result is not None:
                     reply, updated, model_label = result
-                    return reply, updated, model_label
+                    return _apply_trace_footer(reply, trace), updated, model_label
                 reply = None
             finalized = _finalize_provider_reply(
                 reply,
@@ -1386,16 +1443,17 @@ async def chat(
                 cleaned_user_message=cleaned_user_message,
                 history=history,
                 context="quality-retry",
+                trace=trace,
             )
             if copilot_result is not None:
                 cp_reply, cp_updated, cp_label = copilot_result
                 if not is_low_quality(cp_reply):
-                    return cp_reply, cp_updated, cp_label
+                    return _apply_trace_footer(cp_reply, trace), cp_updated, cp_label
                 log.info("Quality retry Copilot reply also low quality — keeping Gemini answer")
     except Exception as _qr_exc:
         log.debug("Quality retry gate skipped: %s", _qr_exc)
 
-    return text, updated_history, model_name
+    return _apply_trace_footer(text, trace), updated_history, model_name
 
 
 def is_configured() -> bool:
