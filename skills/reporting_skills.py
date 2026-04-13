@@ -271,10 +271,12 @@ def _dedupe_sources_section(text: str) -> str:
     Perplexity sometimes returns an inline numbered-reference block
     (e.g. '[1] https://...') AND a plain 'Sources:\\n...' block.
     Keep only whichever appears first; strip the second one.
+
+    Handles both plain 'Sources:' and bold '**Sources:**' variants.
     """
-    # Patterns that start a sources block
+    # Match "Sources:" with optional surrounding markdown bold markers (**).
     sources_re = re.compile(
-        r"^(sources?\s*:?\s*$|sources?\s*\n[-\d\[\]])",
+        r"^\*{0,2}sources?\*{0,2}\s*:?\*{0,2}\s*$",
         re.IGNORECASE | re.MULTILINE,
     )
     matches = list(sources_re.finditer(text))
