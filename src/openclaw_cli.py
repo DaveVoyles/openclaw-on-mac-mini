@@ -81,6 +81,9 @@ except ImportError:  # pragma: no cover
 
 _IS_TTY = sys.stdout.isatty()
 
+# Cached latest PyPI version set by the background update-check thread.
+_latest_version: str | None = None
+
 
 def _c(code: str) -> str:
     """Return an ANSI escape code only when stdout is a real terminal."""
@@ -202,6 +205,48 @@ def _print_file_edit_result(result: Any) -> None:
     else:
         from openclaw_cli_actions import preview_file_result
         print(preview_file_result(result))
+
+
+def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **kwargs: Any) -> Any:
+    """Run *fn* in a background thread while showing an animated braille spinner.
+
+    Falls back to a direct call when output is not a TTY or when --json output
+    is requested so that machine-readable output is never corrupted.
+    """
+    if not (_IS_TTY and not output_json):
+        return fn(*args, **kwargs)
+
+    result_holder: list[Any] = []
+    exc_holder: list[BaseException] = []
+
+    def _run() -> None:
+        try:
+            result_holder.append(fn(*args, **kwargs))
+        except BaseException as exc:  # noqa: BLE001
+            exc_holder.append(exc)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+
+    spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    frame_idx = 0
+    start = time.monotonic()
+    while thread.is_alive():
+        elapsed = time.monotonic() - start
+        frame = spinner_frames[frame_idx % len(spinner_frames)]
+        sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s")
+        sys.stdout.flush()
+        frame_idx += 1
+        time.sleep(0.1)
+
+    thread.join()
+    # Clear the spinner line.
+    sys.stdout.write("\r" + " " * (len(label) + 20) + "\r")
+    sys.stdout.flush()
+
+    if exc_holder:
+        raise exc_holder[0]
+    return result_holder[0]
 
 
 TRANSIENT_WATCH_ERROR_MARKERS = (
@@ -688,8 +733,11 @@ def check_for_update(*, timeout: float = 3.0) -> None:
     Runs synchronously but with a short network timeout so startup is not
     significantly delayed.  All errors are silently swallowed.
     """
+    global _latest_version
     current = cli_version()
     latest = _fetch_latest_pypi_version(timeout=timeout)
+    if latest:
+        _latest_version = latest
     if latest and _version_tuple(latest) > _version_tuple(current):
         _print_update_notice(current, latest)
 
@@ -3458,6 +3506,7 @@ def _set_command_result(ctx: ChatCommandContext, *, ok: bool, summary: str = "")
 
 
 def _cmd_clear(ctx: ChatCommandContext) -> str:
+    n = len(ctx.history)
     ctx.history.clear()
     if ctx.session_id:
         append_event(
@@ -3466,7 +3515,10 @@ def _cmd_clear(ctx: ChatCommandContext) -> str:
             content="/clear",
             metadata={"summary": "cleared chat history"},
         )
-    print(f"{_GR}✓{_R} Conversation history cleared.")
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(f"[green]✓[/] conversation cleared  [dim]({n} message(s) removed)[/]")
+    else:
+        print(f"Conversation history cleared. ({n} messages removed).")
     return _CMD_CONTINUE
 
 
@@ -4062,7 +4114,14 @@ def _cmd_analyze(ctx: ChatCommandContext) -> str:
         metadata={"summary": goal, "cwd": session.cwd, "files": list(session.files)},
     )
     try:
-        response = invoke_openclaw(prompt, config=scoped_config, history=list(ctx.history))
+        response = _with_spinner(
+            "🔍 Analyzing…",
+            invoke_openclaw,
+            prompt,
+            config=scoped_config,
+            history=list(ctx.history),
+            output_json=False,
+        )
     except OpenClawCliError as exc:
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
@@ -4103,7 +4162,11 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
         effective_query = f"{effective_query}\n\nLocal workspace context:\n{context_text[:4000]}"
 
     async def _progress(message: str) -> None:
-        print(message)
+        if _IS_TTY:
+            sys.stdout.write(f"\r🔍 {message:<60}")
+            sys.stdout.flush()
+        else:
+            print(message)
 
     append_event(session.session_id, kind="research", content=query, metadata={"summary": query})
     try:
@@ -4112,6 +4175,9 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
+    if _IS_TTY:
+        sys.stdout.write("\r" + " " * 62 + "\r")
+        sys.stdout.flush()
     output_target = save_output(
         session.session_id,
         output_name_from_title(query, default_stem="research-report", suffix=".md"),
@@ -4148,7 +4214,14 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
     prompt = build_write_prompt(task=task_text, context_text=context_text, session=session, title=title)
     append_event(session.session_id, kind="write", content=task_text, metadata={"summary": task_text})
     try:
-        response = invoke_openclaw(prompt, config=scoped_config, history=list(ctx.history))
+        response = _with_spinner(
+            "✍️  Writing…",
+            invoke_openclaw,
+            prompt,
+            config=scoped_config,
+            history=list(ctx.history),
+            output_json=False,
+        )
     except OpenClawCliError as exc:
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
@@ -4517,12 +4590,31 @@ def print_chat_help() -> None:
             t.add_row(cmd, desc)
         _RICH_CONSOLE.print(_RichPanel(t, title="[bold cyan]OpenClaw Commands[/bold cyan]", border_style="cyan", padding=(0, 1)))
         _RICH_CONSOLE.print(f"[dim]{notes}[/dim]")
+        examples = [
+            ("Ask a question",       "What does this repo do?"),
+            ("Analyze a directory",  "openclaw analyze --cwd ./src"),
+            ("Run a command",        "/exec -- git diff HEAD"),
+            ("Research a topic",     "/research latest Python async patterns"),
+            ("Link a plan",          "/plan my-feature-plan"),
+        ]
+        ex_grid = _RichTable.grid(padding=(0, 2))
+        ex_grid.add_column(style="dim")
+        ex_grid.add_column(style="bold cyan")
+        for label, cmd in examples:
+            ex_grid.add_row(label, cmd)
+        _RICH_CONSOLE.print(_RichPanel(ex_grid, title="[bold]Examples[/]", border_style="dim", padding=(0, 1)))
     else:
         print("Interactive commands:")
         for cmd, desc in commands:
             print(f"  {cmd:<38} {desc}")
         print()
         print(notes)
+        print("\nExamples:")
+        print('  Ask a question         What does this repo do?')
+        print('  Analyze a directory    openclaw analyze --cwd ./src')
+        print('  Run a command          /exec -- git diff HEAD')
+        print('  Research a topic       /research latest Python async patterns')
+        print('  Link a plan            /plan my-feature-plan')
 
 
 def handle_auth_command(args: argparse.Namespace) -> int:
@@ -4596,6 +4688,96 @@ def handle_auth_command(args: argparse.Namespace) -> int:
     raise OpenClawCliError(f"Unknown auth command: {args.auth_command}")
 
 
+def _print_connection_error_panel(msg: str, base_url: str = "") -> None:
+    """Print a rich error panel for connection/HTTP failures, with hints."""
+    if not (_RICH_AVAILABLE and _IS_TTY):
+        _print_error(msg, file=sys.stderr)
+        return
+    is_connection = any(k in msg.lower() for k in ("refused", "unreachable", "timed out", "resolve", "unable to reach"))
+    body = _RichText()
+    body.append(msg + "\n", style="red")
+    if base_url:
+        body.append("\n  url tried: ", style="dim")
+        body.append(base_url + "\n", style="cyan")
+    if is_connection:
+        body.append("\n  hints:\n", style="dim")
+        body.append("  • Is the OpenClaw server running?\n", style="dim")
+        body.append("  • Check OPENCLAW_URL or pass --url\n", style="dim")
+        body.append("  • Try: openclaw health\n", style="dim")
+    _RICH_CONSOLE.print(_RichPanel(body, title="[bold red]❌ Connection failed[/]", border_style="red", padding=(0, 1)), file=sys.stderr)
+
+
+def handle_status_command(args: argparse.Namespace, *, config: "CliConfig") -> int:
+    """Show an at-a-glance status dashboard."""
+    output_json = config.output_json
+
+    version = cli_version()
+    latest = _latest_version
+
+    try:
+        health = fetch_health(config=config)
+        health_status = health.status or "unknown"
+        health_ok = health.healthy
+    except OpenClawCliError as exc:
+        health_status = "unreachable"
+        health_ok = None
+        health_err = str(exc)
+    else:
+        health_err = ""
+
+    resolution = resolve_token_details(config.token)
+
+    from openclaw_cli_sessions import list_sessions as _list_sessions
+    recent = _list_sessions(limit=1)
+    recent_session = recent[0] if recent else None
+
+    if output_json:
+        import json as _json
+        print(_json.dumps({
+            "version": version,
+            "latest": latest,
+            "health": health_status,
+            "token_source": resolution.source if resolution.token else None,
+            "recent_session": recent_session.session_id if recent_session else None,
+        }, indent=2))
+        return 0
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        grid = _RichText()
+        update_badge = ""
+        if latest and latest != version:
+            update_badge = f"  [yellow]⬆ {latest} available[/]  [dim]openclaw update[/]"
+        grid.append("  version    ", style="dim")
+        grid.append(version, style="bold")
+        grid.append(update_badge + "\n")
+        health_emoji = _status_emoji(health_status)
+        health_color = "green" if health_ok is True else ("yellow" if health_ok is False else "red")
+        grid.append("  server     ", style="dim")
+        grid.append(config.base_url, style="cyan")
+        grid.append(f"  [{health_color}]{health_emoji} {health_status.upper()}[/]\n")
+        if health_err:
+            grid.append(f"              [dim red]{health_err[:80]}[/]\n")
+        grid.append("  token      ", style="dim")
+        if resolution.token:
+            grid.append(f"🔑 [green]configured[/]  [dim]via {resolution.source}[/]\n")
+        else:
+            grid.append("🔑 [dim]not configured[/]\n")
+        if recent_session:
+            grid.append("  session    ", style="dim")
+            grid.append(f"[yellow]{recent_session.session_id[:8]}…[/]")
+            if recent_session.title:
+                grid.append(f"  [dim]{recent_session.title[:50]}[/]")
+            grid.append("\n")
+        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]🦞 OpenClaw Status[/]", border_style="cyan", padding=(0, 1)))
+    else:
+        print(f"version : {version}" + (f" (update: {latest})" if latest and latest != version else ""))
+        print(f"server  : {config.base_url}  [{health_status}]")
+        print(f"token   : {'configured via ' + resolution.source if resolution.token else 'not configured'}")
+        if recent_session:
+            print(f"session : {recent_session.session_id}")
+    return 0
+
+
 def load_shell_history() -> None:
     """Load persisted readline history when available."""
     if readline is None:
@@ -4633,6 +4815,17 @@ def build_config(args: argparse.Namespace) -> CliConfig:
         output_json=bool(args.json),
         session_id=str(getattr(args, "session", "") or "").strip(),
     )
+
+
+def _make_prompt(session_id: str = "", autoroute_on: bool = True) -> str:
+    """Build the REPL prompt string, optionally with session hint or no-route badge."""
+    if _IS_TTY:
+        if not autoroute_on:
+            return f"\033[2m[no-route]\033[0m openclaw> "
+        if session_id:
+            short = session_id[:6]
+            return f"openclaw \033[2m({short}…)\033[0m> "
+    return "openclaw> "
 
 
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
@@ -4686,7 +4879,9 @@ def run_chat(
     _print_startup_banner(config, session_id)
     while True:
         try:
-            prompt = str(input_func(f"{_BCY}openclaw{_R}{_CY}>{_R} ")).strip()
+            autoroute_on = _session_auto_route_enabled(session_id)
+            prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on)
+            prompt = str(input_func(prompt_str)).strip()
         except EOFError:
             print()
             save_shell_history()
@@ -4707,7 +4902,7 @@ def run_chat(
         if result == _CMD_CONTINUE:
             continue
 
-        if _session_auto_route_enabled(session_id):
+        if autoroute_on:
             route_decision = route_repl_prompt(prompt, session_id=session_id)
             if route_decision.should_auto_execute_plan():
                 print(_format_route_announcement(route_decision))
@@ -4906,7 +5101,14 @@ def handle_analyze_command(args: argparse.Namespace, *, config: CliConfig) -> in
             "task_id": getattr(args, "task_id", ""),
         },
     )
-    response = invoke_openclaw(prompt, config=scoped_config, history=load_conversation_history(session.session_id))
+    response = _with_spinner(
+        "🔍 Analyzing…",
+        invoke_openclaw,
+        prompt,
+        config=scoped_config,
+        history=load_conversation_history(session.session_id),
+        output_json=config.output_json,
+    )
     print_response(response, output_json=config.output_json)
     persist_response(session.session_id, goal, response.response)
     _print_meta_footer(("session", session.session_id))
@@ -4944,10 +5146,17 @@ def handle_research_command(args: argparse.Namespace) -> int:
         effective_query = f"{effective_query}\n\nLocal workspace context:\n{context_text[:4000]}"
 
     async def _progress(message: str) -> None:
-        print(message)
+        if _IS_TTY:
+            sys.stdout.write(f"\r🔍 {message:<60}")
+            sys.stdout.flush()
+        else:
+            print(message)
 
     append_event(session.session_id, kind="research", content=query, metadata={"summary": query, "files": normalized_targets})
     report = run_async(ResearchAgent().run(effective_query, on_progress=_progress, deep=bool(getattr(args, "deep", False))))
+    if _IS_TTY:
+        sys.stdout.write("\r" + " " * 62 + "\r")
+        sys.stdout.flush()
 
     output_path = str(getattr(args, "output", "") or "").strip()
     if output_path:
@@ -4987,7 +5196,14 @@ def handle_write_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     scoped_config = bind_config_to_session(config, session.session_id)
     prompt = build_write_prompt(task=task_text, context_text=context_text, session=session, title=title)
     append_event(session.session_id, kind="write", content=task_text, metadata={"summary": task_text, "files": normalized_targets})
-    response = invoke_openclaw(prompt, config=scoped_config, history=load_conversation_history(session.session_id))
+    response = _with_spinner(
+        "✍️  Writing…",
+        invoke_openclaw,
+        prompt,
+        config=scoped_config,
+        history=load_conversation_history(session.session_id),
+        output_json=config.output_json,
+    )
     persist_response(session.session_id, task_text, response.response)
 
     output_path = str(getattr(args, "output", "") or "").strip()
@@ -5737,6 +5953,7 @@ def build_parser() -> argparse.ArgumentParser:
     edit_parser.add_argument("--yes", action="store_true", help="Auto-approve high-risk edits")
     edit_parser.add_argument("--plan-id", help="Optional related plan identifier")
     edit_parser.add_argument("--task-id", help="Optional related task identifier")
+    subparsers.add_parser("status", help="Show version, server health, and token status")
     subparsers.add_parser("update", help="Upgrade openclaw to the latest version from PyPI")
     return parser
 
@@ -5758,6 +5975,7 @@ def main(argv: list[str] | None = None) -> int:
         "exec",
         "edit",
         "update",
+        "status",
     }
 
     # Skip background update check when the user is explicitly running `openclaw update`.
@@ -5788,6 +6006,8 @@ def main(argv: list[str] | None = None) -> int:
         if command == "update":
             return handle_update_command(args)
         config = build_config(args)
+        if command == "status":
+            return handle_status_command(args, config=config)
         if command in {"ask", "chat"} and config.session_id:
             require_session(config.session_id)
 
@@ -5828,16 +6048,21 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("prompt is required unless you pipe text on stdin")
         history = load_conversation_history(config.session_id) if config.session_id else None
         if history is None:
-            response = invoke_openclaw(prompt, config=config)
+            response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, output_json=config.output_json)
         else:
-            response = invoke_openclaw(prompt, config=config, history=history)
+            response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, history=history, output_json=config.output_json)
         print_response(response, output_json=config.output_json)
         if config.session_id:
             append_event(config.session_id, kind="prompt", content=prompt, metadata={"summary": prompt})
             persist_response(config.session_id, prompt, response.response)
         return 0
     except OpenClawCliError as exc:
-        _print_error(str(exc), file=sys.stderr)
+        _base = ""
+        try:
+            _base = config.base_url
+        except Exception:
+            pass
+        _print_connection_error_panel(str(exc), base_url=_base)
         return 1
 
 
