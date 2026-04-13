@@ -485,28 +485,16 @@
             <tr><td><code>/exec [--] &lt;command&gt;</code></td><td class="muted">Run a shell command with risk-aware approval prompts and session tracking</td></tr>
             <tr><td><code>/edit &lt;path&gt; [--content TEXT] [--append TEXT]</code></td><td class="muted">Inspect or write a file; shows a unified diff before applying</td></tr>
           </table>
-          <p class="muted" style="margin-top:0.7rem;margin-bottom:0">
-            <code>/outputs</code> lists saved artifacts for the active session using 1-based indices, and
-            <code>/outputs 1</code> or <code>/outputs recap.md</code> previews the selected artifact inline.
-            <code>/context</code> now includes a bounded preview of the grounding block that the next
-            <code>/analyze</code>, <code>/write</code>, or <code>/research</code> action will inherit.
-            When auto-route is on, high-confidence single-action prompts can jump straight into those same
-            action handlers and OpenClaw prints a short route announcement showing the slash command it picked.
-            Quoted or fenced shell snippets can now route more cleanly into <code>/exec</code>, and explicit
-            append/replace edit wording can route into structured <code>/edit</code> calls when the file target is clear.
-            When a prompt clearly contains ordered actions, OpenClaw can decompose it into a linked plan,
-            attach that plan to the active session, and run each step inline with <code>[step/total]</code> progress.
-            Linked plan, task, and current-step grounding can also sharpen route selection, including explicit
-            references like <code>step 2</code> or <code>step three</code> when matching plan data is linked to the session.
-            If a prompt is ambiguous, or that grounding is missing, it safely stays in normal chat instead of forcing a tool action.
-            Use <code>/autoroute off</code> to keep every prompt in chat, or <code>/autoroute on</code> to re-enable routing.
-            High/critical routed <code>/exec</code> and <code>/edit</code> steps still follow the same approval flow as typing those commands directly,
-            <code>/rollback last</code> restores the newest recoverable routed edit checkpoint, automatic rollback currently supports text file edits only,
-            exec checkpoints stay manual-recovery only, and only the newest five routed checkpoints are retained.
-            <code>/events</code> records each routed turn as a structured session event.
-            <code>/plan</code> and <code>/task</code> still link immediately, but they now tell you whether
-            local validation confirmed the target or whether validation was unavailable in the current install.
-          </p>
+          <ul class="muted" style="margin-top:0.7rem;margin-bottom:0;padding-left:1.1rem;line-height:1.8;font-size:0.82rem">
+            <li><code>/outputs</code> lists saved session artifacts (1-based index); <code>/outputs 1</code> or <code>/outputs recap.md</code> previews one inline.</li>
+            <li><code>/context</code> shows a bounded preview of the exact grounding the next <code>/analyze</code>, <code>/write</code>, or <code>/research</code> action will inherit.</li>
+            <li><strong>Auto-routing:</strong> high-confidence single-action prompts jump straight into the matching slash handler — OpenClaw prints a short route announcement. Quoted/fenced shell snippets route into <code>/exec</code>; explicit append/replace wording routes into <code>/edit</code> when the file target is clear.</li>
+            <li><strong>Plan decomposition:</strong> ordered multi-action prompts can become a linked plan attached to the session, run step-by-step with <code>[step/total]</code> progress. Linked plan/task/step grounding also sharpens route selection (e.g. "step 2" resolves against the active plan).</li>
+            <li>Ambiguous prompts — or missing grounding — stay in normal chat. Use <code>/autoroute off</code> / <code>/autoroute on</code> to toggle per session.</li>
+            <li><strong>Safety:</strong> high/critical <code>/exec</code> and <code>/edit</code> steps still require approval. <code>/rollback last</code> restores the newest routed edit checkpoint (text files only; exec checkpoints are manual-recovery). Only the newest 5 checkpoints are kept.</li>
+            <li><code>/events</code> records each routed turn as a structured session event.</li>
+            <li><code>/plan</code> and <code>/task</code> link immediately and report whether local validation confirmed the target.</li>
+          </ul>
         </div>
         <div class="card" style="grid-column: 1 / -1">
           <h3>Common workflows</h3>
