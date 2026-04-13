@@ -647,6 +647,95 @@ def _print_update_notice(current: str, latest: str) -> None:
         )
 
 
+def _standalone_install_dir() -> str | None:
+    """Return the standalone install dir if openclaw is running from one, else None.
+
+    A standalone install places openclaw_cli.py directly in a directory like
+    ~/.local/share/openclaw-cli/ and runs it via a bash shim — not from a
+    pip-managed site-packages location.
+    """
+    try:
+        script = Path(__file__).resolve()
+        marker = script.parent / "openclaw_cli_sessions.py"
+        if marker.exists() and "site-packages" not in str(script):
+            return str(script.parent)
+    except Exception:
+        pass
+    return None
+
+
+def _update_standalone_install(
+    install_dir: str,
+    pip_cmd: list[str],
+    *,
+    latest: str,
+    current: str,
+    output_json: bool = False,
+) -> int:
+    """Update a standalone install by downloading the wheel and extracting files.
+
+    Uses ``pip download --no-deps`` which fetches the wheel without installing
+    it — not blocked by PEP 668 on externally-managed environments.
+    """
+    import tempfile
+    import zipfile as _zipfile
+
+    if _RICH_AVAILABLE and _IS_TTY and not output_json:
+        _RICH_CONSOLE.print(
+            f"[bold cyan]🦞 Updating openclaw[/]  "
+            f"[dim]{current}[/] [dim]→[/] [bold green]{latest}[/]"
+            f"  [dim](standalone install)[/]"
+        )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        dl_cmd = pip_cmd + [
+            "download", "--no-deps", "--dest", tmpdir,
+            f"openclaw=={latest}",
+        ]
+        dl_result = subprocess.run(dl_cmd, capture_output=True)
+        if dl_result.returncode != 0:
+            err = dl_result.stderr.decode(errors="replace")
+            if _RICH_AVAILABLE and _IS_TTY and not output_json:
+                _RICH_ERR.print(f"[bold red]✗ download failed:[/] {err}")
+            else:
+                print(f"✗ download failed: {err}", file=sys.stderr)
+            return 1
+
+        wheels = sorted(Path(tmpdir).glob("*.whl"))
+        if not wheels:
+            if _RICH_AVAILABLE and _IS_TTY and not output_json:
+                _RICH_ERR.print("[bold red]✗[/] no wheel found in download")
+            else:
+                print("✗ no wheel found in download", file=sys.stderr)
+            return 1
+
+        updated: list[str] = []
+        with _zipfile.ZipFile(wheels[0]) as whl:
+            for entry in whl.namelist():
+                basename = Path(entry).name
+                dest = Path(install_dir) / basename
+                if dest.exists() and basename.endswith(".py"):
+                    with whl.open(entry) as src:
+                        dest.write_bytes(src.read())
+                    updated.append(basename)
+
+        if not updated:
+            if _RICH_AVAILABLE and _IS_TTY and not output_json:
+                _RICH_ERR.print("[yellow]⚠[/] no matching files found in wheel")
+            else:
+                print("⚠ no matching files found in wheel", file=sys.stderr)
+            return 1
+
+        if _RICH_AVAILABLE and _IS_TTY and not output_json:
+            _RICH_CONSOLE.print(
+                f"[bold green]✓ Done[/]  —  openclaw [dim]{current}[/] → [bold green]{latest}[/]  "
+                f"[dim]({', '.join(updated)} updated in-place)[/]"
+            )
+        else:
+            print(f"✓ Done — openclaw {current} → {latest}  ({', '.join(updated)} updated)")
+        return 0
+
+
 def handle_update_command(_args: argparse.Namespace) -> int:
     """Self-update openclaw via pip, showing a spinner while the install runs."""
     pip_cmd = _find_pip()
@@ -662,8 +751,19 @@ def handle_update_command(_args: argparse.Namespace) -> int:
             print(f"error: {msg}", file=sys.stderr)
         return 1
 
-    # Outside a venv (e.g. macOS system Python), we must pass --user to avoid
-    # the PEP 668 "externally-managed-environment" error.
+    current = cli_version()
+    latest = _fetch_latest_pypi_version() or "latest"
+
+    # Standalone installs (bash-shim on laptop) can't use pip install because
+    # they're not in a venv and macOS blocks system-Python pip installs (PEP 668).
+    # Instead, download the wheel and extract files directly into the install dir.
+    install_dir = _standalone_install_dir()
+    if install_dir:
+        return _update_standalone_install(
+            install_dir, pip_cmd, latest=latest, current=current
+        )
+
+    # Standard pip install path (venv or user site-packages).
     in_venv = sys.prefix != sys.base_prefix
     user_flag = [] if in_venv else ["--user"]
     install_cmd = pip_cmd + ["install", "--upgrade"] + user_flag
