@@ -790,6 +790,122 @@ def restore_last_routed_action_checkpoint(session_id: str) -> dict[str, Any] | N
     }
 
 
+def _handoffs_root() -> Path:
+    """Return the directory where handoff manifests are stored."""
+    return cli_data_root() / "handoffs"
+
+
+def create_handoff(session_id: str, *, note: str = "", pin_outputs: list[str] | None = None) -> str:
+    """Snapshot the current session state into a portable handoff manifest."""
+    summary = load_session(session_id)
+    if summary is None:
+        raise ValueError(f"Session not found: {session_id!r}")
+
+    handoff_id = (
+        "handoff_"
+        + datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        + "_"
+        + session_id[:8]
+    )
+
+    manifest: dict[str, Any] = {
+        "id": handoff_id,
+        "created_at": _now_iso(),
+        "source_session_id": session_id,
+        "session_title": summary.title,
+        "cwd": summary.cwd,
+        "tracked_files": summary.files,
+        "plan_id": summary.plan_id,
+        "task_id": summary.task_id,
+        "tags": summary.tags,
+        "last_summary": summary.last_summary,
+        "note": note,
+        "pinned_outputs": pin_outputs or [],
+        "recent_history": load_conversation_history(session_id, limit_turns=10),
+        "outputs_snapshot": list_saved_outputs(session_id, limit=20),
+    }
+
+    atomic_write(_handoffs_root() / f"{handoff_id}.json", json.dumps(manifest, indent=2, sort_keys=True))
+    return handoff_id
+
+
+def list_handoffs(*, limit: int = 20) -> list[dict[str, Any]]:
+    """Return recent handoff manifests sorted by creation time descending."""
+    root = _handoffs_root()
+    if not root.exists():
+        return []
+
+    entries: list[dict[str, Any]] = []
+    for path in root.glob("*.json"):
+        try:
+            entries.append(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError):
+            continue
+
+    entries.sort(key=lambda e: e.get("created_at", ""), reverse=True)
+    return entries[:limit]
+
+
+def load_handoff(name_or_id: str) -> dict[str, Any] | None:
+    """Load a handoff manifest by exact name or ID prefix."""
+    root = _handoffs_root()
+    if not root.exists():
+        return None
+
+    exact = root / f"{name_or_id}.json"
+    if exact.exists():
+        try:
+            return json.loads(exact.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+
+    for path in root.glob("*.json"):
+        if path.name.startswith(name_or_id):
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                return None
+
+    return None
+
+
+def apply_handoff(manifest: dict[str, Any], target_session_id: str) -> dict[str, Any]:
+    """Merge a handoff manifest's context into a target session."""
+    if not isinstance(manifest, dict) or "source_session_id" not in manifest:
+        raise ValueError("manifest must be a dict with a 'source_session_id' key")
+
+    result: dict[str, Any] = {"restored": [], "missing": [], "warnings": []}
+
+    available_tracked_files: list[str] = []
+    for f in manifest.get("tracked_files") or []:
+        if Path(f).exists():
+            result["restored"].append(f"tracked_file:{f}")
+            available_tracked_files.append(f)
+        else:
+            result["missing"].append(f"tracked_file:{f}")
+
+    cwd = manifest.get("cwd")
+    if cwd and not Path(cwd).exists():
+        result["warnings"].append(f"cwd:{cwd}")
+
+    if target_session_id:
+        existing = load_session(target_session_id)
+        existing_files: list[str] = list(existing.files) if existing and existing.files else []
+        merged_files = list(set(existing_files + available_tracked_files))
+        existing_tags: list[str] = list(existing.tags) if existing and existing.tags else []
+        handoff_tag = "handoff:" + manifest.get("source_session_id", "")[:8]
+        if handoff_tag not in existing_tags:
+            existing_tags.append(handoff_tag)
+        update_session(
+            target_session_id,
+            last_summary=manifest.get("last_summary", ""),
+            files=merged_files,
+            tags=existing_tags,
+        )
+
+    return result
+
+
 def build_workspace_signature(
     *,
     cwd: str | os.PathLike[str] | None = None,

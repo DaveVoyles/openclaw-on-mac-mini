@@ -39,16 +39,20 @@ from openclaw_cli_actions import (
 from openclaw_cli_sessions import (
     SessionSummary,
     append_event,
+    apply_handoff,
     build_workspace_signature,
     collect_workspace_context,
+    create_handoff,
     create_routed_action_checkpoint,
     create_session,
     export_session,
     extract_prompt_targets,
+    list_handoffs,
     list_saved_outputs,
     list_sessions,
     load_conversation_history,
     load_events,
+    load_handoff,
     load_saved_output_preview,
     load_session,
     load_watch_state,
@@ -5534,6 +5538,147 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_handoff(ctx: ChatCommandContext) -> str:
+    """/handoff [create|list|open NAME|note TEXT] — save/restore a resumable workspace handoff."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    raw = ctx.args.strip()
+    parts = raw.split(None, 1)
+    sub = parts[0].lower() if parts else ""
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    # ── create ──────────────────────────────────────────────────────────────
+    if sub == "create":
+        session_id = _require_session_or_warn(ctx)
+        if session_id is None:
+            return _CMD_CONTINUE
+        if isinstance(session_id, object) and hasattr(session_id, "session_id"):
+            session_id = session_id.session_id  # type: ignore[union-attr]
+        # parse optional note: `/handoff create note "text"` or `/handoff create "text"`
+        note = ""
+        if rest.lower().startswith("note "):
+            note = rest[5:].strip().strip('"').strip("'")
+        elif rest:
+            note = rest.strip('"').strip("'")
+        try:
+            handoff_id = create_handoff(session_id, note=note)
+        except ValueError as exc:
+            _print_error(str(exc))
+            return _CMD_CONTINUE
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(
+                f"\n[bold green]{_e('✅', '[OK]')} Handoff created:[/] [cyan]{handoff_id}[/]"
+            )
+            _RICH_CONSOLE.print(
+                f"  Resume with: [dim]openclaw --session {session_id}[/]  "
+                f"or  [dim]/handoff open {handoff_id}[/]\n"
+            )
+        else:
+            print(f"\n{_GR}{_e('✅', '[OK]')} Handoff created:{_R} {handoff_id}")
+            print(f"  Resume with: openclaw --session {session_id}")
+            print(f"  Or use:      /handoff open {handoff_id}\n")
+        return _CMD_CONTINUE
+
+    # ── list ────────────────────────────────────────────────────────────────
+    if sub == "list" or (not sub):
+        handoffs = list_handoffs(limit=20)
+        if not handoffs:
+            print(f"  {_DM}No handoffs found. Create one with /handoff create{_R}")
+            return _CMD_CONTINUE
+        if _RICH_AVAILABLE and is_tty:
+            tbl = _RichTable(
+                "ID", "Session", "Title", "CWD", "Note", "Created",
+                border_style="dim",
+                header_style="bold cyan",
+                show_lines=False,
+            )
+            for h in handoffs:
+                hid = (h.get("id") or "")[:30]
+                sess = (h.get("source_session_id") or "")[:8]
+                title = (h.get("session_title") or "")[:24]
+                cwd = (h.get("cwd") or "")[-30:]
+                note_cell = (h.get("note") or "")[:30]
+                created = (h.get("created_at") or "")[:19]
+                tbl.add_row(hid, sess, title, cwd, note_cell, created)
+            _RICH_CONSOLE.print(tbl)
+        else:
+            cols = shutil.get_terminal_size((120, 24)).columns
+            header = f"  {'ID':<30}  {'Session':<8}  {'Title':<24}  {'Note':<20}  {'Created'}"
+            print(f"\n{_BCY}{header}{_R}")
+            print(f"  {'─' * min(cols - 4, 100)}")
+            for h in handoffs:
+                hid = (h.get("id") or "")[:30]
+                sess = (h.get("source_session_id") or "")[:8]
+                title = (h.get("session_title") or "")[:24]
+                note_cell = (h.get("note") or "")[:20]
+                created = (h.get("created_at") or "")[:19]
+                print(f"  {hid:<30}  {sess:<8}  {title:<24}  {note_cell:<20}  {created}")
+            print()
+        return _CMD_CONTINUE
+
+    # ── open ────────────────────────────────────────────────────────────────
+    if sub == "open":
+        if not rest:
+            _print_error("Usage: /handoff open NAME")
+            return _CMD_CONTINUE
+        manifest = load_handoff(rest)
+        if manifest is None:
+            _print_error(f"Handoff not found: {rest}")
+            return _CMD_CONTINUE
+        new_session = create_session()
+        new_session_id = new_session.session_id if hasattr(new_session, "session_id") else str(new_session)
+        result = apply_handoff(manifest, new_session_id)
+        restored = result.get("restored", [])
+        missing = result.get("missing", [])
+        warnings = result.get("warnings", [])
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[bold green]{_e('✅', '[OK]')} Handoff applied to new session:[/] [cyan]{new_session_id}[/]")
+            if restored:
+                _RICH_CONSOLE.print(f"  [green]Restored:[/] {', '.join(str(r) for r in restored)}")
+            if missing:
+                _RICH_CONSOLE.print(f"  [yellow]Missing:[/] {', '.join(str(m) for m in missing)}")
+            for w in warnings:
+                _RICH_CONSOLE.print(f"  [yellow]{_e('⚠️', 'Warning:')}[/] {w}")
+            _RICH_CONSOLE.print(f"  Resume with: [dim]openclaw --session {new_session_id}[/]\n")
+        else:
+            print(f"\n{_GR}{_e('✅', '[OK]')} Handoff applied to new session:{_R} {new_session_id}")
+            if restored:
+                print(f"  Restored: {', '.join(str(r) for r in restored)}")
+            if missing:
+                print(f"  {_YE}Missing:{_R} {', '.join(str(m) for m in missing)}")
+            for w in warnings:
+                print(f"  {_YE}{_e('⚠️', 'Warning:')} {w}{_R}")
+            print(f"  Resume with: openclaw --session {new_session_id}\n")
+        return _CMD_CONTINUE
+
+    # ── note ────────────────────────────────────────────────────────────────
+    if sub == "note":
+        session_id = _require_session_or_warn(ctx)
+        if session_id is None:
+            return _CMD_CONTINUE
+        if isinstance(session_id, object) and hasattr(session_id, "session_id"):
+            session_id = session_id.session_id  # type: ignore[union-attr]
+        note_text = rest.strip('"').strip("'")
+        if not note_text:
+            _print_error("Usage: /handoff note TEXT")
+            return _CMD_CONTINUE
+        try:
+            handoff_id = create_handoff(session_id, note=note_text)
+        except ValueError as exc:
+            _print_error(str(exc))
+            return _CMD_CONTINUE
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(
+                f"\n[bold green]{_e('✅', '[OK]')} Handoff with note saved:[/] [cyan]{handoff_id}[/]\n"
+            )
+        else:
+            print(f"\n{_GR}{_e('✅', '[OK]')} Handoff with note saved:{_R} {handoff_id}\n")
+        return _CMD_CONTINUE
+
+    # ── unknown / usage ─────────────────────────────────────────────────────
+    print(f"  {_CY}Usage:{_R} /handoff [create|list|open NAME|note TEXT]")
+    return _CMD_CONTINUE
+
+
 def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
@@ -5732,6 +5877,13 @@ def build_chat_command_registry() -> ChatCommandRegistry:
             name="replay",
             description="Re-print the current or a past session conversation (/replay [session-id])",
             handler=_cmd_replay,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="handoff",
+            description="Save/restore a resumable workspace handoff  [create|list|open NAME|note TEXT]",
+            handler=_cmd_handoff,
         )
     )
     return registry

@@ -74,7 +74,7 @@ Steps:
 | [Wave 8](#wave-8--session-intelligence) | Session Intelligence | ✅ Shipped |
 | [Wave 9](#wave-9--artifact-studio--replay) | Artifact Studio & Replay | ✅ Shipped |
 | [Wave 10](#wave-10--guided-workflows--recovery) | Guided Workflows & Recovery | ✅ Shipped |
-| [Wave 11](#wave-11--workspace-handoffs) | Workspace Handoffs | 🔲 Ready |
+| [Wave 11](#wave-11--workspace-handoffs) | Workspace Handoffs | ✅ Shipped |
 | [Wave 12](#wave-12--automation-control-tower) | Automation Control Tower | 🔲 Ready |
 | [Wave 13](#wave-13--trust--explainability) | Trust & Explainability | 🔲 Ready |
 | [Wave 14](#wave-14--composer--input-flow) | Composer & Input Flow | 🔲 Ready |
@@ -513,7 +513,7 @@ sideways.
 
 ## Wave 11 — Workspace Handoffs
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped**
 
 **Goal:** Make it easy to pause work on one machine and resume it later with the
 right context intact. Users should be able to capture a handoff bundle from the
@@ -575,14 +575,14 @@ plan/task context already lined up.
 
 ### Done-When
 
-- [ ] `/handoff create` writes a resumable bundle with session metadata and recent outputs
-- [ ] `/handoff list` shows recent bundles with source-session context
-- [ ] `/handoff open NAME` restores the handoff into a usable session
-- [ ] Missing tracked files are flagged during restore, not after the first failed command
-- [ ] Pinned outputs are preserved in handoff manifests
-- [ ] Session detail shows when a session originated from a handoff
-- [ ] 180 tests pass
-- [ ] Deployed to macbook
+- [x] `/handoff create` writes a resumable bundle with session metadata and recent outputs
+- [x] `/handoff list` shows recent bundles with source-session context
+- [x] `/handoff open NAME` restores the handoff into a usable session
+- [x] Missing tracked files are flagged during restore, not after the first failed command
+- [x] Pinned outputs are preserved in handoff manifests
+- [x] Session detail shows when a session originated from a handoff
+- [x] 180 tests pass
+- [x] Deployed to macbook
 
 ---
 
