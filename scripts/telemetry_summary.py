@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 def load_records(path: str, last: int | None, provider: str | None) -> list[dict]:
     try:
         with open(path) as f:
-            lines = [l.strip() for l in f if l.strip()]
+            lines = [ln.strip() for ln in f if ln.strip()]
     except FileNotFoundError:
         print(f"File not found: {path}", file=sys.stderr)
         return []
