@@ -119,6 +119,54 @@ OUTPUT_PREVIEW_MAX_CHARS = 4_000
 REPL_ROUTE_AUTO_THRESHOLD = 0.74
 REPL_ROUTE_ANNOUNCEMENT_COMMAND_LIMIT = 80
 REPL_ROUTE_ANNOUNCEMENT_REASON_LIMIT = 72
+
+
+# ---------------------------------------------------------------------------
+# Shared display helpers
+# ---------------------------------------------------------------------------
+
+def _status_emoji(status: str) -> str:
+    """Map a status string to a representative emoji."""
+    s = str(status or "").lower().strip()
+    if s in {"ok", "healthy", "done", "completed", "success", "active"}:
+        return "🟢"
+    if s in {"running", "in_progress"}:
+        return "🔵"
+    if s in {"warn", "warning", "degraded"}:
+        return "🟡"
+    if s in {"error", "failed", "unhealthy"}:
+        return "🔴"
+    if s in {"paused", "stopped", "cancelled"}:
+        return "⏸"
+    if s in {"pending", "queued"}:
+        return "⏳"
+    return "●"
+
+
+def _print_meta_footer(*pairs: tuple[str, str]) -> None:
+    """Print dim label + value metadata lines after a command (e.g. session id, saved path)."""
+    if not pairs:
+        return
+    print()
+    if _RICH_AVAILABLE and _IS_TTY:
+        for label, value in pairs:
+            _RICH_CONSOLE.print(f"  [dim]{label}:[/]  [dim]{value}[/]")
+    else:
+        for label, value in pairs:
+            print(f"  {_DM}{label}:{_R}  {value}")
+
+
+def _print_error(msg: str, *, file: object = None) -> None:
+    """Print a standardized error message with color when available."""
+    import sys as _sys
+    dest = file if file is not None else _sys.stdout
+    if _RICH_AVAILABLE and _IS_TTY and dest is _sys.stderr:
+        _RICH_CONSOLE.print(f"[bold red]error:[/] {msg}", stderr=True)
+    elif _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(f"[bold red]error:[/] {msg}")
+    else:
+        print(f"{_BRE}error:{_R} {msg}", file=dest)
+
 TRANSIENT_WATCH_ERROR_MARKERS = (
     "timed out",
     "timeout",
@@ -701,8 +749,66 @@ def summarize_session(session: SessionSummary) -> str:
     return "\n".join(parts)
 
 
+def _print_session_summary(session: SessionSummary) -> None:
+    """Print a compact session summary, with rich formatting when available."""
+    if _RICH_AVAILABLE and _IS_TTY:
+        grid = _RichTable.grid(padding=(0, 2))
+        grid.add_column(style="dim", min_width=12)
+        grid.add_column()
+        grid.add_row("🆔 id", f"[dim]{session.session_id}[/]")
+        grid.add_row("📋 title", f"[bold]{session.title}[/]")
+        if session.cwd:
+            grid.add_row("📁 cwd", f"[dim]{session.cwd}[/]")
+        grid.add_row("🕐 updated", f"[yellow]{session.updated_at}[/]")
+        grid.add_row("📊 stats", f"[cyan]{session.command_count}[/] commands  [cyan]{session.output_count}[/] outputs")
+        if session.plan_id:
+            grid.add_row("📋 plan", f"[magenta]{session.plan_id}[/]")
+        if session.task_id:
+            grid.add_row("✅ task", f"[magenta]{session.task_id}[/]")
+        if session.files:
+            grid.add_row("📄 files", f"[dim]{', '.join(session.files[:4])}{'…' if len(session.files) > 4 else ''}[/]")
+        if session.last_summary:
+            grid.add_row("💬 last", f"[dim]{session.last_summary[:80]}[/]")
+        if session.automation_mode:
+            a_status = session.automation_status or "active"
+            grid.add_row("🤖 automation", f"[cyan]{session.automation_mode}[/] [dim]({a_status})[/]")
+        _RICH_CONSOLE.print(_RichPanel(grid, border_style="cyan", padding=(0, 1)))
+    else:
+        print(summarize_session(session))
+
+
+def _print_session_list(items: list[SessionSummary]) -> None:
+    """Print a session list table, with rich formatting when available."""
+    if not items:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]No OpenClaw CLI sessions have been recorded yet.[/]")
+        else:
+            print("No OpenClaw CLI sessions have been recorded yet.")
+        return
+    if _RICH_AVAILABLE and _IS_TTY:
+        table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan")
+        table.add_column("Session ID", style="dim", no_wrap=True)
+        table.add_column("Title", style="bold")
+        table.add_column("Updated", style="yellow", no_wrap=True)
+        table.add_column("Cmds", justify="right", style="cyan")
+        table.add_column("Outputs", justify="right", style="cyan")
+        table.add_column("Mode", style="dim")
+        for s in items:
+            table.add_row(
+                s.session_id,
+                s.title or "—",
+                s.updated_at or "—",
+                str(s.command_count),
+                str(s.output_count),
+                s.automation_mode or "—",
+            )
+        _RICH_CONSOLE.print(table)
+    else:
+        print(format_session_list(items))
+
+
 def inspect_session(session_id: str) -> str:
-    """Render a rich, human-readable inspection view of a persisted session."""
+    """Render a human-readable inspection view of a persisted session."""
     from openclaw_cli_sessions import export_session
 
     export = export_session(session_id)
@@ -711,6 +817,10 @@ def inspect_session(session_id: str) -> str:
     outputs: list[dict[str, Any]] = export.get("outputs") or []
     watch: dict[str, Any] = export.get("watch_state") or {}
     routed_checkpoints: list[dict[str, Any]] = export.get("routed_action_checkpoints") or []
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        _inspect_session_rich(session_id, session_data, events, outputs, watch, routed_checkpoints)
+        return ""
 
     sep = "-" * 60
     lines: list[str] = []
@@ -847,8 +957,79 @@ def inspect_session(session_id: str) -> str:
     return "\n".join(lines)
 
 
+def _inspect_session_rich(
+    session_id: str,
+    session_data: dict[str, Any],
+    events: list[dict[str, Any]],
+    outputs: list[dict[str, Any]],
+    watch: dict[str, Any],
+    routed_checkpoints: list[dict[str, Any]],
+) -> None:
+    """Print a rich-formatted session inspection view."""
+    sid = session_data.get("session_id", session_id)
+    title = session_data.get("title") or "Session"
+    status = str(session_data.get("status") or "active")
+    emoji = _status_emoji(status)
+
+    # Metadata panel
+    meta = _RichTable.grid(padding=(0, 2))
+    meta.add_column(style="dim", min_width=12)
+    meta.add_column()
+    meta.add_row("🆔 id", f"[dim]{sid}[/]")
+    meta.add_row(f"{emoji} status", f"[bold]{status}[/]")
+    meta.add_row("📁 cwd", f"[dim]{session_data.get('cwd', '')}[/]")
+    meta.add_row("🕐 created", f"[dim]{session_data.get('created_at', '')}[/]")
+    meta.add_row("🕐 updated", f"[yellow]{session_data.get('updated_at', '')}[/]")
+    meta.add_row(
+        "📊 stats",
+        f"[cyan]{session_data.get('command_count', 0)}[/] commands  "
+        f"[cyan]{session_data.get('output_count', 0)}[/] outputs  "
+        f"[cyan]{session_data.get('file_edit_count', 0)}[/] edits",
+    )
+    plan_id = str(session_data.get("plan_id") or "").strip()
+    task_id = str(session_data.get("task_id") or "").strip()
+    if plan_id:
+        meta.add_row("📋 plan", f"[magenta]{plan_id}[/]")
+    if task_id:
+        meta.add_row("✅ task", f"[magenta]{task_id}[/]")
+    files: list[str] = list(session_data.get("files") or [])
+    if files:
+        file_str = ", ".join(files[:5]) + (f" … +{len(files)-5}" if len(files) > 5 else "")
+        meta.add_row("📄 files", f"[dim]{file_str}[/]")
+    _RICH_CONSOLE.print(_RichPanel(meta, title=f"[bold cyan]{title}[/]", border_style="cyan", padding=(0, 1)))
+
+    # Events panel
+    if events:
+        kind_styles = {"prompt": "cyan", "assistant": "green", "exec": "yellow", "edit": "magenta", "error": "red"}
+        ev_table = _RichTable(border_style="dim", show_edge=False, pad_edge=True, header_style="bold dim")
+        ev_table.add_column("Time", style="dim", no_wrap=True)
+        ev_table.add_column("Kind", no_wrap=True)
+        ev_table.add_column("Summary")
+        for event in events[-8:]:
+            ts = str(event.get("timestamp") or event.get("created_at") or "").strip()[-8:]
+            kind = str(event.get("kind") or "").strip()
+            meta_d = event.get("metadata") or {}
+            summary = str(meta_d.get("summary") if isinstance(meta_d, dict) else "") or str(event.get("content") or "")
+            style = kind_styles.get(kind, "dim")
+            ev_table.add_row(ts, f"[{style}]{kind}[/]", summary[:80])
+        _RICH_CONSOLE.print(_RichPanel(ev_table, title="[bold dim]Recent Events[/]", border_style="dim", padding=(0, 1)))
+
+    # Outputs panel
+    if outputs:
+        out_table = _RichTable(border_style="dim", show_edge=False, pad_edge=True, header_style="bold dim")
+        out_table.add_column("Name", style="cyan")
+        out_table.add_column("Size", justify="right", style="dim")
+        for out in outputs[-5:]:
+            name = str(out.get("name") or "").strip()
+            size = _format_byte_count(int(out.get("size_bytes") or 0))
+            out_table.add_row(name, size)
+        _RICH_CONSOLE.print(_RichPanel(out_table, title=f"[bold dim]Saved Outputs ({len(outputs)})[/]", border_style="dim", padding=(0, 1)))
+
+    _RICH_CONSOLE.print(f"  [dim]Resume:[/] [cyan]openclaw --session {sid}[/]")
+
+
 def format_session_list(items: list[SessionSummary]) -> str:
-    """Render a recent-session table."""
+    """Render a recent-session table as plain text."""
     if not items:
         return "No OpenClaw CLI sessions have been recorded yet."
     rows = ["SESSION ID | UPDATED | MODE | COMMANDS | OUTPUTS | TITLE", "-" * 104]
@@ -1331,23 +1512,49 @@ def print_watch_resume_snapshot(session_id: str, state: dict[str, Any], *, outpu
         return
     status = str(state.get("status") or "unknown").strip() or "unknown"
     poll_count = int(state.get("poll_count") or 0)
-    print(f"Resuming watch {session_id} (status={status}, completed polls={poll_count}).")
     last_summary = str(state.get("last_summary") or "").strip()
-    if last_summary:
-        print(f"Last checkpoint: {last_summary}")
     last_error = str(state.get("last_error") or "").strip()
-    if last_error:
-        print(f"Last error: {last_error}")
     active_checkpoint = state.get("active_checkpoint")
-    if isinstance(active_checkpoint, dict) and active_checkpoint:
-        partial = str(active_checkpoint.get("last_message") or "").strip()
-        if partial:
-            print(f"Partial progress: {partial}")
     recent_progress = list(state.get("progress_log") or [])[-3:]
-    if recent_progress:
-        print("Recent progress:")
-        for entry in recent_progress:
-            print(f"  - {entry.get('message', '')}")
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        emoji = _status_emoji(status)
+        border = "green" if status in ("active", "running") else ("yellow" if status in ("paused", "idle") else ("red" if status in ("failed", "error") else "dim"))
+        body = _RichText()
+        body.append(f"{emoji} status    ", style="dim")
+        body.append(f"{status}", style=f"bold {border}")
+        body.append(f"\n🔢 polls    ", style="dim")
+        body.append(f"{poll_count}", style="cyan")
+        if last_summary:
+            body.append(f"\n📝 last     ", style="dim")
+            body.append(last_summary, style="white")
+        if last_error:
+            body.append(f"\n⚠️  error    ", style="dim")
+            body.append(last_error, style="red")
+        if isinstance(active_checkpoint, dict) and active_checkpoint:
+            partial = str(active_checkpoint.get("last_message") or "").strip()
+            if partial:
+                body.append(f"\n⏳ partial  ", style="dim")
+                body.append(partial, style="yellow")
+        if recent_progress:
+            body.append(f"\n📋 recent   ", style="dim")
+            for entry in recent_progress:
+                body.append(f"\n   • {entry.get('message', '')}", style="dim")
+        _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]resuming watch[/] [dim]{session_id}[/]", border_style=border, padding=(0, 1)))
+    else:
+        print(f"Resuming watch {session_id} (status={status}, completed polls={poll_count}).")
+        if last_summary:
+            print(f"Last checkpoint: {last_summary}")
+        if last_error:
+            print(f"Last error: {last_error}")
+        if isinstance(active_checkpoint, dict) and active_checkpoint:
+            partial = str(active_checkpoint.get("last_message") or "").strip()
+            if partial:
+                print(f"Partial progress: {partial}")
+        if recent_progress:
+            print("Recent progress:")
+            for entry in recent_progress:
+                print(f"  - {entry.get('message', '')}")
 
 
 def refresh_watch_controls(session_id: str, state: dict[str, Any]) -> dict[str, Any]:
@@ -1691,8 +1898,13 @@ def print_response(response: AskResponse, *, output_json: bool) -> None:
         else:
             print(response.response)
     if response.model or response.tokens:
-        print()
-        print(f"{_DM}[model: {response.model} | tokens: {response.tokens}]{_R}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            from rich.rule import Rule as _RichRule
+            _RICH_CONSOLE.print(_RichRule(style="dim"))
+            _RICH_CONSOLE.print(f"[dim]model:[/] [cyan]{response.model}[/]  [dim]tokens:[/] [cyan]{response.tokens}[/]")
+        else:
+            print()
+            print(f"{_DM}[model: {response.model} | tokens: {response.tokens}]{_R}")
 
 
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
@@ -1704,24 +1916,64 @@ def print_health(response: HealthResponse, *, output_json: bool) -> None:
         print(json.dumps(response.payload, indent=2, sort_keys=True))
         return
     status = (response.status or "unknown").upper()
-    if response.healthy is True:
-        prefix = f"{_BGR}OK{_R}"
-    elif response.healthy is False:
-        prefix = f"{_BYE}WARN{_R}"
+    emoji = _status_emoji(response.status or "")
+    if _RICH_AVAILABLE and _IS_TTY:
+        border = "green" if response.healthy is True else ("yellow" if response.healthy is False else "dim")
+        status_style = "bold green" if response.healthy is True else ("bold yellow" if response.healthy is False else "dim")
+        t = _RichText()
+        t.append(f"{emoji}  OpenClaw  ", style="bold")
+        t.append(status, style=status_style)
+        if isinstance(response.payload, dict):
+            grid = _RichTable.grid(padding=(0, 2))
+            grid.add_column(style="dim", min_width=14)
+            grid.add_column()
+            labels = {
+                "uptime_seconds": "uptime",
+                "bot_user": "bot",
+                "guilds": "guilds",
+                "python": "python",
+                "discord_py": "discord.py",
+            }
+            for key, label in labels.items():
+                if key in response.payload:
+                    val = str(response.payload[key])
+                    if key == "uptime_seconds":
+                        val = f"{val}s"
+                    grid.add_row(label, val)
+            checks = response.payload.get("checks")
+            if isinstance(checks, dict) and checks:
+                for name, value in sorted(checks.items()):
+                    chk_emoji = "✅" if str(value).lower() in {"ok", "true", "healthy"} else "⚠️"
+                    grid.add_row(f"  {name}", f"{chk_emoji} {value}")
+            from rich.console import Group as _RichGroup
+            _RICH_CONSOLE.print(_RichPanel(_RichGroup(t, grid), border_style=border, padding=(0, 1)))
+        elif isinstance(response.payload, str) and response.payload.strip():
+            from rich.console import Group as _RichGroup
+            _RICH_CONSOLE.print(_RichPanel(_RichGroup(t, _RichText(response.payload.strip(), style="dim")), border_style=border, padding=(0, 1)))
+        else:
+            _RICH_CONSOLE.print(_RichPanel(t, border_style=border, padding=(0, 1)))
     else:
-        prefix = f"{_DM}INFO{_R}"
-    print(f"{prefix} OpenClaw health: {_B}{status}{_R}")
-    if isinstance(response.payload, dict):
-        for key in ("uptime_seconds", "bot_user", "guilds", "python", "discord_py"):
-            if key in response.payload:
-                print(f"{key}: {response.payload[key]}")
-        checks = response.payload.get("checks")
-        if isinstance(checks, dict) and checks:
-            rendered_checks = ", ".join(f"{name}={value}" for name, value in sorted(checks.items()))
-            print(f"checks: {rendered_checks}")
-        return
-    if isinstance(response.payload, str) and response.payload.strip():
-        print(response.payload.strip())
+        if response.healthy is True:
+            prefix = f"{_BGR}OK{_R}"
+        elif response.healthy is False:
+            prefix = f"{_BYE}WARN{_R}"
+        else:
+            prefix = f"{_DM}INFO{_R}"
+        print(f"{emoji}  {prefix} OpenClaw health: {_B}{status}{_R}")
+        if isinstance(response.payload, dict):
+            for key in ("uptime_seconds", "bot_user", "guilds", "python", "discord_py"):
+                if key in response.payload:
+                    val = str(response.payload[key])
+                    if key == "uptime_seconds":
+                        val = f"{val}s"
+                    print(f"  {_DM}{key}:{_R}  {val}")
+            checks = response.payload.get("checks")
+            if isinstance(checks, dict) and checks:
+                for name, value in sorted(checks.items()):
+                    print(f"  {_DM}{name}:{_R}  {value}")
+            return
+        if isinstance(response.payload, str) and response.payload.strip():
+            print(response.payload.strip())
 
 
 def maybe_warn_missing_token(config: CliConfig) -> None:
@@ -3198,7 +3450,7 @@ def _cmd_session(ctx: ChatCommandContext) -> str:
     session = _require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
-    print(summarize_session(session))
+    _print_session_summary(session)
     return _CMD_CONTINUE
 
 
@@ -3207,23 +3459,53 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
     session = _require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
-    lines = [f"cwd  : {session.cwd}"]
-    if session.files:
-        lines.append("files:")
-        for f in session.files:
-            lines.append(f"  {f}")
+    if _RICH_AVAILABLE and _IS_TTY:
+        from rich.table import Table as _RichTableLocal
+        grid = _RichText()
+        grid.append("📁 cwd    ", style="dim")
+        grid.append(session.cwd or "(none)", style="bold")
+        grid.append("\n")
+        if session.files:
+            grid.append("📄 files  ", style="dim")
+            grid.append("\n")
+            for f in session.files:
+                grid.append(f"   {f}\n", style="cyan")
+        else:
+            grid.append("📄 files  ", style="dim")
+            grid.append("(none tracked)\n", style="dim italic")
+        if session.plan_id:
+            plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
+            suffix = _link_validation_suffix(plan_validation)
+            grid.append("📋 plan   ", style="dim")
+            grid.append(f"{session.plan_id}{suffix}\n", style="yellow")
+        if session.task_id:
+            task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
+            suffix = _link_validation_suffix(task_validation)
+            grid.append("✅ task   ", style="dim")
+            grid.append(f"{session.task_id}{suffix}\n", style="yellow")
+        grounding_preview = _render_effective_grounding_preview(session)
+        if grounding_preview:
+            grid.append("\neffective grounding preview:\n", style="dim italic")
+            grid.append(grounding_preview, style="dim")
+        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold]context[/]", border_style="dim", padding=(0, 1)))
     else:
-        lines.append("files: (none tracked)")
-    if session.plan_id:
-        plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
-        lines.append(f"plan : {session.plan_id}{_link_validation_suffix(plan_validation)}")
-    if session.task_id:
-        task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
-        lines.append(f"task : {session.task_id}{_link_validation_suffix(task_validation)}")
-    grounding_preview = _render_effective_grounding_preview(session)
-    if grounding_preview:
-        lines.extend(["", "effective grounding preview:", grounding_preview])
-    print("\n".join(lines))
+        lines = [f"cwd  : {session.cwd}"]
+        if session.files:
+            lines.append("files:")
+            for f in session.files:
+                lines.append(f"  {f}")
+        else:
+            lines.append("files: (none tracked)")
+        if session.plan_id:
+            plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
+            lines.append(f"plan : {session.plan_id}{_link_validation_suffix(plan_validation)}")
+        if session.task_id:
+            task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
+            lines.append(f"task : {session.task_id}{_link_validation_suffix(task_validation)}")
+        grounding_preview = _render_effective_grounding_preview(session)
+        if grounding_preview:
+            lines.extend(["", "effective grounding preview:", grounding_preview])
+        print("\n".join(lines))
     return _CMD_CONTINUE
 
 
@@ -3238,7 +3520,7 @@ def _cmd_cwd(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     resolved = str(Path(new_path).expanduser().resolve())
     if not Path(resolved).is_dir():
-        print(f"error: not a directory: {resolved}")
+        _print_error(f"not a directory: {resolved}")
         return _CMD_CONTINUE
     update_session(ctx.session_id, cwd=resolved)
     append_event(
@@ -3261,10 +3543,17 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
     if not raw:
         # List mode
         if not session.files:
-            print("No tracked files.")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No tracked files.[/]")
+            else:
+                print("No tracked files.")
         else:
-            for f in session.files:
-                print(f"  {f}")
+            if _RICH_AVAILABLE and _IS_TTY:
+                for f in session.files:
+                    _RICH_CONSOLE.print(f"  [cyan]📄[/] {f}")
+            else:
+                for f in session.files:
+                    print(f"  {f}")
         return _CMD_CONTINUE
 
     parts = raw.split(maxsplit=1)
@@ -3278,7 +3567,10 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
         resolved = str(Path(target).expanduser().resolve())
         current = list(session.files)
         if resolved in current:
-            print(f"Already tracked: {resolved}")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"[yellow]already tracked:[/] {resolved}")
+            else:
+                print(f"Already tracked: {resolved}")
             return _CMD_CONTINUE
         current.append(resolved)
         update_session(ctx.session_id, files=current)
@@ -3288,7 +3580,10 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
             content=f"/files add {target}",
             metadata={"summary": f"added file {resolved}"},
         )
-        print(f"tracked: {resolved}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]✓[/] tracked: {resolved}")
+        else:
+            print(f"tracked: {resolved}")
 
     elif subcmd in ("rm", "remove", "-"):
         if not target:
@@ -3299,7 +3594,10 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
         # Match on resolved path or basename
         matched = [f for f in current if f == resolved or f == target or Path(f).name == target]
         if not matched:
-            print(f"Not tracked: {target}")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"[yellow]not tracked:[/] {target}")
+            else:
+                print(f"Not tracked: {target}")
             return _CMD_CONTINUE
         for m in matched:
             current.remove(m)
@@ -3310,7 +3608,10 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
             content=f"/files rm {target}",
             metadata={"summary": f"removed file {target}"},
         )
-        print(f"untracked: {', '.join(matched)}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[red]✗[/] untracked: {', '.join(matched)}")
+        else:
+            print(f"untracked: {', '.join(matched)}")
 
     else:
         print("Usage: /files  |  /files add <path>  |  /files rm <path>")
@@ -3328,14 +3629,24 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
     if not arg:
         if session.plan_id:
             validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
-            print(f"plan: {session.plan_id}{_link_validation_suffix(validation)}")
+            suffix = _link_validation_suffix(validation)
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"📋 plan: [yellow]{session.plan_id}[/]{suffix}")
+            else:
+                print(f"plan: {session.plan_id}{suffix}")
         else:
-            print("No plan linked. Use: /plan <id>")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No plan linked. Use:[/] /plan <id>")
+            else:
+                print("No plan linked. Use: /plan <id>")
         return _CMD_CONTINUE
 
     if arg.lower() == "unlink":
         if not session.plan_id:
-            print("No plan is currently linked.")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No plan is currently linked.[/]")
+            else:
+                print("No plan is currently linked.")
             return _CMD_CONTINUE
         old = session.plan_id
         update_session(ctx.session_id, plan_id="")
@@ -3345,17 +3656,29 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
             content="/plan unlink",
             metadata={"summary": f"unlinked plan {old}"},
         )
-        print(f"unlinked plan: {old}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[dim]unlinked plan:[/] {old}")
+        else:
+            print(f"unlinked plan: {old}")
         return _CMD_CONTINUE
 
     validation = _validate_plan_id_local(arg, cwd=session.cwd)
     if not validation.available:
-        print("local plan validation unavailable in this install; linking anyway.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]local plan validation unavailable; linking anyway.[/]")
+        else:
+            print("local plan validation unavailable in this install; linking anyway.")
     elif validation.exists:
         detail = f": {validation.summary}" if validation.summary else ""
-        print(f"confirmed local plan '{arg}'{detail}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]✓[/] confirmed plan [yellow]{arg}[/]{detail}")
+        else:
+            print(f"confirmed local plan '{arg}'{detail}")
     else:
-        print(f"warning: local plan '{arg}' was not found; linking anyway.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[yellow]⚠[/] plan [dim]{arg}[/] not found locally; linking anyway.")
+        else:
+            print(f"warning: local plan '{arg}' was not found; linking anyway.")
     update_session(ctx.session_id, plan_id=arg)
     append_event(
         ctx.session_id,
@@ -3363,7 +3686,10 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
         content=f"/plan {arg}",
         metadata={"summary": f"linked plan {arg}"},
     )
-    print(f"plan → {arg}")
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(f"📋 plan → [yellow]{arg}[/]")
+    else:
+        print(f"plan → {arg}")
     return _CMD_CONTINUE
 
 
@@ -3377,14 +3703,24 @@ def _cmd_task(ctx: ChatCommandContext) -> str:
     if not arg:
         if session.task_id:
             validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
-            print(f"task: {session.task_id}{_link_validation_suffix(validation)}")
+            suffix = _link_validation_suffix(validation)
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"✅ task: [yellow]{session.task_id}[/]{suffix}")
+            else:
+                print(f"task: {session.task_id}{suffix}")
         else:
-            print("No task linked. Use: /task <id>")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No task linked. Use:[/] /task <id>")
+            else:
+                print("No task linked. Use: /task <id>")
         return _CMD_CONTINUE
 
     if arg.lower() == "unlink":
         if not session.task_id:
-            print("No task is currently linked.")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No task is currently linked.[/]")
+            else:
+                print("No task is currently linked.")
             return _CMD_CONTINUE
         old = session.task_id
         update_session(ctx.session_id, task_id="")
@@ -3394,17 +3730,29 @@ def _cmd_task(ctx: ChatCommandContext) -> str:
             content="/task unlink",
             metadata={"summary": f"unlinked task {old}"},
         )
-        print(f"unlinked task: {old}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[dim]unlinked task:[/] {old}")
+        else:
+            print(f"unlinked task: {old}")
         return _CMD_CONTINUE
 
     validation = _validate_task_id_local(arg, cwd=session.cwd)
     if not validation.available:
-        print("local task validation unavailable in this install; linking anyway.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]local task validation unavailable; linking anyway.[/]")
+        else:
+            print("local task validation unavailable in this install; linking anyway.")
     elif validation.exists:
         detail = f": {validation.summary}" if validation.summary else ""
-        print(f"confirmed local task '{arg}'{detail}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]✓[/] confirmed task [yellow]{arg}[/]{detail}")
+        else:
+            print(f"confirmed local task '{arg}'{detail}")
     else:
-        print(f"warning: local task '{arg}' was not found; linking anyway.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[yellow]⚠[/] task [dim]{arg}[/] not found locally; linking anyway.")
+        else:
+            print(f"warning: local task '{arg}' was not found; linking anyway.")
     update_session(ctx.session_id, task_id=arg)
     append_event(
         ctx.session_id,
@@ -3412,7 +3760,10 @@ def _cmd_task(ctx: ChatCommandContext) -> str:
         content=f"/task {arg}",
         metadata={"summary": f"linked task {arg}"},
     )
-    print(f"task → {arg}")
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(f"✅ task → [yellow]{arg}[/]")
+    else:
+        print(f"task → {arg}")
     return _CMD_CONTINUE
 
 
@@ -3567,7 +3918,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
 def _require_config_or_warn(ctx: ChatCommandContext) -> "CliConfig | None":
     """Return ctx.config, printing a warning when it is absent."""
     if ctx.config is None:
-        print("error: this command requires an active config. Start with: openclaw --session <id>")
+        _print_error("this command requires an active config. Start with: openclaw --session <id>")
         _set_command_result(ctx, ok=False, summary="missing active config")
         return None
     return ctx.config
@@ -3598,7 +3949,7 @@ def _cmd_analyze(ctx: ChatCommandContext) -> str:
     try:
         response = invoke_openclaw(prompt, config=scoped_config, history=list(ctx.history))
     except OpenClawCliError as exc:
-        print(f"error: {exc}")
+        _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     print_response(response, output_json=config.output_json)
@@ -3643,7 +3994,7 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
     try:
         report = run_async(ResearchAgent().run(effective_query, on_progress=_progress))
     except Exception as exc:
-        print(f"error: {exc}")
+        _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     output_target = save_output(
@@ -3684,7 +4035,7 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
     try:
         response = invoke_openclaw(prompt, config=scoped_config, history=list(ctx.history))
     except OpenClawCliError as exc:
-        print(f"error: {exc}")
+        _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     persist_response(session.session_id, task_text, response.response)
@@ -3715,7 +4066,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
     try:
         command_parts = shlex.split(raw)
     except ValueError as exc:
-        print(f"error: invalid shell command: {exc}")
+        _print_error(f"invalid shell command: {exc}")
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     if not command_parts:
@@ -3747,7 +4098,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
     try:
         result = run_async(run_shell_command(command_parts, cwd=session.cwd or None, timeout=60))
     except Exception as exc:
-        print(f"error: {exc}")
+        _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     append_event(
@@ -3780,7 +4131,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
     try:
         parts = shlex.split(raw)
     except ValueError as exc:
-        print(f"error: invalid edit arguments: {exc}")
+        _print_error(f"invalid edit arguments: {exc}")
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     if not parts:
@@ -3862,7 +4213,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         else:
             result = write_text_file(path, content=content, append=append_mode)
     except Exception as exc:
-        print(f"error: {exc}")
+        _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     append_event(
@@ -4292,18 +4643,20 @@ def handle_session_command(args: argparse.Namespace) -> int:
             plan_id=str(getattr(args, "plan_id", "") or "").strip(),
             task_id=str(getattr(args, "task_id", "") or "").strip(),
         )
-        print(summarize_session(session))
+        _print_session_summary(session)
         return 0
     if subcommand == "list":
-        print(format_session_list(list_sessions(limit=int(getattr(args, "limit", 20) or 20))))
+        _print_session_list(list_sessions(limit=int(getattr(args, "limit", 20) or 20)))
         return 0
     if subcommand == "show":
-        print(inspect_session(args.session_id))
+        out = inspect_session(args.session_id)
+        if out:
+            print(out)
         return 0
     if subcommand == "resume":
         session = require_session(args.session_id)
-        print(summarize_session(session))
-        print(f"\nResume with: openclaw --session {session.session_id}")
+        _print_session_summary(session)
+        _print_meta_footer(("resume", f"openclaw --session {session.session_id}"))
         return 0
     if subcommand == "export":
         print(json.dumps(export_session(args.session_id), indent=2, sort_keys=True))
@@ -4335,10 +4688,37 @@ def handle_plan_command(args: argparse.Namespace, *, session_id: str = "") -> in
     if subcommand == "list":
         plans = list_plan_objects(str(getattr(args, "status", "all") or "all"))
         if not plans:
-            print("No plans found.")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No plans found.[/]")
+            else:
+                print("No plans found.")
             return 0
-        for plan in plans:
-            print(f"{plan.plan_id} | {plan.status} | {plan.progress_str()} | {plan.goal}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _STATUS_COLORS = {
+                "running": "cyan", "done": "green", "completed": "green",
+                "failed": "red", "cancelled": "dim", "pending": "yellow",
+                "in-progress": "cyan",
+            }
+            table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan")
+            table.add_column("Plan ID", style="dim", no_wrap=True)
+            table.add_column("Status", no_wrap=True)
+            table.add_column("Progress", no_wrap=True)
+            table.add_column("Goal")
+            for plan in plans:
+                s = (plan.status or "unknown").lower()
+                color = _STATUS_COLORS.get(s, "dim")
+                emoji = _status_emoji(s)
+                goal_text = (plan.goal or "")[:72] + ("…" if len(plan.goal or "") > 72 else "")
+                table.add_row(
+                    plan.plan_id,
+                    f"[{color}]{emoji} {plan.status}[/]",
+                    plan.progress_str() if hasattr(plan, "progress_str") else "—",
+                    goal_text,
+                )
+            _RICH_CONSOLE.print(table)
+        else:
+            for plan in plans:
+                print(f"{plan.plan_id} | {plan.status} | {plan.progress_str()} | {plan.goal}")
         return 0
     if subcommand == "show":
         print(run_async(read_plan(args.plan_id)))
@@ -5316,7 +5696,7 @@ def main(argv: list[str] | None = None) -> int:
             persist_response(config.session_id, prompt, response.response)
         return 0
     except OpenClawCliError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        _print_error(str(exc), file=sys.stderr)
         return 1
 
 
