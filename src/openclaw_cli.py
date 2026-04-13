@@ -62,6 +62,44 @@ try:
 except ImportError:  # pragma: no cover - platform-dependent
     readline = None
 
+# ---------------------------------------------------------------------------
+# Color / rich support — graceful fallback when not in a TTY or rich absent
+# ---------------------------------------------------------------------------
+try:
+    from rich.console import Console as _RichConsole
+    from rich.markdown import Markdown as _RichMarkdown
+    from rich.panel import Panel as _RichPanel
+    from rich.table import Table as _RichTable
+    from rich.text import Text as _RichText
+
+    _RICH_CONSOLE = _RichConsole(highlight=False)
+    _RICH_ERR = _RichConsole(stderr=True, highlight=False)
+    _RICH_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _RICH_AVAILABLE = False
+
+_IS_TTY = sys.stdout.isatty()
+
+
+def _c(code: str) -> str:
+    """Return an ANSI escape code only when stdout is a real terminal."""
+    return code if _IS_TTY else ""
+
+
+# ANSI palette
+_R   = _c("\033[0m")     # reset
+_B   = _c("\033[1m")     # bold
+_DM  = _c("\033[2m")     # dim
+_CY  = _c("\033[36m")    # cyan
+_GR  = _c("\033[32m")    # green
+_YE  = _c("\033[33m")    # yellow
+_RE  = _c("\033[31m")    # red
+_MA  = _c("\033[35m")    # magenta
+_BCY = _c("\033[1;36m")  # bold cyan
+_BGR = _c("\033[1;32m")  # bold green
+_BYE = _c("\033[1;33m")  # bold yellow
+_BRE = _c("\033[1;31m")  # bold red
+
 DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
@@ -1481,10 +1519,13 @@ def print_response(response: AskResponse, *, output_json: bool) -> None:
         print(json.dumps(response.raw, indent=2, sort_keys=True))
         return
     if response.response:
-        print(response.response)
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(_RichMarkdown(response.response))
+        else:
+            print(response.response)
     if response.model or response.tokens:
         print()
-        print(f"[model: {response.model} | tokens: {response.tokens}]")
+        print(f"{_DM}[model: {response.model} | tokens: {response.tokens}]{_R}")
 
 
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
@@ -1496,8 +1537,13 @@ def print_health(response: HealthResponse, *, output_json: bool) -> None:
         print(json.dumps(response.payload, indent=2, sort_keys=True))
         return
     status = (response.status or "unknown").upper()
-    prefix = "OK" if response.healthy is True else "WARN" if response.healthy is False else "INFO"
-    print(f"{prefix} OpenClaw health: {status}")
+    if response.healthy is True:
+        prefix = f"{_BGR}OK{_R}"
+    elif response.healthy is False:
+        prefix = f"{_BYE}WARN{_R}"
+    else:
+        prefix = f"{_DM}INFO{_R}"
+    print(f"{prefix} OpenClaw health: {_B}{status}{_R}")
     if isinstance(response.payload, dict):
         for key in ("uptime_seconds", "bot_user", "guilds", "python", "discord_py"):
             if key in response.payload:
@@ -2592,15 +2638,15 @@ def _session_auto_route_enabled(session_id: str) -> bool:
 
 def _format_route_announcement(decision: ReplRouteDecision) -> str:
     if decision.kind == ReplRouteKind.PLAN:
-        step_summary = " -> ".join(f"{step.index}:{step.kind.value}" for step in decision.steps)
+        step_summary = " → ".join(f"{step.index}:{step.kind.value}" for step in decision.steps)
         preview = _truncate_repl_route_text(step_summary, limit=REPL_ROUTE_ANNOUNCEMENT_COMMAND_LIMIT)
         rationale = _truncate_repl_route_text(
             decision.rationale,
             limit=REPL_ROUTE_ANNOUNCEMENT_REASON_LIMIT,
         )
         return (
-            f"OpenClaw identified a plan candidate with {len(decision.steps)} steps "
-            f"({preview}) (confidence {decision.confidence:.2f}; {rationale})"
+            f"{_BYE}⚡ plan{_R} {_YE}{len(decision.steps)} steps ({preview}){_R}  "
+            f"{_DM}confidence {decision.confidence:.2f} · {rationale}{_R}"
         )
     slash_command = _truncate_repl_route_text(
         decision.to_slash_command(),
@@ -2610,7 +2656,10 @@ def _format_route_announcement(decision: ReplRouteDecision) -> str:
         decision.rationale,
         limit=REPL_ROUTE_ANNOUNCEMENT_REASON_LIMIT,
     )
-    return f"OpenClaw auto-routed to {slash_command} (confidence {decision.confidence:.2f}; {rationale})"
+    return (
+        f"{_BYE}⚡ auto-route{_R} {_CY}→ {slash_command}{_R}  "
+        f"{_DM}confidence {decision.confidence:.2f} · {rationale}{_R}"
+    )
 
 
 def _append_repl_route_event(session_id: str, prompt: str, decision: ReplRouteDecision) -> None:
@@ -2955,7 +3004,7 @@ def _cmd_clear(ctx: ChatCommandContext) -> str:
             content="/clear",
             metadata={"summary": "cleared chat history"},
         )
-    print("Conversation history cleared.")
+    print(f"{_GR}✓{_R} Conversation history cleared.")
     return _CMD_CONTINUE
 
 
@@ -3800,34 +3849,47 @@ def build_chat_command_registry() -> ChatCommandRegistry:
 
 def print_chat_help() -> None:
     """Print built-in interactive chat commands."""
-    print(
-        "Interactive commands:\n"
-        "  /help                          Show this help\n"
-        "  /clear                         Reset the current conversation history\n"
-        "  /quit                          Exit the CLI\n"
-        "  /session                       Show current session summary\n"
-        "  /context                       Show the effective session grounding preview\n"
-        "  /cwd [path]                    Show or switch the session working directory\n"
-        "  /files                         List tracked files\n"
-        "  /files add <path>              Add a file to tracked files\n"
-        "  /files rm <path>               Remove a file from tracked files\n"
-        "  /plan [<id>]                   Show or link a plan (use 'unlink' to remove)\n"
-        "  /task [<id>]                   Show or link a task (use 'unlink' to remove)\n"
-        "  /outputs [<index>|<filename>]  List or preview saved outputs\n"
-        "  /rollback last                 Restore the latest routed safety checkpoint (text edits only)\n"
-        "  /events [n]                    Show last n session events (default 5)\n"
-        "  /autoroute [on|off]            Show or toggle high-confidence REPL auto-routing\n"
-        "  /analyze <goal>                Analyze the session workspace (requires session + config)\n"
-        "  /research <query>              Run the research agent on a query\n"
-        "  /write <task>                  Generate a markdown document (requires session + config)\n"
-        "  /exec [--] <command>           Run a shell command with approval + session tracking\n"
-        "  /edit <path> [--content TEXT]  Inspect or write a file (--append to append)\n"
-        "\n"
+    commands = [
+        ("/help",                          "Show this help"),
+        ("/clear",                         "Reset the current conversation history"),
+        ("/quit",                          "Exit the CLI"),
+        ("/session",                       "Show current session summary"),
+        ("/context",                       "Show effective session grounding preview"),
+        ("/cwd [path]",                    "Show or switch the session working directory"),
+        ("/files",                         "List tracked files"),
+        ("/files add <path>",              "Add a file to tracked files"),
+        ("/files rm <path>",               "Remove a file from tracked files"),
+        ("/plan [<id>|unlink]",            "Show or link a plan"),
+        ("/task [<id>|unlink]",            "Show or link a task"),
+        ("/outputs [<index>|<filename>]",  "List or preview saved session outputs"),
+        ("/rollback last",                 "Restore latest routed edit checkpoint (text files only)"),
+        ("/events [n]",                    "Show last n session events (default 5)"),
+        ("/autoroute [on|off]",            "Show or toggle high-confidence REPL auto-routing"),
+        ("/analyze <goal>",                "Analyze the session workspace"),
+        ("/research <query>",              "Run the research agent on a query"),
+        ("/write <task>",                  "Generate a markdown document"),
+        ("/exec [--] <command>",           "Run a shell command with approval + session tracking"),
+        ("/edit <path> [--content TEXT]",  "Inspect or write a file (--append to append)"),
+    ]
+    notes = (
         "High-confidence freeform prompts can auto-route to /analyze, /research, /write, /exec, or /edit.\n"
-        "High-confidence multi-step prompts can decompose into linked plans and auto-run step-by-step with inline [n/N] progress.\n"
-        "Ambiguous prompts stay in normal chat. Use /autoroute off to disable auto-routing.\n"
-        "High/critical routed /exec and /edit steps still require approval. /rollback last restores the newest routed edit checkpoint; exec checkpoints remain manual-recovery only and only the latest five routed checkpoints are retained."
+        "Multi-step prompts can decompose into linked plans and auto-run step-by-step with [n/N] progress.\n"
+        "Ambiguous prompts stay in normal chat. High/critical /exec and /edit steps still require approval."
     )
+    if _RICH_AVAILABLE and _IS_TTY:
+        t = _RichTable.grid(padding=(0, 2))
+        t.add_column(style="bold cyan", no_wrap=True)
+        t.add_column(style="dim")
+        for cmd, desc in commands:
+            t.add_row(cmd, desc)
+        _RICH_CONSOLE.print(_RichPanel(t, title="[bold cyan]OpenClaw Commands[/bold cyan]", border_style="cyan", padding=(0, 1)))
+        _RICH_CONSOLE.print(f"[dim]{notes}[/dim]")
+    else:
+        print("Interactive commands:")
+        for cmd, desc in commands:
+            print(f"  {cmd:<38} {desc}")
+        print()
+        print(notes)
 
 
 def handle_auth_command(args: argparse.Namespace) -> int:
@@ -3912,6 +3974,35 @@ def build_config(args: argparse.Namespace) -> CliConfig:
     )
 
 
+def _print_startup_banner(config: CliConfig, session_id: str) -> None:
+    """Print a colored startup banner for the interactive REPL."""
+    if _RICH_AVAILABLE and _IS_TTY:
+        t = _RichText()
+        t.append("🦞 OpenClaw", style="bold cyan")
+        t.append("  connected to ", style="dim")
+        t.append(config.base_url, style="cyan")
+        t.append("\n  user: ", style="dim")
+        t.append(config.user_name, style="green")
+        if session_id:
+            t.append("  ·  session: ", style="dim")
+            t.append(session_id[:8] + "…", style="yellow")
+        t.append("\n  ", style="")
+        t.append("/help", style="bold cyan")
+        t.append("  ·  ", style="dim")
+        t.append("/autoroute off", style="bold cyan")
+        t.append("  ·  ", style="dim")
+        t.append("/clear", style="bold cyan")
+        t.append("  ·  ", style="dim")
+        t.append("/quit", style="bold cyan")
+        _RICH_CONSOLE.print(_RichPanel(t, border_style="cyan", padding=(0, 1)))
+    else:
+        print(
+            f"Connected to {config.base_url} as {config.user_name}. "
+            + (f"Session: {session_id}. " if session_id else "")
+            + "Type /help for commands, /autoroute off to keep prompts in chat, /clear to reset history, or /quit to exit."
+        )
+
+
 def run_chat(
     config: CliConfig,
     *,
@@ -3923,14 +4014,10 @@ def run_chat(
     history: list[dict[str, str]] = load_conversation_history(session_id) if session_id else []
     registry = build_chat_command_registry()
     load_shell_history()
-    print(
-        f"Connected to {config.base_url} as {config.user_name}. "
-        + (f"Session: {session_id}. " if session_id else "")
-        + "Type /help for commands, /autoroute off to keep prompts in chat, /clear to reset history, or /quit to exit."
-    )
+    _print_startup_banner(config, session_id)
     while True:
         try:
-            prompt = str(input_func("openclaw> ")).strip()
+            prompt = str(input_func(f"{_BCY}openclaw{_R}{_CY}>{_R} ")).strip()
         except EOFError:
             print()
             save_shell_history()
@@ -3964,7 +4051,7 @@ def run_chat(
                         ctx=ctx,
                     )
                 except OpenClawCliError as exc:
-                    print(f"error: {exc}", file=sys.stderr)
+                    print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
                 else:
                     if routed == _CMD_QUIT:
                         save_shell_history()
@@ -3984,7 +4071,7 @@ def run_chat(
         try:
             response = ask_func(prompt, config=config, history=list(history))
         except OpenClawCliError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+            print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
             continue
 
         print_response(response, output_json=config.output_json)
