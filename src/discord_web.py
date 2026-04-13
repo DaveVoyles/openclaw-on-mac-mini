@@ -544,6 +544,18 @@ async def _cli_update_handler(request: web.Request) -> web.Response:
     return web.Response(text=file_path.read_text(encoding="utf-8"), content_type="text/plain")
 
 
+async def _cli_update_meta_handler(request: web.Request) -> web.Response:
+    """Return SHA256 hashes of the CLI source files for update checking."""
+    import hashlib
+    src_dir = Path(__file__).parent
+    meta: dict[str, str] = {}
+    for fname in sorted(_CLI_UPDATE_WHITELIST):
+        fpath = src_dir / fname
+        if fpath.exists():
+            meta[fname] = hashlib.sha256(fpath.read_bytes()).hexdigest()
+    return web.json_response(meta)
+
+
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -565,12 +577,13 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_post("/webhook/{source}", _webhook_handler)
     app.router.add_post("/api/trigger-scan", _trigger_scan_handler)
     app.router.add_get("/cli-update/{filename}", _cli_update_handler)
+    app.router.add_get("/cli-update/meta", _cli_update_meta_handler)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
     await site.start()
     log.info(
-        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>)",
+        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>, /cli-update/meta)",
         HEALTH_PORT,
     )
     return runner

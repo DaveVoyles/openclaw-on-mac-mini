@@ -83,6 +83,8 @@ _IS_TTY = sys.stdout.isatty()
 
 # Cached latest PyPI version set by the background update-check thread.
 _latest_version: str | None = None
+# Set to True by the background update-check thread when standalone file hashes differ from server.
+_standalone_needs_update: bool = False
 
 
 def _c(code: str) -> str:
@@ -623,25 +625,34 @@ def _find_pip() -> list[str] | None:
     return None
 
 
-def _print_update_notice(current: str, latest: str) -> None:
-    """Print a styled update-available notice."""
+def _print_update_notice(current: str, latest: str | None) -> None:
+    """Print a styled update-available notice.
+
+    When ``latest`` is None (standalone hash-based check), only the "Run: /update"
+    line is shown without a version arrow.
+    """
     if _RICH_AVAILABLE and _IS_TTY:
         from rich.panel import Panel as _P
         from rich.text import Text as _T
         t = _T()
         t.append("⬆  Update available", style="bold yellow")
-        t.append("   ", style="")
-        t.append(current, style="dim")
-        t.append("  →  ", style="dim")
-        t.append(latest, style="bold green")
+        if latest is not None:
+            t.append("   ", style="")
+            t.append(current, style="dim")
+            t.append("  →  ", style="dim")
+            t.append(latest, style="bold green")
         t.append("\n   Run: ", style="dim")
         t.append("/update", style="bold cyan")
         _RICH_CONSOLE.print(_P(t, border_style="yellow", padding=(0, 1)))
     else:
         action = f"   {_DM}Run:{_R} {_BCY}/update{_R}"
+        if latest is not None:
+            version_line = f"   {_DM}{current}{_R}  →  {_BGR}{latest}{_R}\n"
+        else:
+            version_line = ""
         print(
             f"\n{_BYE}⬆  Update available!{_R}\n"
-            f"   {_DM}{current}{_R}  →  {_BGR}{latest}{_R}\n"
+            f"{version_line}"
             f"{action}\n",
             file=sys.stderr,
         )
@@ -727,6 +738,8 @@ def _update_standalone_install(install_dir: str, *, current: str, base_url: str)
             _RICH_CONSOLE.print("\n[bold green]✓ Updated.[/] Restart openclaw to use the new version.")
         else:
             print("\n✓ Updated. Restart openclaw to use the new version.")
+        global _standalone_needs_update
+        _standalone_needs_update = False
         return 0
 
 
@@ -6172,10 +6185,34 @@ def main(argv: list[str] | None = None) -> int:
         # we print the notice in the main thread after joining so it never
         # appears interleaved with the REPL prompt.
         def _update_check_worker() -> None:
-            global _latest_version
-            latest = _fetch_latest_pypi_version(timeout=3.0)
-            if latest:
-                _latest_version = latest
+            global _latest_version, _standalone_needs_update
+            install_dir = _standalone_install_dir()
+            if install_dir:
+                # Standalone: compare file hashes against the server
+                try:
+                    import hashlib
+                    base_url = os.getenv("OPENCLAW_URL", "http://192.168.1.93:8765").rstrip("/")
+                    url = f"{base_url}/cli-update/meta"
+                    import urllib.request as _ur
+                    with _ur.urlopen(_ur.Request(url), timeout=3.0) as resp:
+                        server_hashes: dict[str, str] = json.loads(resp.read())
+                    for fname, server_hash in server_hashes.items():
+                        local_path = Path(install_dir) / fname
+                        if local_path.exists():
+                            local_hash = hashlib.sha256(local_path.read_bytes()).hexdigest()
+                            if local_hash != server_hash:
+                                _standalone_needs_update = True
+                                break
+                        else:
+                            _standalone_needs_update = True
+                            break
+                except Exception:
+                    pass
+            else:
+                # Standard install: check PyPI
+                latest = _fetch_latest_pypi_version(timeout=3.0)
+                if latest:
+                    _latest_version = latest
 
         _update_thread: threading.Thread | None = threading.Thread(
             target=_update_check_worker, daemon=True
@@ -6195,7 +6232,9 @@ def main(argv: list[str] | None = None) -> int:
     if _update_thread is not None:
         _update_thread.join(timeout=3.5)
     current_ver = cli_version()
-    if _latest_version and _version_tuple(_latest_version) > _version_tuple(current_ver):
+    if _standalone_needs_update:
+        _print_update_notice(current_ver, None)  # standalone: no version string
+    elif _latest_version and _version_tuple(_latest_version) > _version_tuple(current_ver):
         _print_update_notice(current_ver, _latest_version)
 
     try:
