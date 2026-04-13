@@ -625,6 +625,7 @@ def _find_pip() -> list[str] | None:
 
 def _print_update_notice(current: str, latest: str) -> None:
     """Print a styled update-available notice."""
+    is_standalone = bool(_standalone_install_dir())
     if _RICH_AVAILABLE and _IS_TTY:
         from rich.panel import Panel as _P
         from rich.text import Text as _T
@@ -634,15 +635,23 @@ def _print_update_notice(current: str, latest: str) -> None:
         t.append(current, style="dim")
         t.append("  →  ", style="dim")
         t.append(latest, style="bold green")
-        t.append("\n   Run: ", style="dim")
-        t.append("openclaw update", style="bold cyan")
+        if is_standalone:
+            t.append("\n   Sync from Mac Mini: ", style="dim")
+            t.append("bash scripts/install_openclaw_cli_remote.sh macbook", style="bold cyan")
+        else:
+            t.append("\n   Run: ", style="dim")
+            t.append("openclaw update", style="bold cyan")
         _RICH_CONSOLE.print(_P(t, border_style="yellow", padding=(0, 1)))
     else:
         # ANSI fallback — still colorful
+        if is_standalone:
+            action = f"   {_DM}Sync from Mac Mini:{_R} {_BCY}bash scripts/install_openclaw_cli_remote.sh macbook{_R}"
+        else:
+            action = f"   {_DM}Run:{_R} {_BCY}openclaw update{_R}"
         print(
             f"\n{_BYE}⬆  Update available!{_R}\n"
             f"   {_DM}{current}{_R}  →  {_BGR}{latest}{_R}\n"
-            f"   {_DM}Run:{_R} {_BCY}openclaw update{_R}\n",
+            f"{action}\n",
             file=sys.stderr,
         )
 
@@ -4853,7 +4862,10 @@ def handle_status_command(args: argparse.Namespace, *, config: "CliConfig") -> i
         grid = _RichText()
         update_badge = ""
         if latest and latest != version:
-            update_badge = f"  [yellow]⬆ {latest} available[/]  [dim]openclaw update[/]"
+            if _standalone_install_dir():
+                update_badge = f"  [yellow]⬆ {latest} available[/]  [dim]sync from Mac Mini[/]"
+            else:
+                update_badge = f"  [yellow]⬆ {latest} available[/]  [dim]openclaw update[/]"
         grid.append("  version    ", style="dim")
         grid.append(version, style="bold")
         grid.append(update_badge + "\n")
