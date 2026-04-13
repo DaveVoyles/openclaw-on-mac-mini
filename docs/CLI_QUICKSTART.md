@@ -16,10 +16,10 @@ Use this guide when you want the OpenClaw launcher to behave like a real termina
 curl -fsSL http://192.168.1.93:8765/install | bash
 ```
 
-### Over Tailscale
+### Remote (HTTPS)
 
 ```bash
-curl -fsSL http://100.116.47.67:8765/install | bash
+curl -fsSL https://openclaw.davevoyles.synology.me/install | bash
 ```
 
 The installer auto-detects **zsh** vs **bash** and updates the matching rc file by default. You can override that behavior with:
