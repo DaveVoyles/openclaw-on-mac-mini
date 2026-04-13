@@ -525,6 +525,26 @@ async def _health_services_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# CLI self-update endpoint
+# ---------------------------------------------------------------------------
+
+_CLI_UPDATE_WHITELIST = {
+    "openclaw_cli.py",
+    "openclaw_cli_actions.py",
+    "openclaw_cli_sessions.py",
+    "subprocess_utils.py",
+}
+
+
+async def _cli_update_handler(request: web.Request) -> web.Response:
+    filename = request.match_info["filename"]
+    if filename not in _CLI_UPDATE_WHITELIST:
+        return web.Response(status=404, text="Not found")
+    file_path = Path(__file__).parent / filename
+    return web.Response(text=file_path.read_text(encoding="utf-8"), content_type="text/plain")
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -544,12 +564,13 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_get("/smoke", _smoke_handler)
     app.router.add_post("/webhook/{source}", _webhook_handler)
     app.router.add_post("/api/trigger-scan", _trigger_scan_handler)
+    app.router.add_get("/cli-update/{filename}", _cli_update_handler)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
     await site.start()
     log.info(
-        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>)",
+        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>)",
         HEALTH_PORT,
     )
     return runner

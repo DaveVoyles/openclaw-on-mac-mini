@@ -625,7 +625,6 @@ def _find_pip() -> list[str] | None:
 
 def _print_update_notice(current: str, latest: str) -> None:
     """Print a styled update-available notice."""
-    is_standalone = bool(_standalone_install_dir())
     if _RICH_AVAILABLE and _IS_TTY:
         from rich.panel import Panel as _P
         from rich.text import Text as _T
@@ -635,19 +634,11 @@ def _print_update_notice(current: str, latest: str) -> None:
         t.append(current, style="dim")
         t.append("  →  ", style="dim")
         t.append(latest, style="bold green")
-        if is_standalone:
-            t.append("\n   Sync from Mac Mini: ", style="dim")
-            t.append("bash scripts/install_openclaw_cli_remote.sh macbook", style="bold cyan")
-        else:
-            t.append("\n   Run: ", style="dim")
-            t.append("openclaw update", style="bold cyan")
+        t.append("\n   Run: ", style="dim")
+        t.append("/update", style="bold cyan")
         _RICH_CONSOLE.print(_P(t, border_style="yellow", padding=(0, 1)))
     else:
-        # ANSI fallback — still colorful
-        if is_standalone:
-            action = f"   {_DM}Sync from Mac Mini:{_R} {_BCY}bash scripts/install_openclaw_cli_remote.sh macbook{_R}"
-        else:
-            action = f"   {_DM}Run:{_R} {_BCY}openclaw update{_R}"
+        action = f"   {_DM}Run:{_R} {_BCY}/update{_R}"
         print(
             f"\n{_BYE}⬆  Update available!{_R}\n"
             f"   {_DM}{current}{_R}  →  {_BGR}{latest}{_R}\n"
@@ -673,34 +664,70 @@ def _standalone_install_dir() -> str | None:
     return None
 
 
-def _update_standalone_install(install_dir: str, *, current: str) -> int:
-    """Show a helpful sync message for standalone (bash-shim) installs.
+def _update_standalone_install(install_dir: str, *, current: str, base_url: str) -> int:
+    """Download CLI files from the openclaw server and replace in-place."""
+    import urllib.request
 
-    Standalone installs are not distributed via PyPI — the CLI files live in
-    ~/.local/share/openclaw-cli/ and are synced directly from the source repo.
-    The PyPI 'openclaw' package is the cmdop SDK wrapper and does not contain
-    the CLI files.
-    """
+    files = [
+        "openclaw_cli.py",
+        "openclaw_cli_actions.py",
+        "openclaw_cli_sessions.py",
+        "subprocess_utils.py",
+    ]
+    server = base_url.rstrip("/")
+
     if _RICH_AVAILABLE and _IS_TTY:
-        body = _RichText()
-        body.append("This is a standalone install", style="bold")
-        body.append(" — CLI files are not distributed via PyPI.\n\n", style="dim")
-        body.append("To update, sync from your development machine:\n", style="dim")
-        body.append(
-            "  scp openclaw_cli.py macbook:~/.local/share/openclaw-cli/\n",
-            style="bold cyan",
+        _RICH_CONSOLE.print(
+            f"[bold cyan]🦞 Updating openclaw[/]  [dim]{current}[/]  "
+            f"[dim]from[/] [cyan]{server}[/]"
         )
-        body.append("\nOr run ", style="dim")
-        body.append("openclaw update", style="bold cyan")
-        body.append(" from the Mac Mini after pulling the latest changes.", style="dim")
-        _RICH_CONSOLE.print(_RichPanel(body, title="[yellow]⬆  standalone update[/]", border_style="yellow", padding=(0, 1)))
     else:
-        print(
-            "Standalone install — files are not on PyPI.\n"
-            "Sync from your dev machine:\n"
-            "  scp openclaw_cli.py macbook:~/.local/share/openclaw-cli/"
-        )
-    return 0
+        print(f"Updating openclaw {current} from {server}…")
+
+    updated: list[str] = []
+    failed: list[tuple[str, str]] = []
+
+    for fname in files:
+        url = f"{server}/cli-update/{fname}"
+        dest = Path(install_dir) / fname
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"  [dim]↓ {fname}[/]", end="")
+        else:
+            print(f"  ↓ {fname}", end="", flush=True)
+        try:
+            tmp = dest.with_suffix(".tmp")
+            urllib.request.urlretrieve(url, tmp)
+            tmp.replace(dest)
+            updated.append(fname)
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("  [green]✓[/]")
+            else:
+                print("  ✓")
+        except Exception as exc:
+            failed.append((fname, str(exc)))
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"  [red]✗[/]")
+            else:
+                print("  ✗")
+
+    if failed:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_ERR.print("\n[bold red]✗ Update incomplete[/] — some files could not be downloaded:")
+            for fname, err in failed:
+                url = f"{server}/cli-update/{fname}"
+                _RICH_ERR.print(f"  [red]{fname}[/]  [dim]{url}[/]\n  [dim red]{err}[/]")
+        else:
+            print("\n✗ Update incomplete — some files could not be downloaded:", file=sys.stderr)
+            for fname, err in failed:
+                url = f"{server}/cli-update/{fname}"
+                print(f"  {fname}  {url}\n  {err}", file=sys.stderr)
+        return 1
+    else:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("\n[bold green]✓ Updated.[/] Restart openclaw to use the new version.")
+        else:
+            print("\n✓ Updated. Restart openclaw to use the new version.")
+        return 0
 
 
 def handle_update_command(_args: argparse.Namespace) -> int:
@@ -723,10 +750,20 @@ def handle_update_command(_args: argparse.Namespace) -> int:
 
     # Standalone installs (bash-shim on laptop) can't use pip install because
     # they're not in a venv and macOS blocks system-Python pip installs (PEP 668).
-    # Instead, download the wheel and extract files directly into the install dir.
+    # Instead, download the files directly from the openclaw server.
     install_dir = _standalone_install_dir()
     if install_dir:
-        return _update_standalone_install(install_dir, current=current)
+        _cfg = build_config(argparse.Namespace(
+            url=os.getenv("OPENCLAW_URL"),
+            token=None,
+            model=None,
+            timeout=30,
+            user_name=None,
+            client_name=None,
+            json=False,
+            session="",
+        ))
+        return _update_standalone_install(install_dir, current=current, base_url=_cfg.base_url)
 
     # Standard pip install path (venv or user site-packages).
     in_venv = sys.prefix != sys.base_prefix
@@ -4520,11 +4557,15 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
 def _cmd_update(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/update — self-upgrade openclaw via pip without leaving the REPL."""
     import argparse as _argparse
-    handle_update_command(_argparse.Namespace())
-    if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print("[dim]Restart openclaw to use the new version.[/]")
+    install_dir = _standalone_install_dir()
+    if install_dir and ctx.config is not None:
+        _update_standalone_install(install_dir, current=cli_version(), base_url=ctx.config.base_url)
     else:
-        print("Restart openclaw to use the new version.")
+        handle_update_command(_argparse.Namespace())
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]Restart openclaw to use the new version.[/]")
+        else:
+            print("Restart openclaw to use the new version.")
     return _CMD_CONTINUE
 
 
@@ -4862,10 +4903,7 @@ def handle_status_command(args: argparse.Namespace, *, config: "CliConfig") -> i
         grid = _RichText()
         update_badge = ""
         if latest and latest != version:
-            if _standalone_install_dir():
-                update_badge = f"  [yellow]⬆ {latest} available[/]  [dim]sync from Mac Mini[/]"
-            else:
-                update_badge = f"  [yellow]⬆ {latest} available[/]  [dim]openclaw update[/]"
+            update_badge = f"  [yellow]⬆ {latest} available[/]  [dim]/update[/]"
         grid.append("  version    ", style="dim")
         grid.append(version, style="bold")
         grid.append(update_badge + "\n")
