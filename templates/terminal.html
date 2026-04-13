@@ -141,6 +141,28 @@
         <span class="badge badge-mini">Mini</span> = Mac Mini (192.168.1.93) only
       </p>
 
+      <!-- New machine install callout -->
+      <div style="background:rgba(241,196,0,0.08);border:1px solid rgba(241,196,0,0.35);border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem">
+        <strong style="color:var(--gold)">&#128187; New machine? Install the CLI first</strong>
+        <div style="margin-top:0.6rem;display:flex;flex-direction:column;gap:0.45rem;font-size:0.875rem">
+          <div>
+            <span style="color:var(--muted);margin-right:0.5rem">On LAN:</span>
+            <code>curl -fsSL http://192.168.1.93:8765/install | bash</code>
+          </div>
+          <div>
+            <span style="color:var(--muted);margin-right:0.5rem">Off-LAN (Tailscale):</span>
+            <code>curl -fsSL http://100.116.47.67:8765/install | bash</code>
+          </div>
+          <div style="margin-top:0.25rem">
+            <span style="color:var(--muted);margin-right:0.5rem">Then:</span>
+            <code>source ~/.zshrc</code>
+            <span style="color:var(--muted);margin:0 0.5rem">&rarr;</span>
+            <code>OpenClaw</code>
+            <span style="color:var(--muted);font-size:0.8rem;margin-left:0.5rem">(capital O — starts interactive chat)</span>
+          </div>
+        </div>
+      </div>
+
       <div class="toc">
         <a href="#iterm2">&#9654; iTerm2</a>
         <a href="#tmux">&#9654; tmux</a>

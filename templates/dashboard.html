@@ -659,6 +659,21 @@
           </button>
         </div>
 
+        <!-- New machine CLI install banner -->
+        <details style="margin-bottom:0.75rem">
+          <summary style="cursor:pointer;font-size:0.82rem;color:var(--muted);padding:0.4rem 0.6rem;background:var(--surface);border:1px solid var(--border);border-radius:6px;list-style:none;display:flex;align-items:center;gap:0.4rem">
+            <span>&#128187;</span> <strong style="color:var(--gold)">New machine?</strong>&nbsp; Install the OpenClaw CLI
+            <span style="margin-left:auto;font-size:0.75rem">&#9660;</span>
+          </summary>
+          <div style="background:var(--surface);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;padding:0.75rem 1rem;font-size:0.82rem">
+            <div style="display:flex;flex-direction:column;gap:0.4rem">
+              <div><span style="color:var(--muted)">On LAN:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://192.168.1.93:8765/install | bash</code></div>
+              <div><span style="color:var(--muted)">Tailscale:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">curl -fsSL http://100.116.47.67:8765/install | bash</code></div>
+              <div><span style="color:var(--muted)">Then:&nbsp;</span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">source ~/.zshrc</code><span style="color:var(--muted)"> &rarr; </span><code style="background:rgba(0,0,0,0.35);border:1px solid rgba(104,172,229,0.15);border-radius:4px;padding:0.1em 0.4em;font-size:0.83rem;color:#9ecbff">OpenClaw</code></div>
+            </div>
+          </div>
+        </details>
+
         <!-- D-5: Live Status Banner -->
         <div id="status-banner" style="display:flex;gap:1.2rem;justify-content:center;padding:0.6rem 1rem;margin-bottom:1rem;background:var(--card, var(--surface));border-radius:8px;font-size:0.82rem;flex-wrap:wrap">
           <span>🐳 Docker: <span id="st-docker" class="status-dot">…</span></span>
