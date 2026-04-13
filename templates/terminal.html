@@ -65,7 +65,7 @@
       }
       table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
       td { padding: 0.3rem 0.5rem; vertical-align: top; }
-      td:first-child { white-space: nowrap; }
+      td:first-child { white-space: normal; min-width: 8rem; }
       tr:hover td { background: rgba(104,172,229,0.06); }
       code {
         background: rgba(0,0,0,0.35);
@@ -75,7 +75,9 @@
         font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
         font-size: 0.83rem;
         color: #9ecbff;
-        white-space: nowrap;
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: break-word;
       }
       .muted { color: var(--muted); font-size: 0.82rem; }
       .badge {
@@ -506,7 +508,7 @@
             local validation confirmed the target or whether validation was unavailable in the current install.
           </p>
         </div>
-        <div class="card">
+        <div class="card" style="grid-column: 1 / -1">
           <h3>Common workflows</h3>
           <table>
             <tr><td>Deploy update</td><td class="muted"><code>cdopen &rarr; gp &rarr; oc-restart &rarr; oc-logs</code></td></tr>
@@ -555,7 +557,7 @@
             <tr><td><code>ai-list</code></td><td class="muted">ollama list — show installed models</td></tr>
           </table>
         </div>
-        <div class="card">
+        <div class="card" style="grid-column: 1 / -1">
           <h3>Pipe output to AI</h3>
           <table>
             <tr><td><code>docker logs openclaw 2&gt;&amp;1 | tail -30 | ollama run gemma4:e4b &quot;what's wrong?&quot;</code></td><td class="muted">Debug logs</td></tr>
