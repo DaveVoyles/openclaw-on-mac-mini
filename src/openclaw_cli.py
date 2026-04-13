@@ -510,7 +510,7 @@ def _print_update_notice(current: str, latest: str) -> None:
 
 
 def handle_update_command(_args: argparse.Namespace) -> int:
-    """Self-update openclaw via pip."""
+    """Self-update openclaw via pip, showing a spinner while the install runs."""
     pip_cmd = _find_pip()
     if pip_cmd is None:
         msg = (
@@ -528,30 +528,63 @@ def handle_update_command(_args: argparse.Namespace) -> int:
     # Fetch latest from PyPI before running pip so we can display it reliably
     # after the install (importlib.metadata is cached for the running process).
     latest = _fetch_latest_pypi_version() or "latest"
-    pip_display = " ".join(pip_cmd)
 
     if _RICH_AVAILABLE and _IS_TTY:
         _RICH_CONSOLE.print(
-            f"[bold cyan]🦞 Updating openclaw[/] [dim](current: {current})[/]\n"
-            f"[dim]Running:[/] [cyan]{pip_display} install --upgrade openclaw[/]\n"
+            f"[bold cyan]🦞 Updating openclaw[/]  "
+            f"[dim]{current}[/] [dim]→[/] [bold green]{latest}[/]"
         )
-    else:
-        print(f"Updating openclaw (current: {current})...")
 
-    result = subprocess.run(pip_cmd + ["install", "--upgrade", "openclaw"])
+        # Run pip quietly and show a live spinner with elapsed time.
+        result_holder: list[subprocess.CompletedProcess[bytes]] = []
 
-    if result.returncode == 0:
-        if _RICH_AVAILABLE and _IS_TTY:
+        def _run_pip() -> None:
+            result_holder.append(
+                subprocess.run(
+                    pip_cmd + ["install", "--upgrade", "--quiet", "openclaw"],
+                    capture_output=True,
+                )
+            )
+
+        pip_thread = threading.Thread(target=_run_pip, daemon=True)
+        pip_thread.start()
+
+        _RICH_CONSOLE.print()
+        start = time.monotonic()
+        spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        frame_idx = 0
+        while pip_thread.is_alive():
+            elapsed = time.monotonic() - start
+            frame = spinner_frames[frame_idx % len(spinner_frames)]
             _RICH_CONSOLE.print(
-                f"\n[bold green]✓ openclaw updated[/] [dim]{current}[/] → [bold green]{latest}[/]"
+                f"\r  [cyan]{frame}[/] Installing…  [dim]{elapsed:.0f}s elapsed[/]",
+                end="",
+            )
+            frame_idx += 1
+            time.sleep(0.1)
+
+        pip_thread.join()
+        elapsed = time.monotonic() - start
+        _RICH_CONSOLE.print()  # end spinner line
+
+        result = result_holder[0]
+        if result.returncode == 0:
+            _RICH_CONSOLE.print(
+                f"[bold green]✓ Done[/] in [cyan]{elapsed:.1f}s[/]  —  "
+                f"openclaw [dim]{current}[/] → [bold green]{latest}[/]"
             )
         else:
-            print(f"\n✓ openclaw updated {current} → {latest}")
+            _RICH_ERR.print("\n[bold red]✗ Update failed[/]")
+            if result.stderr:
+                _RICH_ERR.print(result.stderr.decode(errors="replace"))
     else:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_ERR.print("\n[bold red]✗ Update failed.[/] Check the output above.")
+        # Plain fallback: just run pip with its normal output.
+        print(f"Updating openclaw {current} → {latest}…")
+        result = subprocess.run(pip_cmd + ["install", "--upgrade", "openclaw"])
+        if result.returncode == 0:
+            print(f"✓ Done  —  openclaw {current} → {latest}")
         else:
-            print("\n✗ Update failed. Check the output above.", file=sys.stderr)
+            print("✗ Update failed. Check the output above.", file=sys.stderr)
 
     return result.returncode
 
