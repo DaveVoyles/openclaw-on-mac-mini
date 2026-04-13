@@ -78,6 +78,7 @@ The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural
 | `/help` | Print the full in-REPL command reference |
 | `/clear` | Reset the current conversation history (keeps the session alive) |
 | `/quit` | Exit the REPL and return to the shell |
+| `/update` | Self-upgrade the CLI without leaving the session (see [Updating](#updating) below) |
 | `/autoroute [on\|off]` | Show whether high-confidence freeform prompts can auto-route, or toggle that behavior for this session |
 | `/rollback last` | Restore the newest routed safety checkpoint when auto-rollback is available (currently text file edits only) |
 
@@ -201,6 +202,40 @@ openclaw auth logout
 ```
 
 If you skipped token setup, the CLI now warns before requests are sent.
+
+## Updating
+
+### Standalone installs (laptop / remote Mac)
+
+Run `/update` from inside the REPL at any time:
+
+```
+[no-route] openclaw> /update
+Updating openclaw 0.6.0 from http://192.168.1.93:8765…
+  ↓ openclaw_cli.py  ✓
+  ↓ openclaw_cli_actions.py  ✓
+  ↓ openclaw_cli_sessions.py  ✓
+  ↓ subprocess_utils.py  ✓
+
+✓ Updated. Restart openclaw to use the new version.
+```
+
+The CLI fetches the four source files directly from the OpenClaw server (`OPENCLAW_URL/cli-update/<filename>`), atomically replaces them in `~/.local/share/openclaw-cli/`, then resets the update-needed flag. Restart the REPL to run the new version.
+
+The update banner on startup uses SHA256 file hashes (from `OPENCLAW_URL/cli-update/meta`) to determine whether an update is available — not PyPI version strings.
+
+### Developer / venv installs (Mac Mini)
+
+```bash
+openclaw update        # CLI subcommand
+pip install --upgrade openclaw
+```
+
+### From the Mac Mini to a remote Mac
+
+```bash
+bash scripts/install_openclaw_cli_remote.sh macbook
+```
 
 ## Remote Mac setup
 
