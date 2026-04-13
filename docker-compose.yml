@@ -98,6 +98,10 @@ services:
       # SQLite thread store (Phase 13B) — lives in /memory alongside other data
       # (openclaw.db is created automatically by thread_store.py)
 
+      # Live CLI source — always serves the latest src/ files without a rebuild
+      # This ensures /update and /cli-update/<file> always return the current version
+      - ./src:/app/src:ro
+
     # Health check
     healthcheck:
       test:
