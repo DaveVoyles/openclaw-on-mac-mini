@@ -75,7 +75,7 @@ Steps:
 | [Wave 9](#wave-9--artifact-studio--replay) | Artifact Studio & Replay | ✅ Shipped |
 | [Wave 10](#wave-10--guided-workflows--recovery) | Guided Workflows & Recovery | ✅ Shipped |
 | [Wave 11](#wave-11--workspace-handoffs) | Workspace Handoffs | ✅ Shipped |
-| [Wave 12](#wave-12--automation-control-tower) | Automation Control Tower | 🔲 Ready |
+| [Wave 12](#wave-12--automation-control-tower) | Automation Control Tower | ✅ Shipped |
 | [Wave 13](#wave-13--trust--explainability) | Trust & Explainability | 🔲 Ready |
 | [Wave 14](#wave-14--composer--input-flow) | Composer & Input Flow | 🔲 Ready |
 | [Wave 15](#wave-15--accessibility--adaptive-layout) | Accessibility & Adaptive Layout | 🔲 Ready |
@@ -588,7 +588,7 @@ plan/task context already lined up.
 
 ## Wave 12 — Automation Control Tower
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped**
 
 **Goal:** Surface long-running automation state as clearly as chat state. Plans,
 watch loops, retries, and interventions should feel inspectable and steerable
@@ -649,14 +649,14 @@ from inside the CLI instead of buried in JSON state files.
 
 ### Done-When
 
-- [ ] `/watch status` and `/watch history` expose retry/checkpoint state without reading raw files
-- [ ] `/watch retry-limit N` updates persisted retry behavior for the active watch session
-- [ ] `/watch intervene` records operator notes that appear in later history output
-- [ ] `/plan status` and `/plan focus` make linked plan progress readable in the CLI
+- [x] `/watch status` and `/watch history` expose retry/checkpoint state without reading raw files
+- [x] `/watch retry-limit N` updates persisted retry behavior for the active watch session
+- [x] `/watch intervene` records operator notes that appear in later history output
+- [x] `/plan status` and `/plan focus` make linked plan progress readable in the CLI
 - [ ] Session/status output surfaces active automation state by default
 - [ ] Retry paths explain when the CLI auto-retried and why
-- [ ] 180 tests pass
-- [ ] Deployed to macbook
+- [x] 180 tests pass
+- [x] Deployed to macbook
 
 ---
 

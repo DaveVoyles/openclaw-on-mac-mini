@@ -4405,8 +4405,195 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+# ---------------------------------------------------------------------------
+# Wave 12: Watch status helpers + /watch REPL command
+# ---------------------------------------------------------------------------
+
+def _print_watch_status(state: dict[str, Any]) -> None:
+    """Render a compact watch-state status panel."""
+    goal = str(state.get("goal") or "").strip()
+    mode = str(state.get("mode") or "").strip()
+    w_status = str(state.get("status") or "").strip()
+    poll_count = int(state.get("poll_count") or 0)
+    max_polls = int(state.get("max_polls") or 0)
+    failure_count = int(state.get("failure_count") or 0)
+    retry_limit = int(state.get("retry_limit") or 3)
+    last_run_at = str(state.get("last_run_at") or "").strip()
+    interval_seconds = int(state.get("interval_seconds") or 0)
+    last_error = str(state.get("last_error") or "").strip()
+    last_summary = str(state.get("last_summary") or "").strip()
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        grid = _RichTable.grid(padding=(0, 2))
+        grid.add_column(style="dim", min_width=12)
+        grid.add_column()
+        if goal:
+            grid.add_row("goal", f"[bold]{goal[:80]}[/]")
+        if mode:
+            grid.add_row("mode", f"[cyan]{mode}[/]")
+        status_color = "green" if w_status == "running" else "yellow" if w_status == "idle" else "dim"
+        grid.add_row("status", f"[{status_color}]{w_status or 'unknown'}[/]")
+        grid.add_row("polls", f"[cyan]{poll_count}[/] / {max_polls or '∞'}")
+        if failure_count:
+            grid.add_row("failures", f"[red]{failure_count}[/] of {retry_limit} retry limit")
+        else:
+            grid.add_row("retry limit", f"{retry_limit}")
+        if interval_seconds:
+            grid.add_row("interval", f"{interval_seconds}s")
+        if last_run_at:
+            grid.add_row("last run", f"[dim]{last_run_at}[/]")
+        if last_summary:
+            grid.add_row("last out", f"[dim]{last_summary[:80]}[/]")
+        if last_error:
+            grid.add_row("last err", f"[red]{last_error[:80]}[/]")
+        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]🤖 Watch Status[/]", border_style="cyan", padding=(0, 1)))
+    else:
+        print("Watch Status")
+        if goal:
+            print(f"  goal:      {goal[:80]}")
+        print(f"  mode:      {mode}  status: {w_status}")
+        print(f"  polls:     {poll_count}/{max_polls or '∞'}")
+        if failure_count:
+            print(f"  failures:  {failure_count}/{retry_limit} retry limit")
+        if interval_seconds:
+            print(f"  interval:  {interval_seconds}s")
+        if last_run_at:
+            print(f"  last run:  {last_run_at}")
+        if last_summary:
+            print(f"  last out:  {last_summary[:80]}")
+        if last_error:
+            print(f"  last err:  {last_error[:80]}")
+
+
+def _print_watch_history(state: dict[str, Any]) -> None:
+    """Render recent watch progress log, retries, and operator notes."""
+    progress_log = list(state.get("progress_log") or [])
+    retry_history = list(state.get("retry_history") or [])
+    notes = [e for e in list(state.get("interventions") or []) if e.get("action") == "operator-note"]
+
+    if not progress_log and not retry_history and not notes:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]No watch history yet.[/]")
+        else:
+            print("No watch history yet.")
+        return
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan")
+        table.add_column("Time", style="dim", no_wrap=True, max_width=10)
+        table.add_column("Kind", no_wrap=True, max_width=10)
+        table.add_column("Summary")
+        for entry in progress_log[-10:]:
+            ts = str(entry.get("timestamp") or entry.get("at") or "").strip()
+            ts_short = ts[11:19] if len(ts) > 10 else ts
+            phase = str(entry.get("phase") or "poll").strip()
+            note = str(entry.get("note") or entry.get("summary") or entry.get("content") or "").strip()
+            icon = "✅" if entry.get("ok") else "⚠️" if entry.get("warning") else "•"
+            table.add_row(ts_short, f"[dim]{phase}[/]", f"{icon} {note[:100]}")
+        for entry in retry_history[-3:]:
+            ts = str(entry.get("at") or entry.get("timestamp") or "").strip()
+            ts_short = ts[11:19] if len(ts) > 10 else ts
+            reason = str(entry.get("reason") or entry.get("error") or "").strip()
+            table.add_row(ts_short, "[red]retry[/]", f"🔄 {reason[:100]}")
+        for note_entry in notes[-3:]:
+            ts = str(note_entry.get("created_at") or "").strip()
+            ts_short = ts[11:19] if len(ts) > 10 else ts
+            reason = str(note_entry.get("reason") or "").strip()
+            table.add_row(ts_short, "[yellow]note[/]", f"📝 {reason[:100]}")
+        _RICH_CONSOLE.print(table)
+    else:
+        for entry in (progress_log[-10:] + retry_history[-3:] + notes[-3:]):
+            ts = str(entry.get("timestamp") or entry.get("at") or entry.get("created_at") or "").strip()
+            label = str(entry.get("phase") or entry.get("action") or "").strip()
+            text = str(entry.get("note") or entry.get("summary") or entry.get("reason") or "").strip()
+            print(f"  [{ts}] {label}: {text[:100]}")
+
+
+def _cmd_watch(ctx: ChatCommandContext) -> str:
+    """/watch [status|history|retry-limit N|intervene TEXT] — inspect or control an active watch session."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+
+    raw = ctx.args.strip()
+    parts = raw.split(None, 1)
+    sub = parts[0].lower() if parts else "status"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    state = load_watch_state(ctx.session_id)
+
+    if sub in ("status", ""):
+        if state is None:
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No active watch session.[/]  Start one with [cyan]openclaw watch --goal …[/]")
+            else:
+                print("No active watch session. Start one with: openclaw watch --goal …")
+            return _CMD_CONTINUE
+        _print_watch_status(state)
+
+    elif sub == "history":
+        if state is None:
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No watch history found.[/]")
+            else:
+                print("No watch history found.")
+            return _CMD_CONTINUE
+        _print_watch_history(state)
+
+    elif sub == "retry-limit":
+        if not rest:
+            _print_error("Usage: /watch retry-limit N")
+            return _CMD_CONTINUE
+        try:
+            n = max(1, int(rest.split()[0]))
+        except ValueError:
+            _print_error("Usage: /watch retry-limit N  (N must be a positive integer)")
+            return _CMD_CONTINUE
+        if state is None:
+            _print_error("No active watch session to update.")
+            return _CMD_CONTINUE
+        state["retry_limit"] = n
+        save_watch_state(ctx.session_id, state)
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]✓[/] retry limit set to [cyan]{n}[/]")
+        else:
+            print(f"retry limit set to {n}")
+
+    elif sub == "intervene":
+        note_text = rest.strip('"').strip("'").strip()
+        if not note_text:
+            _print_error('Usage: /watch intervene "note text"')
+            return _CMD_CONTINUE
+        if state is None:
+            _print_error("No active watch session to add a note to.")
+            return _CMD_CONTINUE
+        import uuid as _uuid_mod
+        from datetime import datetime as _dt, timezone as _tz
+        interventions = list(state.get("interventions") or [])
+        note_entry = {
+            "request_id": _uuid_mod.uuid4().hex[:10],
+            "action": "operator-note",
+            "status": "recorded",
+            "actor": "operator",
+            "reason": note_text[:240],
+            "created_at": _dt.now(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        interventions.append(note_entry)
+        state["interventions"] = interventions[-20:]
+        save_watch_state(ctx.session_id, state)
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]✓[/] operator note recorded  [dim]{note_text[:60]}[/]")
+        else:
+            print(f"operator note recorded: {note_text[:60]}")
+
+    else:
+        _print_error("Usage: /watch [status|history|retry-limit N|intervene TEXT]")
+
+    return _CMD_CONTINUE
+
+
 def _cmd_plan(ctx: ChatCommandContext) -> str:
-    """/plan [<id> | unlink] — show, link, or unlink a plan for this session."""
+    """/plan [<id> | status | focus | unlink] — show, link, focus, or unlink a plan for this session."""
     session = _require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
@@ -4425,6 +4612,103 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
                 _RICH_CONSOLE.print("[dim]No plan linked. Use:[/] /plan <id>")
             else:
                 print("No plan linked. Use: /plan <id>")
+        return _CMD_CONTINUE
+
+    # /plan status — show linked plan details
+    if arg.lower() == "status":
+        if not session.plan_id:
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No plan linked. Use:[/] /plan <id>")
+            else:
+                print("No plan linked. Use: /plan <id>")
+            return _CMD_CONTINUE
+        validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
+        if _RICH_AVAILABLE and _IS_TTY:
+            grid = _RichTable.grid(padding=(0, 2))
+            grid.add_column(style="dim", min_width=10)
+            grid.add_column()
+            grid.add_row("plan id", f"[yellow]{session.plan_id}[/]")
+            if validation.summary:
+                grid.add_row("goal", f"[bold]{validation.summary[:100]}[/]")
+            status_str = "✅ found" if validation.exists else "⚠ not found locally" if validation.available else "unavailable"
+            grid.add_row("status", status_str)
+            if validation.source:
+                grid.add_row("file", f"[dim]{validation.source}[/]")
+            if session.task_id:
+                grid.add_row("task", f"[magenta]{session.task_id}[/]")
+            _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]📋 Plan Status[/]", border_style="cyan", padding=(0, 1)))
+        else:
+            print(f"Plan: {session.plan_id}")
+            if validation.summary:
+                print(f"  goal:   {validation.summary[:100]}")
+            if session.task_id:
+                print(f"  task:   {session.task_id}")
+            print(f"  status: {'found' if validation.exists else 'not found'}")
+        return _CMD_CONTINUE
+
+    # /plan focus — show only current + next pending step from plan file
+    if arg.lower() == "focus":
+        if not session.plan_id:
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No plan linked.[/]")
+            else:
+                print("No plan linked.")
+            return _CMD_CONTINUE
+        validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
+        if not validation.exists or not validation.source:
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"[yellow]⚠[/] Plan file not found locally for [yellow]{session.plan_id}[/].")
+            else:
+                print(f"Plan file not found locally for {session.plan_id}.")
+            return _CMD_CONTINUE
+        try:
+            plan_text = Path(validation.source).read_text(encoding="utf-8")
+        except OSError:
+            _print_error(f"Could not read plan file: {validation.source}")
+            return _CMD_CONTINUE
+        # Find first unchecked task (- [ ]) and the next one after it
+        lines = plan_text.splitlines()
+        unchecked = [(i, l) for i, l in enumerate(lines) if re.match(r"^\s*-\s+\[ \]", l)]
+        done_count = sum(1 for l in lines if re.match(r"^\s*-\s+\[x\]", l, re.IGNORECASE))
+        if not unchecked:
+            msg = "All tasks complete!" if done_count > 0 else "No task items found in plan."
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"[green]✅ {msg}[/]  [dim]{session.plan_id}[/]")
+            else:
+                print(f"{msg}  ({session.plan_id})")
+            return _CMD_CONTINUE
+        focus_lines: list[str] = []
+        if validation.summary:
+            focus_lines.append(f"Goal: {validation.summary}")
+            focus_lines.append("")
+        focus_lines.append(f"Done: {done_count}  Remaining: {len(unchecked)}")
+        focus_lines.append("")
+        # Current step
+        cur_idx, cur_line = unchecked[0]
+        focus_lines.append("▶ Current:")
+        focus_lines.append(f"  {cur_line.strip()}")
+        # Show a few context lines after the current step (sub-tasks or notes)
+        for ctx_line in lines[cur_idx + 1: cur_idx + 4]:
+            if ctx_line.strip() and not re.match(r"^\s*-\s+\[ \]", ctx_line):
+                focus_lines.append(f"    {ctx_line.strip()}")
+            else:
+                break
+        # Next pending step
+        if len(unchecked) > 1:
+            _, nxt_line = unchecked[1]
+            focus_lines.append("")
+            focus_lines.append("→ Next:")
+            focus_lines.append(f"  {nxt_line.strip()}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(_RichPanel(
+                _RichMarkdown("\n".join(focus_lines)),
+                title=f"[bold cyan]📋 Plan Focus — {session.plan_id}[/]",
+                border_style="cyan",
+                padding=(0, 1),
+            ))
+        else:
+            for fl in focus_lines:
+                print(fl)
         return _CMD_CONTINUE
 
     if arg.lower() == "unlink":
@@ -5884,8 +6168,15 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(
         SlashCommand(
             name="plan",
-            description="Show, link, or unlink a plan (/plan [<id>|unlink])",
+            description="Show, link, focus, or unlink a plan (/plan [<id>|status|focus|unlink])",
             handler=_cmd_plan,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="watch",
+            description="Inspect or control active watch sessions (/watch [status|history|retry-limit N|intervene TEXT])",
+            handler=_cmd_watch,
         )
     )
     registry.register(
