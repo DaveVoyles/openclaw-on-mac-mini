@@ -1588,7 +1588,10 @@ def record_watch_progress(
     state["updated_at"] = entry["created_at"]
     save_watch_state(session_id, normalize_watch_state(state))
     if not output_json:
-        print(f"[watch {iteration}] {mode}/{phase}: {message}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[dim][[/][cyan]{iteration}[/][dim]][/] [dim]{mode}/{phase}:[/] {message}")
+        else:
+            print(f"[watch {iteration}] {mode}/{phase}: {message}")
 
 
 def print_watch_resume_snapshot(session_id: str, state: dict[str, Any], *, output_json: bool) -> None:
@@ -3334,18 +3337,27 @@ def _execute_routed_plan(
         return ""
 
     plan_id, create_result = _create_persisted_plan(goal=prompt, steps=decision.steps, session_id=session.session_id)
-    print(create_result)
-    ctx.history[:] = load_conversation_history(session.session_id)
     total = len(decision.steps)
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(_RichPanel(f"📋 Plan [yellow]{plan_id}[/] · [dim]{total} steps[/]", border_style="dim"))
+    else:
+        print(f"plan {plan_id}: {total} steps")
+    ctx.history[:] = load_conversation_history(session.session_id)
     for step in decision.steps:
         slash_command = _plan_step_slash_command(step)
         if not slash_command:
             summary = f"step {step.index} has no executable slash command"
             _update_persisted_plan_step(plan_id, step.index, status="failed", output=summary, session_id=session.session_id)
-            print(f"[{step.index}/{total}] failed: {summary}")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"  [dim][{step.index}/{total}][/] [red]✗ failed:[/] {summary}")
+            else:
+                print(f"[{step.index}/{total}] failed: {summary}")
             return _CMD_CONTINUE
         _update_persisted_plan_step(plan_id, step.index, status="in-progress", session_id=session.session_id)
-        print(f"[{step.index}/{total}] {slash_command}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"  [dim][{step.index}/{total}][/] [cyan]{slash_command}[/]")
+        else:
+            print(f"[{step.index}/{total}] {slash_command}")
         routed = registry.dispatch(slash_command, ctx)
         ctx.history[:] = load_conversation_history(session.session_id)
         summary = ctx.command_summary or _summarize_terminal_result(
@@ -3357,7 +3369,10 @@ def _execute_routed_plan(
             return _CMD_QUIT
         if routed is None or not ctx.command_ok:
             _update_persisted_plan_step(plan_id, step.index, status="failed", output=summary, session_id=session.session_id)
-            print(f"[{step.index}/{total}] failed: {summary}")
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"  [dim][{step.index}/{total}][/] [red]✗ failed:[/] {summary}")
+            else:
+                print(f"[{step.index}/{total}] failed: {summary}")
             return _CMD_CONTINUE
         _update_persisted_plan_step(plan_id, step.index, status="done", output=summary, session_id=session.session_id)
     update_session(session.session_id, plan_id=plan_id)
@@ -3479,15 +3494,16 @@ def _capture_routed_action_checkpoint(
             ),
         )
     except Exception as exc:
-        print(
-            f"error: unable to capture safety checkpoint for {_routed_plan_step_label(metadata)}: {exc}"
-        )
+        _print_error(f"unable to capture safety checkpoint for {_routed_plan_step_label(metadata)}: {exc}")
         _set_command_result(ctx, ok=False, summary=f"checkpoint failed: {exc}")
         return False
-    print(
-        f"Checkpoint {checkpoint['checkpoint_id']} captured for {_routed_plan_step_label(metadata)}. "
-        "Use /rollback last to recover."
-    )
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(f"  [green]✓[/] checkpoint [dim]{checkpoint['checkpoint_id']}[/] captured · [dim]use /rollback last to recover[/]")
+    else:
+        print(
+            f"Checkpoint {checkpoint['checkpoint_id']} captured for {_routed_plan_step_label(metadata)}. "
+            "Use /rollback last to recover."
+        )
     return True
 
 
@@ -3529,7 +3545,10 @@ def _cmd_clear(ctx: ChatCommandContext) -> str:
 def _require_session_or_warn(ctx: ChatCommandContext) -> "SessionSummary | None":
     """Load the active session, printing a warning when none is set."""
     if not ctx.session_id:
-        print("No active session. Start with: openclaw --session <id> or openclaw session create")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[yellow]⚠[/]  no active session  [dim]·  openclaw --session <id>  or  openclaw session create[/]")
+        else:
+            print("No active session. Start with: openclaw --session <id> or openclaw session create")
         _set_command_result(ctx, ok=False, summary="no active session")
         return None
     session = load_session(ctx.session_id)
@@ -3611,7 +3630,10 @@ def _cmd_cwd(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     new_path = ctx.args.strip()
     if not new_path:
-        print(f"cwd: {session.cwd}")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[dim]cwd[/]  {session.cwd}")
+        else:
+            print(f"cwd: {session.cwd}")
         return _CMD_CONTINUE
     resolved = str(Path(new_path).expanduser().resolve())
     if not Path(resolved).is_dir():
@@ -3624,7 +3646,10 @@ def _cmd_cwd(ctx: ChatCommandContext) -> str:
         content=f"/cwd {new_path}",
         metadata={"summary": f"switched cwd to {resolved}"},
     )
-    print(f"cwd → {resolved}")
+    if _RICH_AVAILABLE and _IS_TTY:
+        _RICH_CONSOLE.print(f"[dim]cwd[/] [green]→[/] {resolved}")
+    else:
+        print(f"cwd → {resolved}")
     return _CMD_CONTINUE
 
 
@@ -5021,7 +5046,10 @@ def handle_plan_command(args: argparse.Namespace, *, session_id: str = "") -> in
             steps_text=steps_text,
             session_id=session_id,
         )
-        print(create_result)
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]✓[/] [bold]plan created:[/] [yellow]{_plan_id}[/]")
+        else:
+            print(create_result)
         return 0
     if subcommand == "list":
         plans = list_plan_objects(str(getattr(args, "status", "all") or "all"))
@@ -5062,10 +5090,18 @@ def handle_plan_command(args: argparse.Namespace, *, session_id: str = "") -> in
         print(run_async(read_plan(args.plan_id)))
         return 0
     if subcommand == "resume":
-        print(run_async(resume_plan(args.plan_id)))
+        result = run_async(resume_plan(args.plan_id))
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[green]▶[/] [bold]plan resumed:[/] [yellow]{args.plan_id}[/]  [dim]{str(result)[:120]}[/]")
+        else:
+            print(result)
         return 0
     if subcommand == "cancel":
-        print(run_async(cancel_plan(args.plan_id)))
+        result = run_async(cancel_plan(args.plan_id))
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[red]✗[/] [bold]plan cancelled:[/] [dim]{args.plan_id}[/]  [dim]{str(result)[:120]}[/]")
+        else:
+            print(result)
         return 0
     raise OpenClawCliError(f"Unknown plan command: {subcommand}")
 
@@ -5443,11 +5479,26 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
     if not config.output_json:
         if resume_snapshot:
             print_watch_resume_snapshot(session.session_id, resume_snapshot, output_json=config.output_json)
-        print(
-            f"Watching session {session.session_id} in {mode} mode "
-            f"(interval={interval_seconds}s, max polls={'infinite' if max_polls == 0 else max_polls})."
-        )
-        print("Press Ctrl-C to stop and resume later with `openclaw watch --resume <session_id>`.")
+        if _RICH_AVAILABLE and _IS_TTY:
+            _body = _RichText()
+            _body.append(f"  session  ", style="dim")
+            _body.append(f"{session.session_id}\n")
+            _body.append(f"  mode     ", style="dim")
+            _body.append(f"{mode}\n")
+            _body.append(f"  goal     ", style="dim")
+            _body.append(f"{goal[:60]}\n")
+            _body.append(f"  interval ", style="dim")
+            _body.append(f"{interval_seconds}s")
+            _body.append("  ·  max ", style="dim")
+            _body.append(f"{'infinite' if max_polls == 0 else max_polls}\n")
+            _body.append("  Ctrl-C to pause & resume", style="dim")
+            _RICH_CONSOLE.print(_RichPanel(_body, border_style="cyan", title="[bold cyan]👁  watch[/]"))
+        else:
+            print(
+                f"Watching session {session.session_id} in {mode} mode "
+                f"(interval={interval_seconds}s, max polls={'infinite' if max_polls == 0 else max_polls})."
+            )
+            print("Press Ctrl-C to stop and resume later with `openclaw watch --resume <session_id>`.")
 
     try:
         while max_polls == 0 or int(state.get("poll_count", 0) or 0) < max_polls:
