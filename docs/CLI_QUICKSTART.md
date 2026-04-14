@@ -258,9 +258,24 @@ vocabulary, persistence, and fallback reporting first.
 
 | Command | Description |
 |---------|-------------|
-| `/followup [on\|off]` | Show contextual next-step suggestions after each response |
-| Phase / step feedback | Long-running work reports `Phase: ...` and `Step N/M: ...` instead of generic "thinking" output |
-| Split-bar shell chrome | Interactive flows target a top context bar, primary output region, and bottom control bar with mode + hints |
+| `/followup [on\|off]` | Show or toggle the compact bottom-bar follow-up suggestions after a response |
+| `/ratehint [on\|off]` | Show or hide the rating hint that shares the same bottom-bar footer |
+| `/pathhints [on\|off]` | Keep file-path quick actions on or off when responses mention local files |
+
+Wave 31 is currently shipping as a **response-assist slice**, not the full shell
+roadmap:
+
+- Long-running chat waits now expose concrete **phase / step / trust** copy such
+  as `warming up`, `working`, `wrapping up`, `step N/3`, and `response ready`
+  instead of a generic silent wait.
+- After a normal response, OpenClaw can show a **Suggested follow-ups** block and
+  a compact **bottom bar** footer with `mode: chat` plus up to three contextual
+  hints like `/rate`, `/view`, `/context`, or `/links`.
+- Plain mode and reduced-motion mode keep the same information, but render it as
+  explicit text lists instead of Rich inline chrome.
+- Existing **status-bar context** remains the lightweight session/autoroute shell
+  cue for this slice; the broader split-bar/top-context shell contract is still
+  follow-up work.
 
 ## Wave 20 collaboration handoffs
 
@@ -396,61 +411,176 @@ Wave 27 is currently the **read-only operator snapshot** pass:
 `docs/COMMANDS.md` still does not need regeneration because command metadata is
 unchanged.
 
-## Wave 31 intelligent suggestions & live feedback slice (planned)
+## Wave 31 intelligent suggestions & live feedback slice (current slice)
 
 Wave 31 is the **suggestion layer + phase/step transparency** pass:
 
-- **Contextual suggestions follow important responses.** After an AI output, the
-  CLI should be able to show a few dim next-step suggestions like `→ /exec`,
-  `→ /inspect`, or `→ /export`, while still degrading to plain text cleanly.
+- **Contextual suggestions follow the actual response.** The footer can now use
+  the prompt, response body, and session context to suggest things like
+  `→ /view <path>`, `→ /context`, or `→ /links`.
 - **Long-running operations say what they are doing.** Instead of vague
-  "thinking" output, longer actions should report `Phase: <name>` and
-  `Step N/M: <description>` with clear completion cues.
-- **Split-bar chat chrome becomes the standard shell target.** Interactive flows
-  should use a top context bar, a primary output region, and a bottom control bar
-  with mode + 1–2 hints.
+  "thinking" output, longer actions now emit richer phase/step trust cues with
+  deterministic counts and the shared `response ready.` completion line.
+- **The bottom footer is the first shell slice.** Interactive chat now uses a
+  compact `mode: chat` footer with contextual next actions. The always-on top
+  context bar remains follow-up work.
 - **Trust-building language stays honest.** Prefer deterministic counts, elapsed
   time, and specific action verbs over fake percentage bars or ambiguous status
   words.
 
 Fallback expectations:
 
-- **Plain mode** keeps explicit phase/step labels and text separators
+- **Plain mode** keeps explicit phase/step labels and falls back to the existing
+  predictive-affordance panel instead of a Rich footer
 - **Reduced motion** keeps the same structure without animated reveals
 - **Non-TTY** prints prefixed text lines instead of overlay-style chrome
 - **Narrow terminals** drop low-priority hints first
 
-## Wave 32 bookmarks & instant replay slice (planned)
+## Wave 32 bookmarks & instant replay slice (current slice)
 
 Wave 32 is the **bookmark + replay** follow-up:
 
-- mark meaningful turns with `/bookmark`
-- replay from a bookmark with `/replay --from`
-- surface bookmark markers in timelines, session views, and handoff exports
+- mark meaningful turns with `/bookmark "label"`
+- list replay anchors with `/bookmarks`
+- replay from a bookmark with `/replay --from b1`
+- carry bookmark markers into `session show`, `session share`, and `session export`
 
-## Wave 33 workflows & macros slice (planned)
+## Wave 33 workflows & macros slice (current slice)
 
 Wave 33 is the **workflow composition + dry-run** slice:
 
-- create named workflows from command sequences
-- preview workflows before execution
-- share workflow context in handoffs and exports
+- create named workflows from command sequences with `/workflow save <name>`
+- preview workflows before execution with `/workflow preview <name>`
+- run workflows with session-aware placeholders like `{cwd}` and `{session}`
+- keep the existing macro engine as the persistence/runtime layer for this slice
 
-## Wave 34 quality & experiments slice (planned)
+## Wave 34 quality & experiments slice (current slice)
 
-Wave 34 is the **quality metadata + tracing** slice:
+Wave 34 is the **traceability + quality snapshot** slice:
 
-- summarize confidence/latency/routing via `/quality`
-- inspect last-response routing and fallbacks via `/trace`
-- compare local experiment variants without leaving the terminal
+- keep `/quality` as the rating histogram, then append the latest routing summary
+- inspect the most recent routing decision and confidence with `/trace`
+- defer local experiment variant controls to a later Wave 34 follow-on
 
-## Wave 35 runbooks & exports slice (planned)
+## Wave 35 runbooks & exports slice (current slice)
 
-Wave 35 is the **long-form reporting + export template** slice:
+Wave 35 is the **runbook + export-template gallery** slice:
 
-- export sessions in multiple audience-aware formats
-- generate runbooks from session narratives
-- support reusable export templates and redaction-friendly sharing
+- render the active session as a long-form Markdown handoff with `/runbook`
+- export the same report from the CLI with `openclaw session export --format runbook`
+- inspect the built-in reporting modes with `/exporttemplates`
+
+## Wave 36 workspace recovery slice (current slice)
+
+Wave 36 is the **workspace capsule + restore** slice:
+
+- inspect the current recovery state with `/workspace status`
+- save a portable recovery capsule with `/workspace save`
+- browse saved capsules with `/workspace list`
+- restore one into a fresh session with `/workspace restore <capsule>`
+
+## Wave 37 pattern library slice (current slice)
+
+Wave 37 is the **pattern library + reusable workflow-template** slice:
+
+- save reusable flows from recent command history with `/pattern save <name> [last N]`
+- promote an existing workflow into a reusable pattern with `/pattern save <name> workflow <workflow>`
+- browse saved patterns with `/pattern list`
+- inspect the resolved steps with `/pattern preview <name>`
+- rerun a saved pattern with `/pattern run <name>`
+
+## Wave 38 structured collaboration slice (current slice)
+
+Wave 38 is the **ownership + risk register + readiness audit** slice:
+
+- assign an explicit owner with `/collab assign @actor TEXT`
+- track blockers with `/risk add <critical|high|medium|low> TEXT`
+- review unresolved blockers with `/risk list`
+- audit the next handoff with `/handoff check`
+- use `/collab status` to review assignments and open risks alongside the
+  existing handoff snapshot
+
+## Wave 39 learned routing slice (current slice)
+
+Wave 39 is the **route-quality insight + advisory suggestion** slice:
+
+- capture route context automatically when you rate a routed response with `/rate`
+- inspect the best-rated lane with `/quality predict`
+- review learned route summaries with `/routing suggest`
+- compare the strongest local lanes with `/routing analyze`
+
+## Wave 40 automation dashboard slice (current slice)
+
+Wave 40 is the **operator summary + computed alerts** slice:
+
+- review cross-session automation health with `/dashboard automation`
+- inspect unresolved operator alerts with `/alerts list`
+- quiet an alert once acknowledged with `/alerts acknowledge <index>`
+- reuse the same cross-session overview with `/fleet status` or `/fleet health`
+
+## Wave 41 incident log slice (current slice)
+
+Wave 41 is the **lightweight incident log + resolution** slice:
+
+- review unresolved incidents with `/incident list`
+- record a new operator issue with `/incident log TEXT`
+- resolve an incident with `/incident resolve <index>`
+- use `/collab status` to review open incidents inside the session handoff view
+- use `/handoff check` when you want readiness to account for unresolved incidents
+- review open-incident count in `/dashboard automation`
+
+## Wave 42 source rendering reliability slice (current slice)
+
+Wave 42 is the **response body + sources panel reliability** slice:
+
+- source sections are stripped from the response body before they can render twice
+- loose `Sources:` blocks without extra spacing still extract into the sources panel
+- ANSI color codes no longer bleed into source display labels when clickable-link
+  fallback is used
+- the ANSI sources box now tracks live terminal width instead of a shorter cached width
+
+`docs/COMMANDS.md` does not need regeneration because no new commands were added.
+
+## Wave 43 context & token intelligence slice (current slice)
+
+Wave 43 is the **context visibility + token awareness** slice:
+
+- `/tokeninfo` shows estimated session token usage with a progress bar toward a
+  128k context window
+- response footers now surface token count more prominently when the API returns it
+- `/session` now includes session age so you can gauge how long the current
+  context has been building
+- `/tokeninfo` is part of the startup tip rotation for easier discovery
+
+`docs/COMMANDS.md` does not need regeneration because `/tokeninfo` was already documented.
+
+## Wave 44 startup & first-run polish slice (current slice)
+
+Wave 44 is the **adaptive startup + discovery** slice:
+
+- startup banner greeting adapts to time of day with morning, afternoon, and
+  evening copy
+- session milestones celebrate repeated use at key counts like 10, 50, and 100
+- the startup tips pool now includes the recent-command discovery set for
+  `/tokeninfo`, `/trace`, `/handoff check`, `/fleet health`, `/alerts`,
+  `/collab decision`, `/bookmark`, `/overlay`, `/pattern`, and `/draft multiline`
+- `--no-banner` suppresses the startup panel for scripted or automation-focused runs
+
+`docs/COMMANDS.md` does not need regeneration because Wave 44 changes startup behavior, not command metadata.
+
+## Wave 45 context pressure guardrails slice (current slice)
+
+Wave 45 is the **token breakdown + recovery guidance** slice:
+
+- `/tokeninfo` still shows the estimated 128k progress bar, but now breaks the
+  estimate down by actor so you can see which side of the conversation is
+  consuming the most context
+- `/tokeninfo` also calls out the largest actor share in one compact line for
+  faster triage during long sessions
+- medium pressure still nudges you toward refreshing context, while high and
+  near-capacity pressure now recommend saving a `/bookmark` before using `/clear`
+
+`docs/COMMANDS.md` does not need regeneration because Wave 45 deepens `/tokeninfo` behavior without changing command metadata.
 
 ## Wave 28 predictive affordances slice (current slice)
 

@@ -376,6 +376,18 @@ Implementation guidance:
   active
 - omit low-priority hints first on narrow terminals or non-TTY paths
 
+**Current shipped Wave 31 slice:** the shell contract is only partially landed.
+Today the runtime uses:
+
+- `_print_predictive_affordances(...)` for the post-response **Suggested
+  follow-ups** block
+- `_print_followup_suggestions(...)` for the compact **bottom bar** footer with
+  `mode: ...` plus contextual actions
+- `_print_status_bar(...)` as the lightweight context/status shell cue after the
+  response
+
+The richer always-present top context bar remains deferred.
+
 ### Wave 31+ phase/step feedback contract
 
 Wave 31 is the primary owner of live agent transparency during longer-running
@@ -398,6 +410,340 @@ Language rules:
 
 Wave 34 can later extend this contract with richer trace and quality metadata,
 but the base phase/step/trust-cue vocabulary belongs to Wave 31.
+
+**Current shipped Wave 31 slice:** `_spinner_progress_snapshot(...)` and
+`_with_spinner(...)` are the live implementation today. They currently expose a
+fixed three-step request lifecycle:
+
+1. `warming up` → `step 1/3` → `preparing the request`
+2. `working` → `step 2/3` → `waiting for the agent response`
+3. `wrapping up` → `step 3/3` → `finalizing the answer`
+
+Reduced-motion mode prints the same trust cues as static text plus periodic
+`Still working on ...` heartbeats. Completion ends with the shared `response
+ready.` feedback line rather than decorative-only motion.
+
+### Wave 32 session bookmarks & replay contract
+
+Wave 32 layers bookmark metadata on top of the existing local session/event
+store instead of creating a separate replay subsystem.
+
+Current shipped slice:
+
+- `SessionSummary.bookmarks` stores normalized bookmark entries with `id`,
+  `label`, `created_at`, `turn_index`, `history_index`, and compact previews.
+- `/bookmark [label]` captures the latest replay anchor for the active session.
+- `/bookmarks` lists those anchors in plain text so the same output works in
+  Rich, plain mode, reduced motion, and non-TTY environments.
+- `/replay [session-id] [--from <bookmark>]` resolves the bookmark and slices the
+  rebuilt conversation history from `history_index` forward.
+- `session show`, `session share`, and `session export` surface the same bookmark
+  metadata so handoffs and JSON exports preserve replay anchors.
+
+Deferred follow-up work:
+
+- bookmark markers inside `/timeline` and `/watch history`
+- richer bookmark management (rename/delete/group)
+- bookmark promotion into later workflow/macros surfaces
+
+### Wave 33 workflow preview & substitution contract
+
+Wave 33 reuses the existing persisted macro store rather than introducing a
+second workflow engine.
+
+Current shipped slice:
+
+- `_workflow_store()` keeps `/workflow` and `/macro` backed by the same local
+  preference data so older macros continue to work.
+- `/workflow preview <name>` prints a dry-run step list without executing any
+  commands.
+- `_render_workflow_step(...)` resolves a narrow set of session-aware
+  placeholders: `{cwd}`, `{session}`, `{plan}`, and `{task}`.
+- `_macro_run(..., kind=\"workflow\")` uses the same placeholder resolution when
+  workflows execute, so preview and runtime stay aligned.
+
+Deferred follow-up work:
+
+- workflow metadata beyond the shared macro store
+- workflow embedding in session exports and handoffs
+- per-step approval gates and richer workflow policy controls
+
+### Wave 34 traceability & quality contract
+
+Wave 34 ships as a thin inspection layer over the existing routing and rating
+primitives rather than a new experimentation backend.
+
+Current shipped slice:
+
+- `/trace` reads the latest stored decision event and prints the route,
+  rationale, confidence, timestamp, and latest rating context.
+- `/quality` keeps the existing histogram, then appends a compact latest-route
+  summary so users can pivot into `/trace` without hunting for the right
+  surface.
+- The same data must remain readable in Rich, plain, reduced-motion, and
+  non-TTY output paths.
+
+Deferred follow-up work:
+
+- local experiment controls and comparison modes
+- richer latency envelopes and portable quality export schemas
+
+### Wave 35 runbook & export contract
+
+Wave 35 ships as a reporting veneer over the existing session export,
+collaboration snapshot, and storyline primitives.
+
+Current shipped slice:
+
+- `_build_session_runbook_text(...)` composes a Markdown handoff from persisted
+  session state rather than maintaining a second reporting datastore.
+- `/runbook [template]` renders the current session for interactive review and
+  can save the same content to disk.
+- `openclaw session export --format runbook --template <name>` reuses the exact
+  same rendering path so chat and non-interactive exports stay aligned.
+- `/exporttemplates` exposes the built-in reporting templates that define the
+  audience label and section ordering for the current slice.
+
+Deferred follow-up work:
+
+- user-authored export templates
+- richer redaction controls and additional output formats
+
+### Wave 36 workspace recovery contract
+
+Wave 36 ships as a recovery veneer over the existing session, handoff, watch,
+and export primitives.
+
+Current shipped slice:
+
+- `build_workspace_capsule(session_id)` derives a compact recovery snapshot from
+  persisted session data, outputs, bookmarks, watch state, and a stable
+  workspace signature.
+- `/workspace status|save|list|restore` promotes the existing handoff manifest
+  store into a first-class workspace recovery flow for the terminal.
+- `create_handoff(...)` now embeds workspace capsule metadata, and
+  `apply_handoff(...)` restores cwd, files, plan/task linkage, and saved watch
+  state into the new session.
+- `export_session(...)` exposes `workspace_capsule` so browser/dashboard and
+  scriptable clients can inspect the same recovery payload.
+
+Deferred follow-up work:
+
+- remote or multi-machine capsule sync
+- restore-in-place semantics for the current session
+- richer watch pause/ask policy controls during restore
+
+### Wave 37 pattern library contract
+
+Wave 37 ships as a pattern-library veneer over the existing workflow and macro
+runtime.
+
+Current shipped slice:
+
+- `_pattern_store()` persists reusable patterns in `_PREFS["patterns"]`
+  alongside workflows/macros, using lightweight metadata instead of a second
+  execution backend.
+- `/pattern save <name> [last N|workflow NAME]` can capture a reusable flow from
+  recent command history or clone an existing workflow into the pattern library.
+- `/pattern list|show|preview` exposes those saved flows in-terminal while
+  preserving Rich/plain compatibility.
+- `/pattern run <name>` reuses the shared command-sequence runner, so
+  placeholder resolution and slash-command dispatch stay aligned with `/workflow
+  run`.
+
+Deferred follow-up work:
+
+- auto-mined patterns from successful sessions
+- versioned pattern variants and richer metadata
+- export/import and collaboration-aware sharing flows
+
+### Wave 38 structured collaboration contract
+
+Wave 38 ships as a planning and readiness veneer over the existing collaboration
+event stream, session links, and handoff manifests.
+
+Current shipped slice:
+
+- `build_collaboration_snapshot(...)` now separates structured `assignments` and
+  `open_risks` from the existing notes and decisions.
+- `/collab assign @actor TEXT` records ownership using the same local
+  collaboration events used by `/collab note` and `/collab decision`.
+- `/risk add|list|clear` manages a lightweight risk register by appending
+  collaboration events with risk metadata instead of introducing a second
+  planning store.
+- `_handoff_check_snapshot(...)` derives readiness from linked plan/task
+  context, assignments, existing handoffs, watch state, and unresolved risks,
+  and `/handoff check` renders that audit in deterministic plain text.
+- `_build_session_share_text(...)` now surfaces **ASSIGNMENTS** and **OPEN
+  RISKS** so the operator-facing snapshot stays aligned with the new structured
+  collaboration slice.
+
+Deferred follow-up work:
+
+- step-level `/plan structured` planning views
+- dedicated gate commands and richer approval semantics
+- dashboard/browser planning mirrors and remote enforcement
+
+### Wave 39 learned routing contract
+
+Wave 39 ships as a route-quality insight veneer over the existing routing trace
+and rating history.
+
+Current shipped slice:
+
+- `_cmd_rate(...)` now stores route metadata when a current-session trace exists,
+  so high/low ratings can be correlated with the last routed slash command.
+- `_route_quality_summary()` aggregates those stored ratings by route and derives
+  average score, sample count, and high-rating share using local prefs only.
+- `/quality predict` and `/routing suggest|analyze` surface that learned summary
+  as advisory terminal output; they do not rewrite or auto-apply routing.
+- `/trace` remains the source of truth for explaining the last actual routing
+  decision, keeping the learned layer transparent and reversible.
+
+Deferred follow-up work:
+
+- automatic route adaptation and experiment loops
+- richer fairness or rollback controls for learned behavior
+- dashboard/browser mirrors for route-quality summaries
+
+### Wave 40 automation dashboard contract
+
+Wave 40 ships as a computed operator dashboard veneer over the existing session,
+watch, collaboration, and handoff state.
+
+Current shipped slice:
+
+- `_collect_operator_alerts()` derives retry, pending-intervention, stale-watch,
+  and handoff-ready alerts from local session/watch state rather than a separate
+  alert store.
+- `_print_automation_dashboard()` aggregates active sessions, live watches,
+  pending interventions, handoff-ready sessions, and top alerts into a compact
+  terminal control-plane summary.
+- `/dashboard automation`, `/alerts list|acknowledge`, and `/fleet
+  status|health` all reuse those computed summaries, keeping the operator view
+  local, deterministic, and plain-text friendly.
+- acknowledged alert ids persist in `_PREFS["acknowledged_alerts"]`, which keeps
+  the quieted-alert state lightweight and reversible.
+
+Deferred follow-up work:
+
+- predictive escalation or richer alert tuning
+- browser/dashboard mirrors and remote fleet control
+
+### Wave 41 incident log contract
+
+Wave 41 ships as a lightweight incident annotation veneer over the existing
+session, watch, and collaboration state.
+
+Current shipped slice:
+
+- `build_collaboration_snapshot(...)` now derives `open_incidents` from
+  collaboration events tagged with `collab_kind="incident"`.
+- `/incident list|log|resolve` reuses that same collaboration event stream, so
+  operator issue tracking stays local and deterministic.
+- `_build_session_share_text(...)` now surfaces **OPEN INCIDENTS** alongside
+  assignments and risks in the session handoff snapshot.
+- `_handoff_check_snapshot(...)` treats unresolved incidents like other
+  readiness blockers and renders them in `/handoff check`.
+- `_print_automation_dashboard()` now includes a session-wide open-incident
+  count in the operator summary.
+
+Deferred follow-up work:
+
+- incident notes, stale-marking, and richer lifecycle controls
+- cross-session incident aggregation or fleet-wide dashboards
+- escalation automation and browser/dashboard mirrors
+
+### Wave 42 source rendering reliability contract
+
+Wave 42 ships as a reliability pass over the existing response preprocessing and
+rendering pipeline.
+
+Current shipped slice:
+
+- `_preprocess_response_text(...)` now reuses a shared loose-sources regex so
+  edge-case `Sources:` blocks still extract cleanly when the primary pass misses.
+- `_render_response_body(...)` adds a final deduplication guard before
+  delegating to `openclaw_cli_render`, which keeps sources headings out of the
+  main response body.
+- `_clean_sources_for_display(...)` strips ANSI escape codes from markdown-link
+  labels and falls back to the raw URL when the display text looks corrupted.
+- the ANSI sources panel now measures live terminal width instead of relying on
+  a shorter cached render width, so the source box matches the current console.
+
+Deferred follow-up work:
+
+- per-source metadata, grouping, or extraction-confidence cues
+- richer browser/dashboard source mirrors
+- broader citation/reference UX beyond deduplication and fallback safety
+
+### Wave 43 context & token intelligence contract
+
+Wave 43 ships as a context-visibility pass over the existing session summary,
+response footer, and startup discovery surfaces.
+
+Current shipped slice:
+
+- `/tokeninfo` remains the lightweight local estimator for session context usage,
+  using the existing character-count heuristic and a 128k progress bar.
+- `_response_footer_lines(...)` now lifts token count into the response headline
+  when the API returns it, so token usage is easier to notice at completion time.
+- `_session_age_label(...)` derives session age from `created_at`, and both
+  `summarize_session(...)` and `_print_session_summary(...)` surface that age in
+  plain-text session inspection output.
+- the startup tips pool already includes `/tokeninfo`, which keeps the new
+  context-awareness path discoverable without adding more chrome.
+
+Deferred follow-up work:
+
+- per-model context limits instead of the shared 128k heuristic
+- token usage breakdowns by turn, actor, or command family
+- proactive context-overflow warnings or auto-summary suggestions
+
+### Wave 44 startup & first-run polish contract
+
+Wave 44 ships as a startup-banner and discovery pass over the existing REPL
+entrypoint, session history, and tips rotation.
+
+Current shipped slice:
+
+- `_time_greeting()` now drives contextual startup copy for morning, afternoon,
+  and evening sessions.
+- `_print_startup_banner(...)` checks persisted session count against milestone
+  thresholds and renders a short celebration line when one is reached.
+- the startup tips pool now includes the recent-command discovery set for
+  `/tokeninfo`, `/trace`, `/handoff check`, `/fleet health`, `/alerts`,
+  `/collab decision`, `/bookmark`, `/overlay`, `/pattern`, and `/draft multiline`.
+- `run_chat(..., no_banner=True)` and the top-level `--no-banner` CLI flag keep
+  scripted startup flows quiet by skipping the banner entirely.
+
+Deferred follow-up work:
+
+- per-user greeting personalization
+- adaptive tip selection based on usage history
+- richer startup animation or onboarding beyond the current lightweight banner
+
+### Wave 45 context pressure guardrails contract
+
+Wave 45 ships as a follow-up to the existing token-intelligence path rather than
+as a new command family.
+
+Current shipped slice:
+
+- `_cmd_tokeninfo(...)` still uses the lightweight character-count heuristic, but
+  now breaks estimated token usage down by actor so users can see whether user,
+  assistant, or other history dominates the current context.
+- `/tokeninfo` now highlights the largest actor share explicitly, keeping the
+  terminal output scannable even when the session is long.
+- pressure guidance is now staged: the existing mid-range stale-context tip
+  remains, high pressure suggests bookmarking before clearing, and near-capacity
+  pressure escalates to a stronger recovery hint.
+
+Deferred follow-up work:
+
+- per-model context limits instead of the shared 128k heuristic
+- token usage breakdowns by turn or command family
+- proactive overflow warnings outside `/tokeninfo`
 
 ### stderr vs stdout
 

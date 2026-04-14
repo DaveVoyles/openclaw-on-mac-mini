@@ -1,0 +1,23 @@
+{
+  "contractVersion": "5.6",
+  "lastUpdated": "2026-04-14",
+  "sharedFiles": [
+    ".github/copilot-instructions.md",
+    ".github/agents/autonomous-fleet-agent.md",
+    ".github/copilot-contract.json"
+  ],
+  "localDocsEntrypoint": {
+    "path": ".github/docs/README.md",
+    "requiredWhenPresent": true
+  },
+  "deprecatedPaths": [
+    ".github/agents/autonomous-agent.md",
+    ".github/agents/autonomous-fleet-agent.agent.md"
+  ],
+  "refreshRule": "Consumer repos should refresh their copied shared files when contractVersion changes.",
+  "exampleConsumerStrategy": "automation-first",
+  "scripts": {
+    "refreshHelper": "scripts/refresh-shared-files.sh"
+  },
+  "maintainerGuide": "docs/maintainer-guide.md"
+}

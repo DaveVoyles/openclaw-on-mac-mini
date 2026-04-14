@@ -179,8 +179,9 @@ chrome.
 | [Wave 40](#wave-40--long-running-automation-dashboard--operator-intelligence) | Long-Running Automation Dashboard & Operator Intelligence | ✅ Shipped |
 | [Wave 41](#wave-41--incident-log--operator-resolution) | Incident Log & Operator Resolution | ✅ Shipped |
 | [Wave 42](#wave-42--source-rendering-reliability) | Source Rendering Reliability | ✅ Shipped |
-| [Wave 43](#wave-43--context--token-intelligence) | Context & Token Intelligence | 🔲 Ready |
-| [Wave 44](#wave-44--startup--first-run-polish) | Startup & First-Run Polish | 🔲 Ready |
+| [Wave 43](#wave-43--context--token-intelligence) | Context & Token Intelligence | ✅ Shipped |
+| [Wave 44](#wave-44--startup--first-run-polish) | Startup & First-Run Polish | ✅ Shipped |
+| [Wave 45](#wave-45--context-pressure-guardrails) | Context Pressure Guardrails | ✅ Shipped |
 
 ---
 
@@ -2881,7 +2882,7 @@ Status: ✅ Shipped
 
 ## Wave 43 — Context & Token Intelligence
 
-Status: 🔲 Ready
+Status: ✅ Shipped
 
 **Problem:** Users have no visibility into how much context they've consumed or how full the model's context window is getting.
 
@@ -2894,9 +2895,9 @@ Status: 🔲 Ready
 
 ### Done-when
 
-- [ ] `/tokeninfo` shows estimated token count with progress bar
-- [ ] Footer shows token count when available from API
-- [ ] `/session` includes session age
+- [x] `/tokeninfo` shows estimated token count with progress bar
+- [x] Footer shows token count when available from API
+- [x] `/session` includes session age
 
 **Risk:** 🟢 Low — new read-only command, no data mutation
 
@@ -2904,7 +2905,7 @@ Status: 🔲 Ready
 
 ## Wave 44 — Startup & First-Run Polish
 
-Status: 🔲 Ready
+Status: ✅ Shipped
 
 **Problem:** The startup banner does not dynamically adapt its greeting, the tip-of-the-day pool has grown stale, and first-run users lack a brief orientation.
 
@@ -2917,12 +2918,41 @@ Status: 🔲 Ready
 
 ### Done-when
 
-- [ ] Startup greeting reflects time of day
-- [ ] Session milestones celebrated
-- [ ] 10 new tips in pool
-- [ ] `--no-banner` flag suppresses panel
+- [x] Startup greeting reflects time of day
+- [x] Session milestones celebrated
+- [x] 10 new tips in pool
+- [x] `--no-banner` flag suppresses panel
 
 **Risk:** 🟢 Low — cosmetic startup changes only
+
+---
+
+## Wave 45 — Context Pressure Guardrails
+
+Status: ✅ Shipped
+
+**Problem:** `/tokeninfo` shows a single session-wide estimate, but it does not
+help users understand which actor is consuming most of the context or what the
+best recovery step is as pressure rises.
+
+### Features
+
+- **Actor breakdown in `/tokeninfo`**: Keep the existing rough token heuristic,
+  but add a per-actor estimate so users can quickly see how much context is
+  coming from `user`, `assistant`, or other roles
+- **Dominant-share cue**: Call out the largest actor share in one compact line so
+  the biggest context driver is obvious at a glance
+- **Escalated recovery guidance**: Keep the 50% stale-context nudge, upgrade 80%+
+  guidance to recommend saving a `/bookmark` before `/clear`, and make 90%+
+  pressure read as near-capacity
+
+### Done-when
+
+- [x] `/tokeninfo` shows actor-level token breakdowns
+- [x] `/tokeninfo` highlights the dominant actor share
+- [x] pressure guidance escalates at 50%, 80%, and 90% thresholds
+
+**Risk:** 🟢 Low — read-only command refinement, no persistence or routing changes
 
 ---
 

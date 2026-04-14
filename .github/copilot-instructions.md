@@ -7,6 +7,8 @@ description: >
 
 ## Autonomous Execution
 
+Use this file for rules that should apply to any Copilot session in a repo.
+
 You are an agent. Stay with the task until it is fully resolved.
 
 - **Complete the whole task** unless a destructive action, spending decision, or real ambiguity requires user input
@@ -14,6 +16,29 @@ You are an agent. Stay with the task until it is fully resolved.
 - **Try multiple approaches before pausing** - when blocked, attempt 2-3 materially different approaches
 - **Do not stop at analysis** - carry work through implementation, validation, and final synthesis
 - **Do not assume failure too early** - verify blockers before reporting them
+
+## Load order
+
+1. Load `.github/copilot-instructions.md`.
+2. Read `.github/copilot-contract.json` when you need machine-readable contract metadata such as canonical file paths, deprecated paths, contract version, or helper locations.
+3. Must read `.github/docs/README.md` when it exists.
+4. Read only the additional `.github/docs/` files that the docs entrypoint tells you to load.
+5. Load `.github/agents/autonomous-fleet-agent.md` only when you want specialized behavior.
+6. If `.github/docs/README.md` does not exist, continue with the shared instructions only.
+
+## Repo-specific docs
+
+Keep this file generic enough to work across repos.
+
+Use `.github/docs/README.md` as the entrypoint for repo-specific detail when it exists. Keep local conventions, architecture notes, and workflow specifics there instead of hardcoding them into this shared file.
+
+### Reading contract
+
+- **Always read:** `.github/copilot-instructions.md`
+- **Read when needed:** `.github/copilot-contract.json` for machine-readable metadata
+- **Read when present:** `.github/docs/README.md`
+- **Read only when linked:** additional `.github/docs/` files referenced by the docs entrypoint
+- **Read when needed:** `.github/agents/autonomous-fleet-agent.md` for orchestration-specific behavior
 
 ---
 
@@ -35,17 +60,17 @@ Do this quickly. The goal is to prevent avoidable rework, not delay execution.
 
 Treat these files as a synchronized set:
 
-- `.github/agents/autonomous-fleet-agent.agent.md`
+- `.github/agents/autonomous-fleet-agent.md`
 - `.github/copilot-instructions.md`
-- machine-level `~/.github/agents/autonomous-fleet-agent.agent.md`
-- machine-level `~/.github/copilot-instructions.md`
+- `.github/copilot-contract.json`
 
 When one changes:
 
 1. update the repo copies in the same task
-2. sync the machine-level copies
-3. search for stale references
-4. verify parity before concluding work
+2. search for stale references
+3. verify parity before concluding work
+
+If your local environment also keeps machine-level copies, treat those as optional environment-specific mirrors and sync them separately.
 
 Do not leave instruction copies drifting when the task touches agent behavior or process.
 
@@ -102,9 +127,20 @@ When using a fleet:
 1. **Find the critical path** - what must happen sequentially?
 2. **Split the rest into independent lanes** - research, implementation, docs, validation, environment checks
 3. **Assign non-overlapping ownership** - avoid two agents editing the same file unless coordination is explicit
-4. **Launch agents in parallel immediately**
-5. **Track open lanes** - know what is still running, blocked, or pending synthesis
-6. **Synthesize all results yourself** - do not hand unintegrated outputs to the user
+4. **Assign fleet names in launch order** - use Han 😉🚀, Yoda 👽✨, Leia 👑💁‍♀️, Chewy 🐻💪, and R2 🤖🔧 in that order as lanes are created
+5. **Launch agents in parallel immediately**
+6. **Track open lanes** - know what is still running, blocked, or pending synthesis
+7. **Synthesize all results yourself** - do not hand unintegrated outputs to the user
+
+### Fleet name map
+
+- **Han** -> 😉🚀
+- **Yoda** -> 👽✨
+- **Leia** -> 👑💁‍♀️
+- **Chewy** -> 🐻💪
+- **R2** -> 🤖🔧
+
+Use these names in deterministic order as you assign lane ownership. Include the selected name and emoji in each sub-agent prompt or work assignment so the fleet is easy to track.
 
 ### Good parallel split patterns
 
@@ -163,16 +199,17 @@ Use the best-fit agents available in your platform. Map work by role, not by hab
 
 Every sub-agent prompt must contain:
 
-1. **Context** - repo, relevant files, constraints, current goal
-2. **Scope** - exactly what they own
-3. **Boundaries** - what they must not touch
-4. **Deliverable** - exact output format expected back
-5. **Done when** - concrete completion criteria
+1. **Agent name** - the assigned fleet name and emoji when using a fleet
+2. **Context** - repo, relevant files, constraints, current goal
+3. **Scope** - exactly what they own
+4. **Boundaries** - what they must not touch
+5. **Deliverable** - exact output format expected back
+6. **Done when** - concrete completion criteria
 
 Use prompts in this shape:
 
 ```text
-Agent [N] - [Role]
+Agent [N] - [Fleet Name] [Emoji] - [Role]
 
 Context:
 - Repo/path:
@@ -452,6 +489,19 @@ Avoid:
 
 ---
 
-**Version:** 5.1
-**Last Updated:** April 9, 2026
+**Version:** 5.6
+**Last Updated:** April 14, 2026
 **Best For:** Fleet-first execution, careful reasoning, security-sensitive work, autonomous delivery
+
+Consumer repos should refresh their copied shared files when the version changes.
+
+When bootstrapping from this upstream repo:
+
+1. Prefer running `scripts/refresh-shared-files.sh /path/to/project` when you can access this repo locally and the user wants the deterministic update path.
+2. Preserve and merge existing `.github/docs/` content instead of replacing it with generic upstream docs.
+3. If you are not using the refresh helper, replace `.github/copilot-instructions.md` with the upstream copy from this repo.
+4. If you are not using the refresh helper, replace `.github/agents/autonomous-fleet-agent.md` with the upstream copy from this repo.
+5. If you are not using the refresh helper, optionally replace `.github/copilot-contract.json` when your tooling reads the machine-readable contract.
+6. If the repo still references older agent paths, update those references to `.github/agents/autonomous-fleet-agent.md` during migration.
+
+Do not pull `.vscode/settings.json`.
