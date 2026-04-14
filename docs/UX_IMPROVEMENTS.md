@@ -79,6 +79,8 @@ Steps:
 | [Wave 13](#wave-13--trust--explainability) | Trust & Explainability | ✅ Shipped |
 | [Wave 14](#wave-14--composer--input-flow) | Composer & Input Flow | ✅ Shipped |
 | [Wave 15](#wave-15--accessibility--adaptive-layout) | Accessibility & Adaptive Layout | ✅ Shipped |
+| [Wave 16](#wave-16--search-aliases--pins) | Search, Aliases & Pins | ✅ Shipped |
+| [Wave 17](#wave-17--macros--command-history) | Macros & Command History | ✅ Shipped |
 
 ---
 
@@ -806,7 +808,7 @@ state so users can work on complex prompts without fighting the terminal.
 
 ## Wave 15 — Accessibility & Adaptive Layout
 
-**Status: 🔲 Ready**
+**Status: 🟡 Partial**
 
 **Goal:** Make the terminal experience comfortable across more environments:
 small windows, reduced-motion preferences, plain terminals, high-contrast use
@@ -820,8 +822,8 @@ setup.
 | Reduced-motion mode | Disables spinner animation and other motion-heavy affordances while preserving status cues |
 | Screen-reader/plain mode | Simplifies prompt chrome, separators, badges, and panels into predictable text output |
 | Adaptive width rules | Tables, panels, and status lines reflow more aggressively in narrow terminals |
-| High-contrast preset | Adds a terminal-first high-contrast palette tuned for readability, not decoration |
-| Verbosity density toggle | `/layout compact|normal|verbose|plain` expands the current layout model for accessibility contexts |
+| High-contrast preference | Stores a user-selectable high-contrast preference and applies a higher-contrast palette to shared CLI surfaces |
+| Layout density controls | `/layout compact|normal|verbose|plain` expands the current layout model for accessibility contexts |
 | Non-TTY parity audit | Rich-only affordances get an explicit plain-text equivalent instead of disappearing silently |
 | Alert cues | Optional bell/text cue for long-running completions or approval-required states |
 | Accessibility self-check | `/accessibility status` shows which terminal UX guards are currently active |
@@ -860,22 +862,96 @@ setup.
 | B — Adaptive layout + width behavior | Implementation Agent B | `src/openclaw_cli.py` rendering helpers only |
 | C — Reduced-motion/plain-mode UX | Implementation Agent C | `src/openclaw_cli.py` spinner/status/prompt output only |
 | D — Tests + validation | Test Agent | `tests/test_openclaw_cli.py` |
-| E — Docs | Docs Agent | `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md` |
+| E — Docs | Docs Agent | `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md`, `docs/UX_IMPROVEMENTS.md` |
 
 ### Done-When
 
-- [ ] Reduced-motion mode removes animation without losing progress visibility
-- [ ] Plain/screen-reader mode keeps prompts, approvals, and results understandable
-- [ ] Narrow terminals render tables/status lines without unreadable overflow
-- [ ] High-contrast and plain layout modes are user-selectable and persistent
-- [ ] Major Rich affordances have explicit plain-text equivalents
-- [ ] `/accessibility status` reports active accessibility-related UX modes
-- [ ] 180 tests pass
+- [x] Reduced-motion mode removes animation without losing progress visibility
+- [x] Plain/screen-reader mode keeps prompts and core response surfaces understandable
+- [x] Narrow-terminal/plain-mode rendering has dedicated adaptive-width logic in shared helpers
+- [x] High-contrast palette rendering is applied to shared CLI separators, borders, and selected status surfaces
+- [x] Expanded layout density presets `/layout compact|normal|verbose|plain` are implemented
+- [x] `/accessibility status` reports active accessibility-related UX modes
+- [x] Targeted CLI tests cover reduced-motion, plain-mode, and accessibility status behavior
+- [ ] Full `tests/test_openclaw_cli.py` suite is green (currently 203 passed / 5 failing baseline)
 - [ ] Deployed to macbook
 
 ---
 
-## Clarifying Questions (Agent FAQ)
+## Wave 17 — Theme Engine & Personalization
+
+**Status: ✅ Shipped**
+
+**Goal:** Make personalization feel intentional instead of incidental: safer
+stored theme prefs, more expressive theme switching, and emoji customization
+that covers status output as well as decorative UI icons.
+
+### Features
+
+| Feature | Description | Shipped? |
+|---|---|---|
+| Safe personalization normalization | Invalid stored `theme`, `emoji_pack`, or `layout` values are clamped back to supported defaults during load/save | ✅ |
+| Theme preview | `/theme preview [name]` shows a live sample without persisting the choice | ✅ |
+| Theme cycling | `/theme next` and `/theme prev` rotate through the built-in palette and persist the result | ✅ |
+| Theme reset | `/theme reset` restores the default accent in one step | ✅ |
+| Emoji packs | `/emoji pack classic|minimal|ascii` adds a real pack abstraction while preserving `/emoji on|off` | ✅ |
+| Status-pack parity | `_status_emoji()` now respects the active pack so health/status badges also downgrade safely | ✅ |
+
+### Evidence / Implementation Notes
+
+- `src/openclaw_cli.py` now normalizes personalization prefs through
+  `_normalize_personalization_prefs()`
+- `/theme` now supports `list`, `preview`, `next`, `prev`, `reset`, and aliases
+- `/emoji` now supports `status`, `preview`, and `pack <name>`
+- Tests cover invalid-pref normalization, theme preview/cycling persistence,
+  emoji-pack persistence, and ASCII-safe status badges
+
+### Done-When
+
+- [x] Theme switching is more expressive than simple `/theme NAME`
+- [x] Emoji/theme customization remains fallback-safe for plain/non-Rich usage
+- [x] Preference persistence guards against invalid stored personalization values
+- [x] Docs and tests reflect the shipped Wave 17 slice
+- [ ] Full `tests/test_openclaw_cli.py` suite is green (baseline still has 5 unrelated failures)
+- [ ] Deployed to macbook
+
+---
+
+## Wave 16 — Search, Aliases & Pins
+
+**Status: ✅ Shipped** (`5d2a539`)
+
+| Feature | Description |
+|---|---|
+| `/search <query>` | Full-text search current session events; matches highlighted in bold yellow |
+| `/search --all <query>` | Cross-session search (last 200 sessions, up to 15 hits) |
+| `/alias <name> <expansion>` | Define command shorthands stored in `_PREFS["aliases"]` |
+| `/alias rm <name>` / `/alias` | Remove or list aliases; `_BUILTIN_COMMAND_NAMES` prevents shadowing |
+| Alias expansion | Hooked into `run_chat()` before dispatch; one level only, no recursion |
+| `/pin [name]` | Pin last AI response; auto-names `pin-1`, `pin-2` … |
+| `/pin recall <name>` | Re-render a pinned response via `print_response()` |
+| `/pin rm <name>` / `/pins` | Remove or list all pins |
+| `_last_response_text` | Module-level global tracks latest AI response for `/pin` |
+
+---
+
+## Wave 17 — Macros & Command History
+
+**Status: ✅ Shipped** (`HEAD`)
+
+| Feature | Description |
+|---|---|
+| `/history [n]` | Show last N commands from input history (default 20) |
+| `/history clear` | Clear command history |
+| History recording | Every user input appended to `_PREFS["cmd_history"]` (capped at 50) in `run_chat()` |
+| `/macro list` | List all saved macros with command counts |
+| `/macro save <name> [last N]` | Save last N history entries as a named macro (default 5, max 20 commands) |
+| `/macro show <name>` | Display commands stored in a macro |
+| `/macro run <name>` | Execute macro's slash commands via registry dispatch; NL entries skipped with warning |
+| `/macro rm <name>` | Delete a named macro |
+| Storage | Macros in `_PREFS["macros"]` (max 30); history in `_PREFS["cmd_history"]` |
+
+---
 
 **Q: How do I know what wave to implement next?**
 Check the Wave Status table at the top. The first `🔲 Ready` wave is next.

@@ -17,6 +17,7 @@ import subprocess
 import sys
 import threading
 import time
+import textwrap
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -130,7 +131,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave16"  # updated with each UX wave batch
+_CLI_BUILD = "wave17"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -154,8 +155,12 @@ _PREFS_FILE = _OPENCLAW_DIR / "prefs.json"
 _PREFS: dict[str, Any] = {
     "theme": "default",   # separator / accent colour
     "emoji": True,         # show emoji in UI (False → ASCII fallbacks)
-    "layout": "normal",   # "normal" | "compact" (compact hides separator + status bar)
+    "emoji_pack": "classic",  # "classic" | "minimal" | "ascii"
+    "layout": "normal",   # "compact" | "normal" | "verbose" | "plain"
 }
+
+_CMD_HISTORY_MAX = 50  # max entries in command history
+_SPINNER_HEARTBEAT_SECONDS = 4.0
 
 # Accessibility mode keys in _PREFS
 _A11Y_REDUCED_MOTION = "reduced_motion"   # bool: disable spinner/animations
@@ -172,6 +177,15 @@ _THEMES: dict[str, tuple[str, str]] = {
     "mono":     ("dim",         "\033[2m"),
 }
 
+_HIGH_CONTRAST_THEMES: dict[str, tuple[str, str]] = {
+    "default":  ("bold bright_white",   "\033[1;97m"),
+    "green":    ("bold bright_green",   "\033[1;92m"),
+    "yellow":   ("bold bright_yellow",  "\033[1;93m"),
+    "magenta":  ("bold bright_magenta", "\033[1;95m"),
+    "cyan":     ("bold bright_cyan",    "\033[1;96m"),
+    "mono":     ("bold white",          "\033[1;37m"),
+}
+
 # ASCII fallbacks for each emoji used in the UI
 _EMOJI_FALLBACKS: dict[str, str] = {
     "🦞": "[openclaw]",
@@ -186,16 +200,60 @@ _EMOJI_FALLBACKS: dict[str, str] = {
     "⚡": "!",
 }
 
+_THEME_ORDER: tuple[str, ...] = tuple(_THEMES.keys())
+_THEME_DESCRIPTIONS: dict[str, str] = {
+    "default": "balanced blue accents",
+    "green": "success-forward green accents",
+    "yellow": "warm amber accents",
+    "magenta": "vivid magenta accents",
+    "cyan": "cool cyan accents",
+    "mono": "neutral monochrome accents",
+}
+_THEME_ALIASES: dict[str, str] = {
+    "blue": "default",
+    "classic": "default",
+    "amber": "yellow",
+    "purple": "magenta",
+    "teal": "cyan",
+    "gray": "mono",
+    "grey": "mono",
+}
+_EMOJI_PACKS: dict[str, dict[str, str]] = {
+    "classic": {},
+    "minimal": {
+        "🦞": "[oc]",
+        "💬": "[chat]",
+        "📍": "[pin]",
+        "💡": "[tip]",
+        "📎": "[src]",
+        "⌨": "[kbd]",
+        "⏱": "[time]",
+        "🗂": "[sess]",
+        "👤": "[you]",
+        "⚡": "[!]",
+        "🟢": "[ok]",
+        "🔵": "[run]",
+        "🟡": "[warn]",
+        "🔴": "[err]",
+        "⏸": "[pause]",
+        "⏳": "[wait]",
+        "●": "[*]",
+        "✅": "[ok]",
+        "⚠️": "[warn]",
+    },
+    "ascii": {},
+}
+
 
 def _load_prefs() -> None:
     """Load user preferences from ~/.openclaw/prefs.json (silently ignores errors)."""
     try:
-        if _PREFS_FILE.exists():
-            data = json.loads(_PREFS_FILE.read_text("utf-8"))
+        prefs_file = _prefs_file_path()
+        if prefs_file.exists():
+            data = json.loads(prefs_file.read_text("utf-8"))
             if isinstance(data, dict):
-                for key in ("theme", "emoji", "layout"):
-                    if key in data:
-                        _PREFS[key] = data[key]
+                _PREFS.update(data)
+                _normalize_personalization_prefs()
     except (OSError, json.JSONDecodeError):
         pass
 
@@ -203,10 +261,60 @@ def _load_prefs() -> None:
 def _save_prefs() -> None:
     """Persist user preferences to ~/.openclaw/prefs.json (silently ignores errors)."""
     try:
-        _OPENCLAW_DIR.mkdir(parents=True, exist_ok=True)
-        _PREFS_FILE.write_text(json.dumps(_PREFS, indent=2), "utf-8")
+        _normalize_personalization_prefs()
+        prefs_dir = _prefs_dir_path()
+        prefs_file = _prefs_file_path()
+        prefs_dir.mkdir(parents=True, exist_ok=True)
+        prefs_file.write_text(json.dumps(_PREFS, indent=2), "utf-8")
     except OSError:
         pass
+
+
+def _prefs_dir_path() -> Path:
+    """Return the preference directory, honoring test overrides when present."""
+    override = os.environ.get("OPENCLAW_CLI_HOME")
+    if override:
+        return Path(override).expanduser() / ".openclaw"
+    return _OPENCLAW_DIR
+
+
+def _prefs_file_path() -> Path:
+    """Return the preference file path."""
+    return _prefs_dir_path() / "prefs.json"
+
+
+def _normalize_theme_name(value: Any) -> str:
+    """Normalize a theme preference or user-supplied theme token."""
+    token = str(value or "default").strip().lower()
+    token = _THEME_ALIASES.get(token, token)
+    if token not in _THEMES:
+        return "default"
+    return token
+
+
+def _emoji_pack_name() -> str:
+    """Return the active emoji pack name with legacy bool migration."""
+    pack = str(_PREFS.get("emoji_pack", "") or "").strip().lower()
+    if pack in _EMOJI_PACKS:
+        return pack
+    if _PREFS.get("emoji", True):
+        return "classic"
+    return "ascii"
+
+
+def _normalize_personalization_prefs() -> None:
+    """Clamp personalization preferences to known-safe values."""
+    _PREFS["theme"] = _normalize_theme_name(_PREFS.get("theme", "default"))
+    layout = str(_PREFS.get("layout", "normal") or "normal").strip().lower()
+    if layout not in {"compact", "normal", "verbose", "plain"}:
+        layout = "normal"
+    _PREFS["layout"] = layout
+    pack = _emoji_pack_name()
+    _PREFS["emoji_pack"] = pack
+    _PREFS["emoji"] = pack != "ascii"
+    for key in (_A11Y_REDUCED_MOTION, _A11Y_PLAIN_MODE, _A11Y_HIGH_CONTRAST):
+        if key in _PREFS:
+            _PREFS[key] = bool(_PREFS.get(key, False))
 
 
 def _a11y_reduced_motion() -> bool:
@@ -224,17 +332,29 @@ def _a11y_high_contrast() -> bool:
     return bool(_PREFS.get(_A11Y_HIGH_CONTRAST, False))
 
 
+def _effective_layout_mode() -> str:
+    """Return the normalized active layout mode."""
+    layout = str(_PREFS.get("layout", "normal") or "normal").strip().lower()
+    if layout not in {"compact", "normal", "verbose", "plain"}:
+        return "normal"
+    return layout
+
+
 def _e(emoji: str, fallback: str = "") -> str:
     """Return *emoji* or its ASCII fallback depending on the emoji pref."""
-    if _PREFS.get("emoji", True):
+    pack = _emoji_pack_name()
+    if pack == "classic":
         return emoji
+    if pack == "minimal":
+        return _EMOJI_PACKS["minimal"].get(emoji, fallback or _EMOJI_FALLBACKS.get(emoji, ""))
     return fallback or _EMOJI_FALLBACKS.get(emoji, "")
 
 
 def _theme_style() -> str:
     """Return the Rich rule style string for the current theme."""
-    theme = _PREFS.get("theme", "default")
-    rich_style, _ = _THEMES.get(theme, _THEMES["default"])
+    theme = _normalize_theme_name(_PREFS.get("theme", "default"))
+    palette = _HIGH_CONTRAST_THEMES if _a11y_high_contrast() else _THEMES
+    rich_style, _ = palette.get(theme, palette["default"])
     return rich_style
 
 
@@ -243,8 +363,9 @@ def _theme_ansi() -> str:
     is_tty = _IS_TTY or sys.stdout.isatty()
     if not is_tty:
         return ""
-    theme = _PREFS.get("theme", "default")
-    _, ansi = _THEMES.get(theme, _THEMES["default"])
+    theme = _normalize_theme_name(_PREFS.get("theme", "default"))
+    palette = _HIGH_CONTRAST_THEMES if _a11y_high_contrast() else _THEMES
+    _, ansi = palette.get(theme, palette["default"])
     return ansi
 
 
@@ -256,18 +377,18 @@ def _status_emoji(status: str) -> str:
     """Map a status string to a representative emoji."""
     s = str(status or "").lower().strip()
     if s in {"ok", "healthy", "done", "completed", "success", "active"}:
-        return "🟢"
+        return _e("🟢", "[ok]")
     if s in {"running", "in_progress"}:
-        return "🔵"
+        return _e("🔵", "[run]")
     if s in {"warn", "warning", "degraded"}:
-        return "🟡"
+        return _e("🟡", "[warn]")
     if s in {"error", "failed", "unhealthy"}:
-        return "🔴"
+        return _e("🔴", "[err]")
     if s in {"paused", "stopped", "cancelled"}:
-        return "⏸"
+        return _e("⏸", "[pause]")
     if s in {"pending", "queued"}:
-        return "⏳"
-    return "●"
+        return _e("⏳", "[wait]")
+    return _e("●", "[*]")
 
 
 def _print_meta_footer(*pairs: tuple[str, str]) -> None:
@@ -293,6 +414,64 @@ def _print_error(msg: str, *, file: object = None) -> None:
         _RICH_CONSOLE.print(f"[bold red]error:[/] {msg}")
     else:
         print(f"{_BRE}error:{_R} {msg}", file=dest)
+
+
+def _risk_label(risk_level: Any) -> str:
+    """Return a normalized approval risk label."""
+    return str(getattr(risk_level, "value", risk_level) or "").strip().upper() or "UNKNOWN"
+
+
+def _print_feedback(message: str, *, level: str = "info", detail: str = "") -> None:
+    """Print a compact feedback line with accessible emphasis."""
+    level_key = str(level or "info").strip().lower()
+    plain = _a11y_plain_mode()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    icon_map = {
+        "success": ("✓", "[done]"),
+        "warn": ("⚠", "[warn]"),
+        "info": ("ℹ", "[info]"),
+    }
+    rich_style = {"success": "green", "warn": "bold yellow", "info": "cyan"}.get(level_key, "cyan")
+    ansi_style = {
+        "success": _theme_ansi() or _BGR,
+        "warn": _BRE if _a11y_high_contrast() else _BYE,
+        "info": _theme_ansi() or _BCY,
+    }.get(level_key, _theme_ansi() or _BCY)
+    icon, fallback = icon_map.get(level_key, icon_map["info"])
+    label = fallback if plain else icon
+    if _RICH_AVAILABLE and is_tty and not plain:
+        suffix = f" [dim]{detail}[/]" if detail else ""
+        _RICH_CONSOLE.print(f"[{rich_style}]{label}[/] {message}{suffix}")
+    elif is_tty and not plain:
+        suffix = f" {_DM}{detail}{_R}" if detail else ""
+        print(f"{ansi_style}{label}{_R} {message}{suffix}")
+    else:
+        suffix = f" ({detail})" if detail else ""
+        print(f"{label} {message}{suffix}")
+
+
+def _print_risky_action_warning(*, action: str, target: str, risk_level: Any, recovery_hint: str = "") -> None:
+    """Print an accessible pre-approval emphasis block for risky actions."""
+    risk = _risk_label(risk_level)
+    if risk not in {"HIGH", "CRITICAL"}:
+        return
+    impact = (
+        "destructive side effects are possible — verify the exact target before approving."
+        if risk == "CRITICAL"
+        else "this action can change project or system state — review the target before approving."
+    )
+    if recovery_hint:
+        impact = f"{impact} Recovery: {recovery_hint}"
+    _print_feedback(f"Review carefully: {target}", level="warn", detail=f"{action} · {risk.lower()} risk")
+    width = max(60, min(shutil.get_terminal_size((88, 24)).columns - 4, 100))
+    print(
+        textwrap.fill(
+            impact,
+            width=width,
+            initial_indent="    ",
+            subsequent_indent="    ",
+        )
+    )
 
 
 def _print_shell_result(result: Any) -> None:
@@ -344,12 +523,6 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     if not (is_tty and not output_json):
         return fn(*args, **kwargs)
 
-    # Reduced-motion path: no animation, just a static status line.
-    if _a11y_reduced_motion():
-        sys.stdout.write(f"  {_DM}⏳ thinking...{_R}\n")
-        sys.stdout.flush()
-        return fn(*args, **kwargs)
-
     result_holder: list[Any] = []
     exc_holder: list[BaseException] = []
 
@@ -361,16 +534,40 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
+    start = time.monotonic()
+    heartbeat_every = max(1.0, float(_SPINNER_HEARTBEAT_SECONDS))
+
+    # Reduced-motion path: no animation, but still emit periodic liveness cues.
+    if _a11y_reduced_motion():
+        prefix = "[working]" if _a11y_plain_mode() else f"{_theme_ansi()}{_e('⏳', '[working]')}{_R}"
+        status_style = "" if (_a11y_plain_mode() or _a11y_high_contrast()) else _DM
+        sys.stdout.write(f"  {prefix} {status_style}{label}...{_R if status_style else ''}\n")
+        sys.stdout.flush()
+        last_heartbeat = 0.0
+        join_timeout = min(0.1, heartbeat_every / 2.0)
+        while thread.is_alive():
+            thread.join(timeout=join_timeout)
+            elapsed = time.monotonic() - start
+            if elapsed - last_heartbeat >= heartbeat_every:
+                _print_feedback(f"Still working on {label}", level="info", detail=f"{elapsed:.0f}s elapsed")
+                last_heartbeat = elapsed
+        if exc_holder:
+            raise exc_holder[0]
+        _print_feedback("response ready.", level="success", detail=f"{time.monotonic() - start:.1f}s")
+        return result_holder[0] if result_holder else None
 
     spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     frame_idx = 0
-    start = time.monotonic()
+    last_heartbeat = 0.0
     while thread.is_alive():
         elapsed = time.monotonic() - start
         frame = spinner_frames[frame_idx % len(spinner_frames)]
-        sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s")
+        extra = " · still working" if elapsed - last_heartbeat >= heartbeat_every else ""
+        sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s{extra}")
         sys.stdout.flush()
         frame_idx += 1
+        if extra:
+            last_heartbeat = elapsed
         time.sleep(0.1)
 
     thread.join()
@@ -380,6 +577,7 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
 
     if exc_holder:
         raise exc_holder[0]
+    _print_feedback("response ready.", level="success", detail=f"{time.monotonic() - start:.1f}s")
     return result_holder[0]
 
 
@@ -2252,6 +2450,35 @@ def _terminal_width(*, fallback: int = 80) -> int:
         return fallback
 
 
+def _separator_fill(width: int, *, high_contrast: bool | None = None) -> str:
+    """Return a separator line sized for the current terminal/mode."""
+    use_high_contrast = _a11y_high_contrast() if high_contrast is None else high_contrast
+    char = "=" if use_high_contrast or _a11y_plain_mode() else "─"
+    return char * max(1, width)
+
+
+def _print_response_separator(*, label: str = "") -> None:
+    """Print an adaptive response separator."""
+    if _a11y_plain_mode():
+        if label:
+            print(f"\n{label}:")
+        else:
+            print()
+        return
+    cols = _terminal_width()
+    sep_width = min(max(8, cols - 2), 60)
+    if _RICH_AVAILABLE and (_IS_TTY or sys.stdout.isatty()):
+        from rich.rule import Rule as _RichRule
+
+        _RICH_CONSOLE.print(_RichRule(label if cols >= 72 else "", style=_theme_style()))
+    else:
+        line = _separator_fill(sep_width)
+        if label and cols >= 72:
+            line = f"{line} {label} {line}"
+            line = line[:sep_width]
+        print(f"{_theme_ansi()}{line}{_R}")
+
+
 def _render_table_ansi(rows: list[list[str]]) -> list[str]:
     """Render a list of rows as an ANSI-aligned table, capped to terminal width."""
     if not rows:
@@ -2262,11 +2489,21 @@ def _render_table_ansi(rows: list[list[str]]) -> list[str]:
     def _plain(cell: str) -> str:
         return re.sub(r"\*\*(.+?)\*\*", r"\1", re.sub(r"\*(.+?)\*", r"\1", cell))
 
-    if w < 80:
+    plain_rows = [[_plain(cell) for cell in row[:num_cols]] for row in rows]
+    col_widths = [0] * num_cols
+    for row in plain_rows:
+        for i, cell in enumerate(row):
+            col_widths[i] = max(col_widths[i], len(cell))
+    estimated_total = sum(col_widths) + num_cols * 3 + 1
+
+    if w < 80 or estimated_total > max(20, w - 4):
         # Narrow terminal: list format — one "Header: value" line per cell per row
-        headers = [_plain(c) for c in rows[0]] if rows else []
+        headers = plain_rows[0] if plain_rows else []
         result: list[str] = []
-        sep = "  " + _DM + "─" * max(1, w - 4) + _R
+        sep_core = _separator_fill(max(1, w - 4))
+        sep_style = _theme_ansi() if _a11y_high_contrast() else _DM
+        sep_reset = _R if sep_style else ""
+        sep = f"  {sep_style}{sep_core}{sep_reset}"
         for row_i, row in enumerate(rows):
             if row_i == 0:
                 # First row is the header — skip it as a data row
@@ -2275,18 +2512,19 @@ def _render_table_ansi(rows: list[list[str]]) -> list[str]:
             for j in range(num_cols):
                 cell = row[j] if j < len(row) else ""
                 header = headers[j] if j < len(headers) else f"Col {j + 1}"
-                result.append(f"  {_B}{header}:{_R} {_apply_inline_ansi(cell)}")
+                available = max(12, w - len(header) - 8)
+                wrapped = textwrap.wrap(_plain(cell), width=available) or [""]
+                rendered = _apply_inline_ansi(wrapped[0])
+                result.append(f"  {_B}{header}:{_R} {rendered}")
+                indent = " " * (len(header) + 4)
+                for continuation in wrapped[1:]:
+                    result.append(f"{indent}{_apply_inline_ansi(continuation)}")
             result.append("")
         if result:
             result.append(sep)
         return result
 
     # Wide terminal (>= 80): existing column formatting with proportional cap
-    col_widths = [0] * num_cols
-    for row in rows:
-        for i, cell in enumerate(row[:num_cols]):
-            col_widths[i] = max(col_widths[i], len(_plain(cell)))
-
     max_col_width = max(10, (w - 4) // num_cols)
     col_widths = [min(cw, max_col_width) for cw in col_widths]
 
@@ -2299,7 +2537,9 @@ def _render_table_ansi(rows: list[list[str]]) -> list[str]:
         col_widths = [max(6, int(cw * scale)) for cw in col_widths]
 
     sep_len = min(sum(col_widths) + num_cols * 3 + 1, terminal_width)
-    sep = "  " + _DM + "─" * sep_len + _R
+    sep_style = _theme_ansi() if _a11y_high_contrast() else _DM
+    sep_reset = _R if sep_style else ""
+    sep = f"  {sep_style}{_separator_fill(sep_len)}{sep_reset}"
 
     result = [sep]
     for row_i, row in enumerate(rows):
@@ -2337,6 +2577,10 @@ def _render_markdown_ansi(text: str) -> str:
     """
     term_cols = _terminal_width()
     rule_width = min(term_cols - 2, 72) if term_cols >= 80 else max(1, term_cols - 4)
+    plain_mode = _a11y_plain_mode()
+    narrow = term_cols < 72
+    border_style = _theme_ansi() if _a11y_high_contrast() else _DM
+    border_reset = _R if border_style else ""
 
     lines = text.split("\n")
     result: list[str] = []
@@ -2357,14 +2601,21 @@ def _render_markdown_ansi(text: str) -> str:
                 in_code = True
                 code_lang = line[3:].strip()
                 lang_label = f" {code_lang} " if code_lang else " code "
-                result.append(f"  {_DM}╭─{lang_label}{'─' * max(0, rule_width - len(lang_label) - 3)}╮{_R}")
+                if plain_mode or narrow:
+                    result.append(f"  {lang_label.strip()}:")
+                else:
+                    result.append(
+                        f"  {border_style}╭─{lang_label}{_separator_fill(max(0, rule_width - len(lang_label) - 3), high_contrast=False)}╮{border_reset}"
+                    )
             else:
                 in_code = False
-                result.append(f"  {_DM}╰{'─' * (rule_width - 1)}╯{_R}")
+                if not (plain_mode or narrow):
+                    result.append(f"  {border_style}╰{_separator_fill(rule_width - 1, high_contrast=False)}╯{border_reset}")
                 code_lang = ""
             continue
         if in_code:
-            result.append(f"  {_DM}│{_R} {_CY}{line}{_R}")
+            prefix = "    " if (plain_mode or narrow) else f"  {border_style}│{border_reset} "
+            result.append(f"{prefix}{_CY}{line}{_R}")
             continue
 
         # Markdown table rows
@@ -2380,13 +2631,19 @@ def _render_markdown_ansi(text: str) -> str:
 
         # Horizontal rule
         if re.match(r"^[-*_]{3,}\s*$", line):
-            result.append(f"{_DM}{'─' * rule_width}{_R}")
+            fill = _separator_fill(rule_width, high_contrast=_a11y_high_contrast())
+            style = "" if plain_mode else border_style
+            reset = border_reset if style else ""
+            result.append(f"{style}{fill}{reset}")
             continue
 
         # Blockquotes
         bq = re.match(r"^>\s?(.*)", line)
         if bq:
-            result.append(f"  {_DM}▌{_R}  {_DM}{_apply_inline_ansi(bq.group(1))}{_R}")
+            quote_marker = ">" if (plain_mode or narrow) else "▌"
+            quote_style = "" if plain_mode else border_style
+            reset = border_reset if quote_style else ""
+            result.append(f"  {quote_style}{quote_marker}{reset}  {_apply_inline_ansi(bq.group(1))}")
             continue
 
         # ATX headings
@@ -2676,10 +2933,10 @@ def _render_md_table_rich(headers: list[str], rows: list[list[str]]) -> None:
         col_widths = [max(MIN_COL, int(w * scale)) for w in natural]
 
     table = _RichTable(
-        border_style="dim",
+        border_style="bold white" if _a11y_high_contrast() else "dim",
         show_edge=True,
         pad_edge=True,
-        header_style="bold cyan",
+        header_style="bold bright_white" if _a11y_high_contrast() else "bold cyan",
     )
     for i, (h, w) in enumerate(zip(headers, col_widths)):
         # First column (labels/names) folds; numeric columns truncate cleanly
@@ -2720,7 +2977,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
     # terminal emulators (tmux, iTerm, etc.) even during an interactive session.
     is_tty = _IS_TTY or sys.stdout.isatty()
     if _a11y_plain_mode():
-        is_tty = False  # force plain ANSI path; skip Rich rendering
+        is_tty = False  # force plain-text path; skip Rich rendering
     if response.response:
         body, sources = _preprocess_response_text(response.response)
         if not body.strip():
@@ -2732,7 +2989,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
                     _RichPanel(
                         _RichMarkdown(sources),
                         title=f"[dim]{_e('📎', '[src]')} Sources[/]",
-                        border_style="dim blue",
+                        border_style="bold white" if _a11y_high_contrast() else "dim blue",
                         padding=(0, 1),
                     )
                 )
@@ -2742,15 +2999,20 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
             if sources:
                 term_cols = shutil.get_terminal_size((80, 24)).columns
                 w = min(term_cols - 4, 64)
-                print(f"\n  {_DM}╭─ {_e('📎', '[src]')} Sources {'─' * max(0, w - 12)}╮{_R}")
+                border_style = _theme_ansi() if _a11y_high_contrast() else _DM
+                border_reset = _R if border_style else ""
+                print(
+                    f"\n  {border_style}╭─ {_e('📎', '[src]')} Sources "
+                    f"{_separator_fill(max(0, w - 12), high_contrast=False)}╮{border_reset}"
+                )
                 for src_line in sources.strip().splitlines():
                     rendered = _apply_inline_ansi(src_line)
-                    print(f"  {_DM}│{_R}  {rendered}")
-                print(f"  {_DM}╰{'─' * (w - 1)}╯{_R}")
+                    print(f"  {border_style}│{border_reset}  {rendered}")
+                print(f"  {border_style}╰{_separator_fill(w - 1, high_contrast=False)}╯{border_reset}")
         else:
             print(body)
             if sources:
-                print(f"\n--- Sources ---\n{sources}")
+                print(f"\nSources:\n{sources}")
     if response.model or response.tokens or elapsed > 0:
         parts: list[str] = []
         if elapsed > 0:
@@ -2762,14 +3024,17 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
         footer = "  •  ".join(parts)
         if _RICH_AVAILABLE and is_tty:
             from rich.rule import Rule as _RichRule
-            _RICH_CONSOLE.print(_RichRule(style="dim"))
-            _RICH_CONSOLE.print(f"[dim]{footer}[/]")
+            _RICH_CONSOLE.print(_RichRule(style="bold white" if _a11y_high_contrast() else "dim"))
+            footer_style = "bold white" if _a11y_high_contrast() else "dim"
+            _RICH_CONSOLE.print(f"[{footer_style}]{footer}[/]")
         elif is_tty:
             print()
-            print(f"{_DM}{footer}{_R}")
+            footer_style = _theme_ansi() if _a11y_high_contrast() else _DM
+            footer_reset = _R if footer_style else ""
+            print(f"{footer_style}{footer}{footer_reset}")
         else:
             print()
-            print(f"[{footer}]")
+            print(f"Metadata: {footer}")
 
 
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
@@ -4309,10 +4574,7 @@ def _cmd_clear(ctx: ChatCommandContext) -> str:
             content="/clear",
             metadata={"summary": "cleared chat history"},
         )
-    if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(f"[green]✓[/] conversation cleared  [dim]({n} message(s) removed)[/]")
-    else:
-        print(f"Conversation history cleared. ({n} messages removed).")
+    _print_feedback("Conversation history cleared.", level="success", detail=f"{n} message(s) removed")
     return _CMD_CONTINUE
 
 
@@ -5635,6 +5897,12 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         _set_command_result(ctx, ok=False, summary="missing shell command")
         return _CMD_CONTINUE
     risk_level = infer_command_risk(command_parts)
+    _print_risky_action_warning(
+        action="/exec",
+        target=raw,
+        risk_level=risk_level,
+        recovery_hint="check the cwd and use your shell history or VCS tools before re-running.",
+    )
     if not request_cli_approval(
         action="shell.exec",
         target=raw,
@@ -5674,6 +5942,11 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         },
     )
     _print_shell_result(result)
+    _print_feedback(
+        "Command complete.",
+        level="success" if result.returncode == 0 else "warn",
+        detail=f"exit {result.returncode} · cwd {result.cwd}",
+    )
     _set_command_result(
         ctx,
         ok=result.returncode == 0,
@@ -5751,6 +6024,12 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     risk_level = infer_file_edit_risk(path)
+    _print_risky_action_warning(
+        action="/edit",
+        target=path,
+        risk_level=risk_level,
+        recovery_hint="routed edits can use /rollback last; otherwise recover with your editor or VCS.",
+    )
     if not request_cli_approval(
         action="file.edit",
         target=path,
@@ -5795,6 +6074,11 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         },
     )
     _print_file_edit_result(result)
+    _print_feedback(
+        "Edit complete.",
+        level="success" if result.changed else "info",
+        detail=result.summary,
+    )
     _set_command_result(ctx, ok=True, summary=result.summary)
     return _CMD_CONTINUE
 
@@ -5830,77 +6114,168 @@ def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     return _CMD_CONTINUE
 
 
+def _print_theme_preview(theme_name: str, *, persisted: bool) -> None:
+    """Print a compact theme preview without requiring Rich."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    normalized = _normalize_theme_name(theme_name)
+    _, ansi_code = _THEMES[normalized]
+    swatch = f"{ansi_code}{'━' * 8}{_R}" if is_tty else "--------"
+    state = "saved" if persisted else "preview"
+    print(
+        f"  Theme {state}: {_B}{normalized}{_R} — "
+        f"{_THEME_DESCRIPTIONS.get(normalized, 'accent theme')} {swatch}"
+    )
+    print(f"  {_theme_ansi()}{'─' * 14}{_R} {_status_emoji('healthy')} accent sample")
+    print(f"  {_e('💡', '[tip]')} Try /theme next, /theme prev, or /emoji preview for quick comparisons.")
+
+
+def _cycle_theme(direction: str) -> None:
+    """Advance the stored theme forward or backward through the palette."""
+    current = _normalize_theme_name(_PREFS.get("theme", "default"))
+    index = _THEME_ORDER.index(current)
+    if direction == "prev":
+        next_theme = _THEME_ORDER[(index - 1) % len(_THEME_ORDER)]
+    else:
+        next_theme = _THEME_ORDER[(index + 1) % len(_THEME_ORDER)]
+    _PREFS["theme"] = next_theme
+    _save_prefs()
+    _print_theme_preview(next_theme, persisted=True)
+
+
 def _cmd_theme(ctx: ChatCommandContext) -> str:
     """Handler for /theme — display or set the UI colour theme."""
     is_tty = _IS_TTY or sys.stdout.isatty()
     token = ctx.args.strip().lower()
 
     if not token or token == "list":
-        # Show all available themes with a swatch preview
-        print(f"\n  Available themes (current: {_BBO}{_PREFS.get('theme', 'default')}{_R}):\n")
-        for name, (rich_style, ansi_code) in _THEMES.items():
-            marker = " ← current" if name == _PREFS.get("theme", "default") else ""
+        current = _normalize_theme_name(_PREFS.get("theme", "default"))
+        print(f"\n  Available themes (current: {_B}{current}{_R}):\n")
+        for name, (_rich_style, ansi_code) in _THEMES.items():
+            marker = " ← current" if name == current else ""
             if is_tty:
                 swatch = f"{ansi_code}{'━' * 6}{_R}"
             else:
                 swatch = "------"
-            print(f"    {_B}{name:<10}{_R} {swatch}{_DM}{marker}{_R}")
-        print(f"\n  Usage: /theme <name>   e.g. /theme green\n")
+            desc = _THEME_DESCRIPTIONS.get(name, "")
+            print(f"    {_B}{name:<10}{_R} {swatch} {desc}{_DM}{marker}{_R}")
+        print("\n  Usage: /theme <name> | list | preview [name] | next | prev | reset\n")
         return _CMD_CONTINUE
 
-    if token not in _THEMES:
-        names = "  ".join(_THEMES.keys())
+    if token == "next":
+        _cycle_theme("next")
+        return _CMD_CONTINUE
+    if token in {"prev", "previous"}:
+        _cycle_theme("prev")
+        return _CMD_CONTINUE
+    if token == "reset":
+        _PREFS["theme"] = "default"
+        _save_prefs()
+        _print_theme_preview("default", persisted=True)
+        return _CMD_CONTINUE
+    if token.startswith("preview"):
+        parts = token.split()
+        requested = parts[1] if len(parts) > 1 else _normalize_theme_name(_PREFS.get("theme", "default"))
+        normalized = _normalize_theme_name(requested)
+        if requested not in _THEMES and requested not in _THEME_ALIASES and normalized == "default":
+            names = "  ".join(_THEME_ORDER)
+            print(f"{_BRE}error:{_R} Unknown theme '{requested}'. Choose from: {names}")
+            return _CMD_CONTINUE
+        original_theme = _PREFS.get("theme", "default")
+        _PREFS["theme"] = normalized
+        _print_theme_preview(normalized, persisted=False)
+        _PREFS["theme"] = original_theme
+        return _CMD_CONTINUE
+
+    normalized = _normalize_theme_name(token)
+    if token not in _THEMES and token not in _THEME_ALIASES and normalized == "default":
+        names = "  ".join(_THEME_ORDER)
         print(f"{_BRE}error:{_R} Unknown theme '{token}'. Choose from: {names}")
         return _CMD_CONTINUE
 
-    _PREFS["theme"] = token
+    _PREFS["theme"] = normalized
     _save_prefs()
-    _, ansi_code = _THEMES[token]
-    if is_tty:
-        swatch = f"{ansi_code}{'━' * 8}{_R}"
-    else:
-        swatch = "--------"
-    print(f"  Theme set to {_B}{token}{_R}  {swatch}")
+    _print_theme_preview(normalized, persisted=True)
     return _CMD_CONTINUE
 
 
 def _cmd_emoji(ctx: ChatCommandContext) -> str:
     """Handler for /emoji — toggle emoji display on or off."""
     token = ctx.args.strip().lower()
-    if not token:
-        state = "on" if _PREFS.get("emoji", True) else "off"
-        print(f"  Emoji is currently {_B}{state}{_R}. Usage: /emoji on | off")
+    pack = _emoji_pack_name()
+    if not token or token == "status":
+        state = "on" if pack != "ascii" else "off"
+        print(
+            f"  Emoji is currently {_B}{state}{_R} "
+            f"(pack: {_B}{pack}{_R}). Usage: /emoji on | off | pack <classic|minimal|ascii> | preview"
+        )
+        return _CMD_CONTINUE
+    if token == "preview":
+        print("  Emoji packs:")
+        original_pack = _PREFS.get("emoji_pack", "classic")
+        original_flag = _PREFS.get("emoji", True)
+        for pack_name in ("classic", "minimal", "ascii"):
+            _PREFS["emoji_pack"] = pack_name
+            _PREFS["emoji"] = pack_name != "ascii"
+            sample = " ".join(
+                [
+                    _e("💬", "[chat]"),
+                    _status_emoji("healthy"),
+                    _e("💡", "[tip]"),
+                    _e("📍", "[pin]"),
+                ]
+            )
+            marker = " ← current" if pack_name == pack else ""
+            print(f"    {_B}{pack_name:<8}{_R} {sample}{marker}")
+        _PREFS["emoji_pack"] = original_pack
+        _PREFS["emoji"] = original_flag
+        return _CMD_CONTINUE
+    if token.startswith("pack "):
+        requested = token.split(None, 1)[1].strip().lower()
+        if requested not in _EMOJI_PACKS:
+            print(f"{_BRE}error:{_R} Unknown emoji pack '{requested}'. Choose from: classic, minimal, ascii")
+            return _CMD_CONTINUE
+        _PREFS["emoji_pack"] = requested
+        _PREFS["emoji"] = requested != "ascii"
+        _save_prefs()
+        print(f"  Emoji pack set to {_B}{requested}{_R}. Run /emoji preview to compare packs.")
         return _CMD_CONTINUE
     if token == "on":
         _PREFS["emoji"] = True
+        if _emoji_pack_name() == "ascii":
+            _PREFS["emoji_pack"] = "classic"
         _save_prefs()
-        print("  Emoji enabled ✓")
+        print(f"  Emoji enabled ✓ (pack: {_B}{_emoji_pack_name()}{_R})")
     elif token == "off":
         _PREFS["emoji"] = False
+        _PREFS["emoji_pack"] = "ascii"
         _save_prefs()
         print("  Emoji disabled — ASCII fallbacks active.")
     else:
-        print(f"{_BRE}error:{_R} Expected 'on' or 'off', got '{token}'")
+        print(f"{_BRE}error:{_R} Expected 'on', 'off', 'pack <name>', or 'preview', got '{token}'")
     return _CMD_CONTINUE
 
 
 def _cmd_layout(ctx: ChatCommandContext) -> str:
     """Handler for /layout — switch layout density."""
     token = ctx.args.strip().lower()
+    valid_layouts = ("compact", "normal", "verbose", "plain")
     if not token:
-        current = _PREFS.get("layout", "normal")
-        print(f"  Layout is currently {_B}{current}{_R}. Usage: /layout normal | compact")
+        current = _effective_layout_mode()
+        print(f"  Layout is currently {_B}{current}{_R}. Usage: /layout compact | normal | verbose | plain")
         return _CMD_CONTINUE
-    if token not in ("normal", "compact"):
-        print(f"{_BRE}error:{_R} Expected 'normal' or 'compact', got '{token}'")
+    if token not in valid_layouts:
+        print(f"{_BRE}error:{_R} Expected one of {', '.join(valid_layouts)}, got '{token}'")
         return _CMD_CONTINUE
     _PREFS["layout"] = token
+    _PREFS[_A11Y_PLAIN_MODE] = token == "plain"
     _save_prefs()
     desc = {
-        "normal":  "separator + status bar visible",
-        "compact": "separator + status bar hidden",
+        "compact": "reduced chrome; separator + status bar hidden",
+        "normal": "default density",
+        "verbose": "full density with extra context where available",
+        "plain": "screen-reader/plain-text friendly mode",
     }[token]
-    print(f"  Layout set to {_B}{token}{_R} — {desc}")
+    _print_feedback(f"Layout set to {token}.", level="success", detail=desc)
     return _CMD_CONTINUE
 
 
@@ -6433,17 +6808,16 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
             if role == "user":
                 _RICH_CONSOLE.print(f"[bold cyan]{_e('👤', 'You')}[/]\n{msg}\n")
             else:
-                _RICH_CONSOLE.print(_RichRule(style=_theme_style()))
+                _print_response_separator()
                 _RICH_CONSOLE.print(msg + "\n")
     else:
-        cols = shutil.get_terminal_size((80, 24)).columns
-        sep = "─" * min(cols - 2, 60)
         print(f"\n  {header}\n")
         for role, msg in turns:
             if role == "user":
                 print(f"\n{_BCY}{_e('👤', 'You')}{_R}\n{msg}\n")
             else:
-                print(f"\n{_DM}{sep}{_R}")
+                print()
+                _print_response_separator()
                 print(f"{msg}\n")
     return _CMD_CONTINUE
 
@@ -6586,6 +6960,57 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
 
     # ── unknown / usage ─────────────────────────────────────────────────────
     print(f"  {_CY}Usage:{_R} /handoff [create|list|open NAME|note TEXT]")
+    return _CMD_CONTINUE
+
+
+def _macro_run(ctx: ChatCommandContext, name: str) -> str:
+    """Execute a named macro's commands in sequence."""
+    macros = _PREFS.get("macros", {})
+    if name not in macros:
+        _print_error(f"Macro '{name}' not found — use /macro list to see available macros")
+        return _CMD_CONTINUE
+    commands = macros[name]
+    if not commands:
+        _print_error(f"Macro '{name}' is empty")
+        return _CMD_CONTINUE
+
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"[dim]▶ Running macro '[bold cyan]{name}[/]' ({len(commands)} commands)[/]")
+    else:
+        print(f"▶ Running macro '{name}' ({len(commands)} commands)")
+
+    registry = build_chat_command_registry()
+    for i, cmd in enumerate(commands, 1):
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]  [{i}/{len(commands)}] {cmd}[/]")
+        else:
+            print(f"  [{i}/{len(commands)}] {cmd}")
+
+        if cmd.startswith("/"):
+            parts = cmd[1:].split(None, 1)
+            cmd_name = parts[0].lower()
+            cmd_args = parts[1] if len(parts) > 1 else ""
+            slash_cmd = registry._lookup.get(cmd_name)
+            if slash_cmd is not None:
+                sub_ctx = ChatCommandContext(
+                    history=list(ctx.history),
+                    session_id=ctx.session_id,
+                    args=cmd_args,
+                )
+                slash_cmd.handler(sub_ctx)
+            else:
+                _print_error(f"Unknown command in macro: {cmd}")
+        else:
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[dim yellow]  ⚠ Skipped (natural language — run manually): {cmd}[/]")
+            else:
+                print(f"  ⚠ Skipped (natural language): {cmd}")
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"[green]✓ Macro '{name}' complete[/]")
+    else:
+        print(f"✓ Macro '{name}' complete")
     return _CMD_CONTINUE
 
 
@@ -6758,21 +7183,21 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(
         SlashCommand(
             name="theme",
-            description="Get or set the UI colour theme (/theme [name|list])",
+            description="Manage UI themes (/theme [name|list|preview|next|prev|reset])",
             handler=_cmd_theme,
         )
     )
     registry.register(
         SlashCommand(
             name="emoji",
-            description="Toggle emoji display (/emoji [on|off])",
+            description="Manage emoji packs (/emoji [on|off|pack|preview])",
             handler=_cmd_emoji,
         )
     )
     registry.register(
         SlashCommand(
             name="layout",
-            description="Switch layout density (/layout [normal|compact])",
+            description="Switch layout density (/layout [compact|normal|verbose|plain])",
             handler=_cmd_layout,
         )
     )
@@ -6849,6 +7274,16 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Define, list, or remove command aliases (/alias [name expansion | rm name])",
         handler=_cmd_alias,
     ))
+    registry.register(SlashCommand(
+        name="history",
+        description="Show recent command history (/history [n] | /history clear)",
+        handler=_cmd_history,
+    ))
+    registry.register(SlashCommand(
+        name="macro",
+        description="Manage and run command macros (/macro [save|list|show|run|rm] [name])",
+        handler=_cmd_macro,
+    ))
     return registry
 
 
@@ -6880,9 +7315,9 @@ def print_chat_help(*, search: str = "") -> None:
         ("/write <task>",                  "Generate a markdown document"),
         ("/exec [--] <command>",           "Run a shell command with approval + session tracking"),
         ("/edit <path> [--content TEXT]",  "Inspect or write a file (--append to append)"),
-        ("/theme [name|list]",             "Get or set UI colour theme"),
-        ("/emoji [on|off]",               "Toggle emoji in UI output"),
-        ("/layout [normal|compact]",       "Switch layout density"),
+        ("/theme [name|list|preview|next|prev|reset]", "Manage UI themes and previews"),
+        ("/emoji [on|off|pack|preview]", "Toggle emoji or switch emoji packs"),
+        ("/layout [compact|normal|verbose|plain]", "Switch layout density"),
         ("/sessions [search|related]",     "Browse or search recent sessions; /sessions related"),
         ("/export [md|json|html]",         "Export conversation history to ~/Downloads"),
         ("/stats",                         "Show aggregate usage stats across all sessions"),
@@ -6904,6 +7339,13 @@ def print_chat_help(*, search: str = "") -> None:
         ("/alias",                              "List all defined command aliases"),
         ("/alias <name> <expansion>",           "Define a command shorthand alias"),
         ("/alias rm <name>",                    "Remove a defined alias"),
+        ("/history [n]",                        "Show last N commands from history (default 20)"),
+        ("/history clear",                      "Clear command history"),
+        ("/macro list",                         "List all saved macros"),
+        ("/macro save <name> [last N]",         "Save last N commands as a named macro"),
+        ("/macro show <name>",                  "Show the commands stored in a macro"),
+        ("/macro run <name>",                   "Execute a saved macro's commands in sequence"),
+        ("/macro rm <name>",                    "Delete a named macro"),
     ]
 
     q = search.strip().lower()
@@ -7201,19 +7643,38 @@ def _print_status_bar(
     is_tty = _IS_TTY or sys.stdout.isatty()
     if not is_tty:
         return
-    narrow = _terminal_width() < 60
+    cols = _terminal_width()
+    narrow = cols < 60
     parts: list[str] = []
     if session_id:
-        parts.append(f"{_e('📍', '@')} {session_id[:10]}…")
+        short = session_id[:6] if narrow else session_id[:10]
+        parts.append(f"{_e('📍', '@')} {short}…")
     turns = history_len // 2  # history contains alternating user/assistant pairs
     if turns and not narrow:
         parts.append(f"{_e('💬', 'msgs:')} {turns} turn{'s' if turns != 1 else ''}")
-    parts.append("autoroute \033[32mon\033[0m" if autoroute_on else "autoroute \033[33moff\033[0m")
-    line = "  ·  ".join(parts)
-    if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"[dim]  {line}[/]")
+    autoroute_state = "on" if autoroute_on else "off"
+    if _a11y_plain_mode():
+        parts.append(f"autoroute {autoroute_state}")
+        print("Status: " + " | ".join(parts))
+        return
+    if _a11y_high_contrast():
+        color = "\033[1;92m" if autoroute_on else "\033[1;93m"
     else:
-        print(f"  {_DM}{line}{_R}")
+        color = "\033[32m" if autoroute_on else "\033[33m"
+    parts.append(f"autoroute {color}{autoroute_state}{_R}")
+    if narrow:
+        for idx, part in enumerate(parts):
+            prefix = "Status:" if idx == 0 else "       "
+            print(f"  {prefix} {part}")
+    else:
+        line = "  ·  ".join(parts)
+        if _RICH_AVAILABLE and is_tty:
+            style = "bold white" if _a11y_high_contrast() else "dim"
+            _RICH_CONSOLE.print(f"[{style}]  {line}[/]")
+        else:
+            style = _theme_ansi() if _a11y_high_contrast() else _DM
+            reset = _R if style else ""
+            print(f"  {style}{line}{reset}")
 
 
 def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False) -> str:
@@ -7221,13 +7682,14 @@ def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: boo
     if _a11y_plain_mode():
         return "openclaw> "
     is_tty = _IS_TTY or sys.stdout.isatty()
+    narrow = _terminal_width() < 56
     if is_tty:
-        name = "\033[1;34mopenclaw\033[0m"  # bold blue
+        name = "\033[1;34moc\033[0m" if narrow else "\033[1;34mopenclaw\033[0m"
         ml_badge = f" \033[2;33m[multiline]\033[0m" if multiline else ""
         if not autoroute_on:
             return f"{name} \033[33m[autoroute:off]\033[0m{ml_badge} ❯ "
         if session_id:
-            short = session_id[:8]
+            short = session_id[:4] if narrow else session_id[:8]
             return f"{name} \033[36m[{short}…]\033[0m{ml_badge} ❯ "
         return f"{name}{ml_badge} ❯ "
     ml_suffix = " [multiline]" if multiline else ""
@@ -7268,12 +7730,16 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     autoroute_on = _session_auto_route_enabled(session_id)
     ver = cli_version()
 
+    cols = _terminal_width()
+
     # Plain-mode path: no ANSI, no emoji, no decorative borders.
-    if _a11y_plain_mode():
+    if _a11y_plain_mode() or cols < 72:
         autoroute_str = "on" if autoroute_on else "off"
         print(f"OpenClaw {ver}")
         print(f"Server: {config.base_url}")
         print(f"User: {config.user_name}")
+        if session_id:
+            print(f"Session: {session_id[:8]}…")
         print("Type /help for commands. /quit to exit.")
         print(f"Auto-routing: {autoroute_str}")
         return
@@ -7304,7 +7770,13 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         else:
             t.append(" is off", style="dim yellow")
             t.append(" — use /autoroute on to enable", style="dim")
-        _RICH_CONSOLE.print(_RichPanel(t, border_style="cyan", padding=(0, 1)))
+        _RICH_CONSOLE.print(
+            _RichPanel(
+                t,
+                border_style="bold white" if _a11y_high_contrast() else "cyan",
+                padding=(0, 1),
+            )
+        )
     else:
         session_line = (
             f"\n  {_DM}{_e('🗂', '[session]')}  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
@@ -7348,7 +7820,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "research", "write", "exec", "edit", "theme", "emoji", "layout",
     "sessions", "export", "stats", "tag", "resume", "replay", "handoff",
     "draft", "template", "pasteguard", "accessibility", "a11y",
-    "search", "alias", "pin", "pins",
+    "search", "alias", "pin", "pins", "history",
 })
 
 _MAX_ALIASES = 50
@@ -7418,6 +7890,203 @@ def _cmd_alias(ctx: "ChatCommandContext") -> str:
     aliases[name] = expansion
     _save_prefs()
     print(f"  {_GR}{_e('✅', '[OK]')} Alias '{_CY}{name}{_R}{_GR}' → {_DM}{expansion}{_R}{_GR} defined.{_R}")
+    return _CMD_CONTINUE
+
+
+def _cmd_macro(ctx: "ChatCommandContext") -> str:
+    """Manage named command macros. Sub-commands: list, save, show, rm, run."""
+    import re as _re
+
+    args = (ctx.args or "").strip()
+    macros: "dict[str, list[str]]" = _PREFS.setdefault("macros", {})
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    parts = args.split(None, 1)
+    token = parts[0].lower() if parts else "list"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    # ── list ──────────────────────────────────────────────────────────────────
+    if token in ("list", "ls") or not args:
+        if _RICH_AVAILABLE and is_tty:
+            grid = _RichTable.grid(padding=(0, 2))
+            grid.add_column(style="cyan", no_wrap=True)
+            grid.add_column(style="dim")
+            if macros:
+                for name, cmds in sorted(macros.items()):
+                    grid.add_row(name, f"{len(cmds)} command{'s' if len(cmds) != 1 else ''}")
+            else:
+                grid.add_row(f"{_e('🔧', '')} (no macros defined)", "")
+            _RICH_CONSOLE.print(_RichPanel(
+                grid,
+                title=f"{_e('🔧', '')} Macros",
+                border_style="cyan",
+                padding=(0, 1),
+            ))
+        else:
+            print(f"{_B}Macros:{_R}")
+            if macros:
+                for name, cmds in sorted(macros.items()):
+                    print(f"  {_CY}{name}{_R}  {_DM}({len(cmds)} command{'s' if len(cmds) != 1 else ''}){_R}")
+            else:
+                print(f"  {_DM}(no macros defined){_R}")
+        return _CMD_CONTINUE
+
+    # ── save ──────────────────────────────────────────────────────────────────
+    if token == "save":
+        # Parse: save <name> [last <N>]
+        save_parts = rest.split()
+        if not save_parts:
+            _print_error("Usage: /macro save <name> [last N]")
+            return _CMD_CONTINUE
+
+        macro_name = save_parts[0]
+        # Validate name: alphanumeric + hyphens + underscores, max 40 chars
+        if not _re.match(r'^[A-Za-z0-9_-]{1,40}$', macro_name):
+            _print_error(
+                "Macro name must be 1-40 alphanumeric characters, hyphens, or underscores."
+            )
+            return _CMD_CONTINUE
+
+        # Parse optional "last N"
+        n = 5
+        if len(save_parts) >= 3 and save_parts[1].lower() == "last":
+            try:
+                n = max(1, min(int(save_parts[2]), 20))
+            except ValueError:
+                _print_error("Usage: /macro save <name> [last N]")
+                return _CMD_CONTINUE
+        elif len(save_parts) == 2:
+            _print_error("Usage: /macro save <name> [last N]")
+            return _CMD_CONTINUE
+
+        hist: "list[str]" = _PREFS.get("cmd_history", [])
+        if not hist:
+            _print_error("No command history to save — run some commands first")
+            return _CMD_CONTINUE
+
+        if len(macros) >= 30 and macro_name not in macros:
+            _print_error("Maximum of 30 macros reached. Remove one first with /macro rm <name>.")
+            return _CMD_CONTINUE
+
+        commands = hist[-n:]
+        commands = commands[:20]  # cap at 20 commands per macro
+        updated = macro_name in macros
+        macros[macro_name] = commands
+        _save_prefs()
+
+        suffix = f"  {_GR}(updated){_R}" if updated else ""
+        print(
+            f"  {_GR}{_e('✅', '[OK]')} Macro '{_CY}{macro_name}{_R}{_GR}' saved"
+            f" ({len(commands)} command{'s' if len(commands) != 1 else ''}){_R}{suffix}"
+        )
+        return _CMD_CONTINUE
+
+    # ── show ──────────────────────────────────────────────────────────────────
+    if token == "show":
+        if not rest:
+            _print_error("Usage: /macro show <name>")
+            return _CMD_CONTINUE
+        name = rest.split()[0]
+        if name not in macros:
+            _print_error(f"Macro '{name}' not found")
+            return _CMD_CONTINUE
+        cmds = macros[name]
+        if _RICH_AVAILABLE and is_tty:
+            from rich.text import Text as _RichText
+            from rich.console import Group as _RichGroup
+            lines = []
+            for i, cmd in enumerate(cmds, start=1):
+                line = _RichText()
+                line.append(f"  {i:>2}  ", style="dim")
+                line.append(cmd, style="bold cyan")
+                lines.append(line)
+            _RICH_CONSOLE.print(_RichPanel(
+                _RichGroup(*lines),
+                title=f"{_e('🔧', '')} Macro: {name}",
+                border_style="cyan",
+                padding=(0, 1),
+            ))
+        else:
+            print(f"{_B}Macro '{name}':{_R}")
+            for i, cmd in enumerate(cmds, start=1):
+                print(f"  {_DM}{i:>2}{_R}  {_CY}{cmd}{_R}")
+        return _CMD_CONTINUE
+
+    # ── rm ────────────────────────────────────────────────────────────────────
+    if token == "rm":
+        if not rest:
+            _print_error("Usage: /macro rm <name>")
+            return _CMD_CONTINUE
+        name = rest.split()[0]
+        if name not in macros:
+            _print_error(f"Macro '{name}' not found")
+            return _CMD_CONTINUE
+        del macros[name]
+        _save_prefs()
+        print(f"  {_GR}{_e('✅', '[OK]')} Macro '{name}' removed{_R}")
+        return _CMD_CONTINUE
+
+    # ── run ───────────────────────────────────────────────────────────────────
+    if token == "run":
+        if not rest:
+            _print_error("Usage: /macro run <name>")
+            return _CMD_CONTINUE
+        return _macro_run(ctx, rest.split()[0])
+
+    _print_error(f"Unknown /macro sub-command '{token}'. Use: list, save, show, rm, run")
+    return _CMD_CONTINUE
+
+
+def _cmd_history(ctx: "ChatCommandContext") -> str:
+    """Show or clear recent command history."""
+    args = (ctx.args or "").strip()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    hist: "list[str]" = _PREFS.get("cmd_history", [])
+
+    if args.lower() == "clear":
+        _PREFS["cmd_history"] = []
+        _save_prefs()
+        print(f"  {_GR}{_e('✅', '[OK]')} Command history cleared.{_R}")
+        return _CMD_CONTINUE
+
+    # Parse optional count argument
+    count = 20
+    if args:
+        try:
+            count = max(1, min(int(args), _CMD_HISTORY_MAX))
+        except ValueError:
+            _print_error(f"Usage: /history [n] | /history clear")
+            return _CMD_CONTINUE
+
+    entries = hist[-count:] if hist else []
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.text import Text as _RichText
+        content_lines: list[_RichText] = []
+        if not entries:
+            t = _RichText("(no history yet)", style="dim")
+            content_lines.append(t)
+        else:
+            for i, cmd in enumerate(entries, start=1):
+                line = _RichText()
+                line.append(f"  {i:>3}  ", style="dim")
+                line.append(cmd, style="bold cyan")
+                content_lines.append(line)
+        from rich.console import Group as _RichGroup
+        _RICH_CONSOLE.print(_RichPanel(
+            _RichGroup(*content_lines),
+            title=f"{_e('📜', '')} Command History",
+            border_style="cyan",
+            padding=(0, 1),
+        ))
+    else:
+        print(f"{_BBL}Command History:{_R}")
+        if not entries:
+            print(f"  {_DM}(no history yet){_R}")
+        else:
+            for i, cmd in enumerate(entries, start=1):
+                print(f"  {_DM}{i:>3}{_R}  {_CY}{cmd}{_R}")
+
     return _CMD_CONTINUE
 
 
@@ -7555,12 +8224,16 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
     def _on_off(val: str, key: str, label: str) -> str:
         if val == "on":
             _PREFS[key] = True
+            if key == _A11Y_PLAIN_MODE:
+                _PREFS["layout"] = "plain"
             _save_prefs()
-            return f"  {_GR}{_e('✅', '[OK]')} {label} enabled.{_R}"
+            return f"{label} enabled."
         elif val == "off":
             _PREFS[key] = False
+            if key == _A11Y_PLAIN_MODE and _effective_layout_mode() == "plain":
+                _PREFS["layout"] = "normal"
             _save_prefs()
-            return f"  {_YE}{_e('⚠️', '[warn]')} {label} disabled.{_R}"
+            return f"{label} disabled."
         else:
             state = "ON" if _PREFS.get(key, False) else "off"
             return f"  {label}: {_B}{state}{_R}. Use on|off to change."
@@ -7578,6 +8251,7 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
         rm   = "ON" if _a11y_reduced_motion() else "off"
         pm   = "ON" if _a11y_plain_mode()     else "off"
         hc   = "ON" if _a11y_high_contrast()  else "off"
+        layout = _effective_layout_mode()
         rich = "yes" if _RICH_AVAILABLE else "no"
         tty  = "yes" if _IS_TTY else "no"
 
@@ -7587,6 +8261,7 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
             lines.append(f"  Reduced motion:   {rm}\n",   style="bold" if rm == "ON" else "dim")
             lines.append(f"  Plain mode:       {pm}\n",   style="bold" if pm == "ON" else "dim")
             lines.append(f"  High contrast:    {hc}\n",   style="bold" if hc == "ON" else "dim")
+            lines.append(f"  Layout mode:      {layout}\n", style="dim")
             lines.append(f"  Rich available:   {rich}\n", style="dim")
             lines.append(f"  TTY detected:     {tty}\n",  style="dim")
             lines.append(f"  Terminal width:   {cols} columns", style="dim")
@@ -7596,28 +8271,34 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
             print(f"  Reduced motion:   {rm}")
             print(f"  Plain mode:       {pm}")
             print(f"  High contrast:    {hc}")
+            print(f"  Layout mode:      {layout}")
             print(f"  Rich available:   {rich}")
             print(f"  TTY detected:     {tty}")
             print(f"  Terminal width:   {cols} columns")
         return _CMD_CONTINUE
 
     if sub == "reduced-motion":
-        print(_on_off(val, _A11Y_REDUCED_MOTION, "Reduced motion"))
+        message = _on_off(val, _A11Y_REDUCED_MOTION, "Reduced motion")
+        _print_feedback(message, level="success" if val == "on" else ("warn" if val == "off" else "info"))
         return _CMD_CONTINUE
 
     if sub == "plain":
-        print(_on_off(val, _A11Y_PLAIN_MODE, "Plain mode"))
+        message = _on_off(val, _A11Y_PLAIN_MODE, "Plain mode")
+        _print_feedback(message, level="success" if val == "on" else ("warn" if val == "off" else "info"))
         return _CMD_CONTINUE
 
     if sub == "high-contrast":
-        print(_on_off(val, _A11Y_HIGH_CONTRAST, "High contrast"))
+        message = _on_off(val, _A11Y_HIGH_CONTRAST, "High contrast")
+        _print_feedback(message, level="success" if val == "on" else ("warn" if val == "off" else "info"))
         return _CMD_CONTINUE
 
     if sub == "reset":
         for key in (_A11Y_REDUCED_MOTION, _A11Y_PLAIN_MODE, _A11Y_HIGH_CONTRAST):
             _PREFS.pop(key, None)
+        if _effective_layout_mode() == "plain":
+            _PREFS["layout"] = "normal"
         _save_prefs()
-        print(f"  {_GR}All accessibility modes reset to defaults.{_R}")
+        _print_feedback("Accessibility modes reset to defaults.", level="success")
         return _CMD_CONTINUE
 
     print("  Usage: /accessibility [status|reduced-motion|plain|high-contrast|reset] [on|off]")
@@ -7734,6 +8415,14 @@ def run_chat(
         if not prompt:
             continue
 
+        # Record command history (skip empty lines)
+        if prompt.strip():
+            _hist = _PREFS.setdefault("cmd_history", [])
+            _hist.append(prompt.strip())
+            if len(_hist) > _CMD_HISTORY_MAX:
+                _PREFS["cmd_history"] = _hist[-_CMD_HISTORY_MAX:]
+            _save_prefs()
+
         # Paste guard — warn on large pastes that would trigger risky routing
         prompt = _paste_guard(prompt, input_func=input_func, autoroute_on=autoroute_on)
         if prompt is None:
@@ -7840,12 +8529,7 @@ def run_chat(
         _is_tty = _IS_TTY or sys.stdout.isatty()
         _compact = _PREFS.get("layout") == "compact"
         if _is_tty and not config.output_json and not _compact:
-            if _RICH_AVAILABLE:
-                from rich.rule import Rule as _RichRule
-                _RICH_CONSOLE.print(_RichRule(style=_theme_style()))
-            else:
-                cols = shutil.get_terminal_size((80, 24)).columns
-                print(f"{_theme_ansi()}{'─' * min(cols - 2, 60)}{_R}")
+            _print_response_separator(label="Response")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
         global _last_response_text
@@ -8659,6 +9343,12 @@ def handle_exec_command(args: argparse.Namespace) -> int:
         plan_id=str(getattr(args, "plan_id", "") or "").strip(),
         task_id=str(getattr(args, "task_id", "") or "").strip(),
     )
+    _print_risky_action_warning(
+        action="exec",
+        target=" ".join(command_parts),
+        risk_level=risk_level,
+        recovery_hint="check the cwd and use your shell history or VCS tools before re-running.",
+    )
     if not request_cli_approval(
         action="shell.exec",
         target=" ".join(command_parts),
@@ -8689,6 +9379,11 @@ def handle_exec_command(args: argparse.Namespace) -> int:
         },
     )
     _print_shell_result(result)
+    _print_feedback(
+        "Command complete.",
+        level="success" if result.returncode == 0 else "warn",
+        detail=f"exit {result.returncode} · cwd {result.cwd}",
+    )
     _print_meta_footer(("session", session.session_id))
     return 0 if result.returncode == 0 else 1
 
@@ -8713,6 +9408,12 @@ def handle_edit_command(args: argparse.Namespace) -> int:
         files=[path],
         plan_id=str(getattr(args, "plan_id", "") or "").strip(),
         task_id=str(getattr(args, "task_id", "") or "").strip(),
+    )
+    _print_risky_action_warning(
+        action="edit",
+        target=path,
+        risk_level=risk_level,
+        recovery_hint="recover with your editor or VCS; routed REPL edits also support /rollback last.",
     )
     if not request_cli_approval(
         action="file.edit",
@@ -8751,6 +9452,11 @@ def handle_edit_command(args: argparse.Namespace) -> int:
         },
     )
     _print_file_edit_result(result)
+    _print_feedback(
+        "Edit complete.",
+        level="success" if result.changed else "info",
+        detail=result.summary,
+    )
     _print_meta_footer(("session", session.session_id))
     return 0
 

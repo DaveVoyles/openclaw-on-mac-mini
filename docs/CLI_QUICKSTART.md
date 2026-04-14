@@ -67,6 +67,56 @@ openclaw --health --json
 
 `openclaw --health` now prints a concise operator-friendly summary by default. Add `--json` when you want the raw `/health` payload.
 
+## Accessibility and adaptive layout
+
+Wave 15's currently shipped accessibility controls live in the REPL:
+
+```text
+/accessibility status
+/accessibility reduced-motion on
+/accessibility plain on
+/accessibility high-contrast on
+/accessibility reset
+```
+
+- **Reduced motion** disables spinner animation and falls back to one static
+  `thinking...` line.
+- **Plain mode** simplifies the prompt and startup banner, and forces plain-text
+  response rendering for screen-reader/basic-terminal use. It also aligns with
+  `/layout plain`.
+- **High contrast** is a persisted preference that is surfaced by
+  `/accessibility status` and applied to the CLI's higher-contrast border and
+  separator styles.
+- **`/accessibility status`** reports the active toggles plus Rich availability,
+  TTY detection, and terminal width.
+
+Adaptive layout is currently split between:
+
+- `/layout compact|normal|verbose|plain` for chrome density
+- width-aware render helpers for tables and status output
+
+## Theme engine and personalization
+
+Wave 17 adds a safer, more expressive personalization layer in the REPL:
+
+```text
+/theme list
+/theme preview cyan
+/theme next
+/theme prev
+/theme reset
+/emoji status
+/emoji preview
+/emoji pack minimal
+```
+
+- **Theme switching** now supports previewing without persisting, cycling forward
+  or backward, and resetting to the default accent.
+- **Emoji packs** now support `classic`, `minimal`, and `ascii`. Legacy
+  `/emoji on|off` still works and now maps to the new pack model.
+- **Preference loading** clamps invalid stored theme, emoji-pack, and layout
+  values back to known-safe defaults.
+
 ## Hybrid REPL — in-session slash commands
 
 The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural-language prompts and slash commands coexist in the same input stream. Every slash command is handled locally before the input reaches the LLM.
@@ -105,6 +155,52 @@ These mirror the top-level `openclaw` subcommands but run inside the current ses
 | `/write <task>` | Generate a markdown document from a writing task and save it as a session output |
 | `/exec [--] <command>` | Run a shell command with risk-aware approval prompts and session tracking |
 | `/edit <path> [--content TEXT] [--append TEXT]` | Inspect or write a file; shows a unified diff before applying changes |
+| `/theme [name\|list\|preview\|next\|prev\|reset]` | List, preview, cycle, reset, or persist a theme |
+| `/emoji [on\|off\|status\|pack <name>\|preview]` | Toggle emoji, inspect the active pack, or switch between `classic`, `minimal`, and `ascii` |
+| `/layout [compact\|normal\|verbose\|plain]` | Switch between the currently supported layout densities |
+| `/accessibility [status\|mode]` | Show current accessibility state or manage accessibility prefs |
+| `/accessibility reduced-motion on\|off` | Toggle reduced-motion mode for spinner/status behavior |
+| `/accessibility plain on\|off` | Toggle simplified plain/screen-reader mode |
+| `/accessibility high-contrast on\|off` | Toggle the stored high-contrast preference |
+
+### Trust & explainability
+
+| Command | What it does |
+| --- | --- |
+| `/why` | Explain the last routing or tool decision — shows confidence badge (`[HIGH]`/`[MED]`/`[LOW]`), rationale, and grounding |
+| `/events [n\|decisions]` | Show last N session events; `decisions` filters to route/plan/approval/exec/edit events only |
+
+### Composer & input flow
+
+| Command | What it does |
+| --- | --- |
+| `/draft [save\|load\|clear\|restore]` | Save, load, clear, or restore a draft prompt across turns |
+| `/draft multiline [on\|off]` | Toggle multiline compose mode (`\end` on its own line to submit) |
+| `/template [list\|save\|use\|delete]` | Manage reusable prompt templates persisted across sessions |
+| `/pasteguard [on\|off]` | Guard large pastes that would route to risky commands — shows preview and requires confirmation |
+
+### Search, aliases & pins (Wave 16)
+
+| Command | What it does |
+| --- | --- |
+| `/search <query>` | Full-text search the current session's event history; matches highlighted in bold yellow |
+| `/search --all <query>` | Cross-session search across the last 200 sessions (up to 15 hits) |
+| `/alias <name> <expansion>` | Define a command shorthand — e.g. `/alias r /research` |
+| `/alias rm <name>` | Remove an alias; `/alias` with no args lists all defined aliases |
+| `/pin [name]` | Pin the last AI response for quick recall (auto-named `pin-1`, `pin-2` …) |
+| `/pin recall <name>` | Re-display a pinned response inline |
+| `/pin rm <name>` | Remove a pin by name; `/pins` lists all pins |
+
+### Macros & command history (Wave 17)
+
+| Command | What it does |
+| --- | --- |
+| `/history [n]` | Show the last N commands from input history (default 20); `/history clear` resets |
+| `/macro list` | List all saved macros with their command counts |
+| `/macro save <name> [last N]` | Save the last N history entries as a named macro (default 5) |
+| `/macro show <name>` | Display the commands stored in a macro |
+| `/macro run <name>` | Execute a macro's slash commands in sequence; natural-language entries are skipped with a warning |
+| `/macro rm <name>` | Delete a named macro |
 
 ### Freeform auto-routing and plan decomposition
 

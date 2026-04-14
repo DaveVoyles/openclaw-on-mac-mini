@@ -5,6 +5,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import types
 from pathlib import Path
 from types import SimpleNamespace
@@ -248,6 +249,72 @@ def test_print_health_includes_failed_checks(capsys):
     assert "WARN OpenClaw health: DEGRADED" in stdout
     assert "nas" in stdout and "down" in stdout
     assert "scheduler" in stdout and "ok" in stdout
+
+
+def test_with_spinner_reduced_motion_uses_static_status(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_REDUCED_MOTION, True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+
+    result = mod._with_spinner("Thinking", lambda: "done")
+
+    stdout = capsys.readouterr().out
+    assert result == "done"
+    assert "[working] Thinking..." in stdout
+    assert "[done] response ready." in stdout
+
+
+def test_print_response_plain_mode_flattens_sources_and_footer(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+
+    mod.print_response(
+        mod.AskResponse(
+            response="Hello world\n\nSources\n- https://example.com",
+            model="demo-model",
+            tokens=42,
+            raw={},
+        ),
+        output_json=False,
+        elapsed=1.5,
+    )
+
+    stdout = capsys.readouterr().out
+    assert "Hello world" in stdout
+    assert "Sources:" in stdout
+    assert "Metadata:" in stdout
+
+
+def test_render_table_ansi_uses_high_contrast_separator_on_narrow_terminal(monkeypatch):
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_HIGH_CONTRAST, True)
+    monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 48)
+
+    lines = mod._render_table_ansi(
+        [
+            ["Name", "Value"],
+            ["Status", "A very long value that should wrap cleanly"],
+        ]
+    )
+
+    assert any("=" in line for line in lines)
+    assert any("Name:" in line for line in lines)
+
+
+def test_print_status_bar_wraps_on_narrow_terminal(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+    monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 40)
+
+    mod._print_status_bar(
+        session_id="session-1234567890",
+        autoroute_on=False,
+        history_len=4,
+    )
+
+    stdout = capsys.readouterr().out
+    assert "Status:" in stdout
+    assert "autoroute" in stdout
+    assert stdout.count("\n") >= 2
 
 
 def test_invoke_openclaw_formats_unauthorized_errors():
@@ -1978,7 +2045,10 @@ class TestActionSlashCommands:
         with patch.object(mod, "request_cli_approval", return_value=False):
             result = self._registry().dispatch("/exec rm -rf /", self._ctx(session_id=sess.session_id))
         assert result == mod._CMD_CONTINUE
-        assert "not approved" in capsys.readouterr().out.lower()
+        out = capsys.readouterr().out.lower()
+        assert "not approved" in out
+        assert "review carefully" in out
+        assert "recovery:" in out
 
     def test_exec_runs_command_and_logs_event(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -2000,6 +2070,8 @@ class TestActionSlashCommands:
         assert result == mod._CMD_CONTINUE
         kinds = [call.kwargs.get("kind") for call in mock_ae.call_args_list]
         assert "exec" in kinds
+        out = capsys.readouterr().out
+        assert "Command complete." in out
 
     def test_routed_exec_captures_checkpoint_before_execution(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -2169,7 +2241,9 @@ class TestActionSlashCommands:
                 self._ctx(session_id=sess.session_id),
             )
         assert result == mod._CMD_CONTINUE
-        assert "not approved" in capsys.readouterr().out.lower()
+        out = capsys.readouterr().out.lower()
+        assert "not approved" in out
+        assert "review carefully" in out
 
     def test_edit_content_writes_file_and_logs_event(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -2188,6 +2262,8 @@ class TestActionSlashCommands:
         assert target.read_text() == "hello world"
         kinds = [call.kwargs.get("kind") for call in mock_ae.call_args_list]
         assert "edit" in kinds
+        out = capsys.readouterr().out
+        assert "Edit complete." in out
 
     def test_rollback_last_restores_prior_routed_edit_state(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -2840,6 +2916,7 @@ def test_main_exec_tracks_shell_command(monkeypatch, tmp_path, capsys):
     run_shell_command.assert_called_once()
     stdout = capsys.readouterr().out
     assert "$ git status" in stdout
+    assert "Command complete." in stdout
     assert "session:" in stdout
 
 
@@ -2856,6 +2933,7 @@ def test_main_edit_dry_run_prints_diff(monkeypatch, tmp_path, capsys):
     stdout = capsys.readouterr().out
     assert "-hello world" in stdout
     assert "+hello there" in stdout
+    assert "Edit complete." in stdout
 
 
 # ── New: session show (rich inspection) ─────────────────────────────────────
@@ -3438,6 +3516,65 @@ class TestCmdAlias:
         assert "built-in" in combined.lower() or "reserved" in combined.lower() or "help" in combined
 
 
+# ── /history command ──────────────────────────────────────────────────────────
+
+class TestCmdHistory:
+    """Tests for the /history slash command handler."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, session_id: str = "", args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_history_empty_shows_no_history_yet(self, capsys, monkeypatch, tmp_path):
+        """'/history' with no history should show '(no history yet)'."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["cmd_history"] = []
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/history", self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "no history yet" in out.lower()
+
+    def test_history_shows_entries_numbered(self, capsys, monkeypatch, tmp_path):
+        """'/history' with entries should show them numbered."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["cmd_history"] = ["/help", "/search foo", "/version"]
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/history", self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "/help" in out
+        assert "/search foo" in out
+        assert "/version" in out
+
+    def test_history_clear_empties_prefs(self, capsys, monkeypatch, tmp_path):
+        """'/history clear' should empty _PREFS['cmd_history']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["cmd_history"] = ["/help", "/version"]
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/history clear", self._ctx(args="clear"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS.get("cmd_history") == []
+
+    def test_history_n_shows_only_last_n(self, capsys, monkeypatch, tmp_path):
+        """'/history 5' with 10 entries should show only the last 5."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["cmd_history"] = [f"/cmd{i}" for i in range(10)]
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/history 5", self._ctx(args="5"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "/cmd9" in out
+        assert "/cmd5" in out
+        assert "/cmd4" not in out
+
+
 # ── /pin and /pins commands ───────────────────────────────────────────────────
 
 class TestPinCommand:
@@ -3495,3 +3632,384 @@ class TestPinCommand:
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
         assert "no pins" in out.lower()
+
+
+class TestAccessibilityCommands:
+    """Wave 15 accessibility coverage."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_with_spinner_reduced_motion_prints_static_status(self, capsys, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_REDUCED_MOTION, True)
+
+        result = mod._with_spinner("Thinking", lambda: "done")
+
+        assert result == "done"
+        out = capsys.readouterr().out
+        assert "thinking..." in out.lower()
+        assert "⏳" in out
+
+    def test_with_spinner_reduced_motion_emits_heartbeat_and_completion(self, capsys, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_REDUCED_MOTION, True)
+        monkeypatch.setattr(mod, "_SPINNER_HEARTBEAT_SECONDS", 0.01)
+
+        def _slow() -> str:
+            time.sleep(0.03)
+            return "done"
+
+        result = mod._with_spinner("Thinking", _slow)
+
+        assert result == "done"
+        out = capsys.readouterr().out.lower()
+        assert "still working on thinking" in out
+        assert "response ready" in out
+
+    def test_make_prompt_plain_mode_uses_plain_prompt(self, monkeypatch):
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+
+        prompt = mod._make_prompt(session_id="session-12345678", autoroute_on=False, multiline=True)
+
+        assert prompt == "openclaw> "
+
+    def test_accessibility_status_reports_active_modes(self, capsys, monkeypatch):
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_REDUCED_MOTION, True)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_HIGH_CONTRAST, True)
+
+        result = self._registry().dispatch("/accessibility status", self._ctx(args="status"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Accessibility Status" in out
+        assert "Reduced motion:   ON" in out
+        assert "Plain mode:       ON" in out
+        assert "High contrast:    ON" in out
+        assert "Terminal width:" in out
+
+    def test_accessibility_toggle_persists_to_prefs_file(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        mod._PREFS.clear()
+        mod._PREFS.update({"theme": "default", "emoji": True, "layout": "normal"})
+
+        result = self._registry().dispatch("/accessibility high-contrast on", self._ctx(args="high-contrast on"))
+
+        assert result == mod._CMD_CONTINUE
+        mod._PREFS[mod._A11Y_HIGH_CONTRAST] = False
+        mod._load_prefs()
+        assert mod._PREFS[mod._A11Y_HIGH_CONTRAST] is True
+
+
+class TestAccessibilityPrefs:
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def _reset_prefs(self):
+        mod._PREFS.clear()
+        mod._PREFS.update(
+            {
+                "theme": "default",
+                "emoji": True,
+                "emoji_pack": "classic",
+                "layout": "normal",
+            }
+        )
+
+    def test_load_and_save_prefs_persist_a11y_fields(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        self._reset_prefs()
+        mod._PREFS[mod._A11Y_REDUCED_MOTION] = True
+        mod._PREFS[mod._A11Y_PLAIN_MODE] = True
+        mod._PREFS[mod._A11Y_HIGH_CONTRAST] = True
+        mod._PREFS["emoji_pack"] = "minimal"
+        mod._PREFS["layout"] = "plain"
+
+        mod._save_prefs()
+        self._reset_prefs()
+        mod._load_prefs()
+
+        assert mod._PREFS["layout"] == "plain"
+        assert mod._PREFS["emoji_pack"] == "minimal"
+        assert mod._PREFS[mod._A11Y_REDUCED_MOTION] is True
+        assert mod._PREFS[mod._A11Y_PLAIN_MODE] is True
+        assert mod._PREFS[mod._A11Y_HIGH_CONTRAST] is True
+
+    def test_load_prefs_normalizes_invalid_personalization_values(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        prefs_file = tmp_path / ".openclaw" / "prefs.json"
+        prefs_file.parent.mkdir(parents=True, exist_ok=True)
+        prefs_file.write_text(
+            json.dumps({"theme": "unknown", "emoji_pack": "bogus", "layout": "loud", "emoji": False}),
+            encoding="utf-8",
+        )
+
+        self._reset_prefs()
+        mod._load_prefs()
+
+        assert mod._PREFS["theme"] == "default"
+        assert mod._PREFS["emoji_pack"] == "ascii"
+        assert mod._PREFS["emoji"] is False
+        assert mod._PREFS["layout"] == "normal"
+
+    def test_layout_accepts_verbose_and_plain(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        self._reset_prefs()
+
+        result = self._registry().dispatch("/layout verbose", self._ctx(args="verbose"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["layout"] == "verbose"
+        assert mod._PREFS.get(mod._A11Y_PLAIN_MODE, False) is False
+
+        result = self._registry().dispatch("/layout plain", self._ctx(args="plain"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["layout"] == "plain"
+        assert mod._PREFS[mod._A11Y_PLAIN_MODE] is True
+
+        out = capsys.readouterr().out
+        assert "verbose" in out
+        assert "plain" in out
+
+    def test_accessibility_plain_toggle_updates_persistent_layout(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        self._reset_prefs()
+
+        result = self._registry().dispatch("/accessibility plain on", self._ctx(args="plain on"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS[mod._A11Y_PLAIN_MODE] is True
+        assert mod._PREFS["layout"] == "plain"
+
+        self._reset_prefs()
+        mod._load_prefs()
+        assert mod._PREFS[mod._A11Y_PLAIN_MODE] is True
+        assert mod._PREFS["layout"] == "plain"
+
+        result = self._registry().dispatch("/accessibility plain off", self._ctx(args="plain off"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS[mod._A11Y_PLAIN_MODE] is False
+        assert mod._PREFS["layout"] == "normal"
+
+        out = capsys.readouterr().out
+        assert "enabled" in out
+        assert "disabled" in out
+
+    def test_accessibility_status_reports_layout_and_saved_state(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        self._reset_prefs()
+        mod._PREFS[mod._A11Y_REDUCED_MOTION] = True
+        mod._PREFS[mod._A11Y_PLAIN_MODE] = True
+        mod._PREFS[mod._A11Y_HIGH_CONTRAST] = True
+        mod._PREFS["layout"] = "plain"
+
+        result = self._registry().dispatch("/accessibility status", self._ctx(args="status"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Reduced motion:   ON" in out
+        assert "Plain mode:       ON" in out
+        assert "High contrast:    ON" in out
+        assert "Layout mode:      plain" in out
+
+    def test_theme_preview_does_not_persist_changes(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        self._reset_prefs()
+
+        result = self._registry().dispatch("/theme preview cyan", self._ctx(args="preview cyan"))
+
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["theme"] == "default"
+        out = capsys.readouterr().out
+        assert "Theme preview" in out
+        assert "cyan" in out
+
+    def test_theme_next_cycles_and_persists(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        self._reset_prefs()
+
+        result = self._registry().dispatch("/theme next", self._ctx(args="next"))
+
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["theme"] == "green"
+        self._reset_prefs()
+        mod._load_prefs()
+        assert mod._PREFS["theme"] == "green"
+        assert "Theme saved" in capsys.readouterr().out
+
+    def test_emoji_pack_preview_and_pack_selection(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        self._reset_prefs()
+
+        result = self._registry().dispatch("/emoji preview", self._ctx(args="preview"))
+        assert result == mod._CMD_CONTINUE
+        preview_out = capsys.readouterr().out
+        assert "classic" in preview_out
+        assert "minimal" in preview_out
+        assert "ascii" in preview_out
+
+        result = self._registry().dispatch("/emoji pack minimal", self._ctx(args="pack minimal"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["emoji_pack"] == "minimal"
+        assert mod._PREFS["emoji"] is True
+
+        self._reset_prefs()
+        mod._load_prefs()
+        assert mod._PREFS["emoji_pack"] == "minimal"
+
+    def test_status_emoji_respects_ascii_pack(self):
+        self._reset_prefs()
+        mod._PREFS["emoji_pack"] = "ascii"
+        mod._PREFS["emoji"] = False
+
+        assert mod._status_emoji("healthy") == "[ok]"
+
+
+# ── /macro command ─────────────────────────────────────────────────────────────
+
+class TestCmdMacro:
+    """Tests for the /macro slash command handler."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def _reset_macros(self):
+        mod._PREFS.pop("macros", None)
+        mod._PREFS.pop("cmd_history", None)
+
+    def test_macro_list_empty_shows_no_macros(self, capsys, monkeypatch, tmp_path):
+        """/macro list with no macros shows '(no macros defined)'."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/macro list", self._ctx(args="list"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "no macros defined" in out.lower()
+
+    def test_macro_save_stores_commands(self, capsys, monkeypatch, tmp_path):
+        """/macro save mytest saves last commands from cmd_history."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        mod._PREFS["cmd_history"] = ["/search foo", "/analyze bar", "/write baz"]
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/macro save mytest", self._ctx(args="save mytest"))
+        assert result == mod._CMD_CONTINUE
+        macros = mod._PREFS.get("macros", {})
+        assert "mytest" in macros
+        assert isinstance(macros["mytest"], list)
+        assert len(macros["mytest"]) > 0
+
+    def test_macro_show_prints_commands(self, capsys, monkeypatch, tmp_path):
+        """/macro show mytest prints the stored commands."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        mod._PREFS.setdefault("macros", {})["mytest"] = ["/search foo", "/analyze bar"]
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/macro show mytest", self._ctx(args="show mytest"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "/search foo" in out
+        assert "/analyze bar" in out
+
+    def test_macro_rm_removes_macro(self, monkeypatch, tmp_path):
+        """/macro rm mytest removes the macro from _PREFS['macros']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        mod._PREFS.setdefault("macros", {})["mytest"] = ["/search foo"]
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/macro rm mytest", self._ctx(args="rm mytest"))
+        assert result == mod._CMD_CONTINUE
+        assert "mytest" not in mod._PREFS.get("macros", {})
+
+    def test_macro_save_empty_history_prints_error(self, capsys, monkeypatch, tmp_path):
+        """/macro save with empty cmd_history prints an error."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        mod._PREFS["cmd_history"] = []
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/macro save mytest", self._ctx(args="save mytest"))
+        assert result == mod._CMD_CONTINUE
+        combined = capsys.readouterr().out + capsys.readouterr().err
+        # Error message should mention history
+        assert "history" in combined.lower() or "no command" in combined.lower()
+
+
+class TestCmdMacroRun:
+    """Tests for /macro run execution logic."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="test-session", args=args)
+
+    def _reset_macros(self):
+        mod._PREFS.pop("macros", None)
+
+    def test_macro_run_nonexistent_prints_error(self, capsys, monkeypatch, tmp_path):
+        """/macro run <name> with unknown macro prints an error."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        result = self._registry().dispatch("/macro run ghost", self._ctx(args="run ghost"))
+        assert result == mod._CMD_CONTINUE
+        combined = capsys.readouterr().out + capsys.readouterr().err
+        assert "ghost" in combined
+
+    def test_macro_run_executes_slash_commands(self, capsys, monkeypatch, tmp_path):
+        """/macro run dispatches slash-commands in the macro list."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        mod._PREFS.setdefault("macros", {})["myflow"] = ["/version"]
+
+        called = []
+
+        def fake_handler(ctx: mod.ChatCommandContext) -> str:
+            called.append(ctx.args)
+            return mod._CMD_CONTINUE
+
+        fake_registry = mod.ChatCommandRegistry()
+        fake_registry.register(mod.SlashCommand(name="version", description="", handler=fake_handler))
+
+        with patch.object(mod, "build_chat_command_registry", return_value=fake_registry):
+            result = mod._macro_run(self._ctx(), "myflow")
+
+        assert result == mod._CMD_CONTINUE
+        assert len(called) == 1
+        out = capsys.readouterr().out
+        assert "myflow" in out
+
+    def test_macro_run_skips_natural_language(self, capsys, monkeypatch, tmp_path):
+        """/macro run warns and skips natural-language (non-slash) commands."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        mod._PREFS.setdefault("macros", {})["nlflow"] = ["summarize this session"]
+
+        fake_registry = mod.ChatCommandRegistry()
+
+        with patch.object(mod, "build_chat_command_registry", return_value=fake_registry):
+            result = mod._macro_run(self._ctx(), "nlflow")
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Skip" in out or "skip" in out or "⚠" in out
