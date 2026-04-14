@@ -47,11 +47,14 @@ from openclaw_cli_sessions import (
     collect_workspace_context,
     create_handoff,
     create_routed_action_checkpoint,
+    create_session_bookmark,
     create_session,
     export_session,
     extract_prompt_targets,
+    find_session_bookmark,
     list_handoffs,
     list_saved_outputs,
+    list_session_bookmarks,
     list_sessions,
     load_conversation_history,
     load_events,
@@ -135,7 +138,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave31"  # updated with each UX wave batch
+_CLI_BUILD = "wave32"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -984,11 +987,31 @@ def _motion_pause(stage: str) -> None:
 
 def _spinner_phase_label(elapsed: float) -> str:
     """Return a lightweight motion-language label for spinner pacing."""
+    return _spinner_progress_snapshot(elapsed)["phase"]
+
+
+def _spinner_progress_snapshot(elapsed: float) -> dict[str, Any]:
+    """Return live phase/step copy for the request spinner."""
     if elapsed < 1.0:
-        return "warming up"
+        return {
+            "phase": "warming up",
+            "step_index": 1,
+            "step_total": 3,
+            "trust_copy": "preparing the request",
+        }
     if elapsed < 4.0:
-        return "working"
-    return "wrapping up"
+        return {
+            "phase": "working",
+            "step_index": 2,
+            "step_total": 3,
+            "trust_copy": "waiting for the agent response",
+        }
+    return {
+        "phase": "wrapping up",
+        "step_index": 3,
+        "step_total": 3,
+        "trust_copy": "finalizing the answer",
+    }
 
 
 def _response_footer_lines(*, elapsed: float = 0.0, tokens: int = 0, model: str = "") -> tuple[str, str]:
@@ -1285,9 +1308,14 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
 
     # Reduced-motion path: no animation, but still emit periodic liveness cues.
     if _a11y_reduced_motion():
+        snapshot = _spinner_progress_snapshot(0.0)
         prefix = "[working]" if _a11y_plain_mode() else f"{_theme_ansi()}{_e('⏳', '[working]')}{_R}"
         status_style = "" if (_a11y_plain_mode() or _a11y_high_contrast()) else _DM
-        sys.stdout.write(f"  {prefix} {status_style}{label}... steady pace{_R if status_style else ''}\n")
+        sys.stdout.write(
+            f"  {prefix} {status_style}{label}... "
+            f"{snapshot['phase']} · step {snapshot['step_index']}/{snapshot['step_total']} · "
+            f"{snapshot['trust_copy']}{_R if status_style else ''}\n"
+        )
         sys.stdout.flush()
         last_heartbeat = 0.0
         join_timeout = min(0.1, heartbeat_every / 2.0)
@@ -1295,11 +1323,27 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
             thread.join(timeout=join_timeout)
             elapsed = time.monotonic() - start
             if elapsed - last_heartbeat >= heartbeat_every:
-                _print_feedback(f"Still working on {label}", level="info", detail=f"{elapsed:.0f}s elapsed")
+                snapshot = _spinner_progress_snapshot(elapsed)
+                _print_feedback(
+                    f"Still working on {label}",
+                    level="info",
+                    detail=(
+                        f"phase {snapshot['step_index']}/{snapshot['step_total']} · "
+                        f"{snapshot['trust_copy']} · {elapsed:.0f}s elapsed"
+                    ),
+                )
                 last_heartbeat = elapsed
         if exc_holder:
             raise exc_holder[0]
-        _print_feedback("response ready.", level="success", detail=f"{label} · {time.monotonic() - start:.1f}s")
+        snapshot = _spinner_progress_snapshot(max(time.monotonic() - start, 4.0))
+        _print_feedback(
+            "response ready.",
+            level="success",
+            detail=(
+                f"step {snapshot['step_total']}/{snapshot['step_total']} · "
+                f"{snapshot['trust_copy']} · {label} · {time.monotonic() - start:.1f}s"
+            ),
+        )
         return result_holder[0] if result_holder else None
 
     spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -1308,9 +1352,13 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     while thread.is_alive():
         elapsed = time.monotonic() - start
         frame = spinner_frames[frame_idx % len(spinner_frames)]
-        phase = _spinner_phase_label(elapsed)
+        snapshot = _spinner_progress_snapshot(elapsed)
         extra = " · still working" if elapsed - last_heartbeat >= heartbeat_every else ""
-        sys.stdout.write(f"\r{frame} {label} · {phase}  {elapsed:.0f}s{extra}")
+        sys.stdout.write(
+            f"\r{frame} {label} · {snapshot['phase']} · "
+            f"step {snapshot['step_index']}/{snapshot['step_total']} · "
+            f"{snapshot['trust_copy']}  {elapsed:.0f}s{extra}"
+        )
         sys.stdout.flush()
         frame_idx += 1
         if extra:
@@ -1324,7 +1372,15 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
 
     if exc_holder:
         raise exc_holder[0]
-    _print_feedback("response ready.", level="success", detail=f"{label} · {time.monotonic() - start:.1f}s")
+    snapshot = _spinner_progress_snapshot(max(time.monotonic() - start, 4.0))
+    _print_feedback(
+        "response ready.",
+        level="success",
+        detail=(
+            f"step {snapshot['step_total']}/{snapshot['step_total']} · "
+            f"{snapshot['trust_copy']} · {label} · {time.monotonic() - start:.1f}s"
+        ),
+    )
     return result_holder[0]
 
 
@@ -2516,6 +2572,7 @@ def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
 def _build_session_share_text(session_id: str) -> str:
     snapshot = build_collaboration_snapshot(session_id, limit=5)
     story = build_session_storyline(session_id, limit=5)
+    bookmarks = list_session_bookmarks(session_id)
     session_data = snapshot.get("session") or {}
     actors = list(snapshot.get("actors") or [])
     recent_decisions = list(snapshot.get("recent_decisions") or [])
@@ -2577,6 +2634,16 @@ def _build_session_share_text(session_id: str) -> str:
         lines.append("RECENT NOTES")
         for entry in recent_notes[:2]:
             lines.append(f"  - {_format_collaboration_entry(entry)}")
+    if bookmarks:
+        lines.append("")
+        lines.append("BOOKMARKS")
+        for bookmark in bookmarks[-3:]:
+            lines.append(
+                "  - "
+                f"[{bookmark.get('id', '')}] "
+                f"{bookmark.get('label', '')} "
+                f"(turn {bookmark.get('turn_index', 0)})"
+            )
     if latest_handoff:
         lines.append("")
         lines.append("LATEST HANDOFF")
@@ -2653,6 +2720,7 @@ def inspect_session(session_id: str) -> str:
     watch: dict[str, Any] = export.get("watch_state") or {}
     routed_checkpoints: list[dict[str, Any]] = export.get("routed_action_checkpoints") or []
     collaboration: dict[str, Any] = export.get("collaboration") or {}
+    bookmarks: list[dict[str, Any]] = list(session_data.get("bookmarks") or [])
     story = build_session_storyline(session_id, limit=5)
     mood = _session_mood_snapshot(require_session(session_id), watch_state=watch, collaboration_snapshot=collaboration)
 
@@ -2765,6 +2833,19 @@ def inspect_session(session_id: str) -> str:
             if ts or note:
                 lines.append(f"  [{ts}] {note[:100]}")
 
+    if bookmarks:
+        lines.append("")
+        lines.append("BOOKMARKS")
+        for bookmark in bookmarks[-5:]:
+            lines.append(
+                f"  [{bookmark.get('id', '')}] "
+                f"{bookmark.get('label', '')} "
+                f"· turn {bookmark.get('turn_index', 0)}"
+            )
+            summary_text = str(bookmark.get("summary") or "").strip()
+            if summary_text:
+                lines.append(f"      {summary_text[:120]}")
+
     # ── Recent progress log (watch) ───────────────────────────────
     progress_log: list[dict[str, Any]] = list(watch.get("progress_log") or [])
     if progress_log:
@@ -2850,6 +2931,7 @@ def _inspect_session_rich(
     collaboration = build_collaboration_snapshot(session_id, limit=5)
     story = build_session_storyline(session_id, limit=5)
     mood = _session_mood_snapshot(require_session(session_id), watch_state=watch, collaboration_snapshot=collaboration)
+    bookmarks: list[dict[str, Any]] = list(session_data.get("bookmarks") or [])
     # Metadata panel
     meta = _RichTable.grid(padding=(0, 2))
     meta.add_column(style="dim", min_width=12)
@@ -2915,6 +2997,19 @@ def _inspect_session_rich(
             size = _format_byte_count(int(out.get("size_bytes") or 0))
             out_table.add_row(name, size)
         _RICH_CONSOLE.print(_RichPanel(out_table, title=f"[bold dim]Saved Outputs ({len(outputs)})[/]", border_style="dim", padding=(0, 1)))
+
+    if bookmarks:
+        bookmark_table = _RichTable(border_style="dim", show_edge=False, pad_edge=True, header_style="bold dim")
+        bookmark_table.add_column("ID", style="cyan", no_wrap=True)
+        bookmark_table.add_column("Turn", style="dim", no_wrap=True)
+        bookmark_table.add_column("Label")
+        for bookmark in bookmarks[-5:]:
+            bookmark_table.add_row(
+                str(bookmark.get("id") or ""),
+                str(bookmark.get("turn_index") or ""),
+                str(bookmark.get("label") or ""),
+            )
+        _RICH_CONSOLE.print(_RichPanel(bookmark_table, title="[bold dim]Bookmarks[/]", border_style="dim", padding=(0, 1)))
 
     milestones = list(story.get("milestones") or [])
     timeline = list(story.get("timeline") or [])
@@ -4105,6 +4200,10 @@ def _inject_heading_emojis(text: str) -> str:
 
 
 _URL_PATTERN = re.compile(r'(https?://[^\s\)\]\>\"\']+)', re.IGNORECASE)
+# Regex constants for rendering helpers (compiled once at module level for performance)
+_RE_KV_BOLD = re.compile(r"\*\*[^*]+:\*\*")
+_RE_MD_LINK = re.compile(r"\[([^\]]*)\]\((https?://[^\)]+)\)")
+_RE_BARE_URL = re.compile(r"(https?://\S+)")
 
 
 def _make_clickable_link(url: str, text: str = "") -> str:
@@ -4271,12 +4370,11 @@ def _is_kv_bullet_group(lines: list[str]) -> bool:
     Accepts both **Key:** value (bold) and plain Key: Value formats, including
     lines where the whole content is wrapped in italic markers (*...*).
     """
-    kv_bold_pattern = re.compile(r"\*\*[^*]+:\*\*")
     for line in lines:
         content = re.sub(r"^[•\-\*]\s+", "", line.lstrip())
         # Strip wrapping italic markers (*content*) around the whole line body
         content = re.sub(r"^\*(.+)\*$", r"\1", content.strip())
-        if kv_bold_pattern.search(content):
+        if _RE_KV_BOLD.search(content):
             continue
         # Accept plain "Key: value | Key: value" rows — require a colon in the
         # majority of pipe-segments so we don't misclassify normal prose bullets.
@@ -4508,12 +4606,8 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
     # C. Extract Sources / **Sources** block at the end.
     # Matches bullet lists (- / *) AND numbered lists (1. 2. 3.) after a Sources heading.
     # Finds ALL occurrences, keeps the longest (most complete), strips all from body.
-    _SOURCES_BLOCK_RE = re.compile(
-        r"\n{1,2}(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
-        re.IGNORECASE,
-    )
     sources: str | None = None
-    all_matches = list(_SOURCES_BLOCK_RE.finditer(text))
+    all_matches = list(_RE_SOURCES_BLOCK.finditer(text))
     if all_matches:
         # Use the match with the most content (longest group 1) as the canonical sources
         best = max(all_matches, key=lambda m: len(m.group(1)))
@@ -4590,6 +4684,10 @@ def _auto_bold_response(text: str) -> str:
 
 _MD_TABLE_BLOCK = re.compile(
     r"(?m)^(\|[^\n]+\n\|[-:| ]+\|(?:\n\|[^\n]+)*)",
+)
+_RE_SOURCES_BLOCK = re.compile(
+    r"\n{1,2}(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
+    re.IGNORECASE,
 )
 
 
@@ -4679,8 +4777,6 @@ def _clean_sources_for_display(sources: str) -> list[str]:
       - Numbered/bulleted prefixes: 1. / - / * stripped
     Returns a list of (display_text, url) tuples, or (url, url) if no text.
     """
-    _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^\)]+)\)")
-    _BARE_URL_RE = re.compile(r"(https?://\S+)")
     results: list[tuple[str, str]] = []
     seen: set[str] = set()
     for line in sources.splitlines():
@@ -4691,7 +4787,7 @@ def _clean_sources_for_display(sources: str) -> list[str]:
         if not line:
             continue
         # Check for markdown link [text](url)
-        md = _MD_LINK_RE.search(line)
+        md = _RE_MD_LINK.search(line)
         if md:
             text, url = md.group(1).strip(), md.group(2).strip()
             display = text if text and text != url else url
@@ -4700,7 +4796,7 @@ def _clean_sources_for_display(sources: str) -> list[str]:
                 results.append((display, url))
             continue
         # Check for bare URL
-        bare = _BARE_URL_RE.search(line)
+        bare = _RE_BARE_URL.search(line)
         if bare:
             url = bare.group(1).rstrip(")")
             if url not in seen:
@@ -7699,7 +7795,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
 
         snapshots = _PREFS.get("snapshots", {})
         import datetime
-        ts = datetime.datetime.utcnow().isoformat()
+        ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
         snapshots[name] = {"sha": sha, "ts": ts}
         _PREFS["snapshots"] = snapshots
         _save_prefs()
@@ -9361,6 +9457,50 @@ def _cmd_tag(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_bookmark(ctx: ChatCommandContext) -> str:
+    """/bookmark [label] — save a replay bookmark for the current session."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+
+    label = " ".join(ctx.args.strip().split())
+    bookmark = create_session_bookmark(session.session_id, label=label, history=ctx.history)
+    detail = f"turn {bookmark.get('turn_index', 0)}"
+    _print_feedback(
+        f"Saved bookmark [{bookmark.get('id', '')}] {bookmark.get('label', '')}",
+        level="success",
+        detail=detail,
+    )
+    _set_command_result(ctx, ok=True, summary=f"bookmark {bookmark.get('id', '')} saved")
+    return _CMD_CONTINUE
+
+
+def _cmd_bookmarks(ctx: ChatCommandContext) -> str:
+    """/bookmarks — list replay bookmarks for the current session."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+
+    bookmarks = list_session_bookmarks(session.session_id)
+    if not bookmarks:
+        print(f"  {_DM}No bookmarks yet. Use /bookmark <label> after a meaningful turn.{_R}")
+        _set_command_result(ctx, ok=True, summary="no bookmarks")
+        return _CMD_CONTINUE
+
+    print(f"\n  {_B}Session bookmarks{_R}\n")
+    for bookmark in bookmarks:
+        summary = str(bookmark.get("summary") or "").strip()
+        print(
+            f"  [{bookmark.get('id', '')}] {bookmark.get('label', '')}  "
+            f"{_DM}(turn {bookmark.get('turn_index', 0)}){_R}"
+        )
+        if summary:
+            print(f"      {summary[:120]}")
+    print()
+    _set_command_result(ctx, ok=True, summary=f"{len(bookmarks)} bookmarks")
+    return _CMD_CONTINUE
+
+
 def _cmd_resume(ctx: ChatCommandContext) -> str:
     """/resume [last] — print resume instructions for the most recent other session."""
     token = ctx.args.strip().lower()
@@ -9385,9 +9525,30 @@ def _cmd_resume(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_replay(ctx: ChatCommandContext) -> str:
-    """/replay [session-id] — re-print the current or a past session's conversation."""
+    """/replay [session-id] [--from bookmark] — re-print the current or a past session's conversation."""
     is_tty = _IS_TTY or sys.stdout.isatty()
-    token = ctx.args.strip()
+    raw_args = ctx.args.strip()
+    parts = shlex.split(raw_args) if raw_args else []
+    token = ""
+    bookmark_token = ""
+
+    if parts:
+        if parts[0] == "--from":
+            if len(parts) != 2:
+                print(f"{_BRE}error:{_R} Usage: /replay [session-id] [--from <bookmark>]")
+                return _CMD_CONTINUE
+            bookmark_token = parts[1]
+        else:
+            token = parts[0]
+            if len(parts) > 1:
+                if len(parts) == 3 and parts[1] == "--from":
+                    bookmark_token = parts[2]
+                else:
+                    print(f"{_BRE}error:{_R} Usage: /replay [session-id] [--from <bookmark>]")
+                    return _CMD_CONTINUE
+
+    target_session_id = ""
+    header = "Replay: current session"
 
     if token:
         # Try to find a session matching the token as id prefix or title substring
@@ -9400,11 +9561,32 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
         if match is None:
             print(f"{_BRE}error:{_R} No session found matching '{token}'")
             return _CMD_CONTINUE
+        target_session_id = match.session_id
         history = load_conversation_history(match.session_id, limit_turns=50)
         header = f"Replay: {match.title[:50]} ({match.session_id[:8]}…)"
+    elif bookmark_token:
+        session = _require_session_or_warn(ctx)
+        if session is None:
+            return _CMD_CONTINUE
+        target_session_id = session.session_id
+        history = load_conversation_history(target_session_id, limit_turns=0)
     else:
         history = ctx.history
-        header = "Replay: current session"
+
+    if bookmark_token:
+        bookmark_session_id = target_session_id or ctx.session_id
+        if not bookmark_session_id:
+            print(f"{_BRE}error:{_R} No session found for bookmark replay")
+            return _CMD_CONTINUE
+        bookmark = find_session_bookmark(bookmark_session_id, bookmark_token)
+        if bookmark is None:
+            print(f"{_BRE}error:{_R} No bookmark found matching '{bookmark_token}'")
+            return _CMD_CONTINUE
+        history = history[int(bookmark.get("history_index") or 0):]
+        header = (
+            f"Replay from [{bookmark.get('id', '')}] {bookmark.get('label', '')}"
+            f" (turn {bookmark.get('turn_index', 0)})"
+        )
 
     if not history:
         print(f"  {_DM}No conversation history to replay.{_R}")
@@ -10262,6 +10444,20 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     )
     registry.register(
         SlashCommand(
+            name="bookmark",
+            description="Save a replay bookmark for the current session (/bookmark [label])",
+            handler=_cmd_bookmark,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="bookmarks",
+            description="List saved replay bookmarks for the current session",
+            handler=_cmd_bookmarks,
+        )
+    )
+    registry.register(
+        SlashCommand(
             name="resume",
             description="Print resume instructions for the most-recent other session (/resume [last|id])",
             handler=_cmd_resume,
@@ -10270,7 +10466,7 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(
         SlashCommand(
             name="replay",
-            description="Re-print the current or a past session conversation (/replay [session-id])",
+            description="Re-print the current or a past session conversation (/replay [session-id] [--from bookmark])",
             handler=_cmd_replay,
         )
     )
@@ -10525,8 +10721,10 @@ def print_chat_help(*, search: str = "") -> None:
         ("/export [md|json|txt] [file]",   "Export session history to file (md/json/txt)"),
         ("/stats [commands|ratings|sessions]", "Show ASCII bar charts of usage statistics"),
         ("/tag [add|rm|list] <tag>",       "Manage tags on the current session"),
+        ("/bookmark [label]",              "Save a replay bookmark for the current session"),
+        ("/bookmarks",                     "List saved replay bookmarks for the current session"),
         ("/resume [last|<id>]",            "Print resume instructions for a past session"),
-        ("/replay [session-id]",           "Re-print the current or a past session conversation"),
+        ("/replay [session-id] [--from <bookmark>]", "Re-print the current or a past session conversation"),
         ("/draft [save|load|clear|restore]",    "Save, load, clear, or restore a draft prompt"),
         ("/draft multiline [on|off]",           "Toggle multiline compose mode"),
         ("/template [list|use|save|delete]",    "Manage reusable prompt templates"),
@@ -11174,14 +11372,36 @@ def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
 
 
 _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
+    # Core
     "help", "clear", "quit", "exit", "update", "version", "v",
+    # Session & context
     "session", "context", "cwd", "files", "plan", "watch", "task",
-    "outputs", "rollback", "events", "why", "autoroute", "analyze",
-    "research", "write", "exec", "edit", "theme", "emoji", "layout", "colorscheme",
-    "sessions", "export", "stats", "tag", "resume", "replay", "handoff", "collab",
-    "draft", "template", "pasteguard", "accessibility", "a11y",
-    "search", "alias", "pin", "pins", "history", "recall",
-    "dashboard", "followup",
+    "sessions", "tag", "resume", "replay", "handoff", "collab",
+    # Outputs & edits
+    "outputs", "rollback", "events", "why", "edit", "exec", "write",
+    "changes", "diff", "snapshot",
+    # Routing & analysis
+    "autoroute", "analyze", "research",
+    # Display & UI
+    "theme", "emoji", "layout", "colorscheme", "separator", "links",
+    "autobold", "jsonformat", "emojiheaders", "pathhints", "ratehint",
+    "promptdebug", "quality", "tip", "shortcuts",
+    "palette", "overlay", "bindlist", "keybind", "keys",
+    # Dashboard & benchmarks
+    "dashboard", "benchmark", "timeline",
+    # History & search
+    "history", "recall", "histsearch", "freq", "heatmap", "top", "streak",
+    # Persistence
+    "export", "stats",
+    # Pinning & notes
+    "pin", "pins", "search",
+    # Aliases, macros, templates
+    "alias", "macro", "macrostatus", "template", "draft",
+    # Accessibility
+    "accessibility", "a11y",
+    # Misc / fun
+    "rate", "ratehint", "celebrate", "inject", "system", "prompt",
+    "pasteguard", "followup",
 })
 
 _MAX_ALIASES = 50
@@ -11447,7 +11667,7 @@ def _relative_time(ts_str: str) -> str:
     try:
         import datetime
         ts = datetime.datetime.fromisoformat(ts_str)
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         diff = now - ts
         secs = int(diff.total_seconds())
         if secs < 60:
@@ -11659,7 +11879,7 @@ def _cmd_histsearch(ctx: "ChatCommandContext") -> str:
                 try:
                     import datetime
                     dt = datetime.datetime.fromisoformat(ts)
-                    diff = int((datetime.datetime.utcnow() - dt).total_seconds())
+                    diff = int((datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - dt).total_seconds())
                     rel = f"[dim] ({diff//3600}h ago)[/]" if diff >= 3600 else f"[dim] ({diff//60}m ago)[/]"
                 except Exception:
                     pass
@@ -11877,7 +12097,7 @@ def _cmd_rate(ctx: "ChatCommandContext") -> str:
         _print_error("Nothing to rate — no response yet")
         return _CMD_CONTINUE
 
-    ts = datetime.utcnow().isoformat()
+    ts = datetime.now(timezone.utc).isoformat()
     ratings = _PREFS.setdefault("ratings", [])
     ratings.append({"score": score, "label": label, "ts": ts})
     if len(ratings) > 500:
@@ -12321,10 +12541,19 @@ def _print_path_hints(paths: "list[str]") -> None:
         print(f"\n  {_DM}📁 Files: {hint}  (use /view or /edit){_R}")
 
 
-def _suggest_followups(last_prompt: str) -> list[str]:
+def _suggest_followups(last_prompt: str, *, response_text: str = "", session_id: str = "") -> list[str]:
     """Return 2-3 relevant follow-up command suggestions based on the last prompt."""
     prompt_lower = last_prompt.lower()
+    response_lower = str(response_text or "").lower()
     suggestions: list[str] = []
+    mentioned_paths = _detect_file_paths(response_text) if response_text else []
+
+    if mentioned_paths:
+        suggestions.append(f"/view {mentioned_paths[0]} — inspect the file mentioned above")
+    if session_id:
+        suggestions.append("/context — verify what the next request will inherit")
+    if "sources" in response_lower or "http://" in response_lower or "https://" in response_lower:
+        suggestions.append("/links — revisit the cited sources")
 
     if any(w in prompt_lower for w in ["file", "path", "directory", "folder", "ls", "find"]):
         suggestions.append("/pathhints — show detected file paths in response")
@@ -12350,23 +12579,31 @@ def _suggest_followups(last_prompt: str) -> list[str]:
         suggestions.append("/rate — rate this response")
         suggestions.append("/recall 3 — review recent prompts")
 
-    return suggestions[:3]
+    return _dedupe_preserve_order(suggestions)[:3]
 
 
-def _print_followup_suggestions(suggestions: list[str]) -> None:
-    """Print follow-up suggestions in a dim, unobtrusive style."""
+def _print_followup_suggestions(suggestions: list[str], *, mode: str = "chat") -> None:
+    """Print follow-up suggestions as a compact bottom-hint footer."""
     if not suggestions:
-        return
-    if _a11y_plain_mode() or _a11y_reduced_motion():
         return
     is_tty = _IS_TTY or sys.stdout.isatty()
     if not is_tty:
         return
+    clean = _dedupe_preserve_order(suggestions)[:3]
+    if not clean:
+        return
+    if _a11y_plain_mode() or _a11y_reduced_motion():
+        _print_predictive_affordances(
+            [f"mode: {mode}", *clean],
+            title="Bottom bar",
+            border_style="cyan",
+        )
+        return
 
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print()
-        _RICH_CONSOLE.print("  [dim]💡 Try next:[/]", end="")
-        for i, s in enumerate(suggestions):
+        _RICH_CONSOLE.print(f"  [dim]mode: {mode}[/] [dim]│[/]", end="")
+        for i, s in enumerate(clean):
             sep = "  ·  " if i > 0 else "  "
             cmd = s.split(" — ")[0]
             desc = s.split(" — ")[1] if " — " in s else ""
@@ -12376,11 +12613,11 @@ def _print_followup_suggestions(suggestions: list[str]) -> None:
         _RICH_CONSOLE.print()
     else:
         print(
-            f"\n  {_DM}💡 Try next:{_R}  "
+            f"\n  {_DM}mode: {mode}{_R} {_DM}|{_R} "
             + "  ·  ".join(
                 f"{_BCY}{s.split(' — ')[0]}{_R}"
                 f"{_DM}{' — ' + s.split(' — ')[1] if ' — ' in s else ''}{_R}"
-                for s in suggestions
+                for s in clean
             )
         )
 
@@ -12453,7 +12690,7 @@ def _cmd_followup(ctx: "ChatCommandContext") -> str:
             print(msg)
         return _CMD_CONTINUE
 
-    suggestions = _suggest_followups(last_prompt)
+    suggestions = _suggest_followups(last_prompt, response_text=_last_response_text, session_id=ctx.session_id)
     is_tty = _IS_TTY or sys.stdout.isatty()
 
     if _RICH_AVAILABLE and is_tty:
@@ -13650,15 +13887,19 @@ def run_chat(
                 border_style="cyan",
             )
         _print_animated_separator()
-        if _PREFS.get("show_rate_hint", True) and not _a11y_plain_mode() and (_IS_TTY or sys.stdout.isatty()):
-            if _RICH_AVAILABLE:
-                _RICH_CONSOLE.print("[dim]  rate this response: /rate good · /rate ok · /rate bad[/]")
-            else:
-                print(f"  {_DM}rate this response: /rate good · /rate ok · /rate bad{_R}")
-        # Contextual follow-up suggestions footer
-        if _PREFS.get("show_suggestions", True) and not config.output_json:
-            _suggestions = _suggest_followups(prompt)
-            _print_followup_suggestions(_suggestions)
+        if not config.output_json:
+            _footer_hints: list[str] = []
+            if _PREFS.get("show_rate_hint", True):
+                _footer_hints.append("/rate good — mark this answer helpful")
+            if _PREFS.get("show_suggestions", True):
+                _footer_hints.extend(
+                    _suggest_followups(
+                        prompt,
+                        response_text=response.response or "",
+                        session_id=session_id,
+                    )
+                )
+            _print_followup_suggestions(_footer_hints, mode="chat")
         global _last_response_text
         _last_response_text = response.response or ""
         if not config.output_json and not _compact:
