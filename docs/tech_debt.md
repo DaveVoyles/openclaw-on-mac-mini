@@ -526,8 +526,16 @@ across module decomposition, error handling, type safety, documentation, and tes
 | TD-26 | Extract `ui_utils` module (_with_spinner 126L, _print_startup_banner 96L, 3 more UI helpers) | 🟢 Low | ✅ Shipped (`daefca9`) |
 | TD-27 | Extract `health` module (print_health 67L, _clean_sources_for_display 38L, HealthResponse dataclass) | 🟢 Low | ✅ Shipped (`daefca9`) |
 
-**Actual impact TD-8 through TD-27:** `openclaw_cli.py` reduced from 14,813 → 10,665 lines (−28%).
-24 extracted modules now exist.
+| TD-28 | Create `openclaw_cli_types.py` — move ChatCommandContext, SlashCommand, ChatCommandRegistry, AskResponse, LocalLinkValidation, CliConfig to leaf module (0 deps) | 🟢 Low | ✅ Shipped (`0e47b88`) |
+| TD-29 | Extract `openclaw_cli_cmd_settings.py` — 12 settings/appearance handlers (_cmd_theme, _cmd_emoji, _cmd_layout, _cmd_accessibility, etc., 588L) | 🟢 Low | ✅ Shipped (`abf0e67`) |
+| TD-30 | Extract `openclaw_cli_cmd_session.py` — 10 session lifecycle handlers (_cmd_session, _cmd_events, _cmd_replay, _cmd_bookmark, _cmd_handoff, etc., 778L) | 🟡 Medium | ✅ Shipped (`abf0e67`) |
+| TD-31 | Extract `openclaw_cli_cmd_workflow.py` — 12 workflow/automation handlers (_cmd_plan, _cmd_task, _cmd_workspace, _cmd_macro, _cmd_workflow, _cmd_dashboard, etc.) | 🔴 High | 🔄 In progress |
+| TD-32 | Extract `openclaw_cli_cmd_content.py` — 10 content/analytics handlers (_cmd_outputs, _cmd_search, _cmd_history, _cmd_pin, _cmd_pattern, _cmd_stats, _cmd_timeline, etc., 1100L) | 🟡 Medium | ✅ Shipped (`abf0e67`) |
+| TD-33 | Extract `openclaw_cli_cmd_core.py` — 20+ system/file/exec handlers (_cmd_help, _cmd_exec, _cmd_edit, _cmd_autoroute, _cmd_analyze, _cmd_runbook, _cmd_draft, etc.) | 🟡 Medium | 🔄 Pending |
+| TD-34 | Final cleanup of main — replace inline `_cmd_*` bodies with import re-exports, extract `build_parser` (158L) → `openclaw_cli_cli_parser.py`, extract `print_chat_help` (178L) | 🟡 Medium | ⏳ Blocked on TD-31/33 |
+
+**Actual impact TD-8 through TD-32:** `openclaw_cli.py` reduced from 14,813 → 8,518 lines (−43%).
+31 extracted modules now exist.
 
 ---
 
