@@ -471,4 +471,76 @@ Wave TD-7 (module split) should be last; it changes import structure and may req
 | TD-5 | ~510 | 🟡 |
 | TD-6 | ~150 (net; adds helpers) | 🔴 |
 | TD-7 | 0 net (structural reorganization) | 🔴 |
-| **Total** | **~1,290 lines removed** | — |
+| **Total TD-1–7** | **~1,290 lines removed** | — |
+
+---
+
+## Second Audit — April 2026 (Waves TD-8 through TD-16)
+
+A 3-agent structural audit conducted after TD-7 shipped identified the next tranche of improvements
+across module decomposition, error handling, type safety, documentation, and test coverage.
+
+### Audit Findings Summary
+
+**Structural** (`openclaw_cli.py`, 14,813 lines after TD-7):
+8 clean extraction candidates totaling ~3,129 lines (21% of file).
+
+**Code Quality:**
+- 109+ silent `except Exception: pass` blocks — no logging infrastructure wired in CLI
+- ~95% of functions missing type annotations
+- `OpenClawCliError` + 12 subclass hierarchy in `exceptions.py` — never imported in CLI
+- `enhanced_logging.py` JSON logging framework exists but unused in main CLI module
+
+**Documentation Gaps (7 high-value docs missing):**
+- `docs/DEVELOPMENT.md`, `docs/DEPENDENCY_MAP.md`, `docs/SKILL_DEVELOPMENT.md`
+- `docs/TESTING.md`, `docs/ASYNC_PATTERNS.md`, `scripts/README.md`
+- `docs/AGENT-GUIDE.md` needs update to reflect new module split
+
+**Test Coverage Gaps:**
+- Plugin system: 0 tests | Config loading: 0 tests | Error handling: 0 tests | Auth flow: minimal
+
+---
+
+### Wave Status (TD-8 through TD-16)
+
+| Wave | Description | Risk | Status |
+|------|-------------|------|--------|
+| TD-8  | Extract `auth` + `update` modules (597 lines, pure stdlib) | 🟢 Low | 🔲 Pending |
+| TD-9  | Extract `path_utils` + `diff` modules (353 lines) | 🟢 Low | 🔲 Pending |
+| TD-10 | Extract `router` module (893 lines, 38 funcs, 5 dataclasses) | 🟢 Low | 🔲 Pending |
+| TD-11 | Extract `macros` module (344 lines, workflow engine) | 🟢 Low | 🔲 Pending |
+| TD-12 | Error handling standardization (109+ silent failures → logging) | 🟡 Medium | 🔲 Pending |
+| TD-13 | Extract `exec` + `layout` modules (942 lines, threading) | 🟡 Medium | 🔲 Pending |
+| TD-14 | Type annotation pass (all CLI modules via pyright) | 🟢 Low | 🔲 Pending |
+| TD-15 | Agent + developer documentation (7 new docs) | 🟢 Low | 🔲 Pending |
+| TD-16 | Test coverage expansion (60+ new tests) | 🟡 Medium | 🔲 Pending |
+
+**Projected impact after TD-8 through TD-13:** `openclaw_cli.py` reduced from 14,813 → ~10,700 lines (−28%)
+
+---
+
+### Module Extraction Candidates Detail
+
+| Module | Lines | Key Exports | Dependencies |
+|--------|-------|-------------|--------------|
+| `openclaw_cli_router.py` | 893 | `ReplRouteDecision`, `_maybe_route_with_grounding`, 13 regex patterns | sessions.py only |
+| `openclaw_cli_exec.py` | 730 | `_exec_progress_animate`, `_cmd_exec`, `_analyze_exec_error` | actions.py, ui_core |
+| `openclaw_cli_macros.py` | 344 | `_macro_run`, `_workflow_store`, `_cmd_macro`, `_cmd_workflow` | sessions.py, `_PREFS` ref |
+| `openclaw_cli_update.py` | 335 | `handle_update_command`, `_fetch_latest_pypi_version` | pure stdlib |
+| `openclaw_cli_auth.py` | 262 | `TokenResolution`, `read_keychain_token`, `resolve_token` | pure stdlib |
+| `openclaw_cli_layout.py` | 212 | `_effective_layout_mode`, `_print_layout_preset_workspace` | sessions.py, `_PREFS` ref |
+| `openclaw_cli_diff.py` | 210 | `_render_diff_ansi`, `_cmd_diff`, `_cmd_changes`, `_cmd_timeline` | sessions.py, ui_core |
+| `openclaw_cli_path_utils.py` | 143 | `_detect_file_paths`, `_suggest_followups`, `_print_path_hints` | ui_core only |
+
+---
+
+### Implementation Notes for TD-8 through TD-16
+
+**Deploy script** — `scripts/install_openclaw_cli_remote.sh` `CLI_FILES` array must be updated for
+each new module. Currently 6 files after TD-7.
+
+**Fleet strategy:**
+- TD-8, TD-9, TD-13–16: parallel agents (2–6 lanes)
+- TD-10, TD-11: focused solo or 2-agent
+- TD-12: 2 agents (categorize / replace with logging)
+- All waves: 431 tests must pass + `make deploy-cli` before commit
