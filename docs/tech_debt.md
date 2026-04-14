@@ -518,12 +518,14 @@ across module decomposition, error handling, type safety, documentation, and tes
 | TD-18 | Settings command helpers module | 🟢 Low | ✅ Shipped (`6e583c8`, 0 extracted — inline dispatch) |
 | TD-19 | Session command helpers module (events, search, plan, handoff) | 🟡 Medium | ✅ Shipped (`6e583c8`) |
 | TD-20 | Content command helpers module (export, stats, pin, pattern) | 🟡 Medium | ✅ Shipped (`323f132`) |
-| TD-21 | Extract `watch` module (handle_watch_command 372L, execute_watch_iteration 138L, _print_watch_status 91L) | 🟡 Medium | 🔄 In Progress |
-| TD-22 | Extract `session_display` module (inspect_session 205L, _build_session_share_text 159L, 5 more helpers) | 🟡 Medium | 🔄 In Progress |
-| TD-23 | Move ANSI markdown renderer (_render_markdown_ansi 125L, _render_table_ansi 79L) into render module | 🟢 Low | ⏳ Pending |
+| TD-21 | Extract `watch` module (handle_watch_command 372L, execute_watch_iteration 138L, _print_watch_status 91L) | 🟡 Medium | ✅ Shipped (`4920d6a`) |
+| TD-22 | Extract `session_display` module (inspect_session 205L, _build_session_share_text 159L, 5 more helpers) | 🟡 Medium | ✅ Shipped (`4920d6a`) |
+| TD-23 | Move ANSI markdown renderer (_render_markdown_ansi 125L, _render_table_ansi 79L) into render module | 🟢 Low | ✅ Shipped (`ac7858d`) |
+| TD-24 | Extract `preprocess` module (_preprocess_response_text 71L, _detect_and_format_json 69L, 3 more) | 🟢 Low | 🔄 In Progress |
+| TD-25 | Extract `session_utils` module (summarize_session 59L, _session_preview_lines 51L, _collect_operator_alerts 50L) | 🟢 Low | 🔄 In Progress |
 
-**Actual impact TD-8 through TD-20:** `openclaw_cli.py` reduced from 14,813 → ~13,687 lines (−8%).
-16 extracted modules now exist. TD-21/22/23 target ~1,300 additional lines, projecting 18+ modules total.
+**Actual impact TD-8 through TD-23:** `openclaw_cli.py` reduced from 14,813 → 11,660 lines (−21%).
+20 extracted modules now exist. TD-24/25 target ~400 additional lines.
 
 ---
 
