@@ -237,6 +237,15 @@ vocabulary, persistence, and fallback reporting first.
 
 > **New:** Ctrl-R reverse search, Ctrl-L clear, Ctrl-W word-delete are now active. Bind any `Ctrl+X` to a slash command with `/keybind Ctrl+H /histsearch`.
 
+### Wave 29 — Diff & Edit Viewer Polish
+
+| Command | Description |
+|---|---|
+| `/diff [file1 file2 \| --git]` | Colorized unified diff (+ green, - red, @@ cyan) |
+| `/changes` | Show session edit log + color-coded git status |
+| `/snapshot [name]` | Save current git HEAD as a named restore point |
+| `/rollback [name\|list]` | Preview or execute rollback to a saved snapshot |
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new

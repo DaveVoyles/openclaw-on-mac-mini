@@ -1964,6 +1964,27 @@ of the existing session/watch dashboards:
 
 ---
 
+## Wave 29 — Diff & Edit Viewer Polish
+
+**Status:** ✅ Shipped
+
+### Features
+- **`_render_diff_ansi()`**: Colorizes unified diff output — `+` lines green, `-` lines red, `@@` hunk headers cyan, `---`/`+++` file headers bold, context lines dim.
+- **`/diff [file1 file2 | --git]`**: Runs `git diff` (or `diff -u file1 file2`) and renders with `_render_diff_ansi()`. Falls back gracefully if git not available.
+- **`/changes`**: Shows `session_edits` log entries + colorized `git status --short` (M=yellow, A=green, D=red, ?=dim).
+- **`/snapshot [name]`**: Saves current `git rev-parse HEAD` SHA to `snapshots` pref under a name. Includes timestamp.
+- **`/rollback [name|list]`**: `list` shows saved snapshots. `<name>` previews diff from snapshot to HEAD. `<name> --exec` destructively checks out the snapshot. Warns clearly before destructive action.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/diff [file1 file2 \| --git]` | Colorized unified diff |
+| `/changes` | Session edit log + git status |
+| `/snapshot [name]` | Save named git restore point |
+| `/rollback [name\|list]` | Preview or execute snapshot rollback |
+
+---
+
 ## Wave 29 — Narrative Recaps & Session Storytelling
 
 **Status: ✅ Shipped**

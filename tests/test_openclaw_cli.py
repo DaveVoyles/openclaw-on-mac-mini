@@ -5367,12 +5367,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave29(self):
-        """_CLI_BUILD must equal 'wave29'."""
-        assert mod._CLI_BUILD == "wave29"
-
-
-class TestCmdRatehint:
+    def test_cli_build_is_wave30(self):
+        """_CLI_BUILD must equal 'wave30'."""
+        assert mod._CLI_BUILD == "wave30"
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -6280,9 +6277,9 @@ class TestCmdTip:
         assert len(mod._OPENCLAW_TIPS) > 0
         assert all(isinstance(t, str) for t in mod._OPENCLAW_TIPS)
 
-    def test_cli_build_is_wave29(self):
-        """_CLI_BUILD is updated to wave29."""
-        assert mod._CLI_BUILD == "wave29"
+    def test_cli_build_is_wave30(self):
+        """_CLI_BUILD is updated to wave30."""
+        assert mod._CLI_BUILD == "wave30"
 
 
 class TestCmdKeys:
@@ -6335,9 +6332,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave29(self):
-        """_CLI_BUILD == 'wave29'."""
-        assert mod._CLI_BUILD == "wave29"
+    def test_cli_build_is_wave30(self):
+        """_CLI_BUILD == 'wave30'."""
+        assert mod._CLI_BUILD == "wave30"
 
 
 class TestCmdKeybind:
@@ -6472,3 +6469,129 @@ class TestCmdChanges:
         monkeypatch.setattr(subprocess, "run", lambda *a, **kw: type("R", (), {"stdout": "", "stderr": ""})())
         result = mod._cmd_diff(self._ctx())
         assert result == mod._CMD_CONTINUE
+
+
+class TestCmdDashboard:
+    """Tests for /dashboard — power dashboard command."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_dashboard_empty_prefs_returns_cmd_continue(self, monkeypatch, capsys):
+        """/dashboard returns _CMD_CONTINUE with empty prefs."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_dashboard(self._ctx())
+        assert result == mod._CMD_CONTINUE
+
+    def test_dashboard_with_mock_data_returns_cmd_continue(self, monkeypatch, capsys):
+        """/dashboard returns _CMD_CONTINUE with pins, macros, and ratings populated."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {
+            "cmd_history": [
+                {"text": "hello world", "timestamp": "2024-01-01"},
+                {"text": "/pin foo bar", "timestamp": "2024-01-02"},
+            ],
+            "ratings": [{"score": 4}, {"score": 5}],
+            "pins": {"foo": "bar", "env": "prod"},
+            "macros": {"greet": "say hello"},
+            "aliases": {"h": "/help"},
+            "snapshots": {"snap1": "abc123"},
+            "custom_keybinds": {"Ctrl+D": "/dashboard"},
+        })
+        result = mod._cmd_dashboard(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        # Pins and stats should appear in plain-text output
+        assert "foo" in out
+        assert "Prompts" in out
+
+    def test_dashboard_output_references_cli_build(self, monkeypatch, capsys):
+        """Dashboard plain-text output contains the _CLI_BUILD string."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_dashboard(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert mod._CLI_BUILD in out
+
+
+class TestCmdBenchmark:
+    """Tests for /benchmark — AI server response latency measurement."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_benchmark_default_returns_cmd_continue(self, monkeypatch):
+        """/benchmark (default 3 pings) returns _CMD_CONTINUE even when connection fails."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        import socket
+        monkeypatch.setattr(socket, "create_connection", lambda *a, **kw: (_ for _ in ()).throw(ConnectionRefusedError("no server")))
+        result = mod._cmd_benchmark(self._ctx())
+        assert result == mod._CMD_CONTINUE
+
+    def test_benchmark_explicit_n_returns_cmd_continue(self, monkeypatch):
+        """/benchmark 5 runs 5 pings and returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        import socket
+        monkeypatch.setattr(socket, "create_connection", lambda *a, **kw: (_ for _ in ()).throw(ConnectionRefusedError("no server")))
+        result = mod._cmd_benchmark(self._ctx("5"))
+        assert result == mod._CMD_CONTINUE
+
+    def test_benchmark_zero_clamped_to_one(self, monkeypatch):
+        """/benchmark 0 is clamped to 1 ping and still returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        import socket
+        call_count = []
+
+        def fake_connect(*a, **kw):
+            call_count.append(1)
+            raise ConnectionRefusedError("no server")
+
+        monkeypatch.setattr(socket, "create_connection", fake_connect)
+        result = mod._cmd_benchmark(self._ctx("0"))
+        assert result == mod._CMD_CONTINUE
+        assert len(call_count) == 1
+
+
+class TestCmdTimeline:
+    """Tests for /timeline command — Wave 30 THE FINAL WAVE."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_timeline_empty_history_shows_no_history_message(self, monkeypatch, capsys):
+        """/timeline with empty history shows 'No history yet' and returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"cmd_history": []})
+        result = mod._cmd_timeline(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No history yet" in out
+
+    def test_timeline_with_timestamped_history_returns_cmd_continue(self, monkeypatch, capsys):
+        """/timeline with mock timestamped history returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {
+            "cmd_history": [
+                {"text": "/help", "timestamp": "2024-06-01T10:00:00"},
+                {"text": "explain async", "timestamp": "2024-06-01T11:30:00"},
+                {"text": "/stats", "timestamp": "2024-06-02T09:15:00"},
+            ]
+        })
+        result = mod._cmd_timeline(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Timeline" in out or "2024-06" in out
+
+    def test_cli_build_is_wave30(self):
+        """_CLI_BUILD == 'wave30' — THE FINAL BUILD ASSERTION."""
+        assert mod._CLI_BUILD == "wave30"

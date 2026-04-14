@@ -135,7 +135,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave29"  # updated with each UX wave batch
+_CLI_BUILD = "wave30"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -10290,6 +10290,21 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Show session edit log and git status",
         handler=_cmd_changes,
     ))
+    registry.register(SlashCommand(
+        name="timeline",
+        description="Show a visual activity timeline of recent openclaw usage",
+        handler=_cmd_timeline,
+    ))
+    registry.register(SlashCommand(
+        name="dashboard",
+        description="Show the power dashboard: sessions, stats, pins, and system status",
+        handler=_cmd_dashboard,
+    ))
+    registry.register(SlashCommand(
+        name="benchmark",
+        description="Measure AI server response latency (/benchmark [n], default 3 pings, max 10)",
+        handler=_cmd_benchmark,
+    ))
     return registry
 
 
@@ -10387,6 +10402,9 @@ def print_chat_help(*, search: str = "") -> None:
         ("/keybind [list|Ctrl+X /cmd|clear X]", "Manage custom readline key bindings"),
         ("/diff [file1 file2 | --git]",          "Show a colorized unified diff"),
         ("/changes",                             "Show session edit log and git status"),
+        ("/timeline",                            "Show a visual activity timeline of recent openclaw usage"),
+        ("/dashboard",                           "Show the power dashboard: sessions, stats, pins, and system status"),
+        ("/benchmark [n]",                       "Measure AI server response latency (n pings, default 3, max 10)"),
     ]
 
     q = search.strip().lower()
@@ -10990,6 +11008,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "sessions", "export", "stats", "tag", "resume", "replay", "handoff", "collab",
     "draft", "template", "pasteguard", "accessibility", "a11y",
     "search", "alias", "pin", "pins", "history", "recall",
+    "dashboard",
 })
 
 _MAX_ALIASES = 50
@@ -12782,6 +12801,300 @@ def _cmd_changes(ctx: ChatCommandContext) -> str:
             for line in git_changes.split("\n"):
                 print(f"  {line}")
         print()
+
+    return _CMD_CONTINUE
+
+
+def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
+    """/timeline — show a visual activity timeline of recent openclaw usage."""
+    import datetime
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    cmd_history = _PREFS.get("cmd_history", [])
+
+    if not cmd_history:
+        msg = "No history yet — use openclaw for a while to see your timeline!"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    # Group entries by date
+    by_date: dict = {}
+    for entry in cmd_history:
+        if isinstance(entry, dict):
+            ts_str = entry.get("timestamp", entry.get("ts", ""))
+            text = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
+        else:
+            continue
+        if not ts_str or not text:
+            continue
+        try:
+            ts = datetime.datetime.fromisoformat(ts_str)
+            date_key = ts.strftime("%Y-%m-%d")
+            if date_key not in by_date:
+                by_date[date_key] = []
+            by_date[date_key].append((ts.strftime("%H:%M"), text))
+        except (ValueError, AttributeError):
+            continue
+
+    if not by_date:
+        msg = "No timestamped history found."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    # Sort dates descending (most recent first), show last 7 days
+    sorted_dates = sorted(by_date.keys(), reverse=True)[:7]
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold cyan]📅 Activity Timeline[/] [dim](last {len(sorted_dates)} days)[/]\n")
+
+        for date_str in sorted_dates:
+            entries = by_date[date_str]
+            count = len(entries)
+
+            bar_len = min(count, 20)
+            bar = "█" * bar_len
+
+            try:
+                dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                day_label = dt.strftime("%a %b %d")
+                today = datetime.date.today()
+                diff = (today - dt.date()).days
+                if diff == 0:
+                    day_label = f"Today ({day_label})"
+                elif diff == 1:
+                    day_label = f"Yesterday ({day_label})"
+            except Exception:
+                day_label = date_str
+
+            _RICH_CONSOLE.print(f"  [bold]{day_label}[/]  [cyan]{bar}[/] [dim]{count} events[/]")
+
+            for time_str, text in reversed(entries[-3:]):
+                preview = text[:55] + "…" if len(text) > 55 else text
+                style = "bold green" if text.startswith("/") else "dim"
+                _RICH_CONSOLE.print(f"    [dim]{time_str}[/]  [{style}]{preview}[/]")
+
+            _RICH_CONSOLE.print()
+    else:
+        print(f"\n📅 Activity Timeline (last {len(sorted_dates)} days)\n")
+        for date_str in sorted_dates:
+            entries = by_date[date_str]
+            count = len(entries)
+            bar = "█" * min(count, 20)
+            print(f"  {date_str}  {_CY}{bar}{_R} {_DM}{count} events{_R}")
+            for time_str, text in reversed(entries[-3:]):
+                preview = text[:55]
+                print(f"    {_DM}{time_str}  {preview}{_R}")
+            print()
+
+    return _CMD_CONTINUE
+
+
+def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
+    """/dashboard — show the power dashboard: sessions, stats, pins, and system status."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    # Gather data
+    cmd_history = _PREFS.get("cmd_history", [])
+    ratings = _PREFS.get("ratings", [])
+    pins = _PREFS.get("pins", {})
+    macros = _PREFS.get("macros", {})
+    aliases = _PREFS.get("aliases", {})
+    snapshots = _PREFS.get("snapshots", {})
+    custom_keybinds = _PREFS.get("custom_keybinds", {})
+
+    total_prompts = sum(1 for e in cmd_history if isinstance(e, dict) and not e.get("text", "").startswith("/"))
+    total_commands = sum(1 for e in cmd_history if isinstance(e, dict) and e.get("text", "").startswith("/"))
+    total_ratings = len(ratings)
+    avg_rating = 0.0
+    if ratings:
+        scores = []
+        for r in ratings:
+            if isinstance(r, dict):
+                s = r.get("score", r.get("rating", 0))
+            else:
+                try:
+                    s = int(r)
+                except (ValueError, TypeError):
+                    s = 0
+            scores.append(s)
+        avg_rating = sum(scores) / len(scores) if scores else 0
+
+    # Token estimates
+    total_chars = sum(len(e.get("text", "")) for e in cmd_history if isinstance(e, dict))
+    est_tokens = total_chars // 4
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table
+        from rich.panel import Panel
+        from rich.columns import Columns
+        from rich.box import SIMPLE
+
+        _RICH_CONSOLE.print()
+
+        # Header
+        _RICH_CONSOLE.rule("[bold cyan]🦞 OpenClaw Dashboard[/]", style="cyan")
+        _RICH_CONSOLE.print()
+
+        # Row 1: Stats + Pins side by side
+        stats_tbl = Table(box=SIMPLE, show_header=False, padding=(0, 1))
+        stats_tbl.add_column("Metric", style="dim", width=22)
+        stats_tbl.add_column("Value", style="bold")
+        stats_tbl.add_row("Total prompts", str(total_prompts))
+        stats_tbl.add_row("Slash commands used", str(total_commands))
+        stats_tbl.add_row("Responses rated", str(total_ratings))
+        stats_tbl.add_row("Avg rating", f"{avg_rating:.1f} ⭐" if avg_rating else "—")
+        stats_tbl.add_row("Est. tokens used", f"~{est_tokens:,}")
+        stats_tbl.add_row("Macros saved", str(len(macros)))
+        stats_tbl.add_row("Aliases", str(len(aliases)))
+        stats_tbl.add_row("Snapshots", str(len(snapshots)))
+        stats_tbl.add_row("Custom keybinds", str(len(custom_keybinds)))
+        stats_panel = Panel(stats_tbl, title="[bold cyan]📊 Stats[/]", border_style="cyan", padding=(0, 1))
+
+        pins_tbl = Table(box=SIMPLE, show_header=False, padding=(0, 1))
+        pins_tbl.add_column("Key", style="bold yellow", width=14)
+        pins_tbl.add_column("Value", style="default")
+        if pins:
+            for k, v in list(pins.items())[:8]:
+                val_str = str(v)[:35] + ("…" if len(str(v)) > 35 else "")
+                pins_tbl.add_row(k, val_str)
+        else:
+            pins_tbl.add_row("[dim]no pins[/]", "[dim]use /pin key value[/]")
+        pins_panel = Panel(pins_tbl, title="[bold yellow]📌 Pins[/]", border_style="yellow", padding=(0, 1))
+
+        _RICH_CONSOLE.print(Columns([stats_panel, pins_panel], equal=True, expand=True))
+
+        # Row 2: Recent activity
+        recent = []
+        for e in reversed(cmd_history[-10:]):
+            if isinstance(e, dict):
+                text = e.get("text", e.get("prompt", e.get("cmd", "")))
+                ts = e.get("timestamp", e.get("ts", ""))
+                if text:
+                    recent.append((text[:55], ts[:10] if ts else ""))
+
+        activity_tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
+        activity_tbl.add_column("Recent", style="default")
+        activity_tbl.add_column("Date", style="dim", width=12)
+        for text, ts in reversed(recent[:5]):
+            style = "bold green" if text.startswith("/") else "default"
+            activity_tbl.add_row(f"[{style}]{text}[/]", ts)
+        if not recent:
+            activity_tbl.add_row("[dim]No history yet[/]", "")
+
+        activity_panel = Panel(activity_tbl, title="[bold cyan]🕐 Recent Activity[/]", border_style="dim", padding=(0, 1))
+        _RICH_CONSOLE.print(activity_panel)
+
+        # Row 3: Quick reference
+        _RICH_CONSOLE.print()
+        _RICH_CONSOLE.print(
+            f"[dim]Build:[/] [bold]{_CLI_BUILD}[/]  "
+            f"[dim]Prefs:[/] [bold]{len(_PREFS)} keys[/]  "
+            f"[dim]Commands:[/] [bold]{len(_BUILTIN_COMMAND_NAMES)}[/]  "
+            f"[dim]Type[/] [bold cyan]/help[/] [dim]for full reference[/]"
+        )
+        _RICH_CONSOLE.print()
+        _RICH_CONSOLE.rule(style="dim")
+        _RICH_CONSOLE.print()
+
+    else:
+        # Plain-text dashboard
+        print(f"\n{'='*60}")
+        print(f"  🦞 OpenClaw Dashboard  [{_CLI_BUILD}]")
+        print(f"{'='*60}")
+        print(f"  Prompts:      {total_prompts}")
+        print(f"  Commands:     {total_commands}")
+        print(f"  Ratings:      {total_ratings}  (avg: {avg_rating:.1f})")
+        print(f"  Est tokens:   ~{est_tokens:,}")
+        print(f"  Macros:       {len(macros)}")
+        print(f"  Pins:         {len(pins)}")
+        print(f"  Snapshots:    {len(snapshots)}")
+        print(f"  Commands reg: {len(_BUILTIN_COMMAND_NAMES)}")
+        if pins:
+            print(f"\n  📌 Pins:")
+            for k, v in list(pins.items())[:5]:
+                print(f"     {k}: {str(v)[:40]}")
+        print(f"\n  Type /help for full reference.")
+        print(f"{'='*60}\n")
+
+    return _CMD_CONTINUE
+
+
+def _cmd_benchmark(ctx: ChatCommandContext) -> str:
+    """/benchmark [n] — run n quick AI pings to measure response latency (default: 3)."""
+    import time
+    import socket
+
+    arg = ctx.args.strip()
+    n = int(arg) if arg.isdigit() else 3
+    n = min(max(n, 1), 10)
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    # Resolve server URL from config or env fallback.
+    if ctx.config and getattr(ctx.config, "base_url", None):
+        server_url = ctx.config.base_url.rstrip("/")
+    else:
+        server_url = os.getenv("OPENCLAW_URL", "http://192.168.1.93:8765").rstrip("/")
+
+    host_part = server_url.replace("https://", "").replace("http://", "")
+    host = host_part.split(":")[0]
+    try:
+        port = int(host_part.split(":")[1]) if ":" in host_part else 8765
+    except (IndexError, ValueError):
+        port = 8765
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold cyan]⏱️  Benchmark[/] [dim]({n} TCP pings → {host}:{port})[/]\n")
+    else:
+        print(f"\n⏱️  Benchmark ({n} pings → {host}:{port})\n")
+
+    times: list[float] = []
+    for i in range(n):
+        start = time.time()
+        try:
+            sock = socket.create_connection((host, port), timeout=5)
+            sock.close()
+            elapsed = time.time() - start
+            times.append(elapsed)
+
+            bar_len = min(int(elapsed * 20), 40)
+            bar_color = _RE if elapsed > 3 else _YE if elapsed > 1.5 else _GR
+            bar = f"{bar_color}{'█' * bar_len}{_R}"
+
+            if _RICH_AVAILABLE and is_tty:
+                color = "red" if elapsed > 3 else "yellow" if elapsed > 1.5 else "green"
+                _RICH_CONSOLE.print(f"  [{i + 1}/{n}] [{color}]{elapsed:.3f}s[/]  {bar}")
+            else:
+                print(f"  [{i + 1}/{n}] {elapsed:.3f}s  {bar}")
+        except Exception as exc:  # noqa: BLE001
+            elapsed = time.time() - start
+            times.append(elapsed)
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"  [{i + 1}/{n}] [red]Error: {exc}[/]")
+            else:
+                print(f"  [{i + 1}/{n}] Error: {exc}")
+
+    if times:
+        avg = sum(times) / len(times)
+        mn = min(times)
+        mx = max(times)
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(
+                f"\n  [dim]Min:[/] [bold]{mn:.3f}s[/]  "
+                f"[dim]Avg:[/] [bold]{avg:.3f}s[/]  "
+                f"[dim]Max:[/] [bold]{mx:.3f}s[/]"
+            )
+            quality = "🟢 Fast" if avg < 1.5 else "🟡 Moderate" if avg < 3 else "🔴 Slow"
+            _RICH_CONSOLE.print(f"  [dim]Quality:[/] {quality}\n")
+        else:
+            print(f"\n  Min: {mn:.3f}s  Avg: {avg:.3f}s  Max: {mx:.3f}s")
+            quality = "Fast" if avg < 1.5 else "Moderate" if avg < 3 else "Slow"
+            print(f"  Quality: {quality}\n")
 
     return _CMD_CONTINUE
 
