@@ -1328,7 +1328,7 @@ class TestChatCommandRegistry:
 
     def test_new_commands_registered(self):
         names = {cmd.name for cmd in self._registry().list_commands()}
-        assert names >= {"session", "context", "cwd", "files", "plan", "task", "outputs", "overlay", "rollback", "events",
+        assert names >= {"session", "context", "cwd", "files", "plan", "task", "outputs", "overlay", "rollback", "events", "collab",
                          "analyze", "research", "write", "exec", "edit"}
 
 
@@ -1743,7 +1743,45 @@ class TestSessionSlashCommands:
         assert "Session overlay" in out
         assert "Beta session" in out
         assert second.session_id in out
-        assert f"openclaw --session {second.session_id}" in out
+
+    def test_collab_note_and_status_capture_actor_summary(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="collab", cwd=str(tmp_path))
+
+        result = self._registry().dispatch(
+            "/collab note @alice Checked the handoff checklist",
+            self._ctx(session_id=sess.session_id),
+        )
+
+        assert result == mod._CMD_CONTINUE
+        note_out = capsys.readouterr().out
+        assert "Recorded note by alice" in note_out
+
+        self._registry().dispatch("/collab", self._ctx(session_id=sess.session_id))
+        out = capsys.readouterr().out
+        assert "SESSION HANDOFF" in out
+        assert "ACTORS" in out
+        assert "alice" in out
+        assert "RECENT NOTES" in out
+        assert "Checked the handoff checklist" in out
+
+    def test_collab_decision_adds_tags_and_export_snapshot(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="collab-export", cwd=str(tmp_path))
+
+        self._registry().dispatch(
+            "/collab decision @bob #release Keep the handoff local-only for now",
+            self._ctx(session_id=sess.session_id),
+        )
+
+        out = capsys.readouterr().out
+        assert "Recorded decision by bob" in out
+        exported = mod.export_session(sess.session_id)
+        collaboration = exported["collaboration"]
+        assert collaboration["recent_decisions"][0]["actor"] == "bob"
+        assert "release" in collaboration["recent_decisions"][0]["tags"]
+        updated = sessions_mod.load_session(sess.session_id)
+        assert "collab:release" in updated.tags
 
     def test_task_unlink_removes_task(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -3174,6 +3212,28 @@ def test_session_show_renders_rich_inspection(monkeypatch, tmp_path, capsys):
     assert "Resume:" in out
 
 
+def test_session_show_includes_collaboration_snapshot(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Collab Inspect", cwd=str(tmp_path))
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Ship the local handoff summary first",
+        metadata={
+            "summary": "decision by alice: Ship the local handoff summary first",
+            "actor": "alice",
+            "tags": ["wave-20"],
+            "collab_kind": "decision",
+        },
+    )
+
+    out = mod.inspect_session(session.session_id)
+
+    assert "COLLABORATION" in out
+    assert "alice" in out
+    assert "wave-20" in out
+
+
 def test_inspect_session_includes_watch_state(monkeypatch, tmp_path, capsys):
     """inspect_session should surface watch status, goal, and last error when present."""
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
@@ -3243,6 +3303,31 @@ def test_main_session_list_interactive_overlay(monkeypatch, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "Session list overlay" in out
     assert f"openclaw --session {beta.session_id}" in out
+
+
+def test_main_session_share_prints_handoff_summary(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Share Me", cwd=str(tmp_path), plan_id="plan-20", task_id="task-20")
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Use actor-oriented summaries for the Wave 20 slice",
+        metadata={
+            "summary": "decision by bob: Use actor-oriented summaries for the Wave 20 slice",
+            "actor": "bob",
+            "tags": ["wave-20", "handoff"],
+            "collab_kind": "decision",
+        },
+    )
+
+    exit_code = mod.main(["session", "share", session.session_id])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "SESSION HANDOFF" in out
+    assert "Share Me" in out
+    assert "bob" in out
+    assert "openclaw session share" in out
 
 
 # ── New: exec / edit --plan-id / --task-id ───────────────────────────────────
@@ -4511,3 +4596,111 @@ class TestCmdSystem:
         result = mod._cmd_system(self._ctx("append extra"))
         assert result == mod._CMD_CONTINUE
         assert mod._PREFS["system_prompt"] == "base\nextra"
+
+
+class TestAutoBlodResponse:
+    """Tests for _auto_bold_response() helper."""
+
+    def test_dollar_amount_gets_bolded(self, monkeypatch):
+        """Dollar amounts like $69 million should be wrapped in **...**."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "auto_bold", True)
+        result = mod._auto_bold_response("Revenue was $69 million last quarter.")
+        assert "**$69 million**" in result
+
+    def test_percentage_gets_bolded(self, monkeypatch):
+        """Percentages like 47% should be wrapped in **...**."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "auto_bold", True)
+        result = mod._auto_bold_response("The success rate was 47% overall.")
+        assert "**47%**" in result
+
+    def test_code_block_content_not_bolded(self, monkeypatch):
+        """Lines inside fenced code blocks should not be modified."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "auto_bold", True)
+        text = "Some intro.\n```\nValue: $100 and 50%\n```\nAfter block."
+        result = mod._auto_bold_response(text)
+        assert "$100" in result and "**$100**" not in result
+        assert "50%" in result and "**50%**" not in result
+
+    def test_autobold_off_disables_bolding(self, monkeypatch):
+        """When auto_bold pref is False, text should be returned unchanged."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "auto_bold", False)
+        text = "Revenue was $69 million and growth was 15%."
+        result = mod._auto_bold_response(text)
+        assert result == text
+
+
+class TestEmojiHeaders:
+    """Tests for _inject_heading_emojis() and /emojiheaders command."""
+
+    def test_h2_gets_diamond_emoji(self, monkeypatch):
+        """_inject_heading_emojis("## Section") returns "## 🔹 Section"."""
+        monkeypatch.setitem(mod._PREFS, "emoji_headers", True)
+        monkeypatch.setitem(mod._PREFS, "plain_mode", False)
+        result = mod._inject_heading_emojis("## Section")
+        assert result == "## 🔹 Section"
+
+    def test_h3_gets_arrow(self, monkeypatch):
+        """_inject_heading_emojis("### Sub") returns "### ▸ Sub"."""
+        monkeypatch.setitem(mod._PREFS, "emoji_headers", True)
+        monkeypatch.setitem(mod._PREFS, "plain_mode", False)
+        result = mod._inject_heading_emojis("### Sub")
+        assert result == "### ▸ Sub"
+
+    def test_code_block_headings_not_modified(self, monkeypatch):
+        """Headings inside fenced code blocks are not modified."""
+        monkeypatch.setitem(mod._PREFS, "emoji_headers", True)
+        monkeypatch.setitem(mod._PREFS, "plain_mode", False)
+        text = "```\n## in code\n```"
+        result = mod._inject_heading_emojis(text)
+        assert "## in code" in result
+        assert "🔹" not in result
+
+    def test_pref_disabled_returns_unchanged(self, monkeypatch):
+        """When emoji_headers is False, text is returned unchanged."""
+        monkeypatch.setitem(mod._PREFS, "emoji_headers", False)
+        monkeypatch.setitem(mod._PREFS, "plain_mode", False)
+        text = "## Section\n### Sub"
+        result = mod._inject_heading_emojis(text)
+        assert result == text
+
+
+class TestSeparator:
+    """Tests for _SEPARATOR_STYLES and /separator command."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_separator_styles_has_expected_keys(self):
+        """_SEPARATOR_STYLES has gradient, pulse, dots, wave, and none keys."""
+        expected = {"gradient", "pulse", "dots", "wave", "none"}
+        assert expected == set(mod._SEPARATOR_STYLES.keys())
+
+    def test_separator_none_sets_pref(self, monkeypatch):
+        """/separator none sets separator_style pref and does not animate."""
+        monkeypatch.setitem(mod._PREFS, "separator_style", "gradient")
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        animated_called = []
+        monkeypatch.setattr(mod, "_print_animated_separator", lambda: animated_called.append(1))
+
+        ctx = self._ctx("none")
+        result = mod._cmd_separator(ctx)
+
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["separator_style"] == "none"
+        assert animated_called == []  # no animation for "none"
+
+    def test_separator_gradient_sets_pref(self, monkeypatch):
+        """/separator gradient sets separator_style pref to gradient."""
+        monkeypatch.setitem(mod._PREFS, "separator_style", "none")
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        monkeypatch.setattr(mod, "_print_animated_separator", lambda: None)
+
+        ctx = self._ctx("gradient")
+        result = mod._cmd_separator(ctx)
+
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["separator_style"] == "gradient"

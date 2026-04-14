@@ -351,6 +351,129 @@ def get_last_decision_event(session_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _normalize_collaboration_actor(actor: Any, *, default: str) -> str:
+    label = " ".join(str(actor or "").strip().split())
+    return label[:80] or default
+
+
+def _normalize_collaboration_tags(raw_tags: Any) -> list[str]:
+    if isinstance(raw_tags, str):
+        values = raw_tags.split()
+    elif isinstance(raw_tags, list):
+        values = [str(item or "") for item in raw_tags]
+    else:
+        values = []
+    tags: list[str] = []
+    for value in values:
+        cleaned = re.sub(r"[^a-z0-9_-]+", "-", str(value or "").strip().lower()).strip("-")
+        if cleaned and cleaned not in tags:
+            tags.append(cleaned[:40])
+    return tags
+
+
+def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str, Any]:
+    """Summarize collaboration-oriented session state using local artifacts only."""
+    summary = require_session(session_id)
+    events = load_events(session_id)
+    watch_state = load_watch_state(session_id) or {}
+    recent_handoffs = [
+        item for item in list_handoffs(limit=max(limit * 4, 20))
+        if str(item.get("source_session_id") or "") == session_id
+    ]
+
+    actors: dict[str, dict[str, Any]] = {}
+    notes: list[dict[str, Any]] = []
+    decisions: list[dict[str, Any]] = []
+
+    def _record_actor(name: str, timestamp: str) -> None:
+        entry = actors.get(name)
+        if entry is None:
+            actors[name] = {"name": name, "event_count": 1, "last_at": timestamp}
+            return
+        entry["event_count"] = int(entry.get("event_count") or 0) + 1
+        if timestamp and timestamp > str(entry.get("last_at") or ""):
+            entry["last_at"] = timestamp
+
+    for event in events:
+        kind = str(event.get("kind") or "").strip().lower()
+        meta = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        timestamp = str(event.get("created_at") or event.get("timestamp") or "").strip()
+        content = str(event.get("content") or "").strip()
+        summary_text = str(meta.get("summary") or content or kind).strip()
+
+        if kind == "collab":
+            actor = _normalize_collaboration_actor(meta.get("actor"), default="operator")
+            tags = _normalize_collaboration_tags(meta.get("tags"))
+            entry = {
+                "timestamp": timestamp,
+                "actor": actor,
+                "summary": summary_text,
+                "content": content,
+                "tags": tags,
+                "source": "manual",
+            }
+            _record_actor(actor, timestamp)
+            if str(meta.get("collab_kind") or "note").strip().lower() == "decision":
+                decisions.append(entry)
+            else:
+                notes.append(entry)
+            continue
+
+        if kind in _DECISION_KINDS:
+            actor = _normalize_collaboration_actor(meta.get("actor"), default="OpenClaw")
+            tags = [kind]
+            route_tag = str(meta.get("slash_command") or "").strip().lstrip("/")
+            risk_tag = str(meta.get("risk_level") or "").strip().lower()
+            if route_tag:
+                tags.append(route_tag)
+            if risk_tag:
+                tags.append(risk_tag)
+            _record_actor(actor, timestamp)
+            decisions.append(
+                {
+                    "timestamp": timestamp,
+                    "actor": actor,
+                    "summary": summary_text,
+                    "content": content,
+                    "tags": _normalize_collaboration_tags(tags),
+                    "source": "system",
+                }
+            )
+
+    for intervention in list(watch_state.get("interventions") or []):
+        if not isinstance(intervention, dict):
+            continue
+        actor = _normalize_collaboration_actor(intervention.get("actor"), default="dashboard")
+        _record_actor(actor, str(intervention.get("created_at") or ""))
+
+    actor_items = sorted(
+        actors.values(),
+        key=lambda item: (int(item.get("event_count") or 0), str(item.get("last_at") or ""), item.get("name", "")),
+        reverse=True,
+    )
+    return {
+        "session": {
+            "session_id": summary.session_id,
+            "title": summary.title,
+            "cwd": summary.cwd,
+            "plan_id": summary.plan_id,
+            "task_id": summary.task_id,
+            "tags": list(summary.tags),
+            "last_summary": summary.last_summary,
+        },
+        "actors": actor_items[:limit],
+        "recent_notes": notes[-limit:][::-1],
+        "recent_decisions": decisions[-limit:][::-1],
+        "recent_outputs": list_saved_outputs(session_id, limit=min(limit, 3)),
+        "latest_handoff": recent_handoffs[0] if recent_handoffs else None,
+        "share": {
+            "resume_command": f"openclaw --session {summary.session_id}",
+            "inspect_command": f"openclaw session show {summary.session_id}",
+            "share_command": f"openclaw session share {summary.session_id}",
+        },
+    }
+
+
 def load_conversation_history(session_id: str, *, limit_turns: int = 10) -> list[dict[str, str]]:
     """Rebuild ask/chat history from recorded session events."""
     history: list[dict[str, str]] = []
@@ -502,6 +625,7 @@ def export_session(session_id: str) -> dict[str, Any]:
         "outputs": list_saved_outputs(session_id, limit=0),
         "watch_state": load_watch_state(session_id),
         "routed_action_checkpoints": list_routed_action_checkpoints(session_id, limit=0),
+        "collaboration": build_collaboration_snapshot(session_id, limit=10),
     }
 
 
@@ -882,6 +1006,7 @@ def create_handoff(session_id: str, *, note: str = "", pin_outputs: list[str] | 
         "pinned_outputs": pin_outputs or [],
         "recent_history": load_conversation_history(session_id, limit_turns=10),
         "outputs_snapshot": list_saved_outputs(session_id, limit=20),
+        "collaboration": build_collaboration_snapshot(session_id, limit=10),
     }
 
     atomic_write(_handoffs_root() / f"{handoff_id}.json", json.dumps(manifest, indent=2, sort_keys=True))

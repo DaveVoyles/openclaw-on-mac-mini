@@ -41,6 +41,7 @@ from openclaw_cli_sessions import (
     SessionSummary,
     append_event,
     apply_handoff,
+    build_collaboration_snapshot,
     build_workspace_signature,
     collect_workspace_context,
     create_handoff,
@@ -133,7 +134,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave19"  # updated with each UX wave batch
+_CLI_BUILD = "wave20"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -160,6 +161,14 @@ _PREFS: dict[str, Any] = {
     "emoji_pack": "classic",  # "classic" | "minimal" | "ascii"
     "layout": "normal",   # "compact" | "normal" | "verbose" | "plain"
     "interactive_overlays": False,  # opt-in interactive pickers for supported list commands
+    "emoji_headers": True,  # prepend emoji to markdown headings in AI responses
+}
+
+_HEADING_EMOJIS: dict[int, str] = {
+    1: "✨",  # H1 — rare, important
+    2: "🔹",  # H2 — section header
+    3: "▸",   # H3 — subsection
+    4: "·",   # H4 — minor sub
 }
 
 _CMD_HISTORY_MAX = 50  # max entries in command history
@@ -1485,6 +1494,82 @@ def _print_session_list(items: list[SessionSummary]) -> None:
         print(format_session_list(items))
 
 
+def _format_collaboration_entry(entry: dict[str, Any]) -> str:
+    actor = str(entry.get("actor") or "operator").strip()
+    summary = str(entry.get("summary") or entry.get("content") or "").strip()
+    tags = [str(tag or "").strip() for tag in list(entry.get("tags") or []) if str(tag or "").strip()]
+    suffix = f" [{' '.join('#' + tag for tag in tags)}]" if tags else ""
+    return f"{actor}: {summary}{suffix}".strip()
+
+
+def _build_session_share_text(session_id: str) -> str:
+    snapshot = build_collaboration_snapshot(session_id, limit=5)
+    session_data = snapshot.get("session") or {}
+    actors = list(snapshot.get("actors") or [])
+    recent_decisions = list(snapshot.get("recent_decisions") or [])
+    recent_notes = list(snapshot.get("recent_notes") or [])
+    recent_outputs = list(snapshot.get("recent_outputs") or [])
+    latest_handoff = snapshot.get("latest_handoff") or {}
+    share = snapshot.get("share") or {}
+
+    lines = [
+        "SESSION HANDOFF",
+        "-" * 60,
+        f"title      : {session_data.get('title', '')}",
+        f"session_id : {session_data.get('session_id', session_id)}",
+        f"cwd        : {session_data.get('cwd', '')}",
+    ]
+    plan_id = str(session_data.get("plan_id") or "").strip()
+    task_id = str(session_data.get("task_id") or "").strip()
+    if plan_id:
+        lines.append(f"plan       : {plan_id}")
+    if task_id:
+        lines.append(f"task       : {task_id}")
+    last_summary = str(session_data.get("last_summary") or "").strip()
+    if last_summary:
+        lines.append(f"summary    : {last_summary}")
+    session_tags = [str(tag or "").strip() for tag in list(session_data.get("tags") or []) if str(tag or "").strip()]
+    if session_tags:
+        lines.append(f"tags       : {', '.join(session_tags[:6])}")
+    if actors:
+        lines.append("")
+        lines.append("ACTORS")
+        for actor in actors[:5]:
+            lines.append(
+                f"  - {actor.get('name', 'operator')} "
+                f"({int(actor.get('event_count') or 0)} touchpoints; last {actor.get('last_at', 'n/a')})"
+            )
+    if recent_decisions:
+        lines.append("")
+        lines.append("RECENT DECISIONS")
+        for entry in recent_decisions[:3]:
+            lines.append(f"  - {_format_collaboration_entry(entry)}")
+    if recent_notes:
+        lines.append("")
+        lines.append("RECENT NOTES")
+        for entry in recent_notes[:2]:
+            lines.append(f"  - {_format_collaboration_entry(entry)}")
+    if latest_handoff:
+        lines.append("")
+        lines.append("LATEST HANDOFF")
+        lines.append(f"  id   : {latest_handoff.get('id', '')}")
+        lines.append(f"  when : {latest_handoff.get('created_at', '')}")
+        note = str(latest_handoff.get("note") or "").strip()
+        if note:
+            lines.append(f"  note : {note}")
+    if recent_outputs:
+        lines.append("")
+        lines.append("RECENT OUTPUTS")
+        for item in recent_outputs[:3]:
+            lines.append(f"  - {item.get('name', '')}")
+    lines.append("")
+    lines.append("COMMANDS")
+    lines.append(f"  resume : {share.get('resume_command', f'openclaw --session {session_id}')}")
+    lines.append(f"  inspect: {share.get('inspect_command', f'openclaw session show {session_id}')}")
+    lines.append(f"  share  : {share.get('share_command', f'openclaw session share {session_id}')}")
+    return "\n".join(lines)
+
+
 def inspect_session(session_id: str) -> str:
     """Render a human-readable inspection view of a persisted session."""
     from openclaw_cli_sessions import export_session
@@ -1495,6 +1580,7 @@ def inspect_session(session_id: str) -> str:
     outputs: list[dict[str, Any]] = export.get("outputs") or []
     watch: dict[str, Any] = export.get("watch_state") or {}
     routed_checkpoints: list[dict[str, Any]] = export.get("routed_action_checkpoints") or []
+    collaboration: dict[str, Any] = export.get("collaboration") or {}
 
     if _RICH_AVAILABLE and _IS_TTY:
         _inspect_session_rich(session_id, session_data, events, outputs, watch, routed_checkpoints)
@@ -1622,6 +1708,22 @@ def inspect_session(session_id: str) -> str:
             name = str(out.get("name") or "").strip()
             size = int(out.get("size_bytes") or 0)
             lines.append(f"  {name}  ({size} bytes)")
+
+    actors: list[dict[str, Any]] = list(collaboration.get("actors") or [])
+    recent_decisions: list[dict[str, Any]] = list(collaboration.get("recent_decisions") or [])
+    latest_handoff = collaboration.get("latest_handoff") or {}
+    if actors or recent_decisions or latest_handoff:
+        lines.append("")
+        lines.append("COLLABORATION")
+        for actor in actors[:3]:
+            lines.append(
+                f"  actor : {actor.get('name', 'operator')} "
+                f"({int(actor.get('event_count') or 0)} touchpoints)"
+            )
+        for entry in recent_decisions[:3]:
+            lines.append(f"  decision : {_format_collaboration_entry(entry)}")
+        if latest_handoff:
+            lines.append(f"  handoff  : {latest_handoff.get('id', '')} @ {latest_handoff.get('created_at', '')}")
 
     # ── Last summary ──────────────────────────────────────────────
     last_summary = str(session_data.get("last_summary") or "").strip()
@@ -2676,6 +2778,15 @@ def _terminal_width(*, fallback: int = 80) -> int:
         return fallback
 
 
+_SEPARATOR_STYLES: dict[str, list[str]] = {
+    "gradient": ["▓▒░  ▓▒░  ▓▒░", "░▓▒  ░▓▒  ░▓▒", "▒░▓  ▒░▓  ▒░▓"],
+    "pulse":    ["─────────────", "━━━━━━━━━━━━━", "═══════════════"],
+    "dots":     ["· · · · · · ·", "• • • • • • •", "○ ○ ○ ○ ○ ○ ○"],
+    "wave":     ["~-~-~-~-~-~-~", "-~-~-~-~-~-~-", "~-~-~-~-~-~-~"],
+    "none":     [],
+}
+
+
 def _separator_fill(width: int, *, high_contrast: bool | None = None) -> str:
     """Return a separator line sized for the current terminal/mode."""
     use_high_contrast = _a11y_high_contrast() if high_contrast is None else high_contrast
@@ -2703,6 +2814,33 @@ def _print_response_separator(*, label: str = "") -> None:
             line = f"{line} {label} {line}"
             line = line[:sep_width]
         print(f"{_theme_ansi()}{line}{_R}")
+
+
+def _print_animated_separator() -> None:
+    """Print a short animated separator after an AI response."""
+    if _a11y_plain_mode() or _a11y_reduced_motion():
+        return
+    style = _PREFS.get("separator_style", "gradient")
+    frames = _SEPARATOR_STYLES.get(style, [])
+    if not frames:
+        return
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty:
+        return
+
+    width = 40
+    color = _DM
+    for frame in frames:
+        line = (frame * (width // len(frame) + 1))[:width]
+        sys.stdout.write(f"\r{color}{line}{_R}")
+        sys.stdout.flush()
+        time.sleep(0.08)
+    sys.stdout.write(f"\r{' ' * width}\r")  # clear
+    sys.stdout.flush()
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"[dim]{'─' * 42}[/]")
+    else:
+        print(f"{_DM}{'─' * 42}{_R}")
 
 
 def _render_table_ansi(rows: list[list[str]]) -> list[str]:
@@ -2795,6 +2933,27 @@ def _apply_inline_ansi(text: str) -> str:
     return text
 
 
+def _inject_heading_emojis(text: str) -> str:
+    """Prepend emoji to markdown headings based on level."""
+    if not _PREFS.get("emoji_headers", True) or _a11y_plain_mode():
+        return text
+    lines = text.split("\n")
+    result = []
+    in_code = False
+    for line in lines:
+        if line.strip().startswith("```"):
+            in_code = not in_code
+        if not in_code and line.startswith("#"):
+            m = re.match(r'^(#{1,4}) (.+)$', line)
+            if m:
+                level = len(m.group(1))
+                emoji = _HEADING_EMOJIS.get(level, "")
+                if emoji:
+                    line = f"{m.group(1)} {emoji} {m.group(2)}"
+        result.append(line)
+    return "\n".join(result)
+
+
 def _render_markdown_ansi(text: str) -> str:
     """Convert markdown to ANSI-formatted terminal text (fallback when Rich is absent).
 
@@ -2877,6 +3036,10 @@ def _render_markdown_ansi(text: str) -> str:
         if m:
             level = len(m.group(1))
             raw = m.group(2)
+            if not plain_mode and _PREFS.get("emoji_headers", True):
+                emoji = _HEADING_EMOJIS.get(level, "")
+                if emoji:
+                    raw = f"{emoji} {raw}"
             content = _apply_inline_ansi(raw)
             if level == 1:
                 result.append(f"\n{_B}{_UL}{content}{_R}")
@@ -3090,6 +3253,53 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
     return text, sources
 
 
+def _auto_bold_response(text: str) -> str:
+    """Apply auto-bolding to key terms in AI response text.
+
+    Post-processes the response body to make dollar amounts, percentages,
+    and filenames visually pop. Skips fenced code blocks, table rows, and
+    blockquotes. Only active when auto_bold pref is True and not in plain mode.
+    """
+    if _a11y_plain_mode() or not _PREFS.get("auto_bold", True):
+        return text
+
+    lines = text.split("\n")
+    result = []
+    in_code_block = False
+
+    for line in lines:
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            result.append(line)
+            continue
+        if in_code_block or line.startswith("|") or line.startswith(">"):
+            result.append(line)
+            continue
+
+        # 1. Dollar amounts — skip if already bolded
+        line = re.sub(
+            r'(?<!\*)\$(\d[\d,\.]*(?:\s*(?:million|billion|trillion|thousand|[KMBkmb]))?)\b(?!\*)',
+            r'**$\1**',
+            line,
+        )
+        # 2. Percentages — skip if already bolded
+        line = re.sub(
+            r'(?<!\*)(\d+(?:\.\d+)?%)(?!\*)',
+            r'**\1**',
+            line,
+        )
+        # 3. File extensions — wrap in backticks if not already
+        line = re.sub(
+            r'(?<![`\w])(\w[\w\-]*\.(?:py|md|json|yaml|yml|sh|txt|js|ts|go|rs|html|css))(?![`\w])',
+            r'`\1`',
+            line,
+        )
+
+        result.append(line)
+
+    return "\n".join(result)
+
+
 # ---------------------------------------------------------------------------
 # Smart markdown table renderer — handles wide tables gracefully
 # ---------------------------------------------------------------------------
@@ -3206,6 +3416,8 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
         is_tty = False  # force plain-text path; skip Rich rendering
     if response.response:
         body, sources = _preprocess_response_text(response.response)
+        body = _auto_bold_response(body)
+        body = _inject_heading_emojis(body)
         if not body.strip():
             body = "_No response text returned._"
         if _RICH_AVAILABLE and is_tty:
@@ -5664,6 +5876,76 @@ def _cmd_why(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _parse_collab_entry(raw: str) -> tuple[str, list[str], str]:
+    actor = ""
+    tags: list[str] = []
+    remainder: list[str] = []
+    for token in str(raw or "").split():
+        if not remainder and token.startswith("@") and len(token) > 1 and not actor:
+            actor = token[1:]
+            continue
+        if not remainder and token.startswith("#") and len(token) > 1:
+            tag = re.sub(r"[^a-z0-9_-]+", "-", token[1:].strip().lower()).strip("-")
+            if tag and tag not in tags:
+                tags.append(tag[:40])
+            continue
+        remainder.append(token)
+    return actor, tags, " ".join(remainder).strip()
+
+
+def _cmd_collab(ctx: ChatCommandContext) -> str:
+    """/collab [status|share|note|decision] — collaboration notes, decisions, and handoff summaries."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+
+    raw = ctx.args.strip()
+    if not raw or raw.lower() in {"status", "summary", "share"}:
+        print(_build_session_share_text(session.session_id))
+        return _CMD_CONTINUE
+
+    parts = raw.split(None, 1)
+    sub = parts[0].lower()
+    remainder = parts[1].strip() if len(parts) > 1 else ""
+
+    if sub not in {"note", "decision"}:
+        _print_error("Usage: /collab [status|share|note [@actor] TEXT|decision [@actor] [#tag] TEXT]")
+        return _CMD_CONTINUE
+
+    actor, tags, text = _parse_collab_entry(remainder)
+    if not text:
+        _print_error(f"Usage: /collab {sub} [@actor] {'[#tag] ' if sub == 'decision' else ''}TEXT")
+        return _CMD_CONTINUE
+    actor_label = actor or "operator"
+    summary_text = " ".join(text.split())
+    if len(summary_text) > 90:
+        summary_text = summary_text[:89].rstrip() + "…"
+    summary = f"{sub} by {actor_label}: {summary_text}"
+    append_event(
+        session.session_id,
+        kind="collab",
+        content=text,
+        metadata={
+            "summary": summary,
+            "actor": actor_label,
+            "tags": tags,
+            "collab_kind": sub,
+        },
+    )
+    if tags:
+        existing_tags = list(session.tags or [])
+        for tag in tags:
+            session_tag = f"collab:{tag}"
+            if session_tag not in existing_tags:
+                existing_tags.append(session_tag)
+        update_session(session.session_id, tags=existing_tags)
+    print(f"Recorded {sub} by {actor_label}.")
+    if tags:
+        print(f"Tags: {', '.join('#' + tag for tag in tags)}")
+    print(text)
+    return _CMD_CONTINUE
+
+
 def _cmd_search(ctx: ChatCommandContext) -> str:
     """/search [--all] <query> — full-text search across session event content."""
     is_tty = _IS_TTY or sys.stdout.isatty()
@@ -6604,6 +6886,28 @@ def _cmd_overlay(ctx: ChatCommandContext) -> str:
         print("Interactive overlays enabled for supported list commands.")
     else:
         print("Interactive overlays disabled; list commands will stay non-interactive.")
+    return _CMD_CONTINUE
+
+
+def _cmd_emojiheaders(ctx: ChatCommandContext) -> str:
+    """/emojiheaders [on|off] — toggle emoji prefixes on AI response headings."""
+    arg = ctx.args.strip().lower()
+    if arg in ("on", "off"):
+        _PREFS["emoji_headers"] = (arg == "on")
+        _save_prefs()
+        state = "on" if _PREFS["emoji_headers"] else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] emoji headers [bold]{state}[/]")
+        else:
+            print(f"✓ emoji headers {state}")
+    else:
+        state = "on" if _PREFS.get("emoji_headers", True) else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]emoji headers is [bold]{state}[/] — /emojiheaders on|off[/]")
+        else:
+            print(f"emoji headers is {state}")
     return _CMD_CONTINUE
 
 
@@ -7663,6 +7967,57 @@ def _cmd_promptdebug(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_autobold(ctx: ChatCommandContext) -> str:
+    """/autobold [on|off] — toggle automatic bolding of numbers and filenames in responses."""
+    arg = ctx.args.strip().lower()
+    if arg in ("on", "off"):
+        _PREFS["auto_bold"] = (arg == "on")
+        _save_prefs()
+        state = "on" if _PREFS["auto_bold"] else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] auto-bold [bold]{state}[/]")
+        else:
+            print(f"✓ auto-bold {state}")
+    else:
+        state = "on" if _PREFS.get("auto_bold", True) else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]auto-bold is [bold]{state}[/] — /autobold on|off[/]")
+        else:
+            print(f"auto-bold is {state}")
+    return _CMD_CONTINUE
+
+
+def _cmd_separator(ctx: ChatCommandContext) -> str:
+    """/separator [style] — set or preview response separator style (gradient|pulse|dots|wave|none)."""
+    arg = ctx.args.strip().lower()
+    valid = list(_SEPARATOR_STYLES.keys())
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if arg in valid:
+        _PREFS["separator_style"] = arg
+        _save_prefs()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] separator style: [bold]{arg}[/]")
+        else:
+            print(f"✓ separator style: {arg}")
+        if arg != "none":
+            _print_animated_separator()
+    elif arg:
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]Unknown style '{arg}'[/] — valid: {', '.join(valid)}")
+        else:
+            print(f"Unknown style '{arg}' — valid: {', '.join(valid)}")
+    else:
+        current = _PREFS.get("separator_style", "gradient")
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]separator style: [bold]{current}[/] — /separator gradient|pulse|dots|wave|none[/]")
+        else:
+            print(f"separator style: {current} — /separator gradient|pulse|dots|wave|none")
+    return _CMD_CONTINUE
+
+
 def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
@@ -7789,6 +8144,13 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     )
     registry.register(
         SlashCommand(
+            name="collab",
+            description="Capture collaboration notes/decisions and print a handoff summary",
+            handler=_cmd_collab,
+        )
+    )
+    registry.register(
+        SlashCommand(
             name="search",
             description="Search session event history (/search <query> or /search --all <query>)",
             handler=_cmd_search,
@@ -7841,6 +8203,13 @@ def build_chat_command_registry() -> ChatCommandRegistry:
             name="theme",
             description="Manage UI themes (/theme [name|list|preview|next|prev|reset])",
             handler=_cmd_theme,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="emojiheaders",
+            description="Toggle emoji prefixes on AI response headings (/emojiheaders [on|off])",
+            handler=_cmd_emojiheaders,
         )
     )
     registry.register(
@@ -7972,6 +8341,16 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="View or set a persistent system prompt prefix (/system [view|set <text>|append <text>|clear])",
         handler=_cmd_system,
     ))
+    registry.register(SlashCommand(
+        name="autobold",
+        description="Toggle automatic bolding of numbers and filenames in responses (/autobold [on|off])",
+        handler=_cmd_autobold,
+    ))
+    registry.register(SlashCommand(
+        name="separator",
+        description="Set or preview response separator style (/separator gradient|pulse|dots|wave|none)",
+        handler=_cmd_separator,
+    ))
     return registry
 
 
@@ -7996,6 +8375,9 @@ def print_chat_help(*, search: str = "") -> None:
         ("/rollback [last|list]",          "Restore latest checkpoint or list all checkpoints"),
         ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
         ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
+        ("/collab [status|share]",             "Show an actor-oriented handoff summary for the current session"),
+        ("/collab note [@actor] TEXT",         "Record a collaboration note in the local session audit trail"),
+        ("/collab decision [@actor] [#tag] TEXT", "Record a tagged decision for later handoff/export"),
         ("/search <query>",                    "Search this session's event history for matching turns"),
         ("/search --all <query>",              "Search across all session histories"),
         ("/autoroute [on|off]",            "Show or toggle high-confidence REPL auto-routing"),
@@ -8047,6 +8429,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/system set <text>",                   "Set a persistent system prompt prefix for all messages"),
         ("/system append <text>",               "Append to the existing system prompt"),
         ("/system clear",                        "Clear the system prompt"),
+        ("/autobold [on|off]",                   "Toggle automatic bolding of numbers and filenames in responses"),
+        ("/separator [style]",                   "Set or preview response separator style (gradient|pulse|dots|wave|none)"),
     ]
 
     q = search.strip().lower()
@@ -8519,7 +8903,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "session", "context", "cwd", "files", "plan", "watch", "task",
     "outputs", "rollback", "events", "why", "autoroute", "analyze",
     "research", "write", "exec", "edit", "theme", "emoji", "layout",
-    "sessions", "export", "stats", "tag", "resume", "replay", "handoff",
+    "sessions", "export", "stats", "tag", "resume", "replay", "handoff", "collab",
     "draft", "template", "pasteguard", "accessibility", "a11y",
     "search", "alias", "pin", "pins", "history",
 })
@@ -9413,6 +9797,7 @@ def run_chat(
             _print_response_separator(label="Response")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
+        _print_animated_separator()
         if _PREFS.get("show_rate_hint", True) and not _a11y_plain_mode() and (_IS_TTY or sys.stdout.isatty()):
             if _RICH_AVAILABLE:
                 _RICH_CONSOLE.print("[dim]  rate this response: /rate good · /rate ok · /rate bad[/]")
@@ -9518,6 +9903,9 @@ def handle_session_command(args: argparse.Namespace) -> int:
         return 0
     if subcommand == "export":
         print(json.dumps(export_session(args.session_id), indent=2, sort_keys=True))
+        return 0
+    if subcommand == "share":
+        print(_build_session_share_text(args.session_id))
         return 0
     raise OpenClawCliError(f"Unknown session command: {subcommand}")
 
@@ -10484,6 +10872,8 @@ def build_parser() -> argparse.ArgumentParser:
     session_resume.add_argument("session_id", help="Session identifier")
     session_export = session_subparsers.add_parser("export", help="Export a local session as JSON")
     session_export.add_argument("session_id", help="Session identifier")
+    session_share = session_subparsers.add_parser("share", help="Print a shareable collaboration handoff summary")
+    session_share.add_argument("session_id", help="Session identifier")
 
     plan_parser = subparsers.add_parser("plan", help="Manage agent loop plans")
     plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)

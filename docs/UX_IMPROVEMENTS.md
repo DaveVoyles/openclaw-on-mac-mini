@@ -60,6 +60,37 @@ Steps:
 
 ---
 
+## Future Wave Docs/Dashboard Framework
+
+Waves 21–30 should always reserve a dedicated docs/dashboard lane in parallel
+with research, implementation, and validation lanes.
+
+### Required outputs per future wave
+
+- update `docs/UX_IMPROVEMENTS.md` with roadmap status, shipped evidence, and
+  deferred scope
+- update `docs/CLI_ARCHITECTURE.md` when rendering helpers, state plumbing, or
+  dashboard/shared-surface guardrails change
+- update `docs/CLI_QUICKSTART.md` when user-visible commands, examples, or
+  workflows change
+- update `docs/DASHBOARD_SURFACES.md` whenever a terminal/dashboard canvas is
+  added, renamed, or materially changed
+- regenerate `docs/COMMANDS.md` only when runtime command metadata changes
+
+### Dashboard/docs lane checklist
+
+1. inventory the touched CLI and browser/dashboard surfaces
+2. verify plain-mode, reduced-motion, and non-TTY parity for each changed surface
+3. keep terminology aligned across `/session`, `/watch`, `/outputs`, `/sessions`,
+   `/context`, `/events`, `/accessibility`, and any browser dashboard mirrors
+4. record whether `docs/COMMANDS.md` was regenerated or intentionally left alone
+5. do not mark a wave shipped until the docs/dashboard lane is closed too
+
+For the canonical inventory and reusable checklist, see
+`docs/DASHBOARD_SURFACES.md`.
+
+---
+
 ## Wave Status
 
 | Wave | Name | Status |
@@ -79,12 +110,17 @@ Steps:
 | [Wave 13](#wave-13--trust--explainability) | Trust & Explainability | ✅ Shipped |
 | [Wave 14](#wave-14--composer--input-flow) | Composer & Input Flow | ✅ Shipped |
 | [Wave 15](#wave-15--accessibility--adaptive-layout) | Accessibility & Adaptive Layout | ✅ Shipped |
-| [Wave 16](#wave-16--search-aliases--pins) | Search, Aliases & Pins | ✅ Shipped |
-| [Wave 17](#wave-17--macros--command-history) | Macros & Command History | ✅ Shipped |
-| [Wave 18](#wave-18--response-rating--quality) | Response Rating & Quality | ✅ Shipped |
-| [Wave 19](#wave-19--context-injection--prompt-engineering) | Context Injection & Prompt Engineering | ✅ Shipped |
-| [Wave 19](#wave-19--interactive-overlays) | Interactive Overlays | 🟡 Partial |
+| [Wave 16](#wave-16--microinteractions--feedback-density) | Microinteractions & Feedback Density | ✅ Shipped |
+| [Wave 16B](#wave-16b--search-aliases--pins) | Search, Aliases & Pins | ✅ Shipped |
+| [Wave 17](#wave-17--theme-engine--personalization) | Theme Engine & Personalization | ✅ Shipped |
+| [Wave 18](#wave-18--macros--command-history) | Macros & Command History | ✅ Shipped |
 | [Wave 18B](#wave-18b--performance-visibility) | Performance Visibility | ✅ Shipped |
+| [Wave 18C](#wave-18c--response-rating--quality) | Response Rating & Quality | ✅ Shipped |
+| [Wave 19](#wave-19--context-injection--prompt-engineering) | Context Injection & Prompt Engineering | ✅ Shipped |
+| [Wave 19B](#wave-19b--interactive-overlays) | Interactive Overlays | ✅ Shipped |
+| [Wave 20](#wave-20--collaboration-handoff-ux) | Collaboration Handoff UX | ✅ Shipped |
+| [Wave 21](#wave-21--motion-language--staggered-feedback) | Motion Language & Staggered Feedback | 🔲 Ready |
+| [Wave 22](#wave-22--emoji-badges-progress-cells--live-status-lattice) | Emoji Badges, Progress Cells & Live Status Lattice | 🔲 Ready |
 
 ---
 
@@ -991,6 +1027,245 @@ that covers status output as well as decorative UI icons.
 
 ---
 
+## Wave 18B — Performance Visibility
+
+**Status: ✅ Shipped**
+
+| Feature | Description |
+|---|---|
+| Session timing hints | `/session` now includes active watch phase, last run duration, and retry backoff totals when watch state exists |
+| Watch timing summary | `/watch status` exposes active phase age plus last checkpoint duration |
+| Retry/backoff cues | `/watch history` and checkpoint events include retry delay visibility |
+| Approval timing cues | `/exec` and `/edit` now emit `approval` events and separate approval wait from execution/write time |
+| Backward compatibility | Older watch state still renders by deriving timing from existing timestamps when explicit duration fields are missing |
+
+---
+
+## Wave 18C — Response Rating & Quality
+
+**Status: ✅ Shipped**
+
+| Feature | Description |
+|---|---|
+| `/rate [good/ok/bad/meh/1-5]` | Rate the last AI response, map it to score `1-5`, and persist it in `_PREFS["ratings"]` (cap 500) |
+| Session event trail | Each rating appends a `rating` session event for later review/export |
+| `/quality` | Show total rated responses, average score, a star-distribution chart, and the most recent ratings |
+| `/ratehint [on|off]` | Toggle the post-response dim hint after each AI reply |
+| Preference keys | `show_rate_hint` (default `True`) and `ratings` remain additive persisted settings |
+
+---
+
+## Wave 19 — Context Injection & Prompt Engineering
+
+**Status: ✅ Shipped**
+
+| Feature | Description |
+|---|---|
+| `/inject path` | Read file content into `_next_inject` (max 8000 chars, binary-safe) |
+| `/inject --url URL` | Fetch URL content into `_next_inject` via `requests` (max 8000 chars) |
+| `/inject clear` / `/inject status` | Clear or preview pending injection |
+| Injection prepend | `run_chat()` prepends injection as an `[Injected context]` block, then consumes it after one send |
+| `/system view\|set\|append\|clear` | Manage the persisted system prompt in `_PREFS["system_prompt"]` (max 2000 chars) |
+| System prompt prepend | `run_chat()` prepends system prompt as a `[System context]` block to every AI message |
+| `/context update` | Shows the system-prompt preview and pending injection count |
+| `/promptdebug` (`/pd`) | Preview the fully assembled prompt: system + injected context + user placeholder |
+| `_CLI_BUILD` | Bumped to `wave19` |
+
+---
+
+## Wave 19B — Interactive Overlays
+
+**Status: ✅ Shipped (initial slice)**
+
+**Goal:** add clear opt-in interactive affordances for list-style workflows
+without destabilizing the default REPL or non-TTY automation flows.
+
+### Shipped in this slice
+
+| Feature | Evidence |
+|---|---|
+| Persisted opt-in overlay mode | `/overlay [on|off|status]` stores `_PREFS["interactive_overlays"]` |
+| Saved-output picker | `/outputs overlay` opens a searchable picker and reuses the normal inline preview on selection |
+| Recent-session picker | `/sessions overlay` opens a searchable picker and prints the selected session summary + resume command |
+| One-shot session picker | `openclaw session list --interactive` brings the same picker to non-REPL usage |
+| Guarded fallback behavior | `_overlay_available()` blocks prompts on non-TTY stdin/stdout and falls back to the regular list output |
+
+### Future expansion notes
+
+- Approval-preview overlays are still future work, not a blocker for Wave 21.
+- Arrow-key/full-screen selection remains intentionally deferred until a later UX wave proves it is worth the extra complexity.
+- Additional pickers can be added in later waves without reopening the initial shipped overlay slice.
+
+### Validation
+
+- Focused CLI pytest slice covering `/overlay`, `/outputs overlay`,
+  `/sessions overlay`, and `openclaw session list --interactive` passed.
+
+---
+
+## Wave 20 — Collaboration Handoff UX
+
+**Status: ✅ Shipped**
+
+**Goal:** strengthen local-first collaboration with actor-aware notes,
+decision trails, and pasteable handoff summaries using only existing session
+and handoff data.
+
+### Shipped in this slice
+
+| Feature | Evidence |
+|---|---|
+| Actor-tagged collaboration notes | `/collab note [@actor] TEXT` records additive `collab` events in the active local session |
+| Tagged decision trail | `/collab decision [@actor] [#tag] TEXT` stores tagged decisions for later handoff/export |
+| Shareable handoff summary | `/collab`, `/collab share`, and `openclaw session share <session-id>` print an actor-oriented summary with commands, recent outputs, and latest handoff metadata |
+| Collaboration export surface | `openclaw session export <session-id>` and saved handoff manifests now include a structured `collaboration` snapshot |
+| Inspection visibility | `openclaw session show <session-id>` includes collaboration actors, decisions, and latest handoff evidence when present |
+
+### Guardrails
+
+- Collaboration remains **local/session-file based** only.
+- No remote presence, sockets, or backend services were introduced.
+- Non-TTY and scripted usage stay compatible because all new behavior is
+  additive plain text and additive JSON.
+
+### Validation
+
+- Focused CLI pytest slice covering `/collab`, collaboration export, session
+  inspection, and `openclaw session share` passed.
+
+---
+
+## Wave 21 — Motion Language & Staggered Feedback
+
+**Status: 🔲 Ready**
+
+**Goal:** establish a coherent motion language for the terminal so long-running
+flows feel intentional, phase-aware, and readable without breaking reduced-motion
+or plain-text usage.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Motion vocabulary | The same spinner, pulse, settle, and completion cues should mean the same thing everywhere |
+| Staggered feedback | Users should see a clear progression from start → working → phase change → completion instead of one undifferentiated busy state |
+| Reduced-motion parity | Every new motion cue must have a static or text-heartbeat equivalent |
+| Surface consistency | Chat, analyze, write, approval, and plan-execution flows should share the same timing language |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Spinner lifecycle | Refine `_with_spinner()` so it can express startup, active work, handoff, and completion phases without introducing Rich-only behavior |
+| Shared feedback helpers | Add reusable helpers for staged status lines, phase transitions, and explicit completion cues |
+| Long-running action feedback | Apply the motion language to chat/analyze/write style requests plus other slow CLI actions that already expose progress or waiting states |
+| Approval / handoff cues | Make approval waits and resumptions feel distinct from generic background work |
+| Accessibility guardrails | Ensure reduced-motion and plain mode keep the same information density through text cues rather than animation |
+
+### Implementation notes for the future wave
+
+- Prefer timing/state primitives that can be reused by later visual hierarchy and dashboard waves.
+- Keep Rich output optional and re-check live TTY state before using Rich-only rendering.
+- Do not require full-screen UI, arrow-key controls, or non-stdlib animation dependencies.
+- Preserve Python 3.9 compatibility in any helper signatures or examples.
+
+### Done-when
+
+- [ ] A documented motion vocabulary exists for startup, in-progress, phase-shift, waiting, and completion states.
+- [ ] `_with_spinner()` or successor helpers can express staggered feedback without duplicating phase logic across commands.
+- [ ] Reduced-motion and plain-mode paths emit equivalent text cues for every new motion state.
+- [ ] At least the core long-running request surfaces use the shared motion language consistently.
+- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated alongside the implementation wave.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — motion primitives | Shared spinner / feedback helpers and preference-aware timing state |
+| B — long-running request surfaces | Chat/analyze/write and other slow command paths |
+| C — approvals + resumptions | Approval waits, completion cues, and handoff-style phase transitions |
+| D — validation | Focused pytest coverage plus baseline regression check |
+| E — docs | Architecture + quickstart updates for the new motion language |
+
+---
+
+## Wave 22 — Emoji Badges, Progress Cells & Live Status Lattice
+
+**Status: 🔲 Ready**
+
+**Goal:** turn emoji, color, and compact status cells into a single scanning
+grammar so watch, session, event, and accessibility surfaces communicate state
+instantly without forcing users to read full prose lines.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Emoji badge grammar | `_status_emoji()` and related badges should encode meaning consistently across success, warning, retry, waiting, blocked, active, and idle states |
+| Progress cells | Dense tables and inline summaries need compact “cell” units that can show phase, recency, risk, and completion without turning into paragraph output |
+| Live status lattice | `/session`, `/watch`, `/events`, `/outputs`, `/context`, and `/accessibility status` should feel like related views over the same underlying state vocabulary |
+| Plain-text parity | Every badge/color cue must degrade to readable text labels in non-TTY, plain-mode, and reduced-visual-density paths |
+| Dashboard alignment | Browser/dashboard mirrors and docs should reuse the same labels, state names, and fallback wording rather than invent parallel terminology |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Status badge primitives | Expand `_status_emoji()` and adjacent helpers into a documented badge/status-cell vocabulary that covers phase, health, urgency, and retry state |
+| Watch + session surfaces | Refactor `/watch status`, `/watch history`, `/session`, and `/sessions` summaries to use repeatable badge/cell patterns instead of one-off phrasing |
+| Dense event/status rows | Add compact progress cells to `/events`, `/outputs`, `/context`, and similar dense surfaces so users can scan for active, stalled, or completed work quickly |
+| Accessibility-aware rendering | Ensure high-contrast, plain, reduced-motion, and non-TTY modes preserve the same state meaning through text tokens, ordering, and spacing rather than color dependence |
+| Docs/dashboard sync | Update dashboard reference docs so terminal and future browser surfaces share the same status vocabulary, examples, and fallback expectations |
+
+### Implementation notes for the future wave
+
+- Treat Wave 22 as the state-language foundation for Wave 23 dashboard
+  elevation; avoid inventing per-surface badge systems that would need to be
+  normalized later.
+- Prefer additive helpers and small rendering primitives over one large
+  dashboard abstraction so existing commands can adopt the lattice incrementally.
+- Define a canonical mapping for status families such as active, queued,
+  waiting, retrying, warning, blocked, complete, and informational.
+- Keep emoji packs, plain mode, and accessibility preferences first-class:
+  alternate packs should preserve semantics even when glyphs change.
+- Preserve Python 3.9 compatibility and avoid introducing Rich-only table or
+  live-update dependencies.
+
+### Dashboard/docs alignment
+
+| Surface group | Wave 22 expectation |
+|---|---|
+| `/session`, `/sessions` | Shared badge set for automation state, collaboration state, latest outcome, and next-action hints |
+| `/watch status`, `/watch history` | Progress cells for phase, retry/backoff, checkpoint freshness, and intervention need |
+| `/events`, `/outputs`, `/context` | Compact status prefixes that make dense history views scannable without hiding detailed text |
+| `/accessibility status`, `/layout` | Explicit explanation of how badge grammar degrades in plain/high-contrast/reduced-motion modes |
+| Browser/dashboard mirrors | Reuse CLI status labels and fallback terms in dashboard cards, task status widgets, and future read-only monitoring views |
+
+### Done-when
+
+- [ ] A documented status grammar exists for badge meaning, progress-cell shape,
+      and plain-text equivalents.
+- [ ] Core watch/session/event surfaces reuse the same badge and progress-cell
+      vocabulary instead of per-command phrasing.
+- [ ] Emoji packs and accessibility modes preserve status meaning without
+      requiring color or Rich-only affordances.
+- [ ] `docs/DASHBOARD_SURFACES.md` stays aligned on shared terminology and
+      fallback expectations for dashboard mirrors.
+- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — status grammar primitives | Badge vocabulary, progress-cell tokens, emoji-pack semantics, and helper boundaries |
+| B — watch/session adoption | `/watch*`, `/session`, and `/sessions` rendering updates using the shared grammar |
+| C — dense history surfaces | `/events`, `/outputs`, `/context`, and other scan-heavy views |
+| D — validation + parity | Focused pytest/manual checks for non-TTY, plain mode, high contrast, and reduced-motion output |
+| E — docs/dashboard sync | Architecture, quickstart, and dashboard-surface terminology updates |
+
+---
+
 **Q: How do I know what wave to implement next?**
 Check the Wave Status table at the top. The first `🔲 Ready` wave is next.
 After shipping, update the status to `✅ Shipped`.
@@ -1027,83 +1302,3 @@ If `openclaw_cli_sessions.py` was changed, also deploy it:
 ```bash
 scp src/openclaw_cli_sessions.py macbook:/Users/davevoyles/.local/share/openclaw-cli/
 ```
-
-
----
-
-## Wave 18 — Response Rating & Quality
-
-**Status: shipped**
-
-| Feature | Description |
-|---|---|
-| /rate [good/ok/bad/meh/1-5] | Rate last AI response; maps to score 1-5; stored in _PREFS[ratings] (cap 500) |
-| Session event | Each rating fires append_event(kind=rating) for session history |
-| /quality | Shows total rated, avg score, star distribution bar chart, most recent 3 ratings |
-| /ratehint [on/off] | Toggles post-response dim hint after each AI reply |
-| Pref keys | show_rate_hint (default True); ratings list |
-
----
-
-## Wave 19 — Interactive Overlays
-
-**Status: 🟡 Partial**
-
-**Goal:** add clear opt-in interactive affordances for list-style workflows
-without destabilizing the default REPL or non-TTY automation flows.
-
-### Shipped in this slice
-
-| Feature | Evidence |
-|---|---|
-| Persisted opt-in overlay mode | `/overlay [on|off|status]` stores `_PREFS["interactive_overlays"]` |
-| Saved-output picker | `/outputs overlay` opens a searchable picker and reuses the normal inline preview on selection |
-| Recent-session picker | `/sessions overlay` opens a searchable picker and prints the selected session summary + resume command |
-| One-shot session picker | `openclaw session list --interactive` brings the same picker to non-REPL usage |
-| Guarded fallback behavior | `_overlay_available()` blocks prompts on non-TTY stdin/stdout and falls back to the regular list output |
-
-### Deferred / not yet evidenced
-
-- [ ] Approval-preview overlays
-- [ ] Arrow-key / full-screen selection UI
-- [ ] Additional pickers for more list surfaces beyond sessions and outputs
-- [ ] Full `tests/test_openclaw_cli.py` suite is green (baseline still has unrelated excluded failures)
-- [ ] Deployed to macbook
-
-### Validation
-
-- Focused CLI pytest slice covering `/overlay`, `/outputs overlay`,
-  `/sessions overlay`, and `openclaw session list --interactive` passed.
-
----
-
-## Wave 18B — Performance Visibility
-
-**Status: ✅ Shipped**
-
-| Feature | Description |
-|---|---|
-| Session timing hints | `/session` now includes active watch phase, last run duration, and retry backoff totals when watch state exists |
-| Watch timing summary | `/watch status` exposes active phase age plus last checkpoint duration |
-| Retry/backoff cues | `/watch history` and checkpoint events include retry delay visibility |
-| Approval timing cues | `/exec` and `/edit` now emit `approval` events and separate approval wait from execution/write time |
-| Backward compatibility | Older watch state still renders by deriving timing from existing timestamps when explicit duration fields are missing |
-
-
----
-
-## Wave 19 — Context Injection & Prompt Engineering
-
-**Status: Shipped**
-
-| Feature | Description |
-|---|---|
-| /inject path | Read file content into _next_inject global (max 8000 chars, binary-safe) |
-| /inject --url url | Fetch URL into _next_inject via requests (max 8000 chars) |
-| /inject clear/status | Clear or preview pending injection |
-| Injection prepend | run_chat() prepends injection as [Injected context] block; consumed after one send |
-| /system view/set/append/clear | Manage persistent system prompt in _PREFS[system_prompt] (max 2000 chars) |
-| System prompt prepend | run_chat() prepends system prompt as [System context] block to every AI message |
-| /context update | Now shows system prompt preview and pending injection count |
-| /promptdebug (alias /pd) | Preview full assembled prompt: system + inject + user placeholder |
-| _CLI_BUILD | Bumped to wave19 |

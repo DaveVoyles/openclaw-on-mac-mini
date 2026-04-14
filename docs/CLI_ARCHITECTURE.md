@@ -36,6 +36,135 @@ else:
 **Never** print rich markup unconditionally — the test suite captures stdout
 and will see raw markup tags.
 
+### Accessibility + adaptive layout
+
+Wave 15 currently exposes three persisted accessibility preferences in
+`_PREFS`:
+
+| Preference | Key | Current behavior |
+| --- | --- | --- |
+| Reduced motion | `reduced_motion` | `_with_spinner()` skips animation, prints a static working line, and emits periodic text heartbeats for slower calls |
+| Plain mode | `plain_mode` | Forces plain/non-Rich response rendering, simplifies the REPL prompt + startup banner, and maps to layout `plain` |
+| High contrast | `high_contrast` | Switches to the high-contrast palette for separators, borders, and selected Rich/ANSI accents |
+
+The interactive REPL exposes these through `/accessibility`:
+
+```text
+/accessibility status
+/accessibility reduced-motion on|off
+/accessibility plain on|off
+/accessibility high-contrast on|off
+/accessibility reset
+```
+
+Adaptive layout is split between two surfaces:
+
+- `/layout compact|normal|verbose|plain` controls chrome density
+- width-aware rendering helpers such as `_render_table_ansi()` and
+  `/accessibility status` use terminal width at render time
+
+Wave 16 layers feedback density on top of that baseline:
+
+- `_with_spinner()` now ends with an explicit completion cue, and reduced-motion
+  mode emits periodic plain-text heartbeats instead of going silent.
+- `/clear`, `/layout`, and `/accessibility` use the shared compact feedback line
+  helper for predictable confirmations.
+- High/critical `/exec` and `/edit` actions print an extra warning + recovery
+  hint before the existing approval prompt.
+
+### Theme engine + personalization
+
+Wave 17 extends the existing theme layer without changing the JSON/non-TTY
+surfaces:
+
+| Preference | Key | Current behavior |
+| --- | --- | --- |
+| Theme | `theme` | Normalized through `_normalize_theme_name()` so invalid values safely fall back to `default` |
+| Emoji pack | `emoji_pack` | Supports `classic`, `minimal`, and `ascii`; legacy `emoji` bool is still honored/migrated |
+| Layout | `layout` | Clamped by `_normalize_personalization_prefs()` to `compact`, `normal`, `verbose`, or `plain` |
+
+Command handlers:
+
+- `/theme [name|list|preview|next|prev|reset]`
+- `/emoji [on|off|status|pack <name>|preview]`
+
+Implementation notes:
+
+- `_status_emoji()` now routes through `_e()` so ASCII/minimal emoji packs affect
+  status badges too, not just ad-hoc icon calls.
+- `_load_prefs()` / `_save_prefs()` call `_normalize_personalization_prefs()` to
+  keep stored customization values safe and additive.
+
+### Interactive overlays
+
+Wave 19 adds opt-in interactive list pickers without changing default scripted
+behavior:
+
+| Surface | Trigger | Current behavior |
+| --- | --- | --- |
+| REPL outputs picker | `/outputs overlay` or `/overlay on` + `/outputs` | Searchable output list; selecting an item prints the normal saved-output preview |
+| REPL sessions picker | `/sessions overlay` or `/overlay on` + `/sessions` | Searchable recent-session list; selecting an item prints session summary + resume command |
+| One-shot session picker | `openclaw session list --interactive` | Same searchable session picker outside the REPL |
+
+Implementation notes:
+
+- The persisted preference key is `_PREFS["interactive_overlays"]`.
+- `_overlay_available()` guards overlay prompts behind TTY checks so non-TTY and
+  scripted usage falls back to ordinary list output.
+- `_run_interactive_overlay()` is intentionally lightweight: it uses plain
+  `input()`, fuzzy-ish text filtering, numeric selection, and cancellation via
+  empty input / `q`, avoiding hard Rich dependencies.
+
+### Collaboration handoff UX
+
+Wave 20 adds collaboration-oriented affordances on top of the existing local
+session and handoff files:
+
+- `/collab`, `/collab share`, and `openclaw session share <session-id>` render
+  a pasteable handoff summary from persisted session metadata, outputs, events,
+  and latest handoff data.
+- `/collab note [@actor] TEXT` and `/collab decision [@actor] [#tag] TEXT`
+  append additive `collab` events to the session log; decision tags are also
+  mirrored into session tags as `collab:<tag>`.
+- `export_session()` and `create_handoff()` now include a structured
+  `collaboration` snapshot so downstream tooling can reuse the same actor,
+  decision, and share-command metadata.
+
+### Performance visibility
+
+Wave 18B adds timing-oriented visibility without changing JSON/non-TTY
+compatibility requirements:
+
+- `/session` now folds watch timing hints into the automation row when persisted
+  watch state exists (active phase, last completed run duration, accumulated
+  retry backoff).
+- `/watch status` surfaces the active phase age, last checkpoint duration, and
+  total retry backoff time using backward-compatible derivation from existing
+  watch-state timestamps.
+- `/watch history` annotates recent retries with their backoff delays.
+- `/events` appends compact timing cues when event metadata includes
+  `elapsed_seconds`, `approval_seconds`, or `retry_delay_seconds`.
+- `/exec` and `/edit` now emit explicit `approval` decision events and include
+  both approval wait time and execution/write time in their result metadata.
+
+### Dashboard/docs maintenance
+
+When a wave changes any dashboard or status surface, update the docs as a set:
+
+- `docs/DASHBOARD_SURFACES.md` — canonical inventory + per-wave checklist for
+  Waves 21–30
+- `docs/CLI_ARCHITECTURE.md` — rendering helpers, guardrails, persistence, and
+  shared dashboard plumbing
+- `docs/CLI_QUICKSTART.md` — user-facing command/examples for the changed
+  surface
+- `docs/UX_IMPROVEMENTS.md` — roadmap status, shipped evidence, and deferred
+  scope
+
+`docs/COMMANDS.md` is generated from
+`src/dashboard/helpers.py::_raw_command_groups()`. Regenerate it when command
+metadata changes; avoid hand-editing the file unless that generation flow is
+retired.
+
 ### stderr vs stdout
 
 - `_print_update_notice()` → **stderr** (must not corrupt JSON output from `--json` flag)
@@ -47,11 +176,13 @@ and will see raw markup tags.
 | Helper | Purpose |
 | --- | --- |
 | `_status_emoji(status)` | Maps status strings to emoji (✓ ✗ ⚠ …) |
+| `_print_feedback(message, level, detail)` | Shared compact confirmations, liveness notes, and completion cues |
+| `_print_risky_action_warning(action, target, risk_level, recovery_hint)` | Accessible pre-approval emphasis for high/critical `/exec` and `/edit` actions |
 | `_print_meta_footer(label, value)` | Dim metadata line below output blocks |
 | `_print_error(msg)` | Red error panel (rich) or `error: msg` (plain) |
 | `_print_shell_result(rc, stdout, stderr)` | Colored shell output with exit code badge |
 | `_print_file_edit_result(path, diff)` | Unified diff display for `/edit` |
-| `_with_spinner(msg, fn)` | Braille spinner wrapping a blocking call |
+| `_with_spinner(msg, fn)` | Braille spinner wrapping a blocking call; reduced-motion mode uses text heartbeats + explicit completion feedback |
 | `_preprocess_response_text(text)` | Clean raw LLM response text before rendering: strips `_via model_` trailers, extracts Sources section, removes inline `[N]` citation markers, converts pipe-in-bullet table patterns to real markdown tables. Returns `(body, sources)` |
 | `_apply_inline_ansi(text)` | Apply bold (`**`), italic (`*`), and inline code (`` ` ``) as ANSI spans. Used by the ANSI markdown fallback renderer. |
 | `_render_markdown_ansi(text)` | Full ANSI markdown renderer (fallback when Rich is absent or TTY not detected at module load). Handles H1–H4 headings, blockquotes (`▌`), fenced code blocks with language border, nested bullets, numbered lists, horizontal rules scaled to terminal width. |
@@ -232,13 +363,13 @@ Currently affected files: all four in `~/.local/share/openclaw-cli/`.
 python3 -m pytest tests/test_openclaw_cli.py \
   -k "not (test_run_chat_uses_router_before_generic_chat_fallback \
        or test_run_chat_routed_edit_still_requests_approval \
-       or test_run_chat_autoroutes_plan_candidate \
+       or test_run_chat_autoroutes_plan_candidate_into_persisted_execution \
        or test_run_chat_supports_help_command \
-       or test_help_output_includes_new_commands)" \
+        or test_help_output_includes_new_commands)" \
   -q
 ```
 
-Expected: **180 passed**. The 5 excluded tests are pre-existing failures
+Expected: **203+ passed**. The 5 excluded tests are pre-existing failures
 unrelated to CLI UX work.
 
 After any change to `src/openclaw_cli.py` or `src/openclaw_cli_actions.py`:

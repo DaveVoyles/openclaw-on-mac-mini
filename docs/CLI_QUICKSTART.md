@@ -168,6 +168,30 @@ openclaw session list --interactive
 - If stdin/stdout is not interactive, OpenClaw prints a short notice and falls
   back to the normal non-interactive list output.
 
+## Wave 20 collaboration handoffs
+
+Wave 20 adds local-first collaboration affordances without requiring any new
+backend:
+
+```text
+/collab
+/collab note @alice Checked the failing test shard
+/collab decision @bob #handoff Keep the handoff file-local for now
+openclaw session share <session-id>
+openclaw session export <session-id>
+```
+
+- **`/collab`** prints a compact handoff summary with actors, recent decisions,
+  recent outputs, and the exact resume/share commands.
+- **`/collab note`** records an actor-tagged note in the current session's
+  local event log.
+- **`/collab decision`** records a tagged decision trail entry that also shows
+  up in exports and session inspection.
+- **`openclaw session share`** prints the same pasteable summary outside the
+  REPL for handoff messages or async updates.
+- **`openclaw session export`** now includes a `collaboration` block in its
+  JSON payload, and handoff manifests capture the same structure.
+
 ## Hybrid REPL — in-session slash commands
 
 The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural-language prompts and slash commands coexist in the same input stream. Every slash command is handled locally before the input reaches the LLM.
@@ -193,6 +217,9 @@ The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural
 | `/outputs <index>` or `/outputs <filename>` | Preview a saved artifact inline without leaving the REPL |
 | `/outputs overlay` | Open a searchable picker for saved outputs |
 | `/events [n]` | Show recent session events, including structured `route` events for auto-routed prompts |
+| `/collab [status\|share]` | Print an actor-oriented collaboration/handoff summary for the active session |
+| `/collab note [@actor] TEXT` | Record a collaboration note in the local session audit trail |
+| `/collab decision [@actor] [#tag] TEXT` | Record a tagged decision for later handoff/export |
 | <code>/plan [&lt;id&gt;&#124;unlink]</code> | Show, link, or unlink the session plan |
 | <code>/task [&lt;id&gt;&#124;unlink]</code> | Show, link, or unlink the session task |
 
@@ -302,6 +329,7 @@ High/critical routed `/exec` and `/edit` steps still use the same approval check
 - `openclaw exec` — run tracked shell commands with higher-risk approval prompts; pass `--plan-id <id>` or `--task-id <id>` to tag the command to a plan or task
 - `openclaw edit` — preview or apply text edits with unified diffs; supports `--plan-id` / `--task-id` tagging
 - `openclaw session list|show|resume|export` — inspect resumable local CLI sessions (`show <session-id>` prints full metadata, plan/task linkage, tracked files, automation state, and watch checkpoint/retry history)
+- `openclaw session share <session-id>` — print a pasteable collaboration handoff summary from local session data
 - `openclaw session list --interactive` — open a searchable picker when you want to browse sessions interactively in a real TTY
 - `openclaw plan <subcommand>` — manage agent-loop plans from the terminal (see below)
 
@@ -344,6 +372,17 @@ Affected commands on a thin install: `openclaw plan`, `openclaw research` (full 
 Switch to the developer/package install (`python -m pip install -e .`) to unlock these.
 
 Recent terminal-agent sessions also appear in the dashboard under **Terminal Agent Sessions**, including watch-mode checkpoint counts and automation status. Clicking a session loads a richer detail view with plan/task linkage, recent progress log, intervention history, and a **Watch Insights** panel showing the per-poll checkpoint timeline (poll index, phase, status, summary) and the full retry history (poll, attempt, error type). The Scheduled Tasks card can pause, resume, and update cron/prompt jobs from the browser. The dashboard control-plane also exposes **Active Plans** (linked steps and sessions) and **Unified Task Status** (Mission Control + scheduler tasks in one view).
+
+## Docs/dashboard sync for future waves
+
+If you are shipping a new CLI dashboard or status surface, also update:
+
+- `docs/DASHBOARD_SURFACES.md` for the surface inventory and wave checklist
+- `docs/CLI_ARCHITECTURE.md` for implementation/guard details
+- `docs/UX_IMPROVEMENTS.md` for roadmap status and shipped evidence
+
+Only update `docs/COMMANDS.md` by regenerating it from runtime command metadata
+when command names or descriptions change.
 
 ## Developer install from a repo checkout
 
