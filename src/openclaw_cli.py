@@ -94,6 +94,12 @@ except ImportError:  # pragma: no cover
 
 _IS_TTY = sys.stdout.isatty()
 
+
+def _get_is_tty() -> bool:
+    """Return True if output is a real terminal (live check + startup flag)."""
+    return _IS_TTY or sys.stdout.isatty()
+
+
 # Cached latest PyPI version set by the background update-check thread.
 _latest_version: str | None = None
 # Set to True by the background update-check thread when standalone file hashes differ from server.
@@ -374,6 +380,12 @@ def _save_prefs() -> None:
         pass
 
 
+def _prefs_set(key: str, value: object) -> None:
+    """Set a single preference key and persist immediately."""
+    _PREFS[key] = value
+    _save_prefs()
+
+
 def _prefs_dir_path() -> Path:
     """Return the preference directory, honoring test overrides when present."""
     override = os.environ.get("OPENCLAW_CLI_HOME")
@@ -463,7 +475,7 @@ def _overlay_available() -> bool:
         stdin_tty = bool(sys.stdin.isatty())
     except Exception:
         stdin_tty = False
-    return bool((_IS_TTY or sys.stdout.isatty()) and stdin_tty)
+    return bool(_get_is_tty() and stdin_tty)
 
 
 def _overlay_query_score(text: str, query: str) -> int:
@@ -594,7 +606,7 @@ def _layout_preset_fallback(*, width: int | None = None, is_tty: bool | None = N
     """Return the current preset rendering fallback label."""
     if not _layout_preset_name():
         return "single-pane"
-    tty = (_IS_TTY or sys.stdout.isatty()) if is_tty is None else bool(is_tty)
+    tty = _get_is_tty() if is_tty is None else bool(is_tty)
     cols = _terminal_width() if width is None else int(width)
     if not tty or _a11y_plain_mode() or cols < 100:
         return "single-pane"
@@ -845,7 +857,7 @@ def _theme_style() -> str:
 
 def _theme_ansi() -> str:
     """Return the ANSI escape code for the current theme accent (plain-text path)."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty:
         return ""
     theme = _normalize_theme_name(_PREFS.get("theme", "default"))
@@ -972,7 +984,7 @@ def _progress_cell(label: str, value: str, *, status: str = "", rich: bool = Fal
 
 def _premium_motion_active(*, output_json: bool = False) -> bool:
     """Return True when tasteful motion is allowed for this surface."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     return bool(is_tty and not output_json and not _a11y_plain_mode() and not _a11y_reduced_motion())
 
 
@@ -1070,7 +1082,7 @@ def _print_dashboard_surface(
     """Render a summary → details → actions dashboard surface with safe fallbacks."""
     detail_lines = detail_lines or []
     action_lines = action_lines or []
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if _RICH_AVAILABLE and is_tty and not _a11y_plain_mode():
         body = _RichText()
         _append_dashboard_rich_section(body, "Summary", summary_lines)
@@ -1113,7 +1125,7 @@ def _print_predictive_affordances(
     clean = _dedupe_preserve_order(hints)[:4]
     if not clean:
         return
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if _RICH_AVAILABLE and is_tty and not _a11y_plain_mode():
         body = _RichText()
         for hint in clean:
@@ -1194,7 +1206,7 @@ def _print_feedback(message: str, *, level: str = "info", detail: str = "") -> N
     """Print a compact feedback line with accessible emphasis."""
     level_key = str(level or "info").strip().lower()
     plain = _a11y_plain_mode()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     icon_map = {
         "success": ("✓", "[done]"),
         "warn": ("⚠", "[warn]"),
@@ -1288,7 +1300,7 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     When reduced-motion mode is active, skips the animation and prints a single
     static "thinking..." line instead, then runs *fn* directly.
     """
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not (is_tty and not output_json):
         return fn(*args, **kwargs)
 
@@ -4048,7 +4060,7 @@ def _print_response_separator(*, label: str = "", detail: str = "", status: str 
     display_label = " ".join(part for part in [status_label, label] if part).strip() or label
     if detail and cols >= 96:
         display_label = f"{display_label} · {detail}".strip()
-    if _RICH_AVAILABLE and (_IS_TTY or sys.stdout.isatty()):
+    if _RICH_AVAILABLE and _get_is_tty():
         from rich.rule import Rule as _RichRule
 
         _RICH_CONSOLE.print(_RichRule(display_label if cols >= 72 else "", style=_theme_style()))
@@ -4069,7 +4081,7 @@ def _print_animated_separator() -> None:
     frames = _SEPARATOR_STYLES.get(style, [])
     if not frames:
         return
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty:
         return
 
@@ -4210,7 +4222,7 @@ def _make_clickable_link(url: str, text: str = "") -> str:
     """Return an OSC 8 clickable hyperlink if supported, otherwise plain URL."""
     if not _PREFS.get("clickable_links", True) or _a11y_plain_mode():
         return text or url
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty:
         return text or url
     display = text or url
@@ -4221,7 +4233,7 @@ def _linkify_response(text: str) -> str:
     """Replace bare URLs in response text with OSC 8 clickable links."""
     if not _PREFS.get("clickable_links", True) or _a11y_plain_mode():
         return text
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty:
         return text
 
@@ -4830,7 +4842,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
         return
     # Re-check TTY at call time — module-level _IS_TTY can be False in some
     # terminal emulators (tmux, iTerm, etc.) even during an interactive session.
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if _a11y_plain_mode():
         is_tty = False  # force plain-text path; skip Rich rendering
     if response.response:
@@ -7417,7 +7429,7 @@ def _cmd_collab(ctx: ChatCommandContext) -> str:
 
 def _cmd_search(ctx: ChatCommandContext) -> str:
     """/search [--all] <query> — full-text search across session event content."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     raw = ctx.args.strip()
 
     cross_session = False
@@ -7776,7 +7788,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
     """/snapshot [name] — save current git HEAD as a named restore point."""
     import subprocess
     name = ctx.args.strip() or "auto"
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     try:
         result = subprocess.run(
@@ -7797,8 +7809,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
         import datetime
         ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
         snapshots[name] = {"sha": sha, "ts": ts}
-        _PREFS["snapshots"] = snapshots
-        _save_prefs()
+        _prefs_set("snapshots", snapshots)
 
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[green]✓[/] Snapshot [bold]{name}[/] saved at [dim]{sha}[/]")
@@ -7821,7 +7832,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
     # Git-snapshot: list saved snapshots (no arg or explicit "list" when no checkpoints match)
     if not arg or arg_lower == "list":
         import subprocess
-        is_tty = _IS_TTY or sys.stdout.isatty()
+        is_tty = _get_is_tty()
         snapshots = _PREFS.get("snapshots", {})
         if not snapshots:
             msg = "No snapshots saved. Use /snapshot [name] to save one."
@@ -7904,7 +7915,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
 
     # Git-snapshot: named snapshot preview or exec
     import subprocess
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     parts = arg.split()
     exec_mode = "--exec" in parts
     name = parts[0] if parts else ""
@@ -8151,7 +8162,7 @@ def _progress_bar(current: int, total: int, width: int = 30, label: str = "") ->
 
 def _exec_progress_animate(proc: Any, label: str = "") -> tuple:
     """Animate an indeterminate progress bar while proc runs. Returns (stdout, stderr, returncode)."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty or _a11y_reduced_motion() or _a11y_plain_mode():
         stdout, stderr = proc.communicate()
         return stdout, stderr, proc.returncode
@@ -8260,7 +8271,7 @@ def _print_exec_error_hints(cmd: str, stderr: str, returncode: int) -> None:
     hints = _analyze_exec_error(cmd, stderr, returncode)
     if not hints:
         return
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print("\n[bold yellow]💡 Recovery hints:[/]")
@@ -8343,7 +8354,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     exec_started = time.monotonic()
     _exec_cwd = session.cwd or None
-    _use_animation = (_IS_TTY or sys.stdout.isatty()) and not _a11y_reduced_motion() and not _a11y_plain_mode()
+    _use_animation = _get_is_tty() and not _a11y_reduced_motion() and not _a11y_plain_mode()
     try:
         if _use_animation:
             import subprocess as _sp
@@ -8583,7 +8594,7 @@ def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 
 def _print_theme_preview(theme_name: str, *, persisted: bool) -> None:
     """Print a compact theme preview without requiring Rich."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     normalized = _normalize_theme_name(theme_name)
     _, ansi_code = _THEMES[normalized]
     swatch = f"{ansi_code}{'━' * 8}{_R}" if is_tty else "--------"
@@ -8604,14 +8615,13 @@ def _cycle_theme(direction: str) -> None:
         next_theme = _THEME_ORDER[(index - 1) % len(_THEME_ORDER)]
     else:
         next_theme = _THEME_ORDER[(index + 1) % len(_THEME_ORDER)]
-    _PREFS["theme"] = next_theme
-    _save_prefs()
+    _prefs_set("theme", next_theme)
     _print_theme_preview(next_theme, persisted=True)
 
 
 def _cmd_theme(ctx: ChatCommandContext) -> str:
     """Handler for /theme — display or set the UI colour theme."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     token = ctx.args.strip().lower()
 
     if not token or token == "list":
@@ -8635,8 +8645,7 @@ def _cmd_theme(ctx: ChatCommandContext) -> str:
         _cycle_theme("prev")
         return _CMD_CONTINUE
     if token == "reset":
-        _PREFS["theme"] = "default"
-        _save_prefs()
+        _prefs_set("theme", "default")
         _print_theme_preview("default", persisted=True)
         return _CMD_CONTINUE
     if token.startswith("preview"):
@@ -8659,8 +8668,7 @@ def _cmd_theme(ctx: ChatCommandContext) -> str:
         print(f"{_BRE}error:{_R} Unknown theme '{token}'. Choose from: {names}")
         return _CMD_CONTINUE
 
-    _PREFS["theme"] = normalized
-    _save_prefs()
+    _prefs_set("theme", normalized)
     _print_theme_preview(normalized, persisted=True)
     return _CMD_CONTINUE
 
@@ -8678,8 +8686,7 @@ def _cmd_overlay(ctx: ChatCommandContext) -> str:
         _print_error("Usage: /overlay [on|off|status]")
         return _CMD_CONTINUE
     enabled = token == "on"
-    _PREFS["interactive_overlays"] = enabled
-    _save_prefs()
+    _prefs_set("interactive_overlays", enabled)
     if enabled:
         print("Interactive overlays enabled for supported list commands.")
     else:
@@ -8690,7 +8697,7 @@ def _cmd_overlay(ctx: ChatCommandContext) -> str:
 def _cmd_colorscheme(ctx: ChatCommandContext) -> str:
     """/colorscheme [name|list|reset] — view or set the extended color scheme."""
     arg = (ctx.args or "").strip().lower()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if not arg or arg == "list":
         current = _PREFS.get("color_scheme", "default")
@@ -8724,8 +8731,7 @@ def _cmd_colorscheme(ctx: ChatCommandContext) -> str:
             print(msg)
         return _CMD_CONTINUE
 
-    _PREFS["color_scheme"] = arg
-    _save_prefs()
+    _prefs_set("color_scheme", arg)
     scheme = _EXTENDED_SCHEMES[arg]
     label = scheme.get("label", arg)
 
@@ -8741,17 +8747,16 @@ def _cmd_emojiheaders(ctx: ChatCommandContext) -> str:
     """/emojiheaders [on|off] — toggle emoji prefixes on AI response headings."""
     arg = ctx.args.strip().lower()
     if arg in ("on", "off"):
-        _PREFS["emoji_headers"] = (arg == "on")
-        _save_prefs()
+        _prefs_set("emoji_headers", (arg == "on"))
         state = "on" if _PREFS["emoji_headers"] else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
+        is_tty = _get_is_tty()
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[green]✓[/] emoji headers [bold]{state}[/]")
         else:
             print(f"✓ emoji headers {state}")
     else:
         state = "on" if _PREFS.get("emoji_headers", True) else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
+        is_tty = _get_is_tty()
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[dim]emoji headers is [bold]{state}[/] — /emojiheaders on|off[/]")
         else:
@@ -8796,8 +8801,7 @@ def _cmd_emoji(ctx: ChatCommandContext) -> str:
             print(f"{_BRE}error:{_R} Unknown emoji pack '{requested}'. Choose from: classic, minimal, ascii")
             return _CMD_CONTINUE
         _PREFS["emoji_pack"] = requested
-        _PREFS["emoji"] = requested != "ascii"
-        _save_prefs()
+        _prefs_set("emoji", requested != "ascii")
         print(f"  Emoji pack set to {_B}{requested}{_R}. Run /emoji preview to compare packs.")
         return _CMD_CONTINUE
     if token == "on":
@@ -8808,8 +8812,7 @@ def _cmd_emoji(ctx: ChatCommandContext) -> str:
         print(f"  Emoji enabled ✓ (pack: {_B}{_emoji_pack_name()}{_R})")
     elif token == "off":
         _PREFS["emoji"] = False
-        _PREFS["emoji_pack"] = "ascii"
-        _save_prefs()
+        _prefs_set("emoji_pack", "ascii")
         print("  Emoji disabled — ASCII fallbacks active.")
     else:
         print(f"{_BRE}error:{_R} Expected 'on', 'off', 'pack <name>', or 'preview', got '{token}'")
@@ -8858,8 +8861,7 @@ def _cmd_layout(ctx: ChatCommandContext) -> str:
         if not _layout_preset_name():
             _print_error("Choose a preset first: /layout preset focus|watch-monitor|handoff")
             return _CMD_CONTINUE
-        _PREFS["layout_focus"] = requested_focus
-        _save_prefs()
+        _prefs_set("layout_focus", requested_focus)
         _print_feedback(f"Active pane set to {requested_focus}.", level="success")
         _print_layout_preset_workspace(ctx)
         return _CMD_CONTINUE
@@ -8867,8 +8869,7 @@ def _cmd_layout(ctx: ChatCommandContext) -> str:
     if preset_token in preset_aliases:
         preset = preset_aliases[preset_token]
         _PREFS["layout_preset"] = preset
-        _PREFS["layout_focus"] = "primary"
-        _save_prefs()
+        _prefs_set("layout_focus", "primary")
         config = _layout_preset_config(preset)
         fallback = _layout_preset_fallback()
         _print_feedback(
@@ -8880,8 +8881,7 @@ def _cmd_layout(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
     if token in {"reset", "off", "default", "single", "single-pane"}:
         _PREFS["layout_preset"] = ""
-        _PREFS["layout_focus"] = "primary"
-        _save_prefs()
+        _prefs_set("layout_focus", "primary")
         _print_feedback("Layout preset reset to single-pane default.", level="success")
         return _CMD_CONTINUE
     if token not in valid_layouts:
@@ -8893,8 +8893,7 @@ def _cmd_layout(ctx: ChatCommandContext) -> str:
         )
         return _CMD_CONTINUE
     _PREFS["layout"] = token
-    _PREFS[_A11Y_PLAIN_MODE] = token == "plain"
-    _save_prefs()
+    _prefs_set(_A11Y_PLAIN_MODE, token == "plain")
     desc = {
         "compact": "reduced chrome; separator + status bar hidden",
         "normal": "default density",
@@ -9073,7 +9072,7 @@ def _session_is_stale(s: "SessionSummary", days: int = 7) -> bool:
 
 def _cmd_sessions(ctx: ChatCommandContext) -> str:
     """/sessions [search QUERY | related] — browse recent sessions."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     token = ctx.args.strip()
     token_lower = token.lower()
     overlay_query = ""
@@ -9275,7 +9274,7 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
         filename = f"{filename}.{ext}"
 
     cmd_history = _PREFS.get("cmd_history", [])
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if not cmd_history:
         msg = "No history to export yet."
@@ -9342,7 +9341,7 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
 
 def _cmd_stats(ctx: ChatCommandContext) -> str:
     """/stats — show aggregate usage statistics across all sessions."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     sessions = list_sessions(limit=500)
 
     if not sessions:
@@ -9526,7 +9525,7 @@ def _cmd_resume(ctx: ChatCommandContext) -> str:
 
 def _cmd_replay(ctx: ChatCommandContext) -> str:
     """/replay [session-id] [--from bookmark] — re-print the current or a past session's conversation."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     raw_args = ctx.args.strip()
     parts = shlex.split(raw_args) if raw_args else []
     token = ""
@@ -9616,7 +9615,7 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
 
 def _cmd_handoff(ctx: ChatCommandContext) -> str:
     """/handoff [create|list|open NAME|note TEXT] — save/restore a resumable workspace handoff."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     raw = ctx.args.strip()
     parts = raw.split(None, 1)
     sub = parts[0].lower() if parts else ""
@@ -9791,7 +9790,7 @@ def _macro_run(ctx: ChatCommandContext, name: str) -> str:
         _print_error(f"Macro '{name}' is empty")
         return _CMD_CONTINUE
 
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print(f"[dim]▶ Running macro '[bold cyan]{name}[/]' ({len(commands)} commands)[/]")
     else:
@@ -9834,7 +9833,7 @@ def _macro_run(ctx: ChatCommandContext, name: str) -> str:
 def _cmd_inject(ctx: "ChatCommandContext") -> str:
     """/inject — inject file or URL content as context prefix for the next message."""
     global _next_inject
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     arg = ctx.args.strip()
 
     if not arg:
@@ -9948,7 +9947,7 @@ _SYSTEM_PROMPT_MAX = 2000
 
 def _cmd_system(ctx: ChatCommandContext) -> str:
     """View or set a persistent system prompt prefix for all AI messages."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     args = ctx.args.strip()
     parts = args.split(None, 1)
     sub = parts[0].lower() if parts else "view"
@@ -9969,8 +9968,7 @@ def _cmd_system(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     if sub == "clear":
-        _PREFS["system_prompt"] = ""
-        _save_prefs()
+        _prefs_set("system_prompt", "")
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print("[green]✓ System prompt cleared.[/]")
         else:
@@ -9984,8 +9982,7 @@ def _cmd_system(ctx: ChatCommandContext) -> str:
         if len(rest) > _SYSTEM_PROMPT_MAX:
             _print_error("System prompt too long (max 2000 chars)")
             return _CMD_CONTINUE
-        _PREFS["system_prompt"] = rest
-        _save_prefs()
+        _prefs_set("system_prompt", rest)
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[green]✓ System prompt set ({len(rest)} chars).[/]")
         else:
@@ -10001,8 +9998,7 @@ def _cmd_system(ctx: ChatCommandContext) -> str:
         if len(new_prompt) > _SYSTEM_PROMPT_MAX:
             _print_error("System prompt too long (max 2000 chars)")
             return _CMD_CONTINUE
-        _PREFS["system_prompt"] = new_prompt
-        _save_prefs()
+        _prefs_set("system_prompt", new_prompt)
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[green]✓ System prompt updated ({len(new_prompt)} chars).[/]")
         else:
@@ -10015,7 +10011,7 @@ def _cmd_system(ctx: ChatCommandContext) -> str:
 
 def _cmd_promptdebug(ctx: ChatCommandContext) -> str:
     """/promptdebug — preview what would be sent to the AI for the next message."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     sys_prompt = _PREFS.get("system_prompt", "").strip()
     inj = globals().get("_next_inject", "").strip()
 
@@ -10037,59 +10033,51 @@ def _cmd_promptdebug(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _handle_simple_toggle_pref(
+    ctx: "ChatCommandContext",
+    key: str,
+    label: str,
+    default: bool = True,
+    note: str = "",
+) -> str:
+    """Shared on/off toggle handler for simple boolean preference commands."""
+    val = (ctx.args or "").strip().lower()
+    is_tty = _get_is_tty()
+    if val in ("on", "off"):
+        _prefs_set(key, val == "on")
+        state = "on" if _PREFS[key] else "off"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] {label} [bold]{state}[/]")
+        else:
+            print(f"✓ {label} {state}")
+    else:
+        state = "on" if _PREFS.get(key, default) else "off"
+        suffix = f" — {note}" if note else ""
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{label} is [bold]{state}[/]{suffix}[/]")
+        else:
+            print(f"{label} is {state}{suffix}")
+    return _CMD_CONTINUE
+
+
 def _cmd_autobold(ctx: ChatCommandContext) -> str:
     """/autobold [on|off] — toggle automatic bolding of numbers and filenames in responses."""
-    arg = ctx.args.strip().lower()
-    if arg in ("on", "off"):
-        _PREFS["auto_bold"] = (arg == "on")
-        _save_prefs()
-        state = "on" if _PREFS["auto_bold"] else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[green]✓[/] auto-bold [bold]{state}[/]")
-        else:
-            print(f"✓ auto-bold {state}")
-    else:
-        state = "on" if _PREFS.get("auto_bold", True) else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[dim]auto-bold is [bold]{state}[/] — /autobold on|off[/]")
-        else:
-            print(f"auto-bold is {state}")
-    return _CMD_CONTINUE
+    return _handle_simple_toggle_pref(ctx, "auto_bold", "auto-bold")
 
 
 def _cmd_jsonformat(ctx: ChatCommandContext) -> str:
     """/jsonformat [on|off] — toggle automatic JSON detection and pretty-printing in responses."""
-    arg = ctx.args.strip().lower()
-    if arg in ("on", "off"):
-        _PREFS["json_autoformat"] = (arg == "on")
-        _save_prefs()
-        state = "on" if _PREFS["json_autoformat"] else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[green]✓[/] JSON auto-format [bold]{state}[/]")
-        else:
-            print(f"✓ JSON auto-format {state}")
-    else:
-        state = "on" if _PREFS.get("json_autoformat", True) else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[dim]JSON auto-format is [bold]{state}[/] — /jsonformat on|off[/]")
-        else:
-            print(f"JSON auto-format is {state}")
-    return _CMD_CONTINUE
+    return _handle_simple_toggle_pref(ctx, "json_autoformat", "JSON auto-format")
 
 
 def _cmd_separator(ctx: ChatCommandContext) -> str:
     """/separator [style] — set or preview response separator style (gradient|pulse|dots|wave|none)."""
     arg = ctx.args.strip().lower()
     valid = list(_SEPARATOR_STYLES.keys())
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if arg in valid:
-        _PREFS["separator_style"] = arg
-        _save_prefs()
+        _prefs_set("separator_style", arg)
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[green]✓[/] separator style: [bold]{arg}[/]")
         else:
@@ -10112,24 +10100,7 @@ def _cmd_separator(ctx: ChatCommandContext) -> str:
 
 def _cmd_links(ctx: "ChatCommandContext") -> str:
     """/links [on|off] — toggle clickable OSC 8 hyperlinks in responses (requires modern terminal)."""
-    arg = ctx.args.strip().lower()
-    if arg in ("on", "off"):
-        _PREFS["clickable_links"] = (arg == "on")
-        _save_prefs()
-        state = "on" if _PREFS["clickable_links"] else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[green]✓[/] clickable links [bold]{state}[/]")
-        else:
-            print(f"✓ clickable links {state}")
-    else:
-        state = "on" if _PREFS.get("clickable_links", True) else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[dim]clickable links is [bold]{state}[/] — /links on|off[/]")
-        else:
-            print(f"clickable links is {state}")
-    return _CMD_CONTINUE
+    return _handle_simple_toggle_pref(ctx, "clickable_links", "clickable links")
 
 
 _CMD_REGISTRY_CACHE: "dict | None" = None
@@ -10146,7 +10117,7 @@ def _get_cmd_registry() -> "ChatCommandRegistry":
 def _cmd_palette(ctx: "ChatCommandContext") -> str:
     """/palette [query] — search slash commands by keyword (fuzzy)."""
     query = ctx.args.strip().lower()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     commands = list(_get_cmd_registry().list_commands())
 
@@ -11115,7 +11086,7 @@ def _print_status_bar(
     Shows session, context size, and autoroute state so the user always has
     situational awareness without cluttering the response output itself.
     """
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty:
         return
     cols = _terminal_width()
@@ -11160,7 +11131,7 @@ def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: boo
     custom_fmt = _PREFS.get("prompt_format", "")
     if custom_fmt and custom_fmt != _DEFAULT_PROMPT_FORMAT:
         return _render_prompt_format(custom_fmt)
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     narrow = _terminal_width() < 56
     if is_tty:
         name = "\033[1;34moc\033[0m" if narrow else "\033[1;34mopenclaw\033[0m"
@@ -11207,7 +11178,7 @@ def _cmd_prompt(ctx: "ChatCommandContext") -> str:
       /prompt reset          (restore default)
     """
     arg = ctx.args.strip()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if not arg:
         current = _PREFS.get("prompt_format", _DEFAULT_PROMPT_FORMAT)
@@ -11225,8 +11196,7 @@ def _cmd_prompt(ctx: "ChatCommandContext") -> str:
         return _CMD_CONTINUE
 
     if arg == "reset":
-        _PREFS["prompt_format"] = _DEFAULT_PROMPT_FORMAT
-        _save_prefs()
+        _prefs_set("prompt_format", _DEFAULT_PROMPT_FORMAT)
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[green]✓[/] prompt format reset to default")
         else:
@@ -11240,8 +11210,7 @@ def _cmd_prompt(ctx: "ChatCommandContext") -> str:
             print("Prompt format too short")
         return _CMD_CONTINUE
 
-    _PREFS["prompt_format"] = arg
-    _save_prefs()
+    _prefs_set("prompt_format", arg)
     preview = _render_prompt_format(arg)
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print(f"[green]✓[/] prompt format updated")
@@ -11253,7 +11222,7 @@ def _cmd_prompt(ctx: "ChatCommandContext") -> str:
 
 def _print_first_run_tips() -> None:
     """Print a compact new-session tip panel (shown once, only in TTY mode)."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     tips = [
         (f"{_e('📁', '[cwd]')} /cwd <path>",       "Set working directory for file context"),
         (f"{_e('📄', '[files]')} /files add <path>", "Track specific files the AI can reference"),
@@ -11358,12 +11327,10 @@ def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
     """Toggle or inspect the paste guard setting."""
     token = (ctx.args or "").strip().lower()
     if token == "on":
-        _PREFS["paste_guard"] = True
-        _save_prefs()
+        _prefs_set("paste_guard", True)
         print(f"  {_GR}{_e('✅', '[OK]')} Paste guard enabled.{_R}")
     elif token == "off":
-        _PREFS["paste_guard"] = False
-        _save_prefs()
+        _prefs_set("paste_guard", False)
         print(f"  {_YE}{_e('⚠️', '[warn]')} Paste guard disabled.{_R}")
     else:
         state = "on" if _PREFS.get("paste_guard", True) else "off"
@@ -11411,7 +11378,7 @@ def _cmd_alias(ctx: "ChatCommandContext") -> str:
     """Define, list, or remove command aliases."""
     args = (ctx.args or "").strip()
     aliases: "dict[str, str]" = _PREFS.setdefault("aliases", {})
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if not args:
         # List all aliases
@@ -11480,7 +11447,7 @@ def _cmd_macro(ctx: "ChatCommandContext") -> str:
 
     args = (ctx.args or "").strip()
     macros: "dict[str, list[str]]" = _PREFS.setdefault("macros", {})
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     parts = args.split(None, 1)
     token = parts[0].lower() if parts else "list"
@@ -11621,7 +11588,7 @@ def _cmd_macro(ctx: "ChatCommandContext") -> str:
 def _cmd_macrostatus(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
     """/macrostatus — show saved macros with step counts."""
     macros = _PREFS.get("macros", {})
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not macros:
         msg = "No macros saved. Use /macro save <name> to create one."
         if _RICH_AVAILABLE and is_tty:
@@ -11685,12 +11652,11 @@ def _relative_time(ts_str: str) -> str:
 def _cmd_history(ctx: "ChatCommandContext") -> str:
     """Show or clear recent command history with color-coding and pagination."""
     args = (ctx.args or "").strip()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     hist: "list" = _PREFS.get("cmd_history", [])
 
     if args.lower() == "clear":
-        _PREFS["cmd_history"] = []
-        _save_prefs()
+        _prefs_set("cmd_history", [])
         print(f"  {_GR}{_e('✅', '[OK]')} Command history cleared.{_R}")
         return _CMD_CONTINUE
 
@@ -11778,7 +11744,7 @@ def _cmd_history(ctx: "ChatCommandContext") -> str:
 def _cmd_recall(ctx: "ChatCommandContext") -> str:
     """/recall <n> — re-inject the nth most recent prompt into the chat (1=most recent)."""
     arg = (ctx.args or "").strip()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     cmd_history = _PREFS.get("cmd_history", [])
     prompts: list[str] = []
@@ -11837,7 +11803,7 @@ def _cmd_recall(ctx: "ChatCommandContext") -> str:
 def _cmd_histsearch(ctx: "ChatCommandContext") -> str:
     """/histsearch <query> — search prompt history for matching entries."""
     query = ctx.args.strip().lower()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if not query:
         msg = "Usage: /histsearch <query>"
@@ -11906,7 +11872,7 @@ def _cmd_pin(ctx: "ChatCommandContext") -> str:
     rest = parts[1].strip() if len(parts) > 1 else ""
 
     pins: list[dict] = _PREFS.setdefault("pins", [])
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     # ── list ──────────────────────────────────────────────────────────────────
     if sub in ("list", "ls") or (not sub):
@@ -11969,8 +11935,7 @@ def _cmd_pin(ctx: "ChatCommandContext") -> str:
         if len(pins) == before:
             _print_error(f"No pin named '{rest}'")
             return _CMD_CONTINUE
-        _PREFS["pins"] = pins
-        _save_prefs()
+        _prefs_set("pins", pins)
         print(f"  {_GR}{_e('✅', '[OK]')} Pin '{rest}' removed.{_R}")
         return _CMD_CONTINUE
 
@@ -12007,8 +11972,7 @@ def _cmd_pin(ctx: "ChatCommandContext") -> str:
         pins.append({"name": name, "text": _last_response_text, "ts": ts})
         action = "pinned"
 
-    _PREFS["pins"] = pins
-    _save_prefs()
+    _prefs_set("pins", pins)
     preview = _last_response_text[:60] + ("…" if len(_last_response_text) > 60 else "")
     print(f"  {_GR}{_e('✅', '[OK]')} {action.capitalize()} as '{_CY}{name}{_R}{_GR}': {_DM}{preview}{_R}")
     return _CMD_CONTINUE
@@ -12023,7 +11987,7 @@ def _cmd_pins(ctx: "ChatCommandContext") -> str:
 def _celebration_burst(message: str = "") -> None:
     """Print a short animated celebration burst (confetti + message)."""
     import random
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty or _a11y_reduced_motion() or _a11y_plain_mode():
         if message:
             print(f"🎉 {message}")
@@ -12145,7 +12109,7 @@ def _cmd_rate(ctx: "ChatCommandContext") -> str:
 
 def _print_ascii_trophy(streak: int) -> None:
     """Print an ASCII trophy for streak achievements."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if _a11y_plain_mode():
         print(f"  🏆 {streak}-rating streak!")
         return
@@ -12174,7 +12138,7 @@ def _print_ascii_trophy(streak: int) -> None:
 
 def _cmd_streak(ctx: "ChatCommandContext") -> str:
     """/streak — show your current rating streak and all-time best."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     ratings = _PREFS.get("ratings", [])
 
     if not ratings:
@@ -12340,7 +12304,7 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
 def _cmd_heatmap(ctx: ChatCommandContext) -> str:
     """/heatmap — show a color-coded hourly activity heatmap of openclaw usage."""
     import datetime
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     cmd_history = _PREFS.get("cmd_history", [])
 
@@ -12421,7 +12385,7 @@ def _cmd_heatmap(ctx: ChatCommandContext) -> str:
 
 def _cmd_quality(ctx: "ChatCommandContext") -> str:
     """/quality — show a colored histogram of response quality ratings."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     ratings = _PREFS.get("ratings", [])
 
     if not ratings:
@@ -12522,7 +12486,7 @@ def _print_path_hints(paths: "list[str]") -> None:
     """Print quick-action hints for file paths mentioned in the response."""
     if not _PREFS.get("path_hints", True) or _a11y_plain_mode():
         return
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty:
         return
 
@@ -12586,7 +12550,7 @@ def _print_followup_suggestions(suggestions: list[str], *, mode: str = "chat") -
     """Print follow-up suggestions as a compact bottom-hint footer."""
     if not suggestions:
         return
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     if not is_tty:
         return
     clean = _dedupe_preserve_order(suggestions)[:3]
@@ -12624,46 +12588,12 @@ def _print_followup_suggestions(suggestions: list[str], *, mode: str = "chat") -
 
 def _cmd_pathhints(ctx: "ChatCommandContext") -> str:
     """/pathhints [on|off] — toggle file path quick-action hints after responses."""
-    arg = ctx.args.strip().lower()
-    if arg in ("on", "off"):
-        _PREFS["path_hints"] = (arg == "on")
-        _save_prefs()
-        state = "on" if _PREFS["path_hints"] else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[green]✓[/] path hints [bold]{state}[/]")
-        else:
-            print(f"✓ path hints {state}")
-    else:
-        state = "on" if _PREFS.get("path_hints", True) else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[dim]path hints is [bold]{state}[/] — /pathhints on|off[/]")
-        else:
-            print(f"path hints is {state}")
-    return _CMD_CONTINUE
+    return _handle_simple_toggle_pref(ctx, "path_hints", "path hints")
 
 
 def _cmd_ratehint(ctx: "ChatCommandContext") -> str:
     """/ratehint [on|off] — toggle the post-response rating hint."""
-    arg = ctx.args.strip().lower()
-    if arg in ("on", "off"):
-        _PREFS["show_rate_hint"] = (arg == "on")
-        _save_prefs()
-        state = "on" if _PREFS["show_rate_hint"] else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[green]✓[/] rating hint [bold]{state}[/]")
-        else:
-            print(f"✓ rating hint {state}")
-    else:
-        state = "on" if _PREFS.get("show_rate_hint", True) else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[dim]rating hint is [bold]{state}[/] — use /ratehint on|off[/]")
-        else:
-            print(f"rating hint is {state} — use /ratehint on|off")
-    return _CMD_CONTINUE
+    return _handle_simple_toggle_pref(ctx, "show_rate_hint", "rating hint", note="/ratehint on|off")
 
 
 def _cmd_followup(ctx: "ChatCommandContext") -> str:
@@ -12673,7 +12603,7 @@ def _cmd_followup(ctx: "ChatCommandContext") -> str:
     if arg in ("on", "off"):
         _PREFS["show_suggestions"] = (arg == "on")
         state = "on" if _PREFS["show_suggestions"] else "off"
-        is_tty = _IS_TTY or sys.stdout.isatty()
+        is_tty = _get_is_tty()
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[green]✓[/] follow-up suggestions [bold]{state}[/]")
         else:
@@ -12683,7 +12613,7 @@ def _cmd_followup(ctx: "ChatCommandContext") -> str:
     last_prompt = str(_PREFS.get("_last_prompt", "") or "")
     if not last_prompt:
         msg = "No recent prompt found. Type a question first, then use /followup."
-        is_tty = _IS_TTY or sys.stdout.isatty()
+        is_tty = _get_is_tty()
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[dim]{msg}[/]")
         else:
@@ -12691,7 +12621,7 @@ def _cmd_followup(ctx: "ChatCommandContext") -> str:
         return _CMD_CONTINUE
 
     suggestions = _suggest_followups(last_prompt, response_text=_last_response_text, session_id=ctx.session_id)
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print(
@@ -12717,7 +12647,7 @@ def _cmd_followup(ctx: "ChatCommandContext") -> str:
 
 def _cmd_shortcuts(ctx: "ChatCommandContext") -> str:
     """/shortcuts — show keyboard shortcuts and quick-access reference card."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     sections = [
         ("⌨️  Navigation", [
@@ -12789,7 +12719,7 @@ def _cmd_shortcuts(ctx: "ChatCommandContext") -> str:
 def _cmd_stats(ctx: "ChatCommandContext") -> str:
     """/stats [category] — show ASCII bar charts of usage statistics (commands, ratings, sessions)."""
     category = ctx.args.strip().lower() or "all"
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     cmd_history = _PREFS.get("cmd_history", [])
     ratings = _PREFS.get("ratings", [])
@@ -12863,7 +12793,7 @@ def _cmd_top(ctx: "ChatCommandContext") -> str:
     arg = ctx.args.strip()
     n = int(arg) if arg.isdigit() else 10
     n = min(max(n, 1), 50)
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     cmd_history = _PREFS.get("cmd_history", [])
 
@@ -12921,7 +12851,7 @@ def _cmd_top(ctx: "ChatCommandContext") -> str:
 
 def _cmd_freq(ctx: "ChatCommandContext") -> str:
     """/freq — show frequency analysis of slash commands used."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     cmd_history = _PREFS.get("cmd_history", [])
 
     slash_freq: dict = {}
@@ -12967,7 +12897,7 @@ def _cmd_freq(ctx: "ChatCommandContext") -> str:
 def _cmd_tip(ctx: "ChatCommandContext") -> str:
     """/tip — show a random openclaw usage tip."""
     import random
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     tip = random.choice(_OPENCLAW_TIPS)
 
@@ -13027,7 +12957,7 @@ def _paste_guard(
 
 def _print_key_bindings() -> None:
     """Print currently active readline key bindings summary."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
     bindings = [
         ("Ctrl+R",   "Reverse history search (type to filter)"),
         ("Ctrl+L",   "Clear screen"),
@@ -13067,7 +12997,7 @@ def _cmd_keys(ctx: "ChatCommandContext") -> str:
 
 def _cmd_bindlist(ctx: "ChatCommandContext") -> str:
     """/bindlist — show all keyboard bindings (built-in readline + custom)."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     builtin_bindings = [
         ("Ctrl+R",   "Reverse history search"),
@@ -13128,7 +13058,7 @@ def _cmd_keybind(ctx: "ChatCommandContext") -> str:
       /keybind clear Ctrl+H            — remove a binding
     """
     arg = ctx.args.strip()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if not arg or arg == "list":
         custom = _PREFS.get("custom_keybinds", {})
@@ -13158,8 +13088,7 @@ def _cmd_keybind(ctx: "ChatCommandContext") -> str:
         custom = _PREFS.get("custom_keybinds", {})
         if key_name in custom:
             del custom[key_name]
-            _PREFS["custom_keybinds"] = custom
-            _save_prefs()
+            _prefs_set("custom_keybinds", custom)
             if _RICH_AVAILABLE and is_tty:
                 _RICH_CONSOLE.print(f"[green]✓[/] Removed keybind for [bold]{key_name}[/]")
             else:
@@ -13198,8 +13127,7 @@ def _cmd_keybind(ctx: "ChatCommandContext") -> str:
 
     custom = _PREFS.get("custom_keybinds", {})
     custom[key_name] = action
-    _PREFS["custom_keybinds"] = custom
-    _save_prefs()
+    _prefs_set("custom_keybinds", custom)
 
     _apply_custom_keybind(key_name, action)
 
@@ -13235,7 +13163,7 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
     """/diff [file1 file2 | --git] — show a colorized unified diff."""
     import subprocess
     arg = ctx.args.strip()
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     if not arg or arg == "--git":
         try:
@@ -13280,7 +13208,7 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
 def _cmd_changes(ctx: ChatCommandContext) -> str:
     """/changes — show files mentioned/edited in this session."""
     import subprocess
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     edits = _PREFS.get("session_edits", [])
 
@@ -13334,7 +13262,7 @@ def _cmd_changes(ctx: ChatCommandContext) -> str:
 def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/timeline — show a visual activity timeline of recent openclaw usage."""
     import datetime
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     cmd_history = _PREFS.get("cmd_history", [])
 
@@ -13423,7 +13351,7 @@ def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 
 def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/dashboard — show the power dashboard: sessions, stats, pins, and system status."""
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     # Gather data
     cmd_history = _PREFS.get("cmd_history", [])
@@ -13559,7 +13487,7 @@ def _cmd_benchmark(ctx: ChatCommandContext) -> str:
     arg = ctx.args.strip()
     n = int(arg) if arg.isdigit() else 3
     n = min(max(n, 1), 10)
-    is_tty = _IS_TTY or sys.stdout.isatty()
+    is_tty = _get_is_tty()
 
     # Resolve server URL from config or env fallback.
     if ctx.config and getattr(ctx.config, "base_url", None):
@@ -13679,7 +13607,7 @@ def run_chat(
     _print_startup_banner(config, session_id)
     # Occasionally show a random tip on startup (~30% chance)
     import random as _random
-    _is_tty_startup = _IS_TTY or sys.stdout.isatty()
+    _is_tty_startup = _get_is_tty()
     if _random.random() < 0.3 and not _a11y_plain_mode() and _is_tty_startup and not config.output_json:
         _startup_tip = _random.choice(_OPENCLAW_TIPS)
         if _RICH_AVAILABLE:
@@ -13864,7 +13792,7 @@ def run_chat(
             continue
 
         # Visual separator + status bar (skipped in compact layout)
-        _is_tty = _IS_TTY or sys.stdout.isatty()
+        _is_tty = _get_is_tty()
         _compact = _PREFS.get("layout") == "compact"
         if _is_tty and not config.output_json and not _compact:
             _print_response_separator(label="Response", detail="answer reveal", status="active")
