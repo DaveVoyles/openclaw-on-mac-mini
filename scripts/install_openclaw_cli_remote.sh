@@ -27,9 +27,11 @@ CLI_FILES=(
   openclaw_cli_macros.py
   openclaw_cli_path_utils.py
   openclaw_cli_prefs.py
+  openclaw_cli_preprocess.py
   openclaw_cli_router.py
   openclaw_cli_session_cmds.py
   openclaw_cli_session_display.py
+  openclaw_cli_session_utils.py
   openclaw_cli_sessions.py
   openclaw_cli_settings.py
   openclaw_cli_ui_core.py

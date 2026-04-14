@@ -231,12 +231,23 @@ except ImportError:  # pragma: no cover
 
 import openclaw_cli_render as _render_mod
 from openclaw_cli_render import _render_markdown_ansi  # re-exported; implementation lives in render module
+import openclaw_cli_preprocess as _preprocess_mod
+from openclaw_cli_preprocess import (
+    _MD_TABLE_BLOCK,
+    _RE_ANSI_ESCAPE,
+    _RE_MD_LINK,
+    _RE_BARE_URL,
+    _RE_SOURCES_BLOCK,
+    _RE_SOURCES_BLOCK_LOOSE,
+    _parse_md_table,
+)
 import openclaw_cli_path_utils as _path_utils
 import openclaw_cli_macros as _macros_mod
 import openclaw_cli_layout as _layout_mod
 import openclaw_cli_session_cmds as _session_cmds_mod
 import openclaw_cli_content_cmds as _content_cmds_mod
 import openclaw_cli_session_display as _session_display_mod
+import openclaw_cli_session_utils as _session_utils_mod
 import openclaw_cli_watch as _watch_mod
 from openclaw_cli_watch import (
     normalize_watch_state,
@@ -1392,63 +1403,7 @@ def bind_config_to_session(config: CliConfig, session_id: str) -> CliConfig:
 
 def summarize_session(session: SessionSummary) -> str:
     """Render a compact single-session summary for terminal output."""
-    try:
-        watch_state = load_watch_state(session.session_id)
-    except Exception:
-        _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
-        watch_state = None
-    snapshot = build_collaboration_snapshot(session.session_id, limit=3)
-    mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
-    operator_snapshot = _session_operator_snapshot(
-        session,
-        watch_state=watch_state,
-        collaboration_snapshot=snapshot,
-    )
-    parts = [
-        f"session: {session.session_id}",
-        f"title: {session.title}",
-        _progress_cell("status", str(session.status or "active"), status=session.status or "active"),
-        f"cwd: {session.cwd}",
-        f"age: {_session_age_label(session)}",
-        f"updated: {session.updated_at}",
-        f"freshness: {'stale' if _session_is_stale(session) else 'fresh'}",
-        _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
-        _progress_cell("outputs", str(session.output_count), status="complete" if session.output_count else "idle"),
-    ]
-    mood_cell = _session_mood_cell(mood)
-    if mood_cell:
-        parts.append(mood_cell)
-    parts.extend(_operator_snapshot_lines(operator_snapshot)[:4])
-    if session.plan_id:
-        parts.append(f"plan: {session.plan_id}")
-    if session.task_id:
-        parts.append(f"task: {session.task_id}")
-    if session.files:
-        parts.append("files: " + ", ".join(session.files[:6]))
-    if session.last_summary:
-        parts.append(f"last: {session.last_summary}")
-    if session.automation_mode:
-        status = session.automation_status or "active"
-        parts.append(_progress_cell("automation", f"{session.automation_mode} ({status})", status=status))
-        if watch_state:
-            timing = _watch_timing_summary(watch_state)
-            timing_parts = []
-            if timing["active_phase"]:
-                detail = f"{timing['active_phase']}"
-                if timing["active_phase_elapsed"] is not None:
-                    detail += f" {_format_elapsed_compact(timing['active_phase_elapsed'])}"
-                timing_parts.append(f"phase {detail}")
-            if timing["latest_duration"] is not None:
-                timing_parts.append(f"last run {_format_elapsed_compact(timing['latest_duration'])}")
-            if timing["retry_delay_total"]:
-                timing_parts.append(f"retry backoff {_format_elapsed_compact(timing['retry_delay_total'])}")
-            if timing_parts:
-                parts.append("timing: " + " · ".join(timing_parts))
-    if session.checkpoint_count:
-        parts.append(_progress_cell("checkpoints", str(session.checkpoint_count), status="complete"))
-    if session.last_checkpoint_at:
-        parts.append(f"last checkpoint: {session.last_checkpoint_at}")
-    return "\n".join(parts)
+    return _session_utils_mod.summarize_session(session, _age_label_fn=_session_age_label)
 
 
 def _print_session_summary(session: SessionSummary) -> None:
@@ -1524,56 +1479,7 @@ def _session_mood_cell(snapshot: dict[str, str], *, rich: bool = False) -> str:
 
 
 def _session_preview_lines(session: SessionSummary) -> list[str]:
-    lines: list[str] = []
-    watch_state = None
-    story = build_session_storyline(session.session_id, limit=3)
-    if story.get("headline"):
-        lines.append(f"story: {_single_line_excerpt(str(story.get('headline') or ''), max_chars=100)}")
-    if session.last_summary:
-        lines.append(f"latest activity: {_single_line_excerpt(session.last_summary, max_chars=100)}")
-    if session.automation_mode:
-        try:
-            watch_state = load_watch_state(session.session_id)
-        except Exception:
-            _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
-            watch_state = None
-        if watch_state:
-            lines.extend(_watch_focus_lines(watch_state)[:2])
-    outputs = list_saved_outputs(session.session_id, limit=1)
-    if outputs:
-        output_item = outputs[0]
-        preview = load_saved_output_preview(
-            session.session_id,
-            str(output_item.get("name") or "").strip(),
-            max_chars=SESSION_PREVIEW_OUTPUT_CHARS,
-        )
-        output_line = f"latest output: {str(output_item.get('name') or '').strip()}"
-        if preview:
-            excerpt = _single_line_excerpt(str(preview.get("preview") or ""), max_chars=90)
-            if excerpt:
-                output_line += f" — {excerpt}"
-        lines.append(output_line)
-    snapshot = build_collaboration_snapshot(session.session_id, limit=3)
-    actors = list(snapshot.get("actors") or [])
-    decisions = list(snapshot.get("recent_decisions") or [])
-    if actors:
-        actor_names = ", ".join(str(actor.get("name") or "operator").strip() for actor in actors[:2] if str(actor.get("name") or "").strip())
-        if actor_names:
-            lines.append(f"collab: {actor_names}")
-    if decisions:
-        lines.append(f"decision: {_single_line_excerpt(_format_collaboration_entry(decisions[0]), max_chars=100)}")
-    mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
-    mood_cell = _session_mood_cell(mood)
-    if mood_cell:
-        lines.append(mood_cell)
-    timeline = list(story.get("timeline") or [])
-    if timeline:
-        lead = timeline[0]
-        lines.append(
-            f"recap: {str(lead.get('label') or 'update')}: "
-            f"{_single_line_excerpt(str(lead.get('summary') or ''), max_chars=88)}"
-        )
-    return lines[:6]
+    return _session_utils_mod._session_preview_lines(session)
 
 
 def _session_operator_snapshot(
@@ -1644,55 +1550,7 @@ def _set_acknowledged_alert_ids(values: set[str]) -> None:
 
 
 def _collect_operator_alerts() -> list[dict[str, Any]]:
-    alerts: list[dict[str, Any]] = []
-    for session in list_sessions(limit=50):
-        watch_state = load_watch_state(session.session_id) or {}
-        snapshot = build_collaboration_snapshot(session.session_id, limit=5)
-        operator = _session_operator_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
-        watch_status = str((watch_state or {}).get("status") or "").strip().lower()
-        failures = int((watch_state or {}).get("failure_count") or 0)
-        pending = len([item for item in list((watch_state or {}).get("interventions") or []) if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "pending"])
-        latest_handoff = str(operator.get("latest_handoff") or "").strip()
-        readiness = str(operator.get("readiness_label") or "").strip().lower()
-        if watch_status in {"retrying"} or failures > 0:
-            alerts.append({
-                "id": f"{session.session_id}:retry:{failures}:{watch_status}",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "warn",
-                "kind": "retry",
-                "message": f"automation retrying · failures {failures}",
-            })
-        if pending:
-            alerts.append({
-                "id": f"{session.session_id}:pending:{pending}",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "info",
-                "kind": "pending",
-                "message": f"{pending} pending operator intervention{'s' if pending != 1 else ''}",
-            })
-        if readiness == "handoff-ready" and not latest_handoff:
-            alerts.append({
-                "id": f"{session.session_id}:handoff-ready",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "info",
-                "kind": "handoff",
-                "message": "ready to hand off · create a snapshot",
-            })
-        if _session_is_stale(session) and watch_status in {"running", "active"}:
-            alerts.append({
-                "id": f"{session.session_id}:stale-watch",
-                "session_id": session.session_id,
-                "title": session.title,
-                "severity": "warn",
-                "kind": "stale",
-                "message": "watch looks stale while still active",
-            })
-    severity_order = {"warn": 0, "retry": 0, "error": 0, "info": 1, "idle": 2}
-    alerts.sort(key=lambda item: (severity_order.get(str(item.get("severity") or ""), 9), str(item.get("title") or ""), str(item.get("message") or "")))
-    return alerts
+    return _session_utils_mod._collect_operator_alerts()
 
 
 def _print_automation_dashboard() -> None:
@@ -2517,10 +2375,6 @@ def _inject_heading_emojis(text: str) -> str:
 
 
 _URL_PATTERN = re.compile(r'(https?://[^\s\)\]\>\"\']+)', re.IGNORECASE)
-# Regex constants for rendering helpers (compiled once at module level for performance)
-_RE_KV_BOLD = re.compile(r"\*\*[^*]+:\*\*")
-_RE_MD_LINK = re.compile(r"\[([^\]]*)\]\((https?://[^\)]+)\)")
-_RE_BARE_URL = re.compile(r"(https?://\S+)")
 
 
 def _make_clickable_link(url: str, text: str = "") -> str:
@@ -2534,422 +2388,49 @@ def _linkify_response(text: str) -> str:
 
 
 def _is_kv_bullet_group(lines: list[str]) -> bool:
-    """Return True if all lines look like pipe-separated key:value bullet rows.
-
-    Accepts both **Key:** value (bold) and plain Key: Value formats, including
-    lines where the whole content is wrapped in italic markers (*...*).
-    """
-    for line in lines:
-        content = re.sub(r"^[•\-\*]\s+", "", line.lstrip())
-        # Strip wrapping italic markers (*content*) around the whole line body
-        content = re.sub(r"^\*(.+)\*$", r"\1", content.strip())
-        if _RE_KV_BOLD.search(content):
-            continue
-        # Accept plain "Key: value | Key: value" rows — require a colon in the
-        # majority of pipe-segments so we don't misclassify normal prose bullets.
-        segments = [s.strip() for s in content.split(" | ")]
-        if len(segments) < 2:
-            return False
-        colon_count = sum(1 for s in segments if ":" in s)
-        if colon_count < len(segments) // 2 + 1:
-            return False
-    return True
+    return _preprocess_mod._is_kv_bullet_group(lines)
 
 
 def _bullet_group_to_table(lines: list[str]) -> list[str]:
-    """Convert pipe-in-bullet lines to a markdown table.
-
-    Handles both **Key:** value (bold) and plain Key: Value formats.
-    Also strips wrapping italic markers (*...*) that some models add.
-    """
-    headers: list[str] = []
-    rows: list[list[str]] = []
-    for line in lines:
-        content = re.sub(r"^[•\-\*]\s+", "", line.lstrip())
-        # Strip wrapping italic markers around the whole line body
-        content = re.sub(r"^\*(.+)\*$", r"\1", content.strip())
-        parts = [p.strip() for p in content.split(" | ")]
-        row_headers: list[str] = []
-        row_values: list[str] = []
-        for part in parts:
-            # Strip lone leading asterisks (partial italic markers from the first/last segment)
-            part = re.sub(r"^\*+", "", part).strip()
-            # Match **Key:** value  (bold-colon inside markers)
-            m = re.match(r"\*\*([^*:]+):\*\*\s*(.*)", part)
-            if m:
-                row_headers.append(m.group(1).strip())
-                row_values.append(m.group(2).strip())
-            else:
-                # Match plain "Key: value" — split on first colon
-                colon_idx = part.find(":")
-                if colon_idx > 0:
-                    row_headers.append(part[:colon_idx].strip())
-                    # Strip leading asterisks from values (closing italic marker from last segment)
-                    val = re.sub(r"^\*+\s*", "", part[colon_idx + 1:].strip())
-                    row_values.append(val)
-                else:
-                    row_headers.append(f"Col{len(row_headers) + 1}")
-                    row_values.append(part)
-        if not headers:
-            headers = row_headers
-        rows.append(row_values)
-    table: list[str] = []
-    table.append("| " + " | ".join(headers) + " |")
-    table.append("|" + "|".join(["---"] * len(headers)) + "|")
-    for row in rows:
-        while len(row) < len(headers):
-            row.append("")
-        table.append("| " + " | ".join(row[: len(headers)]) + " |")
-    return table
+    return _preprocess_mod._bullet_group_to_table(lines)
 
 
 def _unwrap_code_block_tables(text: str) -> str:
-    """Unwrap fenced code blocks that contain only pipe-in-bullet table rows.
-
-    When the AI wraps a pipe-in-bullet table in triple-backtick fences, Rich
-    renders it as a monospace code block instead of a table.  This step detects
-    those blocks and removes the fences so _convert_bullet_tables can convert them.
-    """
-    def _replace(m: re.Match) -> str:
-        content = m.group(1).strip()
-        non_empty = [l for l in content.split("\n") if l.strip()]
-        if len(non_empty) >= 2 and all(
-            re.match(r"^[•\-\*]\s+.+$", l) and " | " in l
-            for l in non_empty
-        ):
-            return content  # strip the fences
-        return m.group(0)  # leave unchanged
-
-    return re.sub(r"```[^\n]*\n(.*?)```", _replace, text, flags=re.DOTALL)
+    return _preprocess_mod._unwrap_code_block_tables(text)
 
 
 def _convert_bullet_tables(text: str) -> str:
-    """Detect pipe-in-bullet table patterns and convert to proper markdown tables."""
-    lines = text.split("\n")
-    result: list[str] = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        bullet_match = re.match(r"^\s*[•\-\*]\s+.+$", line)
-        if bullet_match and " | " in line:
-            group = [line]
-            j = i + 1
-            while j < len(lines):
-                next_line = lines[j]
-                if re.match(r"^\s*[•\-\*]\s+.+$", next_line) and " | " in next_line:
-                    group.append(next_line)
-                    j += 1
-                else:
-                    break
-            if len(group) >= 2 and _is_kv_bullet_group(group):
-                result.extend(_bullet_group_to_table(group))
-                i = j
-                continue
-        result.append(line)
-        i += 1
-    return "\n".join(result)
+    return _preprocess_mod._convert_bullet_tables(text)
 
 
 def _colorize_json(text: str) -> str:
-    """Apply ANSI color coding to a JSON string."""
-    if _a11y_plain_mode():
-        return text
-    import re as _re_json
-    # Keys (quoted strings before colon) → cyan
-    text = _re_json.sub(r'"([^"]+)"(\s*:)', f'{_CY}"\\1"{_R}\\2', text)
-    # String values → green
-    text = _re_json.sub(r':\s*"([^"]*)"', f': {_GR}"\\1"{_R}', text)
-    # Numbers → yellow
-    text = _re_json.sub(r':\s*(-?\d+(?:\.\d+)?)', f': {_YE}\\1{_R}', text)
-    # Booleans and null → magenta
-    text = _re_json.sub(r'\b(true|false|null)\b', f'{_MA}\\1{_R}', text)
-    return text
+    return _preprocess_mod._colorize_json(text)
 
 
 def _detect_and_format_json(text: str) -> str:
-    """Detect bare JSON objects/arrays in response text and pretty-print them."""
-    if not _PREFS.get("json_autoformat", True) or _a11y_plain_mode():
-        return text
-
-    lines = text.split("\n")
-    result: list[str] = []
-    i = 0
-    in_code_block = False
-
-    while i < len(lines):
-        line = lines[i]
-
-        # Track code blocks — don't touch content inside them
-        if line.strip().startswith("```"):
-            in_code_block = not in_code_block
-            result.append(line)
-            i += 1
-            continue
-
-        if in_code_block:
-            result.append(line)
-            i += 1
-            continue
-
-        stripped = line.strip()
-
-        # Detect start of JSON: line starts with { or [
-        if stripped.startswith("{") or stripped.startswith("["):
-            # First try just this single line
-            try:
-                obj = json.loads(stripped)
-                pretty = json.dumps(obj, indent=2)
-                pretty_colored = _colorize_json(pretty)
-                result.append("```json")
-                result.extend(pretty_colored.split("\n"))
-                result.append("```")
-                i += 1
-                continue
-            except json.JSONDecodeError:
-                pass
-            # Then try accumulating more lines (multi-line JSON)
-            json_lines = [line]
-            j = i + 1
-            matched = False
-            while j < len(lines) and j < i + 50:
-                json_lines.append(lines[j])
-                candidate = "\n".join(json_lines)
-                try:
-                    obj = json.loads(candidate.strip())
-                    pretty = json.dumps(obj, indent=2)
-                    pretty_colored = _colorize_json(pretty)
-                    result.append("```json")
-                    result.extend(pretty_colored.split("\n"))
-                    result.append("```")
-                    i = j + 1
-                    matched = True
-                    break
-                except json.JSONDecodeError:
-                    j += 1
-            if not matched:
-                result.append(line)
-                i += 1
-            continue
-
-        result.append(line)
-        i += 1
-
-    return "\n".join(result)
+    return _preprocess_mod._detect_and_format_json(text)
 
 
 def _preprocess_response_text(text: str) -> tuple[str, str | None]:
-    """Clean up raw LLM response text for better CLI rendering.
-
-    Returns (cleaned_body, sources) where sources may be None.
-
-    Steps:
-      A. Strip recovery note blocks (before anything else so they don't interfere).
-      B. Strip trailing ``_via model-name_`` trailer added by some proxied models.
-      C. Extract the Sources section (if present) so it can be rendered separately.
-      D. Strip inline [N] citation markers.
-      E. Unwrap fenced code blocks that contain only pipe-in-bullet table rows.
-      F. Convert pipe-in-bullet table patterns to proper markdown tables.
-    """
-    # A. Strip server-appended recovery note blocks — do this FIRST before any other
-    # manipulation so the block is always present in text regardless of ordering.
-    # Matches both \n\n and \n before the blockquote opener, and captures until
-    # the blockquote section ends (no more > lines).
-    text = re.sub(
-        r"\n{1,2}> ℹ️ \*\*Recovery note:\*\*\n(?:> [^\n]*\n?)*",
-        "",
-        text,
-    )
-    # Also strip bare-text recovery note blocks (no blockquote markers) in case
-    # the model emits the recovery note without > prefix after some processing.
-    text = re.sub(
-        r"\n{1,2}ℹ️ \*?\*?Recovery note\*?\*?:?[^\n]*\n(?:[^\n]*\n?){0,6}",
-        "",
-        text,
-    )
-
-    # B. Strip _via model_ trailer — search broadly near the end (last 3 lines)
-    # rather than only at EOF so it's caught even when other trailers follow it.
-    text = re.sub(r"\n_via [^\n]+_[ \t]*(?=\n|$)", "", text)
-    text = text.rstrip()
-
-    # C. Extract Sources / **Sources** block at the end.
-    # Matches bullet lists (- / *) AND numbered lists (1. 2. 3.) after a Sources heading.
-    # Finds ALL occurrences, keeps the longest (most complete), strips all from body.
-    sources: str | None = None
-    all_matches = list(_RE_SOURCES_BLOCK.finditer(text))
-    if all_matches:
-        # Use the match with the most content (longest group 1) as the canonical sources
-        best = max(all_matches, key=lambda m: len(m.group(1)))
-        sources = best.group(0).strip()
-        # Strip ALL sources blocks from body (reverse order to preserve indices)
-        for m in reversed(all_matches):
-            text = text[: m.start()] + text[m.end():]
-        text = text.rstrip()
-
-    # Fallback: catch Sources blocks with no preceding blank line
-    if sources is None:
-        all_loose = list(_RE_SOURCES_BLOCK_LOOSE.finditer(text))
-        if all_loose:
-            best = max(all_loose, key=lambda m: len(m.group(1)))
-            sources = best.group(0).strip()
-            for m in reversed(all_loose):
-                text = text[: m.start()] + text[m.end():]
-            text = text.rstrip()
-
-    # D. Strip bare inline citation markers like [1], [2], [12]
-    # Guard against stripping markdown link text like [text](url) — only remove
-    # patterns where the bracket content is purely digits and not followed by (
-    text = re.sub(r"\[(\d{1,2})\](?!\()", "", text)
-
-    # E. Unwrap fenced code blocks that are really pipe-in-bullet tables
-    text = _unwrap_code_block_tables(text)
-
-    # F. Convert pipe-in-bullet table patterns to real markdown tables
-    text = _convert_bullet_tables(text)
-
-    return text, sources
+    return _preprocess_mod._preprocess_response_text(text)
 
 
 def _auto_bold_response(text: str) -> str:
-    """Apply auto-bolding to key terms in AI response text.
-
-    Post-processes the response body to make dollar amounts, percentages,
-    and filenames visually pop. Skips fenced code blocks, table rows, and
-    blockquotes. Only active when auto_bold pref is True and not in plain mode.
-    """
-    if _a11y_plain_mode() or not _PREFS.get("auto_bold", True):
-        return text
-
-    lines = text.split("\n")
-    result = []
-    in_code_block = False
-
-    for line in lines:
-        if line.strip().startswith("```"):
-            in_code_block = not in_code_block
-            result.append(line)
-            continue
-        if in_code_block or line.startswith("|") or line.startswith(">"):
-            result.append(line)
-            continue
-
-        # 1. Dollar amounts — skip if already bolded
-        line = re.sub(
-            r'(?<!\*)\$(\d[\d,\.]*(?:\s*(?:million|billion|trillion|thousand|[KMBkmb]))?)\b(?!\*)',
-            r'**$\1**',
-            line,
-        )
-        # 2. Percentages — skip if already bolded
-        line = re.sub(
-            r'(?<!\*)(\d+(?:\.\d+)?%)(?!\*)',
-            r'**\1**',
-            line,
-        )
-        # 3. File extensions — wrap in backticks if not already
-        line = re.sub(
-            r'(?<![`\w])(\w[\w\-]*\.(?:py|md|json|yaml|yml|sh|txt|js|ts|go|rs|html|css))(?![`\w])',
-            r'`\1`',
-            line,
-        )
-
-        result.append(line)
-
-    return "\n".join(result)
+    return _preprocess_mod._auto_bold_response(text)
 
 
 # ---------------------------------------------------------------------------
 # Smart markdown table renderer — handles wide tables gracefully
+# (implementation in openclaw_cli_preprocess; constants re-imported above)
 # ---------------------------------------------------------------------------
-
-_MD_TABLE_BLOCK = re.compile(
-    r"(?m)^(\|[^\n]+\n\|[-:| ]+\|(?:\n\|[^\n]+)*)",
-)
-_RE_SOURCES_BLOCK = re.compile(
-    r"\n{1,2}(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
-    re.IGNORECASE,
-)
-_RE_SOURCES_BLOCK_LOOSE = re.compile(
-    r"(?:^|\n)(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
-    re.IGNORECASE | re.MULTILINE,
-)
-_RE_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def _strip_inline_md(text: str) -> str:
-    """Strip common inline markdown markers (bold, italic, code) from a cell string."""
-    text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
-    text = re.sub(r"\*(.+?)\*", r"\1", text)
-    text = re.sub(r"`(.+?)`", r"\1", text)
-    # Strip stray leading/trailing asterisks not caught above
-    return text.strip().strip("*").strip()
-
-
-def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]] | None:
-    """Parse a markdown table block into (headers, rows). Returns None on failure."""
-    lines = [l for l in block.strip().splitlines() if l.strip()]
-    if len(lines) < 2:
-        return None
-    sep_line = lines[1]
-    if not re.match(r"^\|[-:| ]+\|\s*$", sep_line):
-        return None
-
-    def _parse_row(line: str) -> list[str]:
-        return [_strip_inline_md(p) for p in line.strip().strip("|").split("|")]
-
-    headers = _parse_row(lines[0])
-    rows = [_parse_row(l) for l in lines[2:] if l.strip() and "|" in l]
-    if not headers:
-        return None
-    return headers, rows
+    return _preprocess_mod._strip_inline_md(text)
 
 
 def _render_md_table_rich(headers: list[str], rows: list[list[str]]) -> None:
-    """Render a parsed markdown table using a Rich Table with sensible column widths.
-
-    When too many columns exist to fit the terminal, the first column wraps
-    (it's usually a label/name) and remaining columns share the available space.
-    """
-    term_cols = shutil.get_terminal_size((120, 24)).columns
-    n = len(headers)
-    if n == 0:
-        return
-
-    # Compute natural width of each column (max of header + values, capped)
-    MAX_COL = 24
-    MIN_COL = 5
-    natural: list[int] = []
-    for i, h in enumerate(headers):
-        cell_max = max((len(r[i]) if i < len(r) else 0) for r in rows) if rows else 0
-        natural.append(max(MIN_COL, min(max(len(h), cell_max), MAX_COL)))
-
-    # Total needed: sum of column widths + 3 chars per column (border + padding)
-    overhead = n * 3 + 1
-    available = term_cols - overhead
-    total_natural = sum(natural)
-
-    if total_natural <= available:
-        col_widths = natural
-    else:
-        # Scale down proportionally, respecting MIN_COL floor
-        scale = max(0.3, available / total_natural)
-        col_widths = [max(MIN_COL, int(w * scale)) for w in natural]
-
-    table = _RichTable(
-        border_style="bold white" if _a11y_high_contrast() else "dim",
-        show_edge=True,
-        pad_edge=True,
-        header_style="bold bright_white" if _a11y_high_contrast() else "bold cyan",
-    )
-    for i, (h, w) in enumerate(zip(headers, col_widths)):
-        # First column (labels/names) folds; numeric columns truncate cleanly
-        overflow_mode = "fold" if i == 0 else "ellipsis"
-        table.add_column(h, max_width=w, overflow=overflow_mode, no_wrap=(i > 0))
-
-    for row in rows:
-        cells = list(row) + [""] * max(0, n - len(row))
-        table.add_row(*cells[:n])
-
-    _RICH_CONSOLE.print(table)
+    return _preprocess_mod._render_md_table_rich(headers, rows)
 
 
 def _clean_sources_for_display(sources: str) -> list[str]:
