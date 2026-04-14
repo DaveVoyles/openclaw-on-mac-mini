@@ -110,6 +110,8 @@ def _response_footer_lines(
         headline = f"{done_symbol} Response complete in {elapsed:.1f}s"
     else:
         headline = f"{done_symbol} Response complete"
+    if tokens:
+        headline += f" · {tokens} tokens"
     return headline, detail
 
 

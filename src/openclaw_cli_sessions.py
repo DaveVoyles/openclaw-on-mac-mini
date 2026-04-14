@@ -19,6 +19,7 @@ MAX_EVENT_SUMMARY_CHARS = 180
 WATCH_INTERVENTION_LIMIT = 20
 ROUTED_ACTION_CHECKPOINT_LIMIT = 5
 ROUTED_ACTION_CHECKPOINT_MAX_FILE_BYTES = 256_000
+SESSION_BOOKMARK_LIMIT = 20
 TEXT_SUFFIXES = {
     ".c",
     ".cc",
@@ -79,6 +80,7 @@ class SessionSummary:
     last_checkpoint_at: str = ""
     repl_auto_route: bool = True
     tags: list[str] = field(default_factory=list)
+    bookmarks: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         now = _now_iso()
@@ -86,6 +88,7 @@ class SessionSummary:
             self.created_at = now
         if not self.updated_at:
             self.updated_at = now
+        self.bookmarks = _normalize_session_bookmarks(self.bookmarks)
 
 
 def _now_iso() -> str:
@@ -176,6 +179,55 @@ def _short_summary(text: str, *, limit: int = MAX_EVENT_SUMMARY_CHARS) -> str:
     return compact[: limit - 1].rstrip() + "…"
 
 
+def _normalize_session_bookmark(raw: Any, *, fallback_index: int) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    bookmark_id = str(raw.get("id") or "").strip() or f"b{fallback_index}"
+    label = " ".join(str(raw.get("label") or "").split()).strip()
+    created_at = str(raw.get("created_at") or "").strip() or _now_iso()
+    try:
+        turn_index = max(1, int(raw.get("turn_index") or fallback_index))
+    except (TypeError, ValueError):
+        turn_index = fallback_index
+    try:
+        history_index = max(0, int(raw.get("history_index") or 0))
+    except (TypeError, ValueError):
+        history_index = 0
+    prompt_preview = _short_summary(str(raw.get("prompt_preview") or ""), limit=72)
+    response_preview = _short_summary(str(raw.get("response_preview") or ""), limit=96)
+    summary = _short_summary(
+        str(raw.get("summary") or response_preview or prompt_preview or label or bookmark_id),
+        limit=96,
+    )
+    return {
+        "id": bookmark_id[:24],
+        "label": label[:80] or f"Bookmark {turn_index}",
+        "created_at": created_at,
+        "turn_index": turn_index,
+        "history_index": history_index,
+        "prompt_preview": prompt_preview,
+        "response_preview": response_preview,
+        "summary": summary,
+    }
+
+
+def _normalize_session_bookmarks(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for index, item in enumerate(raw, start=1):
+        bookmark = _normalize_session_bookmark(item, fallback_index=index)
+        if bookmark is None:
+            continue
+        bookmark_id = str(bookmark.get("id") or "")
+        if bookmark_id in seen_ids:
+            continue
+        seen_ids.add(bookmark_id)
+        normalized.append(bookmark)
+    return normalized[-SESSION_BOOKMARK_LIMIT:]
+
+
 def _ensure_session_layout(session_id: str) -> Path:
     session_dir = _session_dir(session_id)
     session_dir.mkdir(parents=True, exist_ok=True)
@@ -248,6 +300,77 @@ def require_session(session_id: str) -> SessionSummary:
     if session is None:
         raise FileNotFoundError(f"Session '{session_id}' was not found.")
     return session
+
+
+def list_session_bookmarks(session_id: str) -> list[dict[str, Any]]:
+    """Return normalized session bookmarks ordered oldest-first."""
+    session = require_session(session_id)
+    return list(_normalize_session_bookmarks(getattr(session, "bookmarks", [])))
+
+
+def create_session_bookmark(
+    session_id: str,
+    *,
+    label: str = "",
+    history: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Persist a replay bookmark for the current conversation state."""
+    session = require_session(session_id)
+    bookmarks = list_session_bookmarks(session_id)
+    conversation = list(history or load_conversation_history(session_id, limit_turns=0))
+    bookmark_id = f"b{len(bookmarks) + 1}"
+    start_index = max(0, len(conversation) - 2)
+    turn_index = max(1, sum(1 for item in conversation if str(item.get("role") or "") == "user"))
+
+    last_user = ""
+    last_assistant = ""
+    for entry in reversed(conversation):
+        role = str(entry.get("role") or "").strip().lower()
+        content = str(entry.get("content") or "").strip()
+        if not content:
+            continue
+        if not last_assistant and role == "assistant":
+            last_assistant = content
+        elif not last_user and role == "user":
+            last_user = content
+        if last_user and last_assistant:
+            break
+
+    normalized = _normalize_session_bookmark(
+        {
+            "id": bookmark_id,
+            "label": label or _short_summary(last_user or last_assistant or bookmark_id, limit=56),
+            "created_at": _now_iso(),
+            "turn_index": turn_index,
+            "history_index": start_index,
+            "prompt_preview": last_user,
+            "response_preview": last_assistant,
+            "summary": last_assistant or last_user or label or bookmark_id,
+        },
+        fallback_index=len(bookmarks) + 1,
+    )
+    assert normalized is not None
+    session.bookmarks = [*bookmarks, normalized][-SESSION_BOOKMARK_LIMIT:]
+    save_session(session)
+    return normalized
+
+
+def find_session_bookmark(session_id: str, token: str) -> dict[str, Any] | None:
+    """Resolve a session bookmark by id or label."""
+    needle = " ".join(str(token or "").strip().split()).lower()
+    if not needle:
+        return None
+    bookmarks = list_session_bookmarks(session_id)
+    for bookmark in bookmarks:
+        bookmark_id = str(bookmark.get("id") or "").strip().lower()
+        label = str(bookmark.get("label") or "").strip().lower()
+        if bookmark_id == needle or bookmark_id.startswith(needle) or label == needle:
+            return bookmark
+    for bookmark in bookmarks:
+        label = str(bookmark.get("label") or "").strip().lower()
+        if needle in label:
+            return bookmark
+    return None
 
 
 def list_sessions(*, limit: int = 20) -> list[SessionSummary]:
@@ -384,6 +507,9 @@ def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str
     actors: dict[str, dict[str, Any]] = {}
     notes: list[dict[str, Any]] = []
     decisions: list[dict[str, Any]] = []
+    assignments: list[dict[str, Any]] = []
+    risks: list[dict[str, Any]] = []
+    incidents: list[dict[str, Any]] = []
 
     def _record_actor(name: str, timestamp: str) -> None:
         entry = actors.get(name)
@@ -404,6 +530,7 @@ def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str
         if kind == "collab":
             actor = _normalize_collaboration_actor(meta.get("actor"), default="operator")
             tags = _normalize_collaboration_tags(meta.get("tags"))
+            collab_kind = str(meta.get("collab_kind") or "note").strip().lower()
             entry = {
                 "timestamp": timestamp,
                 "actor": actor,
@@ -413,8 +540,33 @@ def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str
                 "source": "manual",
             }
             _record_actor(actor, timestamp)
-            if str(meta.get("collab_kind") or "note").strip().lower() == "decision":
+            if collab_kind == "decision":
                 decisions.append(entry)
+            elif collab_kind in {"assignment", "assign"}:
+                assignee = _normalize_collaboration_actor(meta.get("assignee"), default=actor)
+                assignments.append(
+                    {
+                        **entry,
+                        "assignee": assignee,
+                        "status": str(meta.get("assignment_status") or "active").strip().lower() or "active",
+                    }
+                )
+            elif collab_kind == "risk":
+                risk_level = str(meta.get("risk_level") or "medium").strip().lower() or "medium"
+                risks.append(
+                    {
+                        **entry,
+                        "risk_level": risk_level,
+                        "status": str(meta.get("risk_status") or "open").strip().lower() or "open",
+                    }
+                )
+            elif collab_kind == "incident":
+                incidents.append(
+                    {
+                        **entry,
+                        "status": str(meta.get("incident_status") or "open").strip().lower() or "open",
+                    }
+                )
             else:
                 notes.append(entry)
             continue
@@ -451,6 +603,28 @@ def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str
         key=lambda item: (int(item.get("event_count") or 0), str(item.get("last_at") or ""), item.get("name", "")),
         reverse=True,
     )
+    open_risk_map: dict[tuple[str, str], dict[str, Any]] = {}
+    for item in risks:
+        level = str(item.get("risk_level") or "medium").strip().lower()
+        content = str(item.get("content") or item.get("summary") or "").strip()
+        if not content:
+            continue
+        key = (level, content)
+        status = str(item.get("status") or "open").strip().lower()
+        if status == "cleared":
+            open_risk_map.pop(key, None)
+        else:
+            open_risk_map[key] = item
+    open_incident_map: dict[str, dict[str, Any]] = {}
+    for item in incidents:
+        content = str(item.get("content") or item.get("summary") or "").strip()
+        if not content:
+            continue
+        status = str(item.get("status") or "open").strip().lower()
+        if status == "resolved":
+            open_incident_map.pop(content, None)
+        else:
+            open_incident_map[content] = item
     return {
         "session": {
             "session_id": summary.session_id,
@@ -459,11 +633,15 @@ def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str
             "plan_id": summary.plan_id,
             "task_id": summary.task_id,
             "tags": list(summary.tags),
+            "bookmarks": list(summary.bookmarks),
             "last_summary": summary.last_summary,
         },
         "actors": actor_items[:limit],
         "recent_notes": notes[-limit:][::-1],
         "recent_decisions": decisions[-limit:][::-1],
+        "assignments": assignments[-limit:][::-1],
+        "open_risks": list(open_risk_map.values())[-limit:][::-1],
+        "open_incidents": list(open_incident_map.values())[-limit:][::-1],
         "recent_outputs": list_saved_outputs(session_id, limit=min(limit, 3)),
         "latest_handoff": recent_handoffs[0] if recent_handoffs else None,
         "share": {
@@ -541,6 +719,10 @@ def build_session_storyline(session_id: str, *, limit: int = 5) -> dict[str, Any
     if outputs:
         milestones.append(
             f"{len(outputs)} saved output{'s' if len(outputs) != 1 else ''} ready for review"
+        )
+    if summary.bookmarks:
+        milestones.append(
+            f"{len(summary.bookmarks)} bookmark{'s' if len(summary.bookmarks) != 1 else ''} saved for replay"
         )
     if checkpoints:
         milestones.append(
@@ -766,6 +948,7 @@ def export_session(session_id: str) -> dict[str, Any]:
         "watch_state": load_watch_state(session_id),
         "routed_action_checkpoints": list_routed_action_checkpoints(session_id, limit=0),
         "collaboration": build_collaboration_snapshot(session_id, limit=10),
+        "workspace_capsule": build_workspace_capsule(session_id),
     }
 
 
@@ -1123,6 +1306,7 @@ def create_handoff(session_id: str, *, note: str = "", pin_outputs: list[str] | 
     summary = load_session(session_id)
     if summary is None:
         raise ValueError(f"Session not found: {session_id!r}")
+    watch_state = load_watch_state(session_id)
 
     handoff_id = (
         "handoff_"
@@ -1141,11 +1325,15 @@ def create_handoff(session_id: str, *, note: str = "", pin_outputs: list[str] | 
         "plan_id": summary.plan_id,
         "task_id": summary.task_id,
         "tags": summary.tags,
+        "bookmarks": list(summary.bookmarks),
         "last_summary": summary.last_summary,
         "note": note,
         "pinned_outputs": pin_outputs or [],
         "recent_history": load_conversation_history(session_id, limit_turns=10),
         "outputs_snapshot": list_saved_outputs(session_id, limit=20),
+        "watch_state": watch_state,
+        "workspace_signature": build_workspace_signature(cwd=summary.cwd, targets=list(summary.files)),
+        "workspace_capsule": build_workspace_capsule(session_id),
         "collaboration": build_collaboration_snapshot(session_id, limit=10),
     }
 
@@ -1220,14 +1408,60 @@ def apply_handoff(manifest: dict[str, Any], target_session_id: str) -> dict[str,
         handoff_tag = "handoff:" + manifest.get("source_session_id", "")[:8]
         if handoff_tag not in existing_tags:
             existing_tags.append(handoff_tag)
+        resolved_cwd = ""
+        cwd_path = str(cwd or "").strip()
+        if cwd_path and Path(cwd_path).exists():
+            resolved_cwd = cwd_path
+            result["restored"].append(f"cwd:{cwd_path}")
+        plan_id = str(manifest.get("plan_id") or "").strip()
+        task_id = str(manifest.get("task_id") or "").strip()
+        if plan_id:
+            result["restored"].append(f"plan:{plan_id}")
+        if task_id:
+            result["restored"].append(f"task:{task_id}")
         update_session(
             target_session_id,
+            cwd=resolved_cwd or (existing.cwd if existing else ""),
             last_summary=manifest.get("last_summary", ""),
             files=merged_files,
             tags=existing_tags,
+            plan_id=plan_id or (existing.plan_id if existing else ""),
+            task_id=task_id or (existing.task_id if existing else ""),
         )
+        watch_state = manifest.get("watch_state")
+        if isinstance(watch_state, dict) and watch_state:
+            normalized_state = dict(watch_state)
+            normalized_state["session_id"] = target_session_id
+            save_watch_state(target_session_id, normalized_state)
+            result["restored"].append("watch_state")
 
     return result
+
+
+def build_workspace_capsule(session_id: str) -> dict[str, Any]:
+    """Build a compact, human-readable workspace recovery snapshot."""
+    summary = require_session(session_id)
+    outputs = list_saved_outputs(session_id, limit=5)
+    watch_state = load_watch_state(session_id) or {}
+    bookmarks = list(summary.bookmarks or [])
+    workspace_signature = build_workspace_signature(cwd=summary.cwd, targets=list(summary.files))
+    return {
+        "session_id": summary.session_id,
+        "title": summary.title,
+        "cwd": summary.cwd,
+        "plan_id": summary.plan_id,
+        "task_id": summary.task_id,
+        "tracked_files": list(summary.files),
+        "tracked_file_count": len(summary.files or []),
+        "bookmark_count": len(bookmarks),
+        "bookmarks": bookmarks[-5:],
+        "output_count": len(outputs),
+        "recent_outputs": outputs[:5],
+        "watch_status": str(watch_state.get("status") or "").strip(),
+        "watch_mode": str(watch_state.get("mode") or "").strip(),
+        "workspace_signature": workspace_signature,
+        "resume_command": f"openclaw --session {summary.session_id}",
+    }
 
 
 def build_workspace_signature(

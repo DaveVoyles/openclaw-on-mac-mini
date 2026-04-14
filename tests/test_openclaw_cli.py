@@ -292,6 +292,46 @@ def test_print_startup_banner_plain_mode_uses_static_summary(monkeypatch, capsys
     assert "Type /help for commands. /quit to exit." in stdout
 
 
+def test_time_greeting_changes_with_hour(monkeypatch):
+    class _Morning:
+        @classmethod
+        def now(cls):
+            return SimpleNamespace(hour=9)
+
+    class _Evening:
+        @classmethod
+        def now(cls):
+            return SimpleNamespace(hour=20)
+
+    monkeypatch.setattr(mod, "datetime", _Morning)
+    assert mod._time_greeting() == "Good morning 🌅"
+
+    monkeypatch.setattr(mod, "datetime", _Evening)
+    assert mod._time_greeting() == "Good evening 🌙"
+
+
+def test_print_startup_banner_shows_session_milestone(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+    monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 120)
+    monkeypatch.setattr(mod, "_session_auto_route_enabled", lambda _session_id: True)
+    monkeypatch.setattr(mod, "_time_greeting", lambda: "Good afternoon ☀️")
+    monkeypatch.setattr(sessions_mod, "list_sessions", lambda limit=1001: [object()] * 10)
+
+    mod._print_startup_banner(_config(), "session-12345678")
+
+    out = capsys.readouterr().out
+    assert "Good afternoon" in out
+    assert "10 sessions with OpenClaw" in out
+
+
+def test_build_parser_accepts_no_banner_flag():
+    parser = mod.build_parser()
+    args = parser.parse_args(["--no-banner"])
+
+    assert args.no_banner is True
+
+
 def test_print_response_plain_mode_flattens_sources_and_footer(monkeypatch, capsys):
     monkeypatch.setattr(mod, "_IS_TTY", True)
     monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
@@ -311,6 +351,7 @@ def test_print_response_plain_mode_flattens_sources_and_footer(monkeypatch, caps
     assert "Hello world" in stdout
     assert "Sources:" in stdout
     assert "Response complete in 1.5s" in stdout
+    assert "42 tokens" in stdout
     assert "Metadata:" in stdout
 
 
@@ -1987,6 +2028,37 @@ class TestSessionSlashCommands:
         final_out = capsys.readouterr().out
         assert "(none)" in final_out
 
+    def test_incident_log_list_and_resolve_roundtrip(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="incident", cwd=str(tmp_path))
+
+        log_result = self._registry().dispatch(
+            "/incident log Agent stalled while waiting for credentials",
+            self._ctx(session_id=sess.session_id),
+        )
+        assert log_result == mod._CMD_CONTINUE
+        log_out = capsys.readouterr().out
+        assert "Recorded incident." in log_out
+
+        list_result = self._registry().dispatch("/incident list", self._ctx(session_id=sess.session_id))
+        assert list_result == mod._CMD_CONTINUE
+        list_out = capsys.readouterr().out
+        assert "Open incidents:" in list_out
+        assert "credentials" in list_out
+
+        self._registry().dispatch("/collab status", self._ctx(session_id=sess.session_id))
+        status_out = capsys.readouterr().out
+        assert "OPEN INCIDENTS" in status_out
+
+        resolve_result = self._registry().dispatch("/incident resolve 1", self._ctx(session_id=sess.session_id))
+        assert resolve_result == mod._CMD_CONTINUE
+        resolve_out = capsys.readouterr().out
+        assert "Resolved incident 1." in resolve_out
+
+        self._registry().dispatch("/incident list", self._ctx(session_id=sess.session_id))
+        final_out = capsys.readouterr().out
+        assert "(none)" in final_out
+
     def test_handoff_check_reports_blockers_and_ownership(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
         sess = sessions_mod.create_session(title="handoff-check", cwd=str(tmp_path), plan_id="plan-38", task_id="task-38")
@@ -2003,6 +2075,22 @@ class TestSessionSlashCommands:
         assert "blocked" in out
         assert "owner" in out
         assert "CRITICAL" in out
+
+    def test_handoff_check_reports_open_incidents(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="handoff-incident", cwd=str(tmp_path), plan_id="plan-41", task_id="task-41")
+        self._registry().dispatch("/collab assign @alice Drive final validation", self._ctx(session_id=sess.session_id))
+        capsys.readouterr()
+        self._registry().dispatch("/incident log Waiting on operator confirmation", self._ctx(session_id=sess.session_id))
+        capsys.readouterr()
+
+        result = self._registry().dispatch("/handoff check", self._ctx(session_id=sess.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "blocked" in out
+        assert "incidents" in out
+        assert "open incidents:" in out
 
     def test_task_unlink_removes_task(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -3078,6 +3166,21 @@ def test_summarize_session_wave26_adds_mood_line(monkeypatch, tmp_path):
 
     assert "mood: steady" in summary
     assert "1 output landed" in summary
+
+
+def test_summarize_session_includes_age(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = sessions_mod.create_session(title="Aged Session", cwd=str(tmp_path))
+    session = sessions_mod.update_session(
+        session.session_id,
+        created_at="2026-04-14T15:00:00Z",
+        updated_at="2026-04-14T15:30:00Z",
+    )
+    monkeypatch.setattr(mod, "_elapsed_seconds", lambda started_at, finished_at=None: 3600.0 if started_at == "2026-04-14T15:00:00Z" else 0.0)
+
+    summary = mod.summarize_session(session)
+
+    assert "age: 1h" in summary
 
 
 def test_print_watch_status_shows_phase_and_backoff(capsys):
@@ -5797,9 +5900,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave39(self):
-        """_CLI_BUILD must equal 'wave39'."""
-        assert mod._CLI_BUILD == "wave39"
+    def test_cli_build_is_wave45(self):
+        """_CLI_BUILD must equal 'wave45'."""
+        assert mod._CLI_BUILD == "wave45"
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -6707,9 +6810,59 @@ class TestCmdTip:
         assert len(mod._OPENCLAW_TIPS) > 0
         assert all(isinstance(t, str) for t in mod._OPENCLAW_TIPS)
 
-    def test_cli_build_is_wave39(self):
-        """_CLI_BUILD is updated to wave39."""
-        assert mod._CLI_BUILD == "wave39"
+    def test_wave44_tip_commands_are_present(self):
+        tips_text = " ".join(mod._OPENCLAW_TIPS)
+        for command in (
+            "/tokeninfo",
+            "/trace",
+            "/handoff check",
+            "/fleet health",
+            "/alerts",
+            "/collab decision",
+            "/bookmark",
+            "/overlay",
+            "/pattern",
+            "/draft multiline",
+        ):
+            assert command in tips_text
+
+    def test_cli_build_is_wave45(self):
+        """_CLI_BUILD is updated to wave45."""
+        assert mod._CLI_BUILD == "wave45"
+
+
+class TestCmdTokeninfo:
+    def _ctx(self, history=None):
+        return mod.ChatCommandContext(history=list(history or []), session_id="")
+
+    def test_tokeninfo_shows_progress_bar_and_estimate(self, capsys):
+        result = mod._cmd_tokeninfo(
+            self._ctx([
+                {"role": "user", "content": "x" * 400},
+                {"role": "assistant", "content": "y" * 200},
+            ])
+        )
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Context usage" in out
+        assert "Est. tokens:" in out
+        assert "128k limit:" in out
+        assert "Breakdown by actor" in out
+        assert "Largest share: user" in out
+
+    def test_tokeninfo_warns_near_capacity_with_bookmark_hint(self, capsys):
+        result = mod._cmd_tokeninfo(
+            self._ctx([
+                {"role": "user", "content": "x" * 400_000},
+                {"role": "assistant", "content": "y" * 120_000},
+            ])
+        )
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Context is near capacity" in out
+        assert "/bookmark before /clear" in out
 
 
 class TestCmdKeys:
@@ -6762,9 +6915,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave39(self):
-        """_CLI_BUILD == 'wave39'."""
-        assert mod._CLI_BUILD == "wave39"
+    def test_cli_build_is_wave45(self):
+        """_CLI_BUILD == 'wave45'."""
+        assert mod._CLI_BUILD == "wave45"
 
 
 class TestCmdKeybind:
@@ -6948,6 +7101,56 @@ class TestCmdDashboard:
         out = capsys.readouterr().out
         assert mod._CLI_BUILD in out
 
+    def test_dashboard_automation_shows_operator_totals(self, monkeypatch, capsys, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        sess = sessions_mod.create_session(title="automation", cwd=str(tmp_path))
+        sessions_mod.save_watch_state(sess.session_id, {"status": "retrying", "failure_count": 2, "interventions": []})
+
+        result = mod._cmd_dashboard(self._ctx("automation"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Automation dashboard" in out
+        assert "Alerts:" in out
+        assert "automation retrying" in out
+
+    def test_alerts_acknowledge_hides_alert(self, monkeypatch, capsys, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        sess = sessions_mod.create_session(title="alerted", cwd=str(tmp_path))
+        sessions_mod.save_watch_state(sess.session_id, {"status": "retrying", "failure_count": 1, "interventions": []})
+
+        list_result = mod._cmd_alerts(self._ctx())
+        assert list_result == mod._CMD_CONTINUE
+        list_out = capsys.readouterr().out
+        assert "Operator alerts" in list_out
+        assert "retrying" in list_out
+
+        ack_result = mod._cmd_alerts(self._ctx("acknowledge 1"))
+        assert ack_result == mod._CMD_CONTINUE
+        ack_out = capsys.readouterr().out
+        assert "Acknowledged alert 1" in ack_out
+
+        mod._cmd_alerts(self._ctx())
+        final_out = capsys.readouterr().out
+        assert "(none)" in final_out
+
+    def test_fleet_status_reuses_automation_dashboard(self, monkeypatch, capsys, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        sessions_mod.create_session(title="fleet", cwd=str(tmp_path))
+
+        result = mod._cmd_fleet(self._ctx("status"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Automation dashboard" in out
+
 
 class TestCmdBenchmark:
     """Tests for /benchmark — AI server response latency measurement."""
@@ -7022,9 +7225,9 @@ class TestCmdTimeline:
         out = capsys.readouterr().out
         assert "Timeline" in out or "2024-06" in out
 
-    def test_cli_build_is_wave39(self):
-        """_CLI_BUILD == 'wave39'."""
-        assert mod._CLI_BUILD == "wave39"
+    def test_cli_build_is_wave45(self):
+        """_CLI_BUILD == 'wave45'."""
+        assert mod._CLI_BUILD == "wave45"
 
 
 class TestCmdBookmarks:
@@ -7276,8 +7479,8 @@ class TestCmdColorscheme:
         assert result == mod._CMD_CONTINUE
         assert prefs.get("color_scheme") == "default"
 
-    def test_cli_build_is_wave39(self):
-        assert mod._CLI_BUILD == "wave39"
+    def test_cli_build_is_wave45(self):
+        assert mod._CLI_BUILD == "wave45"
 
 
 class TestCmdFollowup:
@@ -7394,6 +7597,64 @@ class TestSourcesBugFixes:
         urls = [url for _, url in items]
         assert "https://example.com/page" in urls
         assert "https://other.com" in urls
+
+    def test_preprocess_loose_sources_without_blank_line(self):
+        text = "Response body.\nSources:\n- https://example.com\n- https://other.com\n"
+        body, sources = mod._preprocess_response_text(text)
+        assert sources is not None
+        assert "https://example.com" in sources
+        assert "Sources:" not in body
+
+    def test_render_body_strips_duplicate_sources_heading(self, monkeypatch):
+        captured: dict[str, str | None] = {}
+
+        def _fake_render(body: str, sources: str | None, ctx: object) -> None:
+            captured["body"] = body
+            captured["sources"] = sources
+
+        monkeypatch.setattr(mod._render_mod, "_render_response_body", _fake_render)
+
+        mod._render_response_body(
+            "Response body.\n\nSources:\n- https://example.com\n",
+            "Sources:\n- https://example.com\n",
+            False,
+            False,
+        )
+
+        assert "Sources" not in str(captured.get("body") or "")
+        assert "example.com" in str(captured.get("sources") or "")
+
+    def test_clean_sources_strips_ansi_codes_from_display(self):
+        sources = "Sources\n1. [\x1b[36mExample\x1b[0m](https://example.com/page)\n"
+        items = mod._clean_sources_for_display(sources)
+        assert items == [("Example", "https://example.com/page")]
+
+    def test_ansi_source_box_matches_terminal_width(self, monkeypatch, capsys):
+        monkeypatch.setattr(
+            mod._render_mod.shutil,
+            "get_terminal_size",
+            lambda fallback=(80, 24): os.terminal_size((100, 24)),
+        )
+        ctx = mod._render_mod.RenderContext(
+            is_tty=True,
+            is_rich=False,
+            high_contrast=False,
+            plain_mode=False,
+            cols=60,
+            theme_ansi="",
+            prefs={"clickable_links": False, "rich": False},
+        )
+
+        mod._render_mod._render_response_body(
+            "Body",
+            "Sources\n1. https://example.com\n",
+            ctx,
+        )
+
+        out = capsys.readouterr().out.splitlines()
+        border_lines = [line for line in out if "╭" in line or "╰" in line]
+        assert border_lines
+        assert max(len(line) for line in border_lines) > 90
 
     def test_detect_file_paths_excludes_url_remnants(self):
         # Protocol-relative URLs like //www.adobe.com/... should NOT be detected as paths
