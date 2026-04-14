@@ -100,6 +100,7 @@ from openclaw_cli_update import (
     handle_update_command,
     check_for_update,
 )
+from openclaw_cli_diff import _render_diff_ansi as _render_diff_ansi_impl
 
 # ---------------------------------------------------------------------------
 # Terminal detection and ANSI palette — defined in openclaw_cli_ui_core
@@ -135,6 +136,7 @@ except ImportError:  # pragma: no cover
     _RICH_AVAILABLE = False
 
 import openclaw_cli_render as _render_mod
+import openclaw_cli_path_utils as _path_utils
 
 # Draft buffer — ephemeral unsent prompt (cleared on submission or /draft clear)
 _draft_buffer: str = ""
@@ -4016,33 +4018,12 @@ _RE_BARE_URL = re.compile(r"(https?://\S+)")
 
 def _make_clickable_link(url: str, text: str = "") -> str:
     """Return an OSC 8 clickable hyperlink if supported, otherwise plain URL."""
-    if not _PREFS.get("clickable_links", True) or _a11y_plain_mode():
-        return text or url
-    is_tty = _get_is_tty()
-    if not is_tty:
-        return text or url
-    display = text or url
-    return f"\033]8;;{url}\033\\{_UL}{_CY}{display}{_R}\033]8;;\033\\"
+    return _path_utils._make_clickable_link(url, text, prefs=_PREFS, is_tty=_get_is_tty())
 
 
 def _linkify_response(text: str) -> str:
     """Replace bare URLs in response text with OSC 8 clickable links."""
-    if not _PREFS.get("clickable_links", True) or _a11y_plain_mode():
-        return text
-    is_tty = _get_is_tty()
-    if not is_tty:
-        return text
-
-    lines = text.split("\n")
-    result = []
-    in_code = False
-    for line in lines:
-        if line.strip().startswith("```"):
-            in_code = not in_code
-        if not in_code and not line.startswith("|"):
-            line = _URL_PATTERN.sub(lambda m: _make_clickable_link(m.group(1)), line)
-        result.append(line)
-    return "\n".join(result)
+    return _path_utils._linkify_response(text, prefs=_PREFS, is_tty=_get_is_tty())
 
 
 def _render_markdown_ansi(text: str) -> str:
@@ -11925,127 +11906,23 @@ def _cmd_quality(ctx: "ChatCommandContext") -> str:
 
 import re as _re
 
-_FILE_PATH_PATTERN = _re.compile(
-    r'(?<!\w)((?:~|\.{1,2})?/[\w\-./]+\.\w{1,8}|(?:src|tests|docs|scripts|config|plugins)/[\w\-./]+\.\w{1,8})',
-    _re.IGNORECASE
-)
+_FILE_PATH_PATTERN = _path_utils._FILE_PATH_PATTERN
 
 
 def _detect_file_paths(text: str) -> "list[str]":
-    """Extract file path candidates from text. Excludes URL-like paths."""
-    paths = []
-    for m in _FILE_PATH_PATTERN.finditer(text):
-        p = m.group(1)
-        # Skip URL remnants — paths starting with // are protocol-relative URLs
-        if p.startswith("//"):
-            continue
-        if p not in paths:
-            paths.append(p)
-    return paths[:5]  # max 5 suggestions
+    return _path_utils._detect_file_paths(text)
 
 
 def _print_path_hints(paths: "list[str]") -> None:
-    """Print quick-action hints for file paths mentioned in the response."""
-    if not _PREFS.get("path_hints", True) or _a11y_plain_mode():
-        return
-    is_tty = _get_is_tty()
-    if not is_tty:
-        return
-
-    import os as _os
-    existing = [p for p in paths if _os.path.exists(_os.path.expanduser(p))]
-    if not existing:
-        return
-
-    if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"\n[dim]📁 File{'s' if len(existing) > 1 else ''} mentioned:[/]", end="")
-        for p in existing[:3]:
-            _RICH_CONSOLE.print(f"  [dim cyan]{p}[/]", end="")
-        _RICH_CONSOLE.print(f"  [dim](use /view or /edit)[/]\n")
-    else:
-        hint = "  ".join(existing[:3])
-        print(f"\n  {_DM}📁 Files: {hint}  (use /view or /edit){_R}")
+    return _path_utils._print_path_hints(paths, prefs=_PREFS, is_tty=_get_is_tty(), rich_available=_RICH_AVAILABLE)
 
 
 def _suggest_followups(last_prompt: str, *, response_text: str = "", session_id: str = "") -> list[str]:
-    """Return 2-3 relevant follow-up command suggestions based on the last prompt."""
-    prompt_lower = last_prompt.lower()
-    response_lower = str(response_text or "").lower()
-    suggestions: list[str] = []
-    mentioned_paths = _detect_file_paths(response_text) if response_text else []
-
-    if mentioned_paths:
-        suggestions.append(f"/view {mentioned_paths[0]} — inspect the file mentioned above")
-    if session_id:
-        suggestions.append("/context — verify what the next request will inherit")
-    if "sources" in response_lower or "http://" in response_lower or "https://" in response_lower:
-        suggestions.append("/links — revisit the cited sources")
-
-    if any(w in prompt_lower for w in ["file", "path", "directory", "folder", "ls", "find"]):
-        suggestions.append("/pathhints — show detected file paths in response")
-    if any(w in prompt_lower for w in ["history", "recap", "summary", "week", "yesterday"]):
-        suggestions.append("/recall 5 — review your last 5 prompts")
-    if any(w in prompt_lower for w in ["error", "fail", "broken", "fix", "debug", "crash"]):
-        suggestions.append("/exec — run a shell command to investigate")
-    if any(w in prompt_lower for w in ["json", "data", "api", "response", "output"]):
-        suggestions.append("/jsonformat — format JSON in the response")
-    if any(w in prompt_lower for w in ["link", "url", "http", "website", "source"]):
-        suggestions.append("/links — view clickable source links")
-    if any(w in prompt_lower for w in ["search", "find", "look", "where"]):
-        suggestions.append("/histsearch — search your prompt history")
-    if any(w in prompt_lower for w in ["compare", "diff", "change", "before", "after"]):
-        suggestions.append("/diff — compare files or show git changes")
-    if any(w in prompt_lower for w in ["pin", "save", "remember", "keep", "note"]):
-        suggestions.append("/pin — pin this conversation point")
-    if any(w in prompt_lower for w in ["rate", "quality", "good", "bad", "helpful"]):
-        suggestions.append("/rate — rate this response 1-5")
-
-    if not suggestions:
-        suggestions.append("/export md — save this session as markdown")
-        suggestions.append("/rate — rate this response")
-        suggestions.append("/recall 3 — review recent prompts")
-
-    return _dedupe_preserve_order(suggestions)[:3]
+    return _path_utils._suggest_followups(last_prompt, response_text=response_text, session_id=session_id)
 
 
 def _print_followup_suggestions(suggestions: list[str], *, mode: str = "chat") -> None:
-    """Print follow-up suggestions as a compact bottom-hint footer."""
-    if not suggestions:
-        return
-    is_tty = _get_is_tty()
-    if not is_tty:
-        return
-    clean = _dedupe_preserve_order(suggestions)[:3]
-    if not clean:
-        return
-    if _a11y_plain_mode() or _a11y_reduced_motion():
-        _print_predictive_affordances(
-            [f"mode: {mode}", *clean],
-            title="Bottom bar",
-            border_style="cyan",
-        )
-        return
-
-    if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print()
-        _RICH_CONSOLE.print(f"  [dim]mode: {mode}[/] [dim]│[/]", end="")
-        for i, s in enumerate(clean):
-            sep = "  ·  " if i > 0 else "  "
-            cmd = s.split(" — ")[0]
-            desc = s.split(" — ")[1] if " — " in s else ""
-            _RICH_CONSOLE.print(
-                f"[dim]{sep}[/][bold cyan]{cmd}[/][dim]{' — ' + desc if desc else ''}[/]", end=""
-            )
-        _RICH_CONSOLE.print()
-    else:
-        print(
-            f"\n  {_DM}mode: {mode}{_R} {_DM}|{_R} "
-            + "  ·  ".join(
-                f"{_BCY}{s.split(' — ')[0]}{_R}"
-                f"{_DM}{' — ' + s.split(' — ')[1] if ' — ' in s else ''}{_R}"
-                for s in clean
-            )
-        )
+    return _path_utils._print_followup_suggestions(suggestions, mode=mode, prefs=_PREFS, is_tty=_get_is_tty(), rich_available=_RICH_AVAILABLE)
 
 
 def _cmd_pathhints(ctx: "ChatCommandContext") -> str:
@@ -12603,22 +12480,7 @@ def _cmd_keybind(ctx: "ChatCommandContext") -> str:
 
 def _render_diff_ansi(diff_text: str) -> str:
     """Apply ANSI colors to unified diff output (+ green, - red, @@ cyan)."""
-    if _a11y_plain_mode():
-        return diff_text
-    lines = diff_text.split("\n")
-    result = []
-    for line in lines:
-        if line.startswith("+++") or line.startswith("---"):
-            result.append(f"{_B}{line}{_R}")
-        elif line.startswith("@@"):
-            result.append(f"{_CY}{line}{_R}")
-        elif line.startswith("+"):
-            result.append(f"{_GR}{line}{_R}")
-        elif line.startswith("-"):
-            result.append(f"{_RE}{line}{_R}")
-        else:
-            result.append(f"{_DM}{line}{_R}")
-    return "\n".join(result)
+    return _render_diff_ansi_impl(diff_text, plain_mode=_a11y_plain_mode())
 
 
 def _cmd_diff(ctx: ChatCommandContext) -> str:
@@ -13429,17 +13291,12 @@ def run_async(coro: Any) -> Any:
 
 def output_name_from_title(title: str, *, default_stem: str, suffix: str) -> str:
     """Build a safe output filename from free-form user input."""
-    stem = re.sub(r"[^a-zA-Z0-9]+", "-", str(title or "").strip().lower()).strip("-")
-    return f"{(stem or default_stem)[:40]}{suffix}"
+    return _path_utils.output_name_from_title(title, default_stem=default_stem, suffix=suffix)
 
 
 def missing_feature_hint(feature: str) -> str:
     """Explain when a standalone CLI install is missing optional dependencies."""
-    return (
-        f"`{feature}` needs the full OpenClaw runtime dependencies. "
-        "Use a repo checkout/package install for advanced commands, or stick to core standalone flows like "
-        "ask/chat/health/analyze/write/exec/edit/watch."
-    )
+    return _path_utils.missing_feature_hint(feature)
 
 
 def handle_session_command(args: argparse.Namespace) -> int:
