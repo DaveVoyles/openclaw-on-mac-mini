@@ -1682,6 +1682,47 @@ class TestSessionSlashCommands:
         assert "latest five routed checkpoints are retained" in out
 
 
+class TestSearchSlashCommand:
+    """Tests for the /search slash command."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, session_id: str = "", args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_search_no_args_prints_usage(self, capsys):
+        ctx = self._ctx(session_id="sess-1")
+        result = self._registry().dispatch("/search", ctx)
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Usage:" in out
+        assert "/search" in out
+
+    def test_search_finds_matching_event(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        sess = sessions_mod.create_session(title="search-test", cwd=str(tmp_path))
+        sessions_mod.append_event(sess.session_id, kind="chat", content="hello world from the user")
+        sessions_mod.append_event(sess.session_id, kind="chat", content="something unrelated")
+        ctx = self._ctx(session_id=sess.session_id)
+        result = self._registry().dispatch("/search hello world", ctx)
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "hello world" in out
+        assert "search results" in out
+
+    def test_search_no_matches_prints_message(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        sess = sessions_mod.create_session(title="search-nomatch", cwd=str(tmp_path))
+        sessions_mod.append_event(sess.session_id, kind="chat", content="something else entirely")
+        ctx = self._ctx(session_id=sess.session_id)
+        result = self._registry().dispatch("/search xyzzy_not_found", ctx)
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No matches" in out
+        assert "xyzzy_not_found" in out
+
+
 class TestActionSlashCommands:
     """Tests for in-REPL action delegation slash commands."""
 
@@ -3339,3 +3380,118 @@ def test_watch_research_iteration_omits_plan_task_when_absent(monkeypatch, tmp_p
 
     assert captured_queries
     assert "Active work context:" not in captured_queries[0]
+
+
+# ── /alias command ────────────────────────────────────────────────────────────
+
+
+class TestCmdAlias:
+    """Tests for the /alias slash command handler."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, session_id: str = "", args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_alias_list_empty_shows_no_aliases(self, capsys, monkeypatch, tmp_path):
+        """'/alias' with no aliases defined should show '(no aliases defined)'."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["aliases"] = {}
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/alias", self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "no aliases" in out.lower() or "(no aliases defined)" in out
+
+    def test_alias_define_saves_to_prefs(self, monkeypatch, tmp_path):
+        """'/alias foo /research' should store the alias in _PREFS['aliases']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["aliases"] = {}
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/alias foo /research", self._ctx(args="foo /research"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS.get("aliases", {}).get("foo") == "/research"
+
+    def test_alias_rm_removes_alias(self, monkeypatch, tmp_path):
+        """'/alias rm foo' should remove the alias from _PREFS['aliases']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["aliases"] = {"foo": "/research"}
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/alias rm foo", self._ctx(args="rm foo"))
+        assert result == mod._CMD_CONTINUE
+        assert "foo" not in mod._PREFS.get("aliases", {})
+
+    def test_alias_builtin_name_prints_error(self, capsys, monkeypatch, tmp_path):
+        """'/alias help ...' should fail because 'help' is a built-in command name."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["aliases"] = {}
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/alias help /research", self._ctx(args="help /research"))
+        assert result == mod._CMD_CONTINUE
+        captured = capsys.readouterr()
+        combined = captured.out + captured.err
+        assert "built-in" in combined.lower() or "reserved" in combined.lower() or "help" in combined
+
+
+# ── /pin and /pins commands ───────────────────────────────────────────────────
+
+class TestPinCommand:
+    """Tests for /pin and /pins slash commands."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_pin_no_response_prints_error(self, capsys, monkeypatch, tmp_path):
+        """/pin with no prior response prints 'Nothing to pin' error."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["pins"] = []
+        monkeypatch.setattr(mod, "_last_response_text", "")
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/pin", self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Nothing to pin" in out
+
+    def test_pin_saves_last_response(self, capsys, monkeypatch, tmp_path):
+        """/pin with _last_response_text set saves pin to _PREFS['pins']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["pins"] = []
+        monkeypatch.setattr(mod, "_last_response_text", "Hello from the AI")
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/pin", self._ctx())
+        assert result == mod._CMD_CONTINUE
+        pins = mod._PREFS.get("pins", [])
+        assert len(pins) == 1
+        assert pins[0]["text"] == "Hello from the AI"
+        assert pins[0]["name"] == "pin-1"
+
+    def test_pin_rm_removes_pin(self, monkeypatch, tmp_path):
+        """/pin rm <name> removes the named pin from _PREFS['pins']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["pins"] = [{"name": "my-pin", "text": "some text", "ts": "2024-01-01T00:00:00"}]
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/pin rm my-pin", self._ctx(args="rm my-pin"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS.get("pins") == []
+
+    def test_pins_no_pins_shows_empty(self, capsys, monkeypatch, tmp_path):
+        """/pins with no pins shows '(no pins)' message."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["pins"] = []
+        with patch.object(mod, "_save_prefs"):
+            result = self._registry().dispatch("/pins", self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "no pins" in out.lower()

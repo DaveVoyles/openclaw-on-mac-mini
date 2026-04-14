@@ -99,6 +99,8 @@ _draft_buffer: str = ""
 _last_interrupted_prompt: str = ""
 # Multiline compose mode — toggled by /draft multiline on/off
 _multiline_mode: bool = False
+# Last AI response text — used by /pin
+_last_response_text: str = ""
 
 
 def _c(code: str) -> str:
@@ -128,7 +130,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave12"  # updated with each UX wave batch
+_CLI_BUILD = "wave16"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -5112,6 +5114,112 @@ def _cmd_why(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_search(ctx: ChatCommandContext) -> str:
+    """/search [--all] <query> — full-text search across session event content."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    raw = ctx.args.strip()
+
+    cross_session = False
+    if raw.startswith("--all"):
+        cross_session = True
+        raw = raw[5:].strip()
+
+    query = raw
+    if not query:
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print("[dim]Usage: /search <query>  or  /search --all <query>[/]")
+        else:
+            print("Usage: /search <query>  or  /search --all <query>")
+        return _CMD_CONTINUE
+
+    ql = query.lower()
+    MAX_RESULTS = 15 if cross_session else 10
+    EXCERPT_LEN = 120
+
+    def _highlight_ansi(text: str) -> str:
+        idx = text.lower().find(ql)
+        if idx == -1:
+            return text
+        return text[:idx] + _BYE + text[idx:idx + len(query)] + _R + text[idx + len(query):]
+
+    def _highlight_rich(text: str) -> str:
+        import re as _re
+        return _re.sub(
+            _re.escape(query),
+            f"[bold yellow]{query}[/]",
+            text,
+            flags=_re.IGNORECASE,
+        )
+
+    results: list[tuple[str, str, str, str]] = []  # (session_short, kind, excerpt, ts)
+
+    if cross_session:
+        all_sessions = list_sessions(limit=200)
+        for sess in all_sessions:
+            if len(results) >= MAX_RESULTS:
+                break
+            try:
+                events = load_events(sess.session_id, limit=200)
+            except Exception:
+                continue
+            for ev in events:
+                if len(results) >= MAX_RESULTS:
+                    break
+                content = str(ev.get("content") or "").strip()
+                if ql in content.lower():
+                    kind = str(ev.get("kind") or "event").strip()
+                    ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
+                    excerpt = content[:EXCERPT_LEN]
+                    short_id = sess.session_id[:8] if sess.session_id else "????????"
+                    results.append((short_id, kind, excerpt, ts))
+    else:
+        session = _require_session_or_warn(ctx)
+        if session is None:
+            return _CMD_CONTINUE
+        events = load_events(ctx.session_id, limit=500)
+        for ev in events:
+            if len(results) >= MAX_RESULTS:
+                break
+            content = str(ev.get("content") or "").strip()
+            if ql in content.lower():
+                kind = str(ev.get("kind") or "event").strip()
+                ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
+                excerpt = content[:EXCERPT_LEN]
+                results.append(("", kind, excerpt, ts))
+
+    if not results:
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]No matches for '{query}'[/]")
+        else:
+            print(f"No matches for '{query}'")
+        return _CMD_CONTINUE
+
+    if _RICH_AVAILABLE and is_tty:
+        grid = _RichTable.grid(padding=(0, 1))
+        if cross_session:
+            grid.add_column(style="dim", no_wrap=True)
+        grid.add_column(style="dim", no_wrap=True)
+        grid.add_column()
+        grid.add_column(style="dim", no_wrap=True)
+        for short_id, kind, excerpt, ts in results:
+            highlighted = _highlight_rich(excerpt)
+            if cross_session:
+                grid.add_row(short_id, kind, highlighted, ts)
+            else:
+                grid.add_row(kind, highlighted, ts)
+        scope = "all sessions" if cross_session else "this session"
+        _RICH_CONSOLE.print(_RichPanel(grid, title=f"[bold]🔍 search results[/] [dim]{scope}[/]", border_style="cyan", padding=(0, 1)))
+    else:
+        scope = "all sessions" if cross_session else "this session"
+        print(f"[search results — {scope}]")
+        for short_id, kind, excerpt, ts in results:
+            highlighted = _highlight_ansi(excerpt)
+            prefix = f"{short_id} " if cross_session and short_id else ""
+            print(f"  {prefix}{_DM}{kind}{_R}  {highlighted}  {_DM}{ts}{_R}")
+
+    return _CMD_CONTINUE
+
+
 def _cmd_autoroute(ctx: ChatCommandContext) -> str:
     """/autoroute [on|off] — show or set session-level REPL auto-routing."""
     session = _require_session_or_warn(ctx)
@@ -6600,6 +6708,13 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     )
     registry.register(
         SlashCommand(
+            name="search",
+            description="Search session event history (/search <query> or /search --all <query>)",
+            handler=_cmd_search,
+        )
+    )
+    registry.register(
+        SlashCommand(
             name="autoroute",
             description="Show or toggle session auto-routing (/autoroute [on|off])",
             handler=_cmd_autoroute,
@@ -6714,10 +6829,25 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(SlashCommand(name="template", description="Manage reusable prompt templates", handler=_cmd_template))
     registry.register(SlashCommand(name="pasteguard", description="Toggle paste guard for large risky pastes", handler=_cmd_pasteguard))
     registry.register(SlashCommand(
+        name="pin",
+        description="Pin the last response for quick recall (/pin [name] | /pin recall <name> | /pin rm <name>)",
+        handler=_cmd_pin,
+    ))
+    registry.register(SlashCommand(
+        name="pins",
+        description="List all pinned responses",
+        handler=_cmd_pins,
+    ))
+    registry.register(SlashCommand(
         name="accessibility",
         description="Show or set accessibility modes (reduced-motion, plain, high-contrast)",
         handler=_cmd_accessibility,
         aliases=("a11y",),
+    ))
+    registry.register(SlashCommand(
+        name="alias",
+        description="Define, list, or remove command aliases (/alias [name expansion | rm name])",
+        handler=_cmd_alias,
     ))
     return registry
 
@@ -6742,6 +6872,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/rollback [last|list]",          "Restore latest checkpoint or list all checkpoints"),
         ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
         ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
+        ("/search <query>",                    "Search this session's event history for matching turns"),
+        ("/search --all <query>",              "Search across all session histories"),
         ("/autoroute [on|off]",            "Show or toggle high-confidence REPL auto-routing"),
         ("/analyze <goal>",                "Analyze the session workspace"),
         ("/research <query>",              "Run the research agent on a query"),
@@ -6761,10 +6893,17 @@ def print_chat_help(*, search: str = "") -> None:
         ("/draft multiline [on|off]",           "Toggle multiline compose mode"),
         ("/template [list|use|save|delete]",    "Manage reusable prompt templates"),
         ("/pasteguard [on|off]",                "Toggle paste guard for large risky pastes"),
+        ("/pin [name]",                         "Pin the last AI response (auto-named if no name given)"),
+        ("/pin recall <name>",                  "Re-display a pinned response"),
+        ("/pin rm <name>",                      "Remove a pin by name"),
+        ("/pins",                               "List all pinned responses"),
         ("/accessibility [status|mode]",        "Show or set accessibility modes (a11y)"),
         ("/accessibility reduced-motion on|off","Toggle reduced-motion (no spinner animation)"),
         ("/accessibility plain on|off",         "Toggle plain/screen-reader mode"),
         ("/accessibility high-contrast on|off", "Toggle high-contrast colour palette"),
+        ("/alias",                              "List all defined command aliases"),
+        ("/alias <name> <expansion>",           "Define a command shorthand alias"),
+        ("/alias rm <name>",                    "Remove a defined alias"),
     ]
 
     q = search.strip().lower()
@@ -7202,6 +7341,210 @@ def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
     return _CMD_CONTINUE
 
 
+_BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
+    "help", "clear", "quit", "exit", "update", "version", "v",
+    "session", "context", "cwd", "files", "plan", "watch", "task",
+    "outputs", "rollback", "events", "why", "autoroute", "analyze",
+    "research", "write", "exec", "edit", "theme", "emoji", "layout",
+    "sessions", "export", "stats", "tag", "resume", "replay", "handoff",
+    "draft", "template", "pasteguard", "accessibility", "a11y",
+    "search", "alias", "pin", "pins",
+})
+
+_MAX_ALIASES = 50
+
+
+def _cmd_alias(ctx: "ChatCommandContext") -> str:
+    """Define, list, or remove command aliases."""
+    args = (ctx.args or "").strip()
+    aliases: "dict[str, str]" = _PREFS.setdefault("aliases", {})
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if not args:
+        # List all aliases
+        if _RICH_AVAILABLE and is_tty:
+            grid = _RichTable.grid(padding=(0, 2))
+            grid.add_column(style="cyan", no_wrap=True)
+            grid.add_column(style="dim")
+            if aliases:
+                for name, expansion in sorted(aliases.items()):
+                    grid.add_row(name, expansion)
+            else:
+                grid.add_row("(no aliases defined)", "")
+            _RICH_CONSOLE.print(_RichPanel(grid, title="Aliases", border_style="cyan", padding=(0, 1)))
+        else:
+            print("Aliases:")
+            if aliases:
+                for name, expansion in sorted(aliases.items()):
+                    print(f"  {_CY}{name}{_R} → {_DM}{expansion}{_R}")
+            else:
+                print(f"  {_DM}(no aliases defined){_R}")
+        return _CMD_CONTINUE
+
+    parts = args.split(None, 1)
+    sub = parts[0].lower()
+
+    if sub == "rm":
+        # Remove alias
+        target = parts[1].strip().lstrip("/").lower() if len(parts) > 1 else ""
+        if not target:
+            _print_error("Usage: /alias rm <name>")
+            return _CMD_CONTINUE
+        if target not in aliases:
+            _print_error(f"Alias '{target}' not found.")
+            return _CMD_CONTINUE
+        del aliases[target]
+        _save_prefs()
+        print(f"  {_GR}{_e('✅', '[OK]')} Alias '{target}' removed.{_R}")
+        return _CMD_CONTINUE
+
+    # Define alias: /alias <name> <expansion>
+    name = sub.lstrip("/")
+    expansion = parts[1].strip() if len(parts) > 1 else ""
+
+    if not expansion:
+        _print_error("Usage: /alias <name> <expansion>")
+        return _CMD_CONTINUE
+    if name in ("alias", "rm"):
+        _print_error(f"'{name}' is reserved and cannot be used as an alias name.")
+        return _CMD_CONTINUE
+    if name in _BUILTIN_COMMAND_NAMES:
+        _print_error(f"'{name}' is a built-in command name and cannot be used as an alias.")
+        return _CMD_CONTINUE
+    if len(aliases) >= _MAX_ALIASES and name not in aliases:
+        _print_error(f"Maximum of {_MAX_ALIASES} aliases reached. Remove one first with /alias rm <name>.")
+        return _CMD_CONTINUE
+
+    aliases[name] = expansion
+    _save_prefs()
+    print(f"  {_GR}{_e('✅', '[OK]')} Alias '{_CY}{name}{_R}{_GR}' → {_DM}{expansion}{_R}{_GR} defined.{_R}")
+    return _CMD_CONTINUE
+
+
+def _cmd_pin(ctx: "ChatCommandContext") -> str:
+    """Pin the last AI response for quick recall. Sub-commands: [name] | recall <name> | rm <name> | list."""
+    import datetime as _dt
+
+    args = (ctx.args or "").strip()
+    parts = args.split(None, 1)
+    sub = parts[0].lower() if parts else ""
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    pins: list[dict] = _PREFS.setdefault("pins", [])
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    # ── list ──────────────────────────────────────────────────────────────────
+    if sub in ("list", "ls") or (not sub):
+        if sub in ("list", "ls") or args == "":
+            # "list" explicitly, OR bare "/pin" with no _last_response_text check needed
+            if sub in ("list", "ls"):
+                if not pins:
+                    if _RICH_AVAILABLE and is_tty:
+                        _RICH_CONSOLE.print(_RichPanel(f"[dim](no pins)[/dim]", title="📌 Pins", border_style="cyan", padding=(0, 1)))
+                    else:
+                        print(f"  {_B}📌 Pins{_R}")
+                        print(f"  {_DM}(no pins){_R}")
+                    return _CMD_CONTINUE
+                if _RICH_AVAILABLE and is_tty:
+                    t = _RichTable.grid(padding=(0, 2))
+                    t.add_column(style="bold cyan", no_wrap=True)
+                    t.add_column(style="dim")
+                    for p in pins:
+                        preview = p["text"][:80] + ("…" if len(p["text"]) > 80 else "")
+                        t.add_row(p["name"], preview)
+                    _RICH_CONSOLE.print(_RichPanel(t, title="📌 Pins", border_style="cyan", padding=(0, 1)))
+                else:
+                    print(f"  {_B}📌 Pins{_R}")
+                    for p in pins:
+                        preview = p["text"][:80] + ("…" if len(p["text"]) > 80 else "")
+                        print(f"  {_CY}{p['name']}{_R}: {_DM}{preview}{_R}")
+                return _CMD_CONTINUE
+
+    # ── recall ────────────────────────────────────────────────────────────────
+    if sub == "recall":
+        if not rest:
+            _print_error("Usage: /pin recall <name>")
+            return _CMD_CONTINUE
+        name_lc = rest.lower()
+        match = next((p for p in pins if p["name"].lower() == name_lc), None)
+        if match is None:
+            _print_error(f"No pin named '{rest}'")
+            return _CMD_CONTINUE
+        # Re-render using a minimal AskResponse-like object
+        from dataclasses import dataclass as _dc, field as _field
+
+        @_dc
+        class _PinResponse:
+            response: str
+            raw: dict = _field(default_factory=dict)
+            metadata: dict = _field(default_factory=dict)
+            error: str = ""
+
+        print_response(_PinResponse(response=match["text"]), output_json=False)
+        return _CMD_CONTINUE
+
+    # ── rm ────────────────────────────────────────────────────────────────────
+    if sub == "rm":
+        if not rest:
+            _print_error("Usage: /pin rm <name>")
+            return _CMD_CONTINUE
+        name_lc = rest.lower()
+        before = len(pins)
+        pins[:] = [p for p in pins if p["name"].lower() != name_lc]
+        if len(pins) == before:
+            _print_error(f"No pin named '{rest}'")
+            return _CMD_CONTINUE
+        _PREFS["pins"] = pins
+        _save_prefs()
+        print(f"  {_GR}{_e('✅', '[OK]')} Pin '{rest}' removed.{_R}")
+        return _CMD_CONTINUE
+
+    # ── pin (save) — bare /pin or /pin <name> ────────────────────────────────
+    # At this point sub is either "" (no args) or a custom name
+    global _last_response_text
+    if not _last_response_text:
+        _print_error("Nothing to pin — no response yet")
+        return _CMD_CONTINUE
+
+    if len(pins) >= 20:
+        _print_error("Pin limit reached (20). Use /pin rm <name> to free a slot.")
+        return _CMD_CONTINUE
+
+    # Determine name
+    if not args:
+        # Auto-generate: find highest pin-N
+        existing_nums = []
+        for p in pins:
+            if p["name"].startswith("pin-") and p["name"][4:].isdigit():
+                existing_nums.append(int(p["name"][4:]))
+        next_n = (max(existing_nums) + 1) if existing_nums else 1
+        name = f"pin-{next_n}"
+    else:
+        name = args  # may include sub (whole args string is the name)
+
+    ts = _dt.datetime.now().isoformat(timespec="seconds")
+    name_lc = name.lower()
+    existing = next((i for i, p in enumerate(pins) if p["name"].lower() == name_lc), None)
+    if existing is not None:
+        pins[existing] = {"name": name, "text": _last_response_text, "ts": ts}
+        action = "updated"
+    else:
+        pins.append({"name": name, "text": _last_response_text, "ts": ts})
+        action = "pinned"
+
+    _PREFS["pins"] = pins
+    _save_prefs()
+    preview = _last_response_text[:60] + ("…" if len(_last_response_text) > 60 else "")
+    print(f"  {_GR}{_e('✅', '[OK]')} {action.capitalize()} as '{_CY}{name}{_R}{_GR}': {_DM}{preview}{_R}")
+    return _CMD_CONTINUE
+
+
+def _cmd_pins(ctx: "ChatCommandContext") -> str:
+    """List all pinned responses (alias for /pin list)."""
+    ctx.args = "list"
+    return _cmd_pin(ctx)
+
+
 def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
     """Show or configure accessibility modes (reduced-motion, plain, high-contrast)."""
     args = (ctx.args or "").strip()
@@ -7396,6 +7739,16 @@ def run_chat(
         if prompt is None:
             continue  # user declined — skip this turn
 
+        # Alias expansion — one level only (no recursion) to avoid cycles
+        if prompt.startswith("/"):
+            _tok = prompt[1:].split(None, 1)
+            _alias_name = _tok[0].lower() if _tok else ""
+            _user_aliases = _PREFS.get("aliases", {})
+            if _alias_name in _user_aliases:
+                prompt = _user_aliases[_alias_name]
+                if len(_tok) > 1:
+                    prompt = prompt + " " + _tok[1]
+
         # Inline help: /cmd ? prints description without dispatching
         _help_match = re.match(r"^/(\S+)\s+\?$", prompt)
         if _help_match:
@@ -7495,6 +7848,8 @@ def run_chat(
                 print(f"{_theme_ansi()}{'─' * min(cols - 2, 60)}{_R}")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
+        global _last_response_text
+        _last_response_text = response.response or ""
         if not config.output_json and not _compact:
             _print_status_bar(
                 session_id=session_id,
