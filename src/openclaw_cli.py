@@ -6770,9 +6770,11 @@ def _print_first_run_tips() -> None:
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
     autoroute_on = _session_auto_route_enabled(session_id)
+    ver = cli_version()
     if _RICH_AVAILABLE and _IS_TTY:
         t = _RichText()
         t.append(f"{_e('🦞', '[openclaw]')} OpenClaw", style="bold cyan")
+        t.append(f"  {ver}", style="cyan dim")
         t.append("  connected to ", style="dim")
         t.append(config.base_url, style="cyan")
         t.append(f"\n  {_e('👤', '[user]')} ", style="dim")
@@ -6805,7 +6807,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         else:
             autoroute_line = f"\n  {_B}Auto-routing{_R} {_YE}is off{_R} {_DM}— use /autoroute on to enable{_R}"
         print(
-            f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}"
+            f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}  {_DM}{ver}{_R}"
             f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
             f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
             f"{session_line}"
