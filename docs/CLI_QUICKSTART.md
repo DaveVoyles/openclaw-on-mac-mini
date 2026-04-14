@@ -218,6 +218,15 @@ vocabulary, persistence, and fallback reporting first.
 
 > **New:** After each response, a `[~420 tok]` badge and model name are shown. Customize your prompt with `/prompt {build} ❯ `.
 
+### Wave 27 — Celebrations & Smart Error Recovery
+
+| Command | Description |
+|---|---|
+| `/streak` | Show current + best high-rating streak with 🔥 emoji and ASCII trophy at 5+ |
+| `/tip` | Show a random openclaw usage tip (also appears at startup ~30% of the time) |
+
+> **New:** `/exec` failures now show smart recovery hints (e.g., `pip install` for missing modules, `sudo` for permission errors). Rate 5 stars to trigger streak tracking and ASCII trophy at milestones!
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new

@@ -1829,6 +1829,24 @@ on top of the existing local session data model:
 
 ---
 
+## Wave 27 — Celebrations & Smart Error Recovery
+
+**Status:** ✅ Shipped
+
+### Features
+- **`/streak`**: Tracks consecutive high (4+) ratings. Shows current streak, best-ever streak, high-rate %, and 🔥 fire emojis. Triggers `_print_ascii_trophy()` at streak ≥ 5.
+- **`_print_ascii_trophy()`**: ASCII art trophy with ANSI yellow. Auto-triggered in `_cmd_rate()` at milestone streaks (5, 10, 20, 50).
+- **Smart `/exec` error hints** (`_analyze_exec_error()`): Classifies failures by pattern (permission denied → sudo, command not found → brew/pip, ModuleNotFoundError → pip install, port in use → lsof, etc.) and prints up to 3 actionable hints.
+- **`_OPENCLAW_TIPS`** (25 tips) + **`/tip`**: Random usage tip on demand. Also shown at startup with 30% probability as a dim hint after the banner.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/streak` | Rating streak tracker + ASCII trophy |
+| `/tip` | Random usage tip |
+
+---
+
 ## Wave 28 — Gesture Language & Predictive Affordances
 
 **Status: ✅ Shipped**

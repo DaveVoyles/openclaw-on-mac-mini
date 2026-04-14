@@ -5367,9 +5367,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave27(self):
-        """_CLI_BUILD must equal 'wave27'."""
-        assert mod._CLI_BUILD == "wave27"
+    def test_cli_build_is_wave28(self):
+        """_CLI_BUILD must equal 'wave28'."""
+        assert mod._CLI_BUILD == "wave28"
 
 
 class TestCmdRatehint:
@@ -6280,6 +6280,111 @@ class TestCmdTip:
         assert len(mod._OPENCLAW_TIPS) > 0
         assert all(isinstance(t, str) for t in mod._OPENCLAW_TIPS)
 
-    def test_cli_build_is_wave27(self):
-        """_CLI_BUILD is updated to wave27."""
-        assert mod._CLI_BUILD == "wave27"
+    def test_cli_build_is_wave28(self):
+        """_CLI_BUILD is updated to wave28."""
+        assert mod._CLI_BUILD == "wave28"
+
+
+class TestCmdKeys:
+    """Tests for /keys command and _print_key_bindings() helper."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_print_key_bindings_runs_without_error(self, monkeypatch):
+        """_print_key_bindings() runs without error in non-TTY mode."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._print_key_bindings()  # should not raise
+
+    def test_cmd_keys_returns_cmd_continue(self, monkeypatch):
+        """/keys returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        result = mod._cmd_keys(self._ctx())
+        assert result == mod._CMD_CONTINUE
+
+    def test_print_key_bindings_output_contains_ctrl_r(self, capsys, monkeypatch):
+        """_print_key_bindings() output contains 'Ctrl+R'."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._print_key_bindings()
+        captured = capsys.readouterr().out
+        assert "Ctrl+R" in captured
+
+
+class TestCmdBindlist:
+    """Tests for /bindlist command."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_bindlist_returns_cmd_continue_no_custom(self, monkeypatch):
+        """/bindlist returns _CMD_CONTINUE with no custom bindings."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_bindlist(self._ctx())
+        assert result == mod._CMD_CONTINUE
+
+    def test_bindlist_returns_cmd_continue_with_custom(self, monkeypatch):
+        """/bindlist returns _CMD_CONTINUE when custom_keybinds exist in prefs."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"custom_keybinds": {"Ctrl+H": "/histsearch"}})
+        result = mod._cmd_bindlist(self._ctx())
+        assert result == mod._CMD_CONTINUE
+
+    def test_cli_build_is_wave28(self):
+        """_CLI_BUILD == 'wave28'."""
+        assert mod._CLI_BUILD == "wave28"
+
+
+class TestCmdKeybind:
+    """Tests for /keybind command."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_keybind_list_empty(self, monkeypatch, capsys):
+        """/keybind list with empty custom bindings shows 'No custom keybinds'."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_keybind(self._ctx("list"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No custom keybinds" in out
+
+    def test_keybind_saves_binding(self, monkeypatch):
+        """/keybind Ctrl+H /histsearch saves binding to _PREFS['custom_keybinds']."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        with patch.object(mod, "_save_prefs"):
+            with patch.object(mod, "_apply_custom_keybind"):
+                result = mod._cmd_keybind(self._ctx("Ctrl+H /histsearch"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS.get("custom_keybinds", {}).get("Ctrl+H") == "/histsearch"
+
+    def test_keybind_clear_removes_binding(self, monkeypatch, capsys):
+        """/keybind clear Ctrl+H removes the binding from _PREFS."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"custom_keybinds": {"Ctrl+H": "/histsearch"}})
+        with patch.object(mod, "_save_prefs"):
+            result = mod._cmd_keybind(self._ctx("clear Ctrl+H"))
+        assert result == mod._CMD_CONTINUE
+        assert "Ctrl+H" not in mod._PREFS.get("custom_keybinds", {})
+        out = capsys.readouterr().out
+        assert "Removed" in out
+
+    def test_keybind_missing_action_shows_usage(self, monkeypatch, capsys):
+        """/keybind Ctrl+H with no action shows usage message."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_keybind(self._ctx("Ctrl+H"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Usage" in out

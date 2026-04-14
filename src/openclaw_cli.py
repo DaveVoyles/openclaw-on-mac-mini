@@ -135,7 +135,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave27"  # updated with each UX wave batch
+_CLI_BUILD = "wave28"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -10166,6 +10166,21 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Customize the REPL prompt string (/prompt [format|reset]). Tokens: {route} {session} {model} {build} {time}",
         handler=_cmd_prompt,
     ))
+    registry.register(SlashCommand(
+        name="keys",
+        description="Show active keyboard shortcuts and readline bindings",
+        handler=_cmd_keys,
+    ))
+    registry.register(SlashCommand(
+        name="bindlist",
+        description="Show all keyboard bindings — built-in readline + custom",
+        handler=_cmd_bindlist,
+    ))
+    registry.register(SlashCommand(
+        name="keybind",
+        description="Manage custom readline key bindings (/keybind [list | Ctrl+X /cmd | clear Ctrl+X])",
+        handler=_cmd_keybind,
+    ))
     return registry
 
 
@@ -10257,6 +10272,9 @@ def print_chat_help(*, search: str = "") -> None:
         ("/links [on|off]",                      "Toggle clickable OSC 8 hyperlinks in responses (requires modern terminal)"),
         ("/palette [query]",                     "Search slash commands by keyword (fuzzy)"),
         ("/shortcuts",                           "Show keyboard shortcuts and quick-access reference card"),
+        ("/keys",                                "Show active keyboard shortcuts and readline bindings"),
+        ("/bindlist",                            "Show all keyboard bindings — built-in readline + custom"),
+        ("/keybind [list|Ctrl+X /cmd|clear X]", "Manage custom readline key bindings"),
     ]
 
     q = search.strip().lower()
@@ -12350,6 +12368,212 @@ def _paste_guard(
         return prompt
 
 
+def _print_key_bindings() -> None:
+    """Print currently active readline key bindings summary."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    bindings = [
+        ("Ctrl+R",   "Reverse history search (type to filter)"),
+        ("Ctrl+L",   "Clear screen"),
+        ("Ctrl+W",   "Delete previous word"),
+        ("Ctrl+U",   "Clear current line"),
+        ("Ctrl+A",   "Jump to start of line"),
+        ("Ctrl+E",   "Jump to end of line"),
+        ("Ctrl+C",   "Interrupt / cancel"),
+        ("Ctrl+D",   "Exit openclaw"),
+        ("Tab",      "Auto-complete slash commands"),
+        ("↑ / ↓",    "Browse command history"),
+    ]
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table
+        from rich.box import SIMPLE
+        _RICH_CONSOLE.print(f"\n[bold cyan]⌨️  Active Key Bindings[/]\n")
+        tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
+        tbl.add_column("Key", style="bold yellow", no_wrap=True, width=16)
+        tbl.add_column("Action")
+        for key, desc in bindings:
+            tbl.add_row(key, desc)
+        _RICH_CONSOLE.print(tbl)
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n⌨️  Active Key Bindings\n")
+        for key, desc in bindings:
+            print(f"  {_BYE}{key:<16}{_R} {desc}")
+        print()
+
+
+def _cmd_keys(ctx: "ChatCommandContext") -> str:
+    """/keys — show active keyboard shortcuts and readline bindings."""
+    _print_key_bindings()
+    return _CMD_CONTINUE
+
+
+def _cmd_bindlist(ctx: "ChatCommandContext") -> str:
+    """/bindlist — show all keyboard bindings (built-in readline + custom)."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    builtin_bindings = [
+        ("Ctrl+R",   "Reverse history search"),
+        ("Ctrl+L",   "Clear screen"),
+        ("Ctrl+W",   "Delete previous word"),
+        ("Ctrl+U",   "Clear current line"),
+        ("Ctrl+A",   "Jump to line start"),
+        ("Ctrl+E",   "Jump to line end"),
+        ("Ctrl+C",   "Interrupt"),
+        ("Ctrl+D",   "Exit"),
+        ("Tab",      "Auto-complete /commands"),
+        ("↑ / ↓",    "Browse history"),
+    ]
+
+    custom_bindings = list(_PREFS.get("custom_keybinds", {}).items())
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table
+        from rich.box import SIMPLE
+        _RICH_CONSOLE.print(f"\n[bold cyan]⌨️  All Key Bindings[/]\n")
+
+        tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
+        tbl.add_column("Key", style="bold yellow", no_wrap=True, width=16)
+        tbl.add_column("Action")
+        tbl.add_column("Type", style="dim", width=8)
+
+        for key, desc in builtin_bindings:
+            tbl.add_row(key, desc, "built-in")
+
+        for key, action in custom_bindings:
+            tbl.add_row(key, action, "[green]custom[/]")
+
+        _RICH_CONSOLE.print(tbl)
+        if custom_bindings:
+            _RICH_CONSOLE.print(f"\n[dim]Custom binds: use /keybind to add more, /keybind clear <key> to remove[/]\n")
+        else:
+            _RICH_CONSOLE.print(f"\n[dim]No custom binds yet — try: /keybind Ctrl+H /histsearch[/]\n")
+    else:
+        print(f"\n⌨️  All Key Bindings\n")
+        print(f"  {'Key':<16} {'Action':<35} Type")
+        print("─" * 60)
+        for key, desc in builtin_bindings:
+            print(f"  {_BYE}{key:<16}{_R} {desc:<35} {_DM}built-in{_R}")
+        for key, action in custom_bindings:
+            print(f"  {_BGR}{key:<16}{_R} {action:<35} {_GR}custom{_R}")
+        print()
+
+    return _CMD_CONTINUE
+
+
+def _cmd_keybind(ctx: "ChatCommandContext") -> str:
+    """/keybind [key action | list | clear <key>] — manage custom readline key bindings.
+
+    Examples:
+      /keybind list                    — show all custom bindings
+      /keybind Ctrl+H /histsearch      — bind Ctrl+H to /histsearch
+      /keybind Ctrl+T /top             — bind Ctrl+T to /top
+      /keybind clear Ctrl+H            — remove a binding
+    """
+    arg = ctx.args.strip()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if not arg or arg == "list":
+        custom = _PREFS.get("custom_keybinds", {})
+        if not custom:
+            msg = "No custom keybinds. Try: /keybind Ctrl+H /histsearch"
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+            else:
+                print(msg)
+            return _CMD_CONTINUE
+
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[bold cyan]⌨️  Custom Keybinds[/]\n")
+            for key, action in custom.items():
+                _RICH_CONSOLE.print(f"  [bold yellow]{key:<16}[/] → [bold green]{action}[/]")
+            _RICH_CONSOLE.print()
+        else:
+            print(f"\n⌨️  Custom Keybinds\n")
+            for key, action in custom.items():
+                print(f"  {_BYE}{key:<16}{_R} → {_BGR}{action}{_R}")
+            print()
+        return _CMD_CONTINUE
+
+    parts = arg.split(None, 1)
+    if parts[0] == "clear" and len(parts) > 1:
+        key_name = parts[1].strip()
+        custom = _PREFS.get("custom_keybinds", {})
+        if key_name in custom:
+            del custom[key_name]
+            _PREFS["custom_keybinds"] = custom
+            _save_prefs()
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[green]✓[/] Removed keybind for [bold]{key_name}[/]")
+            else:
+                print(f"✓ Removed keybind for {key_name}")
+        else:
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[yellow]No keybind for '{key_name}'[/]")
+            else:
+                print(f"No keybind for '{key_name}'")
+        return _CMD_CONTINUE
+
+    if len(parts) < 2:
+        msg = "Usage: /keybind <Key> <action>  e.g. /keybind Ctrl+H /histsearch"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    key_name = parts[0]
+    action = parts[1].strip()
+
+    if not (key_name.startswith("Ctrl+") or key_name.startswith("Alt+")):
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]Key must start with Ctrl+ or Alt+ (e.g. Ctrl+H)[/]")
+        else:
+            print("Key must start with Ctrl+ or Alt+ (e.g. Ctrl+H)")
+        return _CMD_CONTINUE
+
+    if not action.startswith("/"):
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]Action must be a slash command (e.g. /histsearch)[/]")
+        else:
+            print("Action must be a slash command")
+        return _CMD_CONTINUE
+
+    custom = _PREFS.get("custom_keybinds", {})
+    custom[key_name] = action
+    _PREFS["custom_keybinds"] = custom
+    _save_prefs()
+
+    _apply_custom_keybind(key_name, action)
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"[green]✓[/] Bound [bold yellow]{key_name}[/] → [bold green]{action}[/]")
+    else:
+        print(f"✓ Bound {key_name} → {action}")
+
+    return _CMD_CONTINUE
+
+
+def _apply_custom_keybind(key_name: str, action: str) -> None:
+    """Apply a custom keybind via readline (best-effort)."""
+    try:
+        import readline as _rl
+        if key_name.startswith("Ctrl+"):
+            char = key_name[5:].upper()
+            if len(char) == 1:
+                ctrl_seq = f"\\C-{char.lower()}"
+                _rl.parse_and_bind(f'"{ctrl_seq}": "{action}\\n"')
+    except (ImportError, AttributeError):
+        pass
+
+
+def _apply_all_custom_keybinds() -> None:
+    """Apply all saved custom keybinds on startup."""
+    custom = _PREFS.get("custom_keybinds", {})
+    for key_name, action in custom.items():
+        _apply_custom_keybind(key_name, action)
+
+
 def run_chat(
     config: CliConfig,
     *,
@@ -12368,6 +12592,19 @@ def run_chat(
         readline.set_completer(_slash_completer.complete)
         readline.set_completer_delims(" \t\n")
         readline.parse_and_bind("tab: complete")
+        try:
+            import readline as _rl
+            # Ensure emacs mode is active so Ctrl-R reverse search works natively.
+            _rl.parse_and_bind("set editing-mode emacs")
+            # Ctrl-L: clear screen
+            _rl.parse_and_bind(r'"\C-l": clear-screen')
+            # Ctrl-W: delete word backward
+            _rl.parse_and_bind(r'"\C-w": backward-kill-word')
+            # Ctrl-U: kill line (explicit for clarity)
+            _rl.parse_and_bind(r'"\C-u": unix-line-discard')
+        except (ImportError, AttributeError):
+            pass
+        _apply_all_custom_keybinds()
     _print_startup_banner(config, session_id)
     # Occasionally show a random tip on startup (~30% chance)
     import random as _random
