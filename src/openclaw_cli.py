@@ -196,6 +196,17 @@ from openclaw_cli_ui_core import (
     _R, _B, _DM, _CY, _GR, _YE, _RE, _MA,
     _BCY, _BGR, _BYE, _BRE, _BBL, _IT, _UL,
 )
+from openclaw_cli_exec import (
+    _separator_fill as _exec_separator_fill,
+    _motion_pause as _exec_motion_pause,
+    _spinner_phase_label as _exec_spinner_phase_label,
+    _spinner_progress_snapshot as _exec_spinner_progress_snapshot,
+    _response_footer_lines as _exec_response_footer_lines,
+    _progress_bar as _exec_progress_bar,
+    _exec_progress_animate as _exec_animate_fn,
+    _analyze_exec_error as _exec_analyze_exec_error,
+    _print_exec_error_hints as _exec_print_exec_error_hints,
+)
 
 
 def _get_is_tty() -> bool:
@@ -221,6 +232,7 @@ except ImportError:  # pragma: no cover
 import openclaw_cli_render as _render_mod
 import openclaw_cli_path_utils as _path_utils
 import openclaw_cli_macros as _macros_mod
+import openclaw_cli_layout as _layout_mod
 import logging as _logging
 
 _LOG = _logging.getLogger("openclaw_cli")
@@ -241,7 +253,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave36"  # updated with each UX wave batch
+_CLI_BUILD = "wave37"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -655,279 +667,86 @@ def _run_interactive_overlay(
 
 def _effective_layout_mode() -> str:
     """Return the normalized active layout mode."""
-    layout = str(_PREFS.get("layout", "normal") or "normal").strip().lower()
-    if layout not in {"compact", "normal", "verbose", "plain"}:
-        return "normal"
-    return layout
+    return _layout_mod._effective_layout_mode(_PREFS)
 
 
 def _layout_preset_name() -> str:
     """Return the normalized active layout preset name, if any."""
-    preset = str(_PREFS.get("layout_preset", "") or "").strip().lower()
-    return preset if preset in {"focus", "watch-monitor", "handoff"} else ""
+    return _layout_mod._layout_preset_name(_PREFS)
 
 
 def _layout_focus_name() -> str:
     """Return the active pane within the current layout preset."""
-    focus = str(_PREFS.get("layout_focus", "primary") or "primary").strip().lower()
-    return focus if focus in {"primary", "supporting"} else "primary"
+    return _layout_mod._layout_focus_name(_PREFS)
 
 
 def _layout_preset_config(name: str = "") -> dict[str, str]:
     """Return the documented surface pairing for a layout preset."""
-    preset = name or _layout_preset_name()
-    return {
-        "focus": {
-            "label": "focus",
-            "primary": "/session",
-            "supporting": "/context",
-        },
-        "watch-monitor": {
-            "label": "watch-monitor",
-            "primary": "/watch status",
-            "supporting": "/watch history + /outputs",
-        },
-        "handoff": {
-            "label": "handoff",
-            "primary": "/collab",
-            "supporting": "session summary + recent outputs",
-        },
-    }.get(preset, {})
+    return _layout_mod._layout_preset_config(_PREFS, name)
 
 
 def _layout_preset_fallback(*, width: int | None = None, is_tty: bool | None = None) -> str:
     """Return the current preset rendering fallback label."""
-    if not _layout_preset_name():
-        return "single-pane"
-    tty = _get_is_tty() if is_tty is None else bool(is_tty)
-    cols = _terminal_width() if width is None else int(width)
-    if not tty or _a11y_plain_mode() or cols < 100:
-        return "single-pane"
-    if cols < 140:
-        return "stacked"
-    return "multi-pane"
+    return _layout_mod._layout_preset_fallback(
+        _PREFS,
+        width=_terminal_width() if width is None else width,
+        is_tty=_get_is_tty() if is_tty is None else is_tty,
+    )
 
 
 def _layout_pane_line_limit() -> int:
     """Return the maximum number of lines shown per preset pane."""
-    return {
-        "compact": 6,
-        "normal": 9,
-        "verbose": 14,
-        "plain": 9,
-    }.get(_effective_layout_mode(), 9)
+    return _layout_mod._layout_pane_line_limit(_PREFS)
 
 
 def _layout_pane_block(title: str, lines: list[str], *, active: bool = False) -> list[str]:
     """Return a bounded plain-text pane block for workspace presets."""
-    clean = [str(line).strip() for line in lines if str(line or "").strip()]
-    limit = _layout_pane_line_limit()
-    clipped = clean[:limit]
-    if len(clean) > limit:
-        clipped.append(f"… {len(clean) - limit} more line(s); open the source surface for full detail")
-    status = "ACTIVE" if active else "READY"
-    return [f"{status} · {title}"] + [f"  {line}" for line in clipped]
+    return _layout_mod._layout_pane_block(_PREFS, title, lines, active=active)
 
 
 def _layout_column_lines(left: list[str], right: list[str], *, width: int) -> list[str]:
     """Lay out two pane blocks side-by-side using safe plain text."""
-    separator = " │ "
-    column_width = max(28, (max(width, 72) - len(separator)) // 2)
-
-    def _wrap(block: list[str]) -> list[str]:
-        rows: list[str] = []
-        for line in block:
-            rows.extend(
-                textwrap.wrap(
-                    str(line),
-                    width=column_width,
-                    break_long_words=False,
-                    break_on_hyphens=False,
-                )
-                or [""]
-            )
-        return rows
-
-    left_rows = _wrap(left)
-    right_rows = _wrap(right)
-    total_rows = max(len(left_rows), len(right_rows))
-    merged: list[str] = []
-    for index in range(total_rows):
-        left_line = left_rows[index] if index < len(left_rows) else ""
-        right_line = right_rows[index] if index < len(right_rows) else ""
-        merged.append(f"{left_line:<{column_width}}{separator}{right_line:<{column_width}}".rstrip())
-    return merged
+    return _layout_mod._layout_column_lines(left, right, width=width)
 
 
 def _layout_outputs_lines(session_id: str) -> list[str]:
     """Return compact recent-output lines for layout presets."""
-    outputs = list_saved_outputs(session_id, limit=3)
-    if not outputs:
-        return [
-            _status_cell("idle", detail="no saved outputs"),
-            "/outputs to inspect artifacts once something is saved",
-        ]
-    lines = [
-        _progress_cell("artifacts", str(len(list_saved_outputs(session_id, limit=0))), status="complete"),
-    ]
-    preview = load_saved_output_preview(session_id, "1", max_chars=OUTPUT_DASHBOARD_EXCERPT_CHARS)
-    if preview:
-        lines.append(
-            f"focused preview: {str(preview.get('name') or '').strip()} · "
-            f"{_format_byte_count(int(preview.get('size_bytes') or 0))}"
-        )
-        lines.extend(_preview_block_lines("excerpt", str(preview.get("preview") or ""), max_chars=OUTPUT_DASHBOARD_EXCERPT_CHARS))
-    for index, item in enumerate(outputs, start=1):
-        lines.append(
-            f"{index}. {str(item.get('name') or '').strip()} · "
-            f"{_format_byte_count(int(item.get('size_bytes') or 0))}"
-        )
-    return lines
+    return _layout_mod._layout_outputs_lines(_PREFS, session_id)
 
 
 def _layout_collab_lines(session_id: str) -> list[str]:
     """Return collaboration snapshot lines for layout presets."""
-    snapshot = build_collaboration_snapshot(session_id, limit=3)
-    actors = list(snapshot.get("actors") or [])
-    decisions = list(snapshot.get("recent_decisions") or [])
-    notes = list(snapshot.get("recent_notes") or [])
-    latest_handoff = snapshot.get("latest_handoff") or {}
-    lines = [
-        _progress_cell("actors", str(len(actors)), status="info" if actors else "idle"),
-        _progress_cell("decisions", str(len(decisions)), status="complete" if decisions else "idle"),
-    ]
-    for actor in actors[:2]:
-        lines.append(
-            f"actor: {str(actor.get('name') or 'operator').strip()} · "
-            f"{int(actor.get('event_count') or 0)} touchpoints"
-        )
-    if decisions:
-        lines.append(f"decision: {_single_line_excerpt(_format_collaboration_entry(decisions[0]), max_chars=96)}")
-    if notes:
-        lines.append(f"note: {_single_line_excerpt(_format_collaboration_entry(notes[0]), max_chars=96)}")
-    if latest_handoff:
-        lines.append(
-            f"handoff: {str(latest_handoff.get('id') or '').strip()} · "
-            f"{str(latest_handoff.get('created_at') or '').strip()}"
-        )
-    lines.append("/collab share to print the full handoff bundle")
-    return lines
+    return _layout_mod._layout_collab_lines(_PREFS, session_id)
 
 
 def _layout_watch_lines(state: dict[str, Any] | None) -> list[str]:
     """Return watch-monitor lines for layout presets."""
-    if not state:
-        return [
-            _status_cell("idle", detail="no active watch"),
-            "Start one with: openclaw watch --goal …",
-            "/watch status to inspect the live control tower when a watch exists",
-        ]
-    state = normalize_watch_state(state)
-    timing = _watch_timing_summary(state)
-    lines = [
-        _progress_cell("status", str(state.get("status") or "active"), status=str(state.get("status") or "active")),
-        _progress_cell("polls", f"{int(state.get('poll_count') or 0)}/{int(state.get('max_polls') or 0) or '∞'}", status=str(state.get("status") or "active")),
-    ]
-    goal = str(state.get("goal") or "").strip()
-    if goal:
-        lines.append(f"goal: {_single_line_excerpt(goal, max_chars=96)}")
-    if timing["active_phase"]:
-        phase_line = timing["active_phase"]
-        if timing["active_phase_elapsed"] is not None:
-            phase_line += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
-        lines.append(_progress_cell("phase", phase_line, status="active"))
-    lines.extend(_watch_focus_lines(state)[:4])
-    progress_log = list(state.get("progress_log") or [])
-    if progress_log:
-        latest = progress_log[-1]
-        note = str(latest.get("note") or latest.get("summary") or latest.get("content") or "").strip()
-        if note:
-            lines.append(f"latest checkpoint: {_single_line_excerpt(note, max_chars=96)}")
-    lines.append("/watch intervene <msg> to leave an operator breadcrumb")
-    return lines
+    return _layout_mod._layout_watch_lines(
+        _PREFS,
+        state,
+        normalize_watch_state_fn=normalize_watch_state,
+        watch_timing_summary_fn=_watch_timing_summary,
+        watch_focus_lines_fn=_watch_focus_lines,
+    )
 
 
 def _layout_session_lines(session: SessionSummary) -> list[str]:
     """Return session health lines for layout presets."""
-    lines = [
-        session.title or session.session_id,
-        _progress_cell("status", str(session.status or "active"), status=session.status or "active"),
-        _progress_cell("updated", session.updated_at or "—", status="info"),
-        _progress_cell("files", str(len(session.files or [])), status="active" if session.files else "idle"),
-    ]
-    if session.cwd:
-        lines.append(f"cwd: {session.cwd}")
-    if session.plan_id:
-        lines.append(f"plan: {session.plan_id}")
-    if session.task_id:
-        lines.append(f"task: {session.task_id}")
-    lines.extend(_session_preview_lines(session))
-    return lines
+    return _layout_mod._layout_session_lines(
+        _PREFS,
+        session,
+        session_preview_lines_fn=_session_preview_lines,
+    )
 
 
 def _print_layout_preset_workspace(ctx: "ChatCommandContext") -> None:
     """Render the active layout preset as a pane-like workspace view."""
-    preset = _layout_preset_name()
-    if not preset:
-        print("Workspace preset is single-pane. Use /layout preset focus|watch-monitor|handoff to opt in.")
-        return
-    session_id = str(ctx.session_id or "").strip()
-    if not session_id:
-        print(f"Workspace preset {_layout_preset_config(preset).get('label', preset)} saved. Resume a session, then run /layout show.")
-        return
-    session = load_session(session_id)
-    if session is None:
-        print(f"Workspace preset {_layout_preset_config(preset).get('label', preset)} saved. Resume a session, then run /layout show.")
-        return
-
-    focus = _layout_focus_name()
-    watch_state = load_watch_state(session.session_id)
-    if preset == "focus":
-        primary_title = "Session summary"
-        primary_lines = _layout_session_lines(session)
-        if watch_state:
-            supporting_title = "Watch monitor"
-            supporting_lines = _layout_watch_lines(watch_state)
-        elif session.output_count:
-            supporting_title = "Artifact preview"
-            supporting_lines = _layout_outputs_lines(session.session_id)
-        else:
-            supporting_title = "Collaboration snapshot"
-            supporting_lines = _layout_collab_lines(session.session_id)
-    elif preset == "watch-monitor":
-        primary_title = "Watch monitor"
-        primary_lines = _layout_watch_lines(watch_state)
-        supporting_title = "Recent artifacts"
-        supporting_lines = _layout_outputs_lines(session.session_id)
-    else:
-        primary_title = "Collaboration snapshot"
-        primary_lines = _layout_collab_lines(session.session_id)
-        supporting_title = "Session health"
-        supporting_lines = _layout_session_lines(session)
-
-    render_mode = _layout_preset_fallback()
-    width = _terminal_width(fallback=100)
-    header = [
-        f"Workspace preset: {_layout_preset_config(preset).get('label', preset)}",
-        f"Render mode: {render_mode}",
-        f"Active pane: {focus}",
-        "",
-    ]
-    primary_block = _layout_pane_block(primary_title, primary_lines, active=focus == "primary")
-    supporting_block = _layout_pane_block(supporting_title, supporting_lines, active=focus == "supporting")
-    if render_mode == "multi-pane":
-        body = _layout_column_lines(primary_block, supporting_block, width=width)
-    elif render_mode == "stacked":
-        body = [*primary_block, "", *supporting_block]
-    else:
-        active_block = primary_block if focus == "primary" else supporting_block
-        collapsed = supporting_title if focus == "primary" else primary_title
-        body = [
-            *active_block,
-            "",
-            f"Supporting pane collapsed. Open {collapsed.lower()} via its source command or widen the terminal.",
-        ]
-    print("\n".join(header + body))
+    _layout_mod._print_layout_preset_workspace(
+        _PREFS,
+        str(ctx.session_id or ""),
+        width=_terminal_width(fallback=100),
+        is_tty=_get_is_tty(),
+    )
 
 
 def _e(emoji: str, fallback: str = "") -> str:
@@ -1083,57 +902,32 @@ def _premium_motion_active(*, output_json: bool = False) -> bool:
 
 def _motion_pause(stage: str) -> None:
     """Sleep briefly to stagger premium UI choreography when motion is enabled."""
-    if not _premium_motion_active():
-        return
-    delay = float(_MOTION_PACING_SECONDS.get(stage, 0.0) or 0.0)
-    if delay > 0:
-        time.sleep(delay)
+    _exec_motion_pause(
+        stage,
+        is_tty=_get_is_tty(),
+        plain_mode=_a11y_plain_mode(),
+        reduced_motion=_a11y_reduced_motion(),
+    )
 
 
 def _spinner_phase_label(elapsed: float) -> str:
     """Return a lightweight motion-language label for spinner pacing."""
-    return _spinner_progress_snapshot(elapsed)["phase"]
+    return _exec_spinner_phase_label(elapsed)
 
 
 def _spinner_progress_snapshot(elapsed: float) -> dict[str, Any]:
     """Return live phase/step copy for the request spinner."""
-    if elapsed < 1.0:
-        return {
-            "phase": "warming up",
-            "step_index": 1,
-            "step_total": 3,
-            "trust_copy": "preparing the request",
-        }
-    if elapsed < 4.0:
-        return {
-            "phase": "working",
-            "step_index": 2,
-            "step_total": 3,
-            "trust_copy": "waiting for the agent response",
-        }
-    return {
-        "phase": "wrapping up",
-        "step_index": 3,
-        "step_total": 3,
-        "trust_copy": "finalizing the answer",
-    }
+    return _exec_spinner_progress_snapshot(elapsed)
 
 
 def _response_footer_lines(*, elapsed: float = 0.0, tokens: int = 0, model: str = "") -> tuple[str, str]:
     """Return the footer headline and metadata line for a response."""
-    parts: list[str] = []
-    if elapsed > 0:
-        parts.append(f"⏱ {elapsed:.1f}s")
-    if tokens:
-        parts.append(f"{tokens} tokens")
-    if model:
-        parts.append(model)
-    detail = "  •  ".join(parts)
-    if elapsed > 0:
-        headline = f"{_e('✨', '[done]')} Response complete in {elapsed:.1f}s"
-    else:
-        headline = f"{_e('✨', '[done]')} Response complete"
-    return headline, detail
+    return _exec_response_footer_lines(
+        elapsed=elapsed,
+        tokens=tokens,
+        model=model,
+        done_symbol=_e("✨", "[done]"),
+    )
 
 
 def _dashboard_section_lines(title: str, lines: list[str]) -> list[str]:
@@ -3810,9 +3604,11 @@ _SEPARATOR_STYLES: dict[str, list[str]] = {
 
 def _separator_fill(width: int, *, high_contrast: bool | None = None) -> str:
     """Return a separator line sized for the current terminal/mode."""
-    use_high_contrast = _a11y_high_contrast() if high_contrast is None else high_contrast
-    char = "=" if use_high_contrast or _a11y_plain_mode() else "─"
-    return char * max(1, width)
+    return _exec_separator_fill(
+        width,
+        high_contrast=_a11y_high_contrast() if high_contrast is None else high_contrast,
+        plain_mode=_a11y_plain_mode(),
+    )
 
 
 def _print_response_separator(*, label: str = "", detail: str = "", status: str = "info") -> None:
@@ -6795,149 +6591,34 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
 
 def _progress_bar(current: int, total: int, width: int = 30, label: str = "") -> str:
     """Return a colored ANSI progress bar string."""
-    if total <= 0:
-        return ""
-    pct = min(current / total, 1.0)
-    filled = int(width * pct)
-    empty = width - filled
-
-    if pct < 0.33:
-        color = _RE
-    elif pct < 0.66:
-        color = _YE
-    else:
-        color = _GR
-
-    bar = f"{color}{'█' * filled}{_DM}{'░' * empty}{_R}"
-    pct_str = f"{int(pct * 100):>3}%"
-    if label:
-        return f"  {bar} {_B}{pct_str}{_R}  {_DM}{label}{_R}"
-    return f"  {bar} {_B}{pct_str}{_R}"
+    return _exec_progress_bar(current, total, width, label)
 
 
 def _exec_progress_animate(proc: Any, label: str = "") -> tuple:
     """Animate an indeterminate progress bar while proc runs. Returns (stdout, stderr, returncode)."""
-    is_tty = _get_is_tty()
-    if not is_tty or _a11y_reduced_motion() or _a11y_plain_mode():
-        stdout, stderr = proc.communicate()
-        return stdout, stderr, proc.returncode
-
-    width = 30
-    frames = []
-    for pos in list(range(0, width - 8)) + list(range(width - 8, 0, -1)):
-        bar = "░" * pos + "█████████" + "░" * (width - pos - 9)
-        bar = bar[:width]
-        frames.append(bar)
-
-    frame_idx = 0
-    import threading
-    done = threading.Event()
-    stdout_buf: list[bytes] = []
-    stderr_buf: list[bytes] = []
-    rc_buf: list[int] = []
-
-    def _run() -> None:
-        o, e = proc.communicate()
-        stdout_buf.append(o)
-        stderr_buf.append(e)
-        rc_buf.append(proc.returncode)
-        done.set()
-
-    t = threading.Thread(target=_run, daemon=True)
-    t.start()
-
-    start = time.time()
-    while not done.is_set():
-        elapsed = time.time() - start
-        frame = frames[frame_idx % len(frames)]
-        elapsed_str = f"{elapsed:.1f}s"
-        sys.stdout.write(f"\r  {_CY}{frame}{_R}  {_DM}{elapsed_str}  {label}{_R}")
-        sys.stdout.flush()
-        frame_idx += 1
-        done.wait(0.08)
-
-    sys.stdout.write(f"\r{' ' * 60}\r")
-    sys.stdout.flush()
-
-    return stdout_buf[0] if stdout_buf else b"", stderr_buf[0] if stderr_buf else b"", rc_buf[0] if rc_buf else -1
+    return _exec_animate_fn(
+        proc,
+        label,
+        is_tty=_get_is_tty(),
+        plain_mode=_a11y_plain_mode(),
+        reduced_motion=_a11y_reduced_motion(),
+    )
 
 
 def _analyze_exec_error(cmd: str, stderr: str, returncode: int) -> "list[str]":
     """Analyze a failed command and return smart recovery hints."""
-    if returncode == 0:
-        return []
-    hints: list[str] = []
-    err_lower = (stderr or "").lower()
-    cmd_lower = (cmd or "").lower()
-
-    if "permission denied" in err_lower:
-        hints.append("Try: sudo " + cmd.strip())
-        hints.append("Or: chmod +x <file> if it's a script")
-
-    if "command not found" in err_lower or "not found" in err_lower:
-        first_word = cmd.strip().split()[0] if cmd.strip() else ""
-        if first_word:
-            hints.append(f"Install {first_word}? Try: brew install {first_word} or pip install {first_word}")
-        hints.append("Check PATH: echo $PATH")
-
-    if "modulenotfounderror" in err_lower or "no module named" in err_lower:
-        import re as _re
-        m = _re.search(r"no module named '([^']+)'", err_lower)
-        if m:
-            mod_name = m.group(1)
-            hints.append(f"Install missing module: pip install {mod_name}")
-        hints.append("Check virtual environment: which python3")
-
-    if "address already in use" in err_lower or ("port" in err_lower and "use" in err_lower):
-        hints.append("Port already in use — try a different port or: lsof -i :<port>")
-        hints.append("Kill process: kill $(lsof -t -i :<port>)")
-
-    if "no such file or directory" in err_lower:
-        hints.append("Check file path: ls -la")
-        hints.append("Create missing dirs: mkdir -p <path>")
-
-    if "timeout" in err_lower or "connection refused" in err_lower:
-        hints.append("Service may be down — check: docker ps or systemctl status")
-        hints.append("Try: /exec curl -s http://localhost:PORT/health")
-
-    if "docker" in cmd_lower and ("error" in err_lower or returncode != 0):
-        hints.append("Check Docker status: docker ps")
-        hints.append("View logs: docker logs <container>")
-
-    if not hints:
-        if returncode == 1:
-            hints.append("Exit code 1 — general error. Check stderr above.")
-        elif returncode == 2:
-            hints.append("Exit code 2 — misuse of command or bad arguments.")
-        elif returncode == 127:
-            hints.append("Exit code 127 — command not found. Check PATH.")
-        elif returncode == 130:
-            hints.append("Exit code 130 — interrupted by Ctrl+C.")
-        else:
-            hints.append(f"Exit code {returncode} — see stderr for details.")
-
-    return hints[:3]
+    return _exec_analyze_exec_error(cmd, stderr, returncode)
 
 
 def _print_exec_error_hints(cmd: str, stderr: str, returncode: int) -> None:
     """Print smart recovery hints after a failed exec command."""
-    if _a11y_plain_mode():
-        return
-    hints = _analyze_exec_error(cmd, stderr, returncode)
-    if not hints:
-        return
-    is_tty = _get_is_tty()
-
-    if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print("\n[bold yellow]💡 Recovery hints:[/]")
-        for hint in hints:
-            _RICH_CONSOLE.print(f"  [dim]→[/] {hint}")
-        _RICH_CONSOLE.print()
-    else:
-        print(f"\n{_BYE}💡 Recovery hints:{_R}")
-        for hint in hints:
-            print(f"  {_DM}→{_R} {hint}")
-        print()
+    _exec_print_exec_error_hints(
+        cmd,
+        stderr,
+        returncode,
+        plain_mode=_a11y_plain_mode(),
+        is_tty=_get_is_tty(),
+    )
 
 
 def _cmd_exec(ctx: ChatCommandContext) -> str:
@@ -8550,6 +8231,14 @@ def _workflow_store() -> dict[str, list[str]]:
     return _macros_mod._workflow_store(_PREFS)
 
 
+def _pattern_store() -> dict[str, dict[str, Any]]:
+    patterns = _PREFS.setdefault("patterns", {})
+    if not isinstance(patterns, dict):
+        patterns = {}
+        _PREFS["patterns"] = patterns
+    return patterns
+
+
 def _history_command_texts(limit: int) -> list[str]:
     return _macros_mod._history_command_texts(_PREFS, limit)
 
@@ -8562,13 +8251,8 @@ def _print_workflow_preview(name: str, steps: list[str], ctx: ChatCommandContext
     _macros_mod._print_workflow_preview(name, steps, ctx)
 
 
-def _macro_run(ctx: ChatCommandContext, name: str, *, kind: str = "macro") -> str:
-    """Execute a named macro/workflow's commands in sequence."""
-    macros = _workflow_store()
-    if name not in macros:
-        _print_error(f"{kind.title()} '{name}' not found")
-        return _CMD_CONTINUE
-    commands = macros[name]
+def _run_command_sequence(ctx: ChatCommandContext, name: str, commands: list[str], *, kind: str = "macro") -> str:
+    """Execute a named macro/workflow/pattern command sequence."""
     if not commands:
         _print_error(f"{kind.title()} '{name}' is empty")
         return _CMD_CONTINUE
@@ -8611,6 +8295,145 @@ def _macro_run(ctx: ChatCommandContext, name: str, *, kind: str = "macro") -> st
         _RICH_CONSOLE.print(f"[green]✓ {kind.title()} '{name}' complete[/]")
     else:
         print(f"✓ {kind.title()} '{name}' complete")
+    return _CMD_CONTINUE
+
+
+def _macro_run(ctx: ChatCommandContext, name: str, *, kind: str = "macro") -> str:
+    """Execute a named macro/workflow's commands in sequence."""
+    macros = _workflow_store()
+    if name not in macros:
+        _print_error(f"{kind.title()} '{name}' not found")
+        return _CMD_CONTINUE
+    return _run_command_sequence(ctx, name, list(macros[name]), kind=kind)
+
+
+def _pattern_steps(entry: dict[str, Any]) -> list[str]:
+    steps = entry.get("commands") or []
+    return [str(step) for step in steps if str(step or "").strip()]
+
+
+def _cmd_pattern(ctx: "ChatCommandContext") -> str:
+    """/pattern — manage reusable workflow patterns backed by history or workflows."""
+    import re as _re
+    args = (ctx.args or "").strip()
+    patterns = _pattern_store()
+    workflows = _workflow_store()
+    is_tty = _get_is_tty()
+    parts = args.split(None, 1)
+    token = parts[0].lower() if parts else "list"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    if token in {"list", "ls"} or not args:
+        if _RICH_AVAILABLE and is_tty:
+            tbl = _RichTable("Pattern", "Source", "Steps", "Updated", border_style="dim", header_style="bold cyan")
+            for name, entry in sorted(patterns.items()):
+                source = str(entry.get("source") or "history")
+                updated = str(entry.get("updated_at") or entry.get("created_at") or "")[:19]
+                tbl.add_row(name, source, str(len(_pattern_steps(entry))), updated or "—")
+            if not patterns:
+                tbl.add_row("(no patterns saved)", "", "", "")
+            _RICH_CONSOLE.print(tbl)
+        else:
+            print("Patterns:")
+            if patterns:
+                for name, entry in sorted(patterns.items()):
+                    source = str(entry.get("source") or "history")
+                    print(f"  {name}  ({len(_pattern_steps(entry))} steps · {source})")
+            else:
+                print("  (no patterns saved)")
+        return _CMD_CONTINUE
+
+    if token == "save":
+        save_parts = rest.split()
+        if not save_parts:
+            _print_error("Usage: /pattern save <name> [last N|workflow NAME]")
+            return _CMD_CONTINUE
+        pattern_name = save_parts[0]
+        if not _re.match(r'^[A-Za-z0-9_-]{1,40}$', pattern_name):
+            _print_error("Pattern name must be 1-40 alphanumeric characters, hyphens, or underscores.")
+            return _CMD_CONTINUE
+        source = "history"
+        source_name = ""
+        commands: list[str] = []
+        if len(save_parts) == 1:
+            commands = _history_command_texts(5)[-5:]
+        elif len(save_parts) >= 3 and save_parts[1].lower() == "last":
+            try:
+                n = max(1, min(int(save_parts[2]), 20))
+            except ValueError:
+                _print_error("Usage: /pattern save <name> [last N|workflow NAME]")
+                return _CMD_CONTINUE
+            commands = _history_command_texts(n)[-n:]
+        elif len(save_parts) >= 3 and save_parts[1].lower() == "workflow":
+            source = "workflow"
+            source_name = save_parts[2]
+            if source_name not in workflows:
+                _print_error(f"Workflow '{source_name}' not found")
+                return _CMD_CONTINUE
+            commands = list(workflows[source_name])
+        else:
+            _print_error("Usage: /pattern save <name> [last N|workflow NAME]")
+            return _CMD_CONTINUE
+        if not commands:
+            _print_error("No reusable commands found for this pattern")
+            return _CMD_CONTINUE
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        patterns[pattern_name] = {
+            "commands": commands[:20],
+            "source": source,
+            "source_name": source_name,
+            "created_at": patterns.get(pattern_name, {}).get("created_at", timestamp),
+            "updated_at": timestamp,
+            "session_id": ctx.session_id,
+        }
+        _save_prefs()
+        print(f"  {_GR}{_e('✅', '[OK]')} Pattern '{pattern_name}' saved ({len(commands[:20])} step{'s' if len(commands[:20]) != 1 else ''}).{_R}")
+        return _CMD_CONTINUE
+
+    if token in {"show", "preview"}:
+        if not rest:
+            _print_error(f"Usage: /pattern {token} <name>")
+            return _CMD_CONTINUE
+        name = rest.split()[0]
+        entry = patterns.get(name)
+        if not isinstance(entry, dict):
+            _print_error(f"Pattern '{name}' not found")
+            return _CMD_CONTINUE
+        steps = _pattern_steps(entry)
+        source = str(entry.get("source") or "history")
+        source_name = str(entry.get("source_name") or "").strip()
+        if source_name:
+            print(f"Pattern '{name}' · source {source}:{source_name}")
+        else:
+            print(f"Pattern '{name}' · source {source}")
+        _print_workflow_preview(name, steps, ctx)
+        return _CMD_CONTINUE
+
+    if token == "run":
+        if not rest:
+            _print_error("Usage: /pattern run <name>")
+            return _CMD_CONTINUE
+        name = rest.split()[0]
+        entry = patterns.get(name)
+        if not isinstance(entry, dict):
+            _print_error(f"Pattern '{name}' not found")
+            return _CMD_CONTINUE
+        return _run_command_sequence(ctx, name, _pattern_steps(entry), kind="pattern")
+
+    if token in {"rm", "remove"}:
+        if not rest:
+            _print_error("Usage: /pattern rm <name>")
+            return _CMD_CONTINUE
+        name = rest.split()[0]
+        if name not in patterns:
+            _print_error(f"Pattern '{name}' not found")
+            return _CMD_CONTINUE
+        del patterns[name]
+        _save_prefs()
+        print(f"  {_GR}{_e('✅', '[OK]')} Pattern '{name}' removed.{_R}")
+        return _CMD_CONTINUE
+
+    _print_error("Unknown /pattern sub-command. Use: list, save, show, preview, run, rm")
     return _CMD_CONTINUE
 
 
@@ -9037,6 +8860,11 @@ def print_chat_help(*, search: str = "") -> None:
         ("/workflow preview <name>",            "Show the resolved workflow steps without executing them"),
         ("/workflow run <name>",                "Execute a saved workflow with session placeholders resolved"),
         ("/workflow rm <name>",                 "Delete a saved workflow"),
+        ("/pattern list",                       "Browse saved reusable patterns with lightweight source metadata"),
+        ("/pattern save <name> [last N|workflow NAME]", "Save recent commands or a workflow as a reusable pattern"),
+        ("/pattern preview <name>",             "Preview a saved pattern before execution"),
+        ("/pattern run <name>",                 "Execute a saved pattern with session placeholders resolved"),
+        ("/pattern rm <name>",                  "Delete a saved pattern"),
         ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
         ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
         ("/streak",   "Show your current high-rating streak and all-time best"),
@@ -9679,7 +9507,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Pinning & notes
     "pin", "pins", "search",
     # Aliases, macros, templates
-    "alias", "macro", "macrostatus", "workflow", "template", "draft",
+    "alias", "macro", "macrostatus", "workflow", "pattern", "patterns", "template", "draft",
     # Accessibility
     "accessibility", "a11y",
     # Misc / fun
@@ -11867,6 +11695,7 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("macro",        "Manage and run command macros (/macro [save|list|show|run|rm] [name])",                                  _cmd_macro,        ()),
     ("macrostatus",  "Show saved macros with step counts (/macrostatus)",                                                      _cmd_macrostatus,  ()),
     ("workflow",     "Manage previewable workflows (/workflow [save|list|show|preview|run|rm] [name])",                       _cmd_workflow,     ()),
+    ("pattern",      "Manage reusable pattern-library flows (/pattern [save|list|show|preview|run|rm] [name])",               _cmd_pattern,      ("patterns",)),
     ("rate",         "Rate the last AI response (/rate [good|ok|bad|meh|1-5])",                                               _cmd_rate,         ("feedback",)),
     ("celebrate",    "Trigger a celebration animation (/celebrate [message])",                                                 _cmd_celebrate,    ()),
     ("quality",      "Show response quality stats and rating history",                                                         _cmd_quality,      ()),
