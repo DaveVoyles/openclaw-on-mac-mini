@@ -4204,7 +4204,14 @@ def _render_markdown_ansi(text: str) -> str:
             result.append(f"  {indent}{nm.group(2)}. {_apply_inline_ansi(nm.group(3))}")
             continue
 
-        result.append(_apply_inline_ansi(line))
+        # Wrap long paragraph lines to terminal width to prevent mid-word splits
+        if len(line) > term_cols - 2 and not plain_mode:
+            plain_line = re.sub(r"\*{1,2}([^*]+)\*{1,2}|`([^`]+)`|_([^_]+)_", r"\1\2\3", line)
+            wrapped_lines = textwrap.wrap(plain_line, width=term_cols - 2) or [line]
+            for wl in wrapped_lines:
+                result.append(_apply_inline_ansi(wl))
+        else:
+            result.append(_apply_inline_ansi(line))
 
     flush_table()
     return "\n".join(result)
@@ -4660,7 +4667,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
             print(_render_markdown_ansi(_linkify_response(body)))
             if sources:
                 term_cols = shutil.get_terminal_size((80, 24)).columns
-                w = min(term_cols - 4, 64)
+                w = max(term_cols - 4, 40)
                 border_style = _theme_ansi() if _a11y_high_contrast() else _DM
                 border_reset = _R if border_style else ""
                 print(
@@ -10907,29 +10914,24 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
     autoroute_on = _session_auto_route_enabled(session_id)
     ver = cli_version()
-    motion_label = "reduced" if _a11y_reduced_motion() else "premium"
-
     cols = _terminal_width()
 
     # Plain-mode path: no ANSI, no emoji, no decorative borders.
     if _a11y_plain_mode() or cols < 72:
         autoroute_str = "on" if autoroute_on else "off"
-        print(f"OpenClaw {ver}")
+        print(f"🦞 OpenClaw {ver}")
         print(f"Server: {config.base_url}")
         print(f"User: {config.user_name}")
         if session_id:
             print(f"Session: {session_id[:8]}…")
         print("Type /help for commands. /quit to exit.")
         print(f"Auto-routing: {autoroute_str}")
-        print(f"Motion: {motion_label}")
         return
 
     if _RICH_AVAILABLE and _IS_TTY:
         t = _RichText()
         t.append(f"{_e('🦞', '[openclaw]')} OpenClaw", style="bold cyan")
         t.append(f"  {ver}", style="cyan dim")
-        t.append("  ·  ", style="dim")
-        t.append(f"{_e('✨', '[mode]')} {motion_label} motion", style="bold white" if _a11y_high_contrast() else "bold magenta")
         t.append("  connected to ", style="dim")
         t.append(config.base_url, style="cyan")
         t.append(f"\n  {_e('👤', '[user]')} ", style="dim")
@@ -10973,7 +10975,6 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
             autoroute_line = f"\n  {_B}Auto-routing{_R} {_YE}is off{_R} {_DM}— use /autoroute on to enable{_R}"
         print(
             f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}  {_DM}{ver}{_R}"
-            f"\n  {_DM}mode:{_R}      {_MA}{motion_label} motion{_R}"
             f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
             f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
             f"{session_line}"
