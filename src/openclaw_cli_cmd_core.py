@@ -759,7 +759,7 @@ def _cmd_analyze(ctx: ChatCommandContext) -> str:
     session = m._require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
-    _, context_text = collect_workspace_context(cwd=session.cwd or None, targets=list(session.files))
+    _, context_text = _get_cli_mod().collect_workspace_context(cwd=session.cwd or None, targets=list(session.files))
     scoped_config = m.bind_config_to_session(config, session.session_id)
     prompt = m.build_analysis_prompt(goal=goal, context_text=context_text, session=session)
     _get_cli_mod().append_event(
@@ -813,7 +813,7 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
     session = m._require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
-    _, context_text = collect_workspace_context(cwd=session.cwd or None, targets=list(session.files))
+    _, context_text = _get_cli_mod().collect_workspace_context(cwd=session.cwd or None, targets=list(session.files))
     effective_query = query
     plan_ctx = m._plan_task_context_snippet(session.plan_id, session.task_id, cwd=session.cwd)
     if plan_ctx:
@@ -839,8 +839,7 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
     if _IS_TTY:
         sys.stdout.write("\r" + " " * 62 + "\r")
         sys.stdout.flush()
-    from openclaw_cli_sessions import save_output  # noqa: PLC0415
-    output_target = save_output(
+    output_target = _get_cli_mod().save_output(
         session.session_id,
         m.output_name_from_title(query, default_stem="research-report", suffix=".md"),
         report,
@@ -875,7 +874,7 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
     session = m._require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
-    _, context_text = collect_workspace_context(cwd=session.cwd or None, targets=list(session.files))
+    _, context_text = _get_cli_mod().collect_workspace_context(cwd=session.cwd or None, targets=list(session.files))
     title = task_text[:80]
     scoped_config = m.bind_config_to_session(config, session.session_id)
     prompt = m.build_write_prompt(task=task_text, context_text=context_text, session=session, title=title)
@@ -894,8 +893,7 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
         m._set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     m.persist_response(session.session_id, task_text, response.response)
-    from openclaw_cli_sessions import save_output  # noqa: PLC0415
-    output_target = save_output(
+    output_target = _get_cli_mod().save_output(
         session.session_id,
         m.output_name_from_title(title, default_stem="draft", suffix=".md"),
         response.response,
@@ -942,7 +940,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         recovery_hint="check the cwd and use your shell history or VCS tools before re-running.",
     )
     approval_started = time.monotonic()
-    approved = request_cli_approval(
+    approved = _get_cli_mod().request_cli_approval(
         action="shell.exec",
         target=raw,
         risk_level=risk_level,
@@ -1008,7 +1006,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
                 timed_out=False,
             )
         else:
-            result = m.run_async(run_shell_command(command_parts, cwd=_exec_cwd, timeout=60))
+            result = m.run_async(_get_cli_mod().run_shell_command(command_parts, cwd=_exec_cwd, timeout=60))
     except Exception as exc:  # noqa: BLE001
         m._LOG.error("shell command execution failed", exc_info=True)
         m._print_error(str(exc))
@@ -1128,7 +1126,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         recovery_hint="routed edits can use /rollback last; otherwise recover with your editor or VCS.",
     )
     approval_started = time.monotonic()
-    approved = request_cli_approval(
+    approved = _get_cli_mod().request_cli_approval(
         action="file.edit",
         target=path,
         risk_level=risk_level,
