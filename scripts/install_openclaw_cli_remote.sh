@@ -22,6 +22,7 @@ CLI_FILES=(
   openclaw_cli_auth.py
   openclaw_cli_cmd_session.py
   openclaw_cli_cmd_settings.py
+  openclaw_cli_cmd_system.py
   openclaw_cli_cmd_content.py
   openclaw_cli_content_cmds.py
   openclaw_cli_diff.py
@@ -45,6 +46,7 @@ CLI_FILES=(
   openclaw_cli_update.py
   openclaw_cli_cmd_workflow.py
   openclaw_cli_cmd_core.py
+  openclaw_cli_cmd_misc.py
   openclaw_cli_watch.py
   subprocess_utils.py
 )
