@@ -233,6 +233,7 @@ import openclaw_cli_render as _render_mod
 import openclaw_cli_path_utils as _path_utils
 import openclaw_cli_macros as _macros_mod
 import openclaw_cli_layout as _layout_mod
+import openclaw_cli_session_cmds as _session_cmds_mod
 import logging as _logging
 
 _LOG = _logging.getLogger("openclaw_cli")
@@ -5386,28 +5387,13 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
             else:
                 print(f"{msg}  ({session.plan_id})")
             return _CMD_CONTINUE
-        focus_lines: list[str] = []
-        if validation.summary:
-            focus_lines.append(f"Goal: {validation.summary}")
-            focus_lines.append("")
-        focus_lines.append(f"Done: {done_count}  Remaining: {len(unchecked)}")
-        focus_lines.append("")
-        # Current step
-        cur_idx, cur_line = unchecked[0]
-        focus_lines.append("▶ Current:")
-        focus_lines.append(f"  {cur_line.strip()}")
-        # Show a few context lines after the current step (sub-tasks or notes)
-        for ctx_line in lines[cur_idx + 1: cur_idx + 4]:
-            if ctx_line.strip() and not re.match(r"^\s*-\s+\[ \]", ctx_line):
-                focus_lines.append(f"    {ctx_line.strip()}")
-            else:
-                break
-        # Next pending step
-        if len(unchecked) > 1:
-            _, nxt_line = unchecked[1]
-            focus_lines.append("")
-            focus_lines.append("→ Next:")
-            focus_lines.append(f"  {nxt_line.strip()}")
+        focus_lines = _session_cmds_mod._build_plan_focus_lines(
+            lines=lines,
+            plan_id=session.plan_id,
+            done_count=done_count,
+            unchecked=unchecked,
+            summary=validation.summary,
+        )
         if _RICH_AVAILABLE and _IS_TTY:
             _RICH_CONSOLE.print(_RichPanel(
                 _RichMarkdown("\n".join(focus_lines)),
@@ -5607,26 +5593,7 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
             ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
             ts_short = ts[11:19] if len(ts) > 10 else ts  # HH:MM:SS portion
             kind = str(ev.get("kind") or "").strip()
-            meta = ev.get("metadata") or {}
-            summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
-            content = str(ev.get("content") or "").strip()
-            label = (summary or content[:80]).replace("\n", " ")
-            if isinstance(meta, dict):
-                timing_bits = []
-                if meta.get("elapsed_seconds") is not None:
-                    timing_bits.append(_format_elapsed_compact(meta.get("elapsed_seconds")))
-                if meta.get("approval_seconds") is not None:
-                    timing_bits.append(f"approval {_format_elapsed_compact(meta.get('approval_seconds'))}")
-                if meta.get("retry_delay_seconds") is not None:
-                    timing_bits.append(f"backoff {_format_elapsed_compact(meta.get('retry_delay_seconds'))}")
-                if timing_bits:
-                    label = f"{label}  ({', '.join(timing_bits)})"
-            if kind == "checkpoint":
-                label = f"{label} · milestone"
-            elif kind == "collab":
-                label = f"{label} · shared momentum"
-            elif kind == "error":
-                label = f"{label} · recovery needed"
+            label = _session_cmds_mod._build_event_label(ev)
             color = _KIND_COLORS.get(kind, "dim")
             table.add_row(ts_short, f"[{color}]{kind}[/]", label)
         _RICH_CONSOLE.print(table)
@@ -5636,26 +5603,7 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
         for ev in events:
             ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
             kind = str(ev.get("kind") or "").strip()
-            meta = ev.get("metadata") or {}
-            summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
-            content = str(ev.get("content") or "").strip()
-            label = summary or content[:100]
-            if isinstance(meta, dict):
-                timing_bits = []
-                if meta.get("elapsed_seconds") is not None:
-                    timing_bits.append(_format_elapsed_compact(meta.get("elapsed_seconds")))
-                if meta.get("approval_seconds") is not None:
-                    timing_bits.append(f"approval {_format_elapsed_compact(meta.get('approval_seconds'))}")
-                if meta.get("retry_delay_seconds") is not None:
-                    timing_bits.append(f"backoff {_format_elapsed_compact(meta.get('retry_delay_seconds'))}")
-                if timing_bits:
-                    label = f"{label} ({', '.join(timing_bits)})"
-            if kind == "checkpoint":
-                label = f"{label} · milestone"
-            elif kind == "collab":
-                label = f"{label} · shared momentum"
-            elif kind == "error":
-                label = f"{label} · recovery needed"
+            label = _session_cmds_mod._build_event_label(ev, excerpt_len=100)
             print(f"[{ts}] {kind}: {label}")
     return _CMD_CONTINUE
 
@@ -6155,19 +6103,10 @@ def _cmd_search(ctx: ChatCommandContext) -> str:
     EXCERPT_LEN = 120
 
     def _highlight_ansi(text: str) -> str:
-        idx = text.lower().find(ql)
-        if idx == -1:
-            return text
-        return text[:idx] + _BYE + text[idx:idx + len(query)] + _R + text[idx + len(query):]
+        return _session_cmds_mod._highlight_ansi(text, query, ql, _BYE, _R)
 
     def _highlight_rich(text: str) -> str:
-        import re as _re
-        return _re.sub(
-            _re.escape(query),
-            f"[bold yellow]{query}[/]",
-            text,
-            flags=_re.IGNORECASE,
-        )
+        return _session_cmds_mod._highlight_rich(text, query)
 
     results: list[tuple[str, str, str, str]] = []  # (session_short, kind, excerpt, ts)
 
@@ -8254,25 +8193,8 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
         if session is None:
             return _CMD_CONTINUE
         check = _handoff_check_snapshot(session.session_id)
-        readiness = str(check.get("readiness") or "needs-attention")
-        checks = list(check.get("checks") or [])
-        open_risks = list(check.get("open_risks") or [])
-        open_incidents = list(check.get("open_incidents") or [])
-        print("Handoff readiness")
-        print("-----------------")
-        print(f"state: {readiness}")
-        for name, ok, detail in checks:
-            badge = "OK" if ok else "WARN"
-            print(f"  {badge:<4} {name:<8} {detail}")
-        if open_risks:
-            print("open risks:")
-            for entry in open_risks[:5]:
-                level = str(entry.get('risk_level') or 'medium').upper()
-                print(f"  - {level} · {str(entry.get('content') or entry.get('summary') or '').strip()}")
-        if open_incidents:
-            print("open incidents:")
-            for entry in open_incidents[:5]:
-                print(f"  - {str(entry.get('content') or entry.get('summary') or '').strip()}")
+        for line in _session_cmds_mod._build_handoff_check_lines(check):
+            print(line)
         return _CMD_CONTINUE
 
     # ── create ──────────────────────────────────────────────────────────────
@@ -8413,38 +8335,39 @@ def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace
     tracked_files = list(capsule.get("tracked_files") or [])
     bookmarks = list(capsule.get("bookmarks") or [])
     recent_outputs = list(capsule.get("recent_outputs") or [])
-    lines = [
-        f"cwd: {capsule.get('cwd', '')}",
-        _progress_cell("files", str(capsule.get("tracked_file_count", len(tracked_files))), status="active" if tracked_files else "idle"),
-        _progress_cell("bookmarks", str(capsule.get("bookmark_count", len(bookmarks))), status="complete" if bookmarks else "idle"),
-        _progress_cell("outputs", str(capsule.get("output_count", len(recent_outputs))), status="complete" if recent_outputs else "idle"),
-    ]
-    watch_status = str(capsule.get("watch_status") or "").strip()
-    if watch_status:
-        lines.append(_progress_cell("watch", watch_status, status="active" if watch_status not in {"idle", "waiting"} else "idle"))
-    signature = str(capsule.get("workspace_signature") or "").strip()
-    if signature:
-        lines.append(f"signature: {signature}")
-    if capsule.get("plan_id"):
-        lines.append(f"plan: {capsule.get('plan_id')}")
-    if capsule.get("task_id"):
-        lines.append(f"task: {capsule.get('task_id')}")
-    if recent_outputs:
-        lines.append("recent outputs:")
-        lines.extend(f"  - {item.get('name', '')}" for item in recent_outputs[:3])
-    if bookmarks:
-        lines.append("recent bookmarks:")
-        lines.extend(f"  - [{item.get('id', '')}] {item.get('label', '')}" for item in bookmarks[-3:])
     if _RICH_AVAILABLE and _IS_TTY:
+        lines = [
+            f"cwd: {capsule.get('cwd', '')}",
+            _progress_cell("files", str(capsule.get("tracked_file_count", len(tracked_files))), status="active" if tracked_files else "idle"),
+            _progress_cell("bookmarks", str(capsule.get("bookmark_count", len(bookmarks))), status="complete" if bookmarks else "idle"),
+            _progress_cell("outputs", str(capsule.get("output_count", len(recent_outputs))), status="complete" if recent_outputs else "idle"),
+        ]
+        watch_status = str(capsule.get("watch_status") or "").strip()
+        if watch_status:
+            lines.append(_progress_cell("watch", watch_status, status="active" if watch_status not in {"idle", "waiting"} else "idle"))
+        signature = str(capsule.get("workspace_signature") or "").strip()
+        if signature:
+            lines.append(f"signature: {signature}")
+        if capsule.get("plan_id"):
+            lines.append(f"plan: {capsule.get('plan_id')}")
+        if capsule.get("task_id"):
+            lines.append(f"task: {capsule.get('task_id')}")
+        if recent_outputs:
+            lines.append("recent outputs:")
+            lines.extend(f"  - {item.get('name', '')}" for item in recent_outputs[:3])
+        if bookmarks:
+            lines.append("recent bookmarks:")
+            lines.extend(f"  - [{item.get('id', '')}] {item.get('label', '')}" for item in bookmarks[-3:])
         grid = _RichTable.grid(padding=(0, 1))
         grid.add_column()
         for line in lines:
             grid.add_row(str(line))
         _RICH_CONSOLE.print(_RichPanel(grid, title=f"[bold cyan]{title}[/]", border_style="cyan", padding=(0, 1)))
     else:
+        plain_lines = _session_cmds_mod._build_workspace_capsule_plain_lines(capsule)
         print(title)
         print("-" * len(title))
-        for line in lines:
+        for line in plain_lines:
             print(line)
 
 
