@@ -84,7 +84,7 @@ Use this mini-template in the docs/dashboard lane output for each wave:
 The approved next planning tranche should follow this order:
 
 1. repair and normalize the late-wave roadmap in `docs/UX_IMPROVEMENTS.md`
-2. implement Wave 21 and Wave 22 with a dedicated docs/dashboard lane
+2. finish the Wave 22 docs/tests/dashboard-alignment lane
 3. implement Wave 23 with explicit dashboard-elevation ownership
 
 ### Waves 27–30 dashboard alignment targets
@@ -114,6 +114,16 @@ The approved next planning tranche should follow this order:
 
 ### Wave 22 dashboard alignment targets
 
+The current Wave 22 slice is still incremental, so treat this section as both a
+checklist and a truth-source for what is already aligned today:
+
+- `_status_emoji()` owns the canonical status-family mapping.
+- `_session_badges()` is the live compact-cell baseline for dense session lists.
+- `summarize_session()`, `_print_watch_status()`, and `/accessibility status`
+  provide the current fallback wording that later surfaces should reuse.
+- `docs/COMMANDS.md` remains intentionally unchanged until command metadata, not
+  just surrounding docs/tests, actually changes.
+
 When Wave 22 ships, keep these surfaces on the same status grammar:
 
 | Surface group | Alignment requirement |
@@ -126,28 +136,37 @@ When Wave 22 ships, keep these surfaces on the same status grammar:
 
 ### Wave 23 dashboard elevation targets
 
-When Wave 23 ships, treat these surfaces as dashboard families instead of
-isolated command outputs:
+The currently shipped Wave 23 slice is partial. Treat these surfaces as the
+first dashboard-family pass, not the completed end state:
 
 | Surface group | Alignment requirement |
 | --- | --- |
-| `/session`, `/sessions` | Use the same summary → details → actions hierarchy, with top-line health, freshness, and next-step blocks |
-| `/watch status`, `/watch history` | Recast watch views as a control tower: active phase first, intervention cues second, historical checkpoints after that |
+| `/session`, `/sessions` | Top-line status, freshness, counts, and compact badges should land before deeper detail; explicit action regions are still follow-up work |
+| `/watch status`, `/watch history` | Current control-tower slice leads with status/phase/retry signals and keeps chronology below that |
 | `/outputs`, `/context`, `/events` | Promote recent/high-value items and keep verbose history visually subordinate |
 | `/accessibility status`, `/layout` | Explain hierarchy changes in plain text too, not only through panel borders or color accents |
 | Browser/dashboard mirrors | Reuse the same section names, card ordering, and summary labels in web/dashboard views |
 
+Wave 23 docs/tests should therefore describe the **shipped hierarchy slice**
+truthfully:
+
+- session summaries and inspection surfaces now lead with status-family cells,
+  counts, and watch context
+- watch status/history views lead with control-state signals before raw history
+- plain-text ordering is part of the feature, not a fallback afterthought
+
 ### Wave 24 preview & focused inspection targets
 
-When Wave 24 ships, preview-capable surfaces should share one inspection model:
+The current Wave 24 slice is incremental. Treat these surfaces as the shipped
+preview/focused-inspection baseline today:
 
 | Surface group | Alignment requirement |
 | --- | --- |
-| `/outputs`, `/outputs overlay` | Preview blocks should show title, freshness, excerpt, and next action before full open/export flows |
-| `/sessions`, `openclaw session list --interactive` | Session previews should expose health, latest activity, collaboration hints, and resume/share actions in a consistent order |
-| `/watch status`, `/watch history` | Focused inspection windows should show active phase, latest checkpoint, and intervention context without losing chronology |
-| `/context`, `/events` | Expanded rows or preview strips must preserve deterministic text fallback and bounded excerpt sizes |
-| Browser/dashboard mirrors | Reuse the same preview fields, truncation rules, and labels for side-panel or detail-card inspection views |
+| `/outputs`, `/outputs overlay` | The shipped preview is a bounded inline excerpt with filename, size, modified time, and an explicit truncation note when the preview is clipped. Follow-up actions still happen as normal commands rather than inside a side panel. |
+| `/sessions`, `openclaw session list --interactive` | The searchable picker is live; selecting a row opens the compact Session Dashboard plus the resume command. Share/handoff actions remain separate follow-up commands instead of picker-local buttons. |
+| `/watch status`, `/watch history` | These are the current focused inspection windows: status leads with mode/status/polls/phase, while history keeps recent progress, retries, and operator notes grouped above raw chronology. |
+| `/context`, `/events`, `openclaw session show` | Focused inspection is currently delivered through bounded grounding previews in `/context` and through the richer `session show` inspection view; dedicated preview strips for `/events` are still deferred. |
+| Browser/dashboard mirrors | Keep future mirrors aligned to the current CLI field order and truncation rules, but treat browser-side preview panes as future work until a shared implementation exists. |
 
 ### Wave 25 multi-pane preset targets
 

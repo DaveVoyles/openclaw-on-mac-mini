@@ -119,10 +119,10 @@ For the canonical inventory and reusable checklist, see
 | [Wave 19](#wave-19--context-injection--prompt-engineering) | Context Injection & Prompt Engineering | ✅ Shipped |
 | [Wave 19B](#wave-19b--interactive-overlays) | Interactive Overlays | ✅ Shipped |
 | [Wave 20](#wave-20--collaboration-handoff-ux) | Collaboration Handoff UX | ✅ Shipped |
-| [Wave 21](#wave-21--motion-language--staggered-feedback) | Motion Language & Staggered Feedback | 🔲 Ready |
-| [Wave 22](#wave-22--emoji-badges-progress-cells--live-status-lattice) | Emoji Badges, Progress Cells & Live Status Lattice | 🔲 Ready |
+| [Wave 21](#wave-21--command-palette--tab-complete) | Command Palette & Tab-Complete | ✅ Shipped |
+| [Wave 22](#wave-22--emoji-badges-progress-cells--live-status-lattice) | Emoji Badges, Progress Cells & Live Status Lattice | 🟡 In progress |
 | [Wave 23](#wave-23--visual-hierarchy-renaissance--dashboard-elevation) | Visual Hierarchy Renaissance & Dashboard Elevation | 🔲 Ready |
-| [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | 🔲 Ready |
+| [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | 🟡 In progress |
 | [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | 🔲 Ready |
 | [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🔲 Ready |
 | [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | 🔲 Ready |
@@ -1168,67 +1168,72 @@ and handoff data.
 
 ---
 
-## Wave 21 — Motion Language & Staggered Feedback
+## Wave 21 — Command Palette & Tab-Complete
 
-**Status: 🔲 Ready**
+**Status:** ✅ Shipped
 
-**Goal:** establish a coherent motion language for the terminal so long-running
-flows feel intentional, phase-aware, and readable without breaking reduced-motion
-or plain-text usage.
+### Features
+- **`/palette [query]`**: Fuzzy-search all registered slash commands by name or description. Results shown in a sorted Rich table. Uses a cached registry to avoid recursion.
+- **Tab-completion** (`_SlashCompleter`): Pressing Tab at the `/` prompt auto-completes slash command names and aliases using readline. Hint shown in startup banner.
+- **`/shortcuts`**: 5-section keyboard shortcut reference card (Navigation, Session, Quick Commands, Appearance, Power) rendered with Rich panels.
 
-### Design targets
-
-| Target | Why it matters |
+### New Commands
+| Command | Description |
 |---|---|
-| Motion vocabulary | The same spinner, pulse, settle, and completion cues should mean the same thing everywhere |
-| Staggered feedback | Users should see a clear progression from start → working → phase change → completion instead of one undifferentiated busy state |
-| Reduced-motion parity | Every new motion cue must have a static or text-heartbeat equivalent |
-| Surface consistency | Chat, analyze, write, approval, and plan-execution flows should share the same timing language |
+| `/palette [query]` | Search all commands by keyword |
+| `/shortcuts` | Keyboard shortcuts reference card |
 
-### Scope for implementation
+### Technical
+- `_CMD_REGISTRY_CACHE` + `_get_cmd_registry()` — cached registry accessor prevents recursion inside `/palette`
+- `_SlashCompleter` class replaces `_make_completer` for readline integration
+- Startup banner updated: `Tab completes /commands` hint added
 
-| Area | Planned work |
-|---|---|
-| Spinner lifecycle | Refine `_with_spinner()` so it can express startup, active work, handoff, and completion phases without introducing Rich-only behavior |
-| Shared feedback helpers | Add reusable helpers for staged status lines, phase transitions, and explicit completion cues |
-| Long-running action feedback | Apply the motion language to chat/analyze/write style requests plus other slow CLI actions that already expose progress or waiting states |
-| Approval / handoff cues | Make approval waits and resumptions feel distinct from generic background work |
-| Accessibility guardrails | Ensure reduced-motion and plain mode keep the same information density through text cues rather than animation |
+## Deferred motion-language follow-up (post-Wave 21 note)
 
-### Implementation notes for the future wave
+The earlier roadmap draft accidentally duplicated Wave 21. Keep the shipped
+**Wave 21 — Command Palette & Tab-Complete** name intact and treat the motion
+language material as a deferred cross-wave follow-up instead of a second
+Wave 21.
 
-- Prefer timing/state primitives that can be reused by later visual hierarchy and dashboard waves.
-- Keep Rich output optional and re-check live TTY state before using Rich-only rendering.
-- Do not require full-screen UI, arrow-key controls, or non-stdlib animation dependencies.
-- Preserve Python 3.9 compatibility in any helper signatures or examples.
+**Status:** deferred / fold into later waves as needed
 
-### Done-when
+### What remains useful from the draft
 
-- [ ] A documented motion vocabulary exists for startup, in-progress, phase-shift, waiting, and completion states.
-- [ ] `_with_spinner()` or successor helpers can express staggered feedback without duplicating phase logic across commands.
-- [ ] Reduced-motion and plain-mode paths emit equivalent text cues for every new motion state.
-- [ ] At least the core long-running request surfaces use the shared motion language consistently.
-- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated alongside the implementation wave.
+- Keep reduced-motion and plain-mode parity mandatory for any future animation.
+- Reuse timing/state primitives instead of inventing per-surface motion systems.
+- Avoid full-screen or non-stdlib animation dependencies.
+- Preserve Python 3.9 compatibility in helper signatures and examples.
 
-### Recommended fleet split
+### Current disposition
 
-| Lane | Ownership |
-|---|---|
-| A — motion primitives | Shared spinner / feedback helpers and preference-aware timing state |
-| B — long-running request surfaces | Chat/analyze/write and other slow command paths |
-| C — approvals + resumptions | Approval waits, completion cues, and handoff-style phase transitions |
-| D — validation | Focused pytest coverage plus baseline regression check |
-| E — docs | Architecture + quickstart updates for the new motion language |
+- Wave 16 already shipped the first staggered-feedback slice.
+- Wave 22 now owns the shared status grammar work for dashboard-like surfaces.
+- Any richer motion/choreography work should be planned explicitly in a later
+  wave instead of silently reusing the Wave 21 label.
 
 ---
 
 ## Wave 22 — Emoji Badges, Progress Cells & Live Status Lattice
 
-**Status: 🔲 Ready**
+**Status:** 🟡 In progress
 
 **Goal:** turn emoji, color, and compact status cells into a single scanning
 grammar so watch, session, event, and accessibility surfaces communicate state
 instantly without forcing users to read full prose lines.
+
+### Current Wave 22 slice
+
+The active implementation/docs lane currently covers:
+
+- `_status_emoji()` family alignment for healthy/running/warning/error/pending
+  and pause-like states.
+- Session-list badge rows via `_session_badges()` (`●`/`○`, `stale`,
+  `outputs`, and tag cells).
+- Existing watch/session timing summaries and accessibility status output as the
+  plain-text fallback baseline for the broader lattice.
+- Docs sync across architecture, quickstart, dashboard surfaces, and this
+  roadmap while command metadata remains unchanged (`docs/COMMANDS.md`
+  intentionally not regenerated).
 
 ### Design targets
 
@@ -1301,7 +1306,7 @@ instantly without forcing users to read full prose lines.
 
 ## Wave 23 — Visual Hierarchy Renaissance & Dashboard Elevation
 
-**Status: 🔲 Ready**
+**Status:** 🟡 In progress (shipped slice)
 
 **Goal:** make OpenClaw’s terminal surfaces read like intentional dashboards
 instead of long transcripts by strengthening hierarchy, grouping, and
@@ -1317,12 +1322,26 @@ surface-specific color/spacing patterns.
 | Summary-first scanning | Critical state, next action, and recent changes should appear before verbose detail |
 | Plain-text structure parity | Non-Rich output must still preserve section ordering, labels, and grouping so the information architecture survives without panels/colors |
 
-### Scope for implementation
+### Current shipped slice
 
-| Area | Planned work |
+The currently landed Wave 23 slice is still intentionally narrow. It elevates
+the most-used terminal dashboard surfaces without claiming the full
+"dashboard family" rewrite is finished yet:
+
+- `summarize_session()`, `inspect_session()`, and `_session_badges()` now put
+  top-line status, freshness, counts, and watch context ahead of deeper detail.
+- `_print_watch_status()` and `_print_watch_history()` lead with status-family
+  cells so operators see active phase, retry pressure, and intervention context
+  before chronology-heavy detail.
+- Plain-text/non-TTY output keeps the same section ordering and status wording as
+  the richer TTY views; Wave 23 is not Rich-only polish.
+
+### Remaining scope
+
+| Area | Remaining work |
 |---|---|
-| Heading + divider primitives | Introduce shared helpers for page headers, section headers, compact metric strips, and summary blocks that work in Rich and ANSI/plain paths |
-| Session + watch dashboards | Recompose `/session`, `/sessions`, `/watch status`, and `/watch history` around a predictable summary → details → actions hierarchy |
+| Heading + divider primitives | Introduce more explicit shared header/section helpers rather than relying only on status/progress cells plus existing section blocks |
+| Session + watch dashboards | Extend the summary → details → actions hierarchy beyond the currently elevated session/watch summaries and history surfaces |
 | Artifact + context elevation | Make `/outputs`, `/context`, and adjacent inspection surfaces emphasize latest/high-value items before secondary metadata |
 | Color-by-surface taxonomy | Define restrained surface accents for session, watch, artifact, accessibility, and collaboration views while keeping status meaning owned by the Wave 22 lattice |
 | Dashboard entrypoint planning | Document whether a consolidated summary/dashboard command should reuse existing surface primitives rather than invent a separate rendering stack |
@@ -1344,8 +1363,8 @@ surface-specific color/spacing patterns.
 
 | Surface group | Wave 23 expectation |
 |---|---|
-| `/session`, `/sessions` | Shared summary block for overall health, latest activity, pending actions, and collaboration state |
-| `/watch status`, `/watch history` | Strong “control tower” hierarchy with current phase and intervention needs above detailed checkpoint history |
+| `/session`, `/sessions` | Current slice elevates top-line status/count badges first; fuller action-region composition remains follow-up work |
+| `/watch status`, `/watch history` | Current slice promotes status, phase, retry/backoff, and notes ahead of deeper history rows |
 | `/outputs`, `/context`, `/events` | Recent/high-value items surface first; dense rows remain available but visually subordinate |
 | `/accessibility status`, `/layout` | Hierarchy updates must still explain mode, density, and fallback state without relying on panel chrome alone |
 | Browser/dashboard mirrors | Dashboard cards and web session detail views should reuse the same section names, priority order, and top-line summaries |
@@ -1354,14 +1373,14 @@ surface-specific color/spacing patterns.
 
 - [ ] Shared header/section primitives exist for dashboard-style CLI output in
       both Rich and plain/ANSI paths.
-- [ ] `/session`, `/sessions`, and `/watch*` adopt a visibly consistent summary →
-      detail → actions hierarchy.
+- [x] `/session`, `/sessions`, and `/watch*` now surface top-line status and
+      timing information before deeper detail in the current shipped slice.
 - [ ] Surface-specific accents improve scanability without conflicting with Wave
-      22 status semantics.
-- [ ] `docs/DASHBOARD_SURFACES.md` documents the elevated dashboard structure and
-      any new/renamed surfaces.
-- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
-      alongside the implementation wave.
+      22 status semantics across all target surfaces.
+- [x] `docs/DASHBOARD_SURFACES.md` documents the currently shipped Wave 23 slice
+      and remaining dashboard-elevation scope.
+- [x] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated to
+      describe the shipped slice honestly.
 
 ### Recommended fleet split
 
@@ -1377,7 +1396,7 @@ surface-specific color/spacing patterns.
 
 ## Wave 24 — Terminal Preview & Focused Inspection
 
-**Status: 🔲 Ready**
+**Status: 🟡 In progress**
 
 **Goal:** let users inspect sessions, outputs, and watch artifacts in place with
 low-friction previews so list browsing does not require repeated context
@@ -1393,51 +1412,54 @@ switching or command hopping.
 | Controlled density | Preview content should surface the most useful excerpt first instead of dumping the entire artifact inline |
 | Accessibility-safe interaction | Preview affordances must stay usable in plain mode, reduced-motion, and non-overlay paths |
 
-### Scope for implementation
+### Current shipped slice
 
-| Area | Planned work |
+| Area | Current behavior |
 |---|---|
-| Preview rendering helpers | Add reusable helpers for title + metadata + excerpt + next-action preview blocks that can be embedded in list workflows |
-| Overlay/list integration | Extend existing overlay-capable surfaces so `/outputs`, `/sessions`, and future list views can show structured previews before or after selection |
-| Watch/session inspection | Design “watch window” and session-focus views that show recent checkpoints, latest output, or pending intervention without requiring a full dashboard jump |
-| Preview truncation strategy | Define safe excerpt lengths, metadata priority, and affordances for “expand/show full detail” behavior |
-| Fallback patterns | Ensure preview flows degrade to ordinary summary lines and explicit follow-up commands when interactive overlays are unavailable |
+| Output previews | `/outputs 1`, `/outputs <filename>`, and `/outputs overlay` show bounded inline previews with filename, size, modified time, and an explicit truncation note when clipped |
+| Session selection | `/sessions overlay` and `openclaw session list --interactive` now let you search/select a session and land directly in the compact Session Dashboard plus its resume command |
+| Focused inspection | `/watch status`, `/watch history`, and `openclaw session show <session-id>` now cover the “look closer without losing the thread” slice for watch/session inspection |
+| Fallback patterns | The overlay path still degrades to the standard list output when stdin/stdout is not interactive; no separate TUI-only control path was introduced |
+| Shared vocabulary | Wave 22/23 status cells and section ordering remain the active grammar for these previews, so the inspection slice stays aligned with the dashboard work already in flight |
 
-### Implementation notes for the future wave
+### Deferred scope / not yet shipped
 
-- Build on the lightweight overlay model from Wave 19B; do not assume full-screen
-  TUIs, arrow-key navigation, or third-party terminal UI dependencies.
-- Reuse Wave 23 hierarchy primitives so previews look like part of the same
-  dashboard family rather than a separate widget system.
-- Keep previews intentionally scoped: enough detail to decide “open, resume,
-  inspect further, or ignore,” not enough to overwhelm the list.
-- Prefer additive commands/flags such as preview modes over replacing existing
-  plain list behavior.
-- Document any “focused inspection” affordance with explicit non-interactive
-  equivalents.
+- There is **not yet** a shared preview-block helper used by every surface.
+- Session pickers do **not yet** expose inline share/handoff controls; share
+  remains a follow-up command.
+- `/events` does **not yet** have a dedicated preview strip or expanded-row mode.
+- Browser/dashboard preview panes are still a planning target rather than a
+  shipped implementation.
 
 ### Dashboard/docs alignment
 
 | Surface group | Wave 24 expectation |
 |---|---|
-| `/outputs`, `/outputs overlay` | Preview blocks show artifact type, freshness, excerpt, and next available action before full open/export workflows |
-| `/sessions`, `openclaw session list --interactive` | Session previews show summary health, last activity, collaboration hints, and resume/share actions |
-| `/watch status`, `/watch history` | Focused inspection windows highlight active phase, recent checkpoints, and intervention context without losing list chronology |
-| `/context`, `/events` | Dense inspection surfaces may expose short preview strips or expanded rows while keeping deterministic text fallback |
-| Browser/dashboard mirrors | Shared monitoring/detail panes should mirror the same preview fields, labels, and truncation rules |
+| `/outputs`, `/outputs overlay` | The shipped preview path is bounded inline output with metadata + truncation messaging; richer preview blocks remain follow-up work |
+| `/sessions`, `openclaw session list --interactive` | Selection now opens the compact Session Dashboard plus the resume command; share/collaboration actions are still separate |
+| `/watch status`, `/watch history` | These are the live focused-inspection windows today, surfacing phase/retry/note context before longer history |
+| `/context`, `/events`, `openclaw session show` | `/context` keeps the bounded grounding preview, while `session show` is the current deep inspection path; `/events` preview strips are deferred |
+| Browser/dashboard mirrors | Future mirrors should copy the current CLI field ordering and truncation rules rather than invent a new preview vocabulary |
 
 ### Done-when
 
 - [ ] Shared preview helpers exist for session/output/watch inspection in Rich
       and plain/ANSI-compatible forms.
-- [ ] At least the primary list/browse surfaces can show focused previews without
-      forcing a full context switch.
-- [ ] Preview truncation and fallback behavior are documented and consistent
-      across overlay and non-overlay flows.
-- [ ] `docs/DASHBOARD_SURFACES.md` records preview-capable surfaces and focused
-      inspection expectations.
-- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
-      alongside the implementation wave.
+- [x] The primary list/browse surfaces now support bounded output preview and
+      session-selection inspection without forcing a full manual re-browse step.
+- [x] Preview truncation and non-interactive fallback behavior are documented
+      for the shipped slice.
+- [x] `docs/DASHBOARD_SURFACES.md` records the current preview-capable surfaces
+      and focused inspection expectations.
+- [x] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the shipped slice.
+
+### Evidence
+
+- `tests/test_openclaw_cli.py::test_outputs_preview_stays_bounded_for_large_artifacts`
+- `tests/test_openclaw_cli.py::test_main_session_list_interactive_overlay_prints_focused_session_dashboard`
+- existing focused-inspection coverage around `inspect_session()`,
+  `_print_watch_status()`, and `_print_watch_history()`
 
 ### Recommended fleet split
 

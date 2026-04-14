@@ -168,6 +168,25 @@ openclaw session list --interactive
 - If stdin/stdout is not interactive, OpenClaw prints a short notice and falls
   back to the normal non-interactive list output.
 
+## Wave 24 preview & focused inspection (current slice)
+
+Wave 24 is currently shipping as a focused-inspection layer on top of those
+existing overlays rather than as a brand-new TUI:
+
+- **`/outputs 1` or `/outputs <filename>`** prints a bounded inline preview with
+  file metadata. Large artifacts stay clipped and tell you when the preview was
+  truncated.
+- **`/outputs overlay`** still uses the searchable picker, but selecting an item
+  immediately prints that same bounded preview in-place.
+- **`/sessions overlay`** and **`openclaw session list --interactive`** let you
+  search, select, and land directly in the compact Session Dashboard plus the
+  exact resume command for that session.
+- **`/watch status`** and **`/watch history`** are the current focused watch
+  inspection surfaces: status leads with phase/polls/backoff, while history
+  keeps recent progress, retries, and operator notes grouped together.
+- **`openclaw session show <session-id>`** remains the deeper inspection view
+  when you want the full session/watch/checkpoint/output snapshot in one place.
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new
@@ -199,6 +218,48 @@ openclaw session export <session-id>
 | `/autobold [on\|off]` | Toggle auto-bolding of dollar amounts, percentages, and filenames in responses |
 | `/emojiheaders [on\|off]` | Toggle emoji prefixes on AI response headings (`## 🔹`, `### ▸`) |
 | `/separator [style]` | Set separator style after responses: `gradient`, `pulse`, `dots`, `wave`, `none` |
+
+### Wave 21 — Command Palette & Tab-Complete
+
+| Command | Description |
+|---|---|
+| `/palette [query]` | Fuzzy-search all slash commands by keyword |
+| `/shortcuts` | Show keyboard shortcuts & quick-reference card |
+
+> **Tip:** Press **Tab** at the prompt after typing `/` to auto-complete slash commands.
+
+## Wave 22 status grammar (current slice)
+
+Wave 22 is the in-progress dashboard/status-language pass. The current slice is
+already visible in a few everyday surfaces:
+
+- **`/sessions`** uses compact badge cells for activity, staleness, saved-output
+  presence, and tags so recent sessions scan faster in plain text.
+- **`/session`** and **`/watch status`** share phase / last-run / retry-backoff
+  wording, which is the current baseline for the broader status lattice.
+- **`/events`** keeps timing hints compact instead of forcing you to read full
+  prose for approval wait or retry/backoff context.
+- **`/accessibility status`** is the reference check for how these cues degrade
+  in plain mode, reduced motion, and high-contrast output.
+
+`docs/COMMANDS.md` did not need regeneration for this docs-only lane because the
+command metadata itself did not change here.
+
+## Wave 23 hierarchy slice (current slice)
+
+Wave 23 has started shipping in the CLI, but only as a focused hierarchy pass:
+
+- **`/session`** and **`openclaw session show`** now put status/count/watch
+  signals near the top so you can scan health before reading deep detail.
+- **`/sessions`** keeps the compact badge row as the first scan target for
+  activity, freshness, outputs, and checkpoints.
+- **`/watch status`** and **`/watch history`** now foreground status-family
+  labels like `ACTIVE`, `RETRY`, and `INFO` so retry pressure and intervention
+  cues are visible before raw timestamps.
+
+This is a **partial Wave 23 slice**, not the full dashboard-elevation roadmap.
+Richer summary/action regions for outputs, context, and browser mirrors remain
+follow-up work.
 
 ## Hybrid REPL — in-session slash commands
 

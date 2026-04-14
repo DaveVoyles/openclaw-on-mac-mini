@@ -147,6 +147,27 @@ compatibility requirements:
 - `/exec` and `/edit` now emit explicit `approval` decision events and include
   both approval wait time and execution/write time in their result metadata.
 
+### Wave 22 status grammar baseline
+
+Wave 22 is the current in-flight status-language slice. The implementation in
+`src/openclaw_cli.py` is still incremental, but these shared primitives are the
+current baseline that docs and tests should align around:
+
+- `_status_emoji()` is the canonical status-family mapper for healthy/active,
+  running, warning, failure, paused, and queued state labels, with emoji-pack
+  fallbacks preserved through `_e()`.
+- `_session_badges()` is the first compact badge row for dense list views; today
+  it emits activity (`●`/`○`), freshness (`stale`), artifact presence
+  (`outputs`), and tag cells.
+- `summarize_session()` and `_print_watch_status()` already provide the timing
+  portion of the lattice through consistent phase / last-run / backoff wording.
+- `/accessibility status` remains the canonical plain/high-contrast/reduced-
+  motion explanation surface, so any new badge grammar must stay readable there
+  without relying on Rich-only color.
+
+This means Wave 22 docs should describe the **shared vocabulary** honestly even
+when individual surfaces are still adopting it incrementally.
+
 ### Dashboard/docs maintenance
 
 When a wave changes any dashboard or status surface, update the docs as a set:
@@ -164,6 +185,49 @@ When a wave changes any dashboard or status surface, update the docs as a set:
 `src/dashboard/helpers.py::_raw_command_groups()`. Regenerate it when command
 metadata changes; avoid hand-editing the file unless that generation flow is
 retired.
+
+### Wave 23 hierarchy slice (current truth)
+
+Wave 23 is underway, but the shipped slice is narrower than the full roadmap
+entry:
+
+- `summarize_session()` now front-loads status/count progress cells before plan,
+  task, file, and watch-detail lines.
+- `inspect_session()` uses the same status/progress-cell grammar in its session,
+  checkpoint, recent-progress, and recent-event sections so the first screenful
+  reads like a lightweight dashboard in plain text too.
+- `_print_watch_status()` and `_print_watch_history()` now use status-family
+  cells (`ACTIVE`, `RETRY`, `INFO`, etc.) to elevate phase/backoff/intervention
+  context above verbose chronology.
+
+Treat this as a **composition slice**: the status lattice from Wave 22 is now
+being used to shape hierarchy, but the broader “summary → details → actions”
+dashboard family work is not fully closed yet.
+
+### Wave 24 preview & focused inspection slice (current truth)
+
+Wave 24 has started shipping as a narrow inspection layer on top of the Wave 19
+overlay model and the Wave 23 hierarchy work:
+
+- `/outputs 1`, `/outputs <filename>`, and `/outputs overlay` all resolve through
+  `load_saved_output_preview(...)`, so the current preview contract is
+  **filename + size + modified time + bounded excerpt + truncation notice**.
+- `/sessions overlay` and `openclaw session list --interactive` still use the
+  lightweight `_run_interactive_overlay()` picker, but the selected item now
+  lands in `_print_session_summary()` plus a resume footer instead of forcing a
+  separate manual browse step.
+- `_print_watch_status()` and `_print_watch_history()` are the current
+  “focused inspection” windows for automation state: phase, retry budget,
+  checkpoint/retry history, and operator notes are surfaced before verbose raw
+  details.
+- `inspect_session()` is the richer non-overlay inspection path for this slice:
+  it front-loads status cells, then groups watch state, checkpoints, recent
+  progress, recent events, outputs, and collaboration in one deterministic view.
+
+Deferred Wave 24 scope remains explicitly deferred: there is not yet a shared
+preview-block helper across every surface, the session picker does not expose
+inline share controls, and `/events` still relies on the existing dense list
+instead of a dedicated preview strip.
 
 ### stderr vs stdout
 
