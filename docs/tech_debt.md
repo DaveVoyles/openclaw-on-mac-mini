@@ -501,21 +501,29 @@ across module decomposition, error handling, type safety, documentation, and tes
 
 ---
 
-### Wave Status (TD-8 through TD-16)
+### Wave Status (TD-8 through TD-23)
 
 | Wave | Description | Risk | Status |
 |------|-------------|------|--------|
-| TD-8  | Extract `auth` + `update` modules (597 lines, pure stdlib) | 🟢 Low | 🔲 Pending |
-| TD-9  | Extract `path_utils` + `diff` modules (353 lines) | 🟢 Low | 🔲 Pending |
-| TD-10 | Extract `router` module (893 lines, 38 funcs, 5 dataclasses) | 🟢 Low | 🔲 Pending |
-| TD-11 | Extract `macros` module (344 lines, workflow engine) | 🟢 Low | 🔲 Pending |
-| TD-12 | Error handling standardization (109+ silent failures → logging) | 🟡 Medium | 🔲 Pending |
-| TD-13 | Extract `exec` + `layout` modules (942 lines, threading) | 🟡 Medium | 🔲 Pending |
-| TD-14 | Type annotation pass (all CLI modules via pyright) | 🟢 Low | 🔲 Pending |
-| TD-15 | Agent + developer documentation (7 new docs) | 🟢 Low | 🔲 Pending |
-| TD-16 | Test coverage expansion (60+ new tests) | 🟡 Medium | 🔲 Pending |
+| TD-8  | Extract `auth` + `update` modules (597 lines, pure stdlib) | 🟢 Low | ✅ Shipped (`32e8c3d`) |
+| TD-9  | Extract `path_utils` + `diff` modules (353 lines) | 🟢 Low | ✅ Shipped (`05c622e`) |
+| TD-10 | Extract `router` module (893→1448 lines, 38 funcs, 5 dataclasses) | 🟢 Low | ✅ Shipped (`f9a91d4`) |
+| TD-11 | Extract `macros` module (344 lines, workflow engine) | 🟢 Low | ✅ Shipped (`e8df076`) |
+| TD-12 | Error handling standardization (109+ silent failures → logging) | 🟡 Medium | ✅ Shipped (`c77d410`) |
+| TD-13 | Extract `exec` + `layout` modules (942 lines, threading) | 🟡 Medium | ✅ Shipped (`038d5dc`) |
+| TD-14 | Type annotation pass (all CLI modules via pyright) | 🟢 Low | ✅ Shipped (already annotated) |
+| TD-15 | Agent + developer documentation (7 new docs) | 🟢 Low | ✅ Shipped (`94775fb`) |
+| TD-16 | Test coverage expansion (60+ new tests) | 🟡 Medium | ✅ Shipped (`ce845d9`) |
+| TD-17 | Extract `prefs` module (_PREFS, _THEMES, _TIPS, load/save) | 🟢 Low | ✅ Shipped (`4320710`) |
+| TD-18 | Settings command helpers module | 🟢 Low | ✅ Shipped (`6e583c8`, 0 extracted — inline dispatch) |
+| TD-19 | Session command helpers module (events, search, plan, handoff) | 🟡 Medium | ✅ Shipped (`6e583c8`) |
+| TD-20 | Content command helpers module (export, stats, pin, pattern) | 🟡 Medium | ✅ Shipped (`323f132`) |
+| TD-21 | Extract `watch` module (handle_watch_command 372L, execute_watch_iteration 138L, _print_watch_status 91L) | 🟡 Medium | 🔄 In Progress |
+| TD-22 | Extract `session_display` module (inspect_session 205L, _build_session_share_text 159L, 5 more helpers) | 🟡 Medium | 🔄 In Progress |
+| TD-23 | Move ANSI markdown renderer (_render_markdown_ansi 125L, _render_table_ansi 79L) into render module | 🟢 Low | ⏳ Pending |
 
-**Projected impact after TD-8 through TD-13:** `openclaw_cli.py` reduced from 14,813 → ~10,700 lines (−28%)
+**Actual impact TD-8 through TD-20:** `openclaw_cli.py` reduced from 14,813 → ~13,687 lines (−8%).
+16 extracted modules now exist. TD-21/22/23 target ~1,300 additional lines, projecting 18+ modules total.
 
 ---
 
