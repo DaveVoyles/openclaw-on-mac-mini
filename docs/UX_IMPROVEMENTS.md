@@ -3,6 +3,15 @@
 > **Audience:** AI coding agents (Copilot, etc.) implementing CLI improvements autonomously.
 > **How to use this doc:** Pick the next unshipped wave. Launch an agent fleet as described below. Verify done-when criteria. Mark the wave complete and move to the next.
 
+## Primary User & Environment Assumptions
+
+- **Primary user:** Dave Voyles
+- **Primary environment:** macOS + iTerm2
+- **Default UX target:** Rich/console-first output with color, emoji, bold hierarchy,
+  and terminal-native chrome enabled by default
+- **Fallback requirement:** plain mode, reduced motion, non-TTY, and narrow-width
+  paths remain required and must stay explicitly documented
+
 ---
 
 ## Orchestration Model
@@ -62,7 +71,7 @@ Steps:
 
 ## Future Wave Docs/Dashboard Framework
 
-Waves 21–30 should always reserve a dedicated docs/dashboard lane in parallel
+Waves 21–35 should always reserve a dedicated docs/dashboard lane in parallel
 with research, implementation, and validation lanes.
 
 ### Required outputs per future wave
@@ -88,6 +97,35 @@ with research, implementation, and validation lanes.
 
 For the canonical inventory and reusable checklist, see
 `docs/DASHBOARD_SURFACES.md`.
+
+---
+
+## Shared Terminal Shell Pattern (Wave 31+)
+
+Starting with the next future-wave tranche, the standard terminal layout target is
+a **split-bar shell** that keeps context and controls out of the main response
+body:
+
+1. **Agent output region** — streamed/logged agent activity above the top bar
+2. **Top context bar** — compact session / model / task / state badges
+3. **Primary message region** — the current response, code, tables, and narrative
+   output
+4. **Bottom control bar** — the current mode plus 1–2 inline instructions or next
+   actions
+
+Default presentation assumptions:
+
+- **Rich + iTerm2** is the standard path: color, emoji, dim accents, and unicode
+  separators are expected by default
+- **Plain mode** keeps the same semantic structure with explicit labels and text
+  separators
+- **Reduced motion** preserves the shell structure but removes animated reveals
+- **Non-TTY / narrow layouts** collapse low-priority hints first and keep the main
+  output readable
+
+Wave 31 is the primary owner of this shell contract, but Waves 32–35 should reuse
+the same top-bar / output / bottom-bar structure rather than inventing per-wave
+chrome.
 
 ---
 
@@ -129,7 +167,11 @@ For the canonical inventory and reusable checklist, see
 | [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | ✅ Shipped |
 | [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | ✅ Shipped |
 | [Wave 30](#wave-30--premium-motion--choreography-layer) | Premium Motion & Choreography Layer | ✅ Shipped |
-| [Wave 31](#wave-31--smart-suggestions-export--color-schemes-) | Smart Suggestions, Export & Color Schemes | ✅ Shipped |
+| [Wave 31](#wave-31--intelligent-command-suggestions--inline-assist) | Intelligent Command Suggestions & Inline Assist | 🔲 Ready |
+| [Wave 32](#wave-32--instant-replay--session-bookmarks) | Instant Replay & Session Bookmarks | 🔲 Ready |
+| [Wave 33](#wave-33--command-chaining--workflow-macros-20) | Command Chaining & Workflow Macros 2.0 | 🔲 Ready |
+| [Wave 34](#wave-34--ai-quality--experimentation-loops) | AI Quality & Experimentation Loops | 🔲 Ready |
+| [Wave 35](#wave-35--long-form-reporting--export-suites) | Long-Form Reporting & Export Suites | 🔲 Ready |
 
 ---
 
@@ -2168,6 +2210,197 @@ existing waiting, startup, warning, and celebration helpers:
 
 ---
 
+## Wave 31 — Intelligent Command Suggestions & Inline Assist
+
+**Status: 🔲 Ready**
+
+**Goal:** reduce prompt friction by surfacing the next best command at the moment
+users need it and by making long-running agent work more transparent while it is
+in flight.
+
+### Focus
+
+- contextual inline hints after errors, approvals, completions, and watch
+  transitions
+- consistent gesture verbs like `retry`, `resume`, `share`, `inspect`, and
+  `export`
+- user controls for suggestion intensity and scope
+- reuse the shared split-bar shell for top-context and bottom-control hints
+- live phase / step messaging during longer-running operations
+- recent completed-step acknowledgements and honest trust-building progress copy
+
+### User value
+
+- faster recovery
+- fewer "what do I do next?" pauses
+- easier command discovery for less frequent users
+- better operator trust because the agent explains what it is doing while it
+  works
+
+### Likely surfaces
+
+- `/exec` and approval flows
+- `/watch status`
+- `/session`, `/sessions`, `/collab`
+- `/outputs`, `/context`
+- spinner / wait-state helpers and response-status chrome
+- mode-switching and command-hint surfaces around the primary chat area
+
+### Explicit design rules
+
+- **Current phase messaging** — e.g. `Phase: analyzing code`
+- **Current step messaging** — e.g. `Step 3/7: validating output`
+- **Completed-step acknowledgement** — short `done` cues before moving on
+- **Trust cues** — elapsed time, checkpoint passed, deterministic counts, and
+  clear cancel/help affordances
+- **Safe wording rules** — specific action verbs, no fake percentage bars, no
+  vague `busy` copy, and no silent "thinking" placeholders when the system knows
+  more
+
+### Risk
+
+**Low** — builds directly on Wave 28 predictive affordances and Wave 30 pacing
+language.
+
+---
+
+## Wave 32 — Instant Replay & Session Bookmarks
+
+**Status: 🔲 Ready**
+
+**Goal:** let users mark meaningful turns and jump back to them quickly.
+
+### Focus
+
+- session bookmarks with labels
+- replay from a bookmark
+- bookmark markers in timelines and history
+- bookmark-aware share, export, and session views
+
+### User value
+
+- easier debugging
+- clearer handoffs
+- faster narrative review
+
+### Likely surfaces
+
+- `/bookmark`, `/bookmarks`
+- `/replay --from`
+- `/timeline`
+- `/watch history`
+- `session show`, `session share`, `session export`
+
+### Risk
+
+**Low to medium** — additive session metadata, but it builds on existing replay,
+history, and session-storytelling surfaces.
+
+---
+
+## Wave 33 — Command Chaining & Workflow Macros 2.0
+
+**Status: 🔲 Ready**
+
+**Goal:** make repeatable CLI sequences composable, previewable, and shareable.
+
+### Focus
+
+- named workflows with readable step lists
+- variable substitution from session context
+- dry-run previews before execution
+- workflow persistence and handoff integration
+
+### User value
+
+- one-command recovery/playbooks
+- executable handoffs
+- faster onboarding for repeated tasks
+
+### Likely surfaces
+
+- `/workflow` family
+- `/events`
+- `/collab`
+- session export/share
+- existing command dispatch and approval plumbing
+
+### Risk
+
+**Medium** — requires careful workflow scoping and preview accuracy, but it stays
+within the existing terminal-first command model.
+
+---
+
+## Wave 34 — AI Quality & Experimentation Loops
+
+**Status: 🔲 Ready**
+
+**Goal:** expose response-quality metadata, compact traceability, and local
+experiment controls in the terminal.
+
+### Focus
+
+- quality envelope per response
+- `/trace` for last-response trace details
+- `/quality` dashboard for ratings, confidence, and latency summaries
+- local experiment variants and comparisons
+
+### User value
+
+- more trust in model behavior
+- easier routing/model comparison
+- better tuning without leaving the terminal
+
+### Likely surfaces
+
+- response footer / event logs
+- `/trace`
+- `/quality`
+- `/experiment`, `/experiments list`, `/experiment compare`
+- session export with quality metadata
+
+### Risk
+
+**Medium** — depends on a clean metadata envelope and careful separation between
+quality inspection and the response body itself.
+
+---
+
+## Wave 35 — Long-Form Reporting & Export Suites
+
+**Status: 🔲 Ready**
+
+**Goal:** turn OpenClaw sessions into durable, audience-aware runbooks and export
+artifacts.
+
+### Focus
+
+- multi-format export foundation
+- runbook generation
+- reusable export templates
+- redaction/compliance-friendly export helpers
+
+### User value
+
+- better external sharing
+- stronger stakeholder handoffs
+- offline artifacts for audits, postmortems, and operational playbooks
+
+### Likely surfaces
+
+- `openclaw session export`
+- `/runbook`
+- `/export-templates`
+- session share/export schemas
+
+### Risk
+
+**Medium** — export breadth and template validation need discipline, but the
+feature remains a natural extension of Wave 29 storytelling and Wave 34 metadata.
+
+---
+
 **Q: How do I know what wave to implement next?**
 Check the Wave Status table at the top. The first `🔲 Ready` wave is next.
 After shipping, update the status to `✅ Shipped`.
@@ -2207,32 +2440,15 @@ scp src/openclaw_cli_sessions.py macbook:/Users/davevoyles/.local/share/openclaw
 
 ---
 
-## Wave 30 — Power Dashboard 🖥️ ✅ Shipped
+## Archive: Earlier late-wave drafts
 
-**Goal:** Give power users a rich at-a-glance view of their openclaw session and server health.
+The following ideas were earlier late-wave drafts and are **not** the canonical
+Wave 30–35 roadmap above:
 
-### Features
-- **`/dashboard`** — Rich multi-panel layout: session stats, pinned notes, recent activity feed, quick command reference card
-- **`/benchmark [n]`** — Measures AI server TCP latency over n pings (1–10, default 3). Color-coded timing bars + Min/Avg/Max summary + quality badge (🟢/🟡/🔴)
-- **`/timeline`** — Scrollable ASCII activity timeline showing last 7 days of usage, grouped by date with activity bars and event previews
+- an older **Wave 30 — Power Dashboard** concept centered on `/dashboard`,
+  `/benchmark`, and `/timeline`
+- an older **Wave 31 — Smart Suggestions, Export & Color Schemes** concept
+  centered on `/followup`, `/export`, and `/colorscheme`
 
-### Implementation Notes
-- Rich layout used for `/dashboard` when Rich is available, falls back to ANSI/plain
-- `/benchmark` uses TCP socket ping (no auth required, works with any endpoint)
-- `/timeline` groups `cmd_history` entries by ISO date, shows last 3 events per day
-- All three commands respect accessibility flags (`_a11y_plain_mode`, `_a11y_reduced_motion`)
-
-## Wave 31 — Smart Suggestions, Export & Color Schemes 🎨 ✅ Shipped
-
-**Goal:** Help users discover what to do next, save their work, and personalize their visual environment.
-
-### Features
-- **`/followup [on|off]`** — After each AI response, shows 2–3 dim contextual suggestions (e.g., `/exec`, `/links`, `/diff`) based on keyword matching in the last prompt. Toggle auto-display with `/followup off`. Respects reduced-motion and plain-mode.
-- **`/export [md|json|txt] [filename]`** — Exports session command history to a formatted file. Markdown includes timestamps and numbered entries; JSON includes metadata; plain text is clean and portable.
-- **`/colorscheme [name|list|reset]`** — Five named color schemes: `cyberpunk 🌆` (magenta/cyan), `ocean 🌊` (cyan/blue), `sunset 🌅` (yellow/red), `matrix 🟩` (all greens), `default 🦞`. Persisted to prefs via `_save_prefs()`.
-
-### Implementation Notes
-- `_suggest_followups()` uses keyword matching across 8 topic categories
-- `_EXTENDED_SCHEMES` dict maps scheme names to ANSI color codes
-- `/followup` auto-renders as a dim footer in `run_chat()` after every response when `show_suggestions` pref is True
-- All commands respect `_a11y_plain_mode()` and `_a11y_reduced_motion()` guards
+Use the canonical Wave 30–35 sections above as the source of truth for future
+implementation.

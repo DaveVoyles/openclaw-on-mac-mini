@@ -173,7 +173,7 @@ when individual surfaces are still adopting it incrementally.
 When a wave changes any dashboard or status surface, update the docs as a set:
 
 - `docs/DASHBOARD_SURFACES.md` — canonical inventory + per-wave checklist for
-  Waves 21–30
+  Waves 21–35
 - `docs/CLI_ARCHITECTURE.md` — rendering helpers, guardrails, persistence, and
   shared dashboard plumbing
 - `docs/CLI_QUICKSTART.md` — user-facing command/examples for the changed
@@ -358,6 +358,46 @@ animation engine:
 
 Shared reveal-order helpers for every dashboard surface, plus broader approval /
 retry choreography adoption, remain future Wave 30 follow-up work.
+
+### Shared split-bar shell pattern (Wave 31+)
+
+Starting with Wave 31, interactive chat, agent, and review flows should reuse a
+consistent three-zone shell:
+
+1. **Top context bar** — compact session/model/task/status context
+2. **Primary output region** — the existing response, table, or narrative output
+3. **Bottom control bar** — current mode plus 1–2 contextual hints
+
+Implementation guidance:
+
+- treat Rich/iTerm2 as the default experience for this shell pattern
+- keep the output region semantics unchanged; the shell adds chrome around it
+- use plain-text labels and separators when Rich is unavailable or plain mode is
+  active
+- omit low-priority hints first on narrow terminals or non-TTY paths
+
+### Wave 31+ phase/step feedback contract
+
+Wave 31 is the primary owner of live agent transparency during longer-running
+operations.
+
+| Pattern | Purpose | Fallback expectation |
+| --- | --- | --- |
+| `Phase: <name>` | announce the current operation phase before or during long work | print as plain text when Rich is unavailable |
+| `Step N/M: <description>` | make deterministic sub-step progress visible | keep numeric counts; never convert to fake percentages |
+| `✓ step completed` | briefly acknowledge completed work before the next step begins | use `[done]`/plain-text equivalent in plain mode |
+| trust cues | elapsed time, checkpoint counts, clear cancel/help affordances | remain readable without color or motion |
+| bottom-bar hints | mode + 1–2 context-sensitive actions | collapse to text list or omit hints first in narrow/non-TTY paths |
+
+Language rules:
+
+- prefer specific action verbs like `retry`, `resume`, `share`, `inspect`, and
+  `export`
+- avoid vague status words like `busy` when a concrete phase or step is known
+- avoid fake progress bars when only step counts or elapsed time are trustworthy
+
+Wave 34 can later extend this contract with richer trace and quality metadata,
+but the base phase/step/trust-cue vocabulary belongs to Wave 31.
 
 ### stderr vs stdout
 

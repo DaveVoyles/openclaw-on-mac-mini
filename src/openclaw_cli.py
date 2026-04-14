@@ -4506,16 +4506,22 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
     text = text.rstrip()
 
     # C. Extract Sources / **Sources** block at the end.
-    # Accept either one or two blank lines before the heading.
-    sources: str | None = None
-    sources_match = re.search(
-        r"\n{1,2}(?:\*\*Sources\*\*|Sources)\s*\n((?:[-\*] .+\n?)+)",
-        text,
+    # Matches bullet lists (- / *) AND numbered lists (1. 2. 3.) after a Sources heading.
+    # Finds ALL occurrences, keeps the longest (most complete), strips all from body.
+    _SOURCES_BLOCK_RE = re.compile(
+        r"\n{1,2}(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
         re.IGNORECASE,
     )
-    if sources_match:
-        sources = sources_match.group(0).strip()
-        text = text[: sources_match.start()].rstrip()
+    sources: str | None = None
+    all_matches = list(_SOURCES_BLOCK_RE.finditer(text))
+    if all_matches:
+        # Use the match with the most content (longest group 1) as the canonical sources
+        best = max(all_matches, key=lambda m: len(m.group(1)))
+        sources = best.group(0).strip()
+        # Strip ALL sources blocks from body (reverse order to preserve indices)
+        for m in reversed(all_matches):
+            text = text[: m.start()] + text[m.end():]
+        text = text.rstrip()
 
     # D. Strip bare inline citation markers like [1], [2], [12]
     # Guard against stripping markdown link text like [text](url) — only remove
@@ -4664,6 +4670,45 @@ def _render_md_table_rich(headers: list[str], rows: list[list[str]]) -> None:
     _RICH_CONSOLE.print(table)
 
 
+def _clean_sources_for_display(sources: str) -> list[str]:
+    """Extract clean URLs from a sources block, stripping markdown link syntax.
+
+    Handles:
+      - Bare URLs: https://example.com
+      - Markdown links: [text](https://example.com)  → https://example.com
+      - Numbered/bulleted prefixes: 1. / - / * stripped
+    Returns a list of (display_text, url) tuples, or (url, url) if no text.
+    """
+    _MD_LINK_RE = re.compile(r"\[([^\]]*)\]\((https?://[^\)]+)\)")
+    _BARE_URL_RE = re.compile(r"(https?://\S+)")
+    results: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for line in sources.splitlines():
+        line = line.strip()
+        # Strip bullet/number prefix
+        line = re.sub(r"^(?:\d+\.|[-\*])\s+", "", line)
+        line = line.strip()
+        if not line:
+            continue
+        # Check for markdown link [text](url)
+        md = _MD_LINK_RE.search(line)
+        if md:
+            text, url = md.group(1).strip(), md.group(2).strip()
+            display = text if text and text != url else url
+            if url not in seen:
+                seen.add(url)
+                results.append((display, url))
+            continue
+        # Check for bare URL
+        bare = _BARE_URL_RE.search(line)
+        if bare:
+            url = bare.group(1).rstrip(")")
+            if url not in seen:
+                seen.add(url)
+                results.append((url, url))
+    return results
+
+
 def _render_body_with_tables(body: str) -> None:
     """Render response body, using a smart Rich Table for any markdown table blocks."""
     last_end = 0
@@ -4702,9 +4747,21 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
         if _RICH_AVAILABLE and is_tty:
             _render_body_with_tables(body)
             if sources:
+                src_items = _clean_sources_for_display(sources)
+                src_text = _RichText()
+                for i, (display, url) in enumerate(src_items):
+                    if i > 0:
+                        src_text.append("\n")
+                    src_text.append(f"{i + 1}. ", style="dim")
+                    if display != url:
+                        src_text.append(display, style="bold")
+                        src_text.append("  ", style="")
+                    src_text.append(url, style="cyan link " + url)
+                if not src_items:
+                    src_text = _RichText(sources, style="dim")
                 _RICH_CONSOLE.print(
                     _RichPanel(
-                        _RichMarkdown(sources),
+                        src_text,
                         title=f"[dim]{_e('📎', '[src]')} Sources[/]",
                         border_style="bold white" if _a11y_high_contrast() else "dim blue",
                         padding=(0, 1),
@@ -4714,6 +4771,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
             # Rich not available but interactive TTY — use ANSI markdown renderer
             print(_render_markdown_ansi(_linkify_response(body)))
             if sources:
+                src_items = _clean_sources_for_display(sources)
                 term_cols = shutil.get_terminal_size((80, 24)).columns
                 w = max(term_cols - 4, 40)
                 border_style = _theme_ansi() if _a11y_high_contrast() else _DM
@@ -4722,9 +4780,11 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
                     f"\n  {border_style}╭─ {_e('📎', '[src]')} Sources "
                     f"{_separator_fill(max(0, w - 12), high_contrast=False)}╮{border_reset}"
                 )
-                for src_line in sources.strip().splitlines():
-                    rendered = _apply_inline_ansi(src_line)
-                    print(f"  {border_style}│{border_reset}  {rendered}")
+                for i, (display, url) in enumerate(src_items or [(sources, sources)]):
+                    label = f"{i + 1}. " if src_items else ""
+                    name_part = f"{_B}{display}{_R}  " if display != url else ""
+                    link = _make_clickable_link(url) if _PREFS.get("clickable_links", True) else f"{_CY}{url}{_R}"
+                    print(f"  {border_style}│{border_reset}  {_DM}{label}{_R}{name_part}{link}")
                 print(f"  {border_style}╰{_separator_fill(w - 1, high_contrast=False)}╯{border_reset}")
         else:
             print(body)
@@ -12226,10 +12286,13 @@ _FILE_PATH_PATTERN = _re.compile(
 
 
 def _detect_file_paths(text: str) -> "list[str]":
-    """Extract file path candidates from text."""
+    """Extract file path candidates from text. Excludes URL-like paths."""
     paths = []
     for m in _FILE_PATH_PATTERN.finditer(text):
         p = m.group(1)
+        # Skip URL remnants — paths starting with // are protocol-relative URLs
+        if p.startswith("//"):
+            continue
         if p not in paths:
             paths.append(p)
     return paths[:5]  # max 5 suggestions
@@ -13577,7 +13640,7 @@ def run_chat(
             _print_predictive_affordances(
                 _dedupe_preserve_order(
                     [
-                        f"/view {_paths[0]} to inspect the first referenced file" if _paths else "",
+                        f"/exec — run a shell command to investigate {_paths[0]}" if _paths and not _paths[0].startswith("/") else "",
                         "/context to verify what the next request will inherit" if session_id else "",
                         "/pin <name> to save this answer for reuse" if body.strip() else "",
                         "/outputs to review saved artifacts for this session" if session_id else "",

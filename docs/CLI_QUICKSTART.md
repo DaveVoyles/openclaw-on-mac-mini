@@ -254,13 +254,13 @@ vocabulary, persistence, and fallback reporting first.
 | `/benchmark [n]` | Benchmark AI server latency (n pings, default 3) |
 | `/timeline` | Visual activity timeline grouped by day (last 7 days) |
 
-### Wave 31 — Smart Suggestions, Export & Color Schemes 🎨
+### Wave 31 — Intelligent Command Suggestions & Inline Assist 🎯
 
 | Command | Description |
 |---------|-------------|
 | `/followup [on\|off]` | Show contextual next-step suggestions after each response |
-| `/export [md\|json\|txt] [file]` | Export session history to a formatted file |
-| `/colorscheme [name\|list\|reset]` | Set extended color theme (cyberpunk/ocean/sunset/matrix) |
+| Phase / step feedback | Long-running work reports `Phase: ...` and `Step N/M: ...` instead of generic "thinking" output |
+| Split-bar shell chrome | Interactive flows target a top context bar, primary output region, and bottom control bar with mode + hints |
 
 ## Wave 20 collaboration handoffs
 
@@ -395,6 +395,62 @@ Wave 27 is currently the **read-only operator snapshot** pass:
 
 `docs/COMMANDS.md` still does not need regeneration because command metadata is
 unchanged.
+
+## Wave 31 intelligent suggestions & live feedback slice (planned)
+
+Wave 31 is the **suggestion layer + phase/step transparency** pass:
+
+- **Contextual suggestions follow important responses.** After an AI output, the
+  CLI should be able to show a few dim next-step suggestions like `→ /exec`,
+  `→ /inspect`, or `→ /export`, while still degrading to plain text cleanly.
+- **Long-running operations say what they are doing.** Instead of vague
+  "thinking" output, longer actions should report `Phase: <name>` and
+  `Step N/M: <description>` with clear completion cues.
+- **Split-bar chat chrome becomes the standard shell target.** Interactive flows
+  should use a top context bar, a primary output region, and a bottom control bar
+  with mode + 1–2 hints.
+- **Trust-building language stays honest.** Prefer deterministic counts, elapsed
+  time, and specific action verbs over fake percentage bars or ambiguous status
+  words.
+
+Fallback expectations:
+
+- **Plain mode** keeps explicit phase/step labels and text separators
+- **Reduced motion** keeps the same structure without animated reveals
+- **Non-TTY** prints prefixed text lines instead of overlay-style chrome
+- **Narrow terminals** drop low-priority hints first
+
+## Wave 32 bookmarks & instant replay slice (planned)
+
+Wave 32 is the **bookmark + replay** follow-up:
+
+- mark meaningful turns with `/bookmark`
+- replay from a bookmark with `/replay --from`
+- surface bookmark markers in timelines, session views, and handoff exports
+
+## Wave 33 workflows & macros slice (planned)
+
+Wave 33 is the **workflow composition + dry-run** slice:
+
+- create named workflows from command sequences
+- preview workflows before execution
+- share workflow context in handoffs and exports
+
+## Wave 34 quality & experiments slice (planned)
+
+Wave 34 is the **quality metadata + tracing** slice:
+
+- summarize confidence/latency/routing via `/quality`
+- inspect last-response routing and fallbacks via `/trace`
+- compare local experiment variants without leaving the terminal
+
+## Wave 35 runbooks & exports slice (planned)
+
+Wave 35 is the **long-form reporting + export template** slice:
+
+- export sessions in multiple audience-aware formats
+- generate runbooks from session narratives
+- support reusable export templates and redaction-friendly sharing
 
 ## Wave 28 predictive affordances slice (current slice)
 

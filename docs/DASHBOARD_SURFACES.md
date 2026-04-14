@@ -1,6 +1,6 @@
 # Dashboard Surfaces & Docs Sync
 
-> **Audience:** agents shipping CLI UX waves, especially Waves 21–30.
+> **Audience:** agents shipping CLI UX waves, especially Waves 21–35.
 > **Goal:** keep terminal dashboard surfaces, browser dashboard surfaces, and CLI docs aligned as each wave lands.
 
 ## Canonical references
@@ -39,7 +39,7 @@
 
 ## Required docs/dashboard lane for every future wave
 
-Every Wave 21–30 implementation should include a dedicated docs/dashboard lane with this checklist:
+Every Wave 21–35 implementation should include a dedicated docs/dashboard lane with this checklist:
 
 1. **Roadmap sync**
    - update `docs/UX_IMPROVEMENTS.md`
@@ -58,7 +58,7 @@ Every Wave 21–30 implementation should include a dedicated docs/dashboard lane
    - if command names/descriptions changed, regenerate `docs/COMMANDS.md`
    - if there was no command metadata change, explicitly note that `docs/COMMANDS.md` did not require regeneration
 
-## Wave 21–30 planning guardrails
+## Wave 21–35 planning guardrails
 
 - Treat dashboard work as a first-class lane, not follow-up cleanup.
 - Keep terminal-first behavior authoritative; browser/dashboard surfaces should mirror the same status language where possible.
@@ -197,3 +197,46 @@ truth-source for what is live today:
 | Browser/dashboard mirrors | Future mirrors should reuse the same restrained celebration vocabulary and reduced-motion/plain-text fallback rules |
 
 Until a richer dashboard reference exists, keep `docs/DASHBOARD_SURFACES.md` as the canonical checklist and inventory for these waves.
+
+## Waves 31–35 shared design pattern
+
+All new surfaces in Waves 31–35 should share three decisions:
+
+1. **Split-bar shell chrome** — a standard three-zone layout of top context bar,
+   primary output region, and bottom control bar that degrades cleanly to plain
+   text
+2. **Live phase/step feedback** — explicit messaging during operations instead of
+   vague "thinking" language when the system knows the current phase or step
+3. **Terminal-first with Rich-default** — assume iTerm2/macOS + Rich as the
+   primary experience, with non-Rich, reduced-motion, plain-mode, and non-TTY
+   parity built in from the start
+
+See `docs/CLI_ARCHITECTURE.md` for the implementation-facing guidance on shell
+chrome, phase/step helpers, and fallback guards.
+
+### Waves 31–35 dashboard alignment targets
+
+The Waves 31–35 tranche extends the dashboard model from monitoring and recap
+into suggestions, replay, workflows, quality tracing, and exports.
+
+#### Shared split-bar shell pattern (Wave 31 primary owner)
+
+- **Top bar** — compact session/model/task context and state badges
+- **Primary output region** — the main response, code, tables, or narrative block
+- **Bottom bar** — current mode plus 1–2 inline hints or next actions
+
+Fallback rules:
+
+- **Rich/iTerm2 default** — color, emoji, dim accents, unicode separators
+- **Plain mode** — explicit labels and text separators
+- **Reduced motion** — same shell structure, no animated reveal assumptions
+- **Non-TTY / narrow width** — collapse to essential status text and omit
+  low-priority hints first
+
+| Wave | Surface focus | Docs/dashboard expectation |
+| --- | --- | --- |
+| Wave 31 — Intelligent Command Suggestions & Inline Assist | `/exec`, approval flows, `/watch status`, `/session*`, `/collab`, response-status chrome | Reuse a shared next-action verb set, document live `Phase:` / `Step:` messaging, and apply the split-bar shell across interactive chat and agent flows |
+| Wave 32 — Instant Replay & Session Bookmarks | `/bookmark*`, `/replay --from`, `/timeline`, `/watch history`, session share/show | Bookmarks must stay visible as plain text, appear in narrative exports, and map cleanly to timeline or browser-session markers |
+| Wave 33 — Command Chaining & Workflow Macros 2.0 | `/workflow*`, `/events`, `/collab`, session export/share | Dry-run previews, workflow steps, and workflow results should reuse the same phase/step vocabulary and remain exportable as plain text |
+| Wave 34 — AI Quality & Experimentation Loops | response footer, `/trace`, `/quality`, `/experiment*` | Quality metadata should appear as compact, portable summaries that browser/dashboard mirrors can reuse without renaming fields |
+| Wave 35 — Long-Form Reporting & Export Suites | `session export`, `/runbook`, `/export-templates`, session share | Export/runbook surfaces should preserve Wave 29 chapter names, Wave 31 trust cues, and cross-format redaction/fallback rules |

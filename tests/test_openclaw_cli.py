@@ -6748,3 +6748,45 @@ class TestCmdFollowup:
         result = mod._cmd_followup(self._ctx("on"))
         assert result == mod._CMD_CONTINUE
         assert prefs.get("show_suggestions") is True
+
+
+class TestSourcesBugFixes:
+    """Regression tests for sources duplication and URL rendering fixes."""
+
+    def test_numbered_sources_extracted_from_body(self):
+        text = "Some response text.\n\nSources:\n1. https://example.com\n2. https://other.com\n"
+        body, sources = mod._preprocess_response_text(text)
+        assert sources is not None
+        assert "example.com" in sources
+        assert "example.com" not in body
+
+    def test_bullet_sources_still_extracted(self):
+        text = "Response.\n\nSources\n- https://foo.com\n- https://bar.com\n"
+        body, sources = mod._preprocess_response_text(text)
+        assert sources is not None
+        assert "foo.com" in sources
+        assert "foo.com" not in body
+
+    def test_duplicate_sources_both_stripped(self):
+        text = (
+            "Response.\n\nSources\n- https://a.com\n\nMore text.\n\nSources\n1. https://b.com\n2. https://c.com\n"
+        )
+        body, sources = mod._preprocess_response_text(text)
+        assert "Sources" not in body
+
+    def test_clean_sources_strips_markdown_links(self):
+        sources = "Sources\n1. [my page](https://example.com/page)\n2. https://other.com\n"
+        items = mod._clean_sources_for_display(sources)
+        urls = [url for _, url in items]
+        assert "https://example.com/page" in urls
+        assert "https://other.com" in urls
+
+    def test_detect_file_paths_excludes_url_remnants(self):
+        # Protocol-relative URLs like //www.adobe.com/... should NOT be detected as paths
+        text = "See //www.adobe.com/acrobat/resources/ai-assistant-capabilities.html"
+        paths = mod._detect_file_paths(text)
+        assert not any(p.startswith("//") for p in paths)
+
+    def test_detect_file_paths_still_finds_local_paths(self):
+        paths = mod._detect_file_paths("see src/openclaw_cli.py for details")
+        assert "src/openclaw_cli.py" in paths
