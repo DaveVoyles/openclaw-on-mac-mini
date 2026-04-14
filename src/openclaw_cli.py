@@ -1448,40 +1448,7 @@ def _cmd_exporttemplates(ctx: ChatCommandContext) -> str:
 
 def _cmd_runbook(ctx: ChatCommandContext) -> str:
     """/runbook [template] [save <path>] — render a long-form session runbook."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-    raw = (ctx.args or "").strip()
-    parts = shlex.split(raw) if raw else []
-    template_name = "operator"
-    save_path = ""
-
-    if parts and parts[0].lower() == "list":
-        return _cmd_exporttemplates(ChatCommandContext(history=ctx.history, session_id=ctx.session_id, args="list"))
-    if parts and parts[0].lower() != "save":
-        template_name = parts.pop(0)
-    if parts:
-        if parts[0].lower() != "save" or len(parts) < 2:
-            _print_error("Usage: /runbook [template] [save <path>]")
-            return _CMD_CONTINUE
-        save_path = parts[1]
-
-    try:
-        content = _build_session_runbook_text(session.session_id, template_name=template_name)
-    except OpenClawCliError as exc:
-        _print_error(str(exc))
-        return _CMD_CONTINUE
-
-    if save_path:
-        target = Path(save_path).expanduser()
-        if not target.suffix:
-            target = target.with_suffix(".md")
-        target.write_text(content, encoding="utf-8")
-        print(f"Runbook saved → {target.resolve()}")
-        return _CMD_CONTINUE
-
-    print(content.rstrip())
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_runbook(ctx)
 
 
 def inspect_session(session_id: str) -> str:
@@ -2571,12 +2538,7 @@ def _cmd_quit(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_help(ctx: ChatCommandContext) -> str:
-    token = ctx.args.strip().lower()
-    if token.startswith("search "):
-        print_chat_help(search=token[7:].strip())
-    else:
-        print_chat_help()
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_help(ctx)
 
 
 def _set_command_result(ctx: ChatCommandContext, *, ok: bool, summary: str = "") -> None:
@@ -2585,17 +2547,7 @@ def _set_command_result(ctx: ChatCommandContext, *, ok: bool, summary: str = "")
 
 
 def _cmd_clear(ctx: ChatCommandContext) -> str:
-    n = len(ctx.history)
-    ctx.history.clear()
-    if ctx.session_id:
-        append_event(
-            ctx.session_id,
-            kind="chat",
-            content="/clear",
-            metadata={"summary": "cleared chat history"},
-        )
-    _print_feedback("Conversation history cleared.", level="success", detail=f"{n} message(s) removed")
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_clear(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -2626,169 +2578,17 @@ def _cmd_session(ctx: ChatCommandContext) -> str:
 
 def _cmd_context(ctx: ChatCommandContext) -> str:
     """/context — show the effective local grounding for the active session."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-    summary_lines = [
-        f"cwd: {session.cwd or '(none)'}",
-        _progress_cell("files", str(len(session.files or [])), status="active" if session.files else "idle"),
-        _progress_cell("plan", session.plan_id or "none", status="active" if session.plan_id else "idle"),
-        _progress_cell("task", session.task_id or "none", status="active" if session.task_id else "idle"),
-    ]
-    detail_lines = []
-    if session.files:
-        detail_lines.extend(f"file: {path}" for path in session.files)
-    else:
-        detail_lines.append("files: (none tracked)")
-    if session.plan_id:
-        plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
-        detail_lines.append(f"plan: {session.plan_id}{_link_validation_suffix(plan_validation)}")
-    if session.task_id:
-        task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
-        detail_lines.append(f"task: {session.task_id}{_link_validation_suffix(task_validation)}")
-    grounding_preview = _render_effective_grounding_preview(session)
-    if grounding_preview:
-        detail_lines.append("effective grounding preview:")
-        detail_lines.extend(str(grounding_preview).splitlines())
-    sys_prompt = _PREFS.get("system_prompt", "").strip()
-    if sys_prompt:
-        preview = sys_prompt[:80] + ("…" if len(sys_prompt) > 80 else "")
-        detail_lines.append(f"system: {preview}")
-    _inj = globals().get("_next_inject", "")
-    if _inj:
-        detail_lines.append(f"inject: ({len(_inj)} chars pending)")
-    action_lines = []
-    if not session.files:
-        action_lines.append("/files add <path> to add grounding files")
-    else:
-        action_lines.append("/files to review or remove tracked files")
-    if session.plan_id or session.task_id:
-        action_lines.append("/session to compare grounding against session health")
-    else:
-        action_lines.append("/plan <id> or /task <id> to strengthen work context")
-    _print_dashboard_surface(
-        "Context Dashboard",
-        summary_lines=summary_lines,
-        detail_lines=detail_lines,
-        action_lines=action_lines,
-    )
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_context(ctx)
 
 
 def _cmd_cwd(ctx: ChatCommandContext) -> str:
     """/cwd [path] — show or switch the session working directory."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-    new_path = ctx.args.strip()
-    if not new_path:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[dim]cwd[/]  {session.cwd}")
-        else:
-            print(f"cwd: {session.cwd}")
-        return _CMD_CONTINUE
-    resolved = str(Path(new_path).expanduser().resolve())
-    if not Path(resolved).is_dir():
-        _print_error(f"not a directory: {resolved}")
-        return _CMD_CONTINUE
-    update_session(ctx.session_id, cwd=resolved)
-    append_event(
-        ctx.session_id,
-        kind="chat",
-        content=f"/cwd {new_path}",
-        metadata={"summary": f"switched cwd to {resolved}"},
-    )
-    if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(f"[dim]cwd[/] [green]→[/] {resolved}")
-    else:
-        print(f"cwd → {resolved}")
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_cwd(ctx)
 
 
 def _cmd_files(ctx: ChatCommandContext) -> str:
     """/files [add <path> | rm <path>] — list, add, or remove tracked files."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-
-    raw = ctx.args.strip()
-    if not raw:
-        # List mode
-        if not session.files:
-            if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print("[dim]No tracked files.[/]")
-            else:
-                print("No tracked files.")
-        else:
-            if _RICH_AVAILABLE and _IS_TTY:
-                for f in session.files:
-                    _RICH_CONSOLE.print(f"  [cyan]📄[/] {f}")
-            else:
-                for f in session.files:
-                    print(f"  {f}")
-        return _CMD_CONTINUE
-
-    parts = raw.split(maxsplit=1)
-    subcmd = parts[0].lower()
-    target = parts[1].strip() if len(parts) > 1 else ""
-
-    if subcmd in ("add", "+"):
-        if not target:
-            print("Usage: /files add <path>")
-            return _CMD_CONTINUE
-        resolved = str(Path(target).expanduser().resolve())
-        current = list(session.files)
-        if resolved in current:
-            if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print(f"[yellow]already tracked:[/] {resolved}")
-            else:
-                print(f"Already tracked: {resolved}")
-            return _CMD_CONTINUE
-        current.append(resolved)
-        update_session(ctx.session_id, files=current)
-        append_event(
-            ctx.session_id,
-            kind="chat",
-            content=f"/files add {target}",
-            metadata={"summary": f"added file {resolved}"},
-        )
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[green]✓[/] tracked: {resolved}")
-        else:
-            print(f"tracked: {resolved}")
-
-    elif subcmd in ("rm", "remove", "-"):
-        if not target:
-            print("Usage: /files rm <path>")
-            return _CMD_CONTINUE
-        resolved = str(Path(target).expanduser().resolve())
-        current = list(session.files)
-        # Match on resolved path or basename
-        matched = [f for f in current if f == resolved or f == target or Path(f).name == target]
-        if not matched:
-            if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print(f"[yellow]not tracked:[/] {target}")
-            else:
-                print(f"Not tracked: {target}")
-            return _CMD_CONTINUE
-        for m in matched:
-            current.remove(m)
-        update_session(ctx.session_id, files=current)
-        append_event(
-            ctx.session_id,
-            kind="chat",
-            content=f"/files rm {target}",
-            metadata={"summary": f"removed file {target}"},
-        )
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[red]✗[/] untracked: {', '.join(matched)}")
-        else:
-            print(f"untracked: {', '.join(matched)}")
-
-    else:
-        print("Usage: /files  |  /files add <path>  |  /files rm <path>")
-
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_files(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -2921,107 +2721,17 @@ def _route_quality_summary() -> list[dict[str, Any]]:
 
 def _cmd_routing(ctx: ChatCommandContext) -> str:
     """/routing [suggest|analyze] — inspect learned routing hints from past ratings."""
-    arg = (ctx.args or "").strip().lower()
-    sub = arg or "suggest"
-    if sub not in {"suggest", "analyze"}:
-        _print_error("Usage: /routing [suggest|analyze]")
-        return _CMD_CONTINUE
-    rows = _route_quality_summary()
-    if not rows:
-        print("No route-quality history yet. Use /rate after routed responses to build suggestions.")
-        return _CMD_CONTINUE
-    if sub == "suggest":
-        best = rows[0]
-        print("Routing suggestion")
-        print("------------------")
-        print(f"  Best-rated route: /{best['route']}")
-        print(f"  Average score:    {best['avg']:.1f}/5 across {best['count']} rating(s)")
-        print(f"  High-rate share:  {best['high_rate']}%")
-        if len(rows) > 1:
-            runner_up = rows[1]
-            print(f"  Runner-up:        /{runner_up['route']} ({runner_up['avg']:.1f}/5)")
-        print("  Learned behavior is advisory only; auto-routing remains unchanged.")
-        return _CMD_CONTINUE
-    print("Routing quality lanes")
-    print("---------------------")
-    for entry in rows[:5]:
-        print(f"  /{entry['route']:<12} avg {entry['avg']:.1f}/5  ratings {entry['count']:<2}  high-rate {entry['high_rate']}%")
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_routing(ctx)
 
 
 def _cmd_why(ctx: ChatCommandContext) -> str:
     """/why — explain the last routing or tool decision from session history."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-    snapshot = _last_trace_snapshot(ctx.session_id)
-    if snapshot is None:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[dim]No routing decisions recorded yet. Try a prompt that triggers auto-routing.[/]")
-        else:
-            print("No routing decisions recorded yet. Try a prompt that triggers auto-routing.")
-        return _CMD_CONTINUE
-
-    if _RICH_AVAILABLE and _IS_TTY:
-        grid = _RichTable.grid(padding=(0, 1))
-        grid.add_column(style="bold cyan", no_wrap=True)
-        grid.add_column()
-        grid.add_row("What happened:", str(snapshot.get("what_happened") or ""))
-        grid.add_row("Why:", str(snapshot.get("rationale") or "")[:300])
-        grid.add_row("Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]")
-        if snapshot.get("target_text"):
-            grid.add_row("Target:", str(snapshot.get("target_text") or "")[:120])
-        if snapshot.get("args_text"):
-            grid.add_row("Args:", str(snapshot.get("args_text") or "")[:120])
-        grid.add_row("When:", str(snapshot.get("ts") or ""))
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Last Decision[/]", border_style=str(snapshot.get("border_style") or "dim"), padding=(0, 1)))
-    else:
-        print(f"  What happened: {str(snapshot.get('what_happened') or '')}")
-        print(f"  Why:           {str(snapshot.get('rationale') or '')[:300]}")
-        print(f"  Confidence:    {str(snapshot.get('conf_label') or '(unknown)')}")
-        if snapshot.get("target_text"):
-            print(f"  Target:        {str(snapshot.get('target_text') or '')[:120]}")
-        if snapshot.get("args_text"):
-            print(f"  Args:          {str(snapshot.get('args_text') or '')[:120]}")
-        print(f"  When:          {str(snapshot.get('ts') or '')}")
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_why(ctx)
 
 
 def _cmd_trace(ctx: ChatCommandContext) -> str:
     """/trace — show the latest routing trace plus the current quality context."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-    snapshot = _last_trace_snapshot(ctx.session_id)
-    if snapshot is None:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[dim]No trace data yet. Route or run a command first.[/]")
-        else:
-            print("No trace data yet. Route or run a command first.")
-        return _CMD_CONTINUE
-
-    if _RICH_AVAILABLE and _IS_TTY:
-        grid = _RichTable.grid(padding=(0, 1))
-        grid.add_column(style="bold cyan", no_wrap=True)
-        grid.add_column()
-        grid.add_row("Route:", str(snapshot.get("what_happened") or ""))
-        grid.add_row("Rationale:", str(snapshot.get("rationale") or "")[:300])
-        grid.add_row("Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]")
-        if snapshot.get("latest_rating"):
-            grid.add_row("Latest rating:", str(snapshot.get("latest_rating") or ""))
-        grid.add_row("Ratings logged:", str(snapshot.get("rating_count") or 0))
-        grid.add_row("When:", str(snapshot.get("ts") or ""))
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Trace Snapshot[/]", border_style=str(snapshot.get("border_style") or "dim"), padding=(0, 1)))
-    else:
-        print("Trace Snapshot")
-        print(f"  Route:         {str(snapshot.get('what_happened') or '')}")
-        print(f"  Rationale:     {str(snapshot.get('rationale') or '')[:300]}")
-        print(f"  Confidence:    {str(snapshot.get('conf_label') or '(unknown)')}")
-        if snapshot.get("latest_rating"):
-            print(f"  Latest rating: {str(snapshot.get('latest_rating') or '')}")
-        print(f"  Ratings logged:{int(snapshot.get('rating_count') or 0):>4}")
-        print(f"  When:          {str(snapshot.get('ts') or '')}")
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_trace(ctx)
 
 
 def _parse_collab_entry(raw: str) -> tuple[str, list[str], str]:
@@ -3103,39 +2813,7 @@ def _cmd_search(ctx: ChatCommandContext) -> str:
 
 def _cmd_autoroute(ctx: ChatCommandContext) -> str:
     """/autoroute [on|off] — show or set session-level REPL auto-routing."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-    raw = ctx.args.strip().lower()
-    current = bool(getattr(session, "repl_auto_route", True))
-    if not raw:
-        if _RICH_AVAILABLE and _IS_TTY:
-            state = "[green]✓ ON[/]" if current else "[dim]✗ OFF[/]"
-            _RICH_CONSOLE.print(f"🔀 auto-route: {state}  [dim](high-confidence prompts only)[/]")
-        else:
-            print(f"Auto-route: {'ON' if current else 'OFF'} (high-confidence prompts only)")
-        return _CMD_CONTINUE
-    if raw not in {"on", "off"}:
-        _print_error("Usage: /autoroute [on|off]")
-        return _CMD_CONTINUE
-    enabled = raw == "on"
-    update_session(ctx.session_id, repl_auto_route=enabled)
-    append_event(
-        ctx.session_id,
-        kind="chat",
-        content=f"/autoroute {raw}",
-        metadata={"summary": f"auto-route {'enabled' if enabled else 'disabled'}"},
-    )
-    if _RICH_AVAILABLE and _IS_TTY:
-        state = "[green]✓ ON[/]" if enabled else "[dim]✗ OFF[/]"
-        note = "" if enabled else "  [dim]prompts will stay in chat[/]"
-        _RICH_CONSOLE.print(f"🔀 auto-route → {state}{note}")
-    else:
-        if enabled:
-            print("Auto-route enabled for this session.")
-        else:
-            print("Auto-route disabled for this session; prompts will stay in chat.")
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_autoroute(ctx)
 
 
 def _cmd_outputs(ctx: ChatCommandContext) -> str:
@@ -3145,42 +2823,7 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
 
 def _cmd_snapshot(ctx: ChatCommandContext) -> str:
     """/snapshot [name] — save current git HEAD as a named restore point."""
-    import subprocess
-    name = ctx.args.strip() or "auto"
-    is_tty = _get_is_tty()
-
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            capture_output=True, text=True, timeout=5
-        )
-        sha = result.stdout.strip()[:12]
-
-        if not sha:
-            msg = "Not in a git repo or no commits yet."
-            if _RICH_AVAILABLE and is_tty:
-                _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
-            else:
-                print(msg)
-            return _CMD_CONTINUE
-
-        snapshots = _PREFS.get("snapshots", {})
-        import datetime
-        ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        snapshots[name] = {"sha": sha, "ts": ts}
-        _prefs_set("snapshots", snapshots)
-
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[green]✓[/] Snapshot [bold]{name}[/] saved at [dim]{sha}[/]")
-        else:
-            print(f"✓ Snapshot '{name}' saved at {sha}")
-    except Exception as e:  # noqa: BLE001
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
-        else:
-            print(f"Error: {e}")
-
-    return _CMD_CONTINUE
+    return _core_cmd_mod._cmd_snapshot(ctx)
 
 
 def _cmd_rollback(ctx: ChatCommandContext) -> str:

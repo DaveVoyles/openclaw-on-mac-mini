@@ -44,6 +44,7 @@ CLI_FILES=(
   openclaw_cli_types.py
   openclaw_cli_update.py
   openclaw_cli_cmd_workflow.py
+  openclaw_cli_cmd_core.py
   openclaw_cli_watch.py
   subprocess_utils.py
 )
