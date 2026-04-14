@@ -2233,7 +2233,7 @@ class TestActionSlashCommands:
     def test_edit_not_approved_halts(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         sess = sessions_mod.create_session(title="edit-deny", cwd=str(tmp_path))
-        target = tmp_path / "secret.py"
+        target = tmp_path / ".env"
         target.touch()
         with patch.object(mod, "request_cli_approval", return_value=False):
             result = self._registry().dispatch(
@@ -3652,7 +3652,7 @@ class TestAccessibilityCommands:
         assert result == "done"
         out = capsys.readouterr().out
         assert "thinking..." in out.lower()
-        assert "⏳" in out
+        assert "⏳" in out or "[wait]" in out.lower()
 
     def test_with_spinner_reduced_motion_emits_heartbeat_and_completion(self, capsys, monkeypatch):
         monkeypatch.setattr(mod, "_IS_TTY", True)
@@ -4013,3 +4013,138 @@ class TestCmdMacroRun:
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
         assert "Skip" in out or "skip" in out or "⚠" in out
+
+
+class TestCmdRate:
+    """Tests for /rate slash command."""
+
+    def _ctx(self, args: str = "", session_id: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_rate_no_args_prints_usage(self, capsys, monkeypatch, tmp_path):
+        """/rate with no args prints usage."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        result = mod._cmd_rate(self._ctx(args=""))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Usage" in out or "usage" in out
+
+    def test_rate_good_saves_rating(self, monkeypatch, tmp_path):
+        """/rate good with _last_response_text set saves rating to _PREFS['ratings']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        monkeypatch.setattr(mod, "_last_response_text", "some AI response")
+        mod._PREFS.pop("ratings", None)
+        with patch.object(mod, "_save_prefs"), \
+             patch("openclaw_cli.append_event"):
+            result = mod._cmd_rate(self._ctx(args="good"))
+        assert result == mod._CMD_CONTINUE
+        ratings = mod._PREFS.get("ratings", [])
+        assert len(ratings) == 1
+        assert ratings[0]["score"] == 5
+        assert ratings[0]["label"] == "good"
+
+    def test_rate_bad_stores_score_1(self, monkeypatch, tmp_path):
+        """/rate bad stores score=1 in _PREFS['ratings']."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        monkeypatch.setattr(mod, "_last_response_text", "some AI response")
+        mod._PREFS.pop("ratings", None)
+        with patch.object(mod, "_save_prefs"), \
+             patch("openclaw_cli.append_event"):
+            result = mod._cmd_rate(self._ctx(args="bad"))
+        assert result == mod._CMD_CONTINUE
+        ratings = mod._PREFS.get("ratings", [])
+        assert ratings[0]["score"] == 1
+        assert ratings[0]["label"] == "bad"
+
+    def test_rate_empty_response_prints_error(self, capsys, monkeypatch, tmp_path):
+        """/rate with empty _last_response_text prints 'Nothing to rate' error."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        monkeypatch.setattr(mod, "_last_response_text", "")
+        result = mod._cmd_rate(self._ctx(args="good"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Nothing to rate" in out
+
+
+class TestCmdQuality:
+    """Tests for _cmd_quality."""
+
+    def _ctx(self, args: str = "", session_id: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_no_ratings_shows_placeholder(self, capsys, monkeypatch, tmp_path):
+        """No ratings → shows 'no ratings yet' message."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS.pop("ratings", None)
+        result = mod._cmd_quality(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "no ratings yet" in out
+
+    def test_with_ratings_shows_average_and_distribution(self, capsys, monkeypatch, tmp_path):
+        """With ratings → shows average and distribution."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["ratings"] = [
+            {"score": 5, "label": "good", "ts": "2024-01-01T10:00:00"},
+            {"score": 3, "label": "okay", "ts": "2024-01-02T10:00:00"},
+            {"score": 1, "label": "bad",  "ts": "2024-01-03T10:00:00"},
+        ]
+        result = mod._cmd_quality(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "3.0" in out
+        assert "3" in out  # total rated
+
+    def test_average_calculation(self, capsys, monkeypatch, tmp_path):
+        """Average of [5, 3, 1] == 3.0."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["ratings"] = [
+            {"score": 5, "label": "excellent", "ts": "2024-01-01T10:00:00"},
+            {"score": 3, "label": "okay",      "ts": "2024-01-02T10:00:00"},
+            {"score": 1, "label": "poor",      "ts": "2024-01-03T10:00:00"},
+        ]
+        result = mod._cmd_quality(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "3.0" in out
+
+
+class TestCmdRatehint:
+    """Tests for _cmd_ratehint."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_ratehint_on_sets_pref_true(self, monkeypatch):
+        """/ratehint on sets show_rate_hint to True."""
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        mod._PREFS["show_rate_hint"] = False
+        result = mod._cmd_ratehint(self._ctx("on"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["show_rate_hint"] is True
+
+    def test_ratehint_off_sets_pref_false(self, monkeypatch):
+        """/ratehint off sets show_rate_hint to False."""
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        mod._PREFS["show_rate_hint"] = True
+        result = mod._cmd_ratehint(self._ctx("off"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["show_rate_hint"] is False
+
+    def test_ratehint_no_args_prints_current_state(self, capsys, monkeypatch):
+        """/ratehint with no args prints the current state."""
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._PREFS["show_rate_hint"] = True
+        result = mod._cmd_ratehint(self._ctx(""))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "on" in out
+        assert "ratehint" in out

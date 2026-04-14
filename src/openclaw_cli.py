@@ -131,7 +131,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave17"  # updated with each UX wave batch
+_CLI_BUILD = "wave19"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -157,6 +157,7 @@ _PREFS: dict[str, Any] = {
     "emoji": True,         # show emoji in UI (False → ASCII fallbacks)
     "emoji_pack": "classic",  # "classic" | "minimal" | "ascii"
     "layout": "normal",   # "compact" | "normal" | "verbose" | "plain"
+    "interactive_overlays": False,  # opt-in interactive pickers for supported list commands
 }
 
 _CMD_HISTORY_MAX = 50  # max entries in command history
@@ -312,6 +313,7 @@ def _normalize_personalization_prefs() -> None:
     pack = _emoji_pack_name()
     _PREFS["emoji_pack"] = pack
     _PREFS["emoji"] = pack != "ascii"
+    _PREFS["interactive_overlays"] = bool(_PREFS.get("interactive_overlays", False))
     for key in (_A11Y_REDUCED_MOTION, _A11Y_PLAIN_MODE, _A11Y_HIGH_CONTRAST):
         if key in _PREFS:
             _PREFS[key] = bool(_PREFS.get(key, False))
@@ -330,6 +332,103 @@ def _a11y_plain_mode() -> bool:
 def _a11y_high_contrast() -> bool:
     """Return True when high-contrast mode is active."""
     return bool(_PREFS.get(_A11Y_HIGH_CONTRAST, False))
+
+
+def _interactive_overlays_enabled() -> bool:
+    """Return True when opt-in interactive overlays are enabled."""
+    return bool(_PREFS.get("interactive_overlays", False))
+
+
+def _overlay_available() -> bool:
+    """Return True when an interactive overlay can safely prompt for input."""
+    stdin_tty = True
+    try:
+        stdin_tty = bool(sys.stdin.isatty())
+    except Exception:
+        stdin_tty = False
+    return bool((_IS_TTY or sys.stdout.isatty()) and stdin_tty)
+
+
+def _overlay_query_score(text: str, query: str) -> int:
+    """Return a simple fuzzy score; 0 means no match."""
+    haystack = " ".join(str(text or "").lower().split())
+    needle = " ".join(str(query or "").lower().split())
+    if not needle:
+        return 1
+    if needle in haystack:
+        return 1000 - max(0, haystack.find(needle))
+    tokens = [token for token in needle.split(" ") if token]
+    if tokens and all(token in haystack for token in tokens):
+        return 700 - sum(max(0, haystack.find(token)) for token in tokens)
+    pos = -1
+    score = 0
+    for ch in needle:
+        next_pos = haystack.find(ch, pos + 1)
+        if next_pos == -1:
+            return 0
+        score += max(1, 20 - min(19, next_pos - pos))
+        pos = next_pos
+    return score
+
+
+def _overlay_filter_items(
+    items: list[Any],
+    *,
+    query: str,
+    label_fn: Callable[[Any], str],
+    limit: int = 9,
+) -> list[Any]:
+    """Return the top overlay matches for a query."""
+    scored: list[tuple[int, int, Any]] = []
+    for index, item in enumerate(items):
+        score = _overlay_query_score(label_fn(item), query)
+        if score > 0:
+            scored.append((score, index, item))
+    scored.sort(key=lambda row: (-row[0], row[1]))
+    return [item for _, _, item in scored[:limit]]
+
+
+def _run_interactive_overlay(
+    *,
+    title: str,
+    items: list[Any],
+    label_fn: Callable[[Any], str],
+    on_select: Callable[[Any], None],
+    initial_query: str = "",
+    empty_message: str = "No matches.",
+) -> bool:
+    """Run a lightweight interactive picker for supported REPL overlays."""
+    if not items:
+        print(empty_message)
+        return False
+    if not _overlay_available():
+        print(f"{_DM}Interactive overlay unavailable here; falling back to the normal listing.{_R}")
+        return False
+
+    query = initial_query.strip()
+    while True:
+        matches = _overlay_filter_items(items, query=query, label_fn=label_fn)
+        print(f"\n{_B}{title}{_R}")
+        if query:
+            print(f"  {_DM}filter:{_R} {query}")
+        if matches:
+            for index, item in enumerate(matches, start=1):
+                print(f"  {_CY}{index}.{_R} {label_fn(item)}")
+        else:
+            print(f"  {_DM}No matches for '{query}'.{_R}")
+        print(f"  {_DM}Type a search term, a number to select, Enter to cancel, or q to close.{_R}")
+        choice = input("overlay> ").strip()
+        if not choice or choice.lower() in {"q", "quit", "exit"}:
+            print(f"  {_DM}Overlay closed.{_R}")
+            return False
+        if choice.isdigit():
+            selected_index = int(choice) - 1
+            if 0 <= selected_index < len(matches):
+                on_select(matches[selected_index])
+                return True
+            print(f"  {_DM}Selection out of range.{_R}")
+            continue
+        query = choice
 
 
 def _effective_layout_mode() -> str:
@@ -535,7 +634,7 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     start = time.monotonic()
-    heartbeat_every = max(1.0, float(_SPINNER_HEARTBEAT_SECONDS))
+    heartbeat_every = max(0.01, float(_SPINNER_HEARTBEAT_SECONDS))
 
     # Reduced-motion path: no animation, but still emit periodic liveness cues.
     if _a11y_reduced_motion():
@@ -1271,6 +1370,24 @@ def summarize_session(session: SessionSummary) -> str:
     if session.automation_mode:
         status = session.automation_status or "active"
         parts.append(f"automation: {session.automation_mode} ({status})")
+        try:
+            watch_state = load_watch_state(session.session_id)
+            if watch_state:
+                timing = _watch_timing_summary(watch_state)
+                timing_parts = []
+                if timing["active_phase"]:
+                    detail = f"{timing['active_phase']}"
+                    if timing["active_phase_elapsed"] is not None:
+                        detail += f" {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+                    timing_parts.append(f"phase {detail}")
+                if timing["latest_duration"] is not None:
+                    timing_parts.append(f"last run {_format_elapsed_compact(timing['latest_duration'])}")
+                if timing["retry_delay_total"]:
+                    timing_parts.append(f"retry backoff {_format_elapsed_compact(timing['retry_delay_total'])}")
+                if timing_parts:
+                    parts.append("timing: " + " · ".join(timing_parts))
+        except Exception:
+            pass
     if session.checkpoint_count:
         parts.append(f"checkpoints: {session.checkpoint_count}")
     if session.last_checkpoint_at:
@@ -1305,6 +1422,7 @@ def _print_session_summary(session: SessionSummary) -> None:
             try:
                 _w = load_watch_state(session.session_id)
                 if _w:
+                    _timing = _watch_timing_summary(_w)
                     _polls = int(_w.get("poll_count") or 0)
                     _max = int(_w.get("max_polls") or 0)
                     _fails = int(_w.get("failure_count") or 0)
@@ -1313,6 +1431,18 @@ def _print_session_summary(session: SessionSummary) -> None:
                     if _fails:
                         _poll_str += f"  [red]{_fails}/{_limit} failures[/]"
                     grid.add_row("", _poll_str)
+                    _timing_parts = []
+                    if _timing["active_phase"]:
+                        _phase = f"{_timing['active_phase']}"
+                        if _timing["active_phase_elapsed"] is not None:
+                            _phase += f" {_format_elapsed_compact(_timing['active_phase_elapsed'])}"
+                        _timing_parts.append(f"phase {_phase}")
+                    if _timing["latest_duration"] is not None:
+                        _timing_parts.append(f"last run {_format_elapsed_compact(_timing['latest_duration'])}")
+                    if _timing["retry_delay_total"]:
+                        _timing_parts.append(f"backoff {_format_elapsed_compact(_timing['retry_delay_total'])}")
+                    if _timing_parts:
+                        grid.add_row("", "[dim]" + "  •  ".join(_timing_parts) + "[/]")
                     _last_err = str(_w.get("last_error") or "").strip()
                     if _last_err:
                         grid.add_row("", f"[red dim]last err: {_last_err[:70]}[/]")
@@ -1590,6 +1720,88 @@ def format_session_list(items: list[SessionSummary]) -> str:
 def utc_timestamp() -> str:
     """Return a UTC timestamp for watch-mode state updates."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_utc_timestamp(raw_value: Any) -> datetime | None:
+    """Parse an ISO8601 timestamp used by persisted CLI/session state."""
+    text = str(raw_value or "").strip()
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _elapsed_seconds(started_at: Any, finished_at: Any | None = None) -> float | None:
+    start_dt = _parse_utc_timestamp(started_at)
+    if start_dt is None:
+        return None
+    end_dt = _parse_utc_timestamp(finished_at) if finished_at else datetime.now(timezone.utc)
+    if end_dt is None:
+        end_dt = datetime.now(timezone.utc)
+    return max(0.0, (end_dt - start_dt).total_seconds())
+
+
+def _format_elapsed_compact(seconds: Any) -> str:
+    try:
+        value = float(seconds)
+    except (TypeError, ValueError):
+        return "0s"
+    if value < 1:
+        return f"{value:.1f}s"
+    if value < 60:
+        return f"{value:.1f}s" if value < 10 else f"{value:.0f}s"
+    minutes, rem = divmod(int(round(value)), 60)
+    if minutes < 60:
+        return f"{minutes}m {rem}s" if rem else f"{minutes}m"
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}h {minutes}m" if minutes else f"{hours}h"
+
+
+def _watch_retry_delay_total(state: dict[str, Any]) -> int:
+    total = 0
+    for entry in list(state.get("retry_history") or []):
+        try:
+            delay = int(entry.get("delay_seconds") or watch_retry_delay_seconds(int(entry.get("attempt") or 1)))
+        except (TypeError, ValueError):
+            delay = 0
+        total += max(0, delay)
+    return total
+
+
+def _watch_timing_summary(state: dict[str, Any]) -> dict[str, Any]:
+    normalized = normalize_watch_state(state)
+    active_checkpoint = normalized.get("active_checkpoint")
+    checkpoints = [item for item in list(normalized.get("checkpoints") or []) if isinstance(item, dict)]
+    latest_checkpoint = checkpoints[-1] if checkpoints else {}
+    active_phase = ""
+    active_phase_elapsed = None
+
+    if isinstance(active_checkpoint, dict) and active_checkpoint:
+        active_phase = str(active_checkpoint.get("phase") or "").strip()
+        phase_started_at = ""
+        for item in reversed(list(active_checkpoint.get("progress") or [])):
+            if str(item.get("phase") or "").strip() == active_phase:
+                phase_started_at = str(item.get("created_at") or "").strip()
+                break
+        if not phase_started_at:
+            phase_started_at = str(active_checkpoint.get("updated_at") or active_checkpoint.get("started_at") or "").strip()
+        active_phase_elapsed = _elapsed_seconds(phase_started_at)
+
+    latest_duration = (
+        latest_checkpoint.get("duration_seconds")
+        or _elapsed_seconds(latest_checkpoint.get("started_at"), latest_checkpoint.get("completed_at"))
+        or _elapsed_seconds(latest_checkpoint.get("created_at"), latest_checkpoint.get("completed_at"))
+    )
+    current_elapsed = _elapsed_seconds(normalized.get("last_run_at")) if normalized.get("status") in {"running", "retrying"} else None
+    return {
+        "active_phase": active_phase,
+        "active_phase_elapsed": active_phase_elapsed,
+        "latest_duration": latest_duration,
+        "retry_delay_total": _watch_retry_delay_total(normalized),
+        "current_elapsed": current_elapsed,
+    }
 
 
 def load_plan_goal(plan_id: str) -> str:
@@ -1985,8 +2197,20 @@ def normalize_watch_state(state: dict[str, Any] | None) -> dict[str, Any]:
         active_checkpoint["attempts"] = [
             item for item in list(active_checkpoint.get("attempts") or []) if isinstance(item, dict)
         ][-WATCH_PROGRESS_LOG_LIMIT:]
+        active_checkpoint.setdefault(
+            "duration_seconds",
+            _elapsed_seconds(active_checkpoint.get("started_at"), active_checkpoint.get("completed_at")),
+        )
     normalized["active_checkpoint"] = active_checkpoint
-    normalized["checkpoints"] = [item for item in list(normalized.get("checkpoints") or []) if isinstance(item, dict)]
+    checkpoints = [item for item in list(normalized.get("checkpoints") or []) if isinstance(item, dict)]
+    for checkpoint in checkpoints:
+        checkpoint.setdefault(
+            "duration_seconds",
+            _elapsed_seconds(checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at")),
+        )
+    normalized["checkpoints"] = checkpoints
+    for entry in normalized["retry_history"]:
+        entry.setdefault("delay_seconds", watch_retry_delay_seconds(int(entry.get("attempt") or 1)))
     return normalized
 
 
@@ -4796,6 +5020,7 @@ def _print_watch_status(state: dict[str, Any]) -> None:
     interval_seconds = int(state.get("interval_seconds") or 0)
     last_error = str(state.get("last_error") or "").strip()
     last_summary = str(state.get("last_summary") or "").strip()
+    timing = _watch_timing_summary(state)
 
     if _RICH_AVAILABLE and _IS_TTY:
         grid = _RichTable.grid(padding=(0, 2))
@@ -4814,6 +5039,15 @@ def _print_watch_status(state: dict[str, Any]) -> None:
             grid.add_row("retry limit", f"{retry_limit}")
         if interval_seconds:
             grid.add_row("interval", f"{interval_seconds}s")
+        if timing["active_phase"]:
+            phase_label = timing["active_phase"]
+            if timing["active_phase_elapsed"] is not None:
+                phase_label += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+            grid.add_row("phase", f"[magenta]{phase_label}[/]")
+        if timing["latest_duration"] is not None:
+            grid.add_row("last duration", f"{_format_elapsed_compact(timing['latest_duration'])}")
+        if timing["retry_delay_total"]:
+            grid.add_row("backoff", f"{_format_elapsed_compact(timing['retry_delay_total'])} total")
         if last_run_at:
             grid.add_row("last run", f"[dim]{last_run_at}[/]")
         if last_summary:
@@ -4831,6 +5065,15 @@ def _print_watch_status(state: dict[str, Any]) -> None:
             print(f"  failures:  {failure_count}/{retry_limit} retry limit")
         if interval_seconds:
             print(f"  interval:  {interval_seconds}s")
+        if timing["active_phase"]:
+            phase_line = timing["active_phase"]
+            if timing["active_phase_elapsed"] is not None:
+                phase_line += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+            print(f"  phase:     {phase_line}")
+        if timing["latest_duration"] is not None:
+            print(f"  duration:  {_format_elapsed_compact(timing['latest_duration'])}")
+        if timing["retry_delay_total"]:
+            print(f"  backoff:   {_format_elapsed_compact(timing['retry_delay_total'])} total")
         if last_run_at:
             print(f"  last run:  {last_run_at}")
         if last_summary:
@@ -4862,13 +5105,17 @@ def _print_watch_history(state: dict[str, Any]) -> None:
             ts_short = ts[11:19] if len(ts) > 10 else ts
             phase = str(entry.get("phase") or "poll").strip()
             note = str(entry.get("note") or entry.get("summary") or entry.get("content") or "").strip()
+            elapsed = _elapsed_seconds(entry.get("created_at"))
             icon = "✅" if entry.get("ok") else "⚠️" if entry.get("warning") else "•"
-            table.add_row(ts_short, f"[dim]{phase}[/]", f"{icon} {note[:100]}")
+            suffix = f"  [dim]{_format_elapsed_compact(elapsed)} ago[/]" if elapsed is not None else ""
+            table.add_row(ts_short, f"[dim]{phase}[/]", f"{icon} {note[:100]}{suffix}")
         for entry in retry_history[-3:]:
             ts = str(entry.get("at") or entry.get("timestamp") or "").strip()
             ts_short = ts[11:19] if len(ts) > 10 else ts
             reason = str(entry.get("reason") or entry.get("error") or "").strip()
-            table.add_row(ts_short, "[red]retry[/]", f"🔄 {reason[:100]}")
+            delay = entry.get("delay_seconds")
+            delay_text = f" · backoff {_format_elapsed_compact(delay)}" if delay else ""
+            table.add_row(ts_short, "[red]retry[/]", f"🔄 {reason[:100]}{delay_text}")
         for note_entry in notes[-3:]:
             ts = str(note_entry.get("created_at") or "").strip()
             ts_short = ts[11:19] if len(ts) > 10 else ts
@@ -4880,7 +5127,10 @@ def _print_watch_history(state: dict[str, Any]) -> None:
             ts = str(entry.get("timestamp") or entry.get("at") or entry.get("created_at") or "").strip()
             label = str(entry.get("phase") or entry.get("action") or "").strip()
             text = str(entry.get("note") or entry.get("summary") or entry.get("reason") or "").strip()
-            print(f"  [{ts}] {label}: {text[:100]}")
+            suffix = ""
+            if entry in retry_history[-3:] and entry.get("delay_seconds"):
+                suffix = f" (backoff {_format_elapsed_compact(entry.get('delay_seconds'))})"
+            print(f"  [{ts}] {label}: {text[:100]}{suffix}")
 
 
 def _cmd_watch(ctx: ChatCommandContext) -> str:
@@ -5276,6 +5526,16 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
             summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
             content = str(ev.get("content") or "").strip()
             label = (summary or content[:80]).replace("\n", " ")
+            if isinstance(meta, dict):
+                timing_bits = []
+                if meta.get("elapsed_seconds") is not None:
+                    timing_bits.append(_format_elapsed_compact(meta.get("elapsed_seconds")))
+                if meta.get("approval_seconds") is not None:
+                    timing_bits.append(f"approval {_format_elapsed_compact(meta.get('approval_seconds'))}")
+                if meta.get("retry_delay_seconds") is not None:
+                    timing_bits.append(f"backoff {_format_elapsed_compact(meta.get('retry_delay_seconds'))}")
+                if timing_bits:
+                    label = f"{label}  ({', '.join(timing_bits)})"
             color = _KIND_COLORS.get(kind, "dim")
             table.add_row(ts_short, f"[{color}]{kind}[/]", label)
         _RICH_CONSOLE.print(table)
@@ -5289,6 +5549,16 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
             summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
             content = str(ev.get("content") or "").strip()
             label = summary or content[:100]
+            if isinstance(meta, dict):
+                timing_bits = []
+                if meta.get("elapsed_seconds") is not None:
+                    timing_bits.append(_format_elapsed_compact(meta.get("elapsed_seconds")))
+                if meta.get("approval_seconds") is not None:
+                    timing_bits.append(f"approval {_format_elapsed_compact(meta.get('approval_seconds'))}")
+                if meta.get("retry_delay_seconds") is not None:
+                    timing_bits.append(f"backoff {_format_elapsed_compact(meta.get('retry_delay_seconds'))}")
+                if timing_bits:
+                    label = f"{label} ({', '.join(timing_bits)})"
             print(f"[{ts}] {kind}: {label}")
     return _CMD_CONTINUE
 
@@ -5533,9 +5803,22 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     token = ctx.args.strip()
+    token_lower = token.lower()
+    overlay_query = ""
+    wants_overlay = False
+    if token_lower == "overlay":
+        wants_overlay = True
+    elif token_lower.startswith("overlay "):
+        wants_overlay = True
+        overlay_query = token[8:].strip()
+    elif token_lower == "pick":
+        wants_overlay = True
+    elif token_lower.startswith("pick "):
+        wants_overlay = True
+        overlay_query = token[5:].strip()
 
     # /outputs promote <index> <name>
-    if token.lower().startswith("promote "):
+    if token_lower.startswith("promote "):
         promote_args = token[8:].strip().split(maxsplit=1)
         if len(promote_args) < 2:
             print(f"{_BRE}error:{_R} Usage: /outputs promote <index> <stable-name>")
@@ -5558,6 +5841,31 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
         print(f"  {_e('📄', '[promoted]')} {src.name} → {_BCY}{dst}{_R}")
         return _CMD_CONTINUE
+    if wants_overlay or (_interactive_overlays_enabled() and not token):
+        selected = _run_interactive_overlay(
+            title="Saved outputs overlay",
+            items=outputs,
+            label_fn=lambda item: (
+                f"{str(item.get('name') or '').strip()}  "
+                f"{_format_byte_count(int(item.get('size_bytes') or 0))}  "
+                f"{str(item.get('modified_at') or '').strip()}".strip()
+            ),
+            on_select=lambda item: print(
+                load_saved_output_preview(
+                    session.session_id,
+                    str(item.get("name") or "").strip(),
+                    max_chars=OUTPUT_PREVIEW_MAX_CHARS,
+                )
+            ),
+            initial_query=overlay_query,
+            empty_message="No saved outputs yet.",
+        )
+        if selected:
+            _set_command_result(ctx, ok=True, summary="selected saved output from overlay")
+            return _CMD_CONTINUE
+        if wants_overlay:
+            _set_command_result(ctx, ok=True, summary="outputs overlay closed")
+            return _CMD_CONTINUE
     if not token:
         if _RICH_AVAILABLE and _IS_TTY:
             table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan",
@@ -5903,7 +6211,8 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         risk_level=risk_level,
         recovery_hint="check the cwd and use your shell history or VCS tools before re-running.",
     )
-    if not request_cli_approval(
+    approval_started = time.monotonic()
+    approved = request_cli_approval(
         action="shell.exec",
         target=raw,
         risk_level=risk_level,
@@ -5912,8 +6221,24 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         session_id=session.session_id,
         plan_id=session.plan_id,
         task_id=session.task_id,
-    ):
+    )
+    approval_seconds = max(0.0, time.monotonic() - approval_started)
+    append_event(
+        session.session_id,
+        kind="approval",
+        content=raw,
+        metadata={
+            "summary": f"{'approved' if approved else 'denied'} /exec {raw[:80]}",
+            "action": "shell.exec",
+            "approved": approved,
+            "approval_seconds": approval_seconds,
+            "risk_level": risk_level.value,
+            "cwd": session.cwd,
+        },
+    )
+    if not approved:
         _print_error("shell command not approved")
+        _print_feedback("Approval denied.", level="warn", detail=f"after {_format_elapsed_compact(approval_seconds)}")
         _set_command_result(ctx, ok=False, summary="shell command not approved")
         return _CMD_CONTINUE
     if not _capture_routed_action_checkpoint(
@@ -5924,12 +6249,14 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         detail=f"cwd={session.cwd}",
     ):
         return _CMD_CONTINUE
+    exec_started = time.monotonic()
     try:
         result = run_async(run_shell_command(command_parts, cwd=session.cwd or None, timeout=60))
     except Exception as exc:
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
+    exec_seconds = max(0.0, time.monotonic() - exec_started)
     append_event(
         session.session_id,
         kind="exec",
@@ -5939,13 +6266,18 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
             "cwd": result.cwd,
             "risk_level": risk_level.value,
             "returncode": result.returncode,
+            "approval_seconds": approval_seconds,
+            "elapsed_seconds": exec_seconds,
         },
     )
     _print_shell_result(result)
     _print_feedback(
         "Command complete.",
         level="success" if result.returncode == 0 else "warn",
-        detail=f"exit {result.returncode} · cwd {result.cwd}",
+        detail=(
+            f"exit {result.returncode} · {_format_elapsed_compact(exec_seconds)} run"
+            f" · approval {_format_elapsed_compact(approval_seconds)} · cwd {result.cwd}"
+        ),
     )
     _set_command_result(
         ctx,
@@ -6030,7 +6362,8 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         risk_level=risk_level,
         recovery_hint="routed edits can use /rollback last; otherwise recover with your editor or VCS.",
     )
-    if not request_cli_approval(
+    approval_started = time.monotonic()
+    approved = request_cli_approval(
         action="file.edit",
         target=path,
         risk_level=risk_level,
@@ -6039,8 +6372,23 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         session_id=session.session_id,
         plan_id=session.plan_id,
         task_id=session.task_id,
-    ):
+    )
+    approval_seconds = max(0.0, time.monotonic() - approval_started)
+    append_event(
+        session.session_id,
+        kind="approval",
+        content=path,
+        metadata={
+            "summary": f"{'approved' if approved else 'denied'} /edit {path}",
+            "action": "file.edit",
+            "approved": approved,
+            "approval_seconds": approval_seconds,
+            "risk_level": risk_level.value,
+        },
+    )
+    if not approved:
         _print_error("file edit not approved")
+        _print_feedback("Approval denied.", level="warn", detail=f"after {_format_elapsed_compact(approval_seconds)}")
         _set_command_result(ctx, ok=False, summary="file edit not approved")
         return _CMD_CONTINUE
     resolved_path = str(Path(path).expanduser().resolve())
@@ -6053,6 +6401,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         file_paths=[resolved_path],
     ):
         return _CMD_CONTINUE
+    edit_started = time.monotonic()
     try:
         if replace_values:
             result = replace_text_in_file(path, old=replace_values[0], new=replace_values[1])
@@ -6062,6 +6411,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
+    edit_seconds = max(0.0, time.monotonic() - edit_started)
     append_event(
         session.session_id,
         kind="edit",
@@ -6071,13 +6421,15 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             "files": [result.path],
             "changed": result.changed,
             "risk_level": risk_level.value,
+            "approval_seconds": approval_seconds,
+            "elapsed_seconds": edit_seconds,
         },
     )
     _print_file_edit_result(result)
     _print_feedback(
         "Edit complete.",
         level="success" if result.changed else "info",
-        detail=result.summary,
+        detail=f"{result.summary} · {_format_elapsed_compact(edit_seconds)} write · approval {_format_elapsed_compact(approval_seconds)}",
     )
     _set_command_result(ctx, ok=True, summary=result.summary)
     return _CMD_CONTINUE
@@ -6195,6 +6547,28 @@ def _cmd_theme(ctx: ChatCommandContext) -> str:
     _PREFS["theme"] = normalized
     _save_prefs()
     _print_theme_preview(normalized, persisted=True)
+    return _CMD_CONTINUE
+
+
+def _cmd_overlay(ctx: ChatCommandContext) -> str:
+    """/overlay [on|off|status] — manage opt-in interactive overlays."""
+    token = (ctx.args or "").strip().lower()
+    if not token or token == "status":
+        state = "ON" if _interactive_overlays_enabled() else "OFF"
+        availability = "available" if _overlay_available() else "unavailable"
+        print(f"Interactive overlays: {state} ({availability} in this terminal)")
+        print("Supported surfaces: /outputs, /sessions, and openclaw session list --interactive")
+        return _CMD_CONTINUE
+    if token not in {"on", "off"}:
+        _print_error("Usage: /overlay [on|off|status]")
+        return _CMD_CONTINUE
+    enabled = token == "on"
+    _PREFS["interactive_overlays"] = enabled
+    _save_prefs()
+    if enabled:
+        print("Interactive overlays enabled for supported list commands.")
+    else:
+        print("Interactive overlays disabled; list commands will stay non-interactive.")
     return _CMD_CONTINUE
 
 
@@ -6444,6 +6818,18 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
     is_tty = _IS_TTY or sys.stdout.isatty()
     token = ctx.args.strip()
     token_lower = token.lower()
+    overlay_query = ""
+    wants_overlay = False
+    if token_lower == "overlay":
+        wants_overlay = True
+    elif token_lower.startswith("overlay "):
+        wants_overlay = True
+        overlay_query = token[8:].strip()
+    elif token_lower == "pick":
+        wants_overlay = True
+    elif token_lower.startswith("pick "):
+        wants_overlay = True
+        overlay_query = token[5:].strip()
 
     if token_lower.startswith("open "):
         target = token[5:].strip()
@@ -6496,7 +6882,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
     query = ""
     if token_lower.startswith("search "):
         query = token[7:].strip().lower()
-    elif token and not token_lower.startswith("search"):
+    elif token and not token_lower.startswith("search") and not wants_overlay:
         # treat bare word as a search query shorthand
         query = token_lower
 
@@ -6517,6 +6903,28 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
         if hint:
             print(hint)
         return _CMD_CONTINUE
+
+    if wants_overlay or (_interactive_overlays_enabled() and not token):
+        selected = _run_interactive_overlay(
+            title="Session overlay",
+            items=sessions,
+            label_fn=lambda s: (
+                f"{s.session_id[:8]}…  {s.title or '—'}  "
+                f"{(s.updated_at or '—')[:19]}  {_session_badges(s)}".strip()
+            ),
+            on_select=lambda s: (
+                _print_session_summary(s),
+                _print_meta_footer(("resume", f"openclaw --session {s.session_id}")),
+            ),
+            initial_query=overlay_query or query,
+            empty_message="No sessions found.",
+        )
+        if selected:
+            _set_command_result(ctx, ok=True, summary="selected session from overlay")
+            return _CMD_CONTINUE
+        if wants_overlay:
+            _set_command_result(ctx, ok=True, summary="session overlay closed")
+            return _CMD_CONTINUE
 
     title_str = "Recent sessions" + (f" matching '{query}'" if query else "")
     if _RICH_AVAILABLE and is_tty:
@@ -7112,6 +7520,13 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     )
     registry.register(
         SlashCommand(
+            name="overlay",
+            description="Toggle opt-in interactive overlays (/overlay [on|off|status])",
+            handler=_cmd_overlay,
+        )
+    )
+    registry.register(
+        SlashCommand(
             name="rollback",
             description="Restore the last routed checkpoint (/rollback last)",
             handler=_cmd_rollback,
@@ -7284,6 +7699,22 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Manage and run command macros (/macro [save|list|show|run|rm] [name])",
         handler=_cmd_macro,
     ))
+    registry.register(SlashCommand(
+        name="rate",
+        description="Rate the last AI response (/rate [good|ok|bad|meh|1-5])",
+        handler=_cmd_rate,
+        aliases=("feedback",),
+    ))
+    registry.register(SlashCommand(
+        name="quality",
+        description="Show response quality stats and rating history",
+        handler=_cmd_quality,
+    ))
+    registry.register(SlashCommand(
+        name="ratehint",
+        description="Toggle the post-response rating hint (/ratehint [on|off])",
+        handler=_cmd_ratehint,
+    ))
     return registry
 
 
@@ -7303,7 +7734,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/files rm <path>",               "Remove a file from tracked files"),
         ("/plan [<id>|unlink]",            "Show or link a plan"),
         ("/task [<id>|unlink]",            "Show or link a task"),
-        ("/outputs [promote <i> <name>]",  "List, preview, or promote saved session outputs"),
+        ("/outputs [promote <i> <name>]",  "List, preview, promote, or overlay-pick saved session outputs"),
+        ("/overlay [on|off|status]",       "Toggle opt-in interactive pickers for supported list commands"),
         ("/rollback [last|list]",          "Restore latest checkpoint or list all checkpoints"),
         ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
         ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
@@ -7318,7 +7750,7 @@ def print_chat_help(*, search: str = "") -> None:
         ("/theme [name|list|preview|next|prev|reset]", "Manage UI themes and previews"),
         ("/emoji [on|off|pack|preview]", "Toggle emoji or switch emoji packs"),
         ("/layout [compact|normal|verbose|plain]", "Switch layout density"),
-        ("/sessions [search|related]",     "Browse or search recent sessions; /sessions related"),
+        ("/sessions [search|related]",     "Browse or search recent sessions; /sessions overlay opens a picker"),
         ("/export [md|json|html]",         "Export conversation history to ~/Downloads"),
         ("/stats",                         "Show aggregate usage stats across all sessions"),
         ("/tag [add|rm|list] <tag>",       "Manage tags on the current session"),
@@ -7346,6 +7778,9 @@ def print_chat_help(*, search: str = "") -> None:
         ("/macro show <name>",                  "Show the commands stored in a macro"),
         ("/macro run <name>",                   "Execute a saved macro's commands in sequence"),
         ("/macro rm <name>",                    "Delete a named macro"),
+        ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
+        ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
+        ("/ratehint [on|off]",                   "Show or toggle the post-response rating hint"),
     ]
 
     q = search.strip().lower()
@@ -8214,6 +8649,66 @@ def _cmd_pins(ctx: "ChatCommandContext") -> str:
     return _cmd_pin(ctx)
 
 
+def _cmd_rate(ctx: "ChatCommandContext") -> str:
+    """Rate the last AI response (/rate [good|ok|bad|meh|1-5])."""
+    global _last_response_text
+    raw = (ctx.args or "").strip().lower()
+    if not raw:
+        print(f"Usage: /rate [good|ok|bad|meh|1-5]")
+        return _CMD_CONTINUE
+
+    _RATING_MAP = {
+        "good": (5, "good"),
+        "5":    (5, "good"),
+        "4":    (4, "great"),
+        "ok":   (3, "ok"),
+        "meh":  (3, "ok"),
+        "3":    (3, "ok"),
+        "2":    (2, "poor"),
+        "bad":  (1, "bad"),
+        "1":    (1, "bad"),
+    }
+    if raw not in _RATING_MAP:
+        _print_error("Unknown rating — use good, ok, bad, or 1-5")
+        return _CMD_CONTINUE
+
+    score, label = _RATING_MAP[raw]
+
+    if not _last_response_text:
+        _print_error("Nothing to rate — no response yet")
+        return _CMD_CONTINUE
+
+    ts = datetime.utcnow().isoformat()
+    ratings = _PREFS.setdefault("ratings", [])
+    ratings.append({"score": score, "label": label, "ts": ts})
+    if len(ratings) > 500:
+        _PREFS["ratings"] = ratings[-500:]
+    _save_prefs()
+
+    if ctx.session_id:
+        try:
+            append_event(
+                session_id=ctx.session_id,
+                kind="rating",
+                content=f"rated: {label} ({score}/5)",
+                metadata={"score": score, "label": label},
+            )
+        except Exception:
+            pass
+
+    _STARS = {5: "⭐⭐⭐⭐⭐", 4: "⭐⭐⭐⭐", 3: "⭐⭐⭐", 2: "⭐⭐", 1: "⭐"}
+    stars = _STARS[score]
+    msg = f"{stars} Rated: {label}"
+    if score >= 4:
+        color = _GR
+    elif score == 3:
+        color = _YL
+    else:
+        color = _DM
+    print(f"{color}{msg}{_R}")
+    return _CMD_CONTINUE
+
+
 def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
     """Show or configure accessibility modes (reduced-motion, plain, high-contrast)."""
     args = (ctx.args or "").strip()
@@ -8302,6 +8797,117 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
         return _CMD_CONTINUE
 
     print("  Usage: /accessibility [status|reduced-motion|plain|high-contrast|reset] [on|off]")
+    return _CMD_CONTINUE
+
+
+def _cmd_quality(ctx: "ChatCommandContext") -> str:
+    """/quality — show response quality stats and rating history."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    ratings: list[dict] = list(_PREFS.get("ratings", []))
+
+    if not ratings:
+        print(f"  {_DM}(no ratings yet — use /rate after responses){_R}")
+        return _CMD_CONTINUE
+
+    total = len(ratings)
+    scores = [r.get("score", 0) for r in ratings]
+    avg = sum(scores) / total
+
+    # Distribution: count per score 1-5
+    dist: dict[int, int] = {i: 0 for i in range(1, 6)}
+    for s in scores:
+        if 1 <= s <= 5:
+            dist[s] += 1
+
+    max_count = max(dist.values()) or 1
+    bar_width = 20
+
+    star_labels = {
+        1: "⭐          poor ",
+        2: "⭐⭐         fair ",
+        3: "⭐⭐⭐        okay ",
+        4: "⭐⭐⭐⭐       good ",
+        5: "⭐⭐⭐⭐⭐ excellent ",
+    }
+
+    recent = ratings[-3:][::-1]
+
+    if _RICH_AVAILABLE and is_tty:
+        content = _RichText()
+        content.append(f"  Total rated:   ", style="dim")
+        content.append(f"{total}", style="bold")
+        content.append(f" responses\n", style="dim")
+        content.append(f"  Average score: ", style="dim")
+        content.append(f"{avg:.1f}", style="bold cyan")
+        content.append(f" / 5.0\n\n", style="dim")
+
+        for star in range(1, 6):
+            count = dist[star]
+            filled = int(round(bar_width * count / max_count)) if count else 0
+            bar = "█" * filled
+            label = star_labels[star]
+            content.append(f"  {label}", style="dim")
+            content.append(f"{bar:<{bar_width}}", style="green")
+            content.append(f"  {count}\n", style="bold")
+
+        if recent:
+            content.append(f"\n  Recent ratings:\n", style="dim")
+            for r in recent:
+                ts = str(r.get("ts", ""))[:16]
+                score = r.get("score", "?")
+                label = r.get("label", "")
+                stars = "⭐" * int(score) if isinstance(score, int) else str(score)
+                content.append(f"    {ts}  ", style="dim")
+                content.append(f"{stars}", style="yellow")
+                if label:
+                    content.append(f"  {label}", style="dim")
+                content.append("\n")
+
+        _RICH_CONSOLE.print(_RichPanel(content, title=f"[bold]{_e('📊', '[quality]')} Response Quality[/]", border_style="cyan"))
+    else:
+        print(f"\n  {_e('📊', '[quality]')} Response Quality\n")
+        print(f"  Total rated:   {_B}{total}{_R} responses")
+        print(f"  Average score: {_B}{avg:.1f}{_R} / 5.0\n")
+        for star in range(1, 6):
+            count = dist[star]
+            filled = int(round(bar_width * count / max_count)) if count else 0
+            bar = "█" * filled
+            label = star_labels[star]
+            print(f"  {label}{bar:<{bar_width}}  {count}")
+        if recent:
+            print(f"\n  Recent ratings:")
+            for r in recent:
+                ts = str(r.get("ts", ""))[:16]
+                score = r.get("score", "?")
+                label = r.get("label", "")
+                stars = "⭐" * int(score) if isinstance(score, int) else str(score)
+                line = f"    {ts}  {stars}"
+                if label:
+                    line += f"  {label}"
+                print(line)
+        print()
+    return _CMD_CONTINUE
+
+
+def _cmd_ratehint(ctx: "ChatCommandContext") -> str:
+    """/ratehint [on|off] — toggle the post-response rating hint."""
+    arg = ctx.args.strip().lower()
+    if arg in ("on", "off"):
+        _PREFS["show_rate_hint"] = (arg == "on")
+        _save_prefs()
+        state = "on" if _PREFS["show_rate_hint"] else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] rating hint [bold]{state}[/]")
+        else:
+            print(f"✓ rating hint {state}")
+    else:
+        state = "on" if _PREFS.get("show_rate_hint", True) else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]rating hint is [bold]{state}[/] — use /ratehint on|off[/]")
+        else:
+            print(f"rating hint is {state} — use /ratehint on|off")
     return _CMD_CONTINUE
 
 
@@ -8532,6 +9138,11 @@ def run_chat(
             _print_response_separator(label="Response")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
+        if _PREFS.get("show_rate_hint", True) and not _a11y_plain_mode() and (_IS_TTY or sys.stdout.isatty()):
+            if _RICH_AVAILABLE:
+                _RICH_CONSOLE.print("[dim]  rate this response: /rate good · /rate ok · /rate bad[/]")
+            else:
+                print(f"  {_DM}rate this response: /rate good · /rate ok · /rate bad{_R}")
         global _last_response_text
         _last_response_text = response.response or ""
         if not config.output_json and not _compact:
@@ -8591,7 +9202,34 @@ def handle_session_command(args: argparse.Namespace) -> int:
         _print_session_summary(session)
         return 0
     if subcommand == "list":
-        _print_session_list(list_sessions(limit=int(getattr(args, "limit", 20) or 20)))
+        sessions = list_sessions(limit=int(getattr(args, "limit", 20) or 20))
+        filter_query = str(getattr(args, "filter", "") or "").strip().lower()
+        if filter_query:
+            sessions = [
+                s for s in sessions
+                if filter_query in s.session_id.lower()
+                or filter_query in (s.title or "").lower()
+                or filter_query in (s.last_summary or "").lower()
+                or filter_query in " ".join(getattr(s, "tags", [])).lower()
+            ]
+        if bool(getattr(args, "interactive", False)):
+            selected = _run_interactive_overlay(
+                title="Session list overlay",
+                items=sessions,
+                label_fn=lambda s: (
+                    f"{s.session_id[:8]}…  {s.title or '—'}  "
+                    f"{(s.updated_at or '—')[:19]}  {_session_badges(s)}".strip()
+                ),
+                on_select=lambda s: (
+                    _print_session_summary(s),
+                    _print_meta_footer(("resume", f"openclaw --session {s.session_id}")),
+                ),
+                initial_query=filter_query,
+                empty_message="No sessions found.",
+            )
+            if selected:
+                return 0
+        _print_session_list(sessions)
         return 0
     if subcommand == "show":
         out = inspect_session(args.session_id)
@@ -9151,17 +9789,32 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                                 output_json=config.output_json,
                             ),
                         )
-                        active_checkpoint["attempts"][-1].update({"finished_at": utc_timestamp(), "status": "completed"})
+                        finished_at = utc_timestamp()
+                        active_checkpoint["attempts"][-1].update(
+                            {
+                                "finished_at": finished_at,
+                                "status": "completed",
+                                "duration_seconds": _elapsed_seconds(
+                                    active_checkpoint["attempts"][-1].get("started_at"),
+                                    finished_at,
+                                ),
+                            }
+                        )
                         break
                     except Exception as exc:
                         error_message = str(exc).strip() or exc.__class__.__name__
                         transient = is_transient_watch_error(error_message)
+                        finished_at = utc_timestamp()
                         active_checkpoint["attempts"][-1].update(
                             {
-                                "finished_at": utc_timestamp(),
+                                "finished_at": finished_at,
                                 "status": "failed",
                                 "error": error_message,
                                 "transient": transient,
+                                "duration_seconds": _elapsed_seconds(
+                                    active_checkpoint["attempts"][-1].get("started_at"),
+                                    finished_at,
+                                ),
                             }
                         )
                         state["failure_count"] = int(state.get("failure_count") or 0) + 1
@@ -9173,6 +9826,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                             "error": error_message,
                             "transient": transient,
                             "created_at": utc_timestamp(),
+                            "delay_seconds": watch_retry_delay_seconds(attempt) if transient and attempt < retry_limit else 0,
                         }
                         retry_history = list(state.get("retry_history") or [])
                         retry_history.append(retry_entry)
@@ -9187,7 +9841,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                             watch_interval_seconds=interval_seconds,
                         )
                         if transient and attempt < retry_limit:
-                            delay_seconds = watch_retry_delay_seconds(attempt)
+                            delay_seconds = int(retry_entry.get("delay_seconds") or watch_retry_delay_seconds(attempt))
                             record_watch_progress(
                                 session_id=session.session_id,
                                 state=state,
@@ -9203,13 +9857,18 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                             time.sleep(delay_seconds)
                             continue
                         failure_summary = f"{mode} failed: {error_message[:160]}"
+                        checkpoint_completed_at = utc_timestamp()
                         active_checkpoint.update(
                             {
                                 "status": "failed",
-                                "completed_at": utc_timestamp(),
+                                "completed_at": checkpoint_completed_at,
                                 "summary": failure_summary,
                                 "error": error_message,
                                 "transient": transient,
+                                "duration_seconds": _elapsed_seconds(
+                                    active_checkpoint.get("started_at"),
+                                    checkpoint_completed_at,
+                                ),
                             }
                         )
                         state.setdefault("checkpoints", []).append(dict(active_checkpoint))
@@ -9230,6 +9889,8 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                                 "status": "failed",
                                 "error": error_message,
                                 "retry_count": attempt,
+                                "retry_delay_seconds": _watch_retry_delay_total(state),
+                                "elapsed_seconds": active_checkpoint.get("duration_seconds"),
                             },
                         )
                         raise OpenClawCliError(
@@ -9247,7 +9908,9 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                     "attempt_count": attempt,
                     "progress": list(state.get("active_checkpoint", {}).get("progress") or []),
                     "attempts": list(state.get("active_checkpoint", {}).get("attempts") or []),
+                    "started_at": str(state.get("active_checkpoint", {}).get("started_at") or ""),
                 }
+                checkpoint["duration_seconds"] = _elapsed_seconds(checkpoint.get("started_at") or checkpoint.get("created_at"), checkpoint.get("completed_at"))
                 state.setdefault("checkpoints", []).append(checkpoint)
                 state["workspace_signature"] = workspace_signature
                 state["last_run_at"] = checkpoint["completed_at"]
@@ -9270,6 +9933,8 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                         "output_path": output_path,
                         "plan_id": plan_id,
                         "task_id": task_id,
+                        "elapsed_seconds": checkpoint.get("duration_seconds"),
+                        "retry_delay_seconds": _watch_retry_delay_total(state),
                     },
                 )
                 update_session(
@@ -9536,6 +10201,8 @@ def build_parser() -> argparse.ArgumentParser:
     session_create.add_argument("--task-id", help="Optional related task identifier")
     session_list = session_subparsers.add_parser("list", help="List recent local sessions")
     session_list.add_argument("--limit", type=int, default=20, help="Maximum number of sessions to print")
+    session_list.add_argument("--filter", help="Optional text filter for titles, IDs, summaries, or tags")
+    session_list.add_argument("--interactive", action="store_true", help="Open an opt-in interactive session picker when running in a TTY")
     session_show = session_subparsers.add_parser("show", help="Show a local session summary")
     session_show.add_argument("session_id", help="Session identifier")
     session_resume = session_subparsers.add_parser("resume", help="Show a session and print its resume command")

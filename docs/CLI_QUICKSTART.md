@@ -79,8 +79,8 @@ Wave 15's currently shipped accessibility controls live in the REPL:
 /accessibility reset
 ```
 
-- **Reduced motion** disables spinner animation and falls back to one static
-  `thinking...` line.
+- **Reduced motion** disables spinner animation and falls back to static text
+  status lines plus periodic heartbeats for slower requests.
 - **Plain mode** simplifies the prompt and startup banner, and forces plain-text
   response rendering for screen-reader/basic-terminal use. It also aligns with
   `/layout plain`.
@@ -94,6 +94,19 @@ Adaptive layout is currently split between:
 
 - `/layout compact|normal|verbose|plain` for chrome density
 - width-aware render helpers for tables and status output
+
+## Wave 16 feedback cues
+
+The current Wave 16 slice adds denser but still accessible feedback:
+
+- Long-running chat/analyze/write calls now end with an explicit `response ready`
+  cue, and reduced-motion mode prints periodic text heartbeats while waiting.
+- `/clear`, `/layout`, and `/accessibility` return a short shared confirmation
+  line instead of mixed ad-hoc phrasing.
+- High/critical `/exec` and `/edit` actions now show an extra pre-approval
+  warning with a recovery hint before the normal approval prompt.
+- `/exec` and `/edit` end with a compact completion line after the main result so
+  it is easier to tell when the action finished.
 
 ## Theme engine and personalization
 
@@ -201,6 +214,14 @@ These mirror the top-level `openclaw` subcommands but run inside the current ses
 | `/macro show <name>` | Display the commands stored in a macro |
 | `/macro run <name>` | Execute a macro's slash commands in sequence; natural-language entries are skipped with a warning |
 | `/macro rm <name>` | Delete a named macro |
+
+### Response rating & quality (Wave 18)
+
+| Command | What it does |
+| --- | --- |
+| `/rate [good\|ok\|bad\|meh\|1-5]` | Rate the last AI response; stored in `_PREFS["ratings"]` and as a session event |
+| `/quality` | Show response quality stats — avg score, star distribution chart, most recent ratings |
+| `/ratehint [on\|off]` | Toggle the dim "rate this response" hint shown after each AI reply |
 
 ### Freeform auto-routing and plan decomposition
 

@@ -81,6 +81,7 @@ Steps:
 | [Wave 15](#wave-15--accessibility--adaptive-layout) | Accessibility & Adaptive Layout | ✅ Shipped |
 | [Wave 16](#wave-16--search-aliases--pins) | Search, Aliases & Pins | ✅ Shipped |
 | [Wave 17](#wave-17--macros--command-history) | Macros & Command History | ✅ Shipped |
+| [Wave 18](#wave-18--response-rating--quality) | Response Rating & Quality | ✅ Shipped |
 
 ---
 
@@ -878,6 +879,58 @@ setup.
 
 ---
 
+## Wave 16 — Microinteractions & Feedback Density
+
+**Status: 🟡 Partial**
+
+**Goal:** Make the CLI feel more alive and legible between big features: quick
+confirmations for common actions, clearer completion cues, gentler liveness for
+long-running calls, and stronger but still accessible emphasis before risky
+actions.
+
+### Shipped in this slice
+
+| Feature | Evidence |
+|---|---|
+| Shared compact confirmations | `/clear`, `/layout`, and `/accessibility` now render through `_print_feedback()` instead of bespoke strings |
+| Reduced-motion liveness heartbeat | `_with_spinner()` now emits periodic text heartbeats in reduced-motion mode instead of going silent |
+| Clear completion cue | `_with_spinner()` now ends with an explicit `response ready` confirmation |
+| Risk emphasis before approvals | High/critical `/exec` and `/edit` print an extra warning + recovery hint before `request_cli_approval()` |
+| Action-complete recaps | `/exec` and `/edit` now end with a compact completion line after the main result block |
+
+### Deferred / not yet evidenced
+
+- [ ] Additional watch-loop-specific liveness cues beyond existing progress lines
+- [ ] Optional bell/alert cues
+- [ ] Broader completion recaps for every command surface
+- [ ] Full `tests/test_openclaw_cli.py` suite is green (baseline still has 5 unrelated failures)
+- [ ] Deployed to macbook
+
+### Validation
+
+- Focused CLI pytest slice covering spinner, accessibility, `/clear`, `/exec`,
+  `/edit`, and top-level `exec`/`edit` feedback paths passed.
+
+---
+
+## Wave 16B — Search, Aliases & Pins
+
+**Status: ✅ Shipped** (`5d2a539`)
+
+| Feature | Description |
+|---|---|
+| `/search <query>` | Full-text search current session events; matches highlighted in bold yellow |
+| `/search --all <query>` | Cross-session search (last 200 sessions, up to 15 hits) |
+| `/alias <name> <expansion>` | Define command shorthands stored in `_PREFS["aliases"]` |
+| `/alias rm <name>` / `/alias` | Remove or list aliases; `_BUILTIN_COMMAND_NAMES` prevents shadowing |
+| Alias expansion | Hooked into `run_chat()` before dispatch; one level only, no recursion |
+| `/pin [name]` | Pin last AI response; auto-names `pin-1`, `pin-2` … |
+| `/pin recall <name>` | Re-render a pinned response via `print_response()` |
+| `/pin rm <name>` / `/pins` | Remove or list all pins |
+| `_last_response_text` | Module-level global tracks latest AI response for `/pin` |
+
+---
+
 ## Wave 17 — Theme Engine & Personalization
 
 **Status: ✅ Shipped**
@@ -917,25 +970,7 @@ that covers status output as well as decorative UI icons.
 
 ---
 
-## Wave 16 — Search, Aliases & Pins
-
-**Status: ✅ Shipped** (`5d2a539`)
-
-| Feature | Description |
-|---|---|
-| `/search <query>` | Full-text search current session events; matches highlighted in bold yellow |
-| `/search --all <query>` | Cross-session search (last 200 sessions, up to 15 hits) |
-| `/alias <name> <expansion>` | Define command shorthands stored in `_PREFS["aliases"]` |
-| `/alias rm <name>` / `/alias` | Remove or list aliases; `_BUILTIN_COMMAND_NAMES` prevents shadowing |
-| Alias expansion | Hooked into `run_chat()` before dispatch; one level only, no recursion |
-| `/pin [name]` | Pin last AI response; auto-names `pin-1`, `pin-2` … |
-| `/pin recall <name>` | Re-render a pinned response via `print_response()` |
-| `/pin rm <name>` / `/pins` | Remove or list all pins |
-| `_last_response_text` | Module-level global tracks latest AI response for `/pin` |
-
----
-
-## Wave 17 — Macros & Command History
+## Wave 18 — Macros & Command History
 
 **Status: ✅ Shipped** (`HEAD`)
 
@@ -989,3 +1024,18 @@ If `openclaw_cli_sessions.py` was changed, also deploy it:
 ```bash
 scp src/openclaw_cli_sessions.py macbook:/Users/davevoyles/.local/share/openclaw-cli/
 ```
+
+
+---
+
+## Wave 18 — Response Rating & Quality
+
+**Status: shipped**
+
+| Feature | Description |
+|---|---|
+| /rate [good/ok/bad/meh/1-5] | Rate last AI response; maps to score 1-5; stored in _PREFS[ratings] (cap 500) |
+| Session event | Each rating fires append_event(kind=rating) for session history |
+| /quality | Shows total rated, avg score, star distribution bar chart, most recent 3 ratings |
+| /ratehint [on/off] | Toggles post-response dim hint after each AI reply |
+| Pref keys | show_rate_hint (default True); ratings list |
