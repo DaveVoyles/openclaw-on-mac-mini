@@ -474,6 +474,146 @@ def build_collaboration_snapshot(session_id: str, *, limit: int = 5) -> dict[str
     }
 
 
+def build_session_storyline(session_id: str, *, limit: int = 5) -> dict[str, Any]:
+    """Build a narrative recap from persisted local session state."""
+    summary = require_session(session_id)
+    events = load_events(session_id)
+    collaboration = build_collaboration_snapshot(session_id, limit=max(limit, 3))
+    watch_state = load_watch_state(session_id) or {}
+    outputs = list_saved_outputs(session_id, limit=max(limit, 3))
+    checkpoints = [item for item in list(watch_state.get("checkpoints") or []) if isinstance(item, dict)]
+    interventions = [item for item in list(watch_state.get("interventions") or []) if isinstance(item, dict)]
+    actors = [item for item in list(collaboration.get("actors") or []) if isinstance(item, dict)]
+    decisions = [item for item in list(collaboration.get("recent_decisions") or []) if isinstance(item, dict)]
+    notes = [item for item in list(collaboration.get("recent_notes") or []) if isinstance(item, dict)]
+    latest_handoff = collaboration.get("latest_handoff") or {}
+
+    def _story_label(kind: str) -> str:
+        mapping = {
+            "prompt": "Prompt set",
+            "chat": "Prompt set",
+            "assistant": "Response landed",
+            "analyze": "Analysis run",
+            "research": "Research pass",
+            "write": "Draft saved",
+            "plan": "Plan linked",
+            "task": "Task linked",
+            "exec": "Command run",
+            "edit": "File updated",
+            "checkpoint": "Checkpoint",
+            "collab": "Team note",
+            "error": "Issue raised",
+        }
+        return mapping.get(kind, "Session update")
+
+    timeline: list[dict[str, str]] = []
+    for event in events[-max(limit * 3, 6):]:
+        kind = str(event.get("kind") or "").strip().lower()
+        meta = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        summary_text = _short_summary(str(meta.get("summary") or event.get("content") or kind), limit=96)
+        if not summary_text:
+            continue
+        timeline.append(
+            {
+                "timestamp": str(event.get("created_at") or event.get("timestamp") or "").strip(),
+                "label": _story_label(kind),
+                "summary": summary_text,
+                "kind": kind or "event",
+            }
+        )
+    timeline = timeline[-limit:][::-1]
+
+    actor_highlights: list[str] = []
+    for actor in actors[:3]:
+        name = str(actor.get("name") or "operator").strip()
+        touches = int(actor.get("event_count") or 0)
+        last_at = str(actor.get("last_at") or "").strip()
+        beat = f"{name} stayed active across {touches} touchpoint{'s' if touches != 1 else ''}"
+        if last_at:
+            beat += f" · last seen {last_at}"
+        actor_highlights.append(beat)
+
+    milestones: list[str] = []
+    if summary.plan_id:
+        milestones.append(f"Plan linked: {summary.plan_id}")
+    if summary.task_id:
+        milestones.append(f"Task linked: {summary.task_id}")
+    if outputs:
+        milestones.append(
+            f"{len(outputs)} saved output{'s' if len(outputs) != 1 else ''} ready for review"
+        )
+    if checkpoints:
+        milestones.append(
+            f"{len(checkpoints)} checkpoint{'s' if len(checkpoints) != 1 else ''} captured in watch history"
+        )
+    if decisions:
+        lead = decisions[0]
+        milestones.append(
+            f"Latest decision: {_short_summary(str(lead.get('summary') or lead.get('content') or ''), limit=88)}"
+        )
+    elif notes:
+        lead = notes[0]
+        milestones.append(
+            f"Latest note: {_short_summary(str(lead.get('summary') or lead.get('content') or ''), limit=88)}"
+        )
+    if latest_handoff:
+        milestones.append(
+            f"Handoff ready: {str(latest_handoff.get('id') or '').strip() or 'latest snapshot available'}"
+        )
+    milestones = milestones[:limit]
+
+    chapter_title = "Quiet setup"
+    chapter_detail = "fresh context with room to build"
+    if latest_handoff or decisions or len(actors) >= 2:
+        chapter_title = "Shared alignment"
+        chapter_detail = "team context, decisions, and handoff cues are in place"
+    elif interventions:
+        chapter_title = "Operator-guided watch"
+        chapter_detail = "monitoring notes are steering the next move"
+    elif outputs and checkpoints:
+        chapter_title = "Milestone recap"
+        chapter_detail = "artifacts and checkpoints tell a complete story"
+    elif outputs or summary.command_count >= 3 or summary.file_edit_count > 0:
+        chapter_title = "Building momentum"
+        chapter_detail = "recent work left visible signals to continue from"
+
+    headline_bits: list[str] = []
+    if summary.last_summary:
+        headline_bits.append(_short_summary(summary.last_summary, limit=72))
+    elif timeline:
+        headline_bits.append(str(timeline[0].get("summary") or "").strip())
+    if outputs:
+        headline_bits.append(
+            f"{len(outputs)} output{'s' if len(outputs) != 1 else ''} ready"
+        )
+    if decisions:
+        headline_bits.append(
+            f"{len(decisions)} decision{'s' if len(decisions) != 1 else ''} recorded"
+        )
+    elif len(actors) >= 2:
+        headline_bits.append(f"{len(actors)} collaborators in the loop")
+    elif checkpoints:
+        headline_bits.append(
+            f"{len(checkpoints)} checkpoint{'s' if len(checkpoints) != 1 else ''} captured"
+        )
+    headline = " · ".join(bit for bit in headline_bits if bit) or "Fresh session story is still forming"
+
+    handoff_summary = headline
+    if latest_handoff:
+        handoff_summary += f" · handoff {str(latest_handoff.get('id') or '').strip()}"
+
+    return {
+        "headline": headline,
+        "chapter_title": chapter_title,
+        "chapter_detail": chapter_detail,
+        "narrative": f"{chapter_title}: {chapter_detail}",
+        "milestones": milestones,
+        "timeline": timeline,
+        "actor_highlights": actor_highlights,
+        "handoff_summary": handoff_summary,
+    }
+
+
 def load_conversation_history(session_id: str, *, limit_turns: int = 10) -> list[dict[str, str]]:
     """Rebuild ask/chat history from recorded session events."""
     history: list[dict[str, str]] = []

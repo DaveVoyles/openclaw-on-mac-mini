@@ -42,6 +42,7 @@ from openclaw_cli_sessions import (
     append_event,
     apply_handoff,
     build_collaboration_snapshot,
+    build_session_storyline,
     build_workspace_signature,
     collect_workspace_context,
     create_handoff,
@@ -135,6 +136,7 @@ DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
 _CLI_BUILD = "wave25"  # updated with each UX wave batch
+_DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -1939,6 +1941,7 @@ def _print_session_summary(session: SessionSummary) -> None:
     except Exception:
         watch_state = None
     snapshot = build_collaboration_snapshot(session.session_id, limit=3)
+    story = build_session_storyline(session.session_id, limit=4)
     mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
     operator_snapshot = _session_operator_snapshot(
         session,
@@ -1957,6 +1960,8 @@ def _print_session_summary(session: SessionSummary) -> None:
     if mood_cell:
         summary_lines.append(mood_cell)
     detail_lines = [
+        f"story: {story.get('headline', '')}" if story.get("headline") else "",
+        f"chapter: {story.get('chapter_title', '')} · {story.get('chapter_detail', '')}" if story.get("chapter_title") else "",
         _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
         _progress_cell("outputs", str(session.output_count), status="complete" if session.output_count else "idle"),
         _progress_cell("checkpoints", str(session.checkpoint_count), status="complete" if session.checkpoint_count else "idle"),
@@ -1973,6 +1978,8 @@ def _print_session_summary(session: SessionSummary) -> None:
         f"last: {session.last_summary[:100]}" if session.last_summary else "",
     ]
     detail_lines.extend(_operator_snapshot_lines(operator_snapshot)[:5])
+    for milestone in list(story.get("milestones") or [])[:2]:
+        detail_lines.append(f"milestone: {milestone}")
     action_lines = []
     if session.automation_mode:
         a_status = session.automation_status or "active"
@@ -2207,6 +2214,9 @@ def _session_mood_cell(snapshot: dict[str, str], *, rich: bool = False) -> str:
 def _session_preview_lines(session: SessionSummary) -> list[str]:
     lines: list[str] = []
     watch_state = None
+    story = build_session_storyline(session.session_id, limit=3)
+    if story.get("headline"):
+        lines.append(f"story: {_single_line_excerpt(str(story.get('headline') or ''), max_chars=100)}")
     if session.last_summary:
         lines.append(f"latest activity: {_single_line_excerpt(session.last_summary, max_chars=100)}")
     if session.automation_mode:
@@ -2243,7 +2253,14 @@ def _session_preview_lines(session: SessionSummary) -> list[str]:
     mood_cell = _session_mood_cell(mood)
     if mood_cell:
         lines.append(mood_cell)
-    return lines[:4]
+    timeline = list(story.get("timeline") or [])
+    if timeline:
+        lead = timeline[0]
+        lines.append(
+            f"recap: {str(lead.get('label') or 'update')}: "
+            f"{_single_line_excerpt(str(lead.get('summary') or ''), max_chars=88)}"
+        )
+    return lines[:6]
 
 
 def _session_operator_snapshot(
@@ -2375,6 +2392,7 @@ def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
 
 def _build_session_share_text(session_id: str) -> str:
     snapshot = build_collaboration_snapshot(session_id, limit=5)
+    story = build_session_storyline(session_id, limit=5)
     session_data = snapshot.get("session") or {}
     actors = list(snapshot.get("actors") or [])
     recent_decisions = list(snapshot.get("recent_decisions") or [])
@@ -2411,6 +2429,10 @@ def _build_session_share_text(session_id: str) -> str:
         lines.append(f"summary    : {last_summary}")
     if mood.get("share_line"):
         lines.append(str(mood.get("share_line")))
+    if story.get("headline"):
+        lines.append(f"story      : {story.get('headline', '')}")
+    if story.get("chapter_title"):
+        lines.append(f"chapter    : {story.get('chapter_title', '')} · {story.get('chapter_detail', '')}")
     session_tags = [str(tag or "").strip() for tag in list(session_data.get("tags") or []) if str(tag or "").strip()]
     if session_tags:
         lines.append(f"tags       : {', '.join(session_tags[:6])}")
@@ -2469,6 +2491,26 @@ def _build_session_share_text(session_id: str) -> str:
         lines.append("RECENT OUTPUTS")
         for item in recent_outputs[:3]:
             lines.append(f"  - {item.get('name', '')}")
+    milestones = list(story.get("milestones") or [])
+    actor_highlights = list(story.get("actor_highlights") or [])
+    timeline = list(story.get("timeline") or [])
+    if milestones:
+        lines.append("")
+        lines.append("MILESTONES")
+        for item in milestones[:4]:
+            lines.append(f"  - {item}")
+    if actor_highlights:
+        lines.append("")
+        lines.append("CAST HIGHLIGHTS")
+        for item in actor_highlights[:3]:
+            lines.append(f"  - {item}")
+    if timeline:
+        lines.append("")
+        lines.append("TIMELINE RECAP")
+        for item in timeline[:4]:
+            stamp = str(item.get("timestamp") or "").strip()
+            prefix = f"{stamp} · " if stamp else ""
+            lines.append(f"  - {prefix}{item.get('label', 'Update')}: {item.get('summary', '')}")
     lines.append("")
     lines.append("COMMANDS")
     lines.append(f"  resume : {share.get('resume_command', f'openclaw --session {session_id}')}")
@@ -2488,6 +2530,7 @@ def inspect_session(session_id: str) -> str:
     watch: dict[str, Any] = export.get("watch_state") or {}
     routed_checkpoints: list[dict[str, Any]] = export.get("routed_action_checkpoints") or []
     collaboration: dict[str, Any] = export.get("collaboration") or {}
+    story = build_session_storyline(session_id, limit=5)
     mood = _session_mood_snapshot(require_session(session_id), watch_state=watch, collaboration_snapshot=collaboration)
 
     if _RICH_AVAILABLE and _IS_TTY:
@@ -2517,6 +2560,10 @@ def inspect_session(session_id: str) -> str:
             ]
         ),
     ]
+    if story.get("headline"):
+        lines.append(f"  story    : {story.get('headline', '')}")
+    if story.get("chapter_title"):
+        lines.append(f"  chapter  : {story.get('chapter_title', '')} · {story.get('chapter_detail', '')}")
     mood_cell = _session_mood_cell(mood)
     if mood_cell:
         lines.append(f"  {mood_cell}")
@@ -2645,6 +2692,13 @@ def inspect_session(session_id: str) -> str:
             lines.append(f"  decision : {_format_collaboration_entry(entry)}")
         if latest_handoff:
             lines.append(f"  handoff  : {latest_handoff.get('id', '')} @ {latest_handoff.get('created_at', '')}")
+    if story.get("milestones") or story.get("timeline"):
+        lines.append("")
+        lines.append("STORY RECAP")
+        for item in list(story.get("milestones") or [])[:4]:
+            lines.append(f"  milestone: {item}")
+        for item in list(story.get("timeline") or [])[:4]:
+            lines.append(f"  timeline : {item.get('label', 'Update')} · {item.get('summary', '')}")
 
     # ── Last summary ──────────────────────────────────────────────
     last_summary = str(session_data.get("last_summary") or "").strip()
@@ -2670,7 +2724,9 @@ def _inspect_session_rich(
     sid = session_data.get("session_id", session_id)
     title = session_data.get("title") or "Session"
     status = str(session_data.get("status") or "active")
-    mood = _session_mood_snapshot(require_session(session_id), watch_state=watch, collaboration_snapshot=build_collaboration_snapshot(session_id, limit=5))
+    collaboration = build_collaboration_snapshot(session_id, limit=5)
+    story = build_session_storyline(session_id, limit=5)
+    mood = _session_mood_snapshot(require_session(session_id), watch_state=watch, collaboration_snapshot=collaboration)
     # Metadata panel
     meta = _RichTable.grid(padding=(0, 2))
     meta.add_column(style="dim", min_width=12)
@@ -2693,6 +2749,10 @@ def _inspect_session_rich(
     mood_cell = _session_mood_cell(mood, rich=True)
     if mood_cell:
         meta.add_row("🙂 mood", mood_cell)
+    if story.get("headline"):
+        meta.add_row("🎬 story", f"[bold]{story.get('headline', '')}[/]")
+    if story.get("chapter_title"):
+        meta.add_row("📚 chapter", f"{story.get('chapter_title', '')} · {story.get('chapter_detail', '')}")
     plan_id = str(session_data.get("plan_id") or "").strip()
     task_id = str(session_data.get("task_id") or "").strip()
     if plan_id:
@@ -2732,6 +2792,21 @@ def _inspect_session_rich(
             size = _format_byte_count(int(out.get("size_bytes") or 0))
             out_table.add_row(name, size)
         _RICH_CONSOLE.print(_RichPanel(out_table, title=f"[bold dim]Saved Outputs ({len(outputs)})[/]", border_style="dim", padding=(0, 1)))
+
+    milestones = list(story.get("milestones") or [])
+    timeline = list(story.get("timeline") or [])
+    cast = list(story.get("actor_highlights") or [])
+    if milestones or timeline or cast:
+        recap = _RichTable.grid(padding=(0, 1))
+        recap.add_column(style="dim", min_width=11)
+        recap.add_column()
+        for item in milestones[:3]:
+            recap.add_row("milestone", item)
+        for item in cast[:2]:
+            recap.add_row("cast", item)
+        for item in timeline[:3]:
+            recap.add_row(str(item.get("label") or "update"), str(item.get("summary") or ""))
+        _RICH_CONSOLE.print(_RichPanel(recap, title="[bold dim]Story Recap[/]", border_style="magenta", padding=(0, 1)))
 
     _RICH_CONSOLE.print(f"  [dim]Resume:[/] [cyan]openclaw --session {sid}[/]")
 
@@ -9907,6 +9982,11 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Toggle file path quick-action hints after responses (/pathhints [on|off])",
         handler=_cmd_pathhints,
     ))
+    registry.register(SlashCommand(
+        name="prompt",
+        description="Customize the REPL prompt string (/prompt [format|reset]). Tokens: {route} {session} {model} {build} {time}",
+        handler=_cmd_prompt,
+    ))
     return registry
 
 
@@ -10371,6 +10451,10 @@ def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: boo
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
     if _a11y_plain_mode():
         return "openclaw> "
+    # If a custom prompt format is configured, use it instead of the default
+    custom_fmt = _PREFS.get("prompt_format", "")
+    if custom_fmt and custom_fmt != _DEFAULT_PROMPT_FORMAT:
+        return _render_prompt_format(custom_fmt)
     is_tty = _IS_TTY or sys.stdout.isatty()
     narrow = _terminal_width() < 56
     if is_tty:
@@ -10384,6 +10468,82 @@ def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: boo
         return f"{name}{ml_badge} ❯ "
     ml_suffix = " [multiline]" if multiline else ""
     return f"openclaw{ml_suffix} ❯ "
+
+
+def _render_prompt_format(fmt: str) -> str:
+    """Render a prompt format string with current state substitutions."""
+    import datetime
+    now = datetime.datetime.now().strftime("%H:%M")
+
+    route_mode = _PREFS.get("route_mode", "")
+    route = f"[{route_mode}]" if route_mode else "[no-route]"
+
+    session_name = _PREFS.get("current_session", "")
+    session = f" ({session_name})" if session_name else ""
+
+    model = _PREFS.get("last_model", "")
+
+    result = fmt
+    result = result.replace("{route}", route)
+    result = result.replace("{session}", session)
+    result = result.replace("{model}", model)
+    result = result.replace("{build}", _CLI_BUILD)
+    result = result.replace("{time}", now)
+    return result
+
+
+def _cmd_prompt(ctx: "ChatCommandContext") -> str:
+    """/prompt [format] — customize the REPL prompt. Use {route}, {session}, {model}, {build}, {time}.
+
+    Examples:
+      /prompt {route} openclaw>
+      /prompt openclaw [{time}]>
+      /prompt {build} ❯
+      /prompt reset          (restore default)
+    """
+    arg = ctx.args.strip()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if not arg:
+        current = _PREFS.get("prompt_format", _DEFAULT_PROMPT_FORMAT)
+        preview = _render_prompt_format(current)
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[bold cyan]Current prompt format:[/]")
+            _RICH_CONSOLE.print(f"  Format:  [dim]{current}[/]")
+            _RICH_CONSOLE.print(f"  Preview: [bold]{preview}[/]")
+            _RICH_CONSOLE.print(f"\n[dim]Tokens: {{route}} {{session}} {{model}} {{build}} {{time}}[/]")
+            _RICH_CONSOLE.print(f"[dim]Use /prompt reset to restore default[/]\n")
+        else:
+            print(f"\nCurrent: {current}")
+            print(f"Preview: {preview}")
+            print(f"Tokens: {{route}} {{session}} {{model}} {{build}} {{time}}")
+        return _CMD_CONTINUE
+
+    if arg == "reset":
+        _PREFS["prompt_format"] = _DEFAULT_PROMPT_FORMAT
+        _save_prefs()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] prompt format reset to default")
+        else:
+            print("✓ prompt format reset")
+        return _CMD_CONTINUE
+
+    if len(arg) < 2:
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]Prompt format too short[/]")
+        else:
+            print("Prompt format too short")
+        return _CMD_CONTINUE
+
+    _PREFS["prompt_format"] = arg
+    _save_prefs()
+    preview = _render_prompt_format(arg)
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"[green]✓[/] prompt format updated")
+        _RICH_CONSOLE.print(f"  Preview: [bold]{preview}[/]")
+    else:
+        print(f"✓ prompt format: {preview}")
+    return _CMD_CONTINUE
 
 
 def _print_first_run_tips() -> None:

@@ -3565,6 +3565,38 @@ def test_build_session_share_text_wave27_adds_operator_snapshot(monkeypatch, tmp
     assert "output    : status.txt" in out
 
 
+def test_build_session_share_text_wave29_adds_story_recap(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Narrative Share", cwd=str(tmp_path), plan_id="plan-29")
+    mod.append_event(
+        session.session_id,
+        kind="exec",
+        content="pytest -q",
+        metadata={"summary": "Validated the focused test slice"},
+    )
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Keep the recap actor-aware",
+        metadata={
+            "summary": "decision by alice: Keep the recap actor-aware",
+            "actor": "alice",
+            "tags": ["wave-29"],
+            "collab_kind": "decision",
+        },
+    )
+    mod.save_output(session.session_id, "wave29.txt", "Story beats locked in")
+
+    out = mod._build_session_share_text(session.session_id)
+
+    assert "story      :" in out
+    assert "chapter    :" in out
+    assert "MILESTONES" in out
+    assert "CAST HIGHLIGHTS" in out
+    assert "TIMELINE RECAP" in out
+    assert "Validated the focused test slice" in out
+
+
 def test_session_preview_lines_wave27_include_operator_visibility(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
     session = mod.create_session(title="Operator Preview", cwd=str(tmp_path))
@@ -3590,6 +3622,22 @@ def test_session_preview_lines_wave27_include_operator_visibility(monkeypatch, t
 
     assert any("checkpoint 3: paused at approval gate" in line for line in lines)
     assert any("intervention: INFO · operator note · waiting on approval" in line for line in lines)
+
+
+def test_session_preview_lines_wave29_include_story_recap(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Story Preview", cwd=str(tmp_path))
+    mod.append_event(
+        session.session_id,
+        kind="write",
+        content="Draft the recap",
+        metadata={"summary": "Drafted the handoff recap for operators"},
+    )
+
+    lines = mod._session_preview_lines(mod.require_session(session.session_id))
+
+    assert any("story:" in line for line in lines)
+    assert any("recap:" in line for line in lines)
 
 
 def test_build_session_share_text_wave27_keeps_read_only_operator_snapshot(monkeypatch, tmp_path):
@@ -3632,6 +3680,68 @@ def test_build_session_share_text_wave27_keeps_read_only_operator_snapshot(monke
     assert "share  :" in out
 
 
+def test_session_preview_lines_wave29_include_actor_decision_and_milestone(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Story Preview", cwd=str(tmp_path))
+    sessions_mod.update_session(session.session_id, status="complete")
+    sessions_mod.save_output(session.session_id, "recap.txt", "Wave 29 recap scaffold is ready")
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Keep actor labels consistent across share and show",
+        metadata={
+            "summary": "decision by alice: Keep actor labels consistent across share and show",
+            "actor": "alice",
+            "tags": ["wave-29"],
+            "collab_kind": "decision",
+        },
+    )
+
+    lines = mod._session_preview_lines(mod.require_session(session.session_id))
+
+    assert any("collab: alice" in line for line in lines)
+    assert any("story: decision by alice: Keep actor labels consistent across share and show" in line for line in lines)
+    assert any("1 output ready" in line for line in lines)
+
+
+def test_build_session_share_text_wave29_preserves_recap_chapter_flow(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Story Share", cwd=str(tmp_path), plan_id="plan-29", task_id="task-29")
+    sessions_mod.save_output(session.session_id, "handoff.md", "Narrative scaffold")
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Use stable chapter names in the handoff",
+        metadata={
+            "summary": "decision by alice: Use stable chapter names in the handoff",
+            "actor": "alice",
+            "tags": ["wave-29"],
+            "collab_kind": "decision",
+        },
+    )
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Operator verified the plain-text recap ordering",
+        metadata={
+            "summary": "note by operator: Operator verified the plain-text recap ordering",
+            "actor": "operator",
+            "tags": [],
+            "collab_kind": "note",
+        },
+    )
+    mod.create_handoff(session.session_id, note="Share the same chapter order everywhere")
+
+    out = mod._build_session_share_text(session.session_id)
+
+    assert out.index("ACTORS") < out.index("RECENT DECISIONS") < out.index("RECENT NOTES")
+    assert out.index("RECENT NOTES") < out.index("LATEST HANDOFF") < out.index("OPERATOR SNAPSHOT")
+    assert out.index("OPERATOR SNAPSHOT") < out.index("RECENT OUTPUTS") < out.index("COMMANDS")
+    assert "resume : openclaw --session" in out
+    assert "inspect: openclaw session show" in out
+    assert "share  : openclaw session share" in out
+
+
 def test_inspect_session_includes_watch_state(monkeypatch, tmp_path, capsys):
     """inspect_session should surface watch status, goal, and last error when present."""
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
@@ -3669,6 +3779,34 @@ def test_inspect_session_includes_watch_state(monkeypatch, tmp_path, capsys):
     assert "midpoint check" in out
     assert "RECENT PROGRESS" in out
     assert "all green" in out
+
+
+def test_inspect_session_wave29_adds_story_recap(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Story Inspect", cwd=str(tmp_path))
+    mod.append_event(
+        session.session_id,
+        kind="edit",
+        content="updated summary copy",
+        metadata={"summary": "Refined the premium recap copy", "changed": True},
+    )
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Ship the recap after the edit lands",
+        metadata={
+            "summary": "decision by bob: Ship the recap after the edit lands",
+            "actor": "bob",
+            "collab_kind": "decision",
+        },
+    )
+
+    out = mod.inspect_session(session.session_id)
+
+    assert "story    :" in out
+    assert "chapter  :" in out
+    assert "STORY RECAP" in out
+    assert "timeline : Team note" in out or "timeline : File updated" in out
 
 
 def test_inspect_session_front_loads_status_cells_in_dashboard_sections(monkeypatch, tmp_path):
@@ -5957,3 +6095,39 @@ class TestCmdRecall:
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
         assert "No prompt #99" in out
+
+
+class TestCmdPromptFormat:
+    """Tests for _render_prompt_format and _cmd_prompt."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_render_prompt_format_build_token(self):
+        """_render_prompt_format with {build} returns string containing _CLI_BUILD."""
+        result = mod._render_prompt_format("{build} ❯ ")
+        assert mod._CLI_BUILD in result
+
+    def test_render_prompt_format_time_token(self):
+        """_render_prompt_format with {time} returns string containing ':' (HH:MM)."""
+        result = mod._render_prompt_format("{time} > ")
+        assert ":" in result
+
+    def test_cmd_prompt_reset_restores_default(self, monkeypatch):
+        """/prompt reset sets prompt_format pref to _DEFAULT_PROMPT_FORMAT."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setitem(mod._PREFS, "prompt_format", "custom {build} ❯ ")
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_prompt(self._ctx(args="reset"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS.get("prompt_format") == mod._DEFAULT_PROMPT_FORMAT
+
+    def test_cmd_prompt_set_format(self, monkeypatch):
+        """/prompt {build} ❯  sets prompt_format pref correctly (trailing space stripped)."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_prompt(self._ctx(args="{build} ❯"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS.get("prompt_format") == "{build} ❯"

@@ -93,7 +93,7 @@ The current docs/dashboard tranche should keep this order:
 | --- | --- | --- |
 | Wave 27 — Live Dashboard Shares & Operator Visibility | `/session`, `/sessions`, `/watch*`, `/collab`, browser session cards | Current shipped slice is the terminal/read-only snapshot: keep intervention, resume, and handoff labels aligned, and document that visibility does not imply remote control |
 | Wave 28 — Gesture Language & Predictive Affordances | `/watch*`, `/session*`, `/outputs`, `/context`, error/approval flows | Current shipped slice is the lightweight hint layer: reuse `/watch history`, `/watch intervene`, `/watch retry-limit`, `/session`, `/files`, `/plan`, `/retry`, and `/reset` labels consistently, with plain-text examples for hints and recovery menus |
-| Wave 29 — Narrative Recaps & Session Storytelling | `openclaw session show/share/export`, `/collab`, browser session detail views | Standardize recap chapter names, actor labels, and next-step wording across terminal, saved artifacts, and dashboard summaries |
+| Wave 29 — Narrative Recaps & Session Storytelling | `openclaw session show/share`, `/collab`, future browser session detail views | Current shipped slice is the plain-text chapter scaffold: reuse ACTORS / RECENT DECISIONS / RECENT NOTES / LATEST HANDOFF / OPERATOR SNAPSHOT / COMMANDS plus the same actor labels and resume/inspect/share wording; bullet/timeline exports and richer dashboard mirrors remain deferred |
 | Wave 30 — Premium Motion & Choreography Layer | startup banner, summary dashboards, approval/retry paths, accessibility surfaces | Document which choreography concepts are terminal-specific, which mirror to dashboards as static hierarchy, and how preference controls shape both |
 
 #### Shared checklist for Waves 27–30

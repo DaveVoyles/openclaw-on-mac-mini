@@ -312,6 +312,53 @@ next-action engine:
 State-aware shell completion and a shared hint derivation helper remain future
 Wave 28 follow-up work.
 
+### Wave 29 storytelling slice (current truth)
+
+Wave 29 is currently a **deterministic narrative scaffold**, not a generated
+prose/timeline recap engine:
+
+- `_build_session_share_text()` is the canonical plain-text storyteller today.
+  It reuses persisted collaboration and watch metadata to emit stable recap
+  chapters: `ACTORS`, `RECENT DECISIONS`, `RECENT NOTES`,
+  `LATEST HANDOFF`, `OPERATOR SNAPSHOT`, `RECENT OUTPUTS`, and `COMMANDS`.
+- `inspect_session()` reuses the same facts for the inspection path: session
+  mood/milestone state, collaboration actors/decisions, outputs, and the resume
+  command are all visible without scanning the raw event log first.
+- `_session_preview_lines()` is the compact version of the same story contract:
+  latest activity, watch focus, latest output, actor names, top decision, and a
+  mood/momentum cell.
+- The current “next step” model is command-based rather than prose-based:
+  resume / inspect / share are the shipped deterministic endings for these
+  recap surfaces.
+
+Bullet/timeline recap transforms and recap-specific export payloads remain
+future Wave 29 follow-up work.
+
+### Wave 30 choreography slice (current truth)
+
+Wave 30 is currently an **accessibility-first pacing layer**, not a new global
+animation engine:
+
+- `_print_feedback(...)` is the shared emphasis primitive for compact success,
+  warning, and liveness cues. It keeps the same message shape across normal,
+  high-contrast, and plain output.
+- `_with_spinner(...)` is the main waiting-state choreography helper today. Rich
+  TTY sessions get the existing spinner, while reduced-motion mode switches to a
+  static working line, periodic `Still working on ...` heartbeats, and an
+  explicit `response ready.` completion cue.
+- `_print_risky_action_warning(...)` reuses that compact-emphasis language for
+  high/critical `/exec` and `/edit` flows so approvals feel calm and consistent
+  before the actual approval prompt appears.
+- `_print_startup_banner(...)` remains intentionally static: plain mode and
+  narrow terminals get a concise text-first reveal, while wider interactive
+  terminals keep the richer panel without introducing extra animation.
+- `_celebration_burst(...)` is still the only decorative motion path, and it
+  already downgrades to a one-line `🎉 ...` confirmation in reduced-motion,
+  plain-mode, or non-TTY contexts.
+
+Shared reveal-order helpers for every dashboard surface, plus broader approval /
+retry choreography adoption, remain future Wave 30 follow-up work.
+
 ### stderr vs stdout
 
 - `_print_update_notice()` → **stderr** (must not corrupt JSON output from `--json` flag)

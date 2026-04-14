@@ -127,7 +127,7 @@ For the canonical inventory and reusable checklist, see
 | [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🟡 In progress |
 | [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | 🔲 Ready |
 | [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | 🔲 Ready |
-| [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | 🔲 Ready |
+| [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | 🟡 In progress |
 | [Wave 30](#wave-30--premium-motion--choreography-layer) | Premium Motion & Choreography Layer | 🔲 Ready |
 
 ---
@@ -1897,11 +1897,28 @@ of the existing session/watch dashboards:
 
 ## Wave 29 — Narrative Recaps & Session Storytelling
 
-**Status: 🔲 Ready**
+**Status: 🟡 In progress**
 
 **Goal:** turn raw session history into durable recap artifacts that explain what
 happened, who acted, what changed, and what should happen next so handoffs,
 reviews, and onboarding do not require reading full event logs.
+
+### Current shipped slice
+
+Wave 29 has started as a **chapter-style plain-text recap pass** over existing
+session facts, not a full prose/timeline recap engine yet:
+
+- `openclaw session share <session-id>` already groups handoff output into stable
+  recap chapters: **ACTORS**, **RECENT DECISIONS**, **RECENT NOTES**,
+  **LATEST HANDOFF**, **OPERATOR SNAPSHOT**, **RECENT OUTPUTS**, and
+  **COMMANDS**.
+- `openclaw session show <session-id>` and `/session` already reuse the same
+  actor/decision/mood facts for inspection and compact storytelling rather than
+  forcing operators back to raw event logs first.
+- The current “ending” for this slice is command-oriented rather than prose:
+  resume / inspect / share commands are the deterministic next steps today.
+- Bullet/timeline recap modes and recap-specific export variants are still
+  future work; do not imply they have shipped yet.
 
 ### Design targets
 
@@ -1913,27 +1930,27 @@ reviews, and onboarding do not require reading full event logs.
 | Actionable endings | Recaps should close with pending approvals, unresolved risks, and recommended next steps instead of passive summaries |
 | Export-ready portability | Storytelling output must remain usable in plain text, saved manifests, and future dashboard summaries |
 
-### Scope for implementation
+### Remaining scope
 
-| Area | Planned work |
+| Area | Remaining work |
 |---|---|
-| Recap composition model | Define reusable chapter structure for goals, key events, decisions, outputs, blockers, and next actions |
-| Session history transforms | Plan helper logic that can derive bullet, timeline, and prose recap modes from existing session/export metadata |
-| Collaboration narration | Integrate actor-tagged notes, decisions, and handoff snapshots into the narrative flow without duplicating raw logs |
-| Export and share surfaces | Extend `openclaw session share`, `openclaw session export`, and recap-style commands with storytelling-oriented variants |
-| Review/onboarding guidance | Document which recap mode fits review, handoff, audit, or onboarding use cases and how plain-text fallbacks should read |
+| Recap composition model | Promote the existing share/show chapter headings into a reusable recap contract that also covers blockers, outputs, and next actions |
+| Session history transforms | Add deterministic bullet, timeline, and prose recap modes derived from existing session/export metadata |
+| Collaboration narration | Expand actor-tagged notes, decisions, and handoff snapshots into richer narrative summaries without duplicating raw logs |
+| Export and share surfaces | Extend `openclaw session export` and future recap-style commands with the same chapter names used by `session show/share` |
+| Review/onboarding guidance | Document which recap mode fits review, handoff, audit, or onboarding use cases once multiple recap modes exist |
 
 ### Dashboard surface alignment
 
 | Surface group | Wave 29 expectation |
 |---|---|
-| `/session`, `/collab` | Summaries and handoff surfaces expose concise chapter-style recaps and recommended follow-ups |
-| `openclaw session show`, `openclaw session export`, `openclaw session share` | Shared narrative structure across terminal inspection, pasted summaries, and saved artifacts |
+| `/session`, `/collab` | Current slice reuses actor/decision/mood facts as compact recap cues; full chapter rendering is still follow-up work |
+| `openclaw session show`, `openclaw session share` | Current shipped slice standardizes actor labels, milestone/momentum wording, and command-oriented endings across plain-text inspection/handoff views |
+| `openclaw session export` | Still exports facts first; recap-specific bullet/timeline/prose variants remain deferred |
 | `/events`, `/outputs`, `/context` | Dense evidence remains linkable/referenceable from recaps instead of being duplicated verbatim |
-| Browser/dashboard mirrors | Session detail pages and handoff cards reuse the same recap sections, chapter names, and next-step wording |
-| Future review flows | Narrative exports support onboarding, async review, and audit trails without requiring the raw transcript first |
+| Browser/dashboard mirrors | Mirror the shipped chapter names and next-step wording from terminal share/show output only; richer dashboard storytelling is still deferred |
 
-### Implementation notes for the future wave
+### Implementation notes
 
 - Treat narrative recaps as **derived views over existing facts**, not a separate
   source of truth that can drift from the underlying session data.
@@ -1949,7 +1966,7 @@ reviews, and onboarding do not require reading full event logs.
 ### Done-when
 
 - [ ] A documented recap model exists for prose, bullet, and timeline session storytelling.
-- [ ] Narrative sections identify actors, decisions, blockers, outputs, and next steps using existing session facts.
+- [x] Plain-text share/show surfaces already identify actors, decisions, momentum/milestone state, and deterministic next steps using existing session facts.
 - [ ] Export/share/dashboard guidance stays aligned on recap chapter names and fallback wording.
 - [ ] Review and onboarding use cases are documented without requiring access to the full transcript.
 - [ ] Follow-on architecture and quickstart docs are updated when implementation begins.

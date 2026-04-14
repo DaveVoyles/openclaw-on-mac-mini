@@ -365,6 +365,29 @@ Wave 28 is currently the **small, deterministic next-step guidance** pass:
 `docs/COMMANDS.md` still does not need regeneration because command metadata is
 unchanged.
 
+## Wave 29 session storytelling slice (current slice)
+
+Wave 29 is currently the **plain-text recap scaffold** for session review and
+handoff:
+
+- **`openclaw session share <session-id>`** is the clearest storytelling view
+  today. It groups the recap into stable chapters: **ACTORS**, **RECENT
+  DECISIONS**, **RECENT NOTES**, **LATEST HANDOFF**, **OPERATOR SNAPSHOT**,
+  **RECENT OUTPUTS**, and **COMMANDS**.
+- **`openclaw session show <session-id>`** keeps the same facts visible during
+  inspection: actor-aware collaboration details, momentum/milestone wording,
+  saved outputs, and the exact resume command.
+- **`/session`** and **`/sessions`** already surface the compact version of that
+  story through latest activity, recent decision, actor names, and a
+  mood/momentum cell.
+- The current ending is intentionally deterministic: the “next steps” are the
+  explicit `resume`, `inspect`, and `share` commands rather than generated prose.
+- **Not shipped yet:** bullet-mode recaps, timeline-mode recaps, recap-specific
+  export variants, or richer browser/dashboard storytelling.
+
+`docs/COMMANDS.md` still does not need regeneration because command metadata is
+unchanged.
+
 ## Hybrid REPL — in-session slash commands
 
 The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural-language prompts and slash commands coexist in the same input stream. Every slash command is handled locally before the input reaches the LLM.
