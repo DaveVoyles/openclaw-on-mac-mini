@@ -20,6 +20,7 @@ CLI_FILES=(
   openclaw_cli.py
   openclaw_cli_actions.py
   openclaw_cli_auth.py
+  openclaw_cli_content_cmds.py
   openclaw_cli_diff.py
   openclaw_cli_exec.py
   openclaw_cli_layout.py

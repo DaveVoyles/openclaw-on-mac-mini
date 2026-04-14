@@ -234,6 +234,7 @@ import openclaw_cli_path_utils as _path_utils
 import openclaw_cli_macros as _macros_mod
 import openclaw_cli_layout as _layout_mod
 import openclaw_cli_session_cmds as _session_cmds_mod
+import openclaw_cli_content_cmds as _content_cmds_mod
 import logging as _logging
 
 _LOG = _logging.getLogger("openclaw_cli")
@@ -254,7 +255,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave44"  # updated with each UX wave batch
+_CLI_BUILD = "wave45"  # updated with each UX wave batch
 
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
@@ -7126,12 +7127,42 @@ def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     return _CMD_CONTINUE
 
 
+def _estimate_token_count(value: object) -> int:
+    """Estimate token count using the shared rough character heuristic."""
+    return max(0, len(str(value or "")) // 4)
+
+
+def _history_token_breakdown(history: list[dict[str, object]]) -> dict[str, object]:
+    """Summarize estimated token usage for the current session history."""
+    roles: dict[str, dict[str, int]] = {}
+    total_chars = 0
+    total_tokens = 0
+    total_messages = len(history)
+    for message in history:
+        role = str(message.get("role") or "unknown").strip().lower() or "unknown"
+        content = str(message.get("content") or "")
+        chars = len(content)
+        tokens = _estimate_token_count(content)
+        total_chars += chars
+        total_tokens += tokens
+        bucket = roles.setdefault(role, {"messages": 0, "chars": 0, "tokens": 0})
+        bucket["messages"] += 1
+        bucket["chars"] += chars
+        bucket["tokens"] += tokens
+    ordered_roles = sorted(roles.items(), key=lambda item: (-item[1]["tokens"], item[0]))
+    return {
+        "total_chars": total_chars,
+        "total_tokens": total_tokens,
+        "total_messages": total_messages,
+        "roles": ordered_roles,
+    }
+
+
 def _cmd_tokeninfo(ctx: "ChatCommandContext") -> str:
     """/tokeninfo — show estimated token usage for this session."""
-    history = ctx.history
-    total_chars = sum(len(str(m.get("content", ""))) for m in history)
-    est_tokens = max(0, total_chars // 4)  # rough ~4 chars per token
-    msg_count = len(history)
+    breakdown = _history_token_breakdown(ctx.history)
+    est_tokens = int(breakdown["total_tokens"])
+    msg_count = int(breakdown["total_messages"])
 
     limit_128k = 128_000
     pct_128k = min(100, round(est_tokens / limit_128k * 100))
@@ -7151,10 +7182,28 @@ def _cmd_tokeninfo(ctx: "ChatCommandContext") -> str:
     print(f"  Messages:   {_B}{msg_count}{_R}")
     print(f"  Est. tokens:{_B}{est_tokens:,}{_R}")
     print(f"  128k limit: {bar} {fill_color}{pct_128k}%{_R}")
-    if pct_128k >= 80:
-        print(f"\n  {_YE}⚠  Context is getting full — consider /clear to reset.{_R}")
+    role_rows = list(breakdown["roles"])
+    if role_rows:
+        print(f"\n  {_B}Breakdown by actor{_R}")
+        for role, details in role_rows[:4]:
+            role_tokens = int(details["tokens"])
+            share = round((role_tokens / est_tokens) * 100) if est_tokens else 0
+            print(
+                "  "
+                f"{role:<10}"
+                f"{details['messages']:>2} msgs"
+                f"  ~{role_tokens:>6,} tok"
+                f"  {share:>3}%"
+            )
+        top_role, top_details = role_rows[0]
+        top_share = round((int(top_details["tokens"]) / est_tokens) * 100) if est_tokens else 0
+        print(f"\n  {_DM}Largest share: {top_role} ({top_share}% of estimated tokens).{_R}")
+    if pct_128k >= 90:
+        print(f"\n  {_RE}⚠  Context is near capacity — use /bookmark before /clear so you can resume cleanly.{_R}")
+    elif pct_128k >= 80:
+        print(f"\n  {_YE}⚠  Context is getting full — consider /bookmark, then /clear to reset.{_R}")
     elif pct_128k >= 50:
-        print(f"\n  {_DM}Tip: Use /clear to reset context if responses feel stale.{_R}")
+        print(f"\n  {_DM}Tip: If responses feel stale, save a /bookmark and use /clear to refresh context.{_R}")
     print()
     return _CMD_CONTINUE
 
@@ -7853,36 +7902,8 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
 
     try:
         now_str = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        if fmt == "md":
-            lines = [f"# OpenClaw Session Export\n", f"**Exported:** {now_str}\n\n---\n"]
-            for i, entry in enumerate(cmd_history, 1):
-                if isinstance(entry, str):
-                    lines.append(f"### [{i}] Prompt\n\n{entry}\n\n")
-                elif isinstance(entry, dict):
-                    prompt = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
-                    ts_str = entry.get("timestamp", entry.get("ts", ""))
-                    ts_label = f" _{ts_str}_" if ts_str else ""
-                    lines.append(f"### [{i}]{ts_label}\n\n{prompt}\n\n")
-            content = "".join(lines)
-
-        elif fmt == "json":
-            import json as _json
-            export_data = {
-                "exported_at": _dt.datetime.now().isoformat(),
-                "entry_count": len(cmd_history),
-                "history": cmd_history,
-            }
-            content = _json.dumps(export_data, indent=2, default=str)
-
-        else:  # txt
-            lines = [f"OpenClaw Session Export — {now_str}\n", "=" * 60 + "\n\n"]
-            for i, entry in enumerate(cmd_history, 1):
-                if isinstance(entry, str):
-                    lines.append(f"[{i}] {entry}\n\n")
-                elif isinstance(entry, dict):
-                    prompt = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
-                    lines.append(f"[{i}] {prompt}\n\n")
-            content = "".join(lines)
+        exported_at_iso = _dt.datetime.now().isoformat()
+        content = _content_cmds_mod._build_export_body(cmd_history, fmt, now_str, exported_at_iso)
 
         output_path = Path(filename).expanduser()
         output_path.write_text(content, encoding="utf-8")
@@ -7915,21 +7936,15 @@ def _cmd_stats(ctx: ChatCommandContext) -> str:
         print(f"  {_DM}No sessions found.{_R}")
         return _CMD_CONTINUE
 
-    total_sessions = len(sessions)
-    total_commands = sum(s.command_count for s in sessions)
-    total_edits = sum(s.file_edit_count for s in sessions)
-    total_checkpoints = sum(s.checkpoint_count for s in sessions)
-    active = sum(1 for s in sessions if s.status == "active")
-    newest = sessions[0].updated_at[:10] if sessions else "—"
-    oldest = sessions[-1].created_at[:10] if sessions else "—"
-
-    # Most-used cwd roots
-    from collections import Counter
-    cwd_counts: Counter[str] = Counter()
-    for s in sessions:
-        if s.cwd:
-            cwd_counts[s.cwd] += 1
-    top_cwds = cwd_counts.most_common(3)
+    _agg = _content_cmds_mod._build_session_stats_agg(sessions)
+    total_sessions = _agg["total_sessions"]
+    total_commands = _agg["total_commands"]
+    total_edits = _agg["total_edits"]
+    total_checkpoints = _agg["total_checkpoints"]
+    active = _agg["active"]
+    newest = _agg["newest"]
+    oldest = _agg["oldest"]
+    top_cwds = _agg["top_cwds"]
 
     if _RICH_AVAILABLE and is_tty:
         from rich.table import Table as _RichTableLocal
@@ -11135,41 +11150,25 @@ def _cmd_stats(ctx: "ChatCommandContext") -> str:
         if not data:
             print(f"  {_DM}No data for {title}{_R}")
             return
-        max_val = max(data.values()) if data else 1
+        rows = _content_cmds_mod._build_ascii_bar_rows(data, max_bar)
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"\n[bold cyan]{title}[/]")
-            for label, count in sorted(data.items(), key=lambda x: -x[1])[:10]:
-                bar_len = int((count / max_val) * max_bar)
-                bar = "█" * bar_len
+            for label, bar, count in rows:
                 _RICH_CONSOLE.print(f"  [dim]{label:<20}[/] [cyan]{bar:<30}[/] [bold]{count}[/]")
         else:
             print(f"\n{_B}{title}{_R}")
-            for label, count in sorted(data.items(), key=lambda x: -x[1])[:10]:
-                bar_len = int((count / max_val) * max_bar)
-                bar = "█" * bar_len
+            for label, bar, count in rows:
                 print(f"  {_DM}{label:<20}{_R} {color}{bar:<30}{_R} {_B}{count}{_R}")
 
     cmd_counts: dict = {}
     rating_counts: dict = {}
 
     if category in ("all", "commands"):
-        for entry in cmd_history:
-            if isinstance(entry, dict):
-                cmd = entry.get("cmd", entry.get("command", "unknown"))
-            else:
-                cmd = str(entry)
-            cmd = cmd.split()[0] if cmd else "unknown"
-            cmd_counts[cmd] = cmd_counts.get(cmd, 0) + 1
+        cmd_counts = _content_cmds_mod._compute_cmd_freq(cmd_history)
         _ascii_bar_chart("📊 Command Frequency", cmd_counts, color=_CY)
 
     if category in ("all", "ratings"):
-        for r in ratings:
-            if isinstance(r, dict):
-                score = str(r.get("score", r.get("rating", "?")))
-            else:
-                score = str(r)
-            label = f"{'⭐' * int(score) if score.isdigit() else score}"
-            rating_counts[label] = rating_counts.get(label, 0) + 1
+        rating_counts = _content_cmds_mod._compute_rating_freq(ratings)
         _ascii_bar_chart("⭐ Rating Distribution", rating_counts, color=_YE)
 
     if category in ("all", "sessions"):
