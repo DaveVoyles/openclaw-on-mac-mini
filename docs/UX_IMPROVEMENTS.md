@@ -122,7 +122,7 @@ For the canonical inventory and reusable checklist, see
 | [Wave 21](#wave-21--command-palette--tab-complete) | Command Palette & Tab-Complete | ✅ Shipped |
 | [Wave 22](#wave-22--animated-progress-bars--celebrations) | Animated Progress Bars & Celebrations | ✅ Shipped |
 | [Wave 23](#wave-23--visual-hierarchy-renaissance--dashboard-elevation) | Visual Hierarchy Renaissance & Dashboard Elevation | ✅ Shipped |
-| [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | 🟡 In progress |
+| [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | ✅ Shipped |
 | [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | 🟡 In progress |
 | [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🟡 In progress |
 | [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | 🔲 Ready |
@@ -1511,6 +1511,31 @@ switching or command hopping.
 
 ---
 
+## Wave 24 — Smart Response Formatting
+
+**Status:** ✅ Shipped
+
+### Features
+- **JSON auto-format** (`/jsonformat`): Bare JSON objects/arrays in AI responses are detected, pretty-printed with 2-space indent, and syntax-highlighted (keys=cyan, strings=green, numbers=yellow, booleans=magenta). Skips existing code blocks. Respects `json_autoformat` pref.
+- **Clickable URLs** (`/links`): OSC 8 hyperlink sequences make URLs in responses clickable in modern terminals (iTerm2, Kitty, WezTerm). URLs in code blocks and table rows are excluded. Controlled by `clickable_links` pref.
+- **File path hints** (`/pathhints`): After responses mentioning file paths (e.g., `src/openclaw_cli.py`), a subtle `📁 Files mentioned: ... (use /view or /edit)` hint is shown for paths that actually exist on disk. Max 3 hints shown. Controlled by `path_hints` pref.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/jsonformat [on\|off]` | Toggle JSON auto-detect and pretty-print |
+| `/links [on\|off]` | Toggle OSC 8 clickable URLs |
+| `/pathhints [on\|off]` | Toggle file path quick-action hints |
+
+### New Prefs
+| Key | Default | Description |
+|---|---|---|
+| `json_autoformat` | `True` | Auto-detect and pretty-print JSON |
+| `clickable_links` | `True` | OSC 8 clickable URLs |
+| `path_hints` | `True` | File path quick-action hints |
+
+---
+
 ## Wave 25 — Multi-Pane Layout Presets
 
 **Status: 🟡 In progress**
@@ -1689,7 +1714,7 @@ the full mood-model roadmap:
 
 ## Wave 27 — Live Dashboard Shares & Operator Visibility
 
-**Status: 🔲 Ready**
+**Status: 🟡 Partial**
 
 **Goal:** expose richer read-only monitoring and dashboard-ready status snapshots
 outside the active REPL so teammates and operators can observe session health,
@@ -1716,6 +1741,24 @@ infrastructure.
 | Browser/dashboard parity | Document how Terminal Agent Sessions, Watch Insights, and future monitoring cards reuse the same field names, labels, and fallback wording |
 | Export/handoff hooks | Plan additive export/share paths so monitoring summaries can be saved or pasted without introducing new remote infrastructure |
 
+### Current shipped slice
+
+Wave 27 is currently landing as a **read-only operator-visibility foundation**
+on top of the existing local session data model:
+
+- `openclaw session share <session-id>` remains the canonical pasteable operator
+  snapshot: title, plan/task linkage, recent actors/decisions/notes, latest
+  handoff, recent outputs, and exact resume/inspect/share commands.
+- `openclaw session show <session-id>` and the compact `/session`/`/sessions`
+  previews already surface watch state, collaboration context, and next-step
+  cues in plain text without requiring a browser or Rich-only chrome.
+- `/watch status` and `/watch history` provide the current operator-facing
+  control-tower slice for checkpoint drift, retry pressure, and operator-note
+  visibility.
+- Browser/dashboard mirrors are still terminology/documentation work in this
+  slice; Wave 27 does **not** ship remote control, shared presence, or hosted
+  monitoring services.
+
 ### Dashboard surface alignment
 
 | Surface group | Wave 27 expectation |
@@ -1741,11 +1784,11 @@ infrastructure.
 
 ### Done-when
 
-- [ ] A documented read-only monitoring snapshot exists for session, watch, approval, and collaboration state.
-- [ ] CLI dashboard surfaces identify which summary fields are operator-facing and how they degrade to plain text.
-- [ ] `docs/DASHBOARD_SURFACES.md` explains how terminal and browser/dashboard monitoring views share terminology and fallback behavior.
-- [ ] Export/share guidance makes it clear that Wave 27 introduces visibility only, not remote control.
-- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+- [x] A documented read-only monitoring snapshot exists for session, watch, approval, and collaboration state.
+- [x] CLI dashboard surfaces identify which summary fields are operator-facing and how they degrade to plain text.
+- [x] `docs/DASHBOARD_SURFACES.md` explains how terminal and browser/dashboard monitoring views share terminology and fallback behavior.
+- [x] Export/share guidance makes it clear that Wave 27 introduces visibility only, not remote control.
+- [x] Follow-on architecture and quickstart docs are updated for the shipped slice.
 
 ### Recommended fleet split
 
@@ -1761,7 +1804,7 @@ infrastructure.
 
 ## Wave 28 — Gesture Language & Predictive Affordances
 
-**Status: 🔲 Ready**
+**Status: 🟡 Partial**
 
 **Goal:** reduce navigation and recovery friction by teaching the CLI to suggest
 the most useful next action, expose repeatable shortcut patterns, and make
@@ -1797,6 +1840,27 @@ stateful flows feel guided without becoming opaque.
 | Approval and error flows | Present a consistent “next best action” line that remains readable in non-interactive output |
 | Browser/dashboard mirrors | Reuse the same action labels and help text for dashboard cards, notifications, or detail panels |
 
+### Current shipped slice
+
+Wave 28 is currently landing as a **lightweight hint-and-recovery layer** on top
+of the existing session/watch dashboards:
+
+- `/watch status` already ships deterministic action lines for the most common
+  next moves: inspect history, leave an operator breadcrumb, tune retry budget,
+  or review the finished session snapshot when a watch completes.
+- `/context` now ends with targeted follow-up guidance based on tracked files and
+  linked plan/task state so users can either add grounding or compare it against
+  the current session health.
+- Chat responses can emit quick file affordances through `_print_path_hints(...)`
+  when the assistant references real local files; the hint stays intentionally
+  small (`use /view or /edit`) and only appears in interactive terminal output.
+- Recovery guidance is additive rather than modal: high/critical `/exec` and
+  `/edit` flows include a recovery hint before approval, and chat failures point
+  users to `/retry` and `/reset` instead of leaving a dead end.
+- `/shortcuts` is the current documented gesture vocabulary surface for repeatable
+  navigation, retry, history, and command-discovery moves. Stateful tab
+  completion remains future work.
+
 ### Implementation notes for the future wave
 
 - Keep predictive guidance **assistive, not mandatory**: users must still be able
@@ -1812,11 +1876,12 @@ stateful flows feel guided without becoming opaque.
 
 ### Done-when
 
-- [ ] A documented next-action model exists for approvals, retries, blocked states, exports, and session handoffs.
-- [ ] Shortcut/gesture terminology is normalized so future commands reuse the same verbs and aliases.
-- [ ] Dashboard and terminal surfaces use the same action labels and fallback phrasing for predictive hints.
-- [ ] Plain-text, non-TTY, and reduced-motion examples show how suggestions remain readable without interactive chrome.
-- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+- [x] A documented next-action model exists for the currently shipped watch, context, approval, and chat-recovery hints.
+- [x] Shortcut/gesture terminology is normalized for the current slice through `/shortcuts`, `/retry`, `/view`, `/edit`, and watch action labels.
+- [x] Dashboard and terminal surfaces reuse the same action labels and fallback phrasing for the shipped predictive hints.
+- [x] Plain-text, non-TTY, and reduced-motion examples explain where guidance is shown, downgraded, or intentionally suppressed.
+- [x] Follow-on architecture and quickstart docs are updated for the shipped slice.
+- [ ] Stateful completion and broader export/handoff affordances remain follow-up work.
 
 ### Recommended fleet split
 

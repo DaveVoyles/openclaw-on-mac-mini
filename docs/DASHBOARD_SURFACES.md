@@ -35,7 +35,7 @@
 | Terminal Agent Sessions | web dashboard session cards/detail view | Mirrors the most important session/watch metadata outside the REPL |
 | Watch Insights | dashboard session detail | Reuses watch checkpoint + retry concepts from CLI `/watch` surfaces |
 | Scheduled Tasks / Active Plans / Unified Task Status | dashboard control-plane cards | Must stay terminology-aligned with CLI commands and quickstart guidance |
-| Future shared read-only monitoring | future Wave 27+ dashboard work | Should reuse the same labels, status grammar, and fallback terminology defined in CLI docs |
+| Future shared read-only monitoring | future Wave 27+ dashboard work | Current Wave 27 slice is docs/vocabulary only: reuse CLI labels and fallback terminology, but do not imply remote control |
 
 ## Required docs/dashboard lane for every future wave
 
@@ -81,18 +81,18 @@ Use this mini-template in the docs/dashboard lane output for each wave:
 
 ## Immediate Waves 21–30 focus
 
-The approved next planning tranche should follow this order:
+The current docs/dashboard tranche should keep this order:
 
-1. repair and normalize the late-wave roadmap in `docs/UX_IMPROVEMENTS.md`
-2. finish the Wave 22 docs/tests/dashboard-alignment lane
-3. implement Wave 23 with explicit dashboard-elevation ownership
+1. keep the late-wave roadmap truthful in `docs/UX_IMPROVEMENTS.md`
+2. align the Wave 27 operator-visibility slice across architecture, quickstart, and tests
+3. preserve shared terminology for later browser/dashboard mirrors without implying remote control
 
 ### Waves 27–30 dashboard alignment targets
 
 | Wave | Surface focus | Docs/dashboard expectation |
 | --- | --- | --- |
-| Wave 27 — Live Dashboard Shares & Operator Visibility | `/session`, `/sessions`, `/watch*`, `/collab`, browser session cards | Define the read-only monitoring snapshot, keep approval/intervention labels aligned, and document that visibility does not imply remote control |
-| Wave 28 — Gesture Language & Predictive Affordances | `/watch*`, `/session*`, `/outputs`, `/context`, error/approval flows | Reuse the same next-action labels across terminal and dashboard surfaces, with plain-text examples for hints and recovery menus |
+| Wave 27 — Live Dashboard Shares & Operator Visibility | `/session`, `/sessions`, `/watch*`, `/collab`, browser session cards | Current shipped slice is the terminal/read-only snapshot: keep intervention, resume, and handoff labels aligned, and document that visibility does not imply remote control |
+| Wave 28 — Gesture Language & Predictive Affordances | `/watch*`, `/session*`, `/outputs`, `/context`, error/approval flows | Current shipped slice is the lightweight hint layer: reuse `/watch history`, `/watch intervene`, `/watch retry-limit`, `/session`, `/files`, `/plan`, `/retry`, and `/reset` labels consistently, with plain-text examples for hints and recovery menus |
 | Wave 29 — Narrative Recaps & Session Storytelling | `openclaw session show/share/export`, `/collab`, browser session detail views | Standardize recap chapter names, actor labels, and next-step wording across terminal, saved artifacts, and dashboard summaries |
 | Wave 30 — Premium Motion & Choreography Layer | startup banner, summary dashboards, approval/retry paths, accessibility surfaces | Document which choreography concepts are terminal-specific, which mirror to dashboards as static hierarchy, and how preference controls shape both |
 

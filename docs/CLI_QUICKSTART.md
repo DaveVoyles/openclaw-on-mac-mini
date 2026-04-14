@@ -266,6 +266,16 @@ openclaw session export <session-id>
 | `/quality` | Colored 8-row vertical histogram of response quality ratings (1–5 ⭐) |
 | `/heatmap` | 24-hour activity heatmap showing peak usage hours with color intensity |
 
+### Wave 24 — Smart Response Formatting
+
+| Command | Description |
+|---|---|
+| `/jsonformat [on\|off]` | Toggle auto-detection and pretty-printing of JSON in responses |
+| `/links [on\|off]` | Toggle OSC 8 clickable hyperlinks in responses (requires modern terminal) |
+| `/pathhints [on\|off]` | Toggle file path quick-action hints shown after responses |
+
+> **New:** Responses now automatically pretty-print JSON with syntax highlighting, make URLs clickable (iTerm2/Kitty/WezTerm), and hint at file paths with `/view` or `/edit`.
+
 ## Wave 22 status grammar (current slice)
 
 Wave 22 is the in-progress dashboard/status-language pass. The current slice is
@@ -313,6 +323,47 @@ Wave 26 is currently a narrow, already-shipped celebration pass:
 
 `docs/COMMANDS.md` does not need regeneration for this lane because the command
 metadata is unchanged.
+
+## Wave 27 operator visibility slice (current slice)
+
+Wave 27 is currently the **read-only operator snapshot** pass:
+
+- **`openclaw session share <session-id>`** is the main pasteable summary for
+  operators: it prints recent actors, decisions, notes, latest handoff,
+  outputs, and the exact resume/inspect/share commands.
+- **`openclaw session show <session-id>`**, **`/session`**, and **`/sessions`**
+  already expose the same local snapshot vocabulary for watch state,
+  collaboration context, and next-step cues.
+- **`/watch status`** and **`/watch history`** are the live operator-visibility
+  views for checkpoint drift, retry pressure, and operator breadcrumbs.
+- This slice is **visibility only**. It does not add browser-side control,
+  shared presence, or remote mutation of another operator's session.
+
+`docs/COMMANDS.md` still does not need regeneration because command metadata is
+unchanged.
+
+## Wave 28 predictive affordances slice (current slice)
+
+Wave 28 is currently the **small, deterministic next-step guidance** pass:
+
+- **`/watch status`** now acts like a control-tower surface with explicit follow-up
+  commands. Expect to see `/watch history` and `/watch intervene <msg>` every
+  time, plus `/watch retry-limit N` while a watch is still active or `/session`
+  after completion.
+- **`/context`** closes with guidance that matches session state: add grounding
+  with `/files add <path>`, review tracked files with `/files`, or strengthen the
+  session with `/plan <id>` / `/task <id>` before the next analyze/write step.
+- **Chat replies** can append a small **file hint** when the response mentions a
+  real local path: `use /view or /edit`. This is terminal-only and intentionally
+  suppressed in plain mode/non-TTY output so scripts stay deterministic.
+- **Approval/error recovery** stays textual. High/critical `/exec` and `/edit`
+  actions include a recovery sentence before approval, while chat failures point
+  to `/retry` and `/reset`.
+- **`/shortcuts`** is the current gesture-language reference card for repeatable
+  moves like retry, history browse, command search, and session control.
+
+`docs/COMMANDS.md` still does not need regeneration because command metadata is
+unchanged.
 
 ## Hybrid REPL — in-session slash commands
 

@@ -267,6 +267,51 @@ celebration helper, not a full session-mood layer:
   deliberately neutral and pasteable; no mood metadata is injected into the
   exported/session-share contract yet.
 
+### Wave 27 operator-visibility slice (current truth)
+
+Wave 27 is currently a **read-only monitoring/documentation slice**, not a
+hosted dashboard runtime:
+
+- `_build_session_share_text()` is the canonical operator-facing snapshot
+  serializer today. It emits title/cwd/plan/task context, recent actors,
+  decisions, notes, latest handoff, recent outputs, and the exact
+  resume/inspect/share commands from local session data.
+- `_session_preview_lines()`, `summarize_session()`, and `inspect_session()`
+  already reuse the same watch/collaboration vocabulary for terminal-first
+  previews, focused session inspection, and plain-text handoff review.
+- `_watch_focus_lines()`, `_print_watch_status()`, and `_print_watch_history()`
+  are the current operator-visibility surfaces for checkpoint freshness, retry
+  pressure, and operator-note breadcrumbs.
+- Approval visibility in this slice is still additive and local-first: existing
+  approval events/timing remain visible through session/watch/event surfaces,
+  but Wave 27 does **not** introduce any remote mutation path or shared control
+  plane.
+
+### Wave 28 predictive-affordance slice (current truth)
+
+Wave 28 is currently a **deterministic hint layer**, not a centralized
+next-action engine:
+
+- `_print_dashboard_surface(...)` remains the shared rendering primitive, and the
+  current predictive slice uses each surface's `action_lines` to advertise the
+  next safest follow-up without changing the underlying raw command model.
+- `_print_watch_status()` is the clearest live example: it always offers
+  `/watch history` and `/watch intervene <msg>`, then switches the lead affordance
+  between `/watch retry-limit N` and `/session` based on completion state.
+- `_cmd_context()` uses the same action-line contract to steer users toward
+  `/files`, `/plan`, `/task`, or `/session` depending on how much grounding is
+  already attached to the active session.
+- `_print_path_hints()` is intentionally narrower than the dashboard affordances:
+  it only fires for interactive TTY output, only when mentioned files exist
+  locally, and only suggests `/view` or `/edit`.
+- `_print_risky_action_warning(...)` and the REPL's `OpenClawCliError` handler are
+  the current recovery-first surfaces. They keep the guidance plain-text and
+  deterministic (`Recovery: ...`, `/retry`, `/reset`) instead of opening
+  interactive menus.
+
+State-aware shell completion and a shared hint derivation helper remain future
+Wave 28 follow-up work.
+
 ### stderr vs stdout
 
 - `_print_update_notice()` → **stderr** (must not corrupt JSON output from `--json` flag)

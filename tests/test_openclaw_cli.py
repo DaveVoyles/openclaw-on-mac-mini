@@ -1363,6 +1363,8 @@ class TestSessionSlashCommands:
         assert "Actions:" in out
         assert "Test Session" in out
         assert sess.session_id in out
+        assert "visibility: read-only local snapshot" in out
+        assert "readiness:" in out
 
     # ------------------------------------------------------------------
     # /context
@@ -2984,6 +2986,70 @@ def test_print_watch_status_wave26_includes_momentum_cue(capsys):
     assert "retry budget still active" in out
 
 
+def test_print_watch_status_wave27_surfaces_operator_queue(capsys):
+    mod._print_watch_status(
+        {
+            "session_id": "sess-123",
+            "goal": "watch repo",
+            "mode": "analyze",
+            "status": "running",
+            "poll_count": 3,
+            "max_polls": 6,
+            "last_summary": "latest local checkpoint looks healthy",
+            "interventions": [
+                {
+                    "action": "operator-note",
+                    "status": "pending",
+                    "created_at": "2026-04-10T00:00:10Z",
+                    "reason": "watch for handoff timing",
+                }
+            ],
+            "stop_requested": True,
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "operator queue:" in out
+    assert "1 pending" in out
+    assert "stop requested" in out
+    assert "read-only local snapshot" in out
+
+
+def test_print_watch_status_wave28_shows_predictive_actions_for_retrying_watch(capsys):
+    mod._print_watch_status(
+        {
+            "goal": "watch repo",
+            "mode": "analyze",
+            "status": "retrying",
+            "poll_count": 2,
+            "max_polls": 5,
+            "failure_count": 1,
+            "retry_limit": 3,
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "/watch retry-limit N to tune retry budget" in out
+    assert "/watch history to inspect checkpoint history" in out
+    assert "/watch intervene <msg> to leave an operator breadcrumb" in out
+
+
+def test_print_watch_status_wave28_shows_session_review_after_completion(capsys):
+    mod._print_watch_status(
+        {
+            "goal": "watch repo",
+            "mode": "analyze",
+            "status": "completed",
+            "poll_count": 5,
+            "max_polls": 5,
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "/session to review the resulting session snapshot" in out
+    assert "/watch history to inspect checkpoint history" in out
+
+
 def test_print_watch_history_uses_dashboard_sections(capsys):
     mod._print_watch_history(
         {
@@ -3441,6 +3507,129 @@ def test_build_session_share_text_wave26_adds_momentum_line(monkeypatch, tmp_pat
 
     assert "momentum   : shared momentum;" in out
     assert "2 collaborators aligned" in out
+
+
+def test_build_session_share_text_wave27_adds_operator_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Operator Snapshot", cwd=str(tmp_path))
+    sessions_mod.save_output(session.session_id, "status.txt", "all systems nominal")
+    mod.save_watch_state(
+        session.session_id,
+        {
+            "session_id": session.session_id,
+            "mode": "analyze",
+            "goal": "observe local status",
+            "cwd": str(tmp_path),
+            "files": [],
+            "status": "running",
+            "poll_count": 2,
+            "max_polls": 4,
+            "active_checkpoint": {
+                "poll": 2,
+                "mode": "analyze",
+                "status": "running",
+                "started_at": "2026-04-10T00:00:00Z",
+                "updated_at": "2026-04-10T00:00:06Z",
+                "phase": "persist",
+                "progress": [{"phase": "persist", "created_at": "2026-04-10T00:00:06Z"}],
+                "attempts": [],
+            },
+            "interventions": [
+                {
+                    "action": "operator-note",
+                    "status": "pending",
+                    "created_at": "2026-04-10T00:00:10Z",
+                    "reason": "operator is monitoring",
+                }
+            ],
+        },
+    )
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Keep the snapshot read-only",
+        metadata={
+            "summary": "decision by alice: Keep the snapshot read-only",
+            "actor": "alice",
+            "collab_kind": "decision",
+        },
+    )
+
+    out = mod._build_session_share_text(session.session_id)
+
+    assert "OPERATOR SNAPSHOT" in out
+    assert "access    : read-only local snapshot" in out
+    assert "control   : visibility only; no remote control" in out
+    assert "watch     : running · persist · 2/4 polls" in out
+    assert "queue     : 1 pending" in out
+    assert "output    : status.txt" in out
+
+
+def test_session_preview_lines_wave27_include_operator_visibility(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Operator Preview", cwd=str(tmp_path))
+    sessions_mod.update_session(session.session_id, automation_mode="watch", automation_status="running")
+    mod.save_watch_state(
+        session.session_id,
+        {
+            "session_id": session.session_id,
+            "mode": "analyze",
+            "status": "running",
+            "poll_count": 3,
+            "max_polls": 8,
+            "checkpoints": [
+                {"poll": 3, "note": "paused at approval gate"},
+            ],
+            "interventions": [
+                {"action": "operator-note", "status": "pending", "reason": "waiting on approval"},
+            ],
+        },
+    )
+
+    lines = mod._session_preview_lines(mod.require_session(session.session_id))
+
+    assert any("checkpoint 3: paused at approval gate" in line for line in lines)
+    assert any("intervention: INFO · operator note · waiting on approval" in line for line in lines)
+
+
+def test_build_session_share_text_wave27_keeps_read_only_operator_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Read Only Share", cwd=str(tmp_path), plan_id="plan-27", task_id="task-27")
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Keep visibility read-only",
+        metadata={
+            "summary": "decision by alice: Keep visibility read-only",
+            "actor": "alice",
+            "tags": ["wave-27"],
+            "collab_kind": "decision",
+        },
+    )
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Approval is still pending review",
+        metadata={
+            "summary": "note by operator: Approval is still pending review",
+            "actor": "operator",
+            "tags": [],
+            "collab_kind": "note",
+        },
+    )
+    mod.create_handoff(session.session_id, note="Share this snapshot with the operator on call")
+
+    out = mod._build_session_share_text(session.session_id)
+
+    assert "ACTORS" in out
+    assert "RECENT DECISIONS" in out
+    assert "RECENT NOTES" in out
+    assert "LATEST HANDOFF" in out
+    assert "plan       : plan-27" in out
+    assert "task       : task-27" in out
+    assert "resume :" in out
+    assert "inspect:" in out
+    assert "share  :" in out
 
 
 def test_inspect_session_includes_watch_state(monkeypatch, tmp_path, capsys):
@@ -4140,17 +4329,57 @@ class TestCmdHistory:
         assert mod._PREFS.get("cmd_history") == []
 
     def test_history_n_shows_only_last_n(self, capsys, monkeypatch, tmp_path):
-        """'/history 5' with 10 entries should show only the last 5."""
+        """'/history 2' with 20 entries shows page 2 (entries 16-20)."""
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         mod._load_prefs()
-        mod._PREFS["cmd_history"] = [f"/cmd{i}" for i in range(10)]
+        mod._PREFS["cmd_history"] = [f"/cmd{i}" for i in range(20)]
         with patch.object(mod, "_save_prefs"):
-            result = self._registry().dispatch("/history 5", self._ctx(args="5"))
+            result = self._registry().dispatch("/history 2", self._ctx(args="2"))
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
-        assert "/cmd9" in out
-        assert "/cmd5" in out
-        assert "/cmd4" not in out
+        # Page 2 with 15 per page shows entries 15-19
+        assert "/cmd19" in out
+        assert "/cmd15" in out
+        assert "/cmd0" not in out
+
+
+class TestCmdHistsearch:
+    """Tests for the /histsearch slash command handler."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_histsearch_no_query_shows_usage(self, capsys, monkeypatch, tmp_path):
+        """/histsearch with no query should show usage message."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        result = self._registry().dispatch("/histsearch", self._ctx(args=""))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "usage" in out.lower()
+
+    def test_histsearch_no_match_shows_no_matches(self, capsys, monkeypatch, tmp_path):
+        """/histsearch foo with no matching history shows 'No history matches'."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["cmd_history"] = ["/help", "/version"]
+        result = self._registry().dispatch("/histsearch foo", self._ctx(args="foo"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "no history matches" in out.lower()
+
+    def test_histsearch_matching_entry_returns_continue(self, capsys, monkeypatch, tmp_path):
+        """/histsearch hello with a matching entry returns _CMD_CONTINUE."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["cmd_history"] = ["/help", "hello world", "/version"]
+        result = self._registry().dispatch("/histsearch hello", self._ctx(args="hello"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "hello" in out.lower()
 
 
 # ── /pin and /pins commands ───────────────────────────────────────────────────
@@ -4943,9 +5172,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave24(self):
-        """_CLI_BUILD must equal 'wave24'."""
-        assert mod._CLI_BUILD == "wave24"
+    def test_cli_build_is_wave25(self):
+        """_CLI_BUILD must equal 'wave25'."""
+        assert mod._CLI_BUILD == "wave25"
 
 
 class TestCmdRatehint:
@@ -5562,3 +5791,169 @@ class TestPathHints:
         result = mod._cmd_pathhints(ctx)
         assert prefs["path_hints"] is False
         assert result == mod._CMD_CONTINUE
+
+    def test_print_path_hints_shows_view_and_edit_affordance(self, capsys, monkeypatch, tmp_path):
+        hinted_file = tmp_path / "notes.txt"
+        hinted_file.write_text("hello", encoding="utf-8")
+        monkeypatch.setattr(mod, "_PREFS", {"path_hints": True})
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+
+        mod._print_path_hints([str(hinted_file)])
+
+        out = capsys.readouterr().out
+        assert str(hinted_file) in out
+        assert "use /view or /edit" in out
+
+
+def test_print_risky_action_warning_wave28_includes_recovery_hint(capsys):
+    mod._print_risky_action_warning(
+        action="/exec",
+        target="rm -rf build/",
+        risk_level="critical",
+        recovery_hint="use git restore if the target was removed accidentally.",
+    )
+
+    out = capsys.readouterr().out
+    assert "Review carefully: rm -rf build/" in out
+    assert "Recovery: use git restore if the target was removed accidentally." in out
+
+
+class TestCmdTop:
+    """Tests for /top command."""
+
+    def _ctx(self, args: str = ""):
+        import types
+        return types.SimpleNamespace(args=args)
+
+    def test_top_empty_history_shows_no_history(self, monkeypatch):
+        """/top with empty history prints 'No history yet.' and returns _CMD_CONTINUE."""
+        monkeypatch.setitem(mod._PREFS, "cmd_history", [])
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        printed = []
+        monkeypatch.setattr("builtins.print", lambda *a, **kw: printed.append(" ".join(str(x) for x in a)))
+        result = mod._cmd_top(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        assert any("No history yet" in line for line in printed)
+
+    def test_top_with_history_returns_cmd_continue(self, monkeypatch):
+        """/top with mock history returns _CMD_CONTINUE and shows items."""
+        history = ["hello world", "hello world", "/help", "foo", "/help"]
+        monkeypatch.setitem(mod._PREFS, "cmd_history", history)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        printed = []
+        monkeypatch.setattr("builtins.print", lambda *a, **kw: printed.append(" ".join(str(x) for x in a)))
+        result = mod._cmd_top(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        combined = "\n".join(printed)
+        assert "hello world" in combined or "Most Used" in combined
+
+    def test_top_n_limits_results(self, monkeypatch):
+        """/top 3 with 5+ distinct items limits output to 3."""
+        history = [f"prompt {i}" for i in range(10)]
+        monkeypatch.setitem(mod._PREFS, "cmd_history", history)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        printed = []
+        monkeypatch.setattr("builtins.print", lambda *a, **kw: printed.append(" ".join(str(x) for x in a)))
+        result = mod._cmd_top(self._ctx("3"))
+        assert result == mod._CMD_CONTINUE
+        # At most 3 numbered rows (lines containing "1.", "2.", "3." but not "4.")
+        combined = "\n".join(printed)
+        assert "4." not in combined
+
+
+class TestCmdFreq:
+    """Tests for /freq command."""
+
+    def _ctx(self, args: str = ""):
+        import types
+        return types.SimpleNamespace(args=args)
+
+    def test_freq_empty_history_shows_no_data_message(self, monkeypatch):
+        """/freq with empty history shows no-data message and returns _CMD_CONTINUE."""
+        monkeypatch.setitem(mod._PREFS, "cmd_history", [])
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        printed = []
+        monkeypatch.setattr("builtins.print", lambda *a, **kw: printed.append(" ".join(str(x) for x in a)))
+        result = mod._cmd_freq(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        assert any("No slash command history" in line for line in printed)
+
+    def test_freq_with_slash_commands_returns_cmd_continue(self, monkeypatch):
+        """/freq with slash command history returns _CMD_CONTINUE and shows commands."""
+        history = ["/help", "/help", "/stats", "/help", "/top"]
+        monkeypatch.setitem(mod._PREFS, "cmd_history", history)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        printed = []
+        monkeypatch.setattr("builtins.print", lambda *a, **kw: printed.append(" ".join(str(x) for x in a)))
+        result = mod._cmd_freq(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        combined = "\n".join(printed)
+        assert "/help" in combined
+
+
+# ── /recall command ───────────────────────────────────────────────────────────
+
+class TestCmdRecall:
+    """Tests for the /recall slash command."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_recall_no_history_shows_no_prompt_history(self, capsys, monkeypatch):
+        """/recall with empty history shows 'No prompt history yet'."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setitem(mod._PREFS, "cmd_history", [])
+        result = mod._cmd_recall(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "no prompt history" in out.lower()
+
+    def test_recall_no_arg_with_history_shows_numbered_list(self, capsys, monkeypatch):
+        """/recall with no argument and history shows numbered prompt list."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setitem(mod._PREFS, "cmd_history", [
+            "explain recursion",
+            "/help",
+            "what is async await",
+        ])
+        result = mod._cmd_recall(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "explain recursion" in out
+        assert "what is async await" in out
+        assert "/help" not in out  # slash commands filtered out
+
+    def test_recall_n_sets_next_inject(self, monkeypatch):
+        """/recall 1 with history sets _next_inject to most recent prompt."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setitem(mod._PREFS, "cmd_history", [
+            "first prompt",
+            "/help",
+            "second prompt",
+        ])
+        mod._next_inject = ""
+        result = mod._cmd_recall(self._ctx(args="1"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._next_inject == "second prompt"
+
+    def test_recall_out_of_range_shows_error(self, capsys, monkeypatch):
+        """/recall 99 with short history shows 'No prompt #99'."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setitem(mod._PREFS, "cmd_history", ["only prompt"])
+        result = mod._cmd_recall(self._ctx(args="99"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No prompt #99" in out

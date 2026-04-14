@@ -134,7 +134,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave24"  # updated with each UX wave batch
+_CLI_BUILD = "wave25"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -941,6 +941,76 @@ def _print_dashboard_surface(
     if action_block:
         lines.extend(["", *action_block])
     print("\n".join(lines))
+
+
+def _dedupe_preserve_order(lines: "list[str]") -> list[str]:
+    """Return non-empty lines without duplicates, preserving first-seen order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for line in lines:
+        text = str(line or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def _print_predictive_affordances(
+    hints: "list[str]",
+    *,
+    title: str = "Next steps",
+    border_style: str = "dim",
+) -> None:
+    """Render a compact, fallback-safe next-step menu."""
+    clean = _dedupe_preserve_order(hints)[:4]
+    if not clean:
+        return
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if _RICH_AVAILABLE and is_tty and not _a11y_plain_mode():
+        body = _RichText()
+        for hint in clean:
+            body.append("  • ", style="dim")
+            body.append(f"{hint}\n")
+        _RICH_CONSOLE.print(
+            _RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1))
+        )
+        return
+    print(f"{title}:")
+    for hint in clean:
+        print(f"  - {hint}")
+
+
+def _build_error_recovery_hints(msg: str, *, session_id: str = "") -> list[str]:
+    """Return recovery-oriented affordances for common CLI failures."""
+    lower = str(msg or "").lower()
+    hints: list[str] = []
+    if any(token in lower for token in ("refused", "unreachable", "timed out", "resolve", "unable to reach")):
+        hints.extend(
+            [
+                "openclaw health to verify the local server",
+                "openclaw status to confirm URL, token source, and recent session state",
+            ]
+        )
+    if any(token in lower for token in ("401", "unauthorized", "forbidden", "token")):
+        hints.extend(
+            [
+                "openclaw auth login to refresh the saved token",
+                "openclaw status to confirm which token source is active",
+            ]
+        )
+    if "usage:" in lower:
+        hints.append("/help or /palette <term> to find the expected command shape")
+    if session_id:
+        hints.extend(
+            [
+                "/retry to resend the last request",
+                "/context to inspect the grounding for the next request",
+            ]
+        )
+    elif not hints:
+        hints.append("/help to browse the available command surface")
+    return _dedupe_preserve_order(hints)
 
 
 def _print_meta_footer(*pairs: tuple[str, str]) -> None:
@@ -1810,6 +1880,11 @@ def summarize_session(session: SessionSummary) -> str:
         watch_state = None
     snapshot = build_collaboration_snapshot(session.session_id, limit=3)
     mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
+    operator_snapshot = _session_operator_snapshot(
+        session,
+        watch_state=watch_state,
+        collaboration_snapshot=snapshot,
+    )
     parts = [
         f"session: {session.session_id}",
         f"title: {session.title}",
@@ -1823,6 +1898,7 @@ def summarize_session(session: SessionSummary) -> str:
     mood_cell = _session_mood_cell(mood)
     if mood_cell:
         parts.append(mood_cell)
+    parts.extend(_operator_snapshot_lines(operator_snapshot)[:4])
     if session.plan_id:
         parts.append(f"plan: {session.plan_id}")
     if session.task_id:
@@ -1864,6 +1940,11 @@ def _print_session_summary(session: SessionSummary) -> None:
         watch_state = None
     snapshot = build_collaboration_snapshot(session.session_id, limit=3)
     mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
+    operator_snapshot = _session_operator_snapshot(
+        session,
+        watch_state=watch_state,
+        collaboration_snapshot=snapshot,
+    )
 
     summary_lines = [
         session.title,
@@ -1891,6 +1972,7 @@ def _print_session_summary(session: SessionSummary) -> None:
         else "files: none tracked",
         f"last: {session.last_summary[:100]}" if session.last_summary else "",
     ]
+    detail_lines.extend(_operator_snapshot_lines(operator_snapshot)[:5])
     action_lines = []
     if session.automation_mode:
         a_status = session.automation_status or "active"
@@ -1918,14 +2000,22 @@ def _print_session_summary(session: SessionSummary) -> None:
                 detail_lines.append(f"last error: {last_error[:80]}")
         action_lines.append("/watch status to inspect the live control tower")
         action_lines.append("/watch history to review retries and checkpoints")
+        if watch_state and (watch_state.get("last_error") or int(watch_state.get("failure_count") or 0) > 0):
+            action_lines.append('/watch intervene "recovery note" to steer the next retry')
+        if watch_state and list(watch_state.get("interventions") or []):
+            action_lines.append("/collab share to copy the latest operator-visible snapshot")
     elif session.output_count:
         action_lines.append("/outputs 1 to inspect the newest saved output")
+        if session.output_count > 1:
+            action_lines.append("/outputs overlay to jump through saved artifacts")
     elif session.files:
         action_lines.append("/context to preview the next request grounding")
     else:
         action_lines.append("/files add <path> to attach workspace context")
     if session.plan_id or session.task_id:
         action_lines.append("/context to verify linked plan/task grounding")
+    action_lines.append("/collab to copy the read-only operator snapshot")
+    action_lines = _dedupe_preserve_order(action_lines)
     if session.last_checkpoint_at:
         detail_lines.append(f"last checkpoint: {session.last_checkpoint_at}")
 
@@ -2156,6 +2246,133 @@ def _session_preview_lines(session: SessionSummary) -> list[str]:
     return lines[:4]
 
 
+def _session_operator_snapshot(
+    session: SessionSummary,
+    *,
+    watch_state: dict[str, Any] | None = None,
+    collaboration_snapshot: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Return a read-only operator snapshot for monitoring and handoff surfaces."""
+    try:
+        normalized_watch = normalize_watch_state(watch_state or {}) if watch_state else {}
+    except Exception:
+        normalized_watch = {}
+    snapshot = collaboration_snapshot or {}
+    decisions = [item for item in list(snapshot.get("recent_decisions") or []) if isinstance(item, dict)]
+    notes = [item for item in list(snapshot.get("recent_notes") or []) if isinstance(item, dict)]
+    outputs = [item for item in list(snapshot.get("recent_outputs") or []) if isinstance(item, dict)]
+    handoff = snapshot.get("latest_handoff") or {}
+    interventions = [item for item in list(normalized_watch.get("interventions") or []) if isinstance(item, dict)]
+    pending_interventions = [
+        item for item in interventions if str(item.get("status") or "").strip().lower() == "pending"
+    ]
+    watch_status = str(normalized_watch.get("status") or "").strip().lower()
+    failures = int(normalized_watch.get("failure_count") or 0)
+    fresh = not _session_is_stale(session)
+    stop_requested = bool(normalized_watch.get("stop_requested"))
+
+    readiness_status = "info"
+    readiness_label = "warming"
+    readiness_detail = "local snapshot is still forming"
+    if stop_requested:
+        readiness_status = "warn"
+        readiness_label = "attention"
+        readiness_detail = "stop requested; verify the next clean handoff point"
+    elif watch_status == "retrying" or failures > 0:
+        readiness_status = "retry"
+        readiness_label = "attention"
+        readiness_detail = "automation is recovering; keep operator eyes on retries"
+    elif watch_status in {"running", "active"}:
+        readiness_status = "active"
+        readiness_label = "live"
+        readiness_detail = "watch loop is active; summary is safe to monitor"
+    elif outputs or decisions or session.last_summary:
+        readiness_status = "complete"
+        readiness_label = "handoff-ready"
+        readiness_detail = "local read-only snapshot is ready to share"
+    elif fresh:
+        readiness_status = "active"
+        readiness_label = "warming"
+        readiness_detail = "fresh session context is available for operators"
+
+    watch_bits: list[str] = []
+    if watch_status:
+        watch_bits.append(watch_status)
+    timing = _watch_timing_summary(normalized_watch) if normalized_watch else {}
+    active_phase = str(timing.get("active_phase") or "").strip()
+    if active_phase:
+        watch_bits.append(active_phase)
+    poll_count = int(normalized_watch.get("poll_count") or 0)
+    max_polls = int(normalized_watch.get("max_polls") or 0)
+    if poll_count or max_polls:
+        watch_bits.append(f"{poll_count}/{max_polls or '∞'} polls")
+
+    queue_bits: list[str] = []
+    if pending_interventions:
+        queue_bits.append(f"{len(pending_interventions)} pending")
+    if stop_requested:
+        queue_bits.append("stop requested")
+
+    latest_output = str((outputs[0] or {}).get("name") or "").strip() if outputs else ""
+    latest_decision = _format_collaboration_entry(decisions[0]) if decisions else ""
+    latest_note = _format_collaboration_entry(notes[0]) if notes else ""
+    latest_handoff = str(handoff.get("id") or "").strip()
+
+    return {
+        "access": "read-only local snapshot",
+        "control": "visibility only; no remote control",
+        "readiness_status": readiness_status,
+        "readiness_label": readiness_label,
+        "readiness_detail": readiness_detail,
+        "watch_summary": " · ".join(watch_bits),
+        "queue_summary": " · ".join(queue_bits),
+        "latest_output": latest_output,
+        "latest_decision": latest_decision,
+        "latest_note": latest_note,
+        "latest_handoff": latest_handoff,
+    }
+
+
+def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
+    """Render human-readable lines for the operator snapshot."""
+    lines = [
+        _progress_cell("visibility", str(snapshot.get("access") or "read-only local snapshot"), status="info"),
+    ]
+    readiness_label = str(snapshot.get("readiness_label") or "").strip()
+    readiness_detail = str(snapshot.get("readiness_detail") or "").strip()
+    if readiness_label:
+        readiness_value = readiness_label if not readiness_detail else f"{readiness_label} · {readiness_detail}"
+        lines.append(
+            _progress_cell(
+                "readiness",
+                readiness_value,
+                status=str(snapshot.get("readiness_status") or "info"),
+            )
+        )
+    watch_summary = str(snapshot.get("watch_summary") or "").strip()
+    if watch_summary:
+        lines.append(f"operator watch: {watch_summary}")
+    queue_summary = str(snapshot.get("queue_summary") or "").strip()
+    if queue_summary:
+        lines.append(f"operator queue: {queue_summary}")
+    latest_output = str(snapshot.get("latest_output") or "").strip()
+    if latest_output:
+        lines.append(f"latest output: {latest_output}")
+    latest_decision = str(snapshot.get("latest_decision") or "").strip()
+    if latest_decision:
+        lines.append(f"latest decision: {_single_line_excerpt(latest_decision, max_chars=100)}")
+    latest_note = str(snapshot.get("latest_note") or "").strip()
+    if latest_note:
+        lines.append(f"latest note: {_single_line_excerpt(latest_note, max_chars=100)}")
+    latest_handoff = str(snapshot.get("latest_handoff") or "").strip()
+    if latest_handoff:
+        lines.append(f"latest handoff: {latest_handoff}")
+    control = str(snapshot.get("control") or "").strip()
+    if control:
+        lines.append(f"control: {control}")
+    return lines
+
+
 def _build_session_share_text(session_id: str) -> str:
     snapshot = build_collaboration_snapshot(session_id, limit=5)
     session_data = snapshot.get("session") or {}
@@ -2166,6 +2383,11 @@ def _build_session_share_text(session_id: str) -> str:
     latest_handoff = snapshot.get("latest_handoff") or {}
     share = snapshot.get("share") or {}
     mood = _session_mood_snapshot(
+        require_session(session_id),
+        watch_state=load_watch_state(session_id),
+        collaboration_snapshot=snapshot,
+    )
+    operator_snapshot = _session_operator_snapshot(
         require_session(session_id),
         watch_state=load_watch_state(session_id),
         collaboration_snapshot=snapshot,
@@ -2218,6 +2440,30 @@ def _build_session_share_text(session_id: str) -> str:
         note = str(latest_handoff.get("note") or "").strip()
         if note:
             lines.append(f"  note : {note}")
+    lines.append("")
+    lines.append("OPERATOR SNAPSHOT")
+    lines.append(f"  access    : {operator_snapshot.get('access', 'read-only local snapshot')}")
+    lines.append(f"  control   : {operator_snapshot.get('control', 'visibility only; no remote control')}")
+    readiness_label = str(operator_snapshot.get("readiness_label") or "").strip()
+    readiness_detail = str(operator_snapshot.get("readiness_detail") or "").strip()
+    if readiness_label:
+        readiness = readiness_label if not readiness_detail else f"{readiness_label} · {readiness_detail}"
+        lines.append(f"  readiness : {readiness}")
+    watch_summary = str(operator_snapshot.get("watch_summary") or "").strip()
+    if watch_summary:
+        lines.append(f"  watch     : {watch_summary}")
+    queue_summary = str(operator_snapshot.get("queue_summary") or "").strip()
+    if queue_summary:
+        lines.append(f"  queue     : {queue_summary}")
+    latest_output = str(operator_snapshot.get("latest_output") or "").strip()
+    if latest_output:
+        lines.append(f"  output    : {latest_output}")
+    latest_decision = str(operator_snapshot.get("latest_decision") or "").strip()
+    if latest_decision:
+        lines.append(f"  decision  : {latest_decision}")
+    latest_note = str(operator_snapshot.get("latest_note") or "").strip()
+    if latest_note:
+        lines.append(f"  note      : {latest_note}")
     if recent_outputs:
         lines.append("")
         lines.append("RECENT OUTPUTS")
@@ -6054,6 +6300,19 @@ def _print_watch_status(state: dict[str, Any]) -> None:
     last_error = str(state.get("last_error") or "").strip()
     last_summary = str(state.get("last_summary") or "").strip()
     timing = _watch_timing_summary(state)
+    operator_snapshot = _session_operator_snapshot(
+        SessionSummary(
+            session_id=str(state.get("session_id") or "watch"),
+            title=str(goal or "Watch session"),
+            cwd=str(state.get("cwd") or ""),
+            files=list(state.get("files") or []),
+            plan_id=str(state.get("plan_id") or ""),
+            task_id=str(state.get("task_id") or ""),
+            status=str(w_status or "active"),
+            last_summary=last_summary,
+        ),
+        watch_state=state,
+    )
     polls_value = f"{poll_count}/{max_polls or '∞'}"
 
     phase_status = "retry" if w_status == "retrying" else "active"
@@ -6096,6 +6355,7 @@ def _print_watch_status(state: dict[str, Any]) -> None:
     if last_error:
         detail_lines.append(f"last error: {last_error[:80]}")
     detail_lines.extend(_watch_focus_lines(state))
+    detail_lines.extend(_operator_snapshot_lines(operator_snapshot)[:5])
     action_lines = [
         "/watch history to inspect checkpoint history",
         "/watch intervene <msg> to leave an operator breadcrumb",
@@ -6104,6 +6364,11 @@ def _print_watch_status(state: dict[str, Any]) -> None:
         action_lines.insert(0, "/session to review the resulting session snapshot")
     else:
         action_lines.insert(0, "/watch retry-limit N to tune retry budget")
+    if last_error or failure_count:
+        action_lines.append('/watch intervene "recovery note" to guide the next loop')
+    if list(state.get("interventions") or []):
+        action_lines.append("/collab share to capture the operator-facing snapshot")
+    action_lines = _dedupe_preserve_order(action_lines)
     _print_dashboard_surface(
         "Watch Control Tower",
         summary_lines=summary_lines,
@@ -6168,10 +6433,14 @@ def _print_watch_history(state: dict[str, Any]) -> None:
         "Watch History",
         summary_lines=summary_lines,
         detail_lines=detail_lines,
-        action_lines=[
-            "/watch status to return to the live control tower",
-            "/watch intervene <msg> to annotate the next checkpoint",
-        ],
+        action_lines=_dedupe_preserve_order(
+            [
+                "/watch status to return to the live control tower",
+                "/watch intervene <msg> to annotate the next checkpoint",
+                "/watch retry-limit N to tune recovery budget after repeated retries" if retry_history else "",
+                "/collab share to carry forward the latest operator note" if notes else "",
+            ]
+        ),
         border_style="dim",
     )
 
@@ -7054,11 +7323,15 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
             "/outputs 1 to preview the newest artifact",
             "/outputs promote <index> <name> to pin a stable filename",
         ]
+        if len(outputs) > 1:
+            action_lines.append("/outputs overlay or /outputs pick <query> to jump by name")
+        if session.files or session.plan_id or session.task_id:
+            action_lines.append("/context to compare saved artifacts against current grounding")
         _print_dashboard_surface(
             "Outputs Dashboard",
             summary_lines=summary_lines,
             detail_lines=detail_lines,
-            action_lines=action_lines,
+            action_lines=_dedupe_preserve_order(action_lines),
             border_style="dim",
         )
         if _RICH_AVAILABLE and _IS_TTY:
@@ -7110,6 +7383,17 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         preview_label += ")"
         print(preview_label)
         print(str(preview.get("preview") or ""))
+    _print_predictive_affordances(
+        _dedupe_preserve_order(
+            [
+                "/outputs overlay to jump to another saved artifact" if len(outputs) > 1 else "",
+                "/outputs promote <index> <name> to keep a stable copy",
+                "/context to compare this artifact with current grounding" if session.files or session.plan_id or session.task_id else "",
+            ]
+        ),
+        title="Artifact shortcuts",
+        border_style="dim",
+    )
     return _CMD_CONTINUE
 
 
@@ -8319,12 +8603,18 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
     title_str = "Recent sessions" + (f" matching '{query}'" if query else "")
     fresh_count = sum(1 for s in sessions if not _session_is_stale(s))
     active_count = sum(1 for s in sessions if _status_family(s.status or "active") in {"active", "complete", "retry", "waiting"})
+    operator_ready_count = 0
+    for session in sessions:
+        operator_snapshot = _session_operator_snapshot(session)
+        if str(operator_snapshot.get("readiness_label") or "").strip() == "handoff-ready":
+            operator_ready_count += 1
     _print_dashboard_surface(
         "Session Browser",
         summary_lines=[
             _progress_cell("shown", str(len(sessions)), status="active"),
             _progress_cell("fresh", str(fresh_count), status="info" if fresh_count else "idle"),
             _progress_cell("active-ish", str(active_count), status="active" if active_count else "idle"),
+            _progress_cell("operator-ready", str(operator_ready_count), status="complete" if operator_ready_count else "idle"),
         ],
         detail_lines=[
             f"query: {query}" if query else "query: recent sessions",
@@ -9502,8 +9792,18 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     ))
     registry.register(SlashCommand(
         name="history",
-        description="Show recent command history (/history [n] | /history clear)",
+        description="Show recent command history (/history [page] | /history clear)",
         handler=_cmd_history,
+    ))
+    registry.register(SlashCommand(
+        name="recall",
+        description="Re-inject the nth most recent prompt (/recall [n])",
+        handler=_cmd_recall,
+    ))
+    registry.register(SlashCommand(
+        name="histsearch",
+        description="Search prompt history for matching entries (/histsearch <query>)",
+        handler=_cmd_histsearch,
     ))
     registry.register(SlashCommand(
         name="macro",
@@ -9535,6 +9835,16 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         name="heatmap",
         description="Show a color-coded hourly activity heatmap of openclaw usage",
         handler=_cmd_heatmap,
+    ))
+    registry.register(SlashCommand(
+        name="top",
+        description="Show the n most frequently used prompts and commands (default: 10)",
+        handler=_cmd_top,
+    ))
+    registry.register(SlashCommand(
+        name="freq",
+        description="Show frequency analysis of slash commands used",
+        handler=_cmd_freq,
     ))
     registry.register(SlashCommand(
         name="ratehint",
@@ -9656,8 +9966,11 @@ def print_chat_help(*, search: str = "") -> None:
         ("/alias",                              "List all defined command aliases"),
         ("/alias <name> <expansion>",           "Define a command shorthand alias"),
         ("/alias rm <name>",                    "Remove a defined alias"),
-        ("/history [n]",                        "Show last N commands from history (default 20)"),
+        ("/history [page]",                     "Show command history, 15 per page (color-coded)"),
         ("/history clear",                      "Clear command history"),
+        ("/recall",                             "List recent prompts (non-slash-command inputs)"),
+        ("/recall <n>",                         "Re-inject the nth most recent prompt into chat"),
+        ("/histsearch <query>",                 "Search prompt history for matching entries"),
         ("/macro list",                         "List all saved macros"),
         ("/macro save <name> [last N]",         "Save last N commands as a named macro"),
         ("/macro show <name>",                  "Show the commands stored in a macro"),
@@ -9666,6 +9979,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
         ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
         ("/heatmap",  "Show a color-coded 24-hour activity heatmap of openclaw usage"),
+        ("/top [n]",  "Show the n most frequently used prompts and commands (default: 10)"),
+        ("/freq",     "Show frequency analysis of slash commands used"),
         ("/ratehint [on|off]",                   "Show or toggle the post-response rating hint"),
         ("/inject <path>",                       "Inject file content as context prefix for next message"),
         ("/inject --url <url>",                  "Inject URL content as context prefix for next message"),
@@ -9813,6 +10128,11 @@ def _print_connection_error_panel(msg: str, base_url: str = "") -> None:
     """Print a rich error panel for connection/HTTP failures, with hints."""
     if not (_RICH_AVAILABLE and _IS_TTY):
         _print_error(msg, file=sys.stderr)
+        _print_predictive_affordances(
+            _build_error_recovery_hints(msg),
+            title="Recovery menu",
+            border_style="red",
+        )
         return
     is_connection = any(k in msg.lower() for k in ("refused", "unreachable", "timed out", "resolve", "unable to reach"))
     body = _RichText()
@@ -9826,6 +10146,11 @@ def _print_connection_error_panel(msg: str, base_url: str = "") -> None:
         body.append("  • Check OPENCLAW_URL or pass --url\n", style="dim")
         body.append("  • Try: openclaw health\n", style="dim")
     _RICH_CONSOLE.print(_RichPanel(body, title="[bold red]❌ Connection failed[/]", border_style="red", padding=(0, 1)), file=sys.stderr)
+    _print_predictive_affordances(
+        _build_error_recovery_hints(msg),
+        title="Recovery menu",
+        border_style="red",
+    )
 
 
 def handle_status_command(args: argparse.Namespace, *, config: "CliConfig") -> int:
@@ -10188,7 +10513,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "research", "write", "exec", "edit", "theme", "emoji", "layout",
     "sessions", "export", "stats", "tag", "resume", "replay", "handoff", "collab",
     "draft", "template", "pasteguard", "accessibility", "a11y",
-    "search", "alias", "pin", "pins", "history",
+    "search", "alias", "pin", "pins", "history", "recall",
 })
 
 _MAX_ALIASES = 50
@@ -10449,11 +10774,31 @@ def _cmd_macrostatus(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
     return _CMD_CONTINUE
 
 
+def _relative_time(ts_str: str) -> str:
+    """Convert ISO timestamp to relative time string."""
+    try:
+        import datetime
+        ts = datetime.datetime.fromisoformat(ts_str)
+        now = datetime.datetime.utcnow()
+        diff = now - ts
+        secs = int(diff.total_seconds())
+        if secs < 60:
+            return f"{secs}s ago"
+        elif secs < 3600:
+            return f"{secs // 60}m ago"
+        elif secs < 86400:
+            return f"{secs // 3600}h ago"
+        else:
+            return f"{secs // 86400}d ago"
+    except Exception:
+        return ""
+
+
 def _cmd_history(ctx: "ChatCommandContext") -> str:
-    """Show or clear recent command history."""
+    """Show or clear recent command history with color-coding and pagination."""
     args = (ctx.args or "").strip()
     is_tty = _IS_TTY or sys.stdout.isatty()
-    hist: "list[str]" = _PREFS.get("cmd_history", [])
+    hist: "list" = _PREFS.get("cmd_history", [])
 
     if args.lower() == "clear":
         _PREFS["cmd_history"] = []
@@ -10461,43 +10806,204 @@ def _cmd_history(ctx: "ChatCommandContext") -> str:
         print(f"  {_GR}{_e('✅', '[OK]')} Command history cleared.{_R}")
         return _CMD_CONTINUE
 
-    # Parse optional count argument
-    count = 20
+    # Parse optional page argument
+    PAGE_SIZE = 15
+    page = 1
     if args:
         try:
-            count = max(1, min(int(args), _CMD_HISTORY_MAX))
+            page = max(1, int(args))
         except ValueError:
-            _print_error(f"Usage: /history [n] | /history clear")
+            _print_error(f"Usage: /history [page] | /history clear")
             return _CMD_CONTINUE
 
-    entries = hist[-count:] if hist else []
+    total = len(hist)
+    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+    start = (page - 1) * PAGE_SIZE
+    end = start + PAGE_SIZE
+    entries = hist[start:end] if hist else []
+
+    def _entry_text(e: object) -> str:
+        if isinstance(e, dict):
+            return e.get("text", e.get("prompt", e.get("cmd", "")))
+        return str(e)
+
+    def _entry_ts(e: object) -> str:
+        if isinstance(e, dict):
+            return e.get("ts", e.get("timestamp", ""))
+        return ""
 
     if _RICH_AVAILABLE and is_tty:
         from rich.text import Text as _RichText
+        from rich.console import Group as _RichGroup
         content_lines: list[_RichText] = []
         if not entries:
-            t = _RichText("(no history yet)", style="dim")
-            content_lines.append(t)
+            content_lines.append(_RichText("(no history yet)", style="dim"))
         else:
-            for i, cmd in enumerate(entries, start=1):
+            global_idx = start + 1
+            for e in entries:
+                text = _entry_text(e)
+                ts_str = _entry_ts(e)
+                rel = _relative_time(ts_str) if ts_str else ""
                 line = _RichText()
-                line.append(f"  {i:>3}  ", style="dim")
-                line.append(cmd, style="bold cyan")
+                line.append(f"  {global_idx:>3}  ", style="dim")
+                if text.startswith("/"):
+                    line.append(text, style="bold cyan")
+                else:
+                    line.append(text, style="default")
+                if rel:
+                    line.append(f"  {rel}", style="dim")
                 content_lines.append(line)
-        from rich.console import Group as _RichGroup
+                global_idx += 1
+        page_info = f"page {page}/{total_pages}" if total_pages > 1 else ""
+        title_parts = [f"{_e('📜', '')} Command History"]
+        if page_info:
+            title_parts.append(f"[dim]({page_info})[/dim]")
         _RICH_CONSOLE.print(_RichPanel(
             _RichGroup(*content_lines),
-            title=f"{_e('📜', '')} Command History",
+            title=" ".join(title_parts),
             border_style="cyan",
             padding=(0, 1),
         ))
+        if total_pages > 1:
+            _RICH_CONSOLE.print(f"[dim]  /history {page + 1} for next page[/dim]" if page < total_pages else "")
     else:
         print(f"{_BBL}Command History:{_R}")
         if not entries:
             print(f"  {_DM}(no history yet){_R}")
         else:
-            for i, cmd in enumerate(entries, start=1):
-                print(f"  {_DM}{i:>3}{_R}  {_CY}{cmd}{_R}")
+            global_idx = start + 1
+            for e in entries:
+                text = _entry_text(e)
+                ts_str = _entry_ts(e)
+                rel = _relative_time(ts_str) if ts_str else ""
+                color = _CY if text.startswith("/") else ""
+                ts_suffix = f"  {_DM}{rel}{_R}" if rel else ""
+                print(f"  {_DM}{global_idx:>3}{_R}  {color}{text}{_R}{ts_suffix}")
+                global_idx += 1
+        if total_pages > 1:
+            print(f"  {_DM}Page {page}/{total_pages} — /history <page> for more{_R}")
+
+    return _CMD_CONTINUE
+
+
+def _cmd_recall(ctx: "ChatCommandContext") -> str:
+    """/recall <n> — re-inject the nth most recent prompt into the chat (1=most recent)."""
+    arg = (ctx.args or "").strip()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    cmd_history = _PREFS.get("cmd_history", [])
+    prompts: list[str] = []
+    for entry in reversed(cmd_history):
+        if isinstance(entry, dict):
+            text = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
+        else:
+            text = str(entry)
+        if text and not text.startswith("/"):
+            prompts.append(text)
+
+    if not arg or not arg.isdigit():
+        if not prompts:
+            msg = "No prompt history yet."
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+            else:
+                print(msg)
+            return _CMD_CONTINUE
+
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print("\n[bold cyan]📜 Recent Prompts[/]")
+            for i, p in enumerate(prompts[:10], 1):
+                preview = p[:70] + "…" if len(p) > 70 else p
+                _RICH_CONSOLE.print(f"  [dim]{i:>2}.[/] [default]{preview}[/]")
+            _RICH_CONSOLE.print(f"\n[dim]Use /recall <n> to re-send prompt #n[/]\n")
+        else:
+            print("\n📜 Recent Prompts")
+            for i, p in enumerate(prompts[:10], 1):
+                preview = p[:70] + "…" if len(p) > 70 else p
+                print(f"  {i:>2}. {preview}")
+            print("\n  Use /recall <n> to re-send prompt #n\n")
+        return _CMD_CONTINUE
+
+    n = int(arg)
+    if n < 1 or n > len(prompts):
+        msg = f"No prompt #{n} — history has {len(prompts)} entries."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    recalled = prompts[n - 1]
+    global _next_inject
+    _next_inject = recalled
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"[dim]↩  Recalling:[/] [italic]{recalled[:80]}[/]")
+    else:
+        print(f"  ↩  Recalling: {recalled[:80]}")
+
+    return _CMD_CONTINUE
+
+
+def _cmd_histsearch(ctx: "ChatCommandContext") -> str:
+    """/histsearch <query> — search prompt history for matching entries."""
+    query = ctx.args.strip().lower()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if not query:
+        msg = "Usage: /histsearch <query>"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    cmd_history = _PREFS.get("cmd_history", [])
+
+    matches = []
+    for i, entry in enumerate(reversed(cmd_history)):
+        if isinstance(entry, dict):
+            text = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
+            ts = entry.get("timestamp", entry.get("ts", ""))
+        else:
+            text = str(entry)
+            ts = ""
+
+        if query in text.lower():
+            matches.append((len(cmd_history) - i, text, ts))
+
+    if not matches:
+        msg = f"No history matches for '{query}'"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold cyan]🔍 History Search:[/] [italic]\"{query}\"[/] [dim]({len(matches)} match{'es' if len(matches)!=1 else ''})[/]\n")
+        for idx, text, ts in matches[:20]:
+            preview = text[:80] + "…" if len(text) > 80 else text
+            highlighted = preview.replace(query, f"[bold yellow]{query}[/]")
+            rel = ""
+            if ts:
+                try:
+                    import datetime
+                    dt = datetime.datetime.fromisoformat(ts)
+                    diff = int((datetime.datetime.utcnow() - dt).total_seconds())
+                    rel = f"[dim] ({diff//3600}h ago)[/]" if diff >= 3600 else f"[dim] ({diff//60}m ago)[/]"
+                except Exception:
+                    pass
+            _RICH_CONSOLE.print(f"  [dim]#{idx:<4}[/] {highlighted}{rel}")
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n🔍 History: \"{query}\" ({len(matches)} matches)\n")
+        for idx, text, ts in matches[:20]:
+            preview = text[:75] + "…" if len(text) > 75 else text
+            highlighted = preview.replace(query, query.upper())
+            print(f"  #{idx:<4} {highlighted}")
+        print()
 
     return _CMD_CONTINUE
 
@@ -11221,6 +11727,112 @@ def _cmd_stats(ctx: "ChatCommandContext") -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_top(ctx: "ChatCommandContext") -> str:
+    """/top [n] — show the n most frequently used prompts and commands (default: 10)."""
+    arg = ctx.args.strip()
+    n = int(arg) if arg.isdigit() else 10
+    n = min(max(n, 1), 50)
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    cmd_history = _PREFS.get("cmd_history", [])
+
+    freq: dict = {}
+    for entry in cmd_history:
+        if isinstance(entry, dict):
+            text = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
+        else:
+            text = str(entry)
+        text = text.strip()
+        if not text:
+            continue
+        key = text[:60]
+        freq[key] = freq.get(key, 0) + 1
+
+    if not freq:
+        msg = "No history yet."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    top = sorted(freq.items(), key=lambda x: -x[1])[:n]
+    max_count = top[0][1] if top else 1
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table
+        from rich.box import SIMPLE
+        _RICH_CONSOLE.print(f"\n[bold cyan]🔝 Top {len(top)} Most Used[/]\n")
+        tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
+        tbl.add_column("#", justify="right", style="dim", width=4)
+        tbl.add_column("Count", justify="right", style="bold yellow", width=6)
+        tbl.add_column("Bar", style="cyan", width=20)
+        tbl.add_column("Text", style="default")
+        for i, (text, count) in enumerate(top, 1):
+            bar_len = int((count / max_count) * 18)
+            bar = "█" * bar_len
+            preview = text[:55] + "…" if len(text) > 55 else text
+            style = "bold green" if text.startswith("/") else "default"
+            tbl.add_row(str(i), str(count), bar, f"[{style}]{preview}[/]")
+        _RICH_CONSOLE.print(tbl)
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n🔝 Top {len(top)} Most Used\n")
+        for i, (text, count) in enumerate(top, 1):
+            bar_len = int((count / max_count) * 20)
+            bar = "█" * bar_len
+            preview = text[:50] + "…" if len(text) > 50 else text
+            print(f"  {i:>3}. {_B}{count:>4}x{_R}  {_CY}{bar:<20}{_R}  {preview}")
+        print()
+
+    return _CMD_CONTINUE
+
+
+def _cmd_freq(ctx: "ChatCommandContext") -> str:
+    """/freq — show frequency analysis of slash commands used."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    cmd_history = _PREFS.get("cmd_history", [])
+
+    slash_freq: dict = {}
+    for entry in cmd_history:
+        if isinstance(entry, dict):
+            text = entry.get("text", entry.get("cmd", ""))
+        else:
+            text = str(entry)
+        text = text.strip()
+        if text.startswith("/"):
+            cmd_name = text.split()[0]
+            slash_freq[cmd_name] = slash_freq.get(cmd_name, 0) + 1
+
+    if not slash_freq:
+        msg = "No slash command history yet."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    sorted_cmds = sorted(slash_freq.items(), key=lambda x: -x[1])[:20]
+    max_count = sorted_cmds[0][1] if sorted_cmds else 1
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold cyan]📊 Slash Command Frequency[/]\n")
+        for cmd, count in sorted_cmds:
+            bar_len = int((count / max_count) * 25)
+            bar = "█" * bar_len
+            _RICH_CONSOLE.print(f"  [bold green]{cmd:<20}[/] [cyan]{bar:<25}[/] [bold yellow]{count}[/]")
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n📊 Slash Command Frequency\n")
+        for cmd, count in sorted_cmds:
+            bar_len = int((count / max_count) * 25)
+            bar = "█" * bar_len
+            print(f"  {_BGR}{cmd:<20}{_R} {_CY}{bar:<25}{_R} {_BYE}{count}{_R}")
+        print()
+
+    return _CMD_CONTINUE
+
+
 def _paste_guard(
     prompt: str,
     *,
@@ -11386,6 +11998,14 @@ def run_chat(
             _suggestions = difflib.get_close_matches(cmd_name, _known, n=1, cutoff=0.6)
             if _suggestions:
                 print(f"  {_DM}Did you mean {_R}{_BCY}/{_suggestions[0]}{_R}{_DM}?{_R}")
+            _print_predictive_affordances(
+                [
+                    "/palette <term> to search commands by name or purpose",
+                    "/shortcuts to review quick keyboard and command gestures",
+                ],
+                title="Command recovery",
+                border_style="yellow",
+            )
             continue
 
         if autoroute_on:
@@ -11447,9 +12067,11 @@ def run_chat(
             continue
         except OpenClawCliError as exc:
             print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
-            _err_tty = _IS_TTY or sys.stdout.isatty()
-            if _err_tty:
-                print(f"  {_DM}{_e('💡', '[hint]')} /retry to resend  ·  /reset to clear history{_R}")
+            _print_predictive_affordances(
+                _build_error_recovery_hints(str(exc), session_id=session_id) + ["/reset to clear chat history if the context feels stuck"],
+                title="Recovery menu",
+                border_style="red",
+            )
             continue
 
         # Visual separator + status bar (skipped in compact layout)
@@ -11463,6 +12085,18 @@ def run_chat(
             _paths = _detect_file_paths(body)
             if _paths:
                 _print_path_hints(_paths)
+            _print_predictive_affordances(
+                _dedupe_preserve_order(
+                    [
+                        f"/view {_paths[0]} to inspect the first referenced file" if _paths else "",
+                        "/context to verify what the next request will inherit" if session_id else "",
+                        "/pin <name> to save this answer for reuse" if body.strip() else "",
+                        "/outputs to review saved artifacts for this session" if session_id else "",
+                    ]
+                ),
+                title="Suggested follow-ups",
+                border_style="cyan",
+            )
         _print_animated_separator()
         if _PREFS.get("show_rate_hint", True) and not _a11y_plain_mode() and (_IS_TTY or sys.stdout.isatty()):
             if _RICH_AVAILABLE:
