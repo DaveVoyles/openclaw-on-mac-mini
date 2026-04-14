@@ -265,6 +265,32 @@ def test_with_spinner_reduced_motion_uses_static_status(monkeypatch, capsys):
     assert "[done] response ready." in stdout
 
 
+def test_print_feedback_plain_mode_uses_textual_emphasis(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+
+    mod._print_feedback("response ready.", level="success", detail="1.2s")
+
+    stdout = capsys.readouterr().out
+    assert "[done] response ready. (1.2s)" in stdout
+
+
+def test_print_startup_banner_plain_mode_uses_static_summary(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+    monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 120)
+    monkeypatch.setattr(mod, "_session_auto_route_enabled", lambda _session_id: False)
+
+    mod._print_startup_banner(_config(), "session-12345678")
+
+    stdout = capsys.readouterr().out
+    assert "OpenClaw" in stdout
+    assert "Server: http://localhost:8765" in stdout
+    assert "Session: session-" in stdout
+    assert "Auto-routing: off" in stdout
+    assert "Type /help for commands. /quit to exit." in stdout
+
+
 def test_print_response_plain_mode_flattens_sources_and_footer(monkeypatch, capsys):
     monkeypatch.setattr(mod, "_IS_TTY", True)
     monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
@@ -283,7 +309,38 @@ def test_print_response_plain_mode_flattens_sources_and_footer(monkeypatch, caps
     stdout = capsys.readouterr().out
     assert "Hello world" in stdout
     assert "Sources:" in stdout
+    assert "Response complete in 1.5s" in stdout
     assert "Metadata:" in stdout
+
+
+def test_print_response_separator_plain_mode_includes_detail(monkeypatch, capsys):
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+
+    mod._print_response_separator(label="Response", detail="answer reveal", status="active")
+
+    stdout = capsys.readouterr().out
+    assert "Response: (answer reveal)" in stdout
+
+
+def test_with_spinner_animated_path_shows_phase_language(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_REDUCED_MOTION, False)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, False)
+    monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+    monkeypatch.setattr(mod.time, "sleep", lambda _s: None)
+
+    def _slow() -> str:
+        deadline = time.monotonic() + 0.02
+        while time.monotonic() < deadline:
+            pass
+        return "done"
+
+    result = mod._with_spinner("Thinking", _slow)
+
+    stdout = capsys.readouterr().out.lower()
+    assert result == "done"
+    assert "warming up" in stdout
+    assert "response ready." in stdout
 
 
 def test_render_table_ansi_uses_high_contrast_separator_on_narrow_terminal(monkeypatch):
@@ -5310,9 +5367,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave25(self):
-        """_CLI_BUILD must equal 'wave25'."""
-        assert mod._CLI_BUILD == "wave25"
+    def test_cli_build_is_wave27(self):
+        """_CLI_BUILD must equal 'wave27'."""
+        assert mod._CLI_BUILD == "wave27"
 
 
 class TestCmdRatehint:
@@ -5347,6 +5404,53 @@ class TestCmdRatehint:
         out = capsys.readouterr().out
         assert "on" in out
         assert "ratehint" in out
+
+
+class TestCmdStreak:
+    """Tests for _cmd_streak and _print_ascii_trophy."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_no_ratings_shows_message(self, capsys, monkeypatch):
+        """/streak with no ratings prints guidance."""
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        mod._PREFS.pop("ratings", None)
+        result = mod._cmd_streak(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No ratings yet" in out
+
+    def test_all_high_ratings_shows_streak_count(self, capsys, monkeypatch):
+        """/streak with all high ratings shows correct current streak."""
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_print_ascii_trophy", lambda s: None)
+        mod._PREFS["ratings"] = [{"score": 4}, {"score": 5}, {"score": 4}, {"score": 5}]
+        result = mod._cmd_streak(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "4 high ratings" in out
+
+    def test_mixed_ratings_streak_stops_at_low(self, capsys, monkeypatch):
+        """/streak with mixed ratings: streak counts only trailing high ratings."""
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        mod._PREFS["ratings"] = [{"score": 5}, {"score": 2}, {"score": 4}, {"score": 5}]
+        result = mod._cmd_streak(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "2 high ratings" in out
+
+    def test_print_ascii_trophy_runs_without_error(self, capsys, monkeypatch):
+        """_print_ascii_trophy(5) runs without error in non-TTY mode."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        mod._print_ascii_trophy(5)
+        out = capsys.readouterr().out
+        assert "5-Rating Streak" in out
 
 
 class TestCmdPromptDebug:
@@ -6131,3 +6235,51 @@ class TestCmdPromptFormat:
         result = mod._cmd_prompt(self._ctx(args="{build} ❯"))
         assert result == mod._CMD_CONTINUE
         assert mod._PREFS.get("prompt_format") == "{build} ❯"
+
+
+class TestExecErrorHints:
+    """Tests for _analyze_exec_error smart recovery hints."""
+
+    def test_file_not_found_contains_path_hint(self):
+        """Hints for 'No such file or directory' include path-related advice."""
+        hints = mod._analyze_exec_error("ls foo", "No such file or directory", 1)
+        assert any("ls -la" in h or "mkdir" in h for h in hints)
+
+    def test_command_not_found_contains_install_hint(self):
+        """Hints for 'command not found' include install suggestion."""
+        hints = mod._analyze_exec_error("foobar", "command not found", 127)
+        assert any("foobar" in h for h in hints)
+
+    def test_missing_python_module_contains_pip_hint(self):
+        """Hints for missing Python module include pip install suggestion."""
+        hints = mod._analyze_exec_error("python", "No module named 'foo'", 1)
+        assert any("pip install" in h for h in hints)
+
+    def test_success_returns_empty_list(self):
+        """Exit code 0 with no stderr returns no hints."""
+        hints = mod._analyze_exec_error("ls", "", 0)
+        assert hints == []
+
+
+class TestCmdTip:
+    """Tests for /tip command and _OPENCLAW_TIPS constant."""
+
+    def _ctx(self):
+        return mod.ChatCommandContext(history=[], session_id="")
+
+    def test_tip_returns_cmd_continue(self, monkeypatch):
+        """/tip returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        result = mod._cmd_tip(self._ctx())
+        assert result == mod._CMD_CONTINUE
+
+    def test_openclaw_tips_is_nonempty_list(self):
+        """_OPENCLAW_TIPS is a non-empty list of strings."""
+        assert isinstance(mod._OPENCLAW_TIPS, list)
+        assert len(mod._OPENCLAW_TIPS) > 0
+        assert all(isinstance(t, str) for t in mod._OPENCLAW_TIPS)
+
+    def test_cli_build_is_wave27(self):
+        """_CLI_BUILD is updated to wave27."""
+        assert mod._CLI_BUILD == "wave27"

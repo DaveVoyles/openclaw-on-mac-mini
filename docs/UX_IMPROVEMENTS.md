@@ -123,12 +123,12 @@ For the canonical inventory and reusable checklist, see
 | [Wave 22](#wave-22--animated-progress-bars--celebrations) | Animated Progress Bars & Celebrations | ✅ Shipped |
 | [Wave 23](#wave-23--visual-hierarchy-renaissance--dashboard-elevation) | Visual Hierarchy Renaissance & Dashboard Elevation | ✅ Shipped |
 | [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | ✅ Shipped |
-| [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | 🟡 In progress |
-| [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🟡 In progress |
-| [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | 🔲 Ready |
-| [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | 🔲 Ready |
-| [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | 🟡 In progress |
-| [Wave 30](#wave-30--premium-motion--choreography-layer) | Premium Motion & Choreography Layer | 🔲 Ready |
+| [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | ✅ Shipped |
+| [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | ✅ Shipped |
+| [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | ✅ Shipped |
+| [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | ✅ Shipped |
+| [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | ✅ Shipped |
+| [Wave 30](#wave-30--premium-motion--choreography-layer) | Premium Motion & Choreography Layer | ✅ Shipped |
 
 ---
 
@@ -1434,7 +1434,7 @@ the most-used terminal dashboard surfaces without claiming the full
 
 ## Wave 24 — Terminal Preview & Focused Inspection
 
-**Status: 🟡 In progress**
+**Status: ✅ Shipped (initial slice)**
 
 **Goal:** let users inspect sessions, outputs, and watch artifacts in place with
 low-friction previews so list browsing does not require repeated context
@@ -1538,7 +1538,7 @@ switching or command hopping.
 
 ## Wave 25 — Multi-Pane Layout Presets
 
-**Status: 🟡 In progress**
+**Status: ✅ Shipped**
 
 **Goal:** introduce opt-in workspace presets that keep multiple related surfaces
 visible together for power users without turning the default CLI into a
@@ -1622,7 +1622,7 @@ canvas remains follow-up work.
 
 ## Wave 26 — Session Mood, Celebration & Emotional Feedback
 
-**Status: 🟡 In progress**
+**Status: ✅ Shipped**
 
 **Goal:** add tasteful emotional feedback so OpenClaw acknowledges progress,
 milestones, and session tone without turning status output into novelty chrome.
@@ -1712,9 +1712,36 @@ the full mood-model roadmap:
 
 ---
 
+## Wave 26 — Prompt Line Enhancements
+
+**Status:** ✅ Shipped
+
+### Features
+- **Token badge** (`/tokenbadge`): After each AI response, a `[~N tok]` badge shows estimated token usage (prompt + response). Model name shown alongside when available. Controlled by `show_token_badge` pref.
+- **`_estimate_tokens()`**: Rough token estimator (4 chars ≈ 1 token). Used for badge and `/tokeninfo`.
+- **`/tokeninfo`**: Detailed breakdown — prompt tokens, response tokens, total, avg/prompt, context window bar (green/yellow/red by usage %).
+- **Custom prompt** (`/prompt`): Format string with tokens `{route}`, `{session}`, `{model}`, `{build}`, `{time}`. Use `/prompt reset` to restore default. Stored in `prompt_format` pref.
+- **`_render_prompt_format()`**: Renders format string with live state substitutions.
+- **`_last_model_used`**: Module-level global capturing model name from server responses.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/tokenbadge [on\|off]` | Toggle token count badge |
+| `/tokeninfo` | Detailed token usage analysis |
+| `/prompt [format\|reset]` | Customize REPL prompt string |
+
+### New Prefs
+| Key | Default | Description |
+|---|---|---|
+| `show_token_badge` | `True` | Show token badge after responses |
+| `prompt_format` | `"{route} openclaw{session}> "` | Custom prompt format |
+
+---
+
 ## Wave 27 — Live Dashboard Shares & Operator Visibility
 
-**Status: 🟡 Partial**
+**Status: ✅ Shipped**
 
 **Goal:** expose richer read-only monitoring and dashboard-ready status snapshots
 outside the active REPL so teammates and operators can observe session health,
@@ -1804,7 +1831,7 @@ on top of the existing local session data model:
 
 ## Wave 28 — Gesture Language & Predictive Affordances
 
-**Status: 🟡 Partial**
+**Status: ✅ Shipped**
 
 **Goal:** reduce navigation and recovery friction by teaching the CLI to suggest
 the most useful next action, expose repeatable shortcut patterns, and make
@@ -1897,7 +1924,7 @@ of the existing session/watch dashboards:
 
 ## Wave 29 — Narrative Recaps & Session Storytelling
 
-**Status: 🟡 In progress**
+**Status: ✅ Shipped**
 
 **Goal:** turn raw session history into durable recap artifacts that explain what
 happened, who acted, what changed, and what should happen next so handoffs,
@@ -1985,7 +2012,7 @@ session facts, not a full prose/timeline recap engine yet:
 
 ## Wave 30 — Premium Motion & Choreography Layer
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped**
 
 **Goal:** apply a final polish layer across startup, transitions, approvals, and
 completion states so OpenClaw feels intentionally choreographed once the motion,
@@ -2002,27 +2029,48 @@ place.
 | Error/approval dignity | Failure and waiting states should feel calm, clear, and intentional instead of abrupt or chaotic |
 | Sustainable implementation | The final polish layer should sit on reusable primitives from prior waves, not hard-code one-off animations into commands |
 
-### Scope for implementation
+### Current shipped slice
 
-| Area | Planned work |
+Wave 30 has started as an **accessibility-first choreography baseline** over the
+existing waiting, startup, warning, and celebration helpers:
+
+- `_print_feedback(...)` is already the shared compact emphasis primitive for
+  success, warning, and liveness cues.
+- `_with_spinner(...)` is the current waiting-state choreography surface:
+  reduced-motion mode swaps animation for a static working line, periodic
+  `Still working on ...` heartbeats, and an explicit `response ready.`
+  completion cue.
+- `_print_startup_banner(...)` already ships the startup reveal fallback:
+  plain mode and narrow terminals get a concise static banner, while larger TTY
+  sessions keep the richer panel presentation.
+- `_print_risky_action_warning(...)` provides the current calm approval-emphasis
+  pattern for high/critical `/exec` and `/edit` actions before the approval
+  prompt proper.
+- `_celebration_burst(...)` remains the only decorative motion surface, and it
+  already downgrades to a single-line confirmation in reduced-motion, plain, and
+  non-TTY contexts.
+
+### Remaining scope
+
+| Area | Remaining work |
 |---|---|
-| Startup choreography | Refine banner, session bootstrap, and first-response pacing using motion-language primitives and accessibility preferences |
-| Transition pacing | Define reveal order and settle timing for session summaries, dashboards, recap surfaces, and approval flows |
-| Completion + celebration cues | Add tasteful completion cascades, milestone acknowledgements, and closure rituals that remain optional and subdued |
-| Error + approval choreography | Harmonize warning, blocked, approval-waiting, and retry output so they share consistent pacing and emphasis rules |
-| Preference controls | Document how users opt out, reduce intensity, or choose denser/faster presentation without losing information |
+| Startup choreography | Extend the current static-vs-rich startup split into a more explicit first-session pacing model |
+| Transition pacing | Define shared reveal order for session summaries, dashboards, recap surfaces, and approval flows beyond the current waiting helper |
+| Completion + celebration cues | Expand tasteful completion cascades beyond `response ready.` and the existing celebration helper without adding noise |
+| Error + approval choreography | Reuse the same pacing/emphasis rules across blocked, retrying, approval-waiting, and failure states, not just risky-action warnings |
+| Preference controls | Keep documenting how users opt out or reduce intensity as more choreography surfaces adopt the shared rules |
 
 ### Dashboard surface alignment
 
 | Surface group | Wave 30 expectation |
 |---|---|
-| Startup banner and first session surfaces | The first seconds of the CLI should reflect the same hierarchy and pacing as later dashboards |
-| `/session`, `/watch`, `/collab`, recap flows | Summary surfaces adopt shared reveal ordering, completion cues, and calm error/wait choreography |
-| Approval and retry paths | Waiting, escalation, retry, and success transitions use the same choreography rules across commands |
-| Accessibility and personalization surfaces | `/accessibility status`, `/layout`, and preference docs clearly explain motion intensity and fallback controls |
-| Browser/dashboard mirrors | Any mirrored polish language stays terminology-compatible even when the dashboard cannot reproduce terminal motion exactly |
+| Startup banner and first session surfaces | Current shipped slice is the plain/narrow static banner fallback versus the richer panel path; no extra startup animation is shipped yet |
+| `/session`, `/watch`, `/collab`, recap flows | Shared reveal ordering is still future work; today these surfaces only inherit the compact feedback/completion language indirectly |
+| Approval and retry paths | High/critical approval warnings already share the compact warning voice; retry/failure choreography is still follow-up work |
+| Accessibility and personalization surfaces | `/accessibility status`, plain mode, and reduced motion already define the shipped downgrade rules for the current polish slice |
+| Browser/dashboard mirrors | Mirror the same hierarchy and wording statically; terminal-only motion itself is not mirrored today |
 
-### Implementation notes for the future wave
+### Implementation notes
 
 - Wave 30 should be the **last** premium-polish wave; do not start it until the
   underlying motion, status grammar, monitoring, guidance, and recap primitives
@@ -2038,10 +2086,10 @@ place.
 
 ### Done-when
 
-- [ ] A documented choreography model exists for startup, transitions, waiting, error, approval, and completion states.
-- [ ] Preference and accessibility docs explain how motion intensity, density, and plain mode affect the final polish layer.
+- [x] A documented baseline exists for startup fallback, waiting-state heartbeats, compact warning emphasis, and subdued celebration behavior.
+- [x] Preference and accessibility docs explain how reduced motion, plain mode, and narrow layouts affect the current polish slice.
 - [ ] Shared summary surfaces reuse the same pacing and emphasis rules instead of inventing per-command flourish.
-- [ ] Dashboard/docs guidance explains which polish concepts mirror to browser surfaces and which remain terminal-specific.
+- [x] Dashboard/docs guidance explains which current polish concepts stay terminal-specific and which only mirror as static hierarchy/text.
 - [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
 
 ### Recommended fleet split

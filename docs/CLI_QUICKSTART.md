@@ -208,6 +208,16 @@ Wave 25 is currently a **preset-management** slice:
 The actual split-pane canvas is still follow-up work; this slice ships the
 vocabulary, persistence, and fallback reporting first.
 
+### Wave 26 — Prompt Line Enhancements
+
+| Command | Description |
+|---|---|
+| `/tokenbadge [on\|off]` | Toggle `[~N tok]` token count badge shown after each response |
+| `/tokeninfo` | Detailed token usage breakdown with context window bar |
+| `/prompt [format\|reset]` | Customize REPL prompt — tokens: `{route}` `{session}` `{model}` `{build}` `{time}` |
+
+> **New:** After each response, a `[~420 tok]` badge and model name are shown. Customize your prompt with `/prompt {build} ❯ `.
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new
@@ -384,6 +394,28 @@ handoff:
   explicit `resume`, `inspect`, and `share` commands rather than generated prose.
 - **Not shipped yet:** bullet-mode recaps, timeline-mode recaps, recap-specific
   export variants, or richer browser/dashboard storytelling.
+
+`docs/COMMANDS.md` still does not need regeneration because command metadata is
+unchanged.
+
+## Wave 30 premium choreography slice (current slice)
+
+Wave 30 is currently the **calm pacing + fallback polish** pass:
+
+- **Startup stays readable first.** In plain mode or on narrow terminals, the
+  startup banner resolves to a short static block with server, user, session,
+  and auto-routing state instead of decorative chrome.
+- **Long waits stay alive without extra motion.** Reduced-motion mode swaps the
+  spinner for a static working line, periodic `Still working on ...` heartbeats,
+  and a final `response ready.` cue.
+- **High-risk actions use the same warning voice.** `/exec` and `/edit` print a
+  compact `Review carefully` warning plus recovery guidance before the normal
+  approval prompt for high/critical actions.
+- **Celebration remains subdued.** `/celebrate` and 5-star `/rate` feedback
+  still collapse to a single-line `🎉 ...` message when reduced motion, plain
+  mode, or non-TTY output is active.
+- **Not shipped yet:** a shared reveal-order system across every dashboard
+  surface, richer retry choreography, or browser-side motion mirrors.
 
 `docs/COMMANDS.md` still does not need regeneration because command metadata is
 unchanged.

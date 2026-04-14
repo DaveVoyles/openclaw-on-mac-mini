@@ -135,7 +135,35 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave25"  # updated with each UX wave batch
+_CLI_BUILD = "wave27"  # updated with each UX wave batch
+
+_OPENCLAW_TIPS = [
+    "Press Tab after / to auto-complete slash commands.",
+    "Use /recall 1 to instantly re-send your last prompt.",
+    "Rate responses with /rate 5 to trigger a 🎉 celebration!",
+    "Try /palette edit to find all editing-related commands.",
+    "Use /histsearch <query> to find any past prompt instantly.",
+    "Customize your prompt with /prompt {build} ❯",
+    "Use /separator none to remove the separator between responses.",
+    "Try /autobold off if you find the auto-bolding distracting.",
+    "Use /top to see your most-used commands and prompts.",
+    "Chain commands with /macro save to automate workflows.",
+    "Use /pin <key> <value> to save quick-reference data.",
+    "Type /shortcuts to see all keyboard shortcuts at a glance.",
+    "Use /heatmap to discover your peak usage hours.",
+    "Try /quality to see a colorful histogram of your ratings.",
+    "Use /export to save your session to a file.",
+    "Use /streak to track your consecutive high-rating streak.",
+    "Use /tokeninfo to see estimated token usage this session.",
+    "Try /emojiheaders off for a cleaner heading style.",
+    "Use /links off if your terminal doesn't support clickable URLs.",
+    "Use /pathhints off to disable file path quick-action hints.",
+    "Try /celebrate Woohoo! for a surprise animation.",
+    "Use /freq to analyze which slash commands you use most.",
+    "Use /histsearch to find any prompt you've ever typed.",
+    "The /stats command shows bar charts of your usage patterns.",
+    "Use /plain for maximum compatibility on any terminal.",
+]
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
@@ -181,6 +209,11 @@ _HEADING_EMOJIS: dict[int, str] = {
 
 _CMD_HISTORY_MAX = 50  # max entries in command history
 _SPINNER_HEARTBEAT_SECONDS = 4.0
+_MOTION_PACING_SECONDS: dict[str, float] = {
+    "banner": 0.04,
+    "separator": 0.03,
+    "footer": 0.02,
+}
 
 # Accessibility mode keys in _PREFS
 _A11Y_REDUCED_MOTION = "reduced_motion"   # bool: disable spinner/animations
@@ -886,6 +919,47 @@ def _progress_cell(label: str, value: str, *, status: str = "", rich: bool = Fal
     return f"{badge} · {cell}"
 
 
+def _premium_motion_active(*, output_json: bool = False) -> bool:
+    """Return True when tasteful motion is allowed for this surface."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    return bool(is_tty and not output_json and not _a11y_plain_mode() and not _a11y_reduced_motion())
+
+
+def _motion_pause(stage: str) -> None:
+    """Sleep briefly to stagger premium UI choreography when motion is enabled."""
+    if not _premium_motion_active():
+        return
+    delay = float(_MOTION_PACING_SECONDS.get(stage, 0.0) or 0.0)
+    if delay > 0:
+        time.sleep(delay)
+
+
+def _spinner_phase_label(elapsed: float) -> str:
+    """Return a lightweight motion-language label for spinner pacing."""
+    if elapsed < 1.0:
+        return "warming up"
+    if elapsed < 4.0:
+        return "working"
+    return "wrapping up"
+
+
+def _response_footer_lines(*, elapsed: float = 0.0, tokens: int = 0, model: str = "") -> tuple[str, str]:
+    """Return the footer headline and metadata line for a response."""
+    parts: list[str] = []
+    if elapsed > 0:
+        parts.append(f"⏱ {elapsed:.1f}s")
+    if tokens:
+        parts.append(f"{tokens} tokens")
+    if model:
+        parts.append(model)
+    detail = "  •  ".join(parts)
+    if elapsed > 0:
+        headline = f"{_e('✨', '[done]')} Response complete in {elapsed:.1f}s"
+    else:
+        headline = f"{_e('✨', '[done]')} Response complete"
+    return headline, detail
+
+
 def _dashboard_section_lines(title: str, lines: list[str]) -> list[str]:
     """Return normalized lines for a plain-text dashboard section."""
     clean = [str(line).strip() for line in lines if str(line or "").strip()]
@@ -1165,7 +1239,7 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     if _a11y_reduced_motion():
         prefix = "[working]" if _a11y_plain_mode() else f"{_theme_ansi()}{_e('⏳', '[working]')}{_R}"
         status_style = "" if (_a11y_plain_mode() or _a11y_high_contrast()) else _DM
-        sys.stdout.write(f"  {prefix} {status_style}{label}...{_R if status_style else ''}\n")
+        sys.stdout.write(f"  {prefix} {status_style}{label}... steady pace{_R if status_style else ''}\n")
         sys.stdout.flush()
         last_heartbeat = 0.0
         join_timeout = min(0.1, heartbeat_every / 2.0)
@@ -1177,7 +1251,7 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
                 last_heartbeat = elapsed
         if exc_holder:
             raise exc_holder[0]
-        _print_feedback("response ready.", level="success", detail=f"{time.monotonic() - start:.1f}s")
+        _print_feedback("response ready.", level="success", detail=f"{label} · {time.monotonic() - start:.1f}s")
         return result_holder[0] if result_holder else None
 
     spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -1186,8 +1260,9 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     while thread.is_alive():
         elapsed = time.monotonic() - start
         frame = spinner_frames[frame_idx % len(spinner_frames)]
+        phase = _spinner_phase_label(elapsed)
         extra = " · still working" if elapsed - last_heartbeat >= heartbeat_every else ""
-        sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s{extra}")
+        sys.stdout.write(f"\r{frame} {label} · {phase}  {elapsed:.0f}s{extra}")
         sys.stdout.flush()
         frame_idx += 1
         if extra:
@@ -1201,7 +1276,7 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
 
     if exc_holder:
         raise exc_holder[0]
-    _print_feedback("response ready.", level="success", detail=f"{time.monotonic() - start:.1f}s")
+    _print_feedback("response ready.", level="success", detail=f"{label} · {time.monotonic() - start:.1f}s")
     return result_holder[0]
 
 
@@ -3815,24 +3890,30 @@ def _separator_fill(width: int, *, high_contrast: bool | None = None) -> str:
     return char * max(1, width)
 
 
-def _print_response_separator(*, label: str = "") -> None:
+def _print_response_separator(*, label: str = "", detail: str = "", status: str = "info") -> None:
     """Print an adaptive response separator."""
     if _a11y_plain_mode():
         if label:
-            print(f"\n{label}:")
+            suffix = f" ({detail})" if detail else ""
+            print(f"\n{label}:{suffix}")
         else:
             print()
         return
     cols = _terminal_width()
     sep_width = min(max(8, cols - 2), 60)
+    status_label = _status_emoji(status)
+    display_label = " ".join(part for part in [status_label, label] if part).strip() or label
+    if detail and cols >= 96:
+        display_label = f"{display_label} · {detail}".strip()
     if _RICH_AVAILABLE and (_IS_TTY or sys.stdout.isatty()):
         from rich.rule import Rule as _RichRule
 
-        _RICH_CONSOLE.print(_RichRule(label if cols >= 72 else "", style=_theme_style()))
+        _RICH_CONSOLE.print(_RichRule(display_label if cols >= 72 else "", style=_theme_style()))
+        _motion_pause("separator")
     else:
         line = _separator_fill(sep_width)
         if label and cols >= 72:
-            line = f"{line} {label} {line}"
+            line = f"{line} {display_label} {line}"
             line = line[:sep_width]
         print(f"{_theme_ansi()}{line}{_R}")
 
@@ -4595,27 +4676,35 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
             if sources:
                 print(f"\nSources:\n{sources}")
     if response.model or response.tokens or elapsed > 0:
-        parts: list[str] = []
-        if elapsed > 0:
-            parts.append(f"⏱ {elapsed:.1f}s")
-        if response.tokens:
-            parts.append(f"{response.tokens} tokens")
-        if response.model:
-            parts.append(response.model)
-        footer = "  •  ".join(parts)
+        headline, footer = _response_footer_lines(
+            elapsed=elapsed,
+            tokens=response.tokens,
+            model=response.model,
+        )
         if _RICH_AVAILABLE and is_tty:
             from rich.rule import Rule as _RichRule
+
+            _motion_pause("footer")
             _RICH_CONSOLE.print(_RichRule(style="bold white" if _a11y_high_contrast() else "dim"))
+            headline_style = "bold white" if _a11y_high_contrast() else "bold cyan"
             footer_style = "bold white" if _a11y_high_contrast() else "dim"
-            _RICH_CONSOLE.print(f"[{footer_style}]{footer}[/]")
+            _RICH_CONSOLE.print(f"[{headline_style}]{headline}[/]")
+            if footer:
+                _RICH_CONSOLE.print(f"[{footer_style}]{footer}[/]")
         elif is_tty:
             print()
+            headline_style = _theme_ansi() if _a11y_high_contrast() else _BCY
             footer_style = _theme_ansi() if _a11y_high_contrast() else _DM
+            headline_reset = _R if headline_style else ""
             footer_reset = _R if footer_style else ""
-            print(f"{footer_style}{footer}{footer_reset}")
+            print(f"{headline_style}{headline}{headline_reset}")
+            if footer:
+                print(f"{footer_style}{footer}{footer_reset}")
         else:
             print()
-            print(f"Metadata: {footer}")
+            print(headline)
+            if footer:
+                print(f"Metadata: {footer}")
 
 
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
@@ -7804,6 +7893,84 @@ def _exec_progress_animate(proc: Any, label: str = "") -> tuple:
     return stdout_buf[0] if stdout_buf else b"", stderr_buf[0] if stderr_buf else b"", rc_buf[0] if rc_buf else -1
 
 
+def _analyze_exec_error(cmd: str, stderr: str, returncode: int) -> "list[str]":
+    """Analyze a failed command and return smart recovery hints."""
+    if returncode == 0:
+        return []
+    hints: list[str] = []
+    err_lower = (stderr or "").lower()
+    cmd_lower = (cmd or "").lower()
+
+    if "permission denied" in err_lower:
+        hints.append("Try: sudo " + cmd.strip())
+        hints.append("Or: chmod +x <file> if it's a script")
+
+    if "command not found" in err_lower or "not found" in err_lower:
+        first_word = cmd.strip().split()[0] if cmd.strip() else ""
+        if first_word:
+            hints.append(f"Install {first_word}? Try: brew install {first_word} or pip install {first_word}")
+        hints.append("Check PATH: echo $PATH")
+
+    if "modulenotfounderror" in err_lower or "no module named" in err_lower:
+        import re as _re
+        m = _re.search(r"no module named '([^']+)'", err_lower)
+        if m:
+            mod_name = m.group(1)
+            hints.append(f"Install missing module: pip install {mod_name}")
+        hints.append("Check virtual environment: which python3")
+
+    if "address already in use" in err_lower or ("port" in err_lower and "use" in err_lower):
+        hints.append("Port already in use — try a different port or: lsof -i :<port>")
+        hints.append("Kill process: kill $(lsof -t -i :<port>)")
+
+    if "no such file or directory" in err_lower:
+        hints.append("Check file path: ls -la")
+        hints.append("Create missing dirs: mkdir -p <path>")
+
+    if "timeout" in err_lower or "connection refused" in err_lower:
+        hints.append("Service may be down — check: docker ps or systemctl status")
+        hints.append("Try: /exec curl -s http://localhost:PORT/health")
+
+    if "docker" in cmd_lower and ("error" in err_lower or returncode != 0):
+        hints.append("Check Docker status: docker ps")
+        hints.append("View logs: docker logs <container>")
+
+    if not hints:
+        if returncode == 1:
+            hints.append("Exit code 1 — general error. Check stderr above.")
+        elif returncode == 2:
+            hints.append("Exit code 2 — misuse of command or bad arguments.")
+        elif returncode == 127:
+            hints.append("Exit code 127 — command not found. Check PATH.")
+        elif returncode == 130:
+            hints.append("Exit code 130 — interrupted by Ctrl+C.")
+        else:
+            hints.append(f"Exit code {returncode} — see stderr for details.")
+
+    return hints[:3]
+
+
+def _print_exec_error_hints(cmd: str, stderr: str, returncode: int) -> None:
+    """Print smart recovery hints after a failed exec command."""
+    if _a11y_plain_mode():
+        return
+    hints = _analyze_exec_error(cmd, stderr, returncode)
+    if not hints:
+        return
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print("\n[bold yellow]💡 Recovery hints:[/]")
+        for hint in hints:
+            _RICH_CONSOLE.print(f"  [dim]→[/] {hint}")
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n{_BYE}💡 Recovery hints:{_R}")
+        for hint in hints:
+            print(f"  {_DM}→{_R} {hint}")
+        print()
+
+
 def _cmd_exec(ctx: ChatCommandContext) -> str:
     """/exec [--] <command> — run a shell command with session tracking and approval."""
     raw = ctx.args.strip()
@@ -7914,6 +8081,8 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         },
     )
     _print_shell_result(result)
+    if result.returncode != 0:
+        _print_exec_error_hints(raw, result.stderr, result.returncode)
     _print_feedback(
         "Command complete.",
         level="success" if result.returncode == 0 else "warn",
@@ -9927,6 +10096,16 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         handler=_cmd_ratehint,
     ))
     registry.register(SlashCommand(
+        name="streak",
+        description="Show your current high-rating streak and all-time best",
+        handler=_cmd_streak,
+    ))
+    registry.register(SlashCommand(
+        name="tip",
+        description="Show a random openclaw usage tip",
+        handler=_cmd_tip,
+    ))
+    registry.register(SlashCommand(
         name="inject",
         description="Inject file/URL content as context prefix for next message (/inject <path> | --url <url> | clear | status)",
         handler=_cmd_inject,
@@ -10058,6 +10237,7 @@ def print_chat_help(*, search: str = "") -> None:
         ("/macro rm <name>",                    "Delete a named macro"),
         ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
         ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
+        ("/streak",   "Show your current high-rating streak and all-time best"),
         ("/heatmap",  "Show a color-coded 24-hour activity heatmap of openclaw usage"),
         ("/top [n]",  "Show the n most frequently used prompts and commands (default: 10)"),
         ("/freq",     "Show frequency analysis of slash commands used"),
@@ -10579,6 +10759,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
     autoroute_on = _session_auto_route_enabled(session_id)
     ver = cli_version()
+    motion_label = "reduced" if _a11y_reduced_motion() else "premium"
 
     cols = _terminal_width()
 
@@ -10592,12 +10773,15 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
             print(f"Session: {session_id[:8]}…")
         print("Type /help for commands. /quit to exit.")
         print(f"Auto-routing: {autoroute_str}")
+        print(f"Motion: {motion_label}")
         return
 
     if _RICH_AVAILABLE and _IS_TTY:
         t = _RichText()
         t.append(f"{_e('🦞', '[openclaw]')} OpenClaw", style="bold cyan")
         t.append(f"  {ver}", style="cyan dim")
+        t.append("  ·  ", style="dim")
+        t.append(f"{_e('✨', '[mode]')} {motion_label} motion", style="bold white" if _a11y_high_contrast() else "bold magenta")
         t.append("  connected to ", style="dim")
         t.append(config.base_url, style="cyan")
         t.append(f"\n  {_e('👤', '[user]')} ", style="dim")
@@ -10630,6 +10814,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
                 padding=(0, 1),
             )
         )
+        _motion_pause("banner")
     else:
         session_line = (
             f"\n  {_DM}{_e('🗂', '[session]')}  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
@@ -10640,6 +10825,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
             autoroute_line = f"\n  {_B}Auto-routing{_R} {_YE}is off{_R} {_DM}— use /autoroute on to enable{_R}"
         print(
             f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}  {_DM}{ver}{_R}"
+            f"\n  {_DM}mode:{_R}      {_MA}{motion_label} motion{_R}"
             f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
             f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
             f"{session_line}"
@@ -11399,6 +11585,116 @@ def _cmd_rate(ctx: "ChatCommandContext") -> str:
     print(f"{color}{msg}{_R}")
     if score == 5:
         _celebration_burst("5-star rating — thanks! 🎉")
+
+    if score >= 4:
+        ratings_list = _PREFS.get("ratings", [])
+        streak = 0
+        for r in reversed(ratings_list):
+            s = r.get("score", 0) if isinstance(r, dict) else 0
+            if s >= 4:
+                streak += 1
+            else:
+                break
+        if streak in (5, 10, 20, 50):
+            _print_ascii_trophy(streak)
+
+    return _CMD_CONTINUE
+
+
+def _print_ascii_trophy(streak: int) -> None:
+    """Print an ASCII trophy for streak achievements."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if _a11y_plain_mode():
+        print(f"  🏆 {streak}-rating streak!")
+        return
+
+    trophy = [
+        f"  {_YE}  ___  {_R}",
+        f"  {_YE} /   \\ {_R}",
+        f"  {_YE}|     |{_R}",
+        f"  {_YE} \\   / {_R}",
+        f"  {_YE}  | |  {_R}",
+        f"  {_YE} _|_|_ {_R}",
+        f"  {_YE}|_____|{_R}",
+    ]
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold yellow]🏆 {streak}-Rating Streak! Amazing![/]\n")
+        for line in trophy:
+            _RICH_CONSOLE.print(line)
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n  🏆 {streak}-Rating Streak! Amazing!\n")
+        for line in trophy:
+            print(line)
+        print()
+
+
+def _cmd_streak(ctx: "ChatCommandContext") -> str:
+    """/streak — show your current rating streak and all-time best."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    ratings = _PREFS.get("ratings", [])
+
+    if not ratings:
+        msg = "No ratings yet. Use /rate 1-5 after responses!"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    # Calculate current streak (consecutive 4+ from most recent)
+    current_streak = 0
+    for r in reversed(ratings):
+        if isinstance(r, dict):
+            score = r.get("score", r.get("rating", 0))
+        else:
+            try:
+                score = int(r)
+            except (ValueError, TypeError):
+                score = 0
+        if score >= 4:
+            current_streak += 1
+        else:
+            break
+
+    # Calculate best streak ever
+    best_streak = 0
+    running = 0
+    for r in ratings:
+        if isinstance(r, dict):
+            score = r.get("score", r.get("rating", 0))
+        else:
+            try:
+                score = int(r)
+            except (ValueError, TypeError):
+                score = 0
+        if score >= 4:
+            running += 1
+            best_streak = max(best_streak, running)
+        else:
+            running = 0
+
+    total = len(ratings)
+    high_pct = int(sum(1 for r in ratings if (r.get("score", 0) if isinstance(r, dict) else 0) >= 4) / max(1, total) * 100)
+
+    if _RICH_AVAILABLE and is_tty:
+        streak_color = "green" if current_streak >= 5 else "yellow" if current_streak >= 2 else "default"
+        _RICH_CONSOLE.print(f"\n[bold cyan]🔥 Rating Streak[/]\n")
+        _RICH_CONSOLE.print(f"  Current streak:  [{streak_color}]{current_streak} high ratings[/]  {'🔥' * min(current_streak, 10)}")
+        _RICH_CONSOLE.print(f"  Best streak:     [bold]{best_streak}[/]")
+        _RICH_CONSOLE.print(f"  High rate (4+):  [bold]{high_pct}%[/] of {total} ratings")
+        _RICH_CONSOLE.print()
+    else:
+        fire = "🔥" * min(current_streak, 10)
+        print(f"\n🔥 Rating Streak\n")
+        print(f"  Current streak:  {current_streak} high ratings  {fire}")
+        print(f"  Best streak:     {best_streak}")
+        print(f"  High rate (4+):  {high_pct}% of {total} ratings\n")
+
+    if current_streak >= 5:
+        _print_ascii_trophy(current_streak)
+
     return _CMD_CONTINUE
 
 
@@ -11993,6 +12289,21 @@ def _cmd_freq(ctx: "ChatCommandContext") -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_tip(ctx: "ChatCommandContext") -> str:
+    """/tip — show a random openclaw usage tip."""
+    import random
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    tip = random.choice(_OPENCLAW_TIPS)
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold cyan]💡 Tip:[/] {tip}\n")
+    else:
+        print(f"\n{_BCY}💡 Tip:{_R} {tip}\n")
+
+    return _CMD_CONTINUE
+
+
 def _paste_guard(
     prompt: str,
     *,
@@ -12058,8 +12369,16 @@ def run_chat(
         readline.set_completer_delims(" \t\n")
         readline.parse_and_bind("tab: complete")
     _print_startup_banner(config, session_id)
-    # First-run checklist: show tips when starting a brand-new empty session
+    # Occasionally show a random tip on startup (~30% chance)
+    import random as _random
     _is_tty_startup = _IS_TTY or sys.stdout.isatty()
+    if _random.random() < 0.3 and not _a11y_plain_mode() and _is_tty_startup and not config.output_json:
+        _startup_tip = _random.choice(_OPENCLAW_TIPS)
+        if _RICH_AVAILABLE:
+            _RICH_CONSOLE.print(f"[dim]💡 {_startup_tip}[/]\n")
+        else:
+            print(f"{_DM}💡 {_startup_tip}{_R}\n")
+    # First-run checklist: show tips when starting a brand-new empty session
     if session_id and not history and _is_tty_startup and not config.output_json:
         _print_first_run_tips()
     while True:
@@ -12238,7 +12557,7 @@ def run_chat(
         _is_tty = _IS_TTY or sys.stdout.isatty()
         _compact = _PREFS.get("layout") == "compact"
         if _is_tty and not config.output_json and not _compact:
-            _print_response_separator(label="Response")
+            _print_response_separator(label="Response", detail="answer reveal", status="active")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
         if body := (response.response or ""):
