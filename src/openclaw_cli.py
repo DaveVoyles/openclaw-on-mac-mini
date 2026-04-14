@@ -253,45 +253,8 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave42"  # updated with each UX wave batch
+_CLI_BUILD = "wave44"  # updated with each UX wave batch
 
-_OPENCLAW_TIPS = [
-    "Press Tab after / to auto-complete slash commands.",
-    "Use /recall 1 to instantly re-send your last prompt.",
-    "Rate responses with /rate 5 to trigger a 🎉 celebration!",
-    "Try /palette edit to find all editing-related commands.",
-    "Use /histsearch <query> to find any past prompt instantly.",
-    "Customize your prompt with /prompt {build} ❯",
-    "Use /separator none to remove the separator between responses.",
-    "Try /autobold off if you find the auto-bolding distracting.",
-    "Use /top to see your most-used commands and prompts.",
-    "Chain commands with /macro save to automate workflows.",
-    "Use /pin <key> <value> to save quick-reference data.",
-    "Type /shortcuts to see all keyboard shortcuts at a glance.",
-    "Use /heatmap to discover your peak usage hours.",
-    "Try /quality to see a colorful histogram of your ratings.",
-    "Use /export to save your session to a file.",
-    "Use /streak to track your consecutive high-rating streak.",
-    "Use /tokeninfo to see estimated token usage this session.",
-    "Try /emojiheaders off for a cleaner heading style.",
-    "Use /links off if your terminal doesn't support clickable URLs.",
-    "Use /pathhints off to disable file path quick-action hints.",
-    "Try /celebrate Woohoo! for a surprise animation.",
-    "Use /freq to analyze which slash commands you use most.",
-    "Use /histsearch to find any prompt you've ever typed.",
-    "The /stats command shows bar charts of your usage patterns.",
-    "Use /plain for maximum compatibility on any terminal.",
-    "Use /tokeninfo to check how full your context window is.",
-    "Use /trace to see the full routing decision with quality context.",
-    "Use /handoff check to audit session readiness before handing off.",
-    "Use /fleet health to get a cross-session automation health summary.",
-    "Use /alerts list to see computed operator alerts from active sessions.",
-    "Use /collab decision to record a tagged decision for later export.",
-    "Use /bookmark to save a replay point in the current session.",
-    "Use /overlay on to enable interactive list pickers for session commands.",
-    "Use /pattern list to browse saved prompt patterns.",
-    "Use /draft multiline on to enter multi-line compose mode.",
-]
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
@@ -308,21 +271,41 @@ WATCH_FOCUS_NOTE_CHARS = 120
 # REPL_ROUTE_* constants imported from openclaw_cli_router above.
 
 # ---------------------------------------------------------------------------
-# User preferences — theme, emoji, layout
+# User preferences — imported from openclaw_cli_prefs
 # ---------------------------------------------------------------------------
-_OPENCLAW_DIR = Path.home() / ".openclaw"
-_PREFS_FILE = _OPENCLAW_DIR / "prefs.json"
+import openclaw_cli_prefs as _prefs_mod
+from openclaw_cli_prefs import (
+    _OPENCLAW_DIR,
+    _PREFS_FILE,
+    _PREFS,
+    _THEMES,
+    _THEME_ORDER,
+    _THEME_DESCRIPTIONS,
+    _THEME_ALIASES,
+    _OPENCLAW_TIPS,
+    _A11Y_REDUCED_MOTION,
+    _A11Y_PLAIN_MODE,
+    _A11Y_HIGH_CONTRAST,
+    _EMOJI_PACKS,
+    _load_prefs,
+    _save_prefs,
+    _prefs_dir_path,
+    _prefs_file_path,
+    _normalize_theme_name,
+    _emoji_pack_name,
+    _normalize_personalization_prefs,
+)
 
-_PREFS: dict[str, Any] = {
-    "theme": "default",   # separator / accent colour
-    "emoji": True,         # show emoji in UI (False → ASCII fallbacks)
-    "emoji_pack": "classic",  # "classic" | "minimal" | "ascii"
-    "layout": "normal",   # "compact" | "normal" | "verbose" | "plain"
-    "layout_preset": "",  # "" | "focus" | "watch-monitor" | "handoff"
-    "layout_focus": "primary",  # "primary" | "supporting"
-    "interactive_overlays": False,  # opt-in interactive pickers for supported list commands
-    "emoji_headers": True,  # prepend emoji to markdown headings in AI responses
-}
+
+def _prefs_set(key: str, value: object) -> None:
+    """Update _PREFS in-place and persist.
+
+    Defined as a shim in this module (not re-exported from openclaw_cli_prefs)
+    so that tests can monkeypatch both `mod._PREFS` and `mod._save_prefs`
+    independently and have _prefs_set see both replacements via module globals.
+    """
+    _PREFS[key] = value
+    _save_prefs()
 
 _HEADING_EMOJIS: dict[int, str] = {
     1: "✨",  # H1 — rare, important
@@ -337,21 +320,6 @@ _MOTION_PACING_SECONDS: dict[str, float] = {
     "banner": 0.04,
     "separator": 0.03,
     "footer": 0.02,
-}
-
-# Accessibility mode keys in _PREFS
-_A11Y_REDUCED_MOTION = "reduced_motion"   # bool: disable spinner/animations
-_A11Y_PLAIN_MODE = "plain_mode"            # bool: simplify chrome to plain text
-_A11Y_HIGH_CONTRAST = "high_contrast"     # bool: high-contrast colour palette
-
-# Maps theme name → Rich rule style + ANSI accent escape code
-_THEMES: dict[str, tuple[str, str]] = {
-    "default":  ("dim blue",    "\033[2;34m"),
-    "green":    ("dim green",   "\033[2;32m"),
-    "yellow":   ("dim yellow",  "\033[2;33m"),
-    "magenta":  ("dim magenta", "\033[2;35m"),
-    "cyan":     ("dim cyan",    "\033[2;36m"),
-    "mono":     ("dim",         "\033[2m"),
 }
 
 _HIGH_CONTRAST_THEMES: dict[str, tuple[str, str]] = {
@@ -424,143 +392,6 @@ _EXTENDED_SCHEMES: dict[str, dict[str, str]] = {
         "label":   "default 🦞",
     },
 }
-
-_THEME_ORDER: tuple[str, ...] = tuple(_THEMES.keys())
-_THEME_DESCRIPTIONS: dict[str, str] = {
-    "default": "balanced blue accents",
-    "green": "success-forward green accents",
-    "yellow": "warm amber accents",
-    "magenta": "vivid magenta accents",
-    "cyan": "cool cyan accents",
-    "mono": "neutral monochrome accents",
-}
-_THEME_ALIASES: dict[str, str] = {
-    "blue": "default",
-    "classic": "default",
-    "amber": "yellow",
-    "purple": "magenta",
-    "teal": "cyan",
-    "gray": "mono",
-    "grey": "mono",
-}
-_EMOJI_PACKS: dict[str, dict[str, str]] = {
-    "classic": {},
-    "minimal": {
-        "🦞": "[oc]",
-        "💬": "[chat]",
-        "📍": "[pin]",
-        "💡": "[tip]",
-        "📎": "[src]",
-        "⌨": "[kbd]",
-        "⏱": "[time]",
-        "🗂": "[sess]",
-        "👤": "[you]",
-        "⚡": "[!]",
-        "🟢": "[ok]",
-        "🔵": "[run]",
-        "🟡": "[warn]",
-        "🔴": "[err]",
-        "⏸": "[pause]",
-        "⏳": "[wait]",
-        "●": "[*]",
-        "✅": "[ok]",
-        "⚠️": "[warn]",
-    },
-    "ascii": {},
-}
-
-
-def _load_prefs() -> None:
-    """Load user preferences from ~/.openclaw/prefs.json (silently ignores errors)."""
-    try:
-        prefs_file = _prefs_file_path()
-        if prefs_file.exists():
-            data = json.loads(prefs_file.read_text("utf-8"))
-            if isinstance(data, dict):
-                _PREFS.update(data)
-                _normalize_personalization_prefs()
-    except (OSError, json.JSONDecodeError):
-        pass
-
-
-def _save_prefs() -> None:
-    """Persist user preferences to ~/.openclaw/prefs.json (silently ignores errors)."""
-    try:
-        _normalize_personalization_prefs()
-        prefs_dir = _prefs_dir_path()
-        prefs_file = _prefs_file_path()
-        prefs_dir.mkdir(parents=True, exist_ok=True)
-        prefs_file.write_text(json.dumps(_PREFS, indent=2), "utf-8")
-    except OSError:
-        pass
-
-
-def _prefs_set(key: str, value: object) -> None:
-    """Set a single preference key and persist immediately."""
-    _PREFS[key] = value
-    _save_prefs()
-
-
-def _prefs_dir_path() -> Path:
-    """Return the preference directory, honoring test overrides when present."""
-    override = os.environ.get("OPENCLAW_CLI_HOME")
-    if override:
-        return Path(override).expanduser() / ".openclaw"
-    return _OPENCLAW_DIR
-
-
-def _prefs_file_path() -> Path:
-    """Return the preference file path."""
-    return _prefs_dir_path() / "prefs.json"
-
-
-def _normalize_theme_name(value: Any) -> str:
-    """Normalize a theme preference or user-supplied theme token."""
-    token = str(value or "default").strip().lower()
-    token = _THEME_ALIASES.get(token, token)
-    if token not in _THEMES:
-        return "default"
-    return token
-
-
-def _emoji_pack_name() -> str:
-    """Return the active emoji pack name with legacy bool migration."""
-    pack = str(_PREFS.get("emoji_pack", "") or "").strip().lower()
-    if pack in _EMOJI_PACKS:
-        return pack
-    if _PREFS.get("emoji", True):
-        return "classic"
-    return "ascii"
-
-
-def _normalize_personalization_prefs() -> None:
-    """Clamp personalization preferences to known-safe values."""
-    _PREFS["theme"] = _normalize_theme_name(_PREFS.get("theme", "default"))
-    layout = str(_PREFS.get("layout", "normal") or "normal").strip().lower()
-    if layout not in {"compact", "normal", "verbose", "plain"}:
-        layout = "normal"
-    _PREFS["layout"] = layout
-    preset = str(_PREFS.get("layout_preset", "") or "").strip().lower()
-    preset = {
-        "watch": "watch-monitor",
-        "monitor": "watch-monitor",
-        "collab": "handoff",
-        "collaboration": "handoff",
-    }.get(preset, preset)
-    if preset not in {"", "focus", "watch-monitor", "handoff"}:
-        preset = ""
-    _PREFS["layout_preset"] = preset
-    focus = str(_PREFS.get("layout_focus", "primary") or "primary").strip().lower()
-    if focus not in {"primary", "supporting"}:
-        focus = "primary"
-    _PREFS["layout_focus"] = focus
-    pack = _emoji_pack_name()
-    _PREFS["emoji_pack"] = pack
-    _PREFS["emoji"] = pack != "ascii"
-    _PREFS["interactive_overlays"] = bool(_PREFS.get("interactive_overlays", False))
-    for key in (_A11Y_REDUCED_MOTION, _A11Y_PLAIN_MODE, _A11Y_HIGH_CONTRAST):
-        if key in _PREFS:
-            _PREFS[key] = bool(_PREFS.get(key, False))
 
 
 def _a11y_reduced_motion() -> bool:
@@ -1552,6 +1383,7 @@ def summarize_session(session: SessionSummary) -> str:
         f"title: {session.title}",
         _progress_cell("status", str(session.status or "active"), status=session.status or "active"),
         f"cwd: {session.cwd}",
+        f"age: {_session_age_label(session)}",
         f"updated: {session.updated_at}",
         f"freshness: {'stale' if _session_is_stale(session) else 'fresh'}",
         _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
@@ -1616,6 +1448,7 @@ def _print_session_summary(session: SessionSummary) -> None:
         _progress_cell("status", str(session.status or "active"), status=session.status or "active"),
         _status_cell("stale" if _session_is_stale(session) else "info", detail="freshness"),
         _progress_cell("updated", session.updated_at or "—", status="info"),
+        _progress_cell("age", _session_age_label(session), status="info"),
     ]
     mood_cell = _session_mood_cell(mood, rich=_RICH_AVAILABLE and _IS_TTY)
     if mood_cell:
@@ -2885,6 +2718,14 @@ def _format_elapsed_compact(seconds: Any) -> str:
         return f"{minutes}m {rem}s" if rem else f"{minutes}m"
     hours, minutes = divmod(minutes, 60)
     return f"{hours}h {minutes}m" if minutes else f"{hours}h"
+
+
+def _session_age_label(session: SessionSummary) -> str:
+    """Return a compact age label for a persisted session."""
+    age_seconds = _elapsed_seconds(session.created_at)
+    if age_seconds is None:
+        return "unknown"
+    return _format_elapsed_compact(age_seconds)
 
 
 def _watch_retry_delay_total(state: dict[str, Any]) -> int:
