@@ -26,6 +26,17 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib import error, request
 
+from openclaw_cli_auth import (
+    AUTH_FILE_NAME,
+    KEYCHAIN_SERVICE,
+    TOKEN_ENV_VARS,
+    OpenClawCliError,
+    TokenResolution,
+    auth_storage_path,
+    delete_keychain_token,
+    read_keychain_token,
+    write_keychain_token,
+)
 from openclaw_cli_actions import (
     format_shell_result,
     infer_command_risk,
@@ -52,6 +63,7 @@ from openclaw_cli_sessions import (
     export_session,
     extract_prompt_targets,
     find_session_bookmark,
+    get_last_decision_event,
     list_handoffs,
     list_saved_outputs,
     list_session_bookmarks,
@@ -75,6 +87,19 @@ try:
     import readline
 except ImportError:  # pragma: no cover - platform-dependent
     readline = None
+
+import openclaw_cli_update as _update_mod
+from openclaw_cli_update import (
+    cli_version,
+    _version_tuple,
+    _fetch_latest_pypi_version,
+    _find_pip,
+    _print_update_notice,
+    _standalone_install_dir,
+    _update_standalone_install,
+    handle_update_command,
+    check_for_update,
+)
 
 # ---------------------------------------------------------------------------
 # Terminal detection and ANSI palette — defined in openclaw_cli_ui_core
@@ -111,11 +136,6 @@ except ImportError:  # pragma: no cover
 
 import openclaw_cli_render as _render_mod
 
-# Cached latest PyPI version set by the background update-check thread.
-_latest_version: str | None = None
-# Set to True by the background update-check thread when standalone file hashes differ from server.
-_standalone_needs_update: bool = False
-
 # Draft buffer — ephemeral unsent prompt (cleared on submission or /draft clear)
 _draft_buffer: str = ""
 # Last interrupted prompt for restore-last (set on KeyboardInterrupt/Ctrl-C)
@@ -131,9 +151,8 @@ _next_inject: str = ""
 DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
-KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave33"  # updated with each UX wave batch
+_CLI_BUILD = "wave35"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -165,8 +184,6 @@ _OPENCLAW_TIPS = [
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
-TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
-AUTH_FILE_NAME = "token"
 WATCH_PROGRESS_LOG_LIMIT = 25
 WATCH_RETRY_LIMIT = 3
 WATCH_RETRY_MAX_DELAY_SECONDS = 8
@@ -1405,10 +1422,6 @@ TRANSIENT_WATCH_ERROR_MARKERS = (
 )
 
 
-class OpenClawCliError(RuntimeError):
-    """Raised when the CLI cannot talk to the OpenClaw API."""
-
-
 @dataclass
 class AskResponse:
     """Structured response from the OpenClaw ask API."""
@@ -1439,14 +1452,6 @@ class LocalLinkValidation:
     exists: bool = False
     source: str = ""
     summary: str = ""
-
-
-@dataclass
-class TokenResolution:
-    """Resolved token plus the source it came from."""
-
-    token: str
-    source: str
 
 
 @dataclass(frozen=True)
@@ -1513,113 +1518,6 @@ def default_user_name() -> str:
     user = getpass.getuser().strip() or "cli"
     client_name = default_client_name()
     return f"{user}@{client_name}"
-
-
-def read_keychain_token(*, account: str | None = None) -> str:
-    """Look up the CLI token from macOS Keychain when available."""
-    if sys.platform != "darwin":
-        return ""
-    keychain_account = (account or os.getenv("USER") or getpass.getuser() or "").strip()
-    if not keychain_account:
-        return ""
-    try:
-        result = subprocess.run(
-            [
-                "security",
-                "find-generic-password",
-                "-s",
-                KEYCHAIN_SERVICE,
-                "-a",
-                keychain_account,
-                "-w",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=2,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    if result.returncode != 0:
-        return ""
-    return result.stdout.strip()
-
-
-def write_keychain_token(token: str, *, account: str | None = None) -> None:
-    """Store a CLI token in macOS Keychain."""
-    value = str(token).strip()
-    if not value:
-        raise OpenClawCliError("OpenClaw token cannot be empty.")
-    keychain_account = (account or os.getenv("USER") or getpass.getuser() or "").strip()
-    if not keychain_account:
-        raise OpenClawCliError("Unable to determine the current macOS account for Keychain storage.")
-    try:
-        result = subprocess.run(
-            [
-                "security",
-                "add-generic-password",
-                "-U",
-                "-s",
-                KEYCHAIN_SERVICE,
-                "-a",
-                keychain_account,
-                "-w",
-                value,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise OpenClawCliError("Unable to store token in macOS Keychain.") from exc
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout or "").strip() or "security add-generic-password failed"
-        raise OpenClawCliError(f"Unable to store token in macOS Keychain: {detail}")
-
-
-def delete_keychain_token(*, account: str | None = None) -> bool:
-    """Delete the CLI token from macOS Keychain when present."""
-    if sys.platform != "darwin":
-        return False
-    keychain_account = (account or os.getenv("USER") or getpass.getuser() or "").strip()
-    if not keychain_account:
-        return False
-    try:
-        result = subprocess.run(
-            [
-                "security",
-                "delete-generic-password",
-                "-s",
-                KEYCHAIN_SERVICE,
-                "-a",
-                keychain_account,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=5,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise OpenClawCliError("Unable to remove token from macOS Keychain.") from exc
-    if result.returncode == 0:
-        return True
-    detail = (result.stderr or result.stdout or "").strip().lower()
-    if "could not be found" in detail or "item not found" in detail:
-        return False
-    raise OpenClawCliError(f"Unable to remove token from macOS Keychain: {detail or 'unknown error'}")
-
-
-def auth_storage_path(*, platform_name: str | None = None) -> Path:
-    """Return the per-user fallback credential file path for the CLI."""
-    current_platform = platform_name or sys.platform
-    if current_platform.startswith("win"):
-        base_dir = Path(os.getenv("APPDATA") or (Path.home() / "AppData" / "Roaming")) / "OpenClaw"
-    elif current_platform == "darwin":
-        base_dir = Path.home() / "Library" / "Application Support" / "OpenClaw"
-    else:
-        base_dir = Path(os.getenv("XDG_CONFIG_HOME") or (Path.home() / ".config")) / "openclaw"
-    return base_dir / AUTH_FILE_NAME
 
 
 def read_saved_token(*, path: Path | None = None) -> str:
@@ -1700,294 +1598,6 @@ def auth_setup_hint(*, platform_name: str | None = None) -> str:
             f"'{KEYCHAIN_SERVICE}', run `openclaw auth login`, or pass --token."
         )
     return f"Set {TOKEN_ENV_VARS}, run `openclaw auth login`, or pass --token."
-
-
-def cli_version() -> str:
-    """Return the installed CLI version when available."""
-    try:
-        return f"{metadata.version('openclaw')}+{_CLI_BUILD}"
-    except metadata.PackageNotFoundError:
-        return f"{DEFAULT_VERSION}+{_CLI_BUILD}"
-
-
-def _version_tuple(v: str) -> tuple[int, ...]:
-    """Convert a version string like '2026.3.20' or '0.6.0' to a comparable tuple."""
-    try:
-        return tuple(int(x) for x in v.split("."))
-    except Exception:
-        return (0,)
-
-
-def _fetch_latest_pypi_version(timeout: float = 3.0) -> str | None:
-    """Return the latest openclaw version from PyPI, or None on any error."""
-    try:
-        req = request.Request(
-            "https://pypi.org/pypi/openclaw/json",
-            headers={"Accept": "application/json"},
-        )
-        with request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
-            return str(data["info"]["version"])
-    except Exception:
-        return None
-
-
-def _find_pip() -> list[str] | None:
-    """Return the first usable pip invocation, or None if pip is unavailable.
-
-    Tries ``sys.executable -m pip`` first so that the same virtual-environment
-    that is running openclaw is used for the upgrade, then falls back to the
-    common ``pip``/``pip3`` shims on PATH.
-    """
-    candidates: list[list[str]] = [
-        [sys.executable, "-m", "pip"],   # same venv/interpreter as running process
-        ["pip3"],
-        ["pip"],
-        ["python3", "-m", "pip"],
-        ["python", "-m", "pip"],
-    ]
-    for cmd in candidates:
-        try:
-            result = subprocess.run(
-                cmd + ["--version"],
-                capture_output=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                return cmd
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
-    return None
-
-
-def _print_update_notice(current: str, latest: str | None) -> None:
-    """Print a styled update-available notice.
-
-    When ``latest`` is None (standalone hash-based check), only the "Run: /update"
-    line is shown without a version arrow.
-    """
-    if _RICH_AVAILABLE and _IS_TTY:
-        from rich.panel import Panel as _P
-        from rich.text import Text as _T
-        t = _T()
-        t.append("⬆  Update available", style="bold yellow")
-        if latest is not None:
-            t.append("   ", style="")
-            t.append(current, style="dim")
-            t.append("  →  ", style="dim")
-            t.append(latest, style="bold green")
-        t.append("\n   Run: ", style="dim")
-        t.append("/update", style="bold cyan")
-        _RICH_CONSOLE.print(_P(t, border_style="yellow", padding=(0, 1)))
-    else:
-        action = f"   {_DM}Run:{_R} {_BCY}/update{_R}"
-        if latest is not None:
-            version_line = f"   {_DM}{current}{_R}  →  {_BGR}{latest}{_R}\n"
-        else:
-            version_line = ""
-        print(
-            f"\n{_BYE}⬆  Update available!{_R}\n"
-            f"{version_line}"
-            f"{action}\n",
-            file=sys.stderr,
-        )
-
-
-def _standalone_install_dir() -> str | None:
-    """Return the standalone install dir if openclaw is running from one, else None.
-
-    A standalone install places openclaw_cli.py directly in a directory like
-    ~/.local/share/openclaw-cli/ and runs it via a bash shim — not from a
-    pip-managed site-packages location.
-    """
-    try:
-        script = Path(__file__).resolve()
-        marker = script.parent / "openclaw_cli_sessions.py"
-        if marker.exists() and "site-packages" not in str(script):
-            return str(script.parent)
-    except Exception:
-        pass
-    return None
-
-
-def _update_standalone_install(install_dir: str, *, current: str, base_url: str) -> int:
-    """Download CLI files from the openclaw server and replace in-place."""
-    import urllib.request
-
-    files = [
-        "openclaw_cli.py",
-        "openclaw_cli_actions.py",
-        "openclaw_cli_sessions.py",
-        "subprocess_utils.py",
-    ]
-    server = base_url.rstrip("/")
-
-    if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(
-            f"[bold cyan]🦞 Updating openclaw[/]  [dim]{current}[/]  "
-            f"[dim]from[/] [cyan]{server}[/]"
-        )
-    else:
-        print(f"Updating openclaw {current} from {server}…")
-
-    updated: list[str] = []
-    failed: list[tuple[str, str]] = []
-
-    for fname in files:
-        url = f"{server}/cli-update/{fname}"
-        dest = Path(install_dir) / fname
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"  [dim]↓ {fname}[/]", end="")
-        else:
-            print(f"  ↓ {fname}", end="", flush=True)
-        try:
-            tmp = dest.with_suffix(".tmp")
-            urllib.request.urlretrieve(url, tmp)
-            tmp.replace(dest)
-            updated.append(fname)
-            if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print("  [green]✓[/]")
-            else:
-                print("  ✓")
-        except Exception as exc:
-            failed.append((fname, str(exc)))
-            if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print(f"  [red]✗[/]")
-            else:
-                print("  ✗")
-
-    if failed:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_ERR.print("\n[bold red]✗ Update incomplete[/] — some files could not be downloaded:")
-            for fname, err in failed:
-                url = f"{server}/cli-update/{fname}"
-                _RICH_ERR.print(f"  [red]{fname}[/]  [dim]{url}[/]\n  [dim red]{err}[/]")
-        else:
-            print("\n✗ Update incomplete — some files could not be downloaded:", file=sys.stderr)
-            for fname, err in failed:
-                url = f"{server}/cli-update/{fname}"
-                print(f"  {fname}  {url}\n  {err}", file=sys.stderr)
-        return 1
-    else:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("\n[bold green]✓ Updated.[/] Restart openclaw to use the new version.")
-        else:
-            print("\n✓ Updated. Restart openclaw to use the new version.")
-        global _standalone_needs_update
-        _standalone_needs_update = False
-        return 0
-
-
-def handle_update_command(_args: argparse.Namespace) -> int:
-    """Self-update openclaw via pip, showing a spinner while the install runs."""
-    pip_cmd = _find_pip()
-    if pip_cmd is None:
-        msg = (
-            "Could not find pip, pip3, or 'python -m pip'.\n"
-            "Install pip first:  https://pip.pypa.io/en/stable/installation/\n"
-            "Then run:  pip install --upgrade openclaw"
-        )
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_ERR.print(f"[bold red]error:[/] {msg}")
-        else:
-            print(f"error: {msg}", file=sys.stderr)
-        return 1
-
-    current = cli_version()
-    latest = _fetch_latest_pypi_version() or "latest"
-
-    # Standalone installs (bash-shim on laptop) can't use pip install because
-    # they're not in a venv and macOS blocks system-Python pip installs (PEP 668).
-    # Instead, download the files directly from the openclaw server.
-    install_dir = _standalone_install_dir()
-    if install_dir:
-        _cfg = build_config(argparse.Namespace(
-            url=os.getenv("OPENCLAW_URL"),
-            token=None,
-            model=None,
-            timeout=30,
-            user_name=None,
-            client_name=None,
-            json=False,
-            session="",
-        ))
-        return _update_standalone_install(install_dir, current=current, base_url=_cfg.base_url)
-
-    # Standard pip install path (venv or user site-packages).
-    in_venv = sys.prefix != sys.base_prefix
-    user_flag = [] if in_venv else ["--user"]
-    install_cmd = pip_cmd + ["install", "--upgrade"] + user_flag
-
-    if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(
-            f"[bold cyan]🦞 Updating openclaw[/]  "
-            f"[dim]{current}[/] [dim]→[/] [bold green]{latest}[/]"
-        )
-
-        # Run pip quietly and show a live spinner with elapsed time.
-        result_holder: list[subprocess.CompletedProcess[bytes]] = []
-
-        def _run_pip() -> None:
-            result_holder.append(
-                subprocess.run(
-                    install_cmd + ["--quiet", "openclaw"],
-                    capture_output=True,
-                )
-            )
-
-        pip_thread = threading.Thread(target=_run_pip, daemon=True)
-        pip_thread.start()
-
-        _RICH_CONSOLE.print()
-        start = time.monotonic()
-        spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-        frame_idx = 0
-        while pip_thread.is_alive():
-            elapsed = time.monotonic() - start
-            frame = spinner_frames[frame_idx % len(spinner_frames)]
-            _RICH_CONSOLE.print(
-                f"\r  [cyan]{frame}[/] Installing…  [dim]{elapsed:.0f}s elapsed[/]",
-                end="",
-            )
-            frame_idx += 1
-            time.sleep(0.1)
-
-        pip_thread.join()
-        elapsed = time.monotonic() - start
-        _RICH_CONSOLE.print()  # end spinner line
-
-        result = result_holder[0]
-        if result.returncode == 0:
-            _RICH_CONSOLE.print(
-                f"[bold green]✓ Done[/] in [cyan]{elapsed:.1f}s[/]  —  "
-                f"openclaw [dim]{current}[/] → [bold green]{latest}[/]"
-            )
-        else:
-            _RICH_ERR.print("\n[bold red]✗ Update failed[/]")
-            if result.stderr:
-                _RICH_ERR.print(result.stderr.decode(errors="replace"))
-    else:
-        # Plain fallback: just run pip with its normal output.
-        print(f"Updating openclaw {current} → {latest}…")
-        result = subprocess.run(install_cmd + ["openclaw"])
-        if result.returncode == 0:
-            print(f"✓ Done  —  openclaw {current} → {latest}")
-        else:
-            print("✗ Update failed. Check the output above.", file=sys.stderr)
-
-    return result.returncode
-
-
-def check_for_update(*, timeout: float = 3.0) -> None:
-    """Check PyPI for a newer openclaw release and cache the result in _latest_version.
-
-    Does NOT print — callers should print the notice from the main thread to avoid
-    interleaving with readline prompts.  All errors are silently swallowed.
-    """
-    global _latest_version
-    latest = _fetch_latest_pypi_version(timeout=timeout)
-    if latest:
-        _latest_version = latest
 
 
 def build_headers(*, token: str, client_name: str) -> dict[str, str]:
@@ -2708,6 +2318,203 @@ def _build_session_share_text(session_id: str) -> str:
     lines.append(f"  inspect: {share.get('inspect_command', f'openclaw session show {session_id}')}")
     lines.append(f"  share  : {share.get('share_command', f'openclaw session share {session_id}')}")
     return "\n".join(lines)
+
+
+_RUNBOOK_TEMPLATES: dict[str, dict[str, Any]] = {
+    "operator": {
+        "label": "Operator Runbook",
+        "audience": "CLI operator handoff",
+        "sections": ("summary", "milestones", "decisions", "timeline", "outputs", "commands"),
+    },
+    "stakeholder": {
+        "label": "Stakeholder Update",
+        "audience": "status recap for non-operators",
+        "sections": ("summary", "milestones", "outputs", "commands"),
+    },
+    "postmortem": {
+        "label": "Postmortem Draft",
+        "audience": "incident recap and follow-up review",
+        "sections": ("summary", "decisions", "timeline", "outputs", "commands"),
+    },
+}
+
+
+def _resolve_runbook_template(name: str) -> tuple[str, dict[str, Any]] | None:
+    token = str(name or "operator").strip().lower()
+    if not token:
+        token = "operator"
+    template = _RUNBOOK_TEMPLATES.get(token)
+    if template is None:
+        return None
+    return token, template
+
+
+def _build_session_runbook_text(session_id: str, *, template_name: str = "operator") -> str:
+    resolved = _resolve_runbook_template(template_name)
+    if resolved is None:
+        valid = ", ".join(sorted(_RUNBOOK_TEMPLATES))
+        raise OpenClawCliError(f"Unknown runbook template '{template_name}'. Available: {valid}")
+    template_key, template = resolved
+    snapshot = build_collaboration_snapshot(session_id, limit=5)
+    story = build_session_storyline(session_id, limit=6)
+    export = export_session(session_id)
+    session_data = export.get("session") or {}
+    recent_outputs = list(export.get("outputs") or [])
+    recent_decisions = list(snapshot.get("recent_decisions") or [])
+    commands = snapshot.get("share") or {}
+    plan_id = str(session_data.get("plan_id") or "").strip()
+    task_id = str(session_data.get("task_id") or "").strip()
+
+    lines = [
+        f"# {template.get('label', 'Runbook')}",
+        "",
+        f"- **Template:** {template_key}",
+        f"- **Audience:** {template.get('audience', 'session review')}",
+        f"- **Session:** {session_data.get('title', '') or session_id}",
+        f"- **Session ID:** {session_data.get('session_id', session_id)}",
+    ]
+    cwd = str(session_data.get("cwd") or "").strip()
+    if cwd:
+        lines.append(f"- **Working directory:** `{cwd}`")
+    if plan_id:
+        lines.append(f"- **Plan:** `{plan_id}`")
+    if task_id:
+        lines.append(f"- **Task:** `{task_id}`")
+    lines.append("")
+
+    sections = tuple(template.get("sections") or ())
+    if "summary" in sections:
+        lines.extend(
+            [
+                "## Summary",
+                "",
+                f"- **Story:** {story.get('headline', 'Fresh session story is still forming')}",
+                f"- **Chapter:** {story.get('chapter_title', 'Session recap')} · {story.get('chapter_detail', '')}",
+            ]
+        )
+        narrative = str(story.get("narrative") or "").strip()
+        if narrative:
+            lines.append(f"- **Narrative:** {narrative}")
+        lines.append("")
+
+    milestones = list(story.get("milestones") or [])
+    if "milestones" in sections and milestones:
+        lines.append("## Milestones")
+        lines.append("")
+        lines.extend(f"- {item}" for item in milestones[:5])
+        lines.append("")
+
+    if "decisions" in sections and recent_decisions:
+        lines.append("## Recent Decisions")
+        lines.append("")
+        lines.extend(f"- {_format_collaboration_entry(item)}" for item in recent_decisions[:4])
+        lines.append("")
+
+    timeline = list(story.get("timeline") or [])
+    if "timeline" in sections and timeline:
+        lines.append("## Timeline")
+        lines.append("")
+        for item in timeline[:5]:
+            stamp = str(item.get("timestamp") or "").strip()
+            prefix = f"{stamp} · " if stamp else ""
+            lines.append(f"- {prefix}{item.get('label', 'Update')}: {item.get('summary', '')}")
+        lines.append("")
+
+    if "outputs" in sections and recent_outputs:
+        lines.append("## Artifacts")
+        lines.append("")
+        for item in recent_outputs[:5]:
+            lines.append(f"- {item.get('name', '')} · {item.get('modified_at', '')}")
+        lines.append("")
+
+    if "commands" in sections:
+        lines.append("## Next Commands")
+        lines.append("")
+        lines.append(f"- Resume: `{commands.get('resume_command', f'openclaw --session {session_id}')}`")
+        lines.append(f"- Inspect: `{commands.get('inspect_command', f'openclaw session show {session_id}')}`")
+        lines.append(f"- Share: `{commands.get('share_command', f'openclaw session share {session_id}')}`")
+        lines.append("")
+
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _cmd_exporttemplates(ctx: ChatCommandContext) -> str:
+    """/exporttemplates [list|show <name>] — inspect built-in runbook/export templates."""
+    raw = (ctx.args or "").strip()
+    parts = raw.split(None, 1)
+    sub = parts[0].lower() if parts else "list"
+
+    if sub in {"", "list"}:
+        if _RICH_AVAILABLE and _IS_TTY:
+            tbl = _RichTable(title="Export Templates", border_style="cyan", header_style="bold cyan")
+            tbl.add_column("Name", style="bold")
+            tbl.add_column("Audience", style="dim")
+            tbl.add_column("Sections")
+            for name, template in sorted(_RUNBOOK_TEMPLATES.items()):
+                sections = ", ".join(str(s) for s in template.get("sections", ()))
+                tbl.add_row(name, str(template.get("audience", "")), sections)
+            _RICH_CONSOLE.print(tbl)
+        else:
+            print("Export templates:")
+            for name, template in sorted(_RUNBOOK_TEMPLATES.items()):
+                sections = ", ".join(str(s) for s in template.get("sections", ()))
+                print(f"  {name}: {template.get('audience', '')} — {sections}")
+        return _CMD_CONTINUE
+
+    if sub == "show":
+        name = parts[1].strip() if len(parts) > 1 else ""
+        resolved = _resolve_runbook_template(name)
+        if resolved is None:
+            valid = ", ".join(sorted(_RUNBOOK_TEMPLATES))
+            _print_error(f"Unknown export template '{name}'. Available: {valid}")
+            return _CMD_CONTINUE
+        template_key, template = resolved
+        sections = ", ".join(str(s) for s in template.get("sections", ()))
+        print(f"Template: {template_key}")
+        print(f"Audience: {template.get('audience', '')}")
+        print(f"Sections: {sections}")
+        return _CMD_CONTINUE
+
+    _print_error("Usage: /exporttemplates [list|show <name>]")
+    return _CMD_CONTINUE
+
+
+def _cmd_runbook(ctx: ChatCommandContext) -> str:
+    """/runbook [template] [save <path>] — render a long-form session runbook."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+    raw = (ctx.args or "").strip()
+    parts = shlex.split(raw) if raw else []
+    template_name = "operator"
+    save_path = ""
+
+    if parts and parts[0].lower() == "list":
+        return _cmd_exporttemplates(ChatCommandContext(history=ctx.history, session_id=ctx.session_id, args="list"))
+    if parts and parts[0].lower() != "save":
+        template_name = parts.pop(0)
+    if parts:
+        if parts[0].lower() != "save" or len(parts) < 2:
+            _print_error("Usage: /runbook [template] [save <path>]")
+            return _CMD_CONTINUE
+        save_path = parts[1]
+
+    try:
+        content = _build_session_runbook_text(session.session_id, template_name=template_name)
+    except OpenClawCliError as exc:
+        _print_error(str(exc))
+        return _CMD_CONTINUE
+
+    if save_path:
+        target = Path(save_path).expanduser()
+        if not target.suffix:
+            target = target.with_suffix(".md")
+        target.write_text(content, encoding="utf-8")
+        print(f"Runbook saved → {target.resolve()}")
+        return _CMD_CONTINUE
+
+    print(content.rstrip())
+    return _CMD_CONTINUE
 
 
 def inspect_session(session_id: str) -> str:
@@ -7237,27 +7044,10 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
-def _cmd_why(ctx: ChatCommandContext) -> str:
-    """/why — explain the last routing or tool decision from session history."""
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-
-    _DECISION_KINDS = {"route", "exec", "edit", "analyze", "research", "write", "plan"}
-    events = load_events(ctx.session_id, limit=50)
-    last_ev = None
-    for ev in reversed(events):
-        if str(ev.get("kind") or "").strip() in _DECISION_KINDS:
-            last_ev = ev
-            break
-
+def _last_trace_snapshot(session_id: str) -> dict[str, Any] | None:
+    last_ev = get_last_decision_event(session_id)
     if last_ev is None:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[dim]No routing decisions recorded yet. Try a prompt that triggers auto-routing.[/]")
-        else:
-            print("No routing decisions recorded yet. Try a prompt that triggers auto-routing.")
-        return _CMD_CONTINUE
-
+        return None
     kind = str(last_ev.get("kind") or "").strip()
     meta = last_ev.get("metadata") or {}
     if not isinstance(meta, dict):
@@ -7293,30 +7083,105 @@ def _cmd_why(ctx: ChatCommandContext) -> str:
         conf_color = "dim"
         border_style = "dim"
 
-    what_happened = f"{kind}" + (f" → /{slash_cmd}" if slash_cmd else (f" — {content[:60]}" if content else ""))
+    ratings = _PREFS.get("ratings", [])
+    latest_rating = ratings[-1] if ratings else None
+    latest_rating_label = ""
+    if isinstance(latest_rating, dict):
+        latest_rating_label = (
+            f"{latest_rating.get('score', latest_rating.get('rating', '?'))}/5"
+            f" ({latest_rating.get('label', 'rated')})"
+        )
+
+    return {
+        "kind": kind,
+        "meta": meta,
+        "content": content,
+        "ts": ts,
+        "slash_cmd": slash_cmd,
+        "rationale": rationale,
+        "target_text": target_text,
+        "args_text": args_text,
+        "conf_label": conf_label,
+        "conf_color": conf_color,
+        "border_style": border_style,
+        "what_happened": f"{kind}" + (f" → /{slash_cmd}" if slash_cmd else (f" — {content[:60]}" if content else "")),
+        "latest_rating": latest_rating_label,
+        "rating_count": len(ratings),
+    }
+
+
+def _cmd_why(ctx: ChatCommandContext) -> str:
+    """/why — explain the last routing or tool decision from session history."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+    snapshot = _last_trace_snapshot(ctx.session_id)
+    if snapshot is None:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]No routing decisions recorded yet. Try a prompt that triggers auto-routing.[/]")
+        else:
+            print("No routing decisions recorded yet. Try a prompt that triggers auto-routing.")
+        return _CMD_CONTINUE
 
     if _RICH_AVAILABLE and _IS_TTY:
         grid = _RichTable.grid(padding=(0, 1))
         grid.add_column(style="bold cyan", no_wrap=True)
         grid.add_column()
-        grid.add_row("What happened:", what_happened)
-        grid.add_row("Why:", rationale[:300])
-        grid.add_row("Confidence:", f"[{conf_color}]{conf_label}[/]")
-        if target_text:
-            grid.add_row("Target:", str(target_text)[:120])
-        if args_text:
-            grid.add_row("Args:", str(args_text)[:120])
-        grid.add_row("When:", ts)
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Last Decision[/]", border_style=border_style, padding=(0, 1)))
+        grid.add_row("What happened:", str(snapshot.get("what_happened") or ""))
+        grid.add_row("Why:", str(snapshot.get("rationale") or "")[:300])
+        grid.add_row("Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]")
+        if snapshot.get("target_text"):
+            grid.add_row("Target:", str(snapshot.get("target_text") or "")[:120])
+        if snapshot.get("args_text"):
+            grid.add_row("Args:", str(snapshot.get("args_text") or "")[:120])
+        grid.add_row("When:", str(snapshot.get("ts") or ""))
+        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Last Decision[/]", border_style=str(snapshot.get("border_style") or "dim"), padding=(0, 1)))
     else:
-        print(f"  What happened: {what_happened}")
-        print(f"  Why:           {rationale[:300]}")
-        print(f"  Confidence:    {conf_label}")
-        if target_text:
-            print(f"  Target:        {str(target_text)[:120]}")
-        if args_text:
-            print(f"  Args:          {str(args_text)[:120]}")
-        print(f"  When:          {ts}")
+        print(f"  What happened: {str(snapshot.get('what_happened') or '')}")
+        print(f"  Why:           {str(snapshot.get('rationale') or '')[:300]}")
+        print(f"  Confidence:    {str(snapshot.get('conf_label') or '(unknown)')}")
+        if snapshot.get("target_text"):
+            print(f"  Target:        {str(snapshot.get('target_text') or '')[:120]}")
+        if snapshot.get("args_text"):
+            print(f"  Args:          {str(snapshot.get('args_text') or '')[:120]}")
+        print(f"  When:          {str(snapshot.get('ts') or '')}")
+    return _CMD_CONTINUE
+
+
+def _cmd_trace(ctx: ChatCommandContext) -> str:
+    """/trace — show the latest routing trace plus the current quality context."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+    snapshot = _last_trace_snapshot(ctx.session_id)
+    if snapshot is None:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]No trace data yet. Route or run a command first.[/]")
+        else:
+            print("No trace data yet. Route or run a command first.")
+        return _CMD_CONTINUE
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        grid = _RichTable.grid(padding=(0, 1))
+        grid.add_column(style="bold cyan", no_wrap=True)
+        grid.add_column()
+        grid.add_row("Route:", str(snapshot.get("what_happened") or ""))
+        grid.add_row("Rationale:", str(snapshot.get("rationale") or "")[:300])
+        grid.add_row("Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]")
+        if snapshot.get("latest_rating"):
+            grid.add_row("Latest rating:", str(snapshot.get("latest_rating") or ""))
+        grid.add_row("Ratings logged:", str(snapshot.get("rating_count") or 0))
+        grid.add_row("When:", str(snapshot.get("ts") or ""))
+        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Trace Snapshot[/]", border_style=str(snapshot.get("border_style") or "dim"), padding=(0, 1)))
+    else:
+        print("Trace Snapshot")
+        print(f"  Route:         {str(snapshot.get('what_happened') or '')}")
+        print(f"  Rationale:     {str(snapshot.get('rationale') or '')[:300]}")
+        print(f"  Confidence:    {str(snapshot.get('conf_label') or '(unknown)')}")
+        if snapshot.get("latest_rating"):
+            print(f"  Latest rating: {str(snapshot.get('latest_rating') or '')}")
+        print(f"  Ratings logged:{int(snapshot.get('rating_count') or 0):>4}")
+        print(f"  When:          {str(snapshot.get('ts') or '')}")
     return _CMD_CONTINUE
 
 
@@ -10208,6 +10073,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
         ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
         ("/collab [status|share]",             "Show an actor-oriented handoff summary for the current session"),
+        ("/runbook [template] [save <path>]",  "Render a long-form runbook for the active session"),
+        ("/exporttemplates [list|show <name>]", "Inspect built-in runbook/export templates"),
         ("/collab note [@actor] TEXT",         "Record a collaboration note in the local session audit trail"),
         ("/collab decision [@actor] [#tag] TEXT", "Record a tagged decision for later handoff/export"),
         ("/search <query>",                    "Search this session's event history for matching turns"),
@@ -10452,7 +10319,7 @@ def handle_status_command(args: argparse.Namespace, *, config: "CliConfig") -> i
     output_json = config.output_json
 
     version = cli_version()
-    latest = _latest_version
+    latest = _update_mod._latest_version
 
     try:
         health = fetch_health(config=config)
@@ -10883,7 +10750,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "session", "context", "cwd", "files", "plan", "watch", "task",
     "sessions", "tag", "resume", "replay", "handoff", "collab",
     # Outputs & edits
-    "outputs", "rollback", "events", "why", "edit", "exec", "write",
+    "outputs", "rollback", "events", "why", "trace", "runbook", "exporttemplates", "edit", "exec", "write",
     "changes", "diff", "snapshot",
     # Routing & analysis
     "autoroute", "analyze", "research",
@@ -11972,6 +11839,7 @@ def _cmd_quality(ctx: "ChatCommandContext") -> str:
     """/quality — show a colored histogram of response quality ratings."""
     is_tty = _get_is_tty()
     ratings = _PREFS.get("ratings", [])
+    snapshot = _last_trace_snapshot(ctx.session_id) if getattr(ctx, "session_id", "") else None
 
     if not ratings:
         msg = "No ratings yet. Use /rate 1-5 after responses to track quality."
@@ -12040,8 +11908,17 @@ def _cmd_quality(ctx: "ChatCommandContext") -> str:
         avg = sum(s * counts[s] for s in range(1, 6)) / total
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"\n  [dim]Average rating: [bold]{avg:.1f}[/]/5.0  ·  Total: {total}[/]\n")
+            if snapshot:
+                _RICH_CONSOLE.print(
+                    f"  [dim]Latest route:[/] [bold]{snapshot.get('what_happened', '')}[/]  "
+                    f"[dim]· confidence[/] [{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]"
+                )
+                _RICH_CONSOLE.print("  [dim]Use /trace for the full decision snapshot.[/]\n")
         else:
             print(f"\n  {_DM}Average rating: {_B}{avg:.1f}{_R}{_DM}/5.0  ·  Total: {total}{_R}\n")
+            if snapshot:
+                print(f"  Latest route: {snapshot.get('what_happened', '')} · confidence {snapshot.get('conf_label', '(unknown)')}")
+                print("  Use /trace for the full decision snapshot.\n")
 
     return _CMD_CONTINUE
 
@@ -13160,6 +13037,9 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("snapshot",     "Save current git HEAD as a named restore point (/snapshot [name])",                                      _cmd_snapshot,     ()),
     ("events",       "Show recent session events (/events [n|decisions])",                                                     _cmd_events,       ()),
     ("why",          "Explain the last routing or tool decision",                                                               _cmd_why,          ()),
+    ("trace",        "Show the latest routing trace with quality context",                                                      _cmd_trace,        ()),
+    ("runbook",      "Render a long-form runbook for the active session",                                                       _cmd_runbook,      ()),
+    ("exporttemplates", "Inspect built-in runbook/export templates",                                                            _cmd_exporttemplates, ("export-templates",)),
     ("collab",       "Capture collaboration notes/decisions and print a handoff summary",                                      _cmd_collab,       ()),
     ("search",       "Search session event history (/search <query> or /search --all <query>)",                                _cmd_search,       ()),
     ("autoroute",    "Show or toggle session auto-routing (/autoroute [on|off])",                                              _cmd_autoroute,    ()),
@@ -13616,7 +13496,10 @@ def handle_session_command(args: argparse.Namespace) -> int:
         _print_meta_footer(("resume", f"openclaw --session {session.session_id}"))
         return 0
     if subcommand == "export":
-        print(json.dumps(export_session(args.session_id), indent=2, sort_keys=True))
+        if getattr(args, "format", "json") == "runbook":
+            print(_build_session_runbook_text(args.session_id, template_name=getattr(args, "template", "operator")))
+        else:
+            print(json.dumps(export_session(args.session_id), indent=2, sort_keys=True))
         return 0
     if subcommand == "share":
         print(_build_session_share_text(args.session_id))
@@ -14584,8 +14467,10 @@ def build_parser() -> argparse.ArgumentParser:
     session_show.add_argument("session_id", help="Session identifier")
     session_resume = session_subparsers.add_parser("resume", help="Show a session and print its resume command")
     session_resume.add_argument("session_id", help="Session identifier")
-    session_export = session_subparsers.add_parser("export", help="Export a local session as JSON")
+    session_export = session_subparsers.add_parser("export", help="Export a local session as JSON or runbook text")
     session_export.add_argument("session_id", help="Session identifier")
+    session_export.add_argument("--format", choices=("json", "runbook"), default="json", help="Export format")
+    session_export.add_argument("--template", default="operator", help="Runbook template when --format runbook")
     session_share = session_subparsers.add_parser("share", help="Print a shareable collaboration handoff summary")
     session_share.add_argument("session_id", help="Session identifier")
 
@@ -14688,7 +14573,6 @@ def main(argv: list[str] | None = None) -> int:
         # we print the notice in the main thread after joining so it never
         # appears interleaved with the REPL prompt.
         def _update_check_worker() -> None:
-            global _latest_version, _standalone_needs_update
             install_dir = _standalone_install_dir()
             if install_dir:
                 # Standalone: compare file hashes against the server
@@ -14704,10 +14588,10 @@ def main(argv: list[str] | None = None) -> int:
                         if local_path.exists():
                             local_hash = hashlib.sha256(local_path.read_bytes()).hexdigest()
                             if local_hash != server_hash:
-                                _standalone_needs_update = True
+                                _update_mod._standalone_needs_update = True
                                 break
                         else:
-                            _standalone_needs_update = True
+                            _update_mod._standalone_needs_update = True
                             break
                 except Exception:
                     pass
@@ -14715,7 +14599,7 @@ def main(argv: list[str] | None = None) -> int:
                 # Standard install: check PyPI
                 latest = _fetch_latest_pypi_version(timeout=3.0)
                 if latest:
-                    _latest_version = latest
+                    _update_mod._latest_version = latest
 
         _update_thread: threading.Thread | None = threading.Thread(
             target=_update_check_worker, daemon=True
@@ -14735,10 +14619,10 @@ def main(argv: list[str] | None = None) -> int:
     if _update_thread is not None:
         _update_thread.join(timeout=3.5)
     current_ver = cli_version()
-    if _standalone_needs_update:
+    if _update_mod._standalone_needs_update:
         _print_update_notice(current_ver, None)  # standalone: no version string
-    elif _latest_version and _version_tuple(_latest_version) > _version_tuple(current_ver):
-        _print_update_notice(current_ver, _latest_version)
+    elif _update_mod._latest_version and _version_tuple(_update_mod._latest_version) > _version_tuple(current_ver):
+        _print_update_notice(current_ver, _update_mod._latest_version)
 
     try:
         if command == "auth":

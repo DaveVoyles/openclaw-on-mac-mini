@@ -19,9 +19,11 @@ BIN_DIR="\$HOME/.local/bin"
 CLI_FILES=(
   openclaw_cli.py
   openclaw_cli_actions.py
+  openclaw_cli_auth.py
   openclaw_cli_sessions.py
   openclaw_cli_ui_core.py
   openclaw_cli_render.py
+  openclaw_cli_update.py
   subprocess_utils.py
 )
 
