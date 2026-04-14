@@ -262,6 +262,7 @@ def test_with_spinner_reduced_motion_uses_static_status(monkeypatch, capsys):
     stdout = capsys.readouterr().out
     assert result == "done"
     assert "[working] Thinking..." in stdout
+    assert "step 1/3" in stdout
     assert "[done] response ready." in stdout
 
 
@@ -340,7 +341,40 @@ def test_with_spinner_animated_path_shows_phase_language(monkeypatch, capsys):
     stdout = capsys.readouterr().out.lower()
     assert result == "done"
     assert "warming up" in stdout
+    assert "step 1/3" in stdout
     assert "response ready." in stdout
+
+
+def test_spinner_progress_snapshot_exposes_wave31_trust_cues():
+    early = mod._spinner_progress_snapshot(0.2)
+    mid = mod._spinner_progress_snapshot(1.5)
+    late = mod._spinner_progress_snapshot(4.2)
+
+    assert early == {
+        "phase": "warming up",
+        "step_index": 1,
+        "step_total": 3,
+        "trust_copy": "preparing the request",
+    }
+    assert mid["phase"] == "working"
+    assert mid["step_index"] == 2
+    assert mid["trust_copy"] == "waiting for the agent response"
+    assert late["phase"] == "wrapping up"
+    assert late["step_index"] == 3
+    assert late["trust_copy"] == "finalizing the answer"
+
+
+def test_with_spinner_reduced_motion_prints_phase_step_and_trust(monkeypatch, capsys):
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_REDUCED_MOTION, True)
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+
+    result = mod._with_spinner("Thinking", lambda: "done")
+
+    stdout = capsys.readouterr().out
+    assert result == "done"
+    assert "[working] Thinking... warming up · step 1/3 · preparing the request" in stdout
+    assert "[done] response ready. (step 3/3 · finalizing the answer · Thinking" in stdout
 
 
 def test_render_table_ansi_uses_high_contrast_separator_on_narrow_terminal(monkeypatch):
@@ -1907,6 +1941,69 @@ class TestSessionSlashCommands:
         updated = sessions_mod.load_session(sess.session_id)
         assert "collab:release" in updated.tags
 
+    def test_collab_assign_is_visible_in_status_snapshot(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="collab-assign", cwd=str(tmp_path), plan_id="plan-38", task_id="task-38")
+
+        result = self._registry().dispatch(
+            "/collab assign @alice Own the release handoff checklist",
+            self._ctx(session_id=sess.session_id),
+        )
+
+        assert result == mod._CMD_CONTINUE
+        assign_out = capsys.readouterr().out
+        assert "Recorded assign by alice" in assign_out
+
+        self._registry().dispatch("/collab status", self._ctx(session_id=sess.session_id))
+        out = capsys.readouterr().out
+        assert "ASSIGNMENTS" in out
+        assert "alice" in out
+        assert "Own the release handoff checklist" in out
+
+    def test_risk_add_list_and_clear_roundtrip(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="risk", cwd=str(tmp_path))
+
+        add_result = self._registry().dispatch(
+            "/risk add high Waiting on operator sign-off",
+            self._ctx(session_id=sess.session_id),
+        )
+        assert add_result == mod._CMD_CONTINUE
+        add_out = capsys.readouterr().out
+        assert "Recorded high risk" in add_out
+
+        list_result = self._registry().dispatch("/risk list", self._ctx(session_id=sess.session_id))
+        assert list_result == mod._CMD_CONTINUE
+        list_out = capsys.readouterr().out
+        assert "Open risks:" in list_out
+        assert "HIGH" in list_out
+
+        clear_result = self._registry().dispatch("/risk clear 1", self._ctx(session_id=sess.session_id))
+        assert clear_result == mod._CMD_CONTINUE
+        clear_out = capsys.readouterr().out
+        assert "Cleared risk 1" in clear_out
+
+        self._registry().dispatch("/risk list", self._ctx(session_id=sess.session_id))
+        final_out = capsys.readouterr().out
+        assert "(none)" in final_out
+
+    def test_handoff_check_reports_blockers_and_ownership(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="handoff-check", cwd=str(tmp_path), plan_id="plan-38", task_id="task-38")
+        self._registry().dispatch("/collab assign @alice Drive final validation", self._ctx(session_id=sess.session_id))
+        capsys.readouterr()
+        self._registry().dispatch("/risk add critical Waiting on release approval", self._ctx(session_id=sess.session_id))
+        capsys.readouterr()
+
+        result = self._registry().dispatch("/handoff check", self._ctx(session_id=sess.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Handoff readiness" in out
+        assert "blocked" in out
+        assert "owner" in out
+        assert "CRITICAL" in out
+
     def test_task_unlink_removes_task(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         sess = sessions_mod.create_session(title="task-unlink", cwd=str(tmp_path), task_id="task-77")
@@ -3450,6 +3547,61 @@ def test_main_session_export_returns_saved_outputs(monkeypatch, tmp_path, capsys
     exported = json.loads(capsys.readouterr().out)
     assert exported["session"]["session_id"] == session.session_id
     assert exported["outputs"][0]["name"].endswith(".md")
+    assert exported["workspace_capsule"]["session_id"] == session.session_id
+
+
+def test_main_session_export_runbook_renders_markdown(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Runbook Session", cwd=str(tmp_path), plan_id="plan-35")
+    mod.persist_response(session.session_id, "Need a handoff", "Create the runbook output.")
+    mod.save_output(session.session_id, "summary.md", "# Summary\n")
+
+    exit_code = mod.main(["session", "export", session.session_id, "--format", "runbook", "--template", "operator"])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "# Operator Runbook" in out
+    assert "Runbook Session" in out
+    assert "## Artifacts" in out
+
+
+def test_workspace_capsule_restore_recovers_cwd_plan_and_task(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    monkeypatch.setattr(mod, "_IS_TTY", False)
+    monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+    tracked = tmp_path / "tracked.txt"
+    tracked.write_text("hello\n", encoding="utf-8")
+    session = mod.create_session(
+        title="Workspace Save",
+        cwd=str(tmp_path),
+        plan_id="plan-36",
+        task_id="task-36",
+        files=[str(tracked)],
+    )
+    mod.persist_response(session.session_id, "Bookmark this state", "Done.")
+    mod.create_session_bookmark(session.session_id, label="checkpoint")
+
+    save_result = mod._cmd_workspace(mod.ChatCommandContext(history=[], session_id=session.session_id, args="save"))
+
+    assert save_result == mod._CMD_CONTINUE
+    save_out = capsys.readouterr().out
+    assert "Saved workspace capsule" in save_out
+
+    capsule_id = mod.list_handoffs(limit=1)[0]["id"]
+
+    restore_result = mod._cmd_workspace(mod.ChatCommandContext(history=[], session_id="", args=f"restore {capsule_id}"))
+
+    assert restore_result == mod._CMD_CONTINUE
+    restore_out = capsys.readouterr().out
+    assert "Workspace restored" in restore_out
+
+    restored_sessions = mod.list_sessions(limit=1)
+    restored = mod.load_session(restored_sessions[0].session_id)
+    assert restored is not None
+    assert restored.cwd == str(tmp_path)
+    assert restored.plan_id == "plan-36"
+    assert restored.task_id == "task-36"
+    assert str(tracked) in restored.files
 
 
 def test_main_exec_tracks_shell_command(monkeypatch, tmp_path, capsys):
@@ -3509,6 +3661,19 @@ def test_session_show_renders_rich_inspection(monkeypatch, tmp_path, capsys):
     assert "RECENT EVENTS" in out
     assert "git status" in out
     assert "Resume:" in out
+
+
+def test_session_show_includes_bookmarks(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Bookmark Inspect", cwd=str(tmp_path))
+    mod.persist_response(session.session_id, "Investigate the failing test", "The fix is in src/openclaw_cli.py")
+    mod.create_session_bookmark(session.session_id, label="failing test fixed")
+
+    out = mod.inspect_session(session.session_id)
+
+    assert "BOOKMARKS" in out
+    assert "[b1] failing test fixed" in out
+    assert "The fix is in src/openclaw_cli.py" in out
 
 
 def test_session_show_includes_collaboration_snapshot(monkeypatch, tmp_path, capsys):
@@ -3652,6 +3817,30 @@ def test_build_session_share_text_wave29_adds_story_recap(monkeypatch, tmp_path)
     assert "CAST HIGHLIGHTS" in out
     assert "TIMELINE RECAP" in out
     assert "Validated the focused test slice" in out
+
+
+def test_build_session_share_text_includes_bookmarks(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Bookmark Share", cwd=str(tmp_path))
+    mod.persist_response(session.session_id, "Capture the handoff", "Session share now exposes bookmark summaries")
+    mod.create_session_bookmark(session.session_id, label="handoff ready")
+
+    out = mod._build_session_share_text(session.session_id)
+
+    assert "BOOKMARKS" in out
+    assert "[b1] handoff ready" in out
+
+
+def test_export_session_preserves_bookmarks(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Bookmark Export", cwd=str(tmp_path))
+    mod.persist_response(session.session_id, "Summarize the change", "Wave 32 bookmarks are live")
+    mod.create_session_bookmark(session.session_id, label="wave32-live")
+
+    exported = sessions_mod.export_session(session.session_id)
+
+    assert exported["session"]["bookmarks"][0]["id"] == "b1"
+    assert exported["session"]["bookmarks"][0]["label"] == "wave32-live"
 
 
 def test_session_preview_lines_wave27_include_operator_visibility(monkeypatch, tmp_path):
@@ -4654,6 +4843,7 @@ class TestAccessibilityCommands:
         assert result == "done"
         out = capsys.readouterr().out
         assert "thinking..." in out.lower()
+        assert "step 1/3" in out.lower()
         assert "⏳" in out or "[wait]" in out.lower()
 
     def test_with_spinner_reduced_motion_emits_heartbeat_and_completion(self, capsys, monkeypatch):
@@ -4670,6 +4860,7 @@ class TestAccessibilityCommands:
         assert result == "done"
         out = capsys.readouterr().out.lower()
         assert "still working on thinking" in out
+        assert "phase 1/3" in out or "phase 2/3" in out
         assert "response ready" in out
 
     def test_make_prompt_plain_mode_uses_plain_prompt(self, monkeypatch):
@@ -5174,6 +5365,187 @@ class TestCmdMacroRun:
         out = capsys.readouterr().out
         assert "Skip" in out or "skip" in out or "⚠" in out
 
+    def test_macro_run_resolves_session_placeholders(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        self._reset_macros()
+        session = mod.create_session(title="Workflow Session", cwd=str(tmp_path))
+        mod._PREFS.setdefault("macros", {})["templated"] = ["/context {cwd}", "/session {session}"]
+
+        called = []
+
+        def fake_context(ctx: mod.ChatCommandContext) -> str:
+            called.append(("context", ctx.args))
+            return mod._CMD_CONTINUE
+
+        def fake_session(ctx: mod.ChatCommandContext) -> str:
+            called.append(("session", ctx.args))
+            return mod._CMD_CONTINUE
+
+        fake_registry = mod.ChatCommandRegistry()
+        fake_registry.register(mod.SlashCommand(name="context", description="", handler=fake_context))
+        fake_registry.register(mod.SlashCommand(name="session", description="", handler=fake_session))
+
+        with patch.object(mod, "build_chat_command_registry", return_value=fake_registry):
+            result = mod._macro_run(mod.ChatCommandContext(history=[], session_id=session.session_id, args=""), "templated")
+
+        assert result == mod._CMD_CONTINUE
+        assert called[0][1] == session.cwd
+        assert called[1][1] == session.session_id
+
+
+class TestCmdWorkflow:
+    """Tests for the Wave 33 /workflow command family."""
+
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "", session_id: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_workflow_preview_resolves_session_placeholders(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        session = mod.create_session(title="Workflow Preview", cwd=str(tmp_path))
+        mod._PREFS["macros"] = {"shipit": ["/context {cwd}", "/bookmark {session}"]}
+
+        result = self._registry().dispatch("/workflow preview shipit", self._ctx("preview shipit", session.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Workflow preview 'shipit'" in out
+        assert session.cwd in out
+        assert session.session_id in out
+
+    def test_workflow_run_delegates_to_macro_runner(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        called = []
+
+        def fake_macro_run(ctx: mod.ChatCommandContext, name: str, *, kind: str = "macro") -> str:
+            called.append((name, kind, ctx.session_id))
+            return mod._CMD_CONTINUE
+
+        with patch.object(mod, "_macro_run", side_effect=fake_macro_run):
+            result = self._registry().dispatch("/workflow run shipit", self._ctx("run shipit", "session-33"))
+
+        assert result == mod._CMD_CONTINUE
+        assert called == [("shipit", "workflow", "session-33")]
+
+
+class TestCmdPattern:
+    def _registry(self) -> mod.ChatCommandRegistry:
+        return mod.build_chat_command_registry()
+
+    def _ctx(self, args: str = "", session_id: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def _reset_patterns(self) -> None:
+        mod._PREFS.pop("patterns", None)
+
+    def test_pattern_save_from_history_stores_metadata(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        self._reset_patterns()
+
+        with patch.object(mod, "_history_command_texts", return_value=["/context", "/files", "/plan"]):
+            result = self._registry().dispatch("/pattern save triage last 2", self._ctx("save triage last 2", "session-37"))
+
+        assert result == mod._CMD_CONTINUE
+        pattern = mod._PREFS["patterns"]["triage"]
+        assert pattern["source"] == "history"
+        assert pattern["session_id"] == "session-37"
+        assert pattern["commands"] == ["/files", "/plan"]
+
+    def test_pattern_save_from_workflow_reuses_workflow_steps(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        self._reset_patterns()
+        mod._PREFS["macros"] = {"shipit": ["/context {cwd}", "/bookmark {session}"]}
+
+        result = self._registry().dispatch("/pattern save launch workflow shipit", self._ctx("save launch workflow shipit"))
+
+        assert result == mod._CMD_CONTINUE
+        pattern = mod._PREFS["patterns"]["launch"]
+        assert pattern["source"] == "workflow"
+        assert pattern["source_name"] == "shipit"
+        assert pattern["commands"] == ["/context {cwd}", "/bookmark {session}"]
+
+    def test_pattern_list_shows_saved_patterns(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        mod._PREFS["patterns"] = {
+            "triage": {
+                "source": "history",
+                "commands": ["/context", "/files"],
+                "updated_at": "2026-01-01T00:00:00Z",
+            }
+        }
+
+        result = self._registry().dispatch("/pattern list", self._ctx("list"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Patterns:" in out
+        assert "triage" in out
+        assert "history" in out
+
+    def test_pattern_preview_prints_steps(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        session = mod.create_session(title="Pattern Preview", cwd=str(tmp_path))
+        mod._PREFS["patterns"] = {
+            "triage": {
+                "source": "workflow",
+                "source_name": "shipit",
+                "commands": ["/context {cwd}", "/bookmark {session}"],
+            }
+        }
+
+        result = self._registry().dispatch("/pattern preview triage", self._ctx("preview triage", session.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Pattern 'triage'" in out
+        assert session.session_id in out
+        assert session.cwd in out
+
+    def test_pattern_run_executes_saved_commands(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["patterns"] = {"triage": {"commands": ["/version"]}}
+        called = []
+
+        def fake_run(ctx: mod.ChatCommandContext, name: str, commands: list[str], *, kind: str = "macro") -> str:
+            called.append((name, commands, kind, ctx.session_id))
+            return mod._CMD_CONTINUE
+
+        with patch.object(mod, "_run_command_sequence", side_effect=fake_run):
+            result = self._registry().dispatch("/pattern run triage", self._ctx("run triage", "session-37"))
+
+        assert result == mod._CMD_CONTINUE
+        assert called == [("triage", ["/version"], "pattern", "session-37")]
+
+    def test_pattern_rm_deletes_saved_pattern(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["patterns"] = {"triage": {"commands": ["/version"]}}
+
+        result = self._registry().dispatch("/pattern rm triage", self._ctx("rm triage"))
+
+        assert result == mod._CMD_CONTINUE
+        assert "triage" not in mod._PREFS.get("patterns", {})
+
 
 class TestMacroProgress:
     """Tests for _print_macro_progress and _cmd_macrostatus."""
@@ -5291,6 +5663,23 @@ class TestCmdRate:
         out = capsys.readouterr().out
         assert "Nothing to rate" in out
 
+    def test_rate_captures_route_metadata_from_last_trace(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        monkeypatch.setattr(mod, "_last_response_text", "some AI response")
+        mod._PREFS.pop("ratings", None)
+        monkeypatch.setattr(
+            mod,
+            "_last_trace_snapshot",
+            lambda session_id: {"slash_cmd": "research", "conf_label": "0.91 (HIGH)"},
+        )
+        with patch.object(mod, "_save_prefs"), patch("openclaw_cli.append_event"):
+            result = mod._cmd_rate(self._ctx(args="good", session_id="session-39"))
+        assert result == mod._CMD_CONTINUE
+        ratings = mod._PREFS.get("ratings", [])
+        assert ratings[0]["route"] == "research"
+        assert ratings[0]["route_confidence"] == "0.91 (HIGH)"
+
 
 class TestCmdQuality:
     """Tests for _cmd_quality (colored vertical histogram)."""
@@ -5318,6 +5707,47 @@ class TestCmdQuality:
         out = capsys.readouterr().out
         # Average of 5+3+4 = 4.0
         assert "4.0" in out
+
+    def test_quality_includes_latest_route_hint(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["ratings"] = [{"score": 5, "label": "good"}]
+        monkeypatch.setattr(
+            mod,
+            "get_last_decision_event",
+            lambda session_id: {
+                "kind": "route",
+                "timestamp": "2026-04-14T12:00:00Z",
+                "metadata": {
+                    "slash_command": "plan",
+                    "confidence": 0.82,
+                    "route_reason": "The user asked for planning mode.",
+                },
+            },
+        )
+
+        result = mod._cmd_quality(self._ctx(session_id="session-34"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Latest route:" in out
+        assert "/plan" in out
+        assert "Use /trace" in out
+
+    def test_quality_predict_uses_route_quality_history(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["ratings"] = [
+            {"score": 5, "route": "research"},
+            {"score": 4, "route": "research"},
+            {"score": 3, "route": "plan"},
+        ]
+        result = mod._cmd_quality(self._ctx("predict"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Quality prediction" in out
+        assert "/research" in out
+        assert "Predicted quality" in out
 
     def test_score_counting(self, capsys, monkeypatch, tmp_path):
         """Score tallying: counts[5]=1, counts[4]=1, counts[3]=1, others=0."""
@@ -5367,9 +5797,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave31(self):
-        """_CLI_BUILD must equal 'wave31'."""
-        assert mod._CLI_BUILD == "wave31"
+    def test_cli_build_is_wave39(self):
+        """_CLI_BUILD must equal 'wave39'."""
+        assert mod._CLI_BUILD == "wave39"
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -6277,9 +6707,9 @@ class TestCmdTip:
         assert len(mod._OPENCLAW_TIPS) > 0
         assert all(isinstance(t, str) for t in mod._OPENCLAW_TIPS)
 
-    def test_cli_build_is_wave31(self):
-        """_CLI_BUILD is updated to wave31."""
-        assert mod._CLI_BUILD == "wave31"
+    def test_cli_build_is_wave39(self):
+        """_CLI_BUILD is updated to wave39."""
+        assert mod._CLI_BUILD == "wave39"
 
 
 class TestCmdKeys:
@@ -6332,9 +6762,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave31(self):
-        """_CLI_BUILD == 'wave31'."""
-        assert mod._CLI_BUILD == "wave31"
+    def test_cli_build_is_wave39(self):
+        """_CLI_BUILD == 'wave39'."""
+        assert mod._CLI_BUILD == "wave39"
 
 
 class TestCmdKeybind:
@@ -6592,9 +7022,75 @@ class TestCmdTimeline:
         out = capsys.readouterr().out
         assert "Timeline" in out or "2024-06" in out
 
-    def test_cli_build_is_wave31(self):
-        """_CLI_BUILD == 'wave31' — THE FINAL BUILD ASSERTION."""
-        assert mod._CLI_BUILD == "wave31"
+    def test_cli_build_is_wave39(self):
+        """_CLI_BUILD == 'wave39'."""
+        assert mod._CLI_BUILD == "wave39"
+
+
+class TestCmdBookmarks:
+    """Tests for Wave 32 bookmark and replay helpers."""
+
+    def _ctx(
+        self,
+        args: str = "",
+        session_id: str = "",
+        history: list[dict[str, str]] | None = None,
+    ) -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=list(history or []), session_id=session_id, args=args)
+
+    def test_bookmark_creates_session_bookmark_with_label(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        session = mod.create_session(title="Bookmark Me", cwd=str(tmp_path))
+        history = [
+            {"role": "user", "content": "Find the fix"},
+            {"role": "assistant", "content": "The fix is in src/openclaw_cli.py"},
+        ]
+
+        result = mod._cmd_bookmark(self._ctx("fix located", session.session_id, history))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Saved bookmark [b1] fix located" in out
+        bookmarks = mod.list_session_bookmarks(session.session_id)
+        assert bookmarks[0]["label"] == "fix located"
+        assert bookmarks[0]["turn_index"] == 1
+
+    def test_bookmarks_lists_all_bookmarks_for_session(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        session = mod.create_session(title="Bookmark List", cwd=str(tmp_path))
+        mod.persist_response(session.session_id, "First turn", "First answer")
+        mod.create_session_bookmark(session.session_id, label="first")
+        mod.persist_response(session.session_id, "Second turn", "Second answer")
+        mod.create_session_bookmark(session.session_id, label="second")
+
+        result = mod._cmd_bookmarks(self._ctx("", session.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "[b1] first" in out
+        assert "[b2] second" in out
+
+    def test_replay_from_bookmark_filters_session_turns(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        session = mod.create_session(title="Replay Bookmark", cwd=str(tmp_path))
+        mod.persist_response(session.session_id, "First turn", "First answer")
+        mod.persist_response(session.session_id, "Second turn", "Second answer")
+        mod.create_session_bookmark(session.session_id, label="second")
+
+        result = mod._cmd_replay(self._ctx("--from b1", session.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Replay from [b1] second" in out
+        assert "Second turn" in out
+        assert "Second answer" in out
+        assert "First turn" not in out
 
 
 class TestCmdExport:
@@ -6651,6 +7147,95 @@ class TestCmdExport:
         assert files
 
 
+class TestCmdWorkspace:
+    def _ctx(self, args: str = "", session_id: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_workspace_status_prints_capsule_summary(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        tracked = tmp_path / "src.py"
+        tracked.write_text("print('ok')\n", encoding="utf-8")
+        session = mod.create_session(title="Workspace Status", cwd=str(tmp_path), files=[str(tracked)])
+        mod.persist_response(session.session_id, "Mark this", "status ready")
+        mod.create_session_bookmark(session.session_id, label="ready")
+
+        result = mod._cmd_workspace(self._ctx("status", session.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Workspace Capsule" in out
+        assert "signature:" in out
+        assert "recent bookmarks:" in out
+
+    def test_workspace_list_shows_saved_capsules(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        session = mod.create_session(title="Workspace List", cwd=str(tmp_path))
+        mod.create_handoff(session.session_id, note="saved capsule")
+
+        result = mod._cmd_workspace(self._ctx("list"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Workspace capsules:" in out
+        assert "handoff_" in out
+
+
+class TestCmdRunbook:
+    def _ctx(self, args: str = "", session_id: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_runbook_renders_active_session(self, monkeypatch, tmp_path, capsys):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        session = mod.create_session(title="Wave 35 Session", cwd=str(tmp_path), task_id="task-35")
+        mod.persist_response(session.session_id, "Summarize the work", "The runbook should capture the artifacts.")
+        mod.save_output(session.session_id, "artifact.txt", "done")
+
+        result = mod._cmd_runbook(self._ctx("", session.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "# Operator Runbook" in out
+        assert "Wave 35 Session" in out
+        assert "## Next Commands" in out
+
+    def test_runbook_save_writes_markdown_file(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        session = mod.create_session(title="Save Runbook", cwd=str(tmp_path))
+        mod.persist_response(session.session_id, "Need a saveable handoff", "Write it to disk.")
+
+        result = mod._cmd_runbook(self._ctx(f"stakeholder save {tmp_path / 'handoff'}", session.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        target = tmp_path / "handoff.md"
+        assert target.exists()
+        content = target.read_text(encoding="utf-8")
+        assert "# Stakeholder Update" in content
+
+
+class TestCmdExportTemplates:
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_exporttemplates_list_shows_builtin_templates(self, monkeypatch, capsys):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+
+        result = mod._cmd_exporttemplates(self._ctx("list"))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "operator" in out
+        assert "postmortem" in out
+
+
 class TestCmdColorscheme:
     """Tests for /colorscheme command and _EXTENDED_SCHEMES."""
 
@@ -6691,8 +7276,8 @@ class TestCmdColorscheme:
         assert result == mod._CMD_CONTINUE
         assert prefs.get("color_scheme") == "default"
 
-    def test_cli_build_is_wave31(self):
-        assert mod._CLI_BUILD == "wave31"
+    def test_cli_build_is_wave39(self):
+        assert mod._CLI_BUILD == "wave39"
 
 
 class TestCmdFollowup:
@@ -6714,6 +7299,35 @@ class TestCmdFollowup:
             "find the file with error history recap search compare pin rate"
         )
         assert len(suggestions) <= 3
+
+    def test_suggest_followups_uses_response_context_and_session(self):
+        suggestions = mod._suggest_followups(
+            "show me the fix",
+            response_text="Updated src/openclaw_cli.py\n\nSources:\n- https://example.com",
+            session_id="session-123",
+        )
+        joined = " ".join(suggestions)
+        assert "/view src/openclaw_cli.py" in joined
+        assert "/context" in joined or "/links" in joined
+
+    def test_print_followup_suggestions_plain_mode_uses_bottom_bar(self, monkeypatch, capsys):
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_REDUCED_MOTION, False)
+
+        mod._print_followup_suggestions(
+            [
+                "/rate good — mark this answer helpful",
+                "/context — verify what the next request will inherit",
+            ],
+            mode="chat",
+        )
+
+        stdout = capsys.readouterr().out
+        assert "Bottom bar:" in stdout
+        assert "mode: chat" in stdout
+        assert "/rate good" in stdout
+        assert "/context" in stdout
 
     def test_cmd_followup_no_history(self, monkeypatch):
         monkeypatch.setattr(mod, "_IS_TTY", False)
@@ -6790,3 +7404,846 @@ class TestSourcesBugFixes:
     def test_detect_file_paths_still_finds_local_paths(self):
         paths = mod._detect_file_paths("see src/openclaw_cli.py for details")
         assert "src/openclaw_cli.py" in paths
+class TestCmdTrace:
+    def _ctx(self, args: str = "", session_id: str = "session-34") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
+
+    def test_trace_shows_last_route_snapshot(self, capsys, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(
+            mod,
+            "_require_session_or_warn",
+            lambda ctx: object(),
+        )
+        monkeypatch.setattr(
+            mod,
+            "get_last_decision_event",
+            lambda session_id: {
+                "kind": "route",
+                "timestamp": "2026-04-14T12:00:00Z",
+                "metadata": {
+                    "slash_command": "research",
+                    "confidence": 0.91,
+                    "route_reason": "The request spans multiple code areas.",
+                },
+            },
+        )
+        monkeypatch.setattr(mod, "_PREFS", {"ratings": [{"score": 4, "label": "good"}]})
+
+        result = mod._cmd_trace(self._ctx())
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Trace Snapshot" in out
+        assert "/research" in out
+        assert "Latest rating" in out
+
+    def test_routing_suggest_shows_best_rated_route(self, capsys, monkeypatch):
+        monkeypatch.setattr(mod, "_PREFS", {"ratings": [
+            {"score": 5, "route": "research"},
+            {"score": 4, "route": "research"},
+            {"score": 3, "route": "plan"},
+        ]})
+        result = mod._cmd_routing(self._ctx("suggest"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Routing suggestion" in out
+        assert "/research" in out
+        assert "advisory only" in out
+
+
+# =============================================================================
+# === TD-16: Plugin Loader / Registry Tests ===
+# =============================================================================
+
+import pytest
+import types as _types
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+# Pre-mock discord and permissions so plugin_system can be imported without
+# the real discord library installed. This must happen before the import below.
+if "discord" not in sys.modules:
+    _fake_discord = _types.ModuleType("discord")
+    sys.modules["discord"] = _fake_discord
+if "permissions" not in sys.modules:
+    _fake_perms = _types.ModuleType("permissions")
+
+    class _FakePermLevel:
+        MEMBER = "MEMBER"
+        ADMIN = "ADMIN"
+
+        def __getitem__(self, key):
+            return key
+
+    _fake_perms.PermissionLevel = _FakePermLevel()
+    _fake_perms.set_plugin_permission = lambda name, level: None
+    sys.modules["permissions"] = _fake_perms
+
+from plugin_system import PluginLoader, PluginMetadata, Plugin, PluginRegistry
+from plugin_system.plugin_api import PluginAPI
+
+
+def _make_loader(tmp_path: Path) -> PluginLoader:
+    return PluginLoader(
+        plugins_dir=tmp_path / "plugins",
+        data_dir=tmp_path / "data",
+        skills_registry={},
+    )
+
+
+def _make_valid_manifest(plugin_dir: Path, name: str = "myplugin") -> None:
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    (plugin_dir / "plugin.yaml").write_text(
+        f"name: {name}\nversion: 1.0.0\nauthor: tester@example.com\n"
+    )
+
+
+class TestPluginLoaderManifest:
+    """Tests for PluginLoader.load_manifest()."""
+
+    def test_load_manifest_returns_metadata_for_valid_yaml(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "alpha"
+        _make_valid_manifest(plugin_dir, name="alpha")
+        meta = loader.load_manifest(plugin_dir)
+        assert meta is not None
+        assert meta.name == "alpha"
+        assert meta.version == "1.0.0"
+        assert meta.author == "tester@example.com"
+
+    def test_load_manifest_returns_none_when_name_missing(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "beta"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "plugin.yaml").write_text("version: 1.0.0\nauthor: x\n")
+        assert loader.load_manifest(plugin_dir) is None
+
+    def test_load_manifest_returns_none_when_version_missing(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "gamma"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "plugin.yaml").write_text("name: gamma\nauthor: x\n")
+        assert loader.load_manifest(plugin_dir) is None
+
+    def test_load_manifest_returns_none_when_author_missing(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "delta"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "plugin.yaml").write_text("name: delta\nversion: 1.0.0\n")
+        assert loader.load_manifest(plugin_dir) is None
+
+    def test_load_manifest_returns_none_for_invalid_yaml(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "bad"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "plugin.yaml").write_text(":\n  - broken: [yaml\n")
+        assert loader.load_manifest(plugin_dir) is None
+
+    def test_load_manifest_returns_none_for_non_dict_yaml(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "list_plugin"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "plugin.yaml").write_text("- item1\n- item2\n")
+        assert loader.load_manifest(plugin_dir) is None
+
+    def test_load_manifest_populates_optional_fields(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "rich"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "plugin.yaml").write_text(
+            "name: rich\nversion: 2.1.0\nauthor: dev\n"
+            "description: A rich plugin\nhomepage: https://example.com\n"
+            "min_openclaw_version: 0.5.0\n"
+        )
+        meta = loader.load_manifest(plugin_dir)
+        assert meta is not None
+        assert meta.description == "A rich plugin"
+        assert meta.homepage == "https://example.com"
+        assert meta.min_openclaw_version == "0.5.0"
+
+    def test_load_manifest_defaults_permission_level_to_member(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "perm"
+        _make_valid_manifest(plugin_dir, name="perm")
+        meta = loader.load_manifest(plugin_dir)
+        assert meta is not None
+        assert meta.permission_level == "MEMBER"
+
+
+class TestPluginLoaderDiscover:
+    """Tests for PluginLoader.discover_plugins()."""
+
+    @pytest.mark.asyncio
+    async def test_discover_plugins_finds_dirs_with_manifest(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        plugin_dir = tmp_path / "plugins" / "myplugin"
+        _make_valid_manifest(plugin_dir, name="myplugin")
+        found = await loader.discover_plugins()
+        assert any(p.name == "myplugin" for p in found)
+
+    @pytest.mark.asyncio
+    async def test_discover_plugins_skips_dirs_without_manifest(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        (tmp_path / "plugins" / "no_manifest").mkdir(parents=True)
+        found = await loader.discover_plugins()
+        assert not any(p.name == "no_manifest" for p in found)
+
+    @pytest.mark.asyncio
+    async def test_discover_plugins_skips_hidden_directories(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        hidden = tmp_path / "plugins" / ".hidden"
+        _make_valid_manifest(hidden, name="hidden")
+        found = await loader.discover_plugins()
+        assert not any(p.name == ".hidden" for p in found)
+
+    @pytest.mark.asyncio
+    async def test_discover_plugins_skips_pycache(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        cache = tmp_path / "plugins" / "__pycache__"
+        _make_valid_manifest(cache, name="__pycache__")
+        found = await loader.discover_plugins()
+        assert not any(p.name == "__pycache__" for p in found)
+
+
+class TestPluginLoaderValidation:
+    """Tests for PluginLoader.validate_dependencies() and validate_version()."""
+
+    def test_validate_dependencies_passes_when_no_deps(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        meta = PluginMetadata(name="x", version="1.0.0", author="a", dependencies=[])
+        ok, msg = loader.validate_dependencies(meta)
+        assert ok is True
+        assert msg == ""
+
+    def test_validate_dependencies_fails_for_missing_package(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        meta = PluginMetadata(
+            name="x", version="1.0.0", author="a",
+            dependencies=["_no_such_package_xyz_"],
+        )
+        ok, msg = loader.validate_dependencies(meta)
+        assert ok is False
+        assert "_no_such_package_xyz_" in msg
+
+    def test_validate_dependencies_passes_for_available_package(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        meta = PluginMetadata(
+            name="x", version="1.0.0", author="a",
+            dependencies=["json"],  # json is always available
+        )
+        ok, msg = loader.validate_dependencies(meta)
+        assert ok is True
+
+    def test_validate_version_passes_within_range(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        loader.config = {"version": "1.0.0"}
+        meta = PluginMetadata(
+            name="x", version="1.0.0", author="a",
+            min_openclaw_version="0.1.0",
+        )
+        ok, _msg = loader.validate_version(meta)
+        assert ok is True
+
+    def test_validate_version_fails_when_current_below_min(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        loader.config = {"version": "0.1.0"}
+        meta = PluginMetadata(
+            name="x", version="1.0.0", author="a",
+            min_openclaw_version="9.9.9",
+        )
+        ok, msg = loader.validate_version(meta)
+        assert ok is False
+        assert "9.9.9" in msg
+
+    def test_parse_version_parses_three_part_semver(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        assert loader._parse_version("1.2.3", "test") == (1, 2, 3)
+
+    def test_parse_version_pads_short_versions(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        assert loader._parse_version("2.1", "test") == (2, 1, 0)
+        assert loader._parse_version("3", "test") == (3, 0, 0)
+
+    def test_parse_version_raises_for_alpha_string(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        with pytest.raises(ValueError, match="Invalid"):
+            loader._parse_version("v1.0.0", "test")
+
+    def test_parse_version_raises_for_none(self, tmp_path):
+        loader = _make_loader(tmp_path)
+        with pytest.raises(ValueError):
+            loader._parse_version(None, "test")
+
+
+class TestPluginMetadata:
+    """Tests for PluginMetadata dataclass."""
+
+    def test_to_dict_round_trip(self):
+        meta = PluginMetadata(
+            name="my-plugin",
+            version="1.2.3",
+            author="dev@example.com",
+            description="A test plugin",
+            min_openclaw_version="0.5.0",
+        )
+        d = meta.to_dict()
+        assert d["name"] == "my-plugin"
+        assert d["version"] == "1.2.3"
+        assert d["author"] == "dev@example.com"
+        assert d["description"] == "A test plugin"
+        assert d["min_openclaw_version"] == "0.5.0"
+        assert d["max_openclaw_version"] is None
+
+    def test_to_dict_includes_all_required_keys(self):
+        meta = PluginMetadata(name="p", version="1.0.0", author="a")
+        d = meta.to_dict()
+        for key in ("name", "version", "author", "description", "dependencies",
+                    "permissions", "permission_level", "min_openclaw_version",
+                    "max_openclaw_version", "homepage", "repository"):
+            assert key in d
+
+
+class TestPluginRegistry:
+    """Tests for PluginRegistry state management."""
+
+    def _make_registry(self, tmp_path: Path) -> PluginRegistry:
+        return PluginRegistry(
+            plugins_dir=tmp_path / "plugins",
+            data_dir=tmp_path / "data",
+            skills_registry={},
+        )
+
+    def test_list_plugins_returns_empty_on_fresh_registry(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        assert registry.list_plugins() == []
+
+    def test_list_disabled_plugins_returns_empty_on_fresh_registry(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        assert registry.list_disabled_plugins() == []
+
+    def test_get_plugin_returns_none_for_unknown_name(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        assert registry.get_plugin("unknown_plugin") is None
+
+    def test_get_plugin_info_returns_none_for_unknown_name(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        assert registry.get_plugin_info("unknown_plugin") is None
+
+    def test_check_conflicts_no_conflict_for_new_name(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        meta = PluginMetadata(name="brand-new", version="1.0.0", author="a")
+        conflict = registry._check_conflicts(meta)
+        assert conflict is None
+
+    def test_check_conflicts_detects_duplicate_name(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        # Manually inject a fake loaded plugin
+        fake_plugin = MagicMock()
+        fake_plugin.metadata = PluginMetadata(name="dup", version="1.0.0", author="a")
+        registry._plugins["dup"] = fake_plugin
+        meta = PluginMetadata(name="dup", version="2.0.0", author="b")
+        conflict = registry._check_conflicts(meta)
+        assert conflict is not None
+        assert "dup" in conflict
+
+    def test_check_conflicts_detects_disabled_name_collision(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        registry._disabled_plugins.add("existing")
+        meta = PluginMetadata(name="existing", version="1.0.0", author="a")
+        conflict = registry._check_conflicts(meta)
+        assert conflict is not None
+
+    @pytest.mark.asyncio
+    async def test_uninstall_plugin_returns_false_for_unknown_plugin(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        ok, msg = await registry.uninstall_plugin("nonexistent")
+        assert ok is False
+        assert "nonexistent" in msg
+
+    @pytest.mark.asyncio
+    async def test_enable_plugin_returns_false_for_unknown_plugin(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        ok, msg = await registry.enable_plugin("nonexistent")
+        assert ok is False
+
+    @pytest.mark.asyncio
+    async def test_disable_plugin_returns_false_for_unknown_plugin(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        ok, msg = await registry.disable_plugin("nonexistent")
+        assert ok is False
+        assert "nonexistent" in msg
+
+    @pytest.mark.asyncio
+    async def test_reload_plugin_returns_false_for_unknown_plugin(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        ok, msg = await registry.reload_plugin("nonexistent")
+        assert ok is False
+
+    def test_load_state_tolerates_missing_state_file(self, tmp_path):
+        # Should not raise even if state file doesn't exist
+        registry = self._make_registry(tmp_path)
+        assert registry._disabled_plugins == set()
+
+    def test_save_and_load_state_persists_disabled_plugins(self, tmp_path):
+        registry = self._make_registry(tmp_path)
+        registry._disabled_plugins.add("myplugin")
+        registry._save_state()
+        # New registry should load from same dir
+        registry2 = self._make_registry(tmp_path)
+        assert "myplugin" in registry2._disabled_plugins
+
+
+# =============================================================================
+# === TD-16: Config Loading / Validation Tests ===
+# =============================================================================
+
+
+class TestPrefsDefaults:
+    """Tests for _PREFS default values."""
+
+    def test_prefs_has_theme_default(self):
+        assert "theme" in mod._PREFS
+
+    def test_prefs_theme_default_is_default(self):
+        # The module-level default is 'default' (may be overridden by file load)
+        assert isinstance(mod._PREFS.get("theme"), str)
+
+    def test_prefs_emoji_is_bool(self):
+        assert isinstance(mod._PREFS.get("emoji"), bool)
+
+    def test_prefs_layout_is_string(self):
+        assert isinstance(mod._PREFS.get("layout"), str)
+
+    def test_prefs_emoji_pack_is_string(self):
+        assert isinstance(mod._PREFS.get("emoji_pack"), str)
+
+    def test_prefs_emoji_headers_is_bool(self, monkeypatch):
+        # emoji_headers default is True; ensure monkeypatched _PREFS has it
+        monkeypatch.setitem(mod._PREFS, "emoji_headers", True)
+        assert isinstance(mod._PREFS.get("emoji_headers"), bool)
+
+
+class TestLoadPrefs:
+    """Tests for _load_prefs() and _save_prefs()."""
+
+    def test_load_prefs_reads_from_json_file(self, tmp_path, monkeypatch):
+        prefs_file = tmp_path / ".openclaw" / "prefs.json"
+        prefs_file.parent.mkdir(parents=True)
+        prefs_file.write_text('{"theme": "green"}', encoding="utf-8")
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        saved = dict(mod._PREFS)
+        mod._load_prefs()
+        assert mod._PREFS.get("theme") == "green"
+        # Restore
+        mod._PREFS.update(saved)
+
+    def test_load_prefs_silently_ignores_missing_file(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "nonexistent"))
+        # Should not raise
+        mod._load_prefs()
+
+    def test_load_prefs_silently_ignores_corrupt_json(self, tmp_path, monkeypatch):
+        prefs_file = tmp_path / ".openclaw" / "prefs.json"
+        prefs_file.parent.mkdir(parents=True)
+        prefs_file.write_text("{{{invalid json}}}", encoding="utf-8")
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        # Should not raise
+        mod._load_prefs()
+
+    def test_load_prefs_ignores_non_dict_json(self, tmp_path, monkeypatch):
+        prefs_file = tmp_path / ".openclaw" / "prefs.json"
+        prefs_file.parent.mkdir(parents=True)
+        prefs_file.write_text("[1, 2, 3]", encoding="utf-8")
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        before = dict(mod._PREFS)
+        mod._load_prefs()
+        # _PREFS should not have been updated with list content
+        assert mod._PREFS.get("theme") == before.get("theme")
+
+    def test_save_prefs_writes_json_file(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setitem(mod._PREFS, "theme", "cyan")
+        mod._save_prefs()
+        prefs_file = tmp_path / ".openclaw" / "prefs.json"
+        assert prefs_file.exists()
+        data = json.loads(prefs_file.read_text("utf-8"))
+        assert data.get("theme") == "cyan"
+
+    def test_save_prefs_creates_directory_if_missing(self, tmp_path, monkeypatch):
+        deep_dir = tmp_path / "a" / "b" / "c"
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(deep_dir))
+        # Should not raise even if dir doesn't exist
+        mod._save_prefs()
+        assert (deep_dir / ".openclaw" / "prefs.json").exists()
+
+    def test_prefs_file_path_uses_env_override(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        result = mod._prefs_file_path()
+        assert result == tmp_path / ".openclaw" / "prefs.json"
+
+    def test_prefs_set_updates_key(self, monkeypatch):
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        monkeypatch.setitem(mod._PREFS, "emoji_headers", True)
+        mod._prefs_set("emoji_headers", False)
+        assert mod._PREFS["emoji_headers"] is False
+
+
+class TestNormalizePrefs:
+    """Tests for _normalize_personalization_prefs()."""
+
+    def test_layout_normal_stays_normal(self, monkeypatch):
+        monkeypatch.setitem(mod._PREFS, "layout", "normal")
+        monkeypatch.setitem(mod._PREFS, "emoji_pack", "classic")
+        mod._normalize_personalization_prefs()
+        assert mod._PREFS["layout"] == "normal"
+
+    def test_layout_unknown_falls_back_to_normal(self, monkeypatch):
+        monkeypatch.setitem(mod._PREFS, "layout", "bogus_layout")
+        monkeypatch.setitem(mod._PREFS, "emoji_pack", "classic")
+        mod._normalize_personalization_prefs()
+        assert mod._PREFS["layout"] == "normal"
+
+    def test_emoji_pack_ascii_disables_emoji(self, monkeypatch):
+        monkeypatch.setitem(mod._PREFS, "emoji_pack", "ascii")
+        monkeypatch.setitem(mod._PREFS, "layout", "normal")
+        mod._normalize_personalization_prefs()
+        assert mod._PREFS.get("emoji") is False
+
+    def test_emoji_pack_classic_enables_emoji(self, monkeypatch):
+        monkeypatch.setitem(mod._PREFS, "emoji_pack", "classic")
+        monkeypatch.setitem(mod._PREFS, "layout", "normal")
+        mod._normalize_personalization_prefs()
+        assert mod._PREFS.get("emoji") is True
+
+
+# =============================================================================
+# === TD-16: Error Handling / Exception Propagation Tests ===
+# =============================================================================
+
+
+class TestOpenClawCliError:
+    """Tests for the OpenClawCliError exception class."""
+
+    def test_is_runtime_error_subclass(self):
+        assert issubclass(mod.OpenClawCliError, RuntimeError)
+
+    def test_message_preserved(self):
+        exc = mod.OpenClawCliError("something went wrong")
+        assert str(exc) == "something went wrong"
+
+    def test_can_be_raised_and_caught(self):
+        with pytest.raises(mod.OpenClawCliError, match="test error"):
+            raise mod.OpenClawCliError("test error")
+
+    def test_wraps_cause_exception(self):
+        cause = ValueError("root cause")
+        try:
+            raise mod.OpenClawCliError("wrapped") from cause
+        except mod.OpenClawCliError as exc:
+            assert exc.__cause__ is cause
+
+    def test_write_saved_token_raises_for_empty_token(self, tmp_path):
+        with pytest.raises(mod.OpenClawCliError, match="cannot be empty"):
+            mod.write_saved_token("", path=tmp_path / "token")
+
+    def test_write_saved_token_raises_for_whitespace_token(self, tmp_path):
+        with pytest.raises(mod.OpenClawCliError, match="cannot be empty"):
+            mod.write_saved_token("   ", path=tmp_path / "token")
+
+    def test_delete_saved_token_returns_false_when_no_file(self, tmp_path):
+        result = mod.delete_saved_token(path=tmp_path / "no_such_token")
+        assert result is False
+
+    def test_read_saved_token_returns_empty_when_no_file(self, tmp_path):
+        result = mod.read_saved_token(path=tmp_path / "no_such_token")
+        assert result == ""
+
+
+class TestPrintError:
+    """Tests for _print_error()."""
+
+    def test_print_error_plain_mode_includes_error_prefix(self, capsys, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._print_error("something failed")
+        out = capsys.readouterr().out
+        assert "error:" in out
+        assert "something failed" in out
+
+    def test_print_error_writes_to_custom_file(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        buf = io.StringIO()
+        mod._print_error("custom dest", file=buf)
+        assert "custom dest" in buf.getvalue()
+        assert "error:" in buf.getvalue()
+
+
+class TestFormatErrors:
+    """Tests for format_http_error() and format_url_error()."""
+
+    def test_format_http_error_includes_status_code(self):
+        msg = mod.format_http_error("http://localhost", 503, "service unavailable")
+        assert "503" in msg
+
+    def test_format_http_error_includes_message_when_provided(self):
+        msg = mod.format_http_error("http://localhost", 404, "not found")
+        assert "not found" in msg
+
+    def test_format_http_error_uses_status_when_message_empty(self):
+        msg = mod.format_http_error("http://localhost", 500, "")
+        assert "500" in msg
+
+    def test_format_url_error_timeout_message(self):
+        exc = error.URLError(reason="timed out")
+        msg = mod.format_url_error("http://localhost:8765", exc)
+        assert "Timed out" in msg or "timed out" in msg.lower()
+
+    def test_format_url_error_connection_refused_message(self):
+        exc = error.URLError(reason="connection refused")
+        msg = mod.format_url_error("http://localhost:8765", exc)
+        assert "refused" in msg.lower()
+
+    def test_format_url_error_dns_failure_message(self):
+        exc = error.URLError(reason="nodename nor servname provided")
+        msg = mod.format_url_error("http://myhost.local", exc)
+        assert "resolve" in msg.lower() or "host" in msg.lower()
+
+    def test_format_url_error_generic_fallback(self):
+        exc = error.URLError(reason="some unknown error")
+        msg = mod.format_url_error("http://localhost", exc)
+        assert "localhost" in msg
+
+
+class TestAnalyzeHealthPayload:
+    """Tests for analyze_health_payload()."""
+
+    def test_healthy_status_dict_returns_true(self):
+        _, ok = mod.analyze_health_payload({"status": "healthy"})
+        assert ok is True
+
+    def test_ok_status_dict_returns_true(self):
+        _, ok = mod.analyze_health_payload({"status": "ok"})
+        assert ok is True
+
+    def test_unhealthy_status_dict_returns_false(self):
+        _, ok = mod.analyze_health_payload({"status": "unhealthy"})
+        assert ok is False
+
+    def test_degraded_status_returns_false(self):
+        _, ok = mod.analyze_health_payload({"status": "degraded"})
+        assert ok is False
+
+    def test_healthy_string_returns_true(self):
+        _, ok = mod.analyze_health_payload("healthy")
+        assert ok is True
+
+    def test_failed_string_returns_false(self):
+        _, ok = mod.analyze_health_payload("failed")
+        assert ok is False
+
+    def test_empty_string_returns_none(self):
+        _, ok = mod.analyze_health_payload("")
+        assert ok is None
+
+    def test_empty_dict_returns_none(self):
+        _, ok = mod.analyze_health_payload({})
+        assert ok is None
+
+
+# =============================================================================
+# === TD-16: Auth Flow Tests ===
+# =============================================================================
+
+import openclaw_cli_auth as auth_mod
+
+
+class TestAuthStoragePath:
+    """Tests for auth_mod.auth_storage_path()."""
+
+    def test_darwin_path_under_library_application_support(self):
+        path = auth_mod.auth_storage_path(platform_name="darwin")
+        assert "Application Support" in str(path)
+        assert "OpenClaw" in str(path)
+        assert path.name == "token"
+
+    def test_linux_path_under_config(self, monkeypatch):
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+        path = auth_mod.auth_storage_path(platform_name="linux")
+        assert ".config" in str(path) or "openclaw" in str(path)
+        assert path.name == "token"
+
+    def test_linux_path_respects_xdg_config_home(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+        path = auth_mod.auth_storage_path(platform_name="linux")
+        assert str(tmp_path) in str(path)
+
+    def test_windows_path_under_appdata(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("APPDATA", str(tmp_path))
+        path = auth_mod.auth_storage_path(platform_name="win32")
+        assert str(tmp_path) in str(path)
+        assert path.name == "token"
+
+
+class TestReadKeychainToken:
+    """Tests for auth_mod.read_keychain_token()."""
+
+    def test_returns_empty_string_on_non_darwin(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "linux")
+        result = auth_mod.read_keychain_token()
+        assert result == ""
+
+    def test_returns_empty_when_account_cannot_be_determined(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
+        monkeypatch.setenv("USER", "")
+        monkeypatch.setattr(auth_mod.getpass, "getuser", lambda: "")
+        result = auth_mod.read_keychain_token(account="")
+        assert result == ""
+
+    def test_returns_empty_on_subprocess_os_error(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
+        monkeypatch.setattr(
+            auth_mod.subprocess, "run",
+            lambda *a, **kw: (_ for _ in ()).throw(OSError("security not found")),
+        )
+        result = auth_mod.read_keychain_token(account="testuser")
+        assert result == ""
+
+    def test_returns_empty_when_security_command_fails(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
+        fake_result = MagicMock()
+        fake_result.returncode = 1
+        fake_result.stdout = ""
+        monkeypatch.setattr(auth_mod.subprocess, "run", lambda *a, **kw: fake_result)
+        result = auth_mod.read_keychain_token(account="testuser")
+        assert result == ""
+
+    def test_returns_stripped_token_on_success(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
+        fake_result = MagicMock()
+        fake_result.returncode = 0
+        fake_result.stdout = "  my-secret-token  \n"
+        monkeypatch.setattr(auth_mod.subprocess, "run", lambda *a, **kw: fake_result)
+        result = auth_mod.read_keychain_token(account="testuser")
+        assert result == "my-secret-token"
+
+
+class TestWriteKeychainToken:
+    """Tests for auth_mod.write_keychain_token()."""
+
+    def test_raises_for_empty_token(self):
+        with pytest.raises(auth_mod.OpenClawCliError, match="cannot be empty"):
+            auth_mod.write_keychain_token("")
+
+    def test_raises_for_whitespace_only_token(self):
+        with pytest.raises(auth_mod.OpenClawCliError, match="cannot be empty"):
+            auth_mod.write_keychain_token("   ")
+
+    def test_raises_when_no_account_determinable(self, monkeypatch):
+        monkeypatch.setenv("USER", "")
+        monkeypatch.setattr(auth_mod.getpass, "getuser", lambda: "")
+        with pytest.raises(auth_mod.OpenClawCliError, match="account"):
+            auth_mod.write_keychain_token("some-token", account="")
+
+    def test_raises_on_subprocess_os_error(self, monkeypatch):
+        monkeypatch.setattr(
+            auth_mod.subprocess, "run",
+            lambda *a, **kw: (_ for _ in ()).throw(OSError("security binary missing")),
+        )
+        with pytest.raises(auth_mod.OpenClawCliError, match="Keychain"):
+            auth_mod.write_keychain_token("tok", account="user")
+
+    def test_raises_when_security_command_fails(self, monkeypatch):
+        fake_result = MagicMock()
+        fake_result.returncode = 1
+        fake_result.stderr = "errSecDuplicateItem"
+        fake_result.stdout = ""
+        monkeypatch.setattr(auth_mod.subprocess, "run", lambda *a, **kw: fake_result)
+        with pytest.raises(auth_mod.OpenClawCliError, match="Keychain"):
+            auth_mod.write_keychain_token("tok", account="user")
+
+
+class TestDeleteKeychainToken:
+    """Tests for auth_mod.delete_keychain_token()."""
+
+    def test_returns_false_on_non_darwin(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "linux")
+        result = auth_mod.delete_keychain_token()
+        assert result is False
+
+    def test_returns_false_when_item_not_found(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
+        fake_result = MagicMock()
+        fake_result.returncode = 1
+        fake_result.stderr = "The specified item could not be found."
+        fake_result.stdout = ""
+        monkeypatch.setattr(auth_mod.subprocess, "run", lambda *a, **kw: fake_result)
+        result = auth_mod.delete_keychain_token(account="user")
+        assert result is False
+
+    def test_returns_true_when_deletion_succeeds(self, monkeypatch):
+        monkeypatch.setattr(auth_mod.sys, "platform", "darwin")
+        fake_result = MagicMock()
+        fake_result.returncode = 0
+        monkeypatch.setattr(auth_mod.subprocess, "run", lambda *a, **kw: fake_result)
+        result = auth_mod.delete_keychain_token(account="user")
+        assert result is True
+
+
+class TestResolveToken:
+    """Tests for mod.resolve_token() and mod.resolve_token_details()."""
+
+    def test_resolve_token_uses_explicit_token_first(self, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_TOKEN", "env-tok")
+        monkeypatch.setattr(mod, "read_keychain_token", lambda: "keychain-tok")
+        result = mod.resolve_token("explicit-tok")
+        assert result == "explicit-tok"
+
+    def test_resolve_token_uses_env_when_no_explicit(self, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_TOKEN", "env-token-123")
+        monkeypatch.setattr(mod, "read_keychain_token", lambda: "")
+        result = mod.resolve_token(None)
+        assert result == "env-token-123"
+
+    def test_resolve_token_returns_empty_when_all_sources_missing(self, monkeypatch):
+        monkeypatch.delenv("OPENCLAW_TOKEN", raising=False)
+        monkeypatch.delenv("DASHBOARD_API_TOKEN", raising=False)
+        monkeypatch.setattr(mod, "read_keychain_token", lambda: "")
+        monkeypatch.setattr(mod, "read_saved_token", lambda path=None: "")
+        result = mod.resolve_token(None)
+        assert result == ""
+
+    def test_resolve_token_details_records_source_for_explicit(self, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_TOKEN", "")
+        monkeypatch.setattr(mod, "read_keychain_token", lambda: "")
+        details = mod.resolve_token_details("my-token")
+        assert details.token == "my-token"
+        assert "command line" in details.source or "flag" in details.source
+
+    def test_resolve_token_details_records_env_source(self, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_TOKEN", "env-val")
+        monkeypatch.setattr(mod, "read_keychain_token", lambda: "")
+        details = mod.resolve_token_details(None)
+        assert details.token == "env-val"
+        assert "OPENCLAW_TOKEN" in details.source or "environment" in details.source.lower()
+
+
+class TestOpenClawCliErrorInAuth:
+    """Tests for OpenClawCliError in auth module."""
+
+    def test_auth_module_error_is_runtime_error(self):
+        assert issubclass(auth_mod.OpenClawCliError, RuntimeError)
+
+    def test_auth_and_main_error_are_same_class(self):
+        # openclaw_cli re-exports the same class from auth
+        assert mod.OpenClawCliError is auth_mod.OpenClawCliError
+
+    def test_keychain_service_constant(self):
+        assert auth_mod.KEYCHAIN_SERVICE == "OpenClaw CLI"
+
+    def test_token_resolution_dataclass_fields(self):
+        tr = auth_mod.TokenResolution(token="abc", source="env")
+        assert tr.token == "abc"
+        assert tr.source == "env"
