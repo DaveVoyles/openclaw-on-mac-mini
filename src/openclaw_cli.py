@@ -219,6 +219,7 @@ except ImportError:  # pragma: no cover
 
 import openclaw_cli_render as _render_mod
 import openclaw_cli_path_utils as _path_utils
+import openclaw_cli_macros as _macros_mod
 
 # Draft buffer — ephemeral unsent prompt (cleared on submission or /draft clear)
 _draft_buffer: str = ""
@@ -8398,72 +8399,23 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
 
 def _print_macro_progress(steps: list, current_idx: int, done_indices: set) -> None:
     """Print a live macro step progress tracker."""
-    if _a11y_plain_mode():
-        return
-    total = len(steps)
-    print()
-    for i, step in enumerate(steps):
-        step_str = str(step)[:50]
-        if i in done_indices:
-            marker = f"{_GR}✓{_R}"
-            style = _DM
-            end_style = _R
-        elif i == current_idx:
-            marker = f"{_CY}▸{_R}"
-            style = _B
-            end_style = _R
-        else:
-            marker = " "
-            style = _DM
-            end_style = _R
-        num = f"Step {i+1}/{total}:"
-        print(f"  {marker} {style}{num} {step_str}{end_style}")
-    print()
+    _macros_mod._print_macro_progress(steps, current_idx, done_indices, a11y_plain=_a11y_plain_mode())
 
 
 def _workflow_store() -> dict[str, list[str]]:
-    raw = _PREFS.setdefault("macros", {})
-    if not isinstance(raw, dict):
-        raw = {}
-        _PREFS["macros"] = raw
-    return raw
+    return _macros_mod._workflow_store(_PREFS)
 
 
 def _history_command_texts(limit: int) -> list[str]:
-    items = list(_PREFS.get("cmd_history", []))
-    commands: list[str] = []
-    for entry in items:
-        if isinstance(entry, dict):
-            text = str(entry.get("text", entry.get("prompt", entry.get("cmd", ""))) or "").strip()
-        else:
-            text = str(entry or "").strip()
-        if text:
-            commands.append(text)
-    return commands[-max(1, limit):]
+    return _macros_mod._history_command_texts(_PREFS, limit)
 
 
 def _render_workflow_step(command: str, ctx: ChatCommandContext) -> str:
-    session = load_session(ctx.session_id) if ctx.session_id else None
-    replacements = {
-        "{session}": session.session_id if session else "",
-        "{cwd}": session.cwd if session else "",
-        "{plan}": session.plan_id if session else "",
-        "{task}": session.task_id if session else "",
-    }
-    rendered = str(command or "")
-    for token, value in replacements.items():
-        rendered = rendered.replace(token, value)
-    return rendered
+    return _macros_mod._render_workflow_step(command, ctx)
 
 
 def _print_workflow_preview(name: str, steps: list[str], ctx: ChatCommandContext) -> None:
-    print(f"\n  {_B}Workflow preview '{name}'{_R}\n")
-    for index, step in enumerate(steps, start=1):
-        rendered = _render_workflow_step(step, ctx)
-        print(f"  {_DM}{index:>2}{_R}  {_CY}{step}{_R}")
-        if rendered != step:
-            print(f"      {_DM}→ {rendered}{_R}")
-    print(f"\n  {_DM}dry run only — use /workflow run {name} to execute.{_R}\n")
+    _macros_mod._print_workflow_preview(name, steps, ctx)
 
 
 def _macro_run(ctx: ChatCommandContext, name: str, *, kind: str = "macro") -> str:
