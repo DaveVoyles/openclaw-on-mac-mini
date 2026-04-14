@@ -230,6 +230,7 @@ except ImportError:  # pragma: no cover
     _RICH_AVAILABLE = False
 
 import openclaw_cli_render as _render_mod
+from openclaw_cli_render import _render_markdown_ansi  # re-exported; implementation lives in render module
 import openclaw_cli_path_utils as _path_utils
 import openclaw_cli_macros as _macros_mod
 import openclaw_cli_layout as _layout_mod
@@ -2489,93 +2490,9 @@ def _print_animated_separator() -> None:
 
 
 def _render_table_ansi(rows: list[list[str]]) -> list[str]:
-    """Render a list of rows as an ANSI-aligned table, capped to terminal width."""
-    if not rows:
-        return []
-    num_cols = max(len(r) for r in rows)
-    w = _terminal_width()
-
-    def _plain(cell: str) -> str:
-        return re.sub(r"\*\*(.+?)\*\*", r"\1", re.sub(r"\*(.+?)\*", r"\1", cell))
-
-    plain_rows = [[_plain(cell) for cell in row[:num_cols]] for row in rows]
-    col_widths = [0] * num_cols
-    for row in plain_rows:
-        for i, cell in enumerate(row):
-            col_widths[i] = max(col_widths[i], len(cell))
-    estimated_total = sum(col_widths) + num_cols * 3 + 1
-
-    if w < 80 or estimated_total > max(20, w - 4):
-        # Narrow terminal: list format — one "Header: value" line per cell per row
-        headers = plain_rows[0] if plain_rows else []
-        result: list[str] = []
-        sep_core = _separator_fill(max(1, w - 4))
-        sep_style = _theme_ansi() if _a11y_high_contrast() else _DM
-        sep_reset = _R if sep_style else ""
-        sep = f"  {sep_style}{sep_core}{sep_reset}"
-        for row_i, row in enumerate(rows):
-            if row_i == 0:
-                # First row is the header — skip it as a data row
-                continue
-            result.append(sep)
-            for j in range(num_cols):
-                cell = row[j] if j < len(row) else ""
-                header = headers[j] if j < len(headers) else f"Col {j + 1}"
-                available = max(12, w - len(header) - 8)
-                wrapped = textwrap.wrap(_plain(cell), width=available) or [""]
-                rendered = _apply_inline_ansi(wrapped[0])
-                result.append(f"  {_B}{header}:{_R} {rendered}")
-                indent = " " * (len(header) + 4)
-                for continuation in wrapped[1:]:
-                    result.append(f"{indent}{_apply_inline_ansi(continuation)}")
-            result.append("")
-        if result:
-            result.append(sep)
-        return result
-
-    # Wide terminal (>= 80): existing column formatting with proportional cap
-    max_col_width = max(10, (w - 4) // num_cols)
-    col_widths = [min(cw, max_col_width) for cw in col_widths]
-
-    # Further scale down if total still exceeds terminal
-    terminal_width = w - 4
-    total = sum(col_widths) + num_cols * 3 + 1
-    if total > terminal_width and sum(col_widths) > 0:
-        available = max(num_cols * 6, terminal_width - num_cols * 3 - 1)
-        scale = available / sum(col_widths)
-        col_widths = [max(6, int(cw * scale)) for cw in col_widths]
-
-    sep_len = min(sum(col_widths) + num_cols * 3 + 1, terminal_width)
-    sep_style = _theme_ansi() if _a11y_high_contrast() else _DM
-    sep_reset = _R if sep_style else ""
-    sep = f"  {sep_style}{_separator_fill(sep_len)}{sep_reset}"
-
-    result = [sep]
-    for row_i, row in enumerate(rows):
-        cells = []
-        for j in range(num_cols):
-            cell = row[j] if j < len(row) else ""
-            plain = _plain(cell)
-            max_w = col_widths[j]
-            if len(plain) > max_w:
-                plain = plain[: max_w - 1] + "…"
-                cell = plain  # use truncated plain for formatting
-            formatted = _apply_inline_ansi(cell)
-            cells.append(formatted + " " * (max_w - len(plain)))
-        result.append("  " + (" │ ".join(cells)).rstrip())
-        if row_i == 0:
-            result.append(sep)
-    result.append(sep)
-    return result
-
-
-def _apply_inline_ansi(text: str) -> str:
-    """Apply inline bold, italic, and code formatting via ANSI codes."""
-    text = re.sub(r"\*\*(.+?)\*\*", lambda m: f"{_B}{m.group(1)}{_R}", text)
-    text = re.sub(r"__(.+?)__", lambda m: f"{_B}{m.group(1)}{_R}", text)
-    text = re.sub(r"\*([^*\n]+?)\*", lambda m: f"{_IT}{m.group(1)}{_R}", text)
-    text = re.sub(r"`([^`\n]+?)`", lambda m: f"{_CY}{m.group(1)}{_R}", text)
-    return text
+    """Shim — delegates to openclaw_cli_render; honours monkeypatched _terminal_width."""
+    from dataclasses import replace as _dc_replace
+    return _render_mod._render_table_ansi(rows, _dc_replace(_make_render_ctx(), cols=_terminal_width()))
 
 
 def _inject_heading_emojis(text: str) -> str:
@@ -2614,133 +2531,6 @@ def _make_clickable_link(url: str, text: str = "") -> str:
 def _linkify_response(text: str) -> str:
     """Replace bare URLs in response text with OSC 8 clickable links."""
     return _path_utils._linkify_response(text, prefs=_PREFS, is_tty=_get_is_tty())
-
-
-def _render_markdown_ansi(text: str) -> str:
-    """Convert markdown to ANSI-formatted terminal text (fallback when Rich is absent).
-
-    Handles headings (H1–H4), bold/italic/code, blockquotes, tables, bullet
-    lists (including nested), numbered lists, fenced code blocks, and rules.
-    """
-    term_cols = _terminal_width()
-    rule_width = min(term_cols - 2, 72) if term_cols >= 80 else max(1, term_cols - 4)
-    plain_mode = _a11y_plain_mode()
-    narrow = term_cols < 72
-    border_style = _theme_ansi() if _a11y_high_contrast() else _DM
-    border_reset = _R if border_style else ""
-
-    lines = text.split("\n")
-    result: list[str] = []
-    in_code = False
-    code_lang = ""
-    table_rows: list[list[str]] = []
-
-    def flush_table() -> None:
-        if table_rows:
-            result.extend(_render_table_ansi(table_rows))
-            table_rows.clear()
-
-    for line in lines:
-        # Fenced code blocks
-        if line.startswith("```"):
-            flush_table()
-            if not in_code:
-                in_code = True
-                code_lang = line[3:].strip()
-                lang_label = f" {code_lang} " if code_lang else " code "
-                if plain_mode or narrow:
-                    result.append(f"  {lang_label.strip()}:")
-                else:
-                    result.append(
-                        f"  {border_style}╭─{lang_label}{_separator_fill(max(0, rule_width - len(lang_label) - 3), high_contrast=False)}╮{border_reset}"
-                    )
-            else:
-                in_code = False
-                if not (plain_mode or narrow):
-                    result.append(f"  {border_style}╰{_separator_fill(rule_width - 1, high_contrast=False)}╯{border_reset}")
-                code_lang = ""
-            continue
-        if in_code:
-            prefix = "    " if (plain_mode or narrow) else f"  {border_style}│{border_reset} "
-            result.append(f"{prefix}{_CY}{line}{_R}")
-            continue
-
-        # Markdown table rows
-        if line.startswith("|"):
-            stripped = line.strip().strip("|")
-            if re.match(r"^[-| :]+$", stripped):
-                continue  # skip separator row
-            cells = [c.strip() for c in stripped.split("|")]
-            table_rows.append(cells)
-            continue
-        else:
-            flush_table()
-
-        # Horizontal rule
-        if re.match(r"^[-*_]{3,}\s*$", line):
-            fill = _separator_fill(rule_width, high_contrast=_a11y_high_contrast())
-            style = "" if plain_mode else border_style
-            reset = border_reset if style else ""
-            result.append(f"{style}{fill}{reset}")
-            continue
-
-        # Blockquotes
-        bq = re.match(r"^>\s?(.*)", line)
-        if bq:
-            quote_marker = ">" if (plain_mode or narrow) else "▌"
-            quote_style = "" if plain_mode else border_style
-            reset = border_reset if quote_style else ""
-            result.append(f"  {quote_style}{quote_marker}{reset}  {_apply_inline_ansi(bq.group(1))}")
-            continue
-
-        # ATX headings
-        m = re.match(r"^(#{1,6})\s+(.*)", line)
-        if m:
-            level = len(m.group(1))
-            raw = m.group(2)
-            if not plain_mode and _PREFS.get("emoji_headers", True):
-                emoji = _HEADING_EMOJIS.get(level, "")
-                if emoji:
-                    raw = f"{emoji} {raw}"
-            content = _apply_inline_ansi(raw)
-            if level == 1:
-                result.append(f"\n{_B}{_UL}{content}{_R}")
-                result.append("")
-            elif level == 2:
-                result.append(f"\n{_B}{content}{_R}")
-            elif level == 3:
-                result.append(f"{_B}{_DM}{content}{_R}")
-            else:
-                result.append(f"{_DM}{_IT}{content}{_R}")
-            continue
-
-        # Bullet list (supports nested via leading whitespace)
-        bm = re.match(r"^(\s*)[-*•]\s+(.*)", line)
-        if bm:
-            indent = bm.group(1)
-            depth = len(indent) // 2
-            bullet = ("◦" if depth % 2 else "•")
-            result.append(f"  {'  ' * depth}{bullet} {_apply_inline_ansi(bm.group(2))}")
-            continue
-
-        # Numbered list
-        nm = re.match(r"^(\s*)(\d+)\.\s+(.*)", line)
-        if nm:
-            indent = nm.group(1)
-            result.append(f"  {indent}{nm.group(2)}. {_apply_inline_ansi(nm.group(3))}")
-            continue
-
-        # Wrap long paragraph lines to terminal width to prevent mid-word splits
-        if len(line) > term_cols - 2 and not plain_mode:
-            plain_line = re.sub(r"\*{1,2}([^*]+)\*{1,2}|`([^`]+)`|_([^_]+)_", r"\1\2\3", line)
-            wrapped_lines = textwrap.wrap(plain_line, width=term_cols - 2) or [line]
-            for wl in wrapped_lines:
-                result.append(_apply_inline_ansi(wl))
-        else:
-            result.append(_apply_inline_ansi(line))
-
-    flush_table()
-    return "\n".join(result)
 
 
 def _is_kv_bullet_group(lines: list[str]) -> bool:
