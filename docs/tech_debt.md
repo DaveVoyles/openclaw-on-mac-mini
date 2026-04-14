@@ -16,7 +16,7 @@
 | TD-4 | Response Pipeline Refactor | 🟡 Medium | ✅ Shipped (`bf4ce70`) |
 | TD-5 | Data-Driven Command Registry | 🟡 Medium | ✅ Shipped (`bf4ce70`) |
 | TD-6 | God Function Decomposition | 🔴 High | ✅ Shipped (`437781d`) |
-| TD-7 | Module Split | 🔴 High | 🔵 Deferred (see notes) |
+| TD-7 | Module Split | 🔴 High | ✅ Shipped (`c3b2722`) |
 
 ---
 
@@ -333,11 +333,37 @@ Each into its own helper ≤80 lines.
 
 ---
 
-## TD-7 — Module Split 🔴 (Deferred)
+## TD-7 — Module Split ✅ Shipped (`c3b2722`)
 
-**Status: Deferred — prerequisites not met.**
+**Status: Shipped — 3-phase approach.**
 
-A structural review identified three blocking issues that make the proposed 3-way split unsafe in the current session:
+The module split was implemented in three phases:
+
+### Phase 1 — `openclaw_cli_ui_core.py` (ANSI leaf module)
+- Contains `_IS_TTY`, `_c()`, `_get_is_tty()`, and all 15 ANSI constants
+- `openclaw_cli.py` imports the palette from this module
+- `_get_is_tty()` override kept in main module for test monkeypatch compat
+
+### Phase 2 — `openclaw_cli_render.py` (response rendering pipeline)
+- `RenderContext` dataclass encapsulates all render-time state
+- All render functions moved with `ctx: RenderContext` signatures
+- Module is self-contained; no imports from `openclaw_cli.py`
+- ANSI constants imported from `openclaw_cli_ui_core`
+
+### Phase 3 — Wiring (shims in `openclaw_cli.py`)
+- `_make_render_ctx()` builds a `RenderContext` from module globals at call time,
+  passing `_PREFS` by reference so `monkeypatch.setitem(mod._PREFS, ...)` works
+- `_render_response_body()` and `_render_response_footer()` replaced with thin
+  shims delegating to `_render_mod.*`
+- All 263 `_IS_TTY`/`_RICH_AVAILABLE` monkeypatches continue to work unchanged
+- Deploy script updated: `openclaw_cli_ui_core.py` and `openclaw_cli_render.py`
+  added to `CLI_FILES`
+
+### Result
+- 431 tests pass (unchanged)
+- Render pipeline fully in `openclaw_cli_render.py`
+- ANSI palette in `openclaw_cli_ui_core.py`
+- `openclaw_cli.py` shims maintain full backward compatibility
 
 ### Why It Was Deferred
 
