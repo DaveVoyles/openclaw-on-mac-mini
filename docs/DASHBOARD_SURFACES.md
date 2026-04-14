@@ -170,16 +170,17 @@ preview/focused-inspection baseline today:
 
 ### Wave 25 multi-pane preset targets
 
-When Wave 25 ships, layout presets should be documented as first-class dashboard
-surfaces:
+Wave 25 is currently shipping as a **preset contract + fallback reporting**
+slice rather than a full split-pane renderer. Treat the table below as the
+truth-source for what is live today:
 
 | Preset / surface group | Alignment requirement |
 | --- | --- |
-| Focus preset | Pair session summary with the highest-value supporting surface and show clear active-pane affordances |
-| Watch-monitor preset | Combine watch status/history with intervention actions and recent outputs using the same badge grammar |
-| Collaboration / handoff preset | Pair collaboration snapshot with session health and recent artifacts without duplicating labels |
-| `/layout`, `/accessibility`, preset commands | Always expose current preset, width fallback, and how to reset to the default single-pane mode |
-| Browser/dashboard mirrors | Keep preset naming and “primary vs supporting pane” vocabulary aligned across CLI and web/dashboard docs |
+| Focus preset | Persisted through `/layout focus`; today it documents `/session` as the primary pane and `/context` as the supporting pane |
+| Watch-monitor preset | Persisted through `/layout watch-monitor`; today it documents `/watch status` as primary with `/watch history + /outputs` as the supporting lane |
+| Collaboration / handoff preset | Persisted through `/layout handoff`; today it documents `/collab` as primary with session summary + recent outputs as supporting context |
+| `/layout`, `/accessibility`, preset commands | `/layout` reports the current preset plus `multi-pane`/`stacked`/`single-pane` fallback, `/layout reset` returns to default mode, and `/accessibility status` mirrors the same fallback state |
+| Browser/dashboard mirrors | Keep the preset names and “primary vs supporting pane” vocabulary aligned now, even though the actual browser-side split-pane implementation is still future work |
 
 ### Wave 26 mood & celebration targets
 

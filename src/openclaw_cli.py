@@ -134,7 +134,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave22"  # updated with each UX wave batch
+_CLI_BUILD = "wave23"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -164,6 +164,8 @@ _PREFS: dict[str, Any] = {
     "emoji": True,         # show emoji in UI (False → ASCII fallbacks)
     "emoji_pack": "classic",  # "classic" | "minimal" | "ascii"
     "layout": "normal",   # "compact" | "normal" | "verbose" | "plain"
+    "layout_preset": "",  # "" | "focus" | "watch-monitor" | "handoff"
+    "layout_focus": "primary",  # "primary" | "supporting"
     "interactive_overlays": False,  # opt-in interactive pickers for supported list commands
     "emoji_headers": True,  # prepend emoji to markdown headings in AI responses
 }
@@ -325,6 +327,20 @@ def _normalize_personalization_prefs() -> None:
     if layout not in {"compact", "normal", "verbose", "plain"}:
         layout = "normal"
     _PREFS["layout"] = layout
+    preset = str(_PREFS.get("layout_preset", "") or "").strip().lower()
+    preset = {
+        "watch": "watch-monitor",
+        "monitor": "watch-monitor",
+        "collab": "handoff",
+        "collaboration": "handoff",
+    }.get(preset, preset)
+    if preset not in {"", "focus", "watch-monitor", "handoff"}:
+        preset = ""
+    _PREFS["layout_preset"] = preset
+    focus = str(_PREFS.get("layout_focus", "primary") or "primary").strip().lower()
+    if focus not in {"primary", "supporting"}:
+        focus = "primary"
+    _PREFS["layout_focus"] = focus
     pack = _emoji_pack_name()
     _PREFS["emoji_pack"] = pack
     _PREFS["emoji"] = pack != "ascii"
@@ -452,6 +468,275 @@ def _effective_layout_mode() -> str:
     if layout not in {"compact", "normal", "verbose", "plain"}:
         return "normal"
     return layout
+
+
+def _layout_preset_name() -> str:
+    """Return the normalized active layout preset name, if any."""
+    preset = str(_PREFS.get("layout_preset", "") or "").strip().lower()
+    return preset if preset in {"focus", "watch-monitor", "handoff"} else ""
+
+
+def _layout_focus_name() -> str:
+    """Return the active pane within the current layout preset."""
+    focus = str(_PREFS.get("layout_focus", "primary") or "primary").strip().lower()
+    return focus if focus in {"primary", "supporting"} else "primary"
+
+
+def _layout_preset_config(name: str = "") -> dict[str, str]:
+    """Return the documented surface pairing for a layout preset."""
+    preset = name or _layout_preset_name()
+    return {
+        "focus": {
+            "label": "focus",
+            "primary": "/session",
+            "supporting": "/context",
+        },
+        "watch-monitor": {
+            "label": "watch-monitor",
+            "primary": "/watch status",
+            "supporting": "/watch history + /outputs",
+        },
+        "handoff": {
+            "label": "handoff",
+            "primary": "/collab",
+            "supporting": "session summary + recent outputs",
+        },
+    }.get(preset, {})
+
+
+def _layout_preset_fallback(*, width: int | None = None, is_tty: bool | None = None) -> str:
+    """Return the current preset rendering fallback label."""
+    if not _layout_preset_name():
+        return "single-pane"
+    tty = (_IS_TTY or sys.stdout.isatty()) if is_tty is None else bool(is_tty)
+    cols = _terminal_width() if width is None else int(width)
+    if not tty or _a11y_plain_mode() or cols < 100:
+        return "single-pane"
+    if cols < 140:
+        return "stacked"
+    return "multi-pane"
+
+
+def _layout_pane_line_limit() -> int:
+    """Return the maximum number of lines shown per preset pane."""
+    return {
+        "compact": 6,
+        "normal": 9,
+        "verbose": 14,
+        "plain": 9,
+    }.get(_effective_layout_mode(), 9)
+
+
+def _layout_pane_block(title: str, lines: list[str], *, active: bool = False) -> list[str]:
+    """Return a bounded plain-text pane block for workspace presets."""
+    clean = [str(line).strip() for line in lines if str(line or "").strip()]
+    limit = _layout_pane_line_limit()
+    clipped = clean[:limit]
+    if len(clean) > limit:
+        clipped.append(f"… {len(clean) - limit} more line(s); open the source surface for full detail")
+    status = "ACTIVE" if active else "READY"
+    return [f"{status} · {title}"] + [f"  {line}" for line in clipped]
+
+
+def _layout_column_lines(left: list[str], right: list[str], *, width: int) -> list[str]:
+    """Lay out two pane blocks side-by-side using safe plain text."""
+    separator = " │ "
+    column_width = max(28, (max(width, 72) - len(separator)) // 2)
+
+    def _wrap(block: list[str]) -> list[str]:
+        rows: list[str] = []
+        for line in block:
+            rows.extend(
+                textwrap.wrap(
+                    str(line),
+                    width=column_width,
+                    break_long_words=False,
+                    break_on_hyphens=False,
+                )
+                or [""]
+            )
+        return rows
+
+    left_rows = _wrap(left)
+    right_rows = _wrap(right)
+    total_rows = max(len(left_rows), len(right_rows))
+    merged: list[str] = []
+    for index in range(total_rows):
+        left_line = left_rows[index] if index < len(left_rows) else ""
+        right_line = right_rows[index] if index < len(right_rows) else ""
+        merged.append(f"{left_line:<{column_width}}{separator}{right_line:<{column_width}}".rstrip())
+    return merged
+
+
+def _layout_outputs_lines(session_id: str) -> list[str]:
+    """Return compact recent-output lines for layout presets."""
+    outputs = list_saved_outputs(session_id, limit=3)
+    if not outputs:
+        return [
+            _status_cell("idle", detail="no saved outputs"),
+            "/outputs to inspect artifacts once something is saved",
+        ]
+    lines = [
+        _progress_cell("artifacts", str(len(list_saved_outputs(session_id, limit=0))), status="complete"),
+    ]
+    preview = load_saved_output_preview(session_id, "1", max_chars=OUTPUT_DASHBOARD_EXCERPT_CHARS)
+    if preview:
+        lines.append(
+            f"focused preview: {str(preview.get('name') or '').strip()} · "
+            f"{_format_byte_count(int(preview.get('size_bytes') or 0))}"
+        )
+        lines.extend(_preview_block_lines("excerpt", str(preview.get("preview") or ""), max_chars=OUTPUT_DASHBOARD_EXCERPT_CHARS))
+    for index, item in enumerate(outputs, start=1):
+        lines.append(
+            f"{index}. {str(item.get('name') or '').strip()} · "
+            f"{_format_byte_count(int(item.get('size_bytes') or 0))}"
+        )
+    return lines
+
+
+def _layout_collab_lines(session_id: str) -> list[str]:
+    """Return collaboration snapshot lines for layout presets."""
+    snapshot = build_collaboration_snapshot(session_id, limit=3)
+    actors = list(snapshot.get("actors") or [])
+    decisions = list(snapshot.get("recent_decisions") or [])
+    notes = list(snapshot.get("recent_notes") or [])
+    latest_handoff = snapshot.get("latest_handoff") or {}
+    lines = [
+        _progress_cell("actors", str(len(actors)), status="info" if actors else "idle"),
+        _progress_cell("decisions", str(len(decisions)), status="complete" if decisions else "idle"),
+    ]
+    for actor in actors[:2]:
+        lines.append(
+            f"actor: {str(actor.get('name') or 'operator').strip()} · "
+            f"{int(actor.get('event_count') or 0)} touchpoints"
+        )
+    if decisions:
+        lines.append(f"decision: {_single_line_excerpt(_format_collaboration_entry(decisions[0]), max_chars=96)}")
+    if notes:
+        lines.append(f"note: {_single_line_excerpt(_format_collaboration_entry(notes[0]), max_chars=96)}")
+    if latest_handoff:
+        lines.append(
+            f"handoff: {str(latest_handoff.get('id') or '').strip()} · "
+            f"{str(latest_handoff.get('created_at') or '').strip()}"
+        )
+    lines.append("/collab share to print the full handoff bundle")
+    return lines
+
+
+def _layout_watch_lines(state: dict[str, Any] | None) -> list[str]:
+    """Return watch-monitor lines for layout presets."""
+    if not state:
+        return [
+            _status_cell("idle", detail="no active watch"),
+            "Start one with: openclaw watch --goal …",
+            "/watch status to inspect the live control tower when a watch exists",
+        ]
+    state = normalize_watch_state(state)
+    timing = _watch_timing_summary(state)
+    lines = [
+        _progress_cell("status", str(state.get("status") or "active"), status=str(state.get("status") or "active")),
+        _progress_cell("polls", f"{int(state.get('poll_count') or 0)}/{int(state.get('max_polls') or 0) or '∞'}", status=str(state.get("status") or "active")),
+    ]
+    goal = str(state.get("goal") or "").strip()
+    if goal:
+        lines.append(f"goal: {_single_line_excerpt(goal, max_chars=96)}")
+    if timing["active_phase"]:
+        phase_line = timing["active_phase"]
+        if timing["active_phase_elapsed"] is not None:
+            phase_line += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+        lines.append(_progress_cell("phase", phase_line, status="active"))
+    lines.extend(_watch_focus_lines(state)[:4])
+    progress_log = list(state.get("progress_log") or [])
+    if progress_log:
+        latest = progress_log[-1]
+        note = str(latest.get("note") or latest.get("summary") or latest.get("content") or "").strip()
+        if note:
+            lines.append(f"latest checkpoint: {_single_line_excerpt(note, max_chars=96)}")
+    lines.append("/watch intervene <msg> to leave an operator breadcrumb")
+    return lines
+
+
+def _layout_session_lines(session: SessionSummary) -> list[str]:
+    """Return session health lines for layout presets."""
+    lines = [
+        session.title or session.session_id,
+        _progress_cell("status", str(session.status or "active"), status=session.status or "active"),
+        _progress_cell("updated", session.updated_at or "—", status="info"),
+        _progress_cell("files", str(len(session.files or [])), status="active" if session.files else "idle"),
+    ]
+    if session.cwd:
+        lines.append(f"cwd: {session.cwd}")
+    if session.plan_id:
+        lines.append(f"plan: {session.plan_id}")
+    if session.task_id:
+        lines.append(f"task: {session.task_id}")
+    lines.extend(_session_preview_lines(session))
+    return lines
+
+
+def _print_layout_preset_workspace(ctx: "ChatCommandContext") -> None:
+    """Render the active layout preset as a pane-like workspace view."""
+    preset = _layout_preset_name()
+    if not preset:
+        print("Workspace preset is single-pane. Use /layout preset focus|watch-monitor|handoff to opt in.")
+        return
+    session_id = str(ctx.session_id or "").strip()
+    if not session_id:
+        print(f"Workspace preset {_layout_preset_config(preset).get('label', preset)} saved. Resume a session, then run /layout show.")
+        return
+    session = load_session(session_id)
+    if session is None:
+        print(f"Workspace preset {_layout_preset_config(preset).get('label', preset)} saved. Resume a session, then run /layout show.")
+        return
+
+    focus = _layout_focus_name()
+    watch_state = load_watch_state(session.session_id)
+    if preset == "focus":
+        primary_title = "Session summary"
+        primary_lines = _layout_session_lines(session)
+        if watch_state:
+            supporting_title = "Watch monitor"
+            supporting_lines = _layout_watch_lines(watch_state)
+        elif session.output_count:
+            supporting_title = "Artifact preview"
+            supporting_lines = _layout_outputs_lines(session.session_id)
+        else:
+            supporting_title = "Collaboration snapshot"
+            supporting_lines = _layout_collab_lines(session.session_id)
+    elif preset == "watch-monitor":
+        primary_title = "Watch monitor"
+        primary_lines = _layout_watch_lines(watch_state)
+        supporting_title = "Recent artifacts"
+        supporting_lines = _layout_outputs_lines(session.session_id)
+    else:
+        primary_title = "Collaboration snapshot"
+        primary_lines = _layout_collab_lines(session.session_id)
+        supporting_title = "Session health"
+        supporting_lines = _layout_session_lines(session)
+
+    render_mode = _layout_preset_fallback()
+    width = _terminal_width(fallback=100)
+    header = [
+        f"Workspace preset: {_layout_preset_config(preset).get('label', preset)}",
+        f"Render mode: {render_mode}",
+        f"Active pane: {focus}",
+        "",
+    ]
+    primary_block = _layout_pane_block(primary_title, primary_lines, active=focus == "primary")
+    supporting_block = _layout_pane_block(supporting_title, supporting_lines, active=focus == "supporting")
+    if render_mode == "multi-pane":
+        body = _layout_column_lines(primary_block, supporting_block, width=width)
+    elif render_mode == "stacked":
+        body = [*primary_block, "", *supporting_block]
+    else:
+        active_block = primary_block if focus == "primary" else supporting_block
+        collapsed = supporting_title if focus == "primary" else primary_title
+        body = [
+            *active_block,
+            "",
+            f"Supporting pane collapsed. Open {collapsed.lower()} via its source command or widen the terminal.",
+        ]
+    print("\n".join(header + body))
 
 
 def _e(emoji: str, fallback: str = "") -> str:
@@ -7384,15 +7669,80 @@ def _cmd_emoji(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_layout(ctx: ChatCommandContext) -> str:
-    """Handler for /layout — switch layout density."""
+    """Handler for /layout — switch density or render preset workspaces."""
     token = ctx.args.strip().lower()
     valid_layouts = ("compact", "normal", "verbose", "plain")
+    preset_aliases = {
+        "focus": "focus",
+        "watch": "watch-monitor",
+        "watch-monitor": "watch-monitor",
+        "monitor": "watch-monitor",
+        "handoff": "handoff",
+        "collab": "handoff",
+        "collaboration": "handoff",
+    }
     if not token:
         current = _effective_layout_mode()
-        print(f"  Layout is currently {_B}{current}{_R}. Usage: /layout compact | normal | verbose | plain")
+        preset = _layout_preset_name()
+        print(f"  Layout is currently {_B}{current}{_R}.")
+        if preset:
+            config = _layout_preset_config(preset)
+            fallback = _layout_preset_fallback()
+            print(f"  Preset:           {_B}{config['label']}{_R} ({fallback})")
+            print(f"  Active pane:      {_layout_focus_name()}")
+            print(f"  Primary pane:     {config['primary']}")
+            print(f"  Supporting pane:  {config['supporting']}")
+            print("  Preview now with /layout show. Reset to single-pane with /layout reset.")
+        else:
+            print("  Preset:           single-pane default")
+            print("  Usage: /layout compact | normal | verbose | plain")
+            print("         /layout preset focus|watch-monitor|handoff")
+            print("         /layout show | /layout focus primary|supporting | /layout reset")
+        return _CMD_CONTINUE
+    if token == "show":
+        _print_layout_preset_workspace(ctx)
+        return _CMD_CONTINUE
+    if token.startswith("focus "):
+        requested_focus = token.split(None, 1)[1].strip()
+        if requested_focus not in {"primary", "supporting"}:
+            _print_error("Usage: /layout focus primary|supporting")
+            return _CMD_CONTINUE
+        if not _layout_preset_name():
+            _print_error("Choose a preset first: /layout preset focus|watch-monitor|handoff")
+            return _CMD_CONTINUE
+        _PREFS["layout_focus"] = requested_focus
+        _save_prefs()
+        _print_feedback(f"Active pane set to {requested_focus}.", level="success")
+        _print_layout_preset_workspace(ctx)
+        return _CMD_CONTINUE
+    preset_token = token.split(None, 1)[1].strip() if token.startswith("preset ") else token
+    if preset_token in preset_aliases:
+        preset = preset_aliases[preset_token]
+        _PREFS["layout_preset"] = preset
+        _PREFS["layout_focus"] = "primary"
+        _save_prefs()
+        config = _layout_preset_config(preset)
+        fallback = _layout_preset_fallback()
+        _print_feedback(
+            f"Layout preset set to {config['label']}.",
+            level="success",
+            detail=f"primary {config['primary']} · supporting {config['supporting']} · fallback {fallback}",
+        )
+        _print_layout_preset_workspace(ctx)
+        return _CMD_CONTINUE
+    if token in {"reset", "off", "default", "single", "single-pane"}:
+        _PREFS["layout_preset"] = ""
+        _PREFS["layout_focus"] = "primary"
+        _save_prefs()
+        _print_feedback("Layout preset reset to single-pane default.", level="success")
         return _CMD_CONTINUE
     if token not in valid_layouts:
-        print(f"{_BRE}error:{_R} Expected one of {', '.join(valid_layouts)}, got '{token}'")
+        print(
+            f"{_BRE}error:{_R} Expected one of "
+            "compact, normal, verbose, plain, preset <focus|watch-monitor|handoff>, "
+            "show, focus <primary|supporting>, or reset, "
+            f"got '{token}'"
+        )
         return _CMD_CONTINUE
     _PREFS["layout"] = token
     _PREFS[_A11Y_PLAIN_MODE] = token == "plain"
@@ -8759,7 +9109,7 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(
         SlashCommand(
             name="layout",
-            description="Switch layout density (/layout [compact|normal|verbose|plain])",
+            description="Switch density or preset workspaces (/layout [compact|normal|verbose|plain|preset|show])",
             handler=_cmd_layout,
         )
     )
@@ -8868,6 +9218,11 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         handler=_cmd_quality,
     ))
     registry.register(SlashCommand(
+        name="heatmap",
+        description="Show a color-coded hourly activity heatmap of openclaw usage",
+        handler=_cmd_heatmap,
+    ))
+    registry.register(SlashCommand(
         name="ratehint",
         description="Toggle the post-response rating hint (/ratehint [on|off])",
         handler=_cmd_ratehint,
@@ -8908,6 +9263,11 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Show keyboard shortcuts and quick-access reference card",
         handler=_cmd_shortcuts,
     ))
+    registry.register(SlashCommand(
+        name="stats",
+        description="Show ASCII bar charts of usage stats (/stats [commands|ratings|sessions])",
+        handler=_cmd_stats,
+    ))
     return registry
 
 
@@ -8945,10 +9305,10 @@ def print_chat_help(*, search: str = "") -> None:
         ("/edit <path> [--content TEXT]",  "Inspect or write a file (--append to append)"),
         ("/theme [name|list|preview|next|prev|reset]", "Manage UI themes and previews"),
         ("/emoji [on|off|pack|preview]", "Toggle emoji or switch emoji packs"),
-        ("/layout [compact|normal|verbose|plain]", "Switch layout density"),
+        ("/layout [compact|normal|verbose|plain|preset|show]", "Switch density or preset workspace views"),
         ("/sessions [search|related]",     "Browse or search recent sessions; /sessions overlay opens a picker"),
         ("/export [md|json|html]",         "Export conversation history to ~/Downloads"),
-        ("/stats",                         "Show aggregate usage stats across all sessions"),
+        ("/stats [commands|ratings|sessions]", "Show ASCII bar charts of usage statistics"),
         ("/tag [add|rm|list] <tag>",       "Manage tags on the current session"),
         ("/resume [last|<id>]",            "Print resume instructions for a past session"),
         ("/replay [session-id]",           "Re-print the current or a past session conversation"),
@@ -8976,6 +9336,7 @@ def print_chat_help(*, search: str = "") -> None:
         ("/macro rm <name>",                    "Delete a named macro"),
         ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
         ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
+        ("/heatmap",  "Show a color-coded 24-hour activity heatmap of openclaw usage"),
         ("/ratehint [on|off]",                   "Show or toggle the post-response rating hint"),
         ("/inject <path>",                       "Inject file content as context prefix for next message"),
         ("/inject --url <url>",                  "Inject URL content as context prefix for next message"),
@@ -10082,6 +10443,8 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
         pm   = "ON" if _a11y_plain_mode()     else "off"
         hc   = "ON" if _a11y_high_contrast()  else "off"
         layout = _effective_layout_mode()
+        preset = _layout_preset_name() or "single-pane"
+        preset_fallback = _layout_preset_fallback(width=cols, is_tty=_IS_TTY)
         rich = "yes" if _RICH_AVAILABLE else "no"
         tty  = "yes" if _IS_TTY else "no"
 
@@ -10092,6 +10455,8 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
             lines.append(f"  Plain mode:       {pm}\n",   style="bold" if pm == "ON" else "dim")
             lines.append(f"  High contrast:    {hc}\n",   style="bold" if hc == "ON" else "dim")
             lines.append(f"  Layout mode:      {layout}\n", style="dim")
+            lines.append(f"  Layout preset:    {preset}\n", style="dim")
+            lines.append(f"  Preset fallback:  {preset_fallback}\n", style="dim")
             lines.append(f"  Rich available:   {rich}\n", style="dim")
             lines.append(f"  TTY detected:     {tty}\n",  style="dim")
             lines.append(f"  Terminal width:   {cols} columns", style="dim")
@@ -10102,6 +10467,8 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
             print(f"  Plain mode:       {pm}")
             print(f"  High contrast:    {hc}")
             print(f"  Layout mode:      {layout}")
+            print(f"  Layout preset:    {preset}")
+            print(f"  Preset fallback:  {preset_fallback}")
             print(f"  Rich available:   {rich}")
             print(f"  TTY detected:     {tty}")
             print(f"  Terminal width:   {cols} columns")
@@ -10135,92 +10502,163 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
     return _CMD_CONTINUE
 
 
-def _cmd_quality(ctx: "ChatCommandContext") -> str:
-    """/quality — show response quality stats and rating history."""
+def _cmd_heatmap(ctx: ChatCommandContext) -> str:
+    """/heatmap — show a color-coded hourly activity heatmap of openclaw usage."""
+    import datetime
     is_tty = _IS_TTY or sys.stdout.isatty()
-    ratings: list[dict] = list(_PREFS.get("ratings", []))
 
-    if not ratings:
-        print(f"  {_DM}(no ratings yet — use /rate after responses){_R}")
+    cmd_history = _PREFS.get("cmd_history", [])
+
+    hour_counts: dict[int, int] = {h: 0 for h in range(24)}
+    day_counts: dict[int, int] = {d: 0 for d in range(7)}  # 0=Mon, 6=Sun
+
+    for entry in cmd_history:
+        if isinstance(entry, dict):
+            ts_str = entry.get("timestamp", entry.get("ts", ""))
+        else:
+            continue
+        if not ts_str:
+            continue
+        try:
+            ts = datetime.datetime.fromisoformat(ts_str)
+            hour_counts[ts.hour] = hour_counts.get(ts.hour, 0) + 1
+            day_counts[ts.weekday()] = day_counts.get(ts.weekday(), 0) + 1
+        except (ValueError, AttributeError):
+            continue
+
+    total = sum(hour_counts.values())
+
+    if total == 0:
+        msg = "No timestamped history yet — use openclaw for a while to see your heatmap!"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
         return _CMD_CONTINUE
 
-    total = len(ratings)
-    scores = [r.get("score", 0) for r in ratings]
-    avg = sum(scores) / total
+    max_hour = max(hour_counts.values()) or 1
 
-    # Distribution: count per score 1-5
-    dist: dict[int, int] = {i: 0 for i in range(1, 6)}
-    for s in scores:
-        if 1 <= s <= 5:
-            dist[s] += 1
-
-    max_count = max(dist.values()) or 1
-    bar_width = 20
-
-    star_labels = {
-        1: "⭐          poor ",
-        2: "⭐⭐         fair ",
-        3: "⭐⭐⭐        okay ",
-        4: "⭐⭐⭐⭐       good ",
-        5: "⭐⭐⭐⭐⭐ excellent ",
-    }
-
-    recent = ratings[-3:][::-1]
+    def _heat_color(count: int, max_count: int) -> str:
+        if count == 0:
+            return _DM
+        ratio = count / max_count
+        if ratio > 0.75:
+            return _RE
+        elif ratio > 0.5:
+            return _YE
+        elif ratio > 0.25:
+            return _GR
+        else:
+            return _CY
 
     if _RICH_AVAILABLE and is_tty:
-        content = _RichText()
-        content.append(f"  Total rated:   ", style="dim")
-        content.append(f"{total}", style="bold")
-        content.append(f" responses\n", style="dim")
-        content.append(f"  Average score: ", style="dim")
-        content.append(f"{avg:.1f}", style="bold cyan")
-        content.append(f" / 5.0\n\n", style="dim")
-
-        for star in range(1, 6):
-            count = dist[star]
-            filled = int(round(bar_width * count / max_count)) if count else 0
-            bar = "█" * filled
-            label = star_labels[star]
-            content.append(f"  {label}", style="dim")
-            content.append(f"{bar:<{bar_width}}", style="green")
-            content.append(f"  {count}\n", style="bold")
-
-        if recent:
-            content.append(f"\n  Recent ratings:\n", style="dim")
-            for r in recent:
-                ts = str(r.get("ts", ""))[:16]
-                score = r.get("score", "?")
-                label = r.get("label", "")
-                stars = "⭐" * int(score) if isinstance(score, int) else str(score)
-                content.append(f"    {ts}  ", style="dim")
-                content.append(f"{stars}", style="yellow")
-                if label:
-                    content.append(f"  {label}", style="dim")
-                content.append("\n")
-
-        _RICH_CONSOLE.print(_RichPanel(content, title=f"[bold]{_e('📊', '[quality]')} Response Quality[/]", border_style="cyan"))
+        _RICH_CONSOLE.print(f"\n[bold cyan]🕐 Hourly Activity Heatmap[/] [dim]({total} events)[/]\n")
     else:
-        print(f"\n  {_e('📊', '[quality]')} Response Quality\n")
-        print(f"  Total rated:   {_B}{total}{_R} responses")
-        print(f"  Average score: {_B}{avg:.1f}{_R} / 5.0\n")
-        for star in range(1, 6):
-            count = dist[star]
-            filled = int(round(bar_width * count / max_count)) if count else 0
-            bar = "█" * filled
-            label = star_labels[star]
-            print(f"  {label}{bar:<{bar_width}}  {count}")
-        if recent:
-            print(f"\n  Recent ratings:")
-            for r in recent:
-                ts = str(r.get("ts", ""))[:16]
-                score = r.get("score", "?")
-                label = r.get("label", "")
-                stars = "⭐" * int(score) if isinstance(score, int) else str(score)
-                line = f"    {ts}  {stars}"
-                if label:
-                    line += f"  {label}"
-                print(line)
-        print()
+        print(f"\n{_B}🕐 Hourly Activity Heatmap{_R} {_DM}({total} events){_R}\n")
+
+    hour_header = "  "
+    for h in range(0, 24, 2):
+        hour_header += f"{_DM}{h:02d}{_R}  "
+    print(hour_header)
+
+    heat_row = "  "
+    for h in range(24):
+        count = hour_counts[h]
+        color = _heat_color(count, max_hour)
+        block = "██" if count > 0 else "░░"
+        heat_row += f"{color}{block}{_R} "
+    print(heat_row)
+
+    count_row = "  "
+    for h in range(24):
+        count = hour_counts[h]
+        count_row += f"{_DM}{count:>2}{_R} "
+    print(count_row)
+
+    peak_hour = max(hour_counts, key=hour_counts.get)
+    peak_count = hour_counts[peak_hour]
+
+    print(f"\n  {_DM}Peak hour: {_B}{peak_hour:02d}:00{_R} {_DM}({peak_count} events)  ·  "
+          f"Legend: {_RE}██{_R}=hot  {_YE}██{_R}=warm  {_GR}██{_R}=mild  {_CY}██{_R}=cool  {_DM}░░=none{_R}\n")
+
+    return _CMD_CONTINUE
+
+
+def _cmd_quality(ctx: "ChatCommandContext") -> str:
+    """/quality — show a colored histogram of response quality ratings."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    ratings = _PREFS.get("ratings", [])
+
+    if not ratings:
+        msg = "No ratings yet. Use /rate 1-5 after responses to track quality."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    # Count scores 1-5 — handle both dict entries and raw integers
+    counts: dict[int, int] = {i: 0 for i in range(1, 6)}
+    for r in ratings:
+        if isinstance(r, dict):
+            score = r.get("score", r.get("rating", 0))
+        else:
+            try:
+                score = int(r)
+            except (ValueError, TypeError):
+                score = 0
+        if 1 <= score <= 5:
+            counts[score] = counts.get(score, 0) + 1
+
+    total = sum(counts.values())
+    max_count = max(counts.values()) if any(counts.values()) else 1
+    bar_height = 8  # rows tall
+
+    score_colors = {
+        1: _RE,
+        2: _YE,
+        3: _CY,
+        4: _GR,
+        5: _MA,
+    }
+    score_labels = {1: "1★", 2: "2★", 3: "3★", 4: "4★", 5: "5★"}
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold cyan]📊 Response Quality Distribution[/] [dim]({total} ratings)[/]\n")
+    else:
+        print(f"\n{_B}📊 Response Quality Distribution{_R} {_DM}({total} ratings){_R}\n")
+
+    # Vertical histogram: print bar_height rows from top to bottom
+    for row in range(bar_height, 0, -1):
+        threshold = (row / bar_height) * max_count
+        line = "  "
+        for score in range(1, 6):
+            count = counts[score]
+            color = score_colors[score]
+            if count >= threshold:
+                line += f"{color}  ██  {_R}"
+            else:
+                line += f"{_DM}  ░░  {_R}"
+        print(line)
+
+    # X-axis: star labels and counts
+    label_line = "  "
+    count_line = "  "
+    for score in range(1, 6):
+        color = score_colors[score]
+        label_line += f"{color} {score_labels[score]}  {_R}"
+        count_line += f"{_DM}({counts[score]:>2})  {_R}"
+    print(label_line)
+    print(count_line)
+
+    # Summary stats
+    if total > 0:
+        avg = sum(s * counts[s] for s in range(1, 6)) / total
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n  [dim]Average rating: [bold]{avg:.1f}[/]/5.0  ·  Total: {total}[/]\n")
+        else:
+            print(f"\n  {_DM}Average rating: {_B}{avg:.1f}{_R}{_DM}/5.0  ·  Total: {total}{_R}\n")
+
     return _CMD_CONTINUE
 
 
@@ -10312,6 +10750,78 @@ def _cmd_shortcuts(ctx: "ChatCommandContext") -> str:
             for key, desc in items:
                 print(f"  {key:<24} {desc}")
         print()
+
+    return _CMD_CONTINUE
+
+
+def _cmd_stats(ctx: "ChatCommandContext") -> str:
+    """/stats [category] — show ASCII bar charts of usage statistics (commands, ratings, sessions)."""
+    category = ctx.args.strip().lower() or "all"
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    cmd_history = _PREFS.get("cmd_history", [])
+    ratings = _PREFS.get("ratings", [])
+
+    def _ascii_bar_chart(title: str, data: dict, max_bar: int = 30, color: str = _CY) -> None:
+        if not data:
+            print(f"  {_DM}No data for {title}{_R}")
+            return
+        max_val = max(data.values()) if data else 1
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[bold cyan]{title}[/]")
+            for label, count in sorted(data.items(), key=lambda x: -x[1])[:10]:
+                bar_len = int((count / max_val) * max_bar)
+                bar = "█" * bar_len
+                _RICH_CONSOLE.print(f"  [dim]{label:<20}[/] [cyan]{bar:<30}[/] [bold]{count}[/]")
+        else:
+            print(f"\n{_B}{title}{_R}")
+            for label, count in sorted(data.items(), key=lambda x: -x[1])[:10]:
+                bar_len = int((count / max_val) * max_bar)
+                bar = "█" * bar_len
+                print(f"  {_DM}{label:<20}{_R} {color}{bar:<30}{_R} {_B}{count}{_R}")
+
+    cmd_counts: dict = {}
+    rating_counts: dict = {}
+
+    if category in ("all", "commands"):
+        for entry in cmd_history:
+            if isinstance(entry, dict):
+                cmd = entry.get("cmd", entry.get("command", "unknown"))
+            else:
+                cmd = str(entry)
+            cmd = cmd.split()[0] if cmd else "unknown"
+            cmd_counts[cmd] = cmd_counts.get(cmd, 0) + 1
+        _ascii_bar_chart("📊 Command Frequency", cmd_counts, color=_CY)
+
+    if category in ("all", "ratings"):
+        for r in ratings:
+            if isinstance(r, dict):
+                score = str(r.get("score", r.get("rating", "?")))
+            else:
+                score = str(r)
+            label = f"{'⭐' * int(score) if score.isdigit() else score}"
+            rating_counts[label] = rating_counts.get(label, 0) + 1
+        _ascii_bar_chart("⭐ Rating Distribution", rating_counts, color=_YE)
+
+    if category in ("all", "sessions"):
+        try:
+            from openclaw_cli_sessions import list_sessions  # type: ignore[import]
+            sessions = list_sessions()
+            date_counts: dict = {}
+            for s in sessions[-50:]:
+                ts = s.get("created_at", s.get("timestamp", ""))
+                date = ts[:10] if ts else "unknown"
+                date_counts[date] = date_counts.get(date, 0) + 1
+            _ascii_bar_chart("📅 Sessions by Date", date_counts, color=_GR)
+        except Exception:
+            pass
+
+    if not cmd_counts and not rating_counts:
+        msg = "No usage data yet. Chat a bit first!"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[dim]{msg}[/]\n")
+        else:
+            print(f"\n{_DM}{msg}{_R}\n")
 
     return _CMD_CONTINUE
 

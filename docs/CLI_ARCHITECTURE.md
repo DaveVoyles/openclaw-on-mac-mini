@@ -229,6 +229,26 @@ preview-block helper across every surface, the session picker does not expose
 inline share controls, and `/events` still relies on the existing dense list
 instead of a dedicated preview strip.
 
+### Wave 25 layout preset contract (current truth)
+
+Wave 25 has started shipping as a **layout-preset state layer**, not yet as a
+terminal TUI shell:
+
+- `_layout_preset_name()`, `_layout_preset_config()`, and
+  `_layout_preset_fallback()` define the current contract for persisted preset
+  names, their documented primary/supporting surface pairings, and the
+  downgrade path (`multi-pane`, `stacked`, or `single-pane`).
+- `_normalize_personalization_prefs()` now treats `layout_preset` like other
+  safe personalization state: aliases normalize to `focus`, `watch-monitor`, or
+  `handoff`, and unknown values are discarded.
+- `_cmd_layout()` is the live user-facing control plane for this slice: it sets
+  presets, reports the current pairing/fallback, and resets back to the default
+  single-pane mode without requiring a separate command family.
+- `/accessibility status` mirrors the current preset + fallback state so the
+  width/accessibility downgrade story stays visible in deterministic plain text.
+
+The actual pane compositor and active-pane focus management remain deferred.
+
 ### stderr vs stdout
 
 - `_print_update_notice()` → **stderr** (must not corrupt JSON output from `--json` flag)

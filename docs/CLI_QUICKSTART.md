@@ -187,6 +187,27 @@ existing overlays rather than as a brand-new TUI:
 - **`openclaw session show <session-id>`** remains the deeper inspection view
   when you want the full session/watch/checkpoint/output snapshot in one place.
 
+## Wave 25 layout presets (current slice)
+
+Wave 25 is currently a **preset-management** slice:
+
+- **`/layout focus`** stores the focus preset (`/session` primary,
+  `/context` supporting).
+- **`/layout watch-monitor`** stores the watch preset (`/watch status` primary,
+  `/watch history + /outputs` supporting).
+- **`/layout handoff`** stores the collaboration preset (`/collab` primary,
+  session summary + recent outputs supporting).
+- **`/layout`** reports the active preset and whether the current terminal can
+  honor it as `multi-pane`, must downgrade to `stacked`, or falls back to
+  `single-pane`.
+- **`/layout reset`** clears the preset and returns to the default single-pane
+  mode.
+- **`/accessibility status`** mirrors the preset + fallback state so you can
+  confirm how plain mode, non-TTY use, or a narrow terminal will collapse it.
+
+The actual split-pane canvas is still follow-up work; this slice ships the
+vocabulary, persistence, and fallback reporting first.
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new
@@ -227,6 +248,15 @@ openclaw session export <session-id>
 | `/shortcuts` | Show keyboard shortcuts & quick-reference card |
 
 > **Tip:** Press **Tab** at the prompt after typing `/` to auto-complete slash commands.
+
+### Wave 22 — Animated Progress & Celebrations
+
+| Command | Description |
+|---|---|
+| `/macrostatus` | Show saved macros with step counts and preview |
+| `/celebrate [message]` | Trigger a confetti celebration animation |
+
+> **New:** `/exec` now shows a live bouncing progress bar during command execution. Rate any response `/rate 5` to trigger the 🎉 celebration burst!
 
 ## Wave 22 status grammar (current slice)
 

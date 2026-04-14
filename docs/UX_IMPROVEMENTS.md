@@ -120,10 +120,10 @@ For the canonical inventory and reusable checklist, see
 | [Wave 19B](#wave-19b--interactive-overlays) | Interactive Overlays | ✅ Shipped |
 | [Wave 20](#wave-20--collaboration-handoff-ux) | Collaboration Handoff UX | ✅ Shipped |
 | [Wave 21](#wave-21--command-palette--tab-complete) | Command Palette & Tab-Complete | ✅ Shipped |
-| [Wave 22](#wave-22--emoji-badges-progress-cells--live-status-lattice) | Emoji Badges, Progress Cells & Live Status Lattice | 🟡 In progress |
+| [Wave 22](#wave-22--animated-progress-bars--celebrations) | Animated Progress Bars & Celebrations | ✅ Shipped |
 | [Wave 23](#wave-23--visual-hierarchy-renaissance--dashboard-elevation) | Visual Hierarchy Renaissance & Dashboard Elevation | 🔲 Ready |
 | [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | 🟡 In progress |
-| [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | 🔲 Ready |
+| [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | 🟡 In progress |
 | [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🔲 Ready |
 | [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | 🔲 Ready |
 | [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | 🔲 Ready |
@@ -1188,6 +1188,24 @@ and handoff data.
 - `_SlashCompleter` class replaces `_make_completer` for readline integration
 - Startup banner updated: `Tab completes /commands` hint added
 
+## Wave 22 — Animated Progress Bars & Celebrations
+
+**Status:** ✅ Shipped
+
+### Features
+- **`_progress_bar()`**: Deterministic colored ANSI bar — red below 33%, yellow to 66%, green above. Used internally for determinate progress display.
+- **`/exec` progress animation**: Long-running shell commands now show a bouncing indeterminate progress bar (braille-style) with elapsed time. Falls back to plain output on non-TTY or reduced-motion.
+- **Macro step tracker** (`_print_macro_progress()`): Shows live ✓/▸/dim step indicators as macros execute — current step highlighted in cyan, completed in green, pending dimmed.
+- **`/macrostatus`**: Rich table showing all saved macros with step count and first-step preview.
+- **`_celebration_burst()`**: 3-frame confetti animation triggered on 5-star `/rate` ratings. Respects reduced-motion and plain-mode.
+- **`/celebrate [message]`**: Manual celebration trigger for fun.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/macrostatus` | List saved macros with step counts |
+| `/celebrate [message]` | Trigger celebration animation |
+
 ## Deferred motion-language follow-up (post-Wave 21 note)
 
 The earlier roadmap draft accidentally duplicated Wave 21. Keep the shipped
@@ -1475,11 +1493,18 @@ switching or command hopping.
 
 ## Wave 25 — Multi-Pane Layout Presets
 
-**Status: 🔲 Ready**
+**Status: 🟡 In progress**
 
 **Goal:** introduce opt-in workspace presets that keep multiple related surfaces
 visible together for power users without turning the default CLI into a
 full-screen terminal app.
+
+**Current shipped slice:** Wave 25 currently ships the **preset contract**, not
+the full pane renderer. `/layout focus`, `/layout watch-monitor`, and
+`/layout handoff` now persist the named preset, `/layout` reports the current
+primary/supporting surface pairing plus the width/accessibility fallback, and
+`/layout reset` returns to the default single-pane mode. The actual multi-pane
+canvas remains follow-up work.
 
 ### Design targets
 
@@ -1495,11 +1520,11 @@ full-screen terminal app.
 
 | Area | Planned work |
 |---|---|
-| Layout preset model | Define named presets such as focus, watch-monitor, and handoff/collaboration, including which surfaces appear together |
-| Pane state management | Add lightweight state for active pane, remembered preset, and focus transitions without hard-coupling every command to a TUI shell |
+| Layout preset model | `focus`, `watch-monitor`, and `handoff` are now persisted as named presets with documented primary/supporting surface pairings |
+| Pane state management | Current state tracks the remembered preset and fallback mode; explicit active-pane focus transitions are still deferred |
 | Pane rendering shells | Reuse dashboard and preview primitives to draw side-by-side or stacked pane groups when the terminal width and mode allow it |
-| Persistence + commands | Document the preference keys and command entry points needed to enable, switch, inspect, and reset presets |
-| Fallback + width rules | Specify how multi-pane presets collapse on narrow terminals, plain mode, non-TTY execution, or overlay-disabled sessions |
+| Persistence + commands | `/layout <preset>`, `/layout`, and `/layout reset` now expose the first preset-management contract through the existing layout command |
+| Fallback + width rules | The current slice reports `multi-pane`, `stacked`, or `single-pane` fallback based on terminal width, TTY state, and plain mode |
 
 ### Implementation notes for the future wave
 
@@ -1518,7 +1543,7 @@ full-screen terminal app.
 
 | Surface group | Wave 25 expectation |
 |---|---|
-| `/layout`, `/accessibility`, preset commands | Users can discover current preset, width fallback, and how to reset to single-pane/default mode |
+| `/layout`, `/accessibility`, preset commands | Users can discover the persisted preset, the current width/accessibility fallback, and how to reset to single-pane/default mode |
 | Session + watch combinations | Focus presets pair session summary, watch control, and next actions without duplicating state labels |
 | Artifact + collaboration combinations | Handoff/collaboration presets surface recent outputs and actor notes beside session state |
 | Preview-capable surfaces | Wave 24 preview rules still apply inside panes; panes should not dump unbounded detail |
@@ -1526,12 +1551,13 @@ full-screen terminal app.
 
 ### Done-when
 
-- [ ] Named layout presets and their fallback rules are documented before code
+- [x] Named layout presets and their fallback rules are documented before code
       lands.
 - [ ] Multi-pane rendering is opt-in, accessibility-aware, and collapses cleanly
       on unsupported terminals.
-- [ ] Focus switching, preset persistence, and reset behavior are defined with
-      non-interactive equivalents.
+- [ ] Focus switching is defined with non-interactive equivalents.
+- [x] Preset persistence and reset behavior are defined through `/layout` and
+      `/accessibility status`.
 - [ ] `docs/DASHBOARD_SURFACES.md` records each preset’s intended surfaces and
       downgrade behavior.
 - [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated

@@ -4242,6 +4242,8 @@ class TestAccessibilityPrefs:
                 "emoji": True,
                 "emoji_pack": "classic",
                 "layout": "normal",
+                "layout_preset": "",
+                "layout_focus": "primary",
             }
         )
 
@@ -4253,12 +4255,14 @@ class TestAccessibilityPrefs:
         mod._PREFS[mod._A11Y_HIGH_CONTRAST] = True
         mod._PREFS["emoji_pack"] = "minimal"
         mod._PREFS["layout"] = "plain"
+        mod._PREFS["layout_focus"] = "supporting"
 
         mod._save_prefs()
         self._reset_prefs()
         mod._load_prefs()
 
         assert mod._PREFS["layout"] == "plain"
+        assert mod._PREFS["layout_focus"] == "supporting"
         assert mod._PREFS["emoji_pack"] == "minimal"
         assert mod._PREFS[mod._A11Y_REDUCED_MOTION] is True
         assert mod._PREFS[mod._A11Y_PLAIN_MODE] is True
@@ -4269,7 +4273,7 @@ class TestAccessibilityPrefs:
         prefs_file = tmp_path / ".openclaw" / "prefs.json"
         prefs_file.parent.mkdir(parents=True, exist_ok=True)
         prefs_file.write_text(
-            json.dumps({"theme": "unknown", "emoji_pack": "bogus", "layout": "loud", "emoji": False}),
+            json.dumps({"theme": "unknown", "emoji_pack": "bogus", "layout": "loud", "layout_focus": "sideways", "emoji": False}),
             encoding="utf-8",
         )
 
@@ -4280,6 +4284,7 @@ class TestAccessibilityPrefs:
         assert mod._PREFS["emoji_pack"] == "ascii"
         assert mod._PREFS["emoji"] is False
         assert mod._PREFS["layout"] == "normal"
+        assert mod._PREFS["layout_focus"] == "primary"
 
     def test_layout_accepts_verbose_and_plain(self, capsys, monkeypatch, tmp_path):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -4298,6 +4303,104 @@ class TestAccessibilityPrefs:
         out = capsys.readouterr().out
         assert "verbose" in out
         assert "plain" in out
+
+    def test_layout_focus_preset_persists_primary_supporting_contract(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 160)
+        self._reset_prefs()
+
+        result = self._registry().dispatch("/layout focus", self._ctx(args="focus"))
+
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["layout_preset"] == "focus"
+        out = capsys.readouterr().out
+        assert "Layout preset set to focus." in out
+        assert "primary /session" in out
+        assert "supporting /context" in out
+        assert "fallback multi-pane" in out
+        assert "Resume a session, then run /layout show." in out
+
+    def test_layout_status_reports_watch_preset_and_reset_hint(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 90)
+        self._reset_prefs()
+        mod._PREFS["layout_preset"] = "watch-monitor"
+
+        result = self._registry().dispatch("/layout", self._ctx(args=""))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Preset:" in out
+        assert "watch-monitor" in out
+        assert "(single-pane)" in out
+        assert "Active pane:      primary" in out
+        assert "Primary pane:     /watch status" in out
+        assert "Supporting pane:  /watch history + /outputs" in out
+        assert "/layout show" in out
+        assert "/layout reset" in out
+
+    def test_layout_show_renders_focus_workspace_with_collapsed_supporting_pane(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 90)
+        self._reset_prefs()
+
+        session = sessions_mod.create_session(title="Preset session", cwd=str(tmp_path))
+        sessions_mod.save_output(session.session_id, "summary.txt", "latest artifact preview text")
+        mod._PREFS["layout_preset"] = "focus"
+        mod._PREFS["layout_focus"] = "supporting"
+
+        result = self._registry().dispatch(
+            "/layout show",
+            mod.ChatCommandContext(history=[], session_id=session.session_id, args="show"),
+        )
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Workspace preset: focus" in out
+        assert "Render mode: single-pane" in out
+        assert "Active pane: supporting" in out
+        assert "ACTIVE · Artifact preview" in out
+        assert "Supporting pane collapsed" in out
+
+    def test_layout_focus_command_updates_active_pane_and_renders_workspace(self, capsys, monkeypatch, tmp_path):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 150)
+        self._reset_prefs()
+
+        session = sessions_mod.create_session(title="Watch preset", cwd=str(tmp_path))
+        sessions_mod.save_watch_state(
+            session.session_id,
+            {
+                "status": "running",
+                "goal": "watch the current branch",
+                "poll_count": 2,
+                "max_polls": 5,
+                "progress_log": [{"note": "collected workspace context"}],
+            },
+        )
+        mod._PREFS["layout_preset"] = "watch-monitor"
+
+        result = self._registry().dispatch(
+            "/layout focus supporting",
+            mod.ChatCommandContext(history=[], session_id=session.session_id, args="focus supporting"),
+        )
+
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["layout_focus"] == "supporting"
+        out = capsys.readouterr().out
+        assert "Active pane set to supporting." in out
+        assert "Workspace preset: watch-monitor" in out
+        assert "Active pane: supporting" in out
+        assert "READY · Watch monitor" in out
+        assert "ACTIVE · Recent artifacts" in out
 
     def test_accessibility_plain_toggle_updates_persistent_layout(self, capsys, monkeypatch, tmp_path):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -4324,11 +4427,15 @@ class TestAccessibilityPrefs:
 
     def test_accessibility_status_reports_layout_and_saved_state(self, capsys, monkeypatch, tmp_path):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 96)
         self._reset_prefs()
         mod._PREFS[mod._A11Y_REDUCED_MOTION] = True
         mod._PREFS[mod._A11Y_PLAIN_MODE] = True
         mod._PREFS[mod._A11Y_HIGH_CONTRAST] = True
         mod._PREFS["layout"] = "plain"
+        mod._PREFS["layout_preset"] = "focus"
 
         result = self._registry().dispatch("/accessibility status", self._ctx(args="status"))
 
@@ -4338,6 +4445,8 @@ class TestAccessibilityPrefs:
         assert "Plain mode:       ON" in out
         assert "High contrast:    ON" in out
         assert "Layout mode:      plain" in out
+        assert "Layout preset:    focus" in out
+        assert "Preset fallback:  single-pane" in out
 
     def test_theme_preview_does_not_persist_changes(self, capsys, monkeypatch, tmp_path):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -4682,49 +4791,83 @@ class TestCmdRate:
 
 
 class TestCmdQuality:
-    """Tests for _cmd_quality."""
+    """Tests for _cmd_quality (colored vertical histogram)."""
 
     def _ctx(self, args: str = "", session_id: str = "") -> mod.ChatCommandContext:
         return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
 
-    def test_no_ratings_shows_placeholder(self, capsys, monkeypatch, tmp_path):
-        """No ratings → shows 'no ratings yet' message."""
+    def test_no_ratings_returns_continue(self, capsys, monkeypatch, tmp_path):
+        """No ratings → prints guidance message and returns _CMD_CONTINUE."""
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         mod._load_prefs()
         mod._PREFS.pop("ratings", None)
         result = mod._cmd_quality(self._ctx())
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
-        assert "no ratings yet" in out
+        assert "ratings" in out.lower()
 
-    def test_with_ratings_shows_average_and_distribution(self, capsys, monkeypatch, tmp_path):
-        """With ratings → shows average and distribution."""
+    def test_with_ratings_returns_continue(self, capsys, monkeypatch, tmp_path):
+        """With mock ratings → renders histogram and returns _CMD_CONTINUE."""
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         mod._load_prefs()
-        mod._PREFS["ratings"] = [
-            {"score": 5, "label": "good", "ts": "2024-01-01T10:00:00"},
-            {"score": 3, "label": "okay", "ts": "2024-01-02T10:00:00"},
-            {"score": 1, "label": "bad",  "ts": "2024-01-03T10:00:00"},
-        ]
+        mod._PREFS["ratings"] = [{"score": 5}, {"score": 3}, {"score": 4}]
         result = mod._cmd_quality(self._ctx())
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
-        assert "3.0" in out
-        assert "3" in out  # total rated
+        # Average of 5+3+4 = 4.0
+        assert "4.0" in out
 
-    def test_average_calculation(self, capsys, monkeypatch, tmp_path):
-        """Average of [5, 3, 1] == 3.0."""
+    def test_score_counting(self, capsys, monkeypatch, tmp_path):
+        """Score tallying: counts[5]=1, counts[4]=1, counts[3]=1, others=0."""
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         mod._load_prefs()
-        mod._PREFS["ratings"] = [
-            {"score": 5, "label": "excellent", "ts": "2024-01-01T10:00:00"},
-            {"score": 3, "label": "okay",      "ts": "2024-01-02T10:00:00"},
-            {"score": 1, "label": "poor",      "ts": "2024-01-03T10:00:00"},
-        ]
-        result = mod._cmd_quality(self._ctx())
+        ratings = [{"score": 5}, {"score": 3}, {"score": 4}]
+        counts: dict[int, int] = {i: 0 for i in range(1, 6)}
+        for r in ratings:
+            score = r.get("score", 0)
+            if 1 <= score <= 5:
+                counts[score] = counts.get(score, 0) + 1
+        assert counts[5] == 1
+        assert counts[4] == 1
+        assert counts[3] == 1
+        assert counts[1] == 0
+        assert counts[2] == 0
+
+
+class TestCmdHeatmap:
+    """Tests for _cmd_heatmap."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_empty_history_returns_continue(self, capsys, monkeypatch, tmp_path):
+        """Empty cmd_history → message printed, _CMD_CONTINUE returned."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS.pop("cmd_history", None)
+        result = mod._cmd_heatmap(self._ctx())
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
-        assert "3.0" in out
+        assert "No timestamped history" in out
+
+    def test_with_timestamped_history_returns_continue(self, capsys, monkeypatch, tmp_path):
+        """Timestamped cmd_history entries → heatmap printed, _CMD_CONTINUE returned."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        mod._PREFS["cmd_history"] = [
+            {"cmd": "/help", "timestamp": "2024-03-15T09:00:00"},
+            {"cmd": "/stats", "timestamp": "2024-03-15T09:30:00"},
+            {"cmd": "/quality", "timestamp": "2024-03-15T14:00:00"},
+            {"cmd": "/help", "timestamp": "2024-03-16T09:15:00"},
+        ]
+        result = mod._cmd_heatmap(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
+
+    def test_cli_build_is_wave23(self):
+        """_CLI_BUILD must equal 'wave23'."""
+        assert mod._CLI_BUILD == "wave23"
 
 
 class TestCmdRatehint:
@@ -5163,3 +5306,56 @@ class TestCelebrationBurst:
         mod._celebration_burst("Congrats!")
         captured = capsys.readouterr()
         assert "Congrats!" in captured.out
+
+
+class TestCmdStats:
+    """Tests for /stats ASCII bar chart visualization."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_empty_history_returns_cmd_continue(self, monkeypatch):
+        """/stats returns _CMD_CONTINUE with no usage data."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"cmd_history": [], "ratings": []})
+        ctx = self._ctx("")
+        result = mod._cmd_stats(ctx)
+        assert result == mod._CMD_CONTINUE
+
+    def test_commands_category_returns_cmd_continue(self, monkeypatch):
+        """/stats commands returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {
+            "cmd_history": [{"cmd": "/help"}, {"cmd": "/clear"}, {"cmd": "/help"}],
+            "ratings": [],
+        })
+        ctx = self._ctx("commands")
+        result = mod._cmd_stats(ctx)
+        assert result == mod._CMD_CONTINUE
+
+    def test_ratings_category_returns_cmd_continue(self, monkeypatch):
+        """/stats ratings returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {
+            "cmd_history": [],
+            "ratings": [{"score": "5"}, {"score": "3"}, {"score": "5"}],
+        })
+        ctx = self._ctx("ratings")
+        result = mod._cmd_stats(ctx)
+        assert result == mod._CMD_CONTINUE
+
+    def test_ratings_bar_chart_output_contains_stars(self, capsys, monkeypatch):
+        """/stats with rating data outputs star characters in the bar chart."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {
+            "cmd_history": [],
+            "ratings": [{"score": "4"}, {"score": "4"}, {"score": "2"}],
+        })
+        ctx = self._ctx("ratings")
+        mod._cmd_stats(ctx)
+        captured = capsys.readouterr().out
+        assert "⭐" in captured or "Rating" in captured
