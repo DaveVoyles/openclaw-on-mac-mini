@@ -10,12 +10,12 @@
 
 | Wave | Title | Risk | Status |
 |------|-------|------|--------|
-| TD-1 | Quick Wins — Deprecations & Hardcoded Values | 🟢 Low | ⏳ Pending |
-| TD-2 | De-duplicate Structural Patterns | 🟡 Medium | ⏳ Pending |
-| TD-3 | Move Regex Compilation to Module Level | 🟢 Low | ⏳ Pending |
-| TD-4 | Response Pipeline Refactor | 🟡 Medium | ⏳ Pending |
-| TD-5 | Data-Driven Command Registry | 🟡 Medium | ⏳ Pending |
-| TD-6 | God Function Decomposition | 🔴 High | ⏳ Pending |
+| TD-1 | Quick Wins — Deprecations & Hardcoded Values | 🟢 Low | ✅ Shipped (`8ffe163`) |
+| TD-2 | De-duplicate Structural Patterns | 🟡 Medium | ✅ Shipped (`e7363e6`) |
+| TD-3 | Move Regex Compilation to Module Level | 🟢 Low | ✅ Shipped (bundled in TD-1) |
+| TD-4 | Response Pipeline Refactor | 🟡 Medium | ✅ Shipped (`bf4ce70`) |
+| TD-5 | Data-Driven Command Registry | 🟡 Medium | ✅ Shipped (`bf4ce70`) |
+| TD-6 | God Function Decomposition | 🔴 High | 🔄 In Progress |
 | TD-7 | Module Split | 🔴 High | ⏳ Pending |
 
 ---

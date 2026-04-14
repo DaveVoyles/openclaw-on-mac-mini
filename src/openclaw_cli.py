@@ -13311,6 +13311,56 @@ def _apply_all_custom_keybinds() -> None:
         _apply_custom_keybind(key_name, action)
 
 
+def _setup_readline() -> None:
+    """Configure readline tab completion and keyboard shortcuts for the REPL."""
+    if readline is None:
+        return
+    _slash_completer = _SlashCompleter()
+    readline.set_completer(_slash_completer.complete)
+    readline.set_completer_delims(" \t\n")
+    readline.parse_and_bind("tab: complete")
+    try:
+        import readline as _rl
+        # Ensure emacs mode is active so Ctrl-R reverse search works natively.
+        _rl.parse_and_bind("set editing-mode emacs")
+        # Ctrl-L: clear screen
+        _rl.parse_and_bind(r'"\C-l": clear-screen')
+        # Ctrl-W: delete word backward
+        _rl.parse_and_bind(r'"\C-w": backward-kill-word')
+        # Ctrl-U: kill line (explicit for clarity)
+        _rl.parse_and_bind(r'"\C-u": unix-line-discard')
+    except (ImportError, AttributeError):
+        pass
+    _apply_all_custom_keybinds()
+
+
+def _maybe_show_startup_tip(config: "CliConfig", session_id: str, history: list) -> None:
+    """Optionally display a random startup tip and first-run checklist."""
+    import random as _random
+    _is_tty_startup = _get_is_tty()
+    if _random.random() < 0.3 and not _a11y_plain_mode() and _is_tty_startup and not config.output_json:
+        _startup_tip = _random.choice(_OPENCLAW_TIPS)
+        if _RICH_AVAILABLE:
+            _RICH_CONSOLE.print(f"[dim]💡 {_startup_tip}[/]\n")
+        else:
+            print(f"{_DM}💡 {_startup_tip}{_R}\n")
+    # First-run checklist: show tips when starting a brand-new empty session
+    if session_id and not history and _is_tty_startup and not config.output_json:
+        _print_first_run_tips()
+
+
+def _read_multiline_input(input_func: Any, prompt_str: str) -> str:
+    """Collect multiline input lines until the user types \\end."""
+    print(f"  {_DM}[multiline — type \\end to submit]{_R}")
+    lines: list[str] = []
+    while True:
+        line = str(input_func(prompt_str)).rstrip("\n")
+        if line.strip().lower() == r"\end":
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
 def run_chat(
     config: CliConfig,
     *,
@@ -13323,51 +13373,15 @@ def run_chat(
     history: list[dict[str, str]] = load_conversation_history(session_id) if session_id else []
     registry = build_chat_command_registry()
     load_shell_history()
-    # Wire tab completion for /commands when readline is available.
-    if readline is not None:
-        _slash_completer = _SlashCompleter()
-        readline.set_completer(_slash_completer.complete)
-        readline.set_completer_delims(" \t\n")
-        readline.parse_and_bind("tab: complete")
-        try:
-            import readline as _rl
-            # Ensure emacs mode is active so Ctrl-R reverse search works natively.
-            _rl.parse_and_bind("set editing-mode emacs")
-            # Ctrl-L: clear screen
-            _rl.parse_and_bind(r'"\C-l": clear-screen')
-            # Ctrl-W: delete word backward
-            _rl.parse_and_bind(r'"\C-w": backward-kill-word')
-            # Ctrl-U: kill line (explicit for clarity)
-            _rl.parse_and_bind(r'"\C-u": unix-line-discard')
-        except (ImportError, AttributeError):
-            pass
-        _apply_all_custom_keybinds()
+    _setup_readline()
     _print_startup_banner(config, session_id)
-    # Occasionally show a random tip on startup (~30% chance)
-    import random as _random
-    _is_tty_startup = _get_is_tty()
-    if _random.random() < 0.3 and not _a11y_plain_mode() and _is_tty_startup and not config.output_json:
-        _startup_tip = _random.choice(_OPENCLAW_TIPS)
-        if _RICH_AVAILABLE:
-            _RICH_CONSOLE.print(f"[dim]💡 {_startup_tip}[/]\n")
-        else:
-            print(f"{_DM}💡 {_startup_tip}{_R}\n")
-    # First-run checklist: show tips when starting a brand-new empty session
-    if session_id and not history and _is_tty_startup and not config.output_json:
-        _print_first_run_tips()
+    _maybe_show_startup_tip(config, session_id, history)
     while True:
         try:
             autoroute_on = _session_auto_route_enabled(session_id)
             prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode)
             if _multiline_mode:
-                print(f"  {_DM}[multiline — type \\end to submit]{_R}")
-                _lines: list[str] = []
-                while True:
-                    _line = str(input_func(prompt_str)).rstrip("\n")
-                    if _line.strip().lower() == r"\end":
-                        break
-                    _lines.append(_line)
-                prompt = "\n".join(_lines).strip()
+                prompt = _read_multiline_input(input_func, prompt_str)
             else:
                 prompt = str(input_func(prompt_str)).strip()
         except EOFError:
