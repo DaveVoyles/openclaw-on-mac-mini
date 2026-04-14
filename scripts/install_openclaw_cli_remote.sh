@@ -38,6 +38,7 @@ CLI_FILES=(
   openclaw_cli_ui_core.py
   openclaw_cli_ui_utils.py
   openclaw_cli_render.py
+  openclaw_cli_types.py
   openclaw_cli_update.py
   openclaw_cli_watch.py
   subprocess_utils.py

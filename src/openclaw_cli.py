@@ -231,6 +231,15 @@ except ImportError:  # pragma: no cover
 
 import openclaw_cli_health as _health_mod
 from openclaw_cli_health import HealthResponse
+import openclaw_cli_types as _types_mod
+from openclaw_cli_types import (
+    AskResponse,
+    ChatCommandContext,
+    ChatCommandRegistry,
+    CliConfig,
+    LocalLinkValidation,
+    SlashCommand,
+)
 import openclaw_cli_render as _render_mod
 from openclaw_cli_render import _render_markdown_ansi  # re-exported; implementation lives in render module
 import openclaw_cli_preprocess as _preprocess_mod
@@ -1063,46 +1072,11 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     return _ui_utils_mod._with_spinner(label, fn, *args, output_json=output_json, _override_is_tty=_IS_TTY, _override_heartbeat_secs=_SPINNER_HEARTBEAT_SECONDS, **kwargs)
 
 
-@dataclass
-class AskResponse:
-    """Structured response from the OpenClaw ask API."""
-
-    response: str
-    model: str
-    tokens: int
-    raw: dict[str, Any]
-
+# AskResponse, LocalLinkValidation, CliConfig — moved to openclaw_cli_types; imported at top of file.
 
 # HealthResponse — moved to openclaw_cli_health; imported at top of file.
 
-@dataclass(frozen=True)
-class LocalLinkValidation:
-    """Result of checking a plan/task identifier against local on-disk sources."""
-
-    kind: str
-    item_id: str
-    available: bool
-    exists: bool = False
-    source: str = ""
-    summary: str = ""
-
-
 # ReplRouteStepContext, ReplRouteGrounding — imported from openclaw_cli_router above.
-
-
-@dataclass
-class CliConfig:
-    """Resolved runtime configuration for a CLI invocation."""
-
-    base_url: str
-    token: str
-    model: str
-    timeout_seconds: int
-    user_name: str
-    client_name: str
-    output_json: bool = False
-    session_id: str = ""
-    no_stream: bool = False
 
 
 def normalize_base_url(raw_url: str | None) -> str:
@@ -2570,68 +2544,7 @@ _CMD_CONTINUE: str = "continue"  # sentinel: command handled, keep the REPL loop
 _CMD_QUIT: str = "quit"           # sentinel: command handled, exit the REPL
 
 
-@dataclass
-class ChatCommandContext:
-    """Mutable context passed to every slash-command handler."""
-
-    history: list[dict[str, str]]
-    session_id: str
-    args: str = ""  # text after the command name, stripped
-    config: Any = None  # CliConfig instance when running inside run_chat
-    route_metadata: dict[str, Any] | None = None
-    command_ok: bool = True
-    command_summary: str = ""
-
-
-@dataclass
-class SlashCommand:
-    """A single registered slash command with optional aliases."""
-
-    name: str
-    description: str
-    handler: Callable[["ChatCommandContext"], str]
-    aliases: tuple[str, ...] = ()
-
-
-class ChatCommandRegistry:
-    """Maps slash-command names (without the leading /) to handlers."""
-
-    def __init__(self) -> None:
-        self._commands: list[SlashCommand] = []
-        self._lookup: dict[str, SlashCommand] = {}
-
-    def register(self, cmd: SlashCommand) -> None:
-        self._commands.append(cmd)
-        self._lookup[cmd.name] = cmd
-        for alias in cmd.aliases:
-            self._lookup[alias] = cmd
-
-    def dispatch(self, text: str, ctx: ChatCommandContext) -> str | None:
-        """Route *text* to a handler if it starts with '/'.
-
-        Returns a sentinel string (_CMD_CONTINUE or _CMD_QUIT) when handled,
-        or None when the text is not a recognised slash command.
-
-        Text after the command name is placed in ``ctx.args`` so handlers can
-        accept optional arguments without needing separate registry entries.
-        """
-        if not text.startswith("/"):
-            return None
-        parts = text[1:].split(maxsplit=1)
-        cmd_name = parts[0] if parts else ""
-        if not cmd_name:
-            return None
-        cmd = self._lookup.get(cmd_name)
-        if cmd is None:
-            return None
-        ctx.args = parts[1] if len(parts) > 1 else ""
-        ctx.command_ok = True
-        ctx.command_summary = ""
-        return cmd.handler(ctx)
-
-    def list_commands(self) -> list[SlashCommand]:
-        """Return the primary commands in registration order."""
-        return list(self._commands)
+# ChatCommandContext, SlashCommand, ChatCommandRegistry — moved to openclaw_cli_types; imported at top of file.
 
 
 def _routed_plan_metadata(ctx: ChatCommandContext) -> dict[str, Any]:
