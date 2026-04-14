@@ -254,6 +254,14 @@ vocabulary, persistence, and fallback reporting first.
 | `/benchmark [n]` | Benchmark AI server latency (n pings, default 3) |
 | `/timeline` | Visual activity timeline grouped by day (last 7 days) |
 
+### Wave 31 — Smart Suggestions, Export & Color Schemes 🎨
+
+| Command | Description |
+|---------|-------------|
+| `/followup [on\|off]` | Show contextual next-step suggestions after each response |
+| `/export [md\|json\|txt] [file]` | Export session history to a formatted file |
+| `/colorscheme [name\|list\|reset]` | Set extended color theme (cyberpunk/ocean/sunset/matrix) |
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new

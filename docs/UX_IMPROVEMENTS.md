@@ -129,6 +129,7 @@ For the canonical inventory and reusable checklist, see
 | [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | ✅ Shipped |
 | [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | ✅ Shipped |
 | [Wave 30](#wave-30--premium-motion--choreography-layer) | Premium Motion & Choreography Layer | ✅ Shipped |
+| [Wave 31](#wave-31--smart-suggestions-export--color-schemes-) | Smart Suggestions, Export & Color Schemes | ✅ Shipped |
 
 ---
 
@@ -2220,3 +2221,18 @@ scp src/openclaw_cli_sessions.py macbook:/Users/davevoyles/.local/share/openclaw
 - `/benchmark` uses TCP socket ping (no auth required, works with any endpoint)
 - `/timeline` groups `cmd_history` entries by ISO date, shows last 3 events per day
 - All three commands respect accessibility flags (`_a11y_plain_mode`, `_a11y_reduced_motion`)
+
+## Wave 31 — Smart Suggestions, Export & Color Schemes 🎨 ✅ Shipped
+
+**Goal:** Help users discover what to do next, save their work, and personalize their visual environment.
+
+### Features
+- **`/followup [on|off]`** — After each AI response, shows 2–3 dim contextual suggestions (e.g., `/exec`, `/links`, `/diff`) based on keyword matching in the last prompt. Toggle auto-display with `/followup off`. Respects reduced-motion and plain-mode.
+- **`/export [md|json|txt] [filename]`** — Exports session command history to a formatted file. Markdown includes timestamps and numbered entries; JSON includes metadata; plain text is clean and portable.
+- **`/colorscheme [name|list|reset]`** — Five named color schemes: `cyberpunk 🌆` (magenta/cyan), `ocean 🌊` (cyan/blue), `sunset 🌅` (yellow/red), `matrix 🟩` (all greens), `default 🦞`. Persisted to prefs via `_save_prefs()`.
+
+### Implementation Notes
+- `_suggest_followups()` uses keyword matching across 8 topic categories
+- `_EXTENDED_SCHEMES` dict maps scheme names to ANSI color codes
+- `/followup` auto-renders as a dim footer in `run_chat()` after every response when `show_suggestions` pref is True
+- All commands respect `_a11y_plain_mode()` and `_a11y_reduced_motion()` guards
