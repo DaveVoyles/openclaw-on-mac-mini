@@ -76,7 +76,7 @@ Steps:
 | [Wave 10](#wave-10--guided-workflows--recovery) | Guided Workflows & Recovery | ✅ Shipped |
 | [Wave 11](#wave-11--workspace-handoffs) | Workspace Handoffs | ✅ Shipped |
 | [Wave 12](#wave-12--automation-control-tower) | Automation Control Tower | ✅ Shipped |
-| [Wave 13](#wave-13--trust--explainability) | Trust & Explainability | 🔲 Ready |
+| [Wave 13](#wave-13--trust--explainability) | Trust & Explainability | ✅ Shipped |
 | [Wave 14](#wave-14--composer--input-flow) | Composer & Input Flow | 🔲 Ready |
 | [Wave 15](#wave-15--accessibility--adaptive-layout) | Accessibility & Adaptive Layout | 🔲 Ready |
 
@@ -662,7 +662,7 @@ from inside the CLI instead of buried in JSON state files.
 
 ## Wave 13 — Trust & Explainability
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped**
 
 **Goal:** Help users understand why the CLI took an action, what context it
 used, and what confidence they should place in the result. The agent should

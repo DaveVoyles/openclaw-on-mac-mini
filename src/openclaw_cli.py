@@ -93,6 +93,13 @@ _latest_version: str | None = None
 # Set to True by the background update-check thread when standalone file hashes differ from server.
 _standalone_needs_update: bool = False
 
+# Draft buffer — ephemeral unsent prompt (cleared on submission or /draft clear)
+_draft_buffer: str = ""
+# Last interrupted prompt for restore-last (set on KeyboardInterrupt/Ctrl-C)
+_last_interrupted_prompt: str = ""
+# Multiline compose mode — toggled by /draft multiline on/off
+_multiline_mode: bool = False
+
 
 def _c(code: str) -> str:
     """Return an ANSI escape code only when stdout is a real terminal."""
@@ -5727,6 +5734,141 @@ def _cmd_layout(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_draft(ctx: ChatCommandContext) -> str:
+    """Handler for /draft — save, load, clear, or restore a draft prompt."""
+    global _draft_buffer, _last_interrupted_prompt, _multiline_mode
+
+    parts = ctx.args.strip().split(None, 1)
+    sub = parts[0].lower() if parts else ""
+
+    if sub == "save":
+        text = parts[1].strip() if len(parts) > 1 else ""
+        if not text:
+            print(f"  {_DM}Usage: /draft save <text to draft>{_R}")
+            return _CMD_CONTINUE
+        _draft_buffer = text
+        print(f"  {_GR}Draft saved.{_R}")
+        return _CMD_CONTINUE
+
+    if sub == "load":
+        if _draft_buffer:
+            print(f"  {_CY}Current draft:{_R}\n  {_draft_buffer}")
+        else:
+            print(f"  {_DM}No draft saved. Use /draft save <text> to save one.{_R}")
+        return _CMD_CONTINUE
+
+    if sub == "clear":
+        _draft_buffer = ""
+        print(f"  {_GR}Draft cleared.{_R}")
+        return _CMD_CONTINUE
+
+    if sub == "restore":
+        if _last_interrupted_prompt:
+            print(f"  {_DM}Last interrupted prompt:{_R}  {_last_interrupted_prompt}")
+            _draft_buffer = _last_interrupted_prompt
+        else:
+            print(f"  {_DM}No interrupted prompt to restore.{_R}")
+        return _CMD_CONTINUE
+
+    if sub == "multiline":
+        rest = (parts[1].strip().lower() if len(parts) > 1 else "")
+        if rest == "on":
+            _multiline_mode = True
+            print(f"  {_GR}Multiline mode: ON{_R} — type \\end on its own line to submit")
+        elif rest == "off":
+            _multiline_mode = False
+            print(f"  Multiline mode: OFF")
+        else:
+            state = "ON" if _multiline_mode else "OFF"
+            print(f"  Multiline mode is currently {_B}{state}{_R}. Usage: /draft multiline on | off")
+        return _CMD_CONTINUE
+
+    # No subcommand — show current draft or usage
+    if _draft_buffer:
+        print(f"  {_CY}Current draft:{_R}\n  {_draft_buffer}")
+    else:
+        print(f"  {_DM}No draft saved.{_R} Usage: /draft save <text> | load | clear | restore | multiline on|off")
+    return _CMD_CONTINUE
+
+
+def _cmd_template(ctx: ChatCommandContext) -> str:
+    """Handler for /template — manage reusable prompt templates."""
+    global _draft_buffer
+
+    import re as _re
+
+    parts = ctx.args.strip().split(None, 1)
+    sub = parts[0].lower() if parts else ""
+
+    templates: dict = _PREFS.setdefault("templates", {})
+
+    def _show_templates() -> None:
+        if not templates:
+            print(f"  {_DM}No templates saved. Use /template save <name> <text> to create one.{_R}")
+            return
+        if _RICH_AVAILABLE and _IS_TTY:
+            t = _RichTable(title="Saved Templates", border_style="cyan", header_style="bold cyan")
+            t.add_column("Name", style="bold")
+            t.add_column("Preview", style="dim")
+            for name, text in sorted(templates.items()):
+                preview = text[:60] + ("…" if len(text) > 60 else "")
+                t.add_row(name, preview)
+            _RICH_CONSOLE.print(t)
+        else:
+            print("  Saved templates:")
+            for name, text in sorted(templates.items()):
+                preview = text[:60] + ("…" if len(text) > 60 else "")
+                print(f"    {_B}{name}{_R}  {_DM}{preview}{_R}")
+
+    if not sub or sub == "list":
+        _show_templates()
+        return _CMD_CONTINUE
+
+    if sub == "save":
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        save_parts = rest.split(None, 1)
+        if len(save_parts) < 2:
+            print(f"  {_DM}Usage: /template save <name> <text>{_R}")
+            return _CMD_CONTINUE
+        name, text = save_parts[0], save_parts[1].strip()
+        if not _re.fullmatch(r"[A-Za-z0-9\-]+", name):
+            _print_error(f"Template name '{name}' is invalid — use letters, digits, and hyphens only.")
+            return _CMD_CONTINUE
+        templates[name] = text
+        _save_prefs()
+        print(f"  {_GR}Template '{name}' saved.{_R}")
+        return _CMD_CONTINUE
+
+    if sub == "use":
+        name = (parts[1].strip() if len(parts) > 1 else "")
+        if not name:
+            print(f"  {_DM}Usage: /template use <name>{_R}")
+            return _CMD_CONTINUE
+        text = templates.get(name)
+        if text is None:
+            _print_error(f"Template '{name}' not found. Use /template list to see available templates.")
+            return _CMD_CONTINUE
+        _draft_buffer = text
+        print(f"  {_GR}Template '{name}' loaded into draft.{_R} Use /draft load to review or submit directly.")
+        return _CMD_CONTINUE
+
+    if sub == "delete":
+        name = (parts[1].strip() if len(parts) > 1 else "")
+        if not name:
+            print(f"  {_DM}Usage: /template delete <name>{_R}")
+            return _CMD_CONTINUE
+        if name not in templates:
+            _print_error(f"Template '{name}' not found. Use /template list to see available templates.")
+            return _CMD_CONTINUE
+        del templates[name]
+        _save_prefs()
+        print(f"  {_GR}Template '{name}' deleted.{_R}")
+        return _CMD_CONTINUE
+
+    _print_error(f"Unknown /template subcommand '{sub}'. Usage: list | use <name> | save <name> <text> | delete <name>")
+    return _CMD_CONTINUE
+
+
 def _session_badges(s: "SessionSummary") -> str:
     """Build a compact badge string for a session summary row."""
     parts: list[str] = []
@@ -6506,6 +6648,9 @@ def build_chat_command_registry() -> ChatCommandRegistry:
             handler=_cmd_handoff,
         )
     )
+    registry.register(SlashCommand(name="draft", description="Save, load, or clear a draft prompt", handler=_cmd_draft))
+    registry.register(SlashCommand(name="template", description="Manage reusable prompt templates", handler=_cmd_template))
+    registry.register(SlashCommand(name="pasteguard", description="Toggle paste guard for large risky pastes", handler=_cmd_pasteguard))
     return registry
 
 
@@ -6544,6 +6689,10 @@ def print_chat_help(*, search: str = "") -> None:
         ("/tag [add|rm|list] <tag>",       "Manage tags on the current session"),
         ("/resume [last|<id>]",            "Print resume instructions for a past session"),
         ("/replay [session-id]",           "Re-print the current or a past session conversation"),
+        ("/draft [save|load|clear|restore]",    "Save, load, clear, or restore a draft prompt"),
+        ("/draft multiline [on|off]",           "Toggle multiline compose mode"),
+        ("/template [list|use|save|delete]",    "Manage reusable prompt templates"),
+        ("/pasteguard [on|off]",                "Toggle paste guard for large risky pastes"),
     ]
 
     q = search.strip().lower()
@@ -6855,20 +7004,20 @@ def _print_status_bar(
         print(f"  {_DM}{line}{_R}")
 
 
-def _make_prompt(session_id: str = "", autoroute_on: bool = True) -> str:
+def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False) -> str:
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
     is_tty = _IS_TTY or sys.stdout.isatty()
     if is_tty:
         name = "\033[1;34mopenclaw\033[0m"  # bold blue
+        ml_badge = f" \033[2;33m[multiline]\033[0m" if multiline else ""
         if not autoroute_on:
-            # Yellow badge so it stands out as a warning-like state
-            return f"{name} \033[33m[autoroute:off]\033[0m ❯ "
+            return f"{name} \033[33m[autoroute:off]\033[0m{ml_badge} ❯ "
         if session_id:
             short = session_id[:8]
-            # Cyan session hint — clearly informational, not a warning
-            return f"{name} \033[36m[{short}…]\033[0m ❯ "
-        return f"{name} ❯ "
-    return "openclaw ❯ "
+            return f"{name} \033[36m[{short}…]\033[0m{ml_badge} ❯ "
+        return f"{name}{ml_badge} ❯ "
+    ml_suffix = " [multiline]" if multiline else ""
+    return f"openclaw{ml_suffix} ❯ "
 
 
 def _print_first_run_tips() -> None:
@@ -6950,6 +7099,69 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         )
 
 
+def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
+    """Toggle or inspect the paste guard setting."""
+    token = (ctx.args or "").strip().lower()
+    if token == "on":
+        _PREFS["paste_guard"] = True
+        _save_prefs()
+        print(f"  {_GR}{_e('✅', '[OK]')} Paste guard enabled.{_R}")
+    elif token == "off":
+        _PREFS["paste_guard"] = False
+        _save_prefs()
+        print(f"  {_YE}{_e('⚠️', '[warn]')} Paste guard disabled.{_R}")
+    else:
+        state = "on" if _PREFS.get("paste_guard", True) else "off"
+        print(f"  Paste guard is currently {_B}{state}{_R}. Use /pasteguard on|off to change.")
+    return _CMD_CONTINUE
+
+
+def _paste_guard(
+    prompt: str,
+    *,
+    input_func: Any,
+    autoroute_on: bool,
+) -> "str | None":
+    """Warn and confirm before executing a large paste that routes to a risky command.
+
+    Returns the prompt unchanged (proceed), or None (cancel this turn).
+    Fails open — any unexpected error returns prompt unchanged.
+    """
+    try:
+        if not (
+            len(prompt) > 400
+            and prompt.count("\n") >= 3
+            and autoroute_on
+            and _PREFS.get("paste_guard", True)
+        ):
+            return prompt
+
+        # Peek at the route without executing — routing is deterministic for the same prompt.
+        decision = route_repl_prompt(prompt, min_confidence=0.70)
+        risky_kinds = {ReplRouteKind.EXEC, ReplRouteKind.EDIT, ReplRouteKind.PLAN}
+        if decision.kind not in risky_kinds:
+            return prompt
+
+        route_label = f"/{decision.kind.value}" if decision.kind != ReplRouteKind.PLAN else "plan"
+        preview = prompt[:200].replace("\n", "↵")
+        print(
+            f"\n  {_BYE}{_e('⚠️', '[!]')} Large paste detected — would route to {_BCY}{route_label}{_R}"
+            f"\n  {_DM}Preview (first 200 chars):{_R} {preview}…"
+            f"\n  {_B}[y]{_R} proceed  {_B}[n]{_R} cancel  {_B}[e]{_R} edit before sending\n"
+        )
+        choice = input_func("  Your choice [y/n/e]: ").strip().lower()
+        if choice in ("y", ""):
+            return prompt
+        if choice == "e":
+            print(f"  {_DM}Edit your prompt and re-submit.{_R}")
+            return None
+        # "n" or anything else
+        print(f"  {_DM}Paste cancelled.{_R}")
+        return None
+    except Exception:  # noqa: BLE001
+        return prompt
+
+
 def run_chat(
     config: CliConfig,
     *,
@@ -6974,8 +7186,18 @@ def run_chat(
     while True:
         try:
             autoroute_on = _session_auto_route_enabled(session_id)
-            prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on)
-            prompt = str(input_func(prompt_str)).strip()
+            prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode)
+            if _multiline_mode:
+                print(f"  {_DM}[multiline — type \\end to submit]{_R}")
+                _lines: list[str] = []
+                while True:
+                    _line = str(input_func(prompt_str)).rstrip("\n")
+                    if _line.strip().lower() == r"\end":
+                        break
+                    _lines.append(_line)
+                prompt = "\n".join(_lines).strip()
+            else:
+                prompt = str(input_func(prompt_str)).strip()
         except EOFError:
             print()
             # Auto-summarize: promote the last user prompt to session title if still generic
@@ -6992,11 +7214,22 @@ def run_chat(
             return 0
         except KeyboardInterrupt:
             print()
+            global _last_interrupted_prompt
+            if readline is not None:
+                _partial = readline.get_line_buffer().strip()
+                if _partial:
+                    _last_interrupted_prompt = _partial
+                    print(f"  {_DM}↳ prompt interrupted — type /draft restore to recover it{_R}")
             save_shell_history()
             return 130
 
         if not prompt:
             continue
+
+        # Paste guard — warn on large pastes that would trigger risky routing
+        prompt = _paste_guard(prompt, input_func=input_func, autoroute_on=autoroute_on)
+        if prompt is None:
+            continue  # user declined — skip this turn
 
         # Inline help: /cmd ? prints description without dispatching
         _help_match = re.match(r"^/(\S+)\s+\?$", prompt)
