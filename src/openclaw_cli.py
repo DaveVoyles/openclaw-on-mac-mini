@@ -54,6 +54,7 @@ from openclaw_cli_sessions import (
     apply_handoff,
     build_collaboration_snapshot,
     build_session_storyline,
+    build_workspace_capsule,
     build_workspace_signature,
     collect_workspace_context,
     create_handoff,
@@ -220,6 +221,9 @@ except ImportError:  # pragma: no cover
 import openclaw_cli_render as _render_mod
 import openclaw_cli_path_utils as _path_utils
 import openclaw_cli_macros as _macros_mod
+import logging as _logging
+
+_LOG = _logging.getLogger("openclaw_cli")
 
 # Draft buffer — ephemeral unsent prompt (cleared on submission or /draft clear)
 _draft_buffer: str = ""
@@ -237,7 +241,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave35"  # updated with each UX wave batch
+_CLI_BUILD = "wave36"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -562,7 +566,7 @@ def _overlay_available() -> bool:
     stdin_tty = True
     try:
         stdin_tty = bool(sys.stdin.isatty())
-    except Exception:
+    except Exception:  # noqa: BLE001  # TTY detection may fail; degrade gracefully
         stdin_tty = False
     return bool(_get_is_tty() and stdin_tty)
 
@@ -1730,6 +1734,7 @@ def summarize_session(session: SessionSummary) -> str:
     try:
         watch_state = load_watch_state(session.session_id)
     except Exception:
+        _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
         watch_state = None
     snapshot = build_collaboration_snapshot(session.session_id, limit=3)
     mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
@@ -1790,6 +1795,7 @@ def _print_session_summary(session: SessionSummary) -> None:
     try:
         watch_state = load_watch_state(session.session_id)
     except Exception:
+        _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
         watch_state = None
     snapshot = build_collaboration_snapshot(session.session_id, limit=3)
     story = build_session_storyline(session.session_id, limit=4)
@@ -1979,6 +1985,7 @@ def _session_mood_snapshot(
     try:
         normalized_watch = normalize_watch_state(watch_state or {}) if watch_state else {}
     except Exception:
+        _LOG.debug("normalize_watch_state failed", exc_info=True)
         normalized_watch = {}
     snapshot = collaboration_snapshot or {}
     actors = [item for item in list(snapshot.get("actors") or []) if isinstance(item, dict)]
@@ -2074,6 +2081,7 @@ def _session_preview_lines(session: SessionSummary) -> list[str]:
         try:
             watch_state = load_watch_state(session.session_id)
         except Exception:
+            _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
             watch_state = None
         if watch_state:
             lines.extend(_watch_focus_lines(watch_state)[:2])
@@ -2124,6 +2132,7 @@ def _session_operator_snapshot(
     try:
         normalized_watch = normalize_watch_state(watch_state or {}) if watch_state else {}
     except Exception:
+        _LOG.debug("normalize_watch_state failed", exc_info=True)
         normalized_watch = {}
     snapshot = collaboration_snapshot or {}
     decisions = [item for item in list(snapshot.get("recent_decisions") or []) if isinstance(item, dict)]
@@ -5017,7 +5026,8 @@ def _capture_routed_action_checkpoint(
                 targets=workspace_targets or None,
             ),
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        _LOG.error("safety checkpoint capture failed", exc_info=True)
         _print_error(f"unable to capture safety checkpoint for {_routed_plan_step_label(metadata)}: {exc}")
         _set_command_result(ctx, ok=False, summary=f"checkpoint failed: {exc}")
         return False
@@ -6117,6 +6127,7 @@ def _cmd_search(ctx: ChatCommandContext) -> str:
             try:
                 events = load_events(sess.session_id, limit=200)
             except Exception:
+                _LOG.debug("load_events failed for %s", sess.session_id, exc_info=True)
                 continue
             for ev in events:
                 if len(results) >= MAX_RESULTS:
@@ -6458,7 +6469,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
             _RICH_CONSOLE.print(f"[green]✓[/] Snapshot [bold]{name}[/] saved at [dim]{sha}[/]")
         else:
             print(f"✓ Snapshot '{name}' saved at {sha}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
         else:
@@ -6590,7 +6601,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
                     _RICH_CONSOLE.print(f"[red]Error:[/] {result.stderr}")
                 else:
                     print(f"Error: {result.stderr}")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if _RICH_AVAILABLE and is_tty:
                 _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
             else:
@@ -6609,7 +6620,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
             else:
                 print(f"\n📸 Rollback Preview: {name} → HEAD\n{diff_stat}")
                 print(f"\n⚠️  Use /rollback {name} --exec to rollback (DESTRUCTIVE)\n")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             if _RICH_AVAILABLE and is_tty:
                 _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
             else:
@@ -6713,7 +6724,8 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
     append_event(session.session_id, kind="research", content=query, metadata={"summary": query})
     try:
         report = run_async(ResearchAgent().run(effective_query, on_progress=_progress))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        _LOG.error("research agent failed", exc_info=True)
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
@@ -7019,7 +7031,8 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
             )
         else:
             result = run_async(run_shell_command(command_parts, cwd=_exec_cwd, timeout=60))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        _LOG.error("shell command execution failed", exc_info=True)
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
@@ -7120,7 +7133,8 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             else:
                 _print_error(f"file not found: {resolved}")
                 _set_command_result(ctx, ok=False, summary=f"file not found: {resolved}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
+            _LOG.error("error reading file %s", path, exc_info=True)
             _print_error(f"error reading {path}: {exc}")
             _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
@@ -7176,7 +7190,8 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             result = replace_text_in_file(path, old=replace_values[0], new=replace_values[1])
         else:
             result = write_text_file(path, content=content, append=append_mode)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
+        _LOG.error("file write failed for %s", path, exc_info=True)
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
@@ -7709,7 +7724,7 @@ def _session_is_stale(s: "SessionSummary", days: int = 7) -> bool:
         updated = datetime.fromisoformat(s.updated_at.replace("Z", "+00:00"))
         age = datetime.now(timezone.utc) - updated
         return age.days >= days
-    except Exception:
+    except Exception:  # noqa: BLE001  # optional staleness check; safe to return False
         return False
 
 
@@ -7972,7 +7987,7 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
         else:
             print(f"\n✅ Exported {count} entries → {abs_path} ({size_kb:.1f} KB, {fmt.upper()})\n")
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         msg = f"Export failed: {e}"
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[red]{msg}[/]")
@@ -8394,6 +8409,135 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
 
     # ── unknown / usage ─────────────────────────────────────────────────────
     print(f"  {_CY}Usage:{_R} /handoff [create|list|open NAME|note TEXT]")
+    return _CMD_CONTINUE
+
+
+def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace Capsule") -> None:
+    """Render a compact workspace recovery summary."""
+    tracked_files = list(capsule.get("tracked_files") or [])
+    bookmarks = list(capsule.get("bookmarks") or [])
+    recent_outputs = list(capsule.get("recent_outputs") or [])
+    lines = [
+        f"cwd: {capsule.get('cwd', '')}",
+        _progress_cell("files", str(capsule.get("tracked_file_count", len(tracked_files))), status="active" if tracked_files else "idle"),
+        _progress_cell("bookmarks", str(capsule.get("bookmark_count", len(bookmarks))), status="complete" if bookmarks else "idle"),
+        _progress_cell("outputs", str(capsule.get("output_count", len(recent_outputs))), status="complete" if recent_outputs else "idle"),
+    ]
+    watch_status = str(capsule.get("watch_status") or "").strip()
+    if watch_status:
+        lines.append(_progress_cell("watch", watch_status, status="active" if watch_status not in {"idle", "waiting"} else "idle"))
+    signature = str(capsule.get("workspace_signature") or "").strip()
+    if signature:
+        lines.append(f"signature: {signature}")
+    if capsule.get("plan_id"):
+        lines.append(f"plan: {capsule.get('plan_id')}")
+    if capsule.get("task_id"):
+        lines.append(f"task: {capsule.get('task_id')}")
+    if recent_outputs:
+        lines.append("recent outputs:")
+        lines.extend(f"  - {item.get('name', '')}" for item in recent_outputs[:3])
+    if bookmarks:
+        lines.append("recent bookmarks:")
+        lines.extend(f"  - [{item.get('id', '')}] {item.get('label', '')}" for item in bookmarks[-3:])
+    if _RICH_AVAILABLE and _IS_TTY:
+        grid = _RichTable.grid(padding=(0, 1))
+        grid.add_column()
+        for line in lines:
+            grid.add_row(str(line))
+        _RICH_CONSOLE.print(_RichPanel(grid, title=f"[bold cyan]{title}[/]", border_style="cyan", padding=(0, 1)))
+    else:
+        print(title)
+        print("-" * len(title))
+        for line in lines:
+            print(line)
+
+
+def _cmd_workspace(ctx: ChatCommandContext) -> str:
+    """/workspace [status|save|list|restore NAME] — manage workspace recovery capsules."""
+    raw = (ctx.args or "").strip()
+    parts = raw.split(None, 1)
+    sub = parts[0].lower() if parts else "status"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    if sub in {"status", ""}:
+        session = _require_session_or_warn(ctx)
+        if session is None:
+            return _CMD_CONTINUE
+        _print_workspace_capsule(build_workspace_capsule(session.session_id))
+        return _CMD_CONTINUE
+
+    if sub == "save":
+        session = _require_session_or_warn(ctx)
+        if session is None:
+            return _CMD_CONTINUE
+        note = rest.strip('"').strip("'")
+        handoff_id = create_handoff(session.session_id, note=note)
+        manifest = load_handoff(handoff_id) or {}
+        capsule = manifest.get("workspace_capsule") if isinstance(manifest, dict) else {}
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[bold green]Saved workspace capsule[/] [cyan]{handoff_id}[/]")
+        else:
+            print(f"Saved workspace capsule {handoff_id}")
+        if isinstance(capsule, dict) and capsule:
+            _print_workspace_capsule(capsule, title="Saved Workspace Capsule")
+        return _CMD_CONTINUE
+
+    if sub == "list":
+        handoffs = list_handoffs(limit=20)
+        if not handoffs:
+            print(f"  {_DM}No workspace capsules found. Use /workspace save to create one.{_R}")
+            return _CMD_CONTINUE
+        if _RICH_AVAILABLE and _IS_TTY:
+            tbl = _RichTable("Capsule", "Session", "Files", "Outputs", "Watch", "Created", border_style="dim", header_style="bold cyan")
+            for item in handoffs:
+                capsule = item.get("workspace_capsule") if isinstance(item.get("workspace_capsule"), dict) else {}
+                tbl.add_row(
+                    str(item.get("id") or "")[:30],
+                    str(item.get("source_session_id") or "")[:8],
+                    str(capsule.get("tracked_file_count", len(item.get("tracked_files") or []))),
+                    str(capsule.get("output_count", len(item.get("outputs_snapshot") or []))),
+                    str(capsule.get("watch_status", "")) or "—",
+                    str(item.get("created_at") or "")[:19],
+                )
+            _RICH_CONSOLE.print(tbl)
+        else:
+            print("Workspace capsules:")
+            for item in handoffs:
+                capsule = item.get("workspace_capsule") if isinstance(item.get("workspace_capsule"), dict) else {}
+                print(
+                    f"  {str(item.get('id') or '')[:30]}  "
+                    f"files:{capsule.get('tracked_file_count', len(item.get('tracked_files') or []))}  "
+                    f"outputs:{capsule.get('output_count', len(item.get('outputs_snapshot') or []))}  "
+                    f"watch:{str(capsule.get('watch_status') or '—')}"
+                )
+        return _CMD_CONTINUE
+
+    if sub == "restore":
+        if not rest:
+            _print_error("Usage: /workspace restore NAME")
+            return _CMD_CONTINUE
+        manifest = load_handoff(rest)
+        if manifest is None:
+            _print_error(f"Workspace capsule not found: {rest}")
+            return _CMD_CONTINUE
+        new_session = create_session()
+        new_session_id = new_session.session_id if hasattr(new_session, "session_id") else str(new_session)
+        result = apply_handoff(manifest, new_session_id)
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"[bold green]Workspace restored[/] [cyan]{new_session_id}[/]")
+            _RICH_CONSOLE.print(f"  [dim]Resume:[/] openclaw --session {new_session_id}")
+        else:
+            print(f"Workspace restored {new_session_id}")
+            print(f"  Resume: openclaw --session {new_session_id}")
+        restored = list(result.get("restored") or [])
+        if restored:
+            print(f"  Restored: {', '.join(str(item) for item in restored[:6])}")
+        warnings = list(result.get("warnings") or [])
+        if warnings:
+            print(f"  Warnings: {', '.join(str(item) for item in warnings[:4])}")
+        return _CMD_CONTINUE
+
+    _print_error("Usage: /workspace [status|save|list|restore NAME]")
     return _CMD_CONTINUE
 
 
@@ -8838,6 +8982,7 @@ def print_chat_help(*, search: str = "") -> None:
         ("/snapshot [name]",               "Save current git HEAD as a named restore point"),
         ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
         ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
+        ("/workspace [status|save|list|restore NAME]", "Manage workspace recovery capsules for the current session"),
         ("/collab [status|share]",             "Show an actor-oriented handoff summary for the current session"),
         ("/runbook [template] [save <path>]",  "Render a long-form runbook for the active session"),
         ("/exporttemplates [list|show <name>]", "Inspect built-in runbook/export templates"),
@@ -9514,7 +9659,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "help", "clear", "quit", "exit", "update", "version", "v",
     # Session & context
     "session", "context", "cwd", "files", "plan", "watch", "task",
-    "sessions", "tag", "resume", "replay", "handoff", "collab",
+    "sessions", "tag", "resume", "replay", "handoff", "workspace", "collab",
     # Outputs & edits
     "outputs", "rollback", "events", "why", "trace", "runbook", "exporttemplates", "edit", "exec", "write",
     "changes", "diff", "snapshot",
@@ -9863,7 +10008,7 @@ def _relative_time(ts_str: str) -> str:
             return f"{secs // 3600}h ago"
         else:
             return f"{secs // 86400}d ago"
-    except Exception:
+    except Exception:  # noqa: BLE001  # optional relative-time formatting
         return ""
 
 
@@ -10065,7 +10210,7 @@ def _cmd_histsearch(ctx: "ChatCommandContext") -> str:
                     dt = datetime.datetime.fromisoformat(ts)
                     diff = int((datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - dt).total_seconds())
                     rel = f"[dim] ({diff//3600}h ago)[/]" if diff >= 3600 else f"[dim] ({diff//60}m ago)[/]"
-                except Exception:
+                except Exception:  # noqa: BLE001  # optional relative timestamp in display
                     pass
             _RICH_CONSOLE.print(f"  [dim]#{idx:<4}[/] {highlighted}{rel}")
         _RICH_CONSOLE.print()
@@ -10295,8 +10440,8 @@ def _cmd_rate(ctx: "ChatCommandContext") -> str:
                 metadata={"score": score, "label": label},
             )
         except Exception:
+            _LOG.debug("append_event for rating failed", exc_info=True)
             pass
-
     _STARS = {5: "⭐⭐⭐⭐⭐", 4: "⭐⭐⭐⭐", 3: "⭐⭐⭐", 2: "⭐⭐", 1: "⭐"}
     stars = _STARS[score]
     msg = f"{stars} Rated: {label}"
@@ -10450,10 +10595,10 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
         try:
             import shutil as _shutil
             cols = _shutil.get_terminal_size(fallback=(80, 24)).columns
-        except Exception:
+        except Exception:  # noqa: BLE001  # terminal size detection fallback
             try:
                 cols = os.get_terminal_size(fallback=(80, 24)).columns
-            except Exception:
+            except Exception:  # noqa: BLE001  # second terminal size fallback
                 cols = 80
 
         rm   = "ON" if _a11y_reduced_motion() else "off"
@@ -10899,7 +11044,7 @@ def _cmd_stats(ctx: "ChatCommandContext") -> str:
                 date = ts[:10] if ts else "unknown"
                 date_counts[date] = date_counts.get(date, 0) + 1
             _ascii_bar_chart("📅 Sessions by Date", date_counts, color=_GR)
-        except Exception:
+        except Exception:  # noqa: BLE001  # optional stats display; safe to skip
             pass
 
     if not cmd_counts and not rating_counts:
@@ -11281,7 +11426,7 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
                 capture_output=True, text=True, timeout=10
             )
             diff_text = result.stdout or result.stderr
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             diff_text = f"Error: {e}"
     else:
         parts = arg.split(None, 1)
@@ -11298,7 +11443,7 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
                 capture_output=True, text=True, timeout=10
             )
             diff_text = result.stdout or "(no differences)"
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             diff_text = f"Error: {e}"
 
     if not diff_text or not diff_text.strip():
@@ -11327,7 +11472,7 @@ def _cmd_changes(ctx: ChatCommandContext) -> str:
             capture_output=True, text=True, timeout=5
         )
         git_changes = result.stdout.strip()
-    except Exception:
+    except Exception:  # noqa: BLE001  # git status is best-effort for display only
         git_changes = ""
 
     if _RICH_AVAILABLE and is_tty:
@@ -11432,7 +11577,7 @@ def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
                     day_label = f"Today ({day_label})"
                 elif diff == 1:
                     day_label = f"Yesterday ({day_label})"
-            except Exception:
+            except Exception:  # noqa: BLE001  # optional date label formatting
                 day_label = date_str
 
             _RICH_CONSOLE.print(f"  [bold]{day_label}[/]  [cyan]{bar}[/] [dim]{count} events[/]")
@@ -11685,6 +11830,7 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("events",       "Show recent session events (/events [n|decisions])",                                                     _cmd_events,       ()),
     ("why",          "Explain the last routing or tool decision",                                                               _cmd_why,          ()),
     ("trace",        "Show the latest routing trace with quality context",                                                      _cmd_trace,        ()),
+    ("workspace",    "Manage workspace recovery capsules (/workspace [status|save|list|restore NAME])",                        _cmd_workspace,    ()),
     ("runbook",      "Render a long-form runbook for the active session",                                                       _cmd_runbook,      ()),
     ("exporttemplates", "Inspect built-in runbook/export templates",                                                            _cmd_exporttemplates, ("export-templates",)),
     ("collab",       "Capture collaboration notes/decisions and print a handoff summary",                                      _cmd_collab,       ()),
@@ -12703,7 +12849,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: CliConfig) -> int:
                             }
                         )
                         break
-                    except Exception as exc:
+                    except Exception as exc:  # noqa: BLE001
                         error_message = str(exc).strip() or exc.__class__.__name__
                         transient = is_transient_watch_error(error_message)
                         finished_at = utc_timestamp()
@@ -13235,10 +13381,8 @@ def main(argv: list[str] | None = None) -> int:
                         else:
                             _update_mod._standalone_needs_update = True
                             break
-                except Exception:
+                except Exception:  # noqa: BLE001  # background update check; non-critical
                     pass
-            else:
-                # Standard install: check PyPI
                 latest = _fetch_latest_pypi_version(timeout=3.0)
                 if latest:
                     _update_mod._latest_version = latest
@@ -13328,7 +13472,7 @@ def main(argv: list[str] | None = None) -> int:
         _base = ""
         try:
             _base = config.base_url
-        except Exception:
+        except Exception:  # noqa: BLE001  # best-effort base_url access for error display
             pass
         _print_connection_error_panel(str(exc), base_url=_base)
         return 1
