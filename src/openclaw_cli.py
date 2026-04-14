@@ -144,7 +144,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave32"  # updated with each UX wave batch
+_CLI_BUILD = "wave33"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -4835,99 +4835,125 @@ def _render_body_with_tables(body: str) -> None:
         _RICH_CONSOLE.print(_RichMarkdown(remaining))
 
 
+def _render_response_body(
+    text: str,
+    sources: str | None,
+    is_tty: bool,
+    high_contrast: bool,
+) -> None:
+    """Render the main response body (Rich tables or ANSI markdown) plus inline sources panel."""
+    if not text.strip():
+        text = "_No response text returned._"
+    if _RICH_AVAILABLE and is_tty:
+        _render_body_with_tables(text)
+        if sources:
+            src_items = _clean_sources_for_display(sources)
+            src_text = _RichText()
+            for i, (display, url) in enumerate(src_items):
+                if i > 0:
+                    src_text.append("\n")
+                src_text.append(f"{i + 1}. ", style="dim")
+                if display != url:
+                    src_text.append(display, style="bold")
+                    src_text.append("  ", style="")
+                src_text.append(url, style="cyan link " + url)
+            if not src_items:
+                src_text = _RichText(sources, style="dim")
+            _RICH_CONSOLE.print(
+                _RichPanel(
+                    src_text,
+                    title=f"[dim]{_e('📎', '[src]')} Sources[/]",
+                    border_style="bold white" if high_contrast else "dim blue",
+                    padding=(0, 1),
+                )
+            )
+    elif is_tty:
+        # Rich not available but interactive TTY — use ANSI markdown renderer
+        print(_render_markdown_ansi(_linkify_response(text)))
+        if sources:
+            src_items = _clean_sources_for_display(sources)
+            term_cols = shutil.get_terminal_size((80, 24)).columns
+            w = max(term_cols - 4, 40)
+            border_style = _theme_ansi() if high_contrast else _DM
+            border_reset = _R if border_style else ""
+            print(
+                f"\n  {border_style}╭─ {_e('📎', '[src]')} Sources "
+                f"{_separator_fill(max(0, w - 12), high_contrast=False)}╮{border_reset}"
+            )
+            for i, (display, url) in enumerate(src_items or [(sources, sources)]):
+                label = f"{i + 1}. " if src_items else ""
+                name_part = f"{_B}{display}{_R}  " if display != url else ""
+                link = _make_clickable_link(url) if _PREFS.get("clickable_links", True) else f"{_CY}{url}{_R}"
+                print(f"  {border_style}│{border_reset}  {_DM}{label}{_R}{name_part}{link}")
+            print(f"  {border_style}╰{_separator_fill(w - 1, high_contrast=False)}╯{border_reset}")
+    else:
+        print(text)
+        if sources:
+            print(f"\nSources:\n{sources}")
+
+
+def _render_response_footer(
+    model: "str | None",
+    tokens: "int | None",
+    elapsed: float,
+    is_tty: bool,
+    high_contrast: bool,
+) -> None:
+    """Render the timing/model footer rule below the response body."""
+    if not (model or tokens or elapsed > 0):
+        return
+    headline, footer = _response_footer_lines(
+        elapsed=elapsed,
+        tokens=tokens,
+        model=model,
+    )
+    if _RICH_AVAILABLE and is_tty:
+        from rich.rule import Rule as _RichRule
+
+        _motion_pause("footer")
+        _RICH_CONSOLE.print(_RichRule(style="bold white" if high_contrast else "dim"))
+        headline_style = "bold white" if high_contrast else "bold cyan"
+        footer_style = "bold white" if high_contrast else "dim"
+        _RICH_CONSOLE.print(f"[{headline_style}]{headline}[/]")
+        if footer:
+            _RICH_CONSOLE.print(f"[{footer_style}]{footer}[/]")
+    elif is_tty:
+        print()
+        headline_style = _theme_ansi() if high_contrast else _BCY
+        footer_style = _theme_ansi() if high_contrast else _DM
+        headline_reset = _R if headline_style else ""
+        footer_reset = _R if footer_style else ""
+        print(f"{headline_style}{headline}{headline_reset}")
+        if footer:
+            print(f"{footer_style}{footer}{footer_reset}")
+    else:
+        print()
+        print(headline)
+        if footer:
+            print(f"Metadata: {footer}")
+
+
 def print_response(response: AskResponse, *, output_json: bool, elapsed: float = 0.0) -> None:
     """Render a response to stdout."""
     if output_json:
         print(json.dumps(response.raw, indent=2, sort_keys=True))
         return
+
     # Re-check TTY at call time — module-level _IS_TTY can be False in some
     # terminal emulators (tmux, iTerm, etc.) even during an interactive session.
     is_tty = _get_is_tty()
     if _a11y_plain_mode():
         is_tty = False  # force plain-text path; skip Rich rendering
+    high_contrast = _a11y_high_contrast()
+
     if response.response:
         body, sources = _preprocess_response_text(response.response)
         body = _auto_bold_response(body)
         body = _detect_and_format_json(body)
         body = _inject_heading_emojis(body)
-        if not body.strip():
-            body = "_No response text returned._"
-        if _RICH_AVAILABLE and is_tty:
-            _render_body_with_tables(body)
-            if sources:
-                src_items = _clean_sources_for_display(sources)
-                src_text = _RichText()
-                for i, (display, url) in enumerate(src_items):
-                    if i > 0:
-                        src_text.append("\n")
-                    src_text.append(f"{i + 1}. ", style="dim")
-                    if display != url:
-                        src_text.append(display, style="bold")
-                        src_text.append("  ", style="")
-                    src_text.append(url, style="cyan link " + url)
-                if not src_items:
-                    src_text = _RichText(sources, style="dim")
-                _RICH_CONSOLE.print(
-                    _RichPanel(
-                        src_text,
-                        title=f"[dim]{_e('📎', '[src]')} Sources[/]",
-                        border_style="bold white" if _a11y_high_contrast() else "dim blue",
-                        padding=(0, 1),
-                    )
-                )
-        elif is_tty:
-            # Rich not available but interactive TTY — use ANSI markdown renderer
-            print(_render_markdown_ansi(_linkify_response(body)))
-            if sources:
-                src_items = _clean_sources_for_display(sources)
-                term_cols = shutil.get_terminal_size((80, 24)).columns
-                w = max(term_cols - 4, 40)
-                border_style = _theme_ansi() if _a11y_high_contrast() else _DM
-                border_reset = _R if border_style else ""
-                print(
-                    f"\n  {border_style}╭─ {_e('📎', '[src]')} Sources "
-                    f"{_separator_fill(max(0, w - 12), high_contrast=False)}╮{border_reset}"
-                )
-                for i, (display, url) in enumerate(src_items or [(sources, sources)]):
-                    label = f"{i + 1}. " if src_items else ""
-                    name_part = f"{_B}{display}{_R}  " if display != url else ""
-                    link = _make_clickable_link(url) if _PREFS.get("clickable_links", True) else f"{_CY}{url}{_R}"
-                    print(f"  {border_style}│{border_reset}  {_DM}{label}{_R}{name_part}{link}")
-                print(f"  {border_style}╰{_separator_fill(w - 1, high_contrast=False)}╯{border_reset}")
-        else:
-            print(body)
-            if sources:
-                print(f"\nSources:\n{sources}")
-    if response.model or response.tokens or elapsed > 0:
-        headline, footer = _response_footer_lines(
-            elapsed=elapsed,
-            tokens=response.tokens,
-            model=response.model,
-        )
-        if _RICH_AVAILABLE and is_tty:
-            from rich.rule import Rule as _RichRule
+        _render_response_body(body, sources, is_tty, high_contrast)
 
-            _motion_pause("footer")
-            _RICH_CONSOLE.print(_RichRule(style="bold white" if _a11y_high_contrast() else "dim"))
-            headline_style = "bold white" if _a11y_high_contrast() else "bold cyan"
-            footer_style = "bold white" if _a11y_high_contrast() else "dim"
-            _RICH_CONSOLE.print(f"[{headline_style}]{headline}[/]")
-            if footer:
-                _RICH_CONSOLE.print(f"[{footer_style}]{footer}[/]")
-        elif is_tty:
-            print()
-            headline_style = _theme_ansi() if _a11y_high_contrast() else _BCY
-            footer_style = _theme_ansi() if _a11y_high_contrast() else _DM
-            headline_reset = _R if headline_style else ""
-            footer_reset = _R if footer_style else ""
-            print(f"{headline_style}{headline}{headline_reset}")
-            if footer:
-                print(f"{footer_style}{footer}{footer_reset}")
-        else:
-            print()
-            print(headline)
-            if footer:
-                print(f"Metadata: {footer}")
+    _render_response_footer(response.model, response.tokens, elapsed, is_tty, high_contrast)
 
 
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
@@ -9779,30 +9805,76 @@ def _print_macro_progress(steps: list, current_idx: int, done_indices: set) -> N
     print()
 
 
-def _macro_run(ctx: ChatCommandContext, name: str) -> str:
-    """Execute a named macro's commands in sequence."""
-    macros = _PREFS.get("macros", {})
+def _workflow_store() -> dict[str, list[str]]:
+    raw = _PREFS.setdefault("macros", {})
+    if not isinstance(raw, dict):
+        raw = {}
+        _PREFS["macros"] = raw
+    return raw
+
+
+def _history_command_texts(limit: int) -> list[str]:
+    items = list(_PREFS.get("cmd_history", []))
+    commands: list[str] = []
+    for entry in items:
+        if isinstance(entry, dict):
+            text = str(entry.get("text", entry.get("prompt", entry.get("cmd", ""))) or "").strip()
+        else:
+            text = str(entry or "").strip()
+        if text:
+            commands.append(text)
+    return commands[-max(1, limit):]
+
+
+def _render_workflow_step(command: str, ctx: ChatCommandContext) -> str:
+    session = load_session(ctx.session_id) if ctx.session_id else None
+    replacements = {
+        "{session}": session.session_id if session else "",
+        "{cwd}": session.cwd if session else "",
+        "{plan}": session.plan_id if session else "",
+        "{task}": session.task_id if session else "",
+    }
+    rendered = str(command or "")
+    for token, value in replacements.items():
+        rendered = rendered.replace(token, value)
+    return rendered
+
+
+def _print_workflow_preview(name: str, steps: list[str], ctx: ChatCommandContext) -> None:
+    print(f"\n  {_B}Workflow preview '{name}'{_R}\n")
+    for index, step in enumerate(steps, start=1):
+        rendered = _render_workflow_step(step, ctx)
+        print(f"  {_DM}{index:>2}{_R}  {_CY}{step}{_R}")
+        if rendered != step:
+            print(f"      {_DM}→ {rendered}{_R}")
+    print(f"\n  {_DM}dry run only — use /workflow run {name} to execute.{_R}\n")
+
+
+def _macro_run(ctx: ChatCommandContext, name: str, *, kind: str = "macro") -> str:
+    """Execute a named macro/workflow's commands in sequence."""
+    macros = _workflow_store()
     if name not in macros:
-        _print_error(f"Macro '{name}' not found — use /macro list to see available macros")
+        _print_error(f"{kind.title()} '{name}' not found")
         return _CMD_CONTINUE
     commands = macros[name]
     if not commands:
-        _print_error(f"Macro '{name}' is empty")
+        _print_error(f"{kind.title()} '{name}' is empty")
         return _CMD_CONTINUE
 
     is_tty = _get_is_tty()
     if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"[dim]▶ Running macro '[bold cyan]{name}[/]' ({len(commands)} commands)[/]")
+        _RICH_CONSOLE.print(f"[dim]▶ Running {kind} '[bold cyan]{name}[/]' ({len(commands)} commands)[/]")
     else:
-        print(f"▶ Running macro '{name}' ({len(commands)} commands)")
+        print(f"▶ Running {kind} '{name}' ({len(commands)} commands)")
 
     registry = build_chat_command_registry()
     done_set: set = set()
     for i, cmd in enumerate(commands):
         _print_macro_progress(commands, i, done_set)
+        rendered = _render_workflow_step(str(cmd), ctx)
 
-        if cmd.startswith("/"):
-            parts = cmd[1:].split(None, 1)
+        if rendered.startswith("/"):
+            parts = rendered[1:].split(None, 1)
             cmd_name = parts[0].lower()
             cmd_args = parts[1] if len(parts) > 1 else ""
             slash_cmd = registry._lookup.get(cmd_name)
@@ -9814,19 +9886,19 @@ def _macro_run(ctx: ChatCommandContext, name: str) -> str:
                 )
                 slash_cmd.handler(sub_ctx)
             else:
-                _print_error(f"Unknown command in macro: {cmd}")
+                _print_error(f"Unknown command in {kind}: {rendered}")
         else:
             if _RICH_AVAILABLE and is_tty:
-                _RICH_CONSOLE.print(f"[dim yellow]  ⚠ Skipped (natural language — run manually): {cmd}[/]")
+                _RICH_CONSOLE.print(f"[dim yellow]  ⚠ Skipped (natural language — run manually): {rendered}[/]")
             else:
-                print(f"  ⚠ Skipped (natural language): {cmd}")
+                print(f"  ⚠ Skipped (natural language): {rendered}")
 
         done_set.add(i)
 
     if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"[green]✓ Macro '{name}' complete[/]")
+        _RICH_CONSOLE.print(f"[green]✓ {kind.title()} '{name}' complete[/]")
     else:
-        print(f"✓ Macro '{name}' complete")
+        print(f"✓ {kind.title()} '{name}' complete")
     return _CMD_CONTINUE
 
 
@@ -10166,489 +10238,13 @@ def _cmd_palette(ctx: "ChatCommandContext") -> str:
 def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
-    registry.register(
-        SlashCommand(
-            name="help",
-            description="Show this help",
-            handler=_cmd_help,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="clear",
-            description="Reset the current conversation history",
-            handler=_cmd_clear,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="quit",
-            description="Exit the CLI",
-            handler=_cmd_quit,
-            aliases=("exit",),
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="update",
-            description="Self-upgrade openclaw via pip",
-            handler=_cmd_update,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="version",
-            description="Show the running CLI version",
-            handler=_cmd_version,
-            aliases=("v",),
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="session",
-            description="Show current session summary",
-            handler=_cmd_session,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="context",
-            description="Show the effective session grounding preview",
-            handler=_cmd_context,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="cwd",
-            description="Show or switch the session working directory (/cwd [path])",
-            handler=_cmd_cwd,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="files",
-            description="List, add, or remove tracked files (/files [add|rm] [path])",
-            handler=_cmd_files,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="plan",
-            description="Show, link, focus, or unlink a plan (/plan [<id>|status|focus|unlink])",
-            handler=_cmd_plan,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="watch",
-            description="Inspect or control active watch sessions (/watch [status|history|retry-limit N|intervene TEXT])",
-            handler=_cmd_watch,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="task",
-            description="Show, link, or unlink a task (/task [<id>|unlink])",
-            handler=_cmd_task,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="outputs",
-            description="List or preview saved outputs (/outputs [<index>|<filename>])",
-            handler=_cmd_outputs,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="overlay",
-            description="Toggle opt-in interactive overlays (/overlay [on|off|status])",
-            handler=_cmd_overlay,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="colorscheme",
-            description="View or set the extended color scheme (/colorscheme [name|list|reset])",
-            handler=_cmd_colorscheme,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="rollback",
-            description="List/preview git snapshots or restore latest checkpoint (/rollback [last|list|<name>])",
-            handler=_cmd_rollback,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="snapshot",
-            description="Save current git HEAD as a named restore point (/snapshot [name])",
-            handler=_cmd_snapshot,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="events",
-            description="Show recent session events (/events [n|decisions])",
-            handler=_cmd_events,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="why",
-            description="Explain the last routing or tool decision",
-            handler=_cmd_why,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="collab",
-            description="Capture collaboration notes/decisions and print a handoff summary",
-            handler=_cmd_collab,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="search",
-            description="Search session event history (/search <query> or /search --all <query>)",
-            handler=_cmd_search,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="autoroute",
-            description="Show or toggle session auto-routing (/autoroute [on|off])",
-            handler=_cmd_autoroute,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="analyze",
-            description="Run an analysis on the current session context (/analyze <goal>)",
-            handler=_cmd_analyze,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="research",
-            description="Run the research agent on a query (/research <query>)",
-            handler=_cmd_research,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="write",
-            description="Generate a markdown document from a writing task (/write <task>)",
-            handler=_cmd_write,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="exec",
-            description="Run a shell command with session tracking (/exec [--] <command>)",
-            handler=_cmd_exec,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="edit",
-            description="Inspect or write a file (/edit <path> [--content <text>] [--append <text>])",
-            handler=_cmd_edit,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="theme",
-            description="Manage UI themes (/theme [name|list|preview|next|prev|reset])",
-            handler=_cmd_theme,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="emojiheaders",
-            description="Toggle emoji prefixes on AI response headings (/emojiheaders [on|off])",
-            handler=_cmd_emojiheaders,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="emoji",
-            description="Manage emoji packs (/emoji [on|off|pack|preview])",
-            handler=_cmd_emoji,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="layout",
-            description="Switch density or preset workspaces (/layout [compact|normal|verbose|plain|preset|show])",
-            handler=_cmd_layout,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="sessions",
-            description="Browse recent sessions (/sessions [search QUERY])",
-            handler=_cmd_sessions,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="export",
-            description="Export session history to file (md/json/txt)",
-            handler=_cmd_export,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="stats",
-            description="Show aggregate usage statistics",
-            handler=_cmd_stats,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="tag",
-            description="Manage session tags (/tag [add <tag>|rm <tag>|list])",
-            handler=_cmd_tag,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="bookmark",
-            description="Save a replay bookmark for the current session (/bookmark [label])",
-            handler=_cmd_bookmark,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="bookmarks",
-            description="List saved replay bookmarks for the current session",
-            handler=_cmd_bookmarks,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="resume",
-            description="Print resume instructions for the most-recent other session (/resume [last|id])",
-            handler=_cmd_resume,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="replay",
-            description="Re-print the current or a past session conversation (/replay [session-id] [--from bookmark])",
-            handler=_cmd_replay,
-        )
-    )
-    registry.register(
-        SlashCommand(
-            name="handoff",
-            description="Save/restore a resumable workspace handoff  [create|list|open NAME|note TEXT]",
-            handler=_cmd_handoff,
-        )
-    )
-    registry.register(SlashCommand(name="draft", description="Save, load, or clear a draft prompt", handler=_cmd_draft))
-    registry.register(SlashCommand(name="template", description="Manage reusable prompt templates", handler=_cmd_template))
-    registry.register(SlashCommand(name="pasteguard", description="Toggle paste guard for large risky pastes", handler=_cmd_pasteguard))
-    registry.register(SlashCommand(
-        name="pin",
-        description="Pin the last response for quick recall (/pin [name] | /pin recall <name> | /pin rm <name>)",
-        handler=_cmd_pin,
-    ))
-    registry.register(SlashCommand(
-        name="pins",
-        description="List all pinned responses",
-        handler=_cmd_pins,
-    ))
-    registry.register(SlashCommand(
-        name="accessibility",
-        description="Show or set accessibility modes (reduced-motion, plain, high-contrast)",
-        handler=_cmd_accessibility,
-        aliases=("a11y",),
-    ))
-    registry.register(SlashCommand(
-        name="alias",
-        description="Define, list, or remove command aliases (/alias [name expansion | rm name])",
-        handler=_cmd_alias,
-    ))
-    registry.register(SlashCommand(
-        name="history",
-        description="Show recent command history (/history [page] | /history clear)",
-        handler=_cmd_history,
-    ))
-    registry.register(SlashCommand(
-        name="recall",
-        description="Re-inject the nth most recent prompt (/recall [n])",
-        handler=_cmd_recall,
-    ))
-    registry.register(SlashCommand(
-        name="histsearch",
-        description="Search prompt history for matching entries (/histsearch <query>)",
-        handler=_cmd_histsearch,
-    ))
-    registry.register(SlashCommand(
-        name="macro",
-        description="Manage and run command macros (/macro [save|list|show|run|rm] [name])",
-        handler=_cmd_macro,
-    ))
-    registry.register(SlashCommand(
-        name="macrostatus",
-        description="Show saved macros with step counts (/macrostatus)",
-        handler=_cmd_macrostatus,
-    ))
-    registry.register(SlashCommand(
-        name="rate",
-        description="Rate the last AI response (/rate [good|ok|bad|meh|1-5])",
-        handler=_cmd_rate,
-        aliases=("feedback",),
-    ))
-    registry.register(SlashCommand(
-        name="celebrate",
-        description="Trigger a celebration animation (/celebrate [message])",
-        handler=_cmd_celebrate,
-    ))
-    registry.register(SlashCommand(
-        name="quality",
-        description="Show response quality stats and rating history",
-        handler=_cmd_quality,
-    ))
-    registry.register(SlashCommand(
-        name="heatmap",
-        description="Show a color-coded hourly activity heatmap of openclaw usage",
-        handler=_cmd_heatmap,
-    ))
-    registry.register(SlashCommand(
-        name="top",
-        description="Show the n most frequently used prompts and commands (default: 10)",
-        handler=_cmd_top,
-    ))
-    registry.register(SlashCommand(
-        name="freq",
-        description="Show frequency analysis of slash commands used",
-        handler=_cmd_freq,
-    ))
-    registry.register(SlashCommand(
-        name="ratehint",
-        description="Toggle the post-response rating hint (/ratehint [on|off])",
-        handler=_cmd_ratehint,
-    ))
-    registry.register(SlashCommand(
-        name="streak",
-        description="Show your current high-rating streak and all-time best",
-        handler=_cmd_streak,
-    ))
-    registry.register(SlashCommand(
-        name="tip",
-        description="Show a random openclaw usage tip",
-        handler=_cmd_tip,
-    ))
-    registry.register(SlashCommand(
-        name="inject",
-        description="Inject file/URL content as context prefix for next message (/inject <path> | --url <url> | clear | status)",
-        handler=_cmd_inject,
-    ))
-    registry.register(SlashCommand(
-        name="promptdebug",
-        description="Preview what would be sent to the AI for the next message",
-        handler=_cmd_promptdebug,
-        aliases=("pd",),
-    ))
-    registry.register(SlashCommand(
-        name="system",
-        description="View or set a persistent system prompt prefix (/system [view|set <text>|append <text>|clear])",
-        handler=_cmd_system,
-    ))
-    registry.register(SlashCommand(
-        name="autobold",
-        description="Toggle automatic bolding of numbers and filenames in responses (/autobold [on|off])",
-        handler=_cmd_autobold,
-    ))
-    registry.register(SlashCommand(
-        name="jsonformat",
-        description="Toggle automatic JSON detection and pretty-printing in responses (/jsonformat [on|off])",
-        handler=_cmd_jsonformat,
-    ))
-    registry.register(SlashCommand(
-        name="separator",
-        description="Set or preview response separator style (/separator gradient|pulse|dots|wave|none)",
-        handler=_cmd_separator,
-    ))
-    registry.register(SlashCommand(
-        name="links",
-        description="Toggle clickable OSC 8 hyperlinks in responses (/links [on|off])",
-        handler=_cmd_links,
-    ))
-    registry.register(SlashCommand(
-        name="palette",
-        description="Search slash commands by keyword (/palette [query])",
-        handler=_cmd_palette,
-    ))
-    registry.register(SlashCommand(
-        name="shortcuts",
-        description="Show keyboard shortcuts and quick-access reference card",
-        handler=_cmd_shortcuts,
-    ))
-    registry.register(SlashCommand(
-        name="stats",
-        description="Show ASCII bar charts of usage stats (/stats [commands|ratings|sessions])",
-        handler=_cmd_stats,
-    ))
-    registry.register(SlashCommand(
-        name="pathhints",
-        description="Toggle file path quick-action hints after responses (/pathhints [on|off])",
-        handler=_cmd_pathhints,
-    ))
-    registry.register(SlashCommand(
-        name="prompt",
-        description="Customize the REPL prompt string (/prompt [format|reset]). Tokens: {route} {session} {model} {build} {time}",
-        handler=_cmd_prompt,
-    ))
-    registry.register(SlashCommand(
-        name="keys",
-        description="Show active keyboard shortcuts and readline bindings",
-        handler=_cmd_keys,
-    ))
-    registry.register(SlashCommand(
-        name="bindlist",
-        description="Show all keyboard bindings — built-in readline + custom",
-        handler=_cmd_bindlist,
-    ))
-    registry.register(SlashCommand(
-        name="keybind",
-        description="Manage custom readline key bindings (/keybind [list | Ctrl+X /cmd | clear Ctrl+X])",
-        handler=_cmd_keybind,
-    ))
-    registry.register(SlashCommand(
-        name="diff",
-        description="Show a colorized unified diff (/diff file1 file2  or  /diff --git)",
-        handler=_cmd_diff,
-    ))
-    registry.register(SlashCommand(
-        name="changes",
-        description="Show session edit log and git status",
-        handler=_cmd_changes,
-    ))
-    registry.register(SlashCommand(
-        name="timeline",
-        description="Show a visual activity timeline of recent openclaw usage",
-        handler=_cmd_timeline,
-    ))
-    registry.register(SlashCommand(
-        name="dashboard",
-        description="Show the power dashboard: sessions, stats, pins, and system status",
-        handler=_cmd_dashboard,
-    ))
-    registry.register(SlashCommand(
-        name="benchmark",
-        description="Measure AI server response latency (/benchmark [n], default 3 pings, max 10)",
-        handler=_cmd_benchmark,
-    ))
-    registry.register(SlashCommand(
-        name="followup",
-        description="Show contextual follow-up suggestions for your last prompt (/followup [on|off])",
-        handler=_cmd_followup,
-    ))
+    for name, description, handler, aliases in _COMMAND_SPECS:
+        registry.register(SlashCommand(
+            name=name,
+            description=description,
+            handler=handler,
+            aliases=aliases,
+        ))
     return registry
 
 
@@ -10721,6 +10317,11 @@ def print_chat_help(*, search: str = "") -> None:
         ("/macro show <name>",                  "Show the commands stored in a macro"),
         ("/macro run <name>",                   "Execute a saved macro's commands in sequence"),
         ("/macro rm <name>",                    "Delete a named macro"),
+        ("/workflow list",                      "List previewable workflows backed by the macro store"),
+        ("/workflow save <name> [last N]",      "Save recent commands as a workflow"),
+        ("/workflow preview <name>",            "Show the resolved workflow steps without executing them"),
+        ("/workflow run <name>",                "Execute a saved workflow with session placeholders resolved"),
+        ("/workflow rm <name>",                 "Delete a saved workflow"),
         ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
         ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
         ("/streak",   "Show your current high-rating streak and all-time best"),
@@ -11363,7 +10964,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Pinning & notes
     "pin", "pins", "search",
     # Aliases, macros, templates
-    "alias", "macro", "macrostatus", "template", "draft",
+    "alias", "macro", "macrostatus", "workflow", "template", "draft",
     # Accessibility
     "accessibility", "a11y",
     # Misc / fun
@@ -11446,7 +11047,7 @@ def _cmd_macro(ctx: "ChatCommandContext") -> str:
     import re as _re
 
     args = (ctx.args or "").strip()
-    macros: "dict[str, list[str]]" = _PREFS.setdefault("macros", {})
+    macros = _workflow_store()
     is_tty = _get_is_tty()
 
     parts = args.split(None, 1)
@@ -11507,7 +11108,7 @@ def _cmd_macro(ctx: "ChatCommandContext") -> str:
             _print_error("Usage: /macro save <name> [last N]")
             return _CMD_CONTINUE
 
-        hist: "list[str]" = _PREFS.get("cmd_history", [])
+        hist = _history_command_texts(20)
         if not hist:
             _print_error("No command history to save — run some commands first")
             return _CMD_CONTINUE
@@ -11626,6 +11227,53 @@ def _cmd_macrostatus(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
                 count = 1
                 preview = str(steps)[:30]
             print(f"  {name:<18} {count:>6}  {preview}")
+    return _CMD_CONTINUE
+
+
+def _cmd_workflow(ctx: "ChatCommandContext") -> str:
+    """/workflow — manage previewable workflows backed by the macro store."""
+    args = (ctx.args or "").strip()
+    workflows = _workflow_store()
+    parts = args.split(None, 1)
+    token = parts[0].lower() if parts else "list"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+
+    if token in {"list", "ls"} or not args:
+        print(f"{_B}Workflows:{_R}")
+        if workflows:
+            for name, steps in sorted(workflows.items()):
+                print(f"  {_CY}{name}{_R}  {_DM}({len(steps)} step{'s' if len(steps) != 1 else ''}){_R}")
+        else:
+            print(f"  {_DM}(no workflows saved — use /workflow save <name> [last N]){_R}")
+        return _CMD_CONTINUE
+
+    if token == "save":
+        return _cmd_macro(ChatCommandContext(history=ctx.history, session_id=ctx.session_id, args=f"save {rest}"))
+
+    if token == "show":
+        return _cmd_macro(ChatCommandContext(history=ctx.history, session_id=ctx.session_id, args=f"show {rest}"))
+
+    if token in {"rm", "remove"}:
+        return _cmd_macro(ChatCommandContext(history=ctx.history, session_id=ctx.session_id, args=f"rm {rest}"))
+
+    if token == "preview":
+        if not rest:
+            _print_error("Usage: /workflow preview <name>")
+            return _CMD_CONTINUE
+        name = rest.split()[0]
+        if name not in workflows:
+            _print_error(f"Workflow '{name}' not found")
+            return _CMD_CONTINUE
+        _print_workflow_preview(name, list(workflows[name]), ctx)
+        return _CMD_CONTINUE
+
+    if token == "run":
+        if not rest:
+            _print_error("Usage: /workflow run <name>")
+            return _CMD_CONTINUE
+        return _macro_run(ctx, rest.split()[0], kind="workflow")
+
+    _print_error("Unknown /workflow sub-command. Use: list, save, show, preview, run, rm")
     return _CMD_CONTINUE
 
 
@@ -13551,6 +13199,96 @@ def _cmd_benchmark(ctx: ChatCommandContext) -> str:
             print(f"  Quality: {quality}\n")
 
     return _CMD_CONTINUE
+
+
+# fmt: off
+# Each entry: (name, description, handler, aliases)
+_COMMAND_SPECS: "list[tuple]" = [
+    ("help",         "Show this help",                                                                                          _cmd_help,         ()),
+    ("clear",        "Reset the current conversation history",                                                                  _cmd_clear,        ()),
+    ("quit",         "Exit the CLI",                                                                                            _cmd_quit,         ("exit",)),
+    ("update",       "Self-upgrade openclaw via pip",                                                                           _cmd_update,       ()),
+    ("version",      "Show the running CLI version",                                                                            _cmd_version,      ("v",)),
+    ("session",      "Show current session summary",                                                                            _cmd_session,      ()),
+    ("context",      "Show the effective session grounding preview",                                                            _cmd_context,      ()),
+    ("cwd",          "Show or switch the session working directory (/cwd [path])",                                              _cmd_cwd,          ()),
+    ("files",        "List, add, or remove tracked files (/files [add|rm] [path])",                                            _cmd_files,        ()),
+    ("plan",         "Show, link, focus, or unlink a plan (/plan [<id>|status|focus|unlink])",                                  _cmd_plan,         ()),
+    ("watch",        "Inspect or control active watch sessions (/watch [status|history|retry-limit N|intervene TEXT])",         _cmd_watch,        ()),
+    ("task",         "Show, link, or unlink a task (/task [<id>|unlink])",                                                     _cmd_task,         ()),
+    ("outputs",      "List or preview saved outputs (/outputs [<index>|<filename>])",                                           _cmd_outputs,      ()),
+    ("overlay",      "Toggle opt-in interactive overlays (/overlay [on|off|status])",                                          _cmd_overlay,      ()),
+    ("colorscheme",  "View or set the extended color scheme (/colorscheme [name|list|reset])",                                  _cmd_colorscheme,  ()),
+    ("rollback",     "List/preview git snapshots or restore latest checkpoint (/rollback [last|list|<name>])",                  _cmd_rollback,     ()),
+    ("snapshot",     "Save current git HEAD as a named restore point (/snapshot [name])",                                      _cmd_snapshot,     ()),
+    ("events",       "Show recent session events (/events [n|decisions])",                                                     _cmd_events,       ()),
+    ("why",          "Explain the last routing or tool decision",                                                               _cmd_why,          ()),
+    ("collab",       "Capture collaboration notes/decisions and print a handoff summary",                                      _cmd_collab,       ()),
+    ("search",       "Search session event history (/search <query> or /search --all <query>)",                                _cmd_search,       ()),
+    ("autoroute",    "Show or toggle session auto-routing (/autoroute [on|off])",                                              _cmd_autoroute,    ()),
+    ("analyze",      "Run an analysis on the current session context (/analyze <goal>)",                                       _cmd_analyze,      ()),
+    ("research",     "Run the research agent on a query (/research <query>)",                                                  _cmd_research,     ()),
+    ("write",        "Generate a markdown document from a writing task (/write <task>)",                                       _cmd_write,        ()),
+    ("exec",         "Run a shell command with session tracking (/exec [--] <command>)",                                       _cmd_exec,         ()),
+    ("edit",         "Inspect or write a file (/edit <path> [--content <text>] [--append <text>])",                            _cmd_edit,         ()),
+    ("theme",        "Manage UI themes (/theme [name|list|preview|next|prev|reset])",                                          _cmd_theme,        ()),
+    ("emojiheaders", "Toggle emoji prefixes on AI response headings (/emojiheaders [on|off])",                                 _cmd_emojiheaders, ()),
+    ("emoji",        "Manage emoji packs (/emoji [on|off|pack|preview])",                                                      _cmd_emoji,        ()),
+    ("layout",       "Switch density or preset workspaces (/layout [compact|normal|verbose|plain|preset|show])",               _cmd_layout,       ()),
+    ("sessions",     "Browse recent sessions (/sessions [search QUERY])",                                                      _cmd_sessions,     ()),
+    ("export",       "Export session history to file (md/json/txt)",                                                           _cmd_export,       ()),
+    ("stats",        "Show aggregate usage statistics",                                                                        _cmd_stats,        ()),
+    ("tag",          "Manage session tags (/tag [add <tag>|rm <tag>|list])",                                                   _cmd_tag,          ()),
+    ("bookmark",     "Save a replay bookmark for the current session (/bookmark [label])",                                     _cmd_bookmark,     ()),
+    ("bookmarks",    "List saved replay bookmarks for the current session",                                                    _cmd_bookmarks,    ()),
+    ("resume",       "Print resume instructions for the most-recent other session (/resume [last|id])",                        _cmd_resume,       ()),
+    ("replay",       "Re-print the current or a past session conversation (/replay [session-id] [--from bookmark])",           _cmd_replay,       ()),
+    ("handoff",      "Save/restore a resumable workspace handoff  [create|list|open NAME|note TEXT]",                          _cmd_handoff,      ()),
+    ("draft",        "Save, load, or clear a draft prompt",                                                                    _cmd_draft,        ()),
+    ("template",     "Manage reusable prompt templates",                                                                       _cmd_template,     ()),
+    ("pasteguard",   "Toggle paste guard for large risky pastes",                                                              _cmd_pasteguard,   ()),
+    ("pin",          "Pin the last response for quick recall (/pin [name] | /pin recall <name> | /pin rm <name>)",             _cmd_pin,          ()),
+    ("pins",         "List all pinned responses",                                                                              _cmd_pins,         ()),
+    ("accessibility","Show or set accessibility modes (reduced-motion, plain, high-contrast)",                                 _cmd_accessibility,("a11y",)),
+    ("alias",        "Define, list, or remove command aliases (/alias [name expansion | rm name])",                            _cmd_alias,        ()),
+    ("history",      "Show recent command history (/history [page] | /history clear)",                                        _cmd_history,      ()),
+    ("recall",       "Re-inject the nth most recent prompt (/recall [n])",                                                     _cmd_recall,       ()),
+    ("histsearch",   "Search prompt history for matching entries (/histsearch <query>)",                                       _cmd_histsearch,   ()),
+    ("macro",        "Manage and run command macros (/macro [save|list|show|run|rm] [name])",                                  _cmd_macro,        ()),
+    ("macrostatus",  "Show saved macros with step counts (/macrostatus)",                                                      _cmd_macrostatus,  ()),
+    ("workflow",     "Manage previewable workflows (/workflow [save|list|show|preview|run|rm] [name])",                       _cmd_workflow,     ()),
+    ("rate",         "Rate the last AI response (/rate [good|ok|bad|meh|1-5])",                                               _cmd_rate,         ("feedback",)),
+    ("celebrate",    "Trigger a celebration animation (/celebrate [message])",                                                 _cmd_celebrate,    ()),
+    ("quality",      "Show response quality stats and rating history",                                                         _cmd_quality,      ()),
+    ("heatmap",      "Show a color-coded hourly activity heatmap of openclaw usage",                                           _cmd_heatmap,      ()),
+    ("top",          "Show the n most frequently used prompts and commands (default: 10)",                                     _cmd_top,          ()),
+    ("freq",         "Show frequency analysis of slash commands used",                                                         _cmd_freq,         ()),
+    ("ratehint",     "Toggle the post-response rating hint (/ratehint [on|off])",                                              _cmd_ratehint,     ()),
+    ("streak",       "Show your current high-rating streak and all-time best",                                                 _cmd_streak,       ()),
+    ("tip",          "Show a random openclaw usage tip",                                                                       _cmd_tip,          ()),
+    ("inject",       "Inject file/URL content as context prefix for next message (/inject <path> | --url <url> | clear | status)", _cmd_inject,  ()),
+    ("promptdebug",  "Preview what would be sent to the AI for the next message",                                              _cmd_promptdebug,  ("pd",)),
+    ("system",       "View or set a persistent system prompt prefix (/system [view|set <text>|append <text>|clear])",          _cmd_system,       ()),
+    ("autobold",     "Toggle automatic bolding of numbers and filenames in responses (/autobold [on|off])",                    _cmd_autobold,     ()),
+    ("jsonformat",   "Toggle automatic JSON detection and pretty-printing in responses (/jsonformat [on|off])",                _cmd_jsonformat,   ()),
+    ("separator",    "Set or preview response separator style (/separator gradient|pulse|dots|wave|none)",                     _cmd_separator,    ()),
+    ("links",        "Toggle clickable OSC 8 hyperlinks in responses (/links [on|off])",                                       _cmd_links,        ()),
+    ("palette",      "Search slash commands by keyword (/palette [query])",                                                    _cmd_palette,      ()),
+    ("shortcuts",    "Show keyboard shortcuts and quick-access reference card",                                                _cmd_shortcuts,    ()),
+    ("stats",        "Show ASCII bar charts of usage stats (/stats [commands|ratings|sessions])",                              _cmd_stats,        ()),
+    ("pathhints",    "Toggle file path quick-action hints after responses (/pathhints [on|off])",                              _cmd_pathhints,    ()),
+    ("prompt",       "Customize the REPL prompt string (/prompt [format|reset]). Tokens: {route} {session} {model} {build} {time}", _cmd_prompt, ()),
+    ("keys",         "Show active keyboard shortcuts and readline bindings",                                                   _cmd_keys,         ()),
+    ("bindlist",     "Show all keyboard bindings — built-in readline + custom",                                                _cmd_bindlist,     ()),
+    ("keybind",      "Manage custom readline key bindings (/keybind [list | Ctrl+X /cmd | clear Ctrl+X])",                    _cmd_keybind,      ()),
+    ("diff",         "Show a colorized unified diff (/diff file1 file2  or  /diff --git)",                                    _cmd_diff,         ()),
+    ("changes",      "Show session edit log and git status",                                                                   _cmd_changes,      ()),
+    ("timeline",     "Show a visual activity timeline of recent openclaw usage",                                               _cmd_timeline,     ()),
+    ("dashboard",    "Show the power dashboard: sessions, stats, pins, and system status",                                     _cmd_dashboard,    ()),
+    ("benchmark",    "Measure AI server response latency (/benchmark [n], default 3 pings, max 10)",                           _cmd_benchmark,    ()),
+    ("followup",     "Show contextual follow-up suggestions for your last prompt (/followup [on|off])",                        _cmd_followup,     ()),
+]
+# fmt: on
 
 
 def _apply_custom_keybind(key_name: str, action: str) -> None:
