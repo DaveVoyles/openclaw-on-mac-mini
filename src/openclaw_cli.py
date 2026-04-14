@@ -77,6 +77,23 @@ except ImportError:  # pragma: no cover - platform-dependent
     readline = None
 
 # ---------------------------------------------------------------------------
+# Terminal detection and ANSI palette — defined in openclaw_cli_ui_core
+# Re-exported here for backward compatibility with existing code and tests.
+# ---------------------------------------------------------------------------
+from openclaw_cli_ui_core import (
+    _IS_TTY,
+    _c,
+    _get_is_tty,
+    _R, _B, _DM, _CY, _GR, _YE, _RE, _MA,
+    _BCY, _BGR, _BYE, _BRE, _BBL, _IT, _UL,
+)
+
+
+def _get_is_tty() -> bool:
+    """Live TTY check — reads openclaw_cli._IS_TTY so monkeypatch works in tests."""
+    return _IS_TTY or sys.stdout.isatty()
+
+# ---------------------------------------------------------------------------
 # Color / rich support — graceful fallback when not in a TTY or rich absent
 # ---------------------------------------------------------------------------
 try:
@@ -92,13 +109,7 @@ try:
 except ImportError:  # pragma: no cover
     _RICH_AVAILABLE = False
 
-_IS_TTY = sys.stdout.isatty()
-
-
-def _get_is_tty() -> bool:
-    """Return True if output is a real terminal (live check + startup flag)."""
-    return _IS_TTY or sys.stdout.isatty()
-
+import openclaw_cli_render as _render_mod
 
 # Cached latest PyPI version set by the background update-check thread.
 _latest_version: str | None = None
@@ -116,28 +127,6 @@ _last_response_text: str = ""
 # Content to prepend to the next outgoing message — set by /inject
 _next_inject: str = ""
 
-
-def _c(code: str) -> str:
-    """Return an ANSI escape code only when stdout is a real terminal."""
-    return code if _IS_TTY else ""
-
-
-# ANSI palette
-_R   = _c("\033[0m")     # reset
-_B   = _c("\033[1m")     # bold
-_DM  = _c("\033[2m")     # dim
-_CY  = _c("\033[36m")    # cyan
-_GR  = _c("\033[32m")    # green
-_YE  = _c("\033[33m")    # yellow
-_RE  = _c("\033[31m")    # red
-_MA  = _c("\033[35m")    # magenta
-_BCY = _c("\033[1;36m")  # bold cyan
-_BGR = _c("\033[1;32m")  # bold green
-_BYE = _c("\033[1;33m")  # bold yellow
-_BRE = _c("\033[1;31m")  # bold red
-_BBL = _c("\033[1;34m")  # bold blue
-_IT  = _c("\033[3m")     # italic
-_UL  = _c("\033[4m")     # underline
 
 DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
@@ -4835,61 +4824,39 @@ def _render_body_with_tables(body: str) -> None:
         _RICH_CONSOLE.print(_RichMarkdown(remaining))
 
 
+def _make_render_ctx(is_tty: bool | None = None, high_contrast: bool | None = None) -> "_render_mod.RenderContext":
+    """Build a RenderContext from current module globals — called at render time."""
+    try:
+        from rich.rule import Rule as _Rule
+    except ImportError:
+        _Rule = None
+    _is_tty = _get_is_tty() if is_tty is None else is_tty
+    _hc = _a11y_high_contrast() if high_contrast is None else high_contrast
+    return _render_mod.RenderContext(
+        is_tty=_is_tty,
+        is_rich=_RICH_AVAILABLE,
+        high_contrast=_hc,
+        plain_mode=_a11y_plain_mode(),
+        cols=shutil.get_terminal_size((80, 24)).columns,
+        theme_ansi=_theme_ansi(),
+        prefs=_PREFS,  # pass by reference — monkeypatches on _PREFS work transparently
+        console=globals().get("_RICH_CONSOLE"),
+        Panel=globals().get("_RichPanel"),
+        Text=globals().get("_RichText"),
+        Rule=_Rule,
+        Table=globals().get("_RichTable"),
+        Markdown=globals().get("_RichMarkdown"),
+    )
+
+
 def _render_response_body(
     text: str,
     sources: str | None,
     is_tty: bool,
     high_contrast: bool,
 ) -> None:
-    """Render the main response body (Rich tables or ANSI markdown) plus inline sources panel."""
-    if not text.strip():
-        text = "_No response text returned._"
-    if _RICH_AVAILABLE and is_tty:
-        _render_body_with_tables(text)
-        if sources:
-            src_items = _clean_sources_for_display(sources)
-            src_text = _RichText()
-            for i, (display, url) in enumerate(src_items):
-                if i > 0:
-                    src_text.append("\n")
-                src_text.append(f"{i + 1}. ", style="dim")
-                if display != url:
-                    src_text.append(display, style="bold")
-                    src_text.append("  ", style="")
-                src_text.append(url, style="cyan link " + url)
-            if not src_items:
-                src_text = _RichText(sources, style="dim")
-            _RICH_CONSOLE.print(
-                _RichPanel(
-                    src_text,
-                    title=f"[dim]{_e('📎', '[src]')} Sources[/]",
-                    border_style="bold white" if high_contrast else "dim blue",
-                    padding=(0, 1),
-                )
-            )
-    elif is_tty:
-        # Rich not available but interactive TTY — use ANSI markdown renderer
-        print(_render_markdown_ansi(_linkify_response(text)))
-        if sources:
-            src_items = _clean_sources_for_display(sources)
-            term_cols = shutil.get_terminal_size((80, 24)).columns
-            w = max(term_cols - 4, 40)
-            border_style = _theme_ansi() if high_contrast else _DM
-            border_reset = _R if border_style else ""
-            print(
-                f"\n  {border_style}╭─ {_e('📎', '[src]')} Sources "
-                f"{_separator_fill(max(0, w - 12), high_contrast=False)}╮{border_reset}"
-            )
-            for i, (display, url) in enumerate(src_items or [(sources, sources)]):
-                label = f"{i + 1}. " if src_items else ""
-                name_part = f"{_B}{display}{_R}  " if display != url else ""
-                link = _make_clickable_link(url) if _PREFS.get("clickable_links", True) else f"{_CY}{url}{_R}"
-                print(f"  {border_style}│{border_reset}  {_DM}{label}{_R}{name_part}{link}")
-            print(f"  {border_style}╰{_separator_fill(w - 1, high_contrast=False)}╯{border_reset}")
-    else:
-        print(text)
-        if sources:
-            print(f"\nSources:\n{sources}")
+    """Render the main response body — delegated to openclaw_cli_render."""
+    _render_mod._render_response_body(text, sources, _make_render_ctx(is_tty, high_contrast))
 
 
 def _render_response_footer(
@@ -4899,38 +4866,8 @@ def _render_response_footer(
     is_tty: bool,
     high_contrast: bool,
 ) -> None:
-    """Render the timing/model footer rule below the response body."""
-    if not (model or tokens or elapsed > 0):
-        return
-    headline, footer = _response_footer_lines(
-        elapsed=elapsed,
-        tokens=tokens,
-        model=model,
-    )
-    if _RICH_AVAILABLE and is_tty:
-        from rich.rule import Rule as _RichRule
-
-        _motion_pause("footer")
-        _RICH_CONSOLE.print(_RichRule(style="bold white" if high_contrast else "dim"))
-        headline_style = "bold white" if high_contrast else "bold cyan"
-        footer_style = "bold white" if high_contrast else "dim"
-        _RICH_CONSOLE.print(f"[{headline_style}]{headline}[/]")
-        if footer:
-            _RICH_CONSOLE.print(f"[{footer_style}]{footer}[/]")
-    elif is_tty:
-        print()
-        headline_style = _theme_ansi() if high_contrast else _BCY
-        footer_style = _theme_ansi() if high_contrast else _DM
-        headline_reset = _R if headline_style else ""
-        footer_reset = _R if footer_style else ""
-        print(f"{headline_style}{headline}{headline_reset}")
-        if footer:
-            print(f"{footer_style}{footer}{footer_reset}")
-    else:
-        print()
-        print(headline)
-        if footer:
-            print(f"Metadata: {footer}")
+    """Render the timing/model footer — delegated to openclaw_cli_render."""
+    _render_mod._render_response_footer(model, tokens, elapsed, _make_render_ctx(is_tty, high_contrast))
 
 
 def print_response(response: AskResponse, *, output_json: bool, elapsed: float = 0.0) -> None:
