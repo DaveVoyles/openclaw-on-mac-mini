@@ -1,0 +1,409 @@
+# OpenClaw CLI — Tech Debt Audit & Remediation Plan
+
+> Generated after a 4-agent structural audit of `src/openclaw_cli.py` (14,954 lines, Wave 31).
+> Waves are ordered from lowest-risk/highest-impact to highest-risk/largest structural change.
+> Each wave should pass all 418+ tests before deployment.
+
+---
+
+## Wave Status
+
+| Wave | Title | Risk | Status |
+|------|-------|------|--------|
+| TD-1 | Quick Wins — Deprecations & Hardcoded Values | 🟢 Low | ⏳ Pending |
+| TD-2 | De-duplicate Structural Patterns | 🟡 Medium | ⏳ Pending |
+| TD-3 | Move Regex Compilation to Module Level | 🟢 Low | ⏳ Pending |
+| TD-4 | Response Pipeline Refactor | 🟡 Medium | ⏳ Pending |
+| TD-5 | Data-Driven Command Registry | 🟡 Medium | ⏳ Pending |
+| TD-6 | God Function Decomposition | 🔴 High | ⏳ Pending |
+| TD-7 | Module Split | 🔴 High | ⏳ Pending |
+
+---
+
+## Audit Summary
+
+Four parallel agents audited `src/openclaw_cli.py` and `tests/test_openclaw_cli.py` across four dimensions:
+
+| Audit | Key Finding |
+|-------|-------------|
+| Duplicate Patterns | 77× inline `is_tty` check; 128× `if _RICH_AVAILABLE and is_tty`; 12 identical toggle command bodies; 44× `_PREFS[k]=v; _save_prefs()` pattern |
+| Dead / Stale Code | 4× `datetime.utcnow()` deprecation; hardcoded IP `192.168.1.93:8765` in 2 places; 4 stale `_PREFS` keys read but never written |
+| Architecture | 14,954-line monolith; 6,792-line test file; no clear module boundaries; 14 `re.compile()` inside functions |
+| Size / Complexity | `build_chat_command_registry()` 475 lines / 71 registry calls; `handle_watch_command()` 374 lines; `run_chat()` 276 lines / 11 responsibilities; `_BUILTIN_COMMAND_NAMES` frozenset 49 entries vs 79 registered commands |
+
+---
+
+## TD-1 — Quick Wins: Deprecations & Hardcoded Values 🟢
+
+**Goal:** Fix correctness and portability issues with zero user-visible impact.
+
+### Changes
+
+#### 1.1 — Fix `datetime.utcnow()` deprecation (4 locations)
+
+`datetime.utcnow()` is deprecated since Python 3.12 and emits runtime warnings.
+
+```python
+# Before
+ts = datetime.utcnow().isoformat()
+
+# After
+from datetime import timezone
+ts = datetime.now(timezone.utc).isoformat()
+```
+
+**Locations:** lines ~7702, ~11450, ~11662, ~11880
+
+#### 1.2 — Remove hardcoded server IP (2 locations)
+
+`192.168.1.93:8765` is hardcoded in two fallback paths. Should read from env var.
+
+```python
+# Before
+url = "http://192.168.1.93:8765/chat"
+
+# After
+_DEFAULT_SERVER = os.environ.get("OPENCLAW_SERVER", "http://192.168.1.93:8765")
+url = f"{_DEFAULT_SERVER}/chat"
+```
+
+**Locations:** lines ~13331, ~14839
+
+#### 1.3 — Remove stale `_PREFS` read keys
+
+Four keys are read in `_cmd_stats()` but never written:
+
+| Key | Read Location | Fix |
+|-----|---------------|-----|
+| `route_mode` | `_cmd_stats()` | Remove from stats display |
+| `current_session` | `_cmd_stats()` | Remove or derive from session_id |
+| `last_model` | `_cmd_stats()` | Remove from stats display |
+| `session_edits` | `_cmd_stats()` | Written once; keep or derive |
+
+#### 1.4 — Generate `_BUILTIN_COMMAND_NAMES` dynamically
+
+The frozenset has 49 entries; the registry has 79 registered commands. 30+ commands are unprotected from aliasing conflicts.
+
+```python
+# Before (hardcoded, goes stale)
+_BUILTIN_COMMAND_NAMES: frozenset[str] = frozenset({"help", "clear", ...})  # 49 entries
+
+# After (generated from registry — never stale)
+def _get_builtin_command_names() -> frozenset[str]:
+    return frozenset(cmd.name for cmd in _REGISTRY.list_commands())
+```
+
+**Impact:** `/alias` validation becomes correct for all 79 commands automatically.
+
+---
+
+## TD-2 — De-duplicate Structural Patterns 🟡
+
+**Goal:** Extract repeated inline patterns into shared helpers. Reduces the codebase by an estimated 400–600 lines.
+
+### Changes
+
+#### 2.1 — Extract `_get_is_tty()` (77× duplicated)
+
+```python
+# Before (duplicated 77 times)
+is_tty = _IS_TTY or sys.stdout.isatty()
+
+# After
+def _get_is_tty() -> bool:
+    return _IS_TTY or sys.stdout.isatty()
+```
+
+#### 2.2 — Extract `_print_rich_or_plain()` (128× duplicated branch)
+
+```python
+# Before (128 times)
+if _RICH_AVAILABLE and is_tty:
+    _console.print(rich_obj)
+else:
+    print(plain_text)
+
+# After
+def _print_rich_or_plain(rich_obj: Any, plain_text: str) -> None:
+    if _RICH_AVAILABLE and _get_is_tty():
+        _console.print(rich_obj)
+    else:
+        print(plain_text)
+```
+
+#### 2.3 — Extract `_handle_simple_toggle_pref()` (12 toggle commands)
+
+All 12 on/off toggle commands share identical structure:
+
+```python
+# Before — repeated 12 times with different pref key and label
+def _cmd_links(ctx: ChatCommandContext) -> str:
+    val = ctx.args.strip().lower() if ctx.args else ""
+    if val in ("on", "off"):
+        _PREFS["links"] = val == "on"
+        _save_prefs()
+        return f"Links {'enabled' if _PREFS['links'] else 'disabled'}."
+    state = "on" if _PREFS.get("links", True) else "off"
+    return f"Links are currently {state}."
+
+# After — one shared helper
+def _handle_simple_toggle_pref(
+    ctx: ChatCommandContext,
+    key: str,
+    label: str,
+    default: bool = True,
+) -> str:
+    val = ctx.args.strip().lower() if ctx.args else ""
+    if val in ("on", "off"):
+        _PREFS[key] = val == "on"
+        _save_prefs()
+        return f"{label} {'enabled' if _PREFS[key] else 'disabled'}."
+    state = "on" if _PREFS.get(key, default) else "off"
+    return f"{label} is currently {state}."
+```
+
+**Commands affected:** `/links`, `/autobold`, `/jsonformat`, `/emojiheaders`, `/pathhints`, `/ratehint`, `/promptdebug`, `/followup`, `/separator`, `/quality`, `/tip`, `/shortcuts`
+
+#### 2.4 — Extract `_prefs_set()` helper (44× pattern)
+
+```python
+# Before — 44 occurrences
+_PREFS["key"] = value
+_save_prefs()
+
+# After
+def _prefs_set(key: str, value: object) -> None:
+    _PREFS[key] = value
+    _save_prefs()
+```
+
+---
+
+## TD-3 — Move Regex Compilation to Module Level 🟢
+
+**Goal:** Eliminate per-call regex compilation overhead. Affects rendering loops that run on every response.
+
+**14 `re.compile()` calls** inside functions should be hoisted to module-level constants.
+
+```python
+# Before (compiled on every call to _render_markdown_ansi and friends)
+def _render_markdown_ansi(text: str) -> str:
+    bold_re = re.compile(r"\*\*(.+?)\*\*")
+    ...
+
+# After (compiled once at import time)
+_RE_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+def _render_markdown_ansi(text: str) -> str:
+    # use _RE_BOLD directly
+    ...
+```
+
+**Naming convention:** `_RE_<DESCRIPTION>` for all module-level regex patterns.
+
+**Functions to audit:** `_render_markdown_ansi()`, `_auto_bold_response()`, `_preprocess_response_text()`, `_detect_and_format_json()`, `_inject_heading_emojis()`, `_linkify_response()`, `_detect_file_paths()`
+
+---
+
+## TD-4 — Response Pipeline Refactor 🟡
+
+**Goal:** Split the 95-line `print_response()` (21 helper calls, 8 processing stages, 20 branches) into focused components with single responsibilities.
+
+### Current Pipeline (all in one function)
+
+```
+print_response()
+  ├─ JSON vs text detection
+  ├─ TTY / a11y mode detection
+  ├─ _preprocess_response_text()
+  ├─ _auto_bold_response()
+  ├─ _detect_and_format_json()
+  ├─ _inject_heading_emojis()
+  ├─ Body rendering (Rich tables OR ANSI markdown)
+  ├─ _clean_sources_for_display()
+  └─ Footer + border rendering
+```
+
+### Target Architecture
+
+```python
+class ResponsePipeline:
+    """Preprocessing: text normalization, bold, JSON, emojis, sources extraction."""
+    def process(self, raw: str) -> ProcessedResponse: ...
+
+class OutputRenderer(Protocol):
+    """Interface for Rich / ANSI / Plain renderers."""
+    def render(self, processed: ProcessedResponse) -> None: ...
+
+class RichRenderer:    ...  # uses _console.print + Rich objects
+class AnsiRenderer:    ...  # uses _render_markdown_ansi
+class PlainRenderer:   ...  # uses textwrap + print
+
+def print_response(text: str, ...) -> None:
+    """Orchestrator: ~15 lines."""
+    processed = ResponsePipeline().process(text)
+    renderer = _pick_renderer()
+    renderer.render(processed)
+```
+
+**Benefit:** Each renderer can be unit-tested independently; a11y rendering becomes a first-class concern.
+
+---
+
+## TD-5 — Data-Driven Command Registry 🟡
+
+**Goal:** Replace the 475-line `build_chat_command_registry()` (71 identical `registry.register()` calls) and the 155-line `print_chat_help()` (48 hardcoded tuples) with a single data source.
+
+### Current State
+
+- `build_chat_command_registry()`: 475 lines, 0 logic, 71 repetitions
+- `print_chat_help()`: 155 lines, 48 hardcoded command descriptions
+- **Total: 630 lines** for what is essentially a static data table
+- Maintenance: every new command requires edits in 2 places
+
+### Target State
+
+```python
+# commands_data.py  (or inline as module-level list)
+COMMAND_SPECS: list[dict] = [
+    {"name": "help",  "aliases": [], "description": "Show this help",   "handler": "_cmd_help",  "group": "General"},
+    {"name": "clear", "aliases": [], "description": "Reset conversation", "handler": "_cmd_clear", "group": "General"},
+    # ... 69 more rows
+]
+
+def build_chat_command_registry() -> CommandRegistry:
+    """3 lines."""
+    return CommandRegistry.from_specs(COMMAND_SPECS)
+
+def print_chat_help(...) -> None:
+    """Generated from same COMMAND_SPECS — no duplication."""
+```
+
+**Estimated reduction:** 630 lines → ~120 lines (data table + 2 short loaders)
+
+---
+
+## TD-6 — God Function Decomposition 🔴
+
+**Goal:** Break up the two largest functions in the codebase into single-responsibility components.
+
+### 6.1 — `run_chat()` (276 lines, 11 responsibilities)
+
+Current responsibilities:
+1. Session history management
+2. Command registry & processing
+3. Input/prompt handling (readline, multiline, buffering)
+4. Response rendering
+5. Error handling / recovery
+6. Readline tab-completion setup
+7. Startup banner & random tips
+8. Multiline mode handling
+9. Auto-routing state checking
+10. Draft buffer management
+11. Shell history persistence
+
+**Target:**
+
+```python
+def _setup_readline(registry: CommandRegistry) -> None:
+    """Tab completion + keybindings."""
+
+def _make_session_controller(session_id: str) -> SessionController:
+    """Auto-route, session history, draft buffer."""
+
+def _run_interaction_loop(
+    controller: SessionController,
+    registry: CommandRegistry,
+) -> None:
+    """Main input/output loop — ~50 lines."""
+
+def run_chat(session_id: str, ...) -> None:
+    """Orchestrator: setup → loop → teardown. ~20 lines."""
+```
+
+### 6.2 — `handle_watch_command()` (374 lines)
+
+Extract:
+- File watching setup
+- Diff rendering
+- Polling / debounce logic
+- Output formatting
+
+Each into its own helper ≤80 lines.
+
+---
+
+## TD-7 — Module Split 🔴
+
+**Goal:** Split the 14,954-line monolith into focused, independently testable modules.
+
+### Proposed Module Structure
+
+```
+src/
+├── openclaw_cli.py          # Entry point + run_chat() only (~300 lines)
+├── openclaw_cli_render.py   # print_response, ResponsePipeline, renderers
+├── openclaw_cli_commands.py # All _cmd_* handlers + COMMAND_SPECS
+├── openclaw_cli_prefs.py    # _PREFS, _save_prefs, _load_prefs, _prefs_set
+├── openclaw_cli_session.py  # Session state, history, auto-routing (already exists)
+├── openclaw_cli_actions.py  # File actions, plan commands (already exists)
+└── subprocess_utils.py      # Already separate
+```
+
+### Test Module Split
+
+```
+tests/
+├── test_cli_render.py       # ResponsePipeline, renderers, sources
+├── test_cli_commands.py     # All _cmd_* handlers
+├── test_cli_prefs.py        # Pref persistence, toggles
+├── test_cli_session.py      # Session state, history
+└── test_cli_integration.py  # run_chat() integration tests (5 flaky tests live here)
+```
+
+**Current state:** `tests/test_openclaw_cli.py` = 6,792 lines, all tests in one file.
+
+**Benefit:** Faster pytest runs (parallel), clearer ownership, no 6,000-line file to navigate.
+
+---
+
+## Implementation Notes
+
+### Testing
+
+All waves must pass the full test suite before deployment:
+
+```bash
+python3 -m pytest tests/test_openclaw_cli.py \
+  -k "not (test_run_chat_uses_router_before_generic_chat_fallback \
+       or test_run_chat_routed_edit_still_requests_approval \
+       or test_run_chat_autoroutes_plan_candidate \
+       or test_run_chat_supports_help_command \
+       or test_help_output_includes_new_commands)" \
+  -q
+```
+
+### Deployment
+
+```bash
+make deploy-cli
+```
+
+### Risk Order
+
+Waves TD-1 and TD-3 are pure refactors with no behavioral change — safe to ship quickly.
+Waves TD-4 through TD-7 touch rendering and control flow — require careful regression testing.
+Wave TD-7 (module split) should be last; it changes import structure and may require CI pipeline updates.
+
+### Estimated Impact
+
+| Wave | Lines Removed | Risk |
+|------|---------------|------|
+| TD-1 | ~30 | 🟢 |
+| TD-2 | ~500 | 🟡 |
+| TD-3 | ~40 (+ performance gain) | 🟢 |
+| TD-4 | ~60 (net; adds classes) | 🟡 |
+| TD-5 | ~510 | 🟡 |
+| TD-6 | ~150 (net; adds helpers) | 🔴 |
+| TD-7 | 0 net (structural reorganization) | 🔴 |
+| **Total** | **~1,290 lines removed** | — |
