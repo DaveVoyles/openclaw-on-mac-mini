@@ -1847,6 +1847,30 @@ on top of the existing local session data model:
 
 ---
 
+## Wave 28 — Keyboard Shortcuts
+
+**Status:** ✅ Shipped
+
+### Features
+- **readline emacs mode**: Ctrl-R (reverse history search), Ctrl-L (clear screen), Ctrl-W (delete word), Ctrl-U (clear line) — explicitly bound in `run_chat()`.
+- **`/keys`** (`_print_key_bindings()`): Table of all active built-in keyboard shortcuts in Rich or plain-text format.
+- **`/keybind [key action|list|clear]`**: Save custom `Ctrl+X → /command` bindings. Persisted in `custom_keybinds` pref. Applied on startup via `_apply_all_custom_keybinds()`. Example: `/keybind Ctrl+H /histsearch`.
+- **`/bindlist`**: Unified Rich table showing built-in readline bindings + all custom bindings with type indicator.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/keys` | Show active keyboard shortcuts |
+| `/keybind [key action\|list\|clear]` | Manage custom key bindings |
+| `/bindlist` | Show all bindings (built-in + custom) |
+
+### New Prefs
+| Key | Default | Description |
+|---|---|---|
+| `custom_keybinds` | `{}` | User-defined key→command mappings |
+
+---
+
 ## Wave 28 — Gesture Language & Predictive Affordances
 
 **Status: ✅ Shipped**

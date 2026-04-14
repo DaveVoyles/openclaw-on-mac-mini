@@ -227,6 +227,16 @@ vocabulary, persistence, and fallback reporting first.
 
 > **New:** `/exec` failures now show smart recovery hints (e.g., `pip install` for missing modules, `sudo` for permission errors). Rate 5 stars to trigger streak tracking and ASCII trophy at milestones!
 
+### Wave 28 — Keyboard Shortcuts
+
+| Command | Description |
+|---|---|
+| `/keys` | Show all active keyboard shortcuts and readline bindings |
+| `/keybind [key action\|list\|clear]` | Set custom Ctrl+X key bindings to slash commands |
+| `/bindlist` | Show all key bindings — built-in readline + your custom binds |
+
+> **New:** Ctrl-R reverse search, Ctrl-L clear, Ctrl-W word-delete are now active. Bind any `Ctrl+X` to a slash command with `/keybind Ctrl+H /histsearch`.
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new

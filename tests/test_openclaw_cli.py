@@ -3072,7 +3072,7 @@ def test_print_watch_status_wave27_surfaces_operator_queue(capsys):
     assert "read-only local snapshot" in out
 
 
-def test_print_watch_status_wave28_shows_predictive_actions_for_retrying_watch(capsys):
+def test_print_watch_status_wave29_shows_predictive_actions_for_retrying_watch(capsys):
     mod._print_watch_status(
         {
             "goal": "watch repo",
@@ -3091,7 +3091,7 @@ def test_print_watch_status_wave28_shows_predictive_actions_for_retrying_watch(c
     assert "/watch intervene <msg> to leave an operator breadcrumb" in out
 
 
-def test_print_watch_status_wave28_shows_session_review_after_completion(capsys):
+def test_print_watch_status_wave29_shows_session_review_after_completion(capsys):
     mod._print_watch_status(
         {
             "goal": "watch repo",
@@ -5367,9 +5367,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave28(self):
-        """_CLI_BUILD must equal 'wave28'."""
-        assert mod._CLI_BUILD == "wave28"
+    def test_cli_build_is_wave29(self):
+        """_CLI_BUILD must equal 'wave29'."""
+        assert mod._CLI_BUILD == "wave29"
 
 
 class TestCmdRatehint:
@@ -6048,7 +6048,7 @@ class TestPathHints:
         assert "use /view or /edit" in out
 
 
-def test_print_risky_action_warning_wave28_includes_recovery_hint(capsys):
+def test_print_risky_action_warning_wave29_includes_recovery_hint(capsys):
     mod._print_risky_action_warning(
         action="/exec",
         target="rm -rf build/",
@@ -6280,9 +6280,9 @@ class TestCmdTip:
         assert len(mod._OPENCLAW_TIPS) > 0
         assert all(isinstance(t, str) for t in mod._OPENCLAW_TIPS)
 
-    def test_cli_build_is_wave28(self):
-        """_CLI_BUILD is updated to wave28."""
-        assert mod._CLI_BUILD == "wave28"
+    def test_cli_build_is_wave29(self):
+        """_CLI_BUILD is updated to wave29."""
+        assert mod._CLI_BUILD == "wave29"
 
 
 class TestCmdKeys:
@@ -6335,9 +6335,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave28(self):
-        """_CLI_BUILD == 'wave28'."""
-        assert mod._CLI_BUILD == "wave28"
+    def test_cli_build_is_wave29(self):
+        """_CLI_BUILD == 'wave29'."""
+        assert mod._CLI_BUILD == "wave29"
 
 
 class TestCmdKeybind:
@@ -6388,3 +6388,87 @@ class TestCmdKeybind:
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
         assert "Usage" in out
+
+
+class TestRenderDiffAnsi:
+    """Tests for _render_diff_ansi colorization."""
+
+    def test_added_line_contains_green(self):
+        """Lines starting with '+' are wrapped in _GR (green)."""
+        result = mod._render_diff_ansi("+added line")
+        assert mod._GR in result
+
+    def test_removed_line_contains_red(self):
+        """Lines starting with '-' are wrapped in _RE (red)."""
+        result = mod._render_diff_ansi("-removed line")
+        assert mod._RE in result
+
+    def test_hunk_header_contains_cyan(self):
+        """Lines starting with '@@' are wrapped in _CY (cyan)."""
+        result = mod._render_diff_ansi("@@ -1,3 +1,4 @@")
+        assert mod._CY in result
+
+
+class TestCmdSnapshot:
+    """Tests for /snapshot and /rollback (git snapshot) commands."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_snapshot_no_args_returns_cmd_continue(self, monkeypatch):
+        """/snapshot with no args returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        import subprocess
+        fake = type("R", (), {"stdout": "abc123def456\n", "stderr": "", "returncode": 0})()
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: fake)
+        with patch.object(mod, "_save_prefs"):
+            result = mod._cmd_snapshot(self._ctx(""))
+        assert result == mod._CMD_CONTINUE
+
+    def test_rollback_list_no_snapshots_shows_no_snapshots(self, monkeypatch, capsys):
+        """/rollback list with no snapshots shows 'No snapshots' message and returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_rollback(self._ctx("list"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No snapshots" in out
+
+    def test_rollback_unknown_name_shows_no_snapshot_named(self, monkeypatch, capsys):
+        """/rollback unknownname shows 'No snapshot named' message."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_rollback(self._ctx("unknownname"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No snapshot named" in out
+
+
+class TestCmdChanges:
+    """Tests for /changes and /diff commands."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_cmd_changes_returns_cmd_continue(self, monkeypatch):
+        """/changes returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        import subprocess
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: type("R", (), {"stdout": "", "stderr": ""})())
+        result = mod._cmd_changes(self._ctx())
+        assert result == mod._CMD_CONTINUE
+
+    def test_cmd_diff_no_args_returns_cmd_continue(self, monkeypatch):
+        """/diff with no args returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        import subprocess
+        monkeypatch.setattr(subprocess, "run", lambda *a, **kw: type("R", (), {"stdout": "", "stderr": ""})())
+        result = mod._cmd_diff(self._ctx())
+        assert result == mod._CMD_CONTINUE

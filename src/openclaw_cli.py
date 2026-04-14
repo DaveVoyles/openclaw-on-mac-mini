@@ -135,7 +135,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave28"  # updated with each UX wave batch
+_CLI_BUILD = "wave29"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -7561,106 +7561,198 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
-def _cmd_rollback(ctx: ChatCommandContext) -> str:
-    """/rollback [last|list] — restore the latest checkpoint or list all checkpoints."""
-    arg = ctx.args.strip().lower()
+def _cmd_snapshot(ctx: ChatCommandContext) -> str:
+    """/snapshot [name] — save current git HEAD as a named restore point."""
+    import subprocess
+    name = ctx.args.strip() or "auto"
+    is_tty = _IS_TTY or sys.stdout.isatty()
 
-    if arg == "list":
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5
+        )
+        sha = result.stdout.strip()[:12]
+
+        if not sha:
+            msg = "Not in a git repo or no commits yet."
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+            else:
+                print(msg)
+            return _CMD_CONTINUE
+
+        snapshots = _PREFS.get("snapshots", {})
+        import datetime
+        ts = datetime.datetime.utcnow().isoformat()
+        snapshots[name] = {"sha": sha, "ts": ts}
+        _PREFS["snapshots"] = snapshots
+        _save_prefs()
+
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] Snapshot [bold]{name}[/] saved at [dim]{sha}[/]")
+        else:
+            print(f"✓ Snapshot '{name}' saved at {sha}")
+    except Exception as e:
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
+        else:
+            print(f"Error: {e}")
+
+    return _CMD_CONTINUE
+
+
+def _cmd_rollback(ctx: ChatCommandContext) -> str:
+    """/rollback [last|list|<name>] — restore latest checkpoint, list git snapshots, or preview/exec a git snapshot rollback."""
+    arg = ctx.args.strip()
+    arg_lower = arg.lower()
+
+    # Git-snapshot: list saved snapshots (no arg or explicit "list" when no checkpoints match)
+    if not arg or arg_lower == "list":
+        import subprocess
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        snapshots = _PREFS.get("snapshots", {})
+        if not snapshots:
+            msg = "No snapshots saved. Use /snapshot [name] to save one."
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+            else:
+                print(msg)
+            return _CMD_CONTINUE
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[bold cyan]📸 Saved Snapshots[/]\n")
+            for snap_name, snap_data in snapshots.items():
+                sha = snap_data.get("sha", "?")
+                ts = snap_data.get("ts", "")[:10]
+                _RICH_CONSOLE.print(f"  [bold green]{snap_name:<20}[/] [dim]{sha}[/]  {ts}")
+            _RICH_CONSOLE.print()
+        else:
+            print(f"\n📸 Saved Snapshots\n")
+            for snap_name, snap_data in snapshots.items():
+                sha = snap_data.get("sha", "?")
+                ts = snap_data.get("ts", "")[:10]
+                print(f"  {snap_name:<20} {sha}  {ts}")
+            print()
+        return _CMD_CONTINUE
+
+    # Existing checkpoint restore: /rollback last
+    if arg_lower == "last":
         session = _require_session_or_warn(ctx)
         if session is None:
             return _CMD_CONTINUE
-        checkpoints = list_routed_action_checkpoints(session.session_id)
-        if not checkpoints:
-            print(f"  {_DM}No routed action checkpoints recorded for this session.{_R}")
-            print(f"  {_DM}Checkpoints are created automatically when you approve /exec or /edit routes.{_R}")
+        outcome = restore_last_routed_action_checkpoint(session.session_id)
+        if outcome is None:
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]—  no routed action checkpoints available for this session[/]")
+            else:
+                print("No routed action checkpoints are available for this session.")
+            _set_command_result(ctx, ok=False, summary="no routed checkpoints")
+            return _CMD_CONTINUE
+        checkpoint = outcome.get("checkpoint") or {}
+        checkpoint_id = str(checkpoint.get("checkpoint_id") or "").strip()
+        action_kind = str(checkpoint.get("action_kind") or "action").strip()
+        reason = str(outcome.get("reason") or "").strip()
+        status = str(outcome.get("status") or "").strip()
+        if status == "restored":
+            restored_files = [str(item) for item in outcome.get("restored_files") or []]
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"[green]✓[/] rolled back [dim]{action_kind}[/] via checkpoint [dim]{checkpoint_id}[/]  [cyan]({len(restored_files)} file(s) restored)[/]")
+                for path in restored_files[:5]:
+                    _RICH_CONSOLE.print(f"  [dim]↩ {path}[/]")
+            else:
+                print(f"Rolled back last routed {action_kind} action via checkpoint {checkpoint_id}. Restored {len(restored_files)} file(s).")
+                for path in restored_files[:5]:
+                    print(f"  restored: {path}")
+            _set_command_result(ctx, ok=True, summary=f"rolled back checkpoint {checkpoint_id}")
+            return _CMD_CONTINUE
+        if status == "already_rolled_back":
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"[dim]—  checkpoint {checkpoint_id} was already restored[/]")
+            else:
+                print(f"Checkpoint {checkpoint_id} for the last routed action was already restored.")
+            _set_command_result(ctx, ok=True, summary=f"checkpoint {checkpoint_id} already restored")
+            return _CMD_CONTINUE
+        if status == "unsupported":
+            workspace_signature = str(checkpoint.get("workspace_signature") or "").strip()
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print(f"[yellow]⚠[/] rollback unavailable for [dim]{checkpoint_id}[/]: {reason or 'manual recovery required'}")
+                if workspace_signature:
+                    _RICH_CONSOLE.print(f"  [dim]workspace before action:[/] {workspace_signature}")
+            else:
+                print(f"Checkpoint {checkpoint_id} recorded the last routed {action_kind} action, but automatic rollback is unavailable: {reason or 'manual recovery required.'}")
+                if workspace_signature:
+                    print(f"workspace signature before action: {workspace_signature}")
+            _set_command_result(ctx, ok=False, summary=f"rollback unavailable for {checkpoint_id}")
             return _CMD_CONTINUE
         if _RICH_AVAILABLE and _IS_TTY:
-            tbl = _RichTable(show_header=True, header_style="bold", box=None, pad_edge=False)
-            tbl.add_column("#", style="dim", justify="right", min_width=2)
-            tbl.add_column("ID", style="cyan", no_wrap=True, min_width=12)
-            tbl.add_column("Kind", style="dim", no_wrap=True)
-            tbl.add_column("Target", no_wrap=False, max_width=36)
-            tbl.add_column("Recoverable", style="dim", no_wrap=True)
-            for i, cp in enumerate(checkpoints, 1):
-                cp_id = str(cp.get("checkpoint_id") or "")[:12]
-                kind = str(cp.get("action_kind") or "—")
-                target = str(cp.get("target") or "—")[:34]
-                recoverable = "[green]✓[/]" if cp.get("rollback_supported") else "[dim]✗[/]"
-                tbl.add_row(str(i), cp_id, kind, target, recoverable)
-            _RICH_CONSOLE.print()
-            _RICH_CONSOLE.print(tbl)
-            _RICH_CONSOLE.print(f"\n  [dim]Use /rollback last to restore the most recent recoverable checkpoint.[/]\n")
+            _RICH_CONSOLE.print(f"[red]✗[/] rollback failed for [dim]{checkpoint_id}[/]: {reason or 'unable to restore the latest routed action'}")
         else:
-            print(f"\n  Routed action checkpoints ({len(checkpoints)}):\n")
-            print(f"  {'#':>2}  {'ID':<12}  {'Kind':<8}  {'Target':<36}  Recoverable")
-            print(f"  {'─'*2}  {'─'*12}  {'─'*8}  {'─'*36}  ───────────")
-            for i, cp in enumerate(checkpoints, 1):
-                cp_id = str(cp.get("checkpoint_id") or "")[:12]
-                kind = str(cp.get("action_kind") or "—")[:8]
-                target = str(cp.get("target") or "—")[:34]
-                recoverable = "✓" if cp.get("rollback_supported") else "✗"
-                print(f"  {i:>2}  {cp_id:<12}  {kind:<8}  {target:<36}  {recoverable}")
-            print(f"\n  Use /rollback last to restore the most recent recoverable checkpoint.\n")
+            print(f"Rollback failed for checkpoint {checkpoint_id}: {reason or 'unable to restore the latest routed action.'}")
+        _set_command_result(ctx, ok=False, summary=f"rollback failed for {checkpoint_id}")
         return _CMD_CONTINUE
 
-    if arg != "last":
-        _print_error("Usage: /rollback [last|list]")
-        _set_command_result(ctx, ok=False, summary="invalid rollback selector")
-        return _CMD_CONTINUE
-    session = _require_session_or_warn(ctx)
-    if session is None:
-        return _CMD_CONTINUE
-    outcome = restore_last_routed_action_checkpoint(session.session_id)
-    if outcome is None:
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print("[dim]—  no routed action checkpoints available for this session[/]")
+    # Git-snapshot: named snapshot preview or exec
+    import subprocess
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    parts = arg.split()
+    exec_mode = "--exec" in parts
+    name = parts[0] if parts else ""
+    snapshots = _PREFS.get("snapshots", {})
+
+    if name not in snapshots:
+        msg = f"No snapshot named '{name}'. Use /rollback list to see saved snapshots."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
         else:
-            print("No routed action checkpoints are available for this session.")
-        _set_command_result(ctx, ok=False, summary="no routed checkpoints")
+            print(msg)
         return _CMD_CONTINUE
 
-    checkpoint = outcome.get("checkpoint") or {}
-    checkpoint_id = str(checkpoint.get("checkpoint_id") or "").strip()
-    action_kind = str(checkpoint.get("action_kind") or "action").strip()
-    reason = str(outcome.get("reason") or "").strip()
-    status = str(outcome.get("status") or "").strip()
-    if status == "restored":
-        restored_files = [str(item) for item in outcome.get("restored_files") or []]
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[green]✓[/] rolled back [dim]{action_kind}[/] via checkpoint [dim]{checkpoint_id}[/]  [cyan]({len(restored_files)} file(s) restored)[/]")
-            for path in restored_files[:5]:
-                _RICH_CONSOLE.print(f"  [dim]↩ {path}[/]")
-        else:
-            print(f"Rolled back last routed {action_kind} action via checkpoint {checkpoint_id}. Restored {len(restored_files)} file(s).")
-            for path in restored_files[:5]:
-                print(f"  restored: {path}")
-        _set_command_result(ctx, ok=True, summary=f"rolled back checkpoint {checkpoint_id}")
-        return _CMD_CONTINUE
-    if status == "already_rolled_back":
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[dim]—  checkpoint {checkpoint_id} was already restored[/]")
-        else:
-            print(f"Checkpoint {checkpoint_id} for the last routed action was already restored.")
-        _set_command_result(ctx, ok=True, summary=f"checkpoint {checkpoint_id} already restored")
-        return _CMD_CONTINUE
-    if status == "unsupported":
-        workspace_signature = str(checkpoint.get("workspace_signature") or "").strip()
-        if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[yellow]⚠[/] rollback unavailable for [dim]{checkpoint_id}[/]: {reason or 'manual recovery required'}")
-            if workspace_signature:
-                _RICH_CONSOLE.print(f"  [dim]workspace before action:[/] {workspace_signature}")
-        else:
-            print(f"Checkpoint {checkpoint_id} recorded the last routed {action_kind} action, but automatic rollback is unavailable: {reason or 'manual recovery required.'}")
-            if workspace_signature:
-                print(f"workspace signature before action: {workspace_signature}")
-        _set_command_result(ctx, ok=False, summary=f"rollback unavailable for {checkpoint_id}")
-        return _CMD_CONTINUE
-    if _RICH_AVAILABLE and _IS_TTY:
-        _RICH_CONSOLE.print(f"[red]✗[/] rollback failed for [dim]{checkpoint_id}[/]: {reason or 'unable to restore the latest routed action'}")
+    sha = snapshots[name].get("sha", "")
+
+    if exec_mode:
+        try:
+            result = subprocess.run(
+                ["git", "checkout", sha],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                if _RICH_AVAILABLE and is_tty:
+                    _RICH_CONSOLE.print(f"[green]✓[/] Rolled back to snapshot [bold]{name}[/] ({sha})")
+                else:
+                    print(f"✓ Rolled back to {name} ({sha})")
+            else:
+                if _RICH_AVAILABLE and is_tty:
+                    _RICH_CONSOLE.print(f"[red]Error:[/] {result.stderr}")
+                else:
+                    print(f"Error: {result.stderr}")
+        except Exception as e:
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
+            else:
+                print(f"Error: {e}")
     else:
-        print(f"Rollback failed for checkpoint {checkpoint_id}: {reason or 'unable to restore the latest routed action.'}")
-    _set_command_result(ctx, ok=False, summary=f"rollback failed for {checkpoint_id}")
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--stat", f"{sha}..HEAD"],
+                capture_output=True, text=True, timeout=10
+            )
+            diff_stat = result.stdout.strip() or "(no differences)"
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"\n[bold cyan]📸 Rollback Preview:[/] [bold]{name}[/] → current HEAD\n")
+                _RICH_CONSOLE.print(f"[dim]{diff_stat}[/]")
+                _RICH_CONSOLE.print(f"\n[yellow]⚠️  Use /rollback {name} --exec to actually rollback (DESTRUCTIVE)[/]\n")
+            else:
+                print(f"\n📸 Rollback Preview: {name} → HEAD\n{diff_stat}")
+                print(f"\n⚠️  Use /rollback {name} --exec to rollback (DESTRUCTIVE)\n")
+        except Exception as e:
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
+            else:
+                print(f"Error: {e}")
+
     return _CMD_CONTINUE
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -9859,8 +9951,15 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(
         SlashCommand(
             name="rollback",
-            description="Restore the last routed checkpoint (/rollback last)",
+            description="List/preview git snapshots or restore latest checkpoint (/rollback [last|list|<name>])",
             handler=_cmd_rollback,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="snapshot",
+            description="Save current git HEAD as a named restore point (/snapshot [name])",
+            handler=_cmd_snapshot,
         )
     )
     registry.register(
@@ -10181,6 +10280,16 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Manage custom readline key bindings (/keybind [list | Ctrl+X /cmd | clear Ctrl+X])",
         handler=_cmd_keybind,
     ))
+    registry.register(SlashCommand(
+        name="diff",
+        description="Show a colorized unified diff (/diff file1 file2  or  /diff --git)",
+        handler=_cmd_diff,
+    ))
+    registry.register(SlashCommand(
+        name="changes",
+        description="Show session edit log and git status",
+        handler=_cmd_changes,
+    ))
     return registry
 
 
@@ -10202,7 +10311,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/task [<id>|unlink]",            "Show or link a task"),
         ("/outputs [promote <i> <name>]",  "List, preview, promote, or overlay-pick saved session outputs"),
         ("/overlay [on|off|status]",       "Toggle opt-in interactive pickers for supported list commands"),
-        ("/rollback [last|list]",          "Restore latest checkpoint or list all checkpoints"),
+        ("/rollback [last|list|<name>]",   "List git snapshots, preview/exec rollback, or restore checkpoint"),
+        ("/snapshot [name]",               "Save current git HEAD as a named restore point"),
         ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
         ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
         ("/collab [status|share]",             "Show an actor-oriented handoff summary for the current session"),
@@ -10275,6 +10385,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/keys",                                "Show active keyboard shortcuts and readline bindings"),
         ("/bindlist",                            "Show all keyboard bindings — built-in readline + custom"),
         ("/keybind [list|Ctrl+X /cmd|clear X]", "Manage custom readline key bindings"),
+        ("/diff [file1 file2 | --git]",          "Show a colorized unified diff"),
+        ("/changes",                             "Show session edit log and git status"),
     ]
 
     q = search.strip().lower()
@@ -12550,6 +12662,126 @@ def _cmd_keybind(ctx: "ChatCommandContext") -> str:
         _RICH_CONSOLE.print(f"[green]✓[/] Bound [bold yellow]{key_name}[/] → [bold green]{action}[/]")
     else:
         print(f"✓ Bound {key_name} → {action}")
+
+    return _CMD_CONTINUE
+
+
+def _render_diff_ansi(diff_text: str) -> str:
+    """Apply ANSI colors to unified diff output (+ green, - red, @@ cyan)."""
+    if _a11y_plain_mode():
+        return diff_text
+    lines = diff_text.split("\n")
+    result = []
+    for line in lines:
+        if line.startswith("+++") or line.startswith("---"):
+            result.append(f"{_B}{line}{_R}")
+        elif line.startswith("@@"):
+            result.append(f"{_CY}{line}{_R}")
+        elif line.startswith("+"):
+            result.append(f"{_GR}{line}{_R}")
+        elif line.startswith("-"):
+            result.append(f"{_RE}{line}{_R}")
+        else:
+            result.append(f"{_DM}{line}{_R}")
+    return "\n".join(result)
+
+
+def _cmd_diff(ctx: ChatCommandContext) -> str:
+    """/diff [file1 file2 | --git] — show a colorized unified diff."""
+    import subprocess
+    arg = ctx.args.strip()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if not arg or arg == "--git":
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--no-color"],
+                capture_output=True, text=True, timeout=10
+            )
+            diff_text = result.stdout or result.stderr
+        except Exception as e:
+            diff_text = f"Error: {e}"
+    else:
+        parts = arg.split(None, 1)
+        if len(parts) < 2:
+            msg = "Usage: /diff file1 file2  or  /diff --git"
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+            else:
+                print(msg)
+            return _CMD_CONTINUE
+        try:
+            result = subprocess.run(
+                ["diff", "-u", parts[0], parts[1]],
+                capture_output=True, text=True, timeout=10
+            )
+            diff_text = result.stdout or "(no differences)"
+        except Exception as e:
+            diff_text = f"Error: {e}"
+
+    if not diff_text or not diff_text.strip():
+        msg = "No differences found."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    colored = _render_diff_ansi(diff_text)
+    print(colored)
+    return _CMD_CONTINUE
+
+
+def _cmd_changes(ctx: ChatCommandContext) -> str:
+    """/changes — show files mentioned/edited in this session."""
+    import subprocess
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    edits = _PREFS.get("session_edits", [])
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short"],
+            capture_output=True, text=True, timeout=5
+        )
+        git_changes = result.stdout.strip()
+    except Exception:
+        git_changes = ""
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold cyan]📝 Session Changes[/]\n")
+        if edits:
+            for edit in edits[-20:]:
+                _RICH_CONSOLE.print(f"  [dim]→[/] {edit}")
+        else:
+            _RICH_CONSOLE.print(f"  [dim]No session edits tracked yet[/]")
+
+        if git_changes:
+            _RICH_CONSOLE.print(f"\n[bold cyan]🔀 Git Status[/]\n")
+            for line in git_changes.split("\n"):
+                if line.startswith("M") or line.startswith(" M"):
+                    _RICH_CONSOLE.print(f"  [yellow]{line}[/]")
+                elif line.startswith("A") or line.startswith(" A"):
+                    _RICH_CONSOLE.print(f"  [green]{line}[/]")
+                elif line.startswith("D") or line.startswith(" D"):
+                    _RICH_CONSOLE.print(f"  [red]{line}[/]")
+                elif line.startswith("?"):
+                    _RICH_CONSOLE.print(f"  [dim]{line}[/]")
+                else:
+                    _RICH_CONSOLE.print(f"  {line}")
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n📝 Session Changes\n")
+        if edits:
+            for edit in edits[-20:]:
+                print(f"  → {edit}")
+        else:
+            print(f"  No session edits tracked yet")
+        if git_changes:
+            print(f"\n🔀 Git Status\n")
+            for line in git_changes.split("\n"):
+                print(f"  {line}")
+        print()
 
     return _CMD_CONTINUE
 
