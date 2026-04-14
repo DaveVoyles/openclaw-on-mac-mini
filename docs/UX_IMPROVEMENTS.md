@@ -82,6 +82,9 @@ Steps:
 | [Wave 16](#wave-16--search-aliases--pins) | Search, Aliases & Pins | ✅ Shipped |
 | [Wave 17](#wave-17--macros--command-history) | Macros & Command History | ✅ Shipped |
 | [Wave 18](#wave-18--response-rating--quality) | Response Rating & Quality | ✅ Shipped |
+| [Wave 19](#wave-19--context-injection--prompt-engineering) | Context Injection & Prompt Engineering | ✅ Shipped |
+| [Wave 19](#wave-19--interactive-overlays) | Interactive Overlays | 🟡 Partial |
+| [Wave 18B](#wave-18b--performance-visibility) | Performance Visibility | ✅ Shipped |
 
 ---
 
@@ -1039,3 +1042,68 @@ scp src/openclaw_cli_sessions.py macbook:/Users/davevoyles/.local/share/openclaw
 | /quality | Shows total rated, avg score, star distribution bar chart, most recent 3 ratings |
 | /ratehint [on/off] | Toggles post-response dim hint after each AI reply |
 | Pref keys | show_rate_hint (default True); ratings list |
+
+---
+
+## Wave 19 — Interactive Overlays
+
+**Status: 🟡 Partial**
+
+**Goal:** add clear opt-in interactive affordances for list-style workflows
+without destabilizing the default REPL or non-TTY automation flows.
+
+### Shipped in this slice
+
+| Feature | Evidence |
+|---|---|
+| Persisted opt-in overlay mode | `/overlay [on|off|status]` stores `_PREFS["interactive_overlays"]` |
+| Saved-output picker | `/outputs overlay` opens a searchable picker and reuses the normal inline preview on selection |
+| Recent-session picker | `/sessions overlay` opens a searchable picker and prints the selected session summary + resume command |
+| One-shot session picker | `openclaw session list --interactive` brings the same picker to non-REPL usage |
+| Guarded fallback behavior | `_overlay_available()` blocks prompts on non-TTY stdin/stdout and falls back to the regular list output |
+
+### Deferred / not yet evidenced
+
+- [ ] Approval-preview overlays
+- [ ] Arrow-key / full-screen selection UI
+- [ ] Additional pickers for more list surfaces beyond sessions and outputs
+- [ ] Full `tests/test_openclaw_cli.py` suite is green (baseline still has unrelated excluded failures)
+- [ ] Deployed to macbook
+
+### Validation
+
+- Focused CLI pytest slice covering `/overlay`, `/outputs overlay`,
+  `/sessions overlay`, and `openclaw session list --interactive` passed.
+
+---
+
+## Wave 18B — Performance Visibility
+
+**Status: ✅ Shipped**
+
+| Feature | Description |
+|---|---|
+| Session timing hints | `/session` now includes active watch phase, last run duration, and retry backoff totals when watch state exists |
+| Watch timing summary | `/watch status` exposes active phase age plus last checkpoint duration |
+| Retry/backoff cues | `/watch history` and checkpoint events include retry delay visibility |
+| Approval timing cues | `/exec` and `/edit` now emit `approval` events and separate approval wait from execution/write time |
+| Backward compatibility | Older watch state still renders by deriving timing from existing timestamps when explicit duration fields are missing |
+
+
+---
+
+## Wave 19 — Context Injection & Prompt Engineering
+
+**Status: Shipped**
+
+| Feature | Description |
+|---|---|
+| /inject path | Read file content into _next_inject global (max 8000 chars, binary-safe) |
+| /inject --url url | Fetch URL into _next_inject via requests (max 8000 chars) |
+| /inject clear/status | Clear or preview pending injection |
+| Injection prepend | run_chat() prepends injection as [Injected context] block; consumed after one send |
+| /system view/set/append/clear | Manage persistent system prompt in _PREFS[system_prompt] (max 2000 chars) |
+| System prompt prepend | run_chat() prepends system prompt as [System context] block to every AI message |
+| /context update | Now shows system prompt preview and pending injection count |
+| /promptdebug (alias /pd) | Preview full assembled prompt: system + inject + user placeholder |
+| _CLI_BUILD | Bumped to wave19 |

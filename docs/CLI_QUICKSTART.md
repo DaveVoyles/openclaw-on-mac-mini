@@ -130,6 +130,44 @@ Wave 17 adds a safer, more expressive personalization layer in the REPL:
 - **Preference loading** clamps invalid stored theme, emoji-pack, and layout
   values back to known-safe defaults.
 
+## Wave 18B performance visibility
+
+The current performance-visibility slice focuses on long-running session and
+watch flows without changing non-TTY or JSON output behavior:
+
+- `/session` now shows watch timing cues when automation is active or recently
+  ran: active phase, last run duration, and accumulated retry backoff.
+- `/watch status` surfaces phase age, last checkpoint duration, and retry
+  backoff totals from persisted watch state.
+- `/watch history` annotates retry rows with their backoff delays.
+- `/events` includes compact timing hints for approval waits, command/edit
+  runtime, and watch retry backoff when those metrics are available.
+- `/exec` and `/edit` now print completion details that separate approval wait
+  time from actual execution/write time.
+
+## Wave 19 interactive overlays
+
+Wave 19 adds opt-in interactive pickers for safe list-style browsing:
+
+```text
+/overlay status
+/overlay on
+/outputs overlay
+/sessions overlay
+openclaw session list --interactive
+```
+
+- **Interactive overlays are off by default** so scripted and non-TTY usage
+  keeps the existing output and control flow.
+- **`/outputs overlay`** opens a searchable picker for saved artifacts, then
+  previews the selected output inline.
+- **`/sessions overlay`** opens a searchable picker for recent sessions, then
+  shows the selected session summary plus its resume command.
+- **`openclaw session list --interactive`** exposes the same picker for one-shot
+  terminal usage outside the REPL.
+- If stdin/stdout is not interactive, OpenClaw prints a short notice and falls
+  back to the normal non-interactive list output.
+
 ## Hybrid REPL — in-session slash commands
 
 The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural-language prompts and slash commands coexist in the same input stream. Every slash command is handled locally before the input reaches the LLM.
@@ -153,6 +191,7 @@ The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural
 | `/context` | Show the active working directory, tracked file list, linked plan/task IDs, and a bounded preview of the grounding OpenClaw will inject into the next analyze/write/research-style action |
 | `/outputs` | List saved outputs for the active session with 1-based indices |
 | `/outputs <index>` or `/outputs <filename>` | Preview a saved artifact inline without leaving the REPL |
+| `/outputs overlay` | Open a searchable picker for saved outputs |
 | `/events [n]` | Show recent session events, including structured `route` events for auto-routed prompts |
 | <code>/plan [&lt;id&gt;&#124;unlink]</code> | Show, link, or unlink the session plan |
 | <code>/task [&lt;id&gt;&#124;unlink]</code> | Show, link, or unlink the session task |
@@ -170,6 +209,7 @@ These mirror the top-level `openclaw` subcommands but run inside the current ses
 | `/edit <path> [--content TEXT] [--append TEXT]` | Inspect or write a file; shows a unified diff before applying changes |
 | `/theme [name\|list\|preview\|next\|prev\|reset]` | List, preview, cycle, reset, or persist a theme |
 | `/emoji [on\|off\|status\|pack <name>\|preview]` | Toggle emoji, inspect the active pack, or switch between `classic`, `minimal`, and `ascii` |
+| `/overlay [on\|off\|status]` | Toggle opt-in interactive pickers for supported list commands |
 | `/layout [compact\|normal\|verbose\|plain]` | Switch between the currently supported layout densities |
 | `/accessibility [status\|mode]` | Show current accessibility state or manage accessibility prefs |
 | `/accessibility reduced-motion on\|off` | Toggle reduced-motion mode for spinner/status behavior |
@@ -223,6 +263,18 @@ These mirror the top-level `openclaw` subcommands but run inside the current ses
 | `/quality` | Show response quality stats — avg score, star distribution chart, most recent ratings |
 | `/ratehint [on\|off]` | Toggle the dim "rate this response" hint shown after each AI reply |
 
+### Context injection & prompt engineering (Wave 19)
+
+| Command | What it does |
+| --- | --- |
+| `/inject <path>` | Inject file content as context prefix for the next AI message (consumed once; max 8000 chars) |
+| `/inject --url <url>` | Inject URL content as context prefix for next message |
+| `/inject clear` | Clear the pending injection; `/inject status` shows queued char count |
+| `/system` | View the current persistent system prompt (prepended to every AI message) |
+| `/system set <text>` | Set a system prompt (max 2000 chars); `/system append <text>` to extend |
+| `/system clear` | Clear the system prompt |
+| `/promptdebug` | Preview the full prompt that would be sent to AI (system + inject + your message) |
+
 ### Freeform auto-routing and plan decomposition
 
 When auto-route is on (the default), OpenClaw can turn high-confidence freeform prompts into the matching slash command before the LLM sees them. Prompts that clearly look like a single action — for example a command to analyze, research, write, execute, or edit something — are routed through the existing in-REPL handlers and announced inline so you can see the equivalent slash command that ran. That routed extraction is now smarter about quoted or fenced shell commands for `/exec`, and about edit-style prompts that clearly describe an append or replace operation against a detected file target.
@@ -250,6 +302,7 @@ High/critical routed `/exec` and `/edit` steps still use the same approval check
 - `openclaw exec` — run tracked shell commands with higher-risk approval prompts; pass `--plan-id <id>` or `--task-id <id>` to tag the command to a plan or task
 - `openclaw edit` — preview or apply text edits with unified diffs; supports `--plan-id` / `--task-id` tagging
 - `openclaw session list|show|resume|export` — inspect resumable local CLI sessions (`show <session-id>` prints full metadata, plan/task linkage, tracked files, automation state, and watch checkpoint/retry history)
+- `openclaw session list --interactive` — open a searchable picker when you want to browse sessions interactively in a real TTY
 - `openclaw plan <subcommand>` — manage agent-loop plans from the terminal (see below)
 
 ### Plan subcommands

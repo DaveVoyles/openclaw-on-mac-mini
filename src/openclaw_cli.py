@@ -102,6 +102,8 @@ _last_interrupted_prompt: str = ""
 _multiline_mode: bool = False
 # Last AI response text — used by /pin
 _last_response_text: str = ""
+# Content to prepend to the next outgoing message — set by /inject
+_next_inject: str = ""
 
 
 def _c(code: str) -> str:
@@ -396,14 +398,14 @@ def _run_interactive_overlay(
     on_select: Callable[[Any], None],
     initial_query: str = "",
     empty_message: str = "No matches.",
-) -> bool:
+) -> str:
     """Run a lightweight interactive picker for supported REPL overlays."""
     if not items:
         print(empty_message)
-        return False
+        return "empty"
     if not _overlay_available():
         print(f"{_DM}Interactive overlay unavailable here; falling back to the normal listing.{_R}")
-        return False
+        return "fallback"
 
     query = initial_query.strip()
     while True:
@@ -420,12 +422,12 @@ def _run_interactive_overlay(
         choice = input("overlay> ").strip()
         if not choice or choice.lower() in {"q", "quit", "exit"}:
             print(f"  {_DM}Overlay closed.{_R}")
-            return False
+            return "closed"
         if choice.isdigit():
             selected_index = int(choice) - 1
             if 0 <= selected_index < len(matches):
                 on_select(matches[selected_index])
-                return True
+                return "selected"
             print(f"  {_DM}Selection out of range.{_R}")
             continue
         query = choice
@@ -4865,6 +4867,15 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
         if grounding_preview:
             grid.append("\neffective grounding preview:\n", style="dim italic")
             grid.append(grounding_preview, style="dim")
+        sys_prompt = _PREFS.get("system_prompt", "").strip()
+        if sys_prompt:
+            grid.append("\n🔧 system  ", style="dim")
+            preview = sys_prompt[:80] + ("…" if len(sys_prompt) > 80 else "")
+            grid.append(f"{preview}\n", style="yellow")
+        _inj = globals().get("_next_inject", "")
+        if _inj:
+            grid.append("📎 inject  ", style="dim")
+            grid.append(f"({len(_inj)} chars pending)\n", style="cyan")
         _RICH_CONSOLE.print(_RichPanel(grid, title="[bold]context[/]", border_style="dim", padding=(0, 1)))
     else:
         lines = [f"cwd  : {session.cwd}"]
@@ -4883,6 +4894,13 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
         grounding_preview = _render_effective_grounding_preview(session)
         if grounding_preview:
             lines.extend(["", "effective grounding preview:", grounding_preview])
+        sys_prompt = _PREFS.get("system_prompt", "").strip()
+        if sys_prompt:
+            preview = sys_prompt[:80] + ("…" if len(sys_prompt) > 80 else "")
+            lines.append(f"system: {preview}")
+        _inj = globals().get("_next_inject", "")
+        if _inj:
+            lines.append(f"inject: ({len(_inj)} chars pending)")
         print("\n".join(lines))
     return _CMD_CONTINUE
 
@@ -5842,7 +5860,28 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         print(f"  {_e('📄', '[promoted]')} {src.name} → {_BCY}{dst}{_R}")
         return _CMD_CONTINUE
     if wants_overlay or (_interactive_overlays_enabled() and not token):
-        selected = _run_interactive_overlay(
+        def _preview_output(item: dict[str, Any]) -> None:
+            preview = load_saved_output_preview(
+                session.session_id,
+                str(item.get("name") or "").strip(),
+                max_chars=OUTPUT_PREVIEW_MAX_CHARS,
+            )
+            if preview is None:
+                print(f"Saved output not found: {str(item.get('name') or '').strip()}")
+                return
+            name = str(preview.get("name") or "").strip()
+            size = _format_byte_count(int(preview.get("size_bytes") or 0))
+            modified_at = str(preview.get("modified_at") or "").strip()
+            preview_label = f"saved output preview: {name} ({size}"
+            if modified_at:
+                preview_label += f"; {modified_at}"
+            if preview.get("truncated"):
+                preview_label += f"; preview limited to {OUTPUT_PREVIEW_MAX_CHARS} chars"
+            preview_label += ")"
+            print(preview_label)
+            print(str(preview.get("preview") or ""))
+
+        overlay_result = _run_interactive_overlay(
             title="Saved outputs overlay",
             items=outputs,
             label_fn=lambda item: (
@@ -5850,22 +5889,18 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
                 f"{_format_byte_count(int(item.get('size_bytes') or 0))}  "
                 f"{str(item.get('modified_at') or '').strip()}".strip()
             ),
-            on_select=lambda item: print(
-                load_saved_output_preview(
-                    session.session_id,
-                    str(item.get("name") or "").strip(),
-                    max_chars=OUTPUT_PREVIEW_MAX_CHARS,
-                )
-            ),
+            on_select=_preview_output,
             initial_query=overlay_query,
             empty_message="No saved outputs yet.",
         )
-        if selected:
+        if overlay_result == "selected":
             _set_command_result(ctx, ok=True, summary="selected saved output from overlay")
             return _CMD_CONTINUE
-        if wants_overlay:
+        if wants_overlay and overlay_result == "closed":
             _set_command_result(ctx, ok=True, summary="outputs overlay closed")
             return _CMD_CONTINUE
+        if wants_overlay and overlay_result in {"fallback", "empty"}:
+            token = ""
     if not token:
         if _RICH_AVAILABLE and _IS_TTY:
             table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan",
@@ -6905,7 +6940,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     if wants_overlay or (_interactive_overlays_enabled() and not token):
-        selected = _run_interactive_overlay(
+        overlay_result = _run_interactive_overlay(
             title="Session overlay",
             items=sessions,
             label_fn=lambda s: (
@@ -6919,10 +6954,10 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             initial_query=overlay_query or query,
             empty_message="No sessions found.",
         )
-        if selected:
+        if overlay_result == "selected":
             _set_command_result(ctx, ok=True, summary="selected session from overlay")
             return _CMD_CONTINUE
-        if wants_overlay:
+        if wants_overlay and overlay_result == "closed":
             _set_command_result(ctx, ok=True, summary="session overlay closed")
             return _CMD_CONTINUE
 
@@ -7422,6 +7457,212 @@ def _macro_run(ctx: ChatCommandContext, name: str) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_inject(ctx: "ChatCommandContext") -> str:
+    """/inject — inject file or URL content as context prefix for the next message."""
+    global _next_inject
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    arg = ctx.args.strip()
+
+    if not arg:
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(
+                "[dim]Usage:[/]  /inject <path>  |  /inject --url <url>  |  /inject clear  |  /inject status"
+            )
+        else:
+            print("Usage:  /inject <path>  |  /inject --url <url>  |  /inject clear  |  /inject status")
+        return _CMD_CONTINUE
+
+    if arg == "clear":
+        _next_inject = ""
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print("[green]✓[/] Injection cleared")
+        else:
+            print("✓ Injection cleared")
+        return _CMD_CONTINUE
+
+    if arg == "status":
+        if _next_inject:
+            preview = _next_inject[:100]
+            suffix = "…" if len(_next_inject) > 100 else ""
+            char_count = len(_next_inject)
+            if _RICH_AVAILABLE and is_tty:
+                from rich.panel import Panel as _RichPanel  # noqa: PLC0415
+                _RICH_CONSOLE.print(
+                    _RichPanel(
+                        f"[dim]{preview}{suffix}[/]\n\n[bold]{char_count}[/] chars queued",
+                        title="📎 Inject",
+                        border_style="cyan",
+                    )
+                )
+            else:
+                print(f"📎 Inject ({char_count} chars): {preview}{suffix}")
+        else:
+            if _RICH_AVAILABLE and is_tty:
+                _RICH_CONSOLE.print("[dim](no injection set)[/]")
+            else:
+                print("(no injection set)")
+        return _CMD_CONTINUE
+
+    if arg.startswith("--url "):
+        url = arg[6:].strip()
+        try:
+            import requests as _requests  # noqa: PLC0415
+        except ImportError:
+            _print_error("requests library not available — install with pip install requests")
+            return _CMD_CONTINUE
+        try:
+            content = _requests.get(url, timeout=10).text
+        except Exception as exc:  # noqa: BLE001
+            _print_error(f"Failed to fetch URL: {exc}")
+            return _CMD_CONTINUE
+        _MAX = 8000
+        truncated = False
+        if len(content) > _MAX:
+            content = content[:_MAX]
+            truncated = True
+        _next_inject = content
+        preview = content[:60].replace("\n", " ")
+        suffix = "…" if len(content) > 60 else ""
+        trunc_note = f" [truncated at {_MAX} chars]" if truncated else ""
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(
+                f"[green]✓[/] Loaded [bold]{len(content)}[/] chars from URL{trunc_note}\n"
+                f"[dim]Preview: {preview}{suffix}[/]"
+            )
+        else:
+            print(f"✓ Loaded {len(content)} chars from URL{trunc_note}\nPreview: {preview}{suffix}")
+        return _CMD_CONTINUE
+
+    # File path
+    path = Path(arg).expanduser().resolve()
+    if not path.exists():
+        _print_error(f"File not found: {path}")
+        return _CMD_CONTINUE
+    if not path.is_file():
+        _print_error(f"Not a file: {path}")
+        return _CMD_CONTINUE
+    try:
+        raw = path.read_bytes()
+        content = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        _print_error("file appears to be binary")
+        return _CMD_CONTINUE
+    except OSError as exc:
+        _print_error(f"Could not read file: {exc}")
+        return _CMD_CONTINUE
+    _MAX = 8000
+    truncated = False
+    if len(content) > _MAX:
+        content = content[:_MAX]
+        truncated = True
+    _next_inject = content
+    preview = content[:60].replace("\n", " ")
+    suffix = "…" if len(content) > 60 else ""
+    trunc_note = f" [truncated at {_MAX} chars]" if truncated else ""
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(
+            f"[green]✓[/] Loaded [bold]{len(content)}[/] chars from [cyan]{path.name}[/]{trunc_note}\n"
+            f"[dim]Preview: {preview}{suffix}[/]"
+        )
+    else:
+        print(f"✓ Loaded {len(content)} chars from {path.name}{trunc_note}\nPreview: {preview}{suffix}")
+    return _CMD_CONTINUE
+
+
+_SYSTEM_PROMPT_MAX = 2000
+
+
+def _cmd_system(ctx: ChatCommandContext) -> str:
+    """View or set a persistent system prompt prefix for all AI messages."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    args = ctx.args.strip()
+    parts = args.split(None, 1)
+    sub = parts[0].lower() if parts else "view"
+    rest = parts[1] if len(parts) > 1 else ""
+
+    if sub in ("view", "") or not args:
+        current = _PREFS.get("system_prompt", "").strip()
+        if _RICH_AVAILABLE and is_tty:
+            if current:
+                _RICH_CONSOLE.print(_RichPanel(current, title="🔧 System Prompt", border_style="cyan", padding=(0, 1)))
+            else:
+                _RICH_CONSOLE.print(_RichPanel(f"[dim](not set)[/]", title="🔧 System Prompt", border_style="dim", padding=(0, 1)))
+        else:
+            if current:
+                print(f"System prompt:\n  {current}")
+            else:
+                print(f"System prompt: (not set)")
+        return _CMD_CONTINUE
+
+    if sub == "clear":
+        _PREFS["system_prompt"] = ""
+        _save_prefs()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print("[green]✓ System prompt cleared.[/]")
+        else:
+            print("✓ System prompt cleared.")
+        return _CMD_CONTINUE
+
+    if sub == "set":
+        if not rest.strip():
+            _print_error("Usage: /system set <text>")
+            return _CMD_CONTINUE
+        if len(rest) > _SYSTEM_PROMPT_MAX:
+            _print_error("System prompt too long (max 2000 chars)")
+            return _CMD_CONTINUE
+        _PREFS["system_prompt"] = rest
+        _save_prefs()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓ System prompt set ({len(rest)} chars).[/]")
+        else:
+            print(f"✓ System prompt set ({len(rest)} chars).")
+        return _CMD_CONTINUE
+
+    if sub == "append":
+        if not rest.strip():
+            _print_error("Usage: /system append <text>")
+            return _CMD_CONTINUE
+        current = _PREFS.get("system_prompt", "")
+        new_prompt = (current + "\n" + rest).strip() if current.strip() else rest
+        if len(new_prompt) > _SYSTEM_PROMPT_MAX:
+            _print_error("System prompt too long (max 2000 chars)")
+            return _CMD_CONTINUE
+        _PREFS["system_prompt"] = new_prompt
+        _save_prefs()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓ System prompt updated ({len(new_prompt)} chars).[/]")
+        else:
+            print(f"✓ System prompt updated ({len(new_prompt)} chars).")
+        return _CMD_CONTINUE
+
+    _print_error(f"Unknown sub-command '{sub}'. Use: view, set <text>, append <text>, clear")
+    return _CMD_CONTINUE
+
+
+def _cmd_promptdebug(ctx: ChatCommandContext) -> str:
+    """/promptdebug — preview what would be sent to the AI for the next message."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    sys_prompt = _PREFS.get("system_prompt", "").strip()
+    inj = globals().get("_next_inject", "").strip()
+
+    parts = []
+    if sys_prompt:
+        parts.append(f"[System context]\n{sys_prompt}")
+    if inj:
+        parts.append(f"[Injected context]\n{inj}")
+    parts.append("[User message]\n(your next message here)")
+
+    preview = "\n\n".join(parts)
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.syntax import Syntax as _RichSyntax
+        _RICH_CONSOLE.print(_RichPanel(preview, title="[bold]📤 Next message preview[/]", border_style="dim", padding=(0, 1)))
+    else:
+        print("\n📤 Next message preview:\n")
+        print(preview)
+    return _CMD_CONTINUE
+
+
 def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
@@ -7715,6 +7956,22 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Toggle the post-response rating hint (/ratehint [on|off])",
         handler=_cmd_ratehint,
     ))
+    registry.register(SlashCommand(
+        name="inject",
+        description="Inject file/URL content as context prefix for next message (/inject <path> | --url <url> | clear | status)",
+        handler=_cmd_inject,
+    ))
+    registry.register(SlashCommand(
+        name="promptdebug",
+        description="Preview what would be sent to the AI for the next message",
+        handler=_cmd_promptdebug,
+        aliases=("pd",),
+    ))
+    registry.register(SlashCommand(
+        name="system",
+        description="View or set a persistent system prompt prefix (/system [view|set <text>|append <text>|clear])",
+        handler=_cmd_system,
+    ))
     return registry
 
 
@@ -7781,6 +8038,15 @@ def print_chat_help(*, search: str = "") -> None:
         ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
         ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
         ("/ratehint [on|off]",                   "Show or toggle the post-response rating hint"),
+        ("/inject <path>",                       "Inject file content as context prefix for next message"),
+        ("/inject --url <url>",                  "Inject URL content as context prefix for next message"),
+        ("/inject clear",                        "Clear the pending injection"),
+        ("/inject status",                       "Show what content is queued for injection"),
+        ("/promptdebug",                         "Preview the full prompt that would be sent to AI (system + inject + message)"),
+        ("/system",                              "View the current system prompt"),
+        ("/system set <text>",                   "Set a persistent system prompt prefix for all messages"),
+        ("/system append <text>",               "Append to the existing system prompt"),
+        ("/system clear",                        "Clear the system prompt"),
     ]
 
     q = search.strip().lower()
@@ -9112,10 +9378,19 @@ def run_chat(
 
         try:
             _t0 = time.monotonic()
+            global _next_inject
+            if _next_inject:
+                effective_input = f"[Injected context]\n{_next_inject}\n\n[User message]\n{prompt}"
+                _next_inject = ""
+            else:
+                effective_input = prompt
+            _sys_prompt = _PREFS.get("system_prompt", "").strip()
+            if _sys_prompt:
+                effective_input = f"[System context]\n{_sys_prompt}\n\n{effective_input}"
             response = _with_spinner(
                 f"{_e('💬', '>>')} Thinking…",
                 ask_func,
-                prompt,
+                effective_input,
                 config=config,
                 history=list(history),
                 output_json=config.output_json,
@@ -9213,7 +9488,7 @@ def handle_session_command(args: argparse.Namespace) -> int:
                 or filter_query in " ".join(getattr(s, "tags", [])).lower()
             ]
         if bool(getattr(args, "interactive", False)):
-            selected = _run_interactive_overlay(
+            overlay_result = _run_interactive_overlay(
                 title="Session list overlay",
                 items=sessions,
                 label_fn=lambda s: (
@@ -9227,7 +9502,7 @@ def handle_session_command(args: argparse.Namespace) -> int:
                 initial_query=filter_query,
                 empty_message="No sessions found.",
             )
-            if selected:
+            if overlay_result == "selected":
                 return 0
         _print_session_list(sessions)
         return 0

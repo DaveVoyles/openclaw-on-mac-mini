@@ -1328,7 +1328,7 @@ class TestChatCommandRegistry:
 
     def test_new_commands_registered(self):
         names = {cmd.name for cmd in self._registry().list_commands()}
-        assert names >= {"session", "context", "cwd", "files", "plan", "task", "outputs", "rollback", "events",
+        assert names >= {"session", "context", "cwd", "files", "plan", "task", "outputs", "overlay", "rollback", "events",
                          "analyze", "research", "write", "exec", "edit"}
 
 
@@ -1670,12 +1670,80 @@ class TestSessionSlashCommands:
         assert "saved output preview: alpha.md" in out
         assert "alpha body" in out
 
+    def test_outputs_overlay_supports_interactive_filter_and_selection(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+        sess = sessions_mod.create_session(title="outputs", cwd=str(tmp_path))
+        sessions_mod.save_output(sess.session_id, "alpha.md", "alpha body")
+        sessions_mod.save_output(sess.session_id, "beta-notes.md", "beta body")
+        prompts = iter(["beta", "1"])
+        monkeypatch.setattr("builtins.input", lambda _label: next(prompts))
+
+        self._registry().dispatch("/outputs overlay", self._ctx(session_id=sess.session_id))
+
+        out = capsys.readouterr().out
+        assert "Saved outputs overlay" in out
+        assert "beta-notes.md" in out
+        assert "saved output preview: beta-notes.md" in out
+        assert "beta body" in out
+
+    def test_outputs_overlay_falls_back_to_listing_without_tty(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: False)
+        sess = sessions_mod.create_session(title="outputs", cwd=str(tmp_path))
+        sessions_mod.save_output(sess.session_id, "alpha.md", "alpha body")
+
+        self._registry().dispatch("/outputs overlay", self._ctx(session_id=sess.session_id))
+
+        out = capsys.readouterr().out
+        assert "Interactive overlay unavailable here" in out
+        assert "saved outputs" in out
+        assert "1. alpha.md" in out
+
+    def test_overlay_command_toggles_persisted_preference(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        mod._PREFS.clear()
+        mod._PREFS.update({"theme": "default", "emoji": True, "emoji_pack": "classic", "layout": "normal"})
+
+        result = self._registry().dispatch("/overlay on", self._ctx(args="on"))
+
+        assert result == mod._CMD_CONTINUE
+        mod._PREFS["interactive_overlays"] = False
+        mod._load_prefs()
+        assert mod._PREFS["interactive_overlays"] is True
+        out = capsys.readouterr().out
+        assert "Interactive overlays enabled" in out
+
     def test_task_shows_current_task(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         sess = sessions_mod.create_session(title="task-show", cwd=str(tmp_path), task_id="task-77")
         self._registry().dispatch("/task", self._ctx(session_id=sess.session_id))
         out = capsys.readouterr().out
         assert "task-77" in out
+
+    def test_sessions_overlay_supports_interactive_selection(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+        first = sessions_mod.create_session(title="Alpha session", cwd=str(tmp_path))
+        second = sessions_mod.create_session(title="Beta session", cwd=str(tmp_path))
+        prompts = iter(["beta", "1"])
+        monkeypatch.setattr("builtins.input", lambda _label: next(prompts))
+
+        self._registry().dispatch("/sessions overlay", self._ctx(session_id=first.session_id))
+
+        out = capsys.readouterr().out
+        assert "Session overlay" in out
+        assert "Beta session" in out
+        assert second.session_id in out
+        assert f"openclaw --session {second.session_id}" in out
 
     def test_task_unlink_removes_task(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -2073,6 +2141,39 @@ class TestActionSlashCommands:
         out = capsys.readouterr().out
         assert "Command complete." in out
 
+    def test_exec_records_approval_timing_and_feedback(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        sess = sessions_mod.create_session(title="exec-timing", cwd=str(tmp_path))
+
+        from openclaw_cli_actions import ShellCommandResult
+
+        fake_result = ShellCommandResult(command="echo hi", stdout="hi\n", stderr="", returncode=0, cwd=str(tmp_path))
+
+        def _fake_run_async(coro):
+            coro.close()
+            return fake_result
+
+        with (
+            patch.object(mod, "request_cli_approval", return_value=True),
+            patch.object(mod, "run_async", side_effect=_fake_run_async),
+            patch.object(mod, "append_event") as mock_ae,
+            patch.object(mod.time, "monotonic", side_effect=[10.0, 10.6, 11.0, 13.5]),
+        ):
+            result = self._registry().dispatch("/exec echo hi", self._ctx(session_id=sess.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        approval_event = mock_ae.call_args_list[0].kwargs
+        exec_event = mock_ae.call_args_list[1].kwargs
+        assert approval_event["kind"] == "approval"
+        assert approval_event["metadata"]["approved"] is True
+        assert approval_event["metadata"]["approval_seconds"] == pytest.approx(0.6)
+        assert exec_event["kind"] == "exec"
+        assert exec_event["metadata"]["approval_seconds"] == pytest.approx(0.6)
+        assert exec_event["metadata"]["elapsed_seconds"] == pytest.approx(2.5)
+        out = capsys.readouterr().out
+        assert "2.5s run" in out
+        assert "approval 0.6s" in out
+
     def test_routed_exec_captures_checkpoint_before_execution(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         sess = sessions_mod.create_session(title="exec-checkpoint", cwd=str(tmp_path))
@@ -2457,6 +2558,33 @@ class TestActionSlashCommands:
         assert sessions_mod.list_routed_action_checkpoints(sess.session_id, limit=0) == []
         assert "not approved" in capsys.readouterr().out.lower()
 
+    def test_edit_records_approval_timing_and_feedback(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        sess = sessions_mod.create_session(title="edit-timing", cwd=str(tmp_path))
+        target = tmp_path / "notes.txt"
+
+        with (
+            patch.object(mod, "request_cli_approval", return_value=True),
+            patch.object(mod, "append_event") as mock_ae,
+            patch.object(mod.time, "monotonic", side_effect=[5.0, 5.4, 8.0, 8.9]),
+        ):
+            result = self._registry().dispatch(
+                f"/edit {target} --content hello",
+                self._ctx(session_id=sess.session_id),
+            )
+
+        assert result == mod._CMD_CONTINUE
+        approval_event = mock_ae.call_args_list[0].kwargs
+        edit_event = mock_ae.call_args_list[1].kwargs
+        assert approval_event["kind"] == "approval"
+        assert approval_event["metadata"]["approval_seconds"] == pytest.approx(0.4)
+        assert edit_event["kind"] == "edit"
+        assert edit_event["metadata"]["approval_seconds"] == pytest.approx(0.4)
+        assert edit_event["metadata"]["elapsed_seconds"] == pytest.approx(0.9)
+        out = capsys.readouterr().out
+        assert "0.9s write" in out
+        assert "approval 0.4s" in out
+
 
 
 def test_setup_script_supports_bash_rc_detection():
@@ -2613,6 +2741,91 @@ def test_main_watch_retries_transient_failure(monkeypatch, tmp_path, capsys):
     assert any(entry["phase"] == "retry" for entry in state["progress_log"])
     assert any(call.args == (1,) for call in sleep_mock.call_args_list)
     assert "Transient failure on attempt 1/3" in capsys.readouterr().out
+
+
+def test_summarize_session_includes_watch_timing_summary(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = sessions_mod.create_session(title="watch-summary", cwd=str(tmp_path))
+    session = sessions_mod.update_session(session.session_id, automation_mode="analyze", automation_status="retrying")
+    mod.save_watch_state(
+        session.session_id,
+        {
+            "session_id": session.session_id,
+            "mode": "analyze",
+            "goal": "watch repo",
+            "cwd": str(tmp_path),
+            "files": [],
+            "interval_seconds": 30,
+            "max_polls": 3,
+            "poll_count": 1,
+            "status": "retrying",
+            "retry_history": [{"attempt": 1, "delay_seconds": 2, "created_at": "2026-04-10T00:00:05Z"}],
+            "active_checkpoint": {
+                "poll": 1,
+                "mode": "analyze",
+                "status": "running",
+                "started_at": "2026-04-10T00:00:00Z",
+                "updated_at": "2026-04-10T00:00:04Z",
+                "phase": "request",
+                "progress": [{"phase": "request", "created_at": "2026-04-10T00:00:04Z"}],
+                "attempts": [],
+            },
+            "checkpoints": [
+                {
+                    "poll": 0,
+                    "started_at": "2026-04-09T23:59:50Z",
+                    "completed_at": "2026-04-10T00:00:00Z",
+                    "summary": "prior run",
+                }
+            ],
+        },
+    )
+
+    summary = mod.summarize_session(session)
+
+    assert "automation: analyze (retrying)" in summary
+    assert "timing: phase request" in summary
+    assert "last run 10s" in summary
+    assert "retry backoff 2.0s" in summary
+
+
+def test_print_watch_status_shows_phase_and_backoff(capsys):
+    mod._print_watch_status(
+        {
+            "goal": "watch repo",
+            "mode": "analyze",
+            "status": "retrying",
+            "poll_count": 2,
+            "max_polls": 5,
+            "failure_count": 1,
+            "retry_limit": 3,
+            "interval_seconds": 30,
+            "retry_history": [{"attempt": 1, "delay_seconds": 2, "created_at": "2026-04-10T00:00:05Z"}],
+            "active_checkpoint": {
+                "poll": 2,
+                "mode": "analyze",
+                "status": "running",
+                "started_at": "2026-04-10T00:00:00Z",
+                "updated_at": "2026-04-10T00:00:06Z",
+                "phase": "persist",
+                "progress": [{"phase": "persist", "created_at": "2026-04-10T00:00:06Z"}],
+                "attempts": [],
+            },
+            "checkpoints": [
+                {
+                    "poll": 1,
+                    "started_at": "2026-04-10T00:00:00Z",
+                    "completed_at": "2026-04-10T00:00:09Z",
+                    "summary": "prior run",
+                }
+            ],
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "phase:" in out and "persist" in out
+    assert "duration:" in out and "9.0s" in out
+    assert "backoff:" in out and "2.0s total" in out
 
 
 def test_main_watch_resume_uses_saved_goal(monkeypatch, tmp_path):
@@ -3012,6 +3225,24 @@ def test_session_show_minimal_session(monkeypatch, tmp_path, capsys):
     assert "SESSION INSPECTION" in out
     assert "Bare session" in out
     assert "Resume:" in out
+
+
+def test_main_session_list_interactive_overlay(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+    sessions_mod.create_session(title="Alpha session", cwd=str(tmp_path))
+    beta = sessions_mod.create_session(title="Beta session", cwd=str(tmp_path))
+    prompts = iter(["beta", "1"])
+    monkeypatch.setattr("builtins.input", lambda _label: next(prompts))
+
+    exit_code = mod.main(["session", "list", "--interactive"])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Session list overlay" in out
+    assert f"openclaw --session {beta.session_id}" in out
 
 
 # ── New: exec / edit --plan-id / --task-id ───────────────────────────────────
@@ -4148,3 +4379,135 @@ class TestCmdRatehint:
         out = capsys.readouterr().out
         assert "on" in out
         assert "ratehint" in out
+
+
+class TestCmdPromptDebug:
+    """Tests for _cmd_promptdebug."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_no_system_prompt_no_inject_shows_placeholder(self, capsys, monkeypatch):
+        """With no system prompt and no inject, only the user message placeholder is shown."""
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        mod._PREFS.pop("system_prompt", None)
+        mod._next_inject = ""
+        result = mod._cmd_promptdebug(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "your next message here" in out
+        assert "System context" not in out
+        assert "Injected context" not in out
+
+    def test_with_system_prompt_shows_system_section(self, capsys, monkeypatch):
+        """When a system prompt is set, its section appears in the preview."""
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        mod._PREFS["system_prompt"] = "You are a helpful assistant."
+        mod._next_inject = ""
+        result = mod._cmd_promptdebug(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "System context" in out
+        assert "You are a helpful assistant." in out
+        mod._PREFS.pop("system_prompt", None)
+
+    def test_with_inject_shows_inject_section(self, capsys, monkeypatch):
+        """When _next_inject is set, its section appears in the preview."""
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        mod._PREFS.pop("system_prompt", None)
+        mod._next_inject = "Some injected file content."
+        result = mod._cmd_promptdebug(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Injected context" in out
+        assert "Some injected file content." in out
+        mod._next_inject = ""
+
+
+class TestCmdInject:
+    """Tests for _cmd_inject."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_status_no_injection(self, capsys, monkeypatch):
+        """/inject status with no injection shows (no injection set)."""
+        monkeypatch.setattr(mod, "_next_inject", "")
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        result = mod._cmd_inject(self._ctx("status"))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "(no injection set)" in out
+
+    def test_clear_clears_injection(self, monkeypatch):
+        """/inject clear sets _next_inject to empty string."""
+        monkeypatch.setattr(mod, "_next_inject", "some content here")
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        result = mod._cmd_inject(self._ctx("clear"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._next_inject == ""
+
+    def test_file_path_stores_content(self, tmp_path, monkeypatch):
+        """/inject <path> reads file and stores content in _next_inject."""
+        monkeypatch.setattr(mod, "_next_inject", "")
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        test_file = tmp_path / "context.txt"
+        test_file.write_text("Hello from inject file!", encoding="utf-8")
+        result = mod._cmd_inject(self._ctx(str(test_file)))
+        assert result == mod._CMD_CONTINUE
+        assert mod._next_inject == "Hello from inject file!"
+
+    def test_no_args_prints_usage(self, capsys, monkeypatch):
+        """/inject with no args prints usage hint."""
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        result = mod._cmd_inject(self._ctx(""))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "Usage" in out or "usage" in out.lower()
+        assert "--url" in out
+
+
+class TestCmdSystem:
+    """Tests for /system command."""
+
+    def _ctx(self, args: str = "") -> "mod.ChatCommandContext":
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_view_no_prompt_shows_not_set(self, capsys, monkeypatch):
+        """/system with no prompt set shows (not set)."""
+        monkeypatch.setitem(mod._PREFS, "system_prompt", "")
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        result = mod._cmd_system(self._ctx(""))
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "not set" in out
+
+    def test_set_stores_in_prefs(self, monkeypatch):
+        """/system set Hello stores in _PREFS["system_prompt"]."""
+        monkeypatch.setitem(mod._PREFS, "system_prompt", "")
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_system(self._ctx("set Hello"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["system_prompt"] == "Hello"
+
+    def test_clear_empties_system_prompt(self, monkeypatch):
+        """/system clear empties _PREFS["system_prompt"]."""
+        monkeypatch.setitem(mod._PREFS, "system_prompt", "existing prompt")
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_system(self._ctx("clear"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["system_prompt"] == ""
+
+    def test_append_adds_to_existing_prompt(self, monkeypatch):
+        """/system append more appends to existing prompt."""
+        monkeypatch.setitem(mod._PREFS, "system_prompt", "base")
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_system(self._ctx("append extra"))
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["system_prompt"] == "base\nextra"
