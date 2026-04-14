@@ -523,9 +523,11 @@ across module decomposition, error handling, type safety, documentation, and tes
 | TD-23 | Move ANSI markdown renderer (_render_markdown_ansi 125L, _render_table_ansi 79L) into render module | 🟢 Low | ✅ Shipped (`ac7858d`) |
 | TD-24 | Extract `preprocess` module (_preprocess_response_text 71L, _detect_and_format_json 69L, 3 more) | 🟢 Low | ✅ Shipped (`e4b9d93`) |
 | TD-25 | Extract `session_utils` module (summarize_session 59L, _session_preview_lines 51L, _collect_operator_alerts 50L) | 🟢 Low | ✅ Shipped (`e4b9d93`) |
+| TD-26 | Extract `ui_utils` module (_with_spinner 126L, _print_startup_banner 96L, 3 more UI helpers) | 🟢 Low | ✅ Shipped (`daefca9`) |
+| TD-27 | Extract `health` module (print_health 67L, _clean_sources_for_display 38L, HealthResponse dataclass) | 🟢 Low | ✅ Shipped (`daefca9`) |
 
-**Actual impact TD-8 through TD-25:** `openclaw_cli.py` reduced from 14,813 → 11,141 lines (−25%).
-22 extracted modules now exist.
+**Actual impact TD-8 through TD-27:** `openclaw_cli.py` reduced from 14,813 → 10,665 lines (−28%).
+24 extracted modules now exist.
 
 ---
 
