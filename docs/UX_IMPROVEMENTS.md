@@ -167,11 +167,20 @@ chrome.
 | [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | ✅ Shipped |
 | [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | ✅ Shipped |
 | [Wave 30](#wave-30--premium-motion--choreography-layer) | Premium Motion & Choreography Layer | ✅ Shipped |
-| [Wave 31](#wave-31--intelligent-command-suggestions--inline-assist) | Intelligent Command Suggestions & Inline Assist | 🔲 Ready |
-| [Wave 32](#wave-32--instant-replay--session-bookmarks) | Instant Replay & Session Bookmarks | 🔲 Ready |
-| [Wave 33](#wave-33--command-chaining--workflow-macros-20) | Command Chaining & Workflow Macros 2.0 | 🔲 Ready |
-| [Wave 34](#wave-34--ai-quality--experimentation-loops) | AI Quality & Experimentation Loops | 🔲 Ready |
-| [Wave 35](#wave-35--long-form-reporting--export-suites) | Long-Form Reporting & Export Suites | 🔲 Ready |
+| [Wave 31](#wave-31--intelligent-command-suggestions--inline-assist) | Intelligent Command Suggestions & Inline Assist | ✅ Shipped |
+| [Wave 32](#wave-32--instant-replay--session-bookmarks) | Instant Replay & Session Bookmarks | ✅ Shipped |
+| [Wave 33](#wave-33--command-chaining--workflow-macros-20) | Command Chaining & Workflow Macros 2.0 | ✅ Shipped |
+| [Wave 34](#wave-34--ai-quality--experimentation-loops) | AI Quality & Experimentation Loops | ✅ Shipped |
+| [Wave 35](#wave-35--long-form-reporting--export-suites) | Long-Form Reporting & Export Suites | ✅ Shipped |
+| [Wave 36](#wave-36--workspace-state--ide-like-recovery) | Workspace State & IDE-Like Recovery | ✅ Shipped |
+| [Wave 37](#wave-37--pattern-library--workflow-templates) | Pattern Library & Workflow Templates | ✅ Shipped |
+| [Wave 38](#wave-38--multi-actor-planning--risk-aware-handoffs) | Multi-Actor Planning & Risk-Aware Handoffs | ✅ Shipped |
+| [Wave 39](#wave-39--learned-routing--personalized-quality-loops) | Learned Routing & Personalized Quality Loops | ✅ Shipped |
+| [Wave 40](#wave-40--long-running-automation-dashboard--operator-intelligence) | Long-Running Automation Dashboard & Operator Intelligence | ✅ Shipped |
+| [Wave 41](#wave-41--incident-log--operator-resolution) | Incident Log & Operator Resolution | ✅ Shipped |
+| [Wave 42](#wave-42--source-rendering-reliability) | Source Rendering Reliability | ✅ Shipped |
+| [Wave 43](#wave-43--context--token-intelligence) | Context & Token Intelligence | 🔲 Ready |
+| [Wave 44](#wave-44--startup--first-run-polish) | Startup & First-Run Polish | 🔲 Ready |
 
 ---
 
@@ -2212,7 +2221,7 @@ existing waiting, startup, warning, and celebration helpers:
 
 ## Wave 31 — Intelligent Command Suggestions & Inline Assist
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped (current response-assist slice)**
 
 **Goal:** reduce prompt friction by surfacing the next best command at the moment
 users need it and by making long-running agent work more transparent while it is
@@ -2262,11 +2271,43 @@ in flight.
 **Low** — builds directly on Wave 28 predictive affordances and Wave 30 pacing
 language.
 
+### Shipped evidence (current slice)
+
+Wave 31 is currently shipping as a **narrow response-assist slice**, not the
+entire late-wave shell vision:
+
+- `_spinner_progress_snapshot(...)` and `_with_spinner(...)` now provide the
+  live wait-state copy: `warming up` / `working` / `wrapping up`, deterministic
+  `step N/3`, explicit trust cues, periodic reduced-motion heartbeats, and the
+  shared `response ready.` completion cue.
+- `print_response(...)` now pairs the main answer with a **Suggested
+  follow-ups** block plus a compact **bottom bar** footer when hints are
+  enabled.
+- `_print_followup_suggestions(...)` is the shipped bottom-hint surface for
+  `mode: chat` plus contextual next actions.
+- `/followup [on|off]` controls the auto-suggestion footer, while existing
+  `/ratehint` and `/pathhints` preferences participate in the same post-response
+  trust/assist layer.
+
+### Deferred scope
+
+- the always-present top context bar from the shared split-bar shell pattern
+- broader Wave 31 coverage for `/exec`, approvals, `/watch`, `/session`, and
+  `/collab`
+- per-step completed-step acknowledgements beyond the shared completion cue
+
+### Docs/dashboard notes
+
+- `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md`, and
+  `docs/DASHBOARD_SURFACES.md` should describe this shipped slice truthfully.
+- `docs/COMMANDS.md` remains intentionally unchanged because this docs/tests pass
+  did not change command metadata.
+
 ---
 
 ## Wave 32 — Instant Replay & Session Bookmarks
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped (current bookmark slice)**
 
 **Goal:** let users mark meaningful turns and jump back to them quickly.
 
@@ -2296,11 +2337,30 @@ language.
 **Low to medium** — additive session metadata, but it builds on existing replay,
 history, and session-storytelling surfaces.
 
+### Shipped evidence (current slice)
+
+Wave 32 is currently shipping as a **bookmark-and-replay slice**:
+
+- `/bookmark [label]` saves a replay marker for the active session using the
+  latest turn pair as the replay anchor.
+- `/bookmarks` lists the saved markers as plain-text ids, labels, and turn
+  numbers.
+- `/replay --from <bookmark>` replays the current session from a saved bookmark,
+  while `/replay <session> --from <bookmark>` works for prior sessions.
+- `session show`, `session share`, and `session export` now carry bookmark
+  metadata so handoffs and JSON exports preserve the same replay anchors.
+
+### Deferred scope
+
+- bookmark markers inside `/timeline` and `/watch history`
+- bulk bookmark actions and richer bookmark management UX
+- workflow-aware bookmark promotion for later Wave 33 reuse
+
 ---
 
 ## Wave 33 — Command Chaining & Workflow Macros 2.0
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped (current workflow slice)**
 
 **Goal:** make repeatable CLI sequences composable, previewable, and shareable.
 
@@ -2330,56 +2390,85 @@ history, and session-storytelling surfaces.
 **Medium** — requires careful workflow scoping and preview accuracy, but it stays
 within the existing terminal-first command model.
 
+### Shipped evidence (current slice)
+
+Wave 33 is currently shipping as a **workflow veneer over the macro engine**:
+
+- `/workflow list`, `/workflow save <name> [last N]`, `/workflow preview <name>`,
+  `/workflow run <name>`, and `/workflow rm <name>` now expose a clearer workflow
+  UX while reusing the existing persisted macro store.
+- `/workflow preview <name>` shows a dry-run step list before execution.
+- `/workflow run <name>` resolves session-aware placeholders like `{cwd}`,
+  `{session}`, `{plan}`, and `{task}` before dispatching slash commands.
+- existing `/macro run <name>` also benefits from the same placeholder
+  resolution, so the two surfaces stay behaviorally aligned.
+
+### Deferred scope
+
+- session export/share embedding of saved workflows
+- workflow versioning and richer metadata beyond the shared macro store
+- per-step approval gates for workflow execution
+
 ---
 
 ## Wave 34 — AI Quality & Experimentation Loops
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped (current slice)**
 
-**Goal:** expose response-quality metadata, compact traceability, and local
-experiment controls in the terminal.
+**Goal:** expose response-quality metadata and compact traceability directly in
+the terminal.
 
 ### Focus
 
-- quality envelope per response
-- `/trace` for last-response trace details
-- `/quality` dashboard for ratings, confidence, and latency summaries
-- local experiment variants and comparisons
+- `/trace` for last-route and last-response decision details
+- `/quality` summary for ratings plus the latest routing confidence snapshot
+- compact, honest trust metadata that stays readable in plain mode too
 
 ### User value
 
 - more trust in model behavior
-- easier routing/model comparison
-- better tuning without leaving the terminal
+- faster inspection of why the agent chose a route
+- better quality review without leaving the terminal
 
 ### Likely surfaces
 
 - response footer / event logs
 - `/trace`
 - `/quality`
-- `/experiment`, `/experiments list`, `/experiment compare`
-- session export with quality metadata
+- session export with later quality metadata follow-on
 
 ### Risk
 
-**Medium** — depends on a clean metadata envelope and careful separation between
-quality inspection and the response body itself.
+**Medium** — the shipped slice stays narrow and reuses existing rating and
+routing metadata rather than introducing a new experiment system yet.
+
+### Current shipped slice
+
+- `/trace` shows the most recent routing decision with rationale, confidence,
+  timestamp, and the latest saved rating context.
+- `/quality` still renders the rating histogram, then adds the latest route and
+  a direct nudge to inspect the full decision snapshot with `/trace`.
+
+### Deferred scope
+
+- local experiment variant management and side-by-side comparisons
+- richer latency envelopes and longer quality history summaries
+- export/schema work for portable quality metadata outside the CLI
 
 ---
 
 ## Wave 35 — Long-Form Reporting & Export Suites
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped (current slice)**
 
 **Goal:** turn OpenClaw sessions into durable, audience-aware runbooks and export
 artifacts.
 
 ### Focus
 
-- multi-format export foundation
-- runbook generation
-- reusable export templates
-- redaction/compliance-friendly export helpers
+- runbook generation from existing session story/export data
+- template-aware exports for operator, stakeholder, and postmortem views
+- lightweight export-template discovery in the terminal
 
 ### User value
 
@@ -2398,6 +2487,333 @@ artifacts.
 
 **Medium** — export breadth and template validation need discipline, but the
 feature remains a natural extension of Wave 29 storytelling and Wave 34 metadata.
+
+### Current shipped slice
+
+- `/runbook [template]` renders a long-form Markdown handoff from the current
+  session using the existing storyline, collaboration snapshot, and saved
+  outputs.
+- `openclaw session export <id> --format runbook --template <name>` reuses the
+  same rendering path for non-interactive export flows.
+- `/exporttemplates` exposes the built-in template gallery so the terminal can
+  truthfully advertise the available reporting modes before custom template
+  authoring lands.
+
+### Deferred scope
+
+- user-authored export templates and richer redaction policy controls
+- alternate file formats beyond the current JSON + Markdown runbook slice
+- deeper schema work for browser/dashboard reuse of long-form report metadata
+
+---
+
+## Wave 36 — Workspace State & IDE-Like Recovery
+
+**Status: ✅ Shipped (current slice)**
+
+**Goal:** let users freeze and restore full workspace context so interruptions and
+machine switches feel instant instead of manual.
+
+### Focus
+
+- workspace state capsules with cwd, tracked files, outputs, bookmarks, and watch
+  state
+- quick restore of the full terminal context
+- human-readable capsule manifests before restore
+- explicit watch-state carryover during restore
+
+### User value
+
+- faster recovery after interruptions
+- easier machine-to-machine continuity
+- stronger "terminal as IDE" experience
+
+### Likely surfaces
+
+- `/snapshot workspace`
+- `/workspace save`, `/workspace restore`, `/workspace list`
+- `session show`, `session export`
+
+### Risk
+
+**Medium** — state serialization needs discipline, but it builds on existing
+session, output, and watch metadata.
+
+### Current shipped slice
+
+- `/workspace status` renders a human-readable workspace capsule for the active
+  session, including cwd, tracked files, bookmarks, outputs, watch state, and a
+  stable workspace signature.
+- `/workspace save`, `/workspace list`, and `/workspace restore <capsule>` reuse
+  the existing handoff manifest store instead of introducing a second recovery
+  backend.
+- restoring a workspace capsule now carries back the cwd, tracked files, plan,
+  task, and saved watch state into the new session.
+- `openclaw session export <id>` now includes a `workspace_capsule` block so the
+  recovery snapshot is visible to non-interactive tooling as well.
+
+### Deferred scope
+
+- machine-to-machine sync and remote capsule transport
+- workspace restore into the current session instead of always opening a new one
+- richer pause/ask/retry controls beyond the restored watch-state snapshot
+
+---
+
+## Wave 37 — Pattern Library & Workflow Templates
+
+**Status: ✅ Shipped**
+
+**Goal:** turn successful workflows into reusable templates and a personal pattern
+library.
+
+Wave 37 ships as a thin **pattern-library veneer** over the existing workflow
+and command-history primitives rather than a new mining or versioning backend.
+
+### Current shipped slice
+
+- `/pattern save <name> [last N|workflow NAME]` captures reusable command flows
+  either from recent history or from an existing workflow.
+- `/pattern list`, `/pattern show`, and `/pattern preview` turn those saved flows
+  into a browsable terminal-native pattern library with lightweight source
+  metadata.
+- `/pattern run <name>` reuses the existing workflow/macro execution engine, so
+  current-session placeholders like `{cwd}` and `{session}` still resolve before
+  dispatch.
+- `/pattern rm <name>` keeps the library editable without introducing a second
+  persistence model.
+
+### User value
+
+- faster onboarding for repeatable tasks
+- shareable operational playbooks
+- a growing terminal-native knowledge base
+
+### Deferred scope
+
+- automatic pattern mining from successful sessions
+- pattern versioning and variants over time
+- export/import or handoff-backed sharing flows
+- richer metadata, recommendations, or remote sync
+
+### Risk
+
+**Medium** — this slice stays low-risk by reusing the Wave 33 workflow runtime
+and keeping mining/versioning deferred.
+
+---
+
+## Wave 38 — Multi-Actor Planning & Risk-Aware Handoffs
+
+**Status: ✅ Shipped**
+
+**Goal:** evolve collaboration from notes into structured planning with blockers,
+owners, gates, and readiness checks.
+
+### Focus
+
+- structured planning with explicit owners and blockers
+- risk and blocker tracking inside the terminal
+- approval gates before risky or shared transitions
+- handoff readiness audits
+
+### User value
+
+- clearer team coordination
+- fewer surprise blockers at handoff time
+- better auditability for shared work
+
+### Likely surfaces
+
+- `/plan structured`
+- `/risk`, `/gate`, `/handoff check`
+- `/collab assign`, `/collab status`
+
+### Risk
+
+**High** — ownership and gate semantics add complexity, but the work remains
+local-session and terminal-first.
+
+### Current shipped slice
+
+Wave 38 ships as a structured collaboration veneer over the existing session,
+collaboration, and handoff primitives.
+
+- `/collab assign @actor TEXT` records an explicit owner for the next shared task
+  or handoff step using the same collaboration event stream as notes and
+  decisions.
+- `/risk add <critical|high|medium|low> TEXT`, `/risk list`, and `/risk clear
+  <index>` create a lightweight terminal-native risk register without a second
+  datastore.
+- `/handoff check` audits linked plan/task context, ownership, latest handoff
+  state, watch state, and open risks before the next transition.
+- `/collab status` now includes structured **ASSIGNMENTS** and **OPEN RISKS**
+  sections so the current operator snapshot is easier to scan.
+
+### Deferred scope
+
+- `/plan structured` step-level planning views
+- dedicated `/gate` commands and richer approval semantics
+- remote enforcement, escalation flows, and browser/dashboard planning mirrors
+
+---
+
+## Wave 39 — Learned Routing & Personalized Quality Loops
+
+**Status: ✅ Shipped**
+
+**Goal:** personalize routing, quality targets, and suggested actions based on
+observed session outcomes and ratings.
+
+### Focus
+
+- learned routing suggestions from past ratings
+- quality prediction for likely-good paths
+- local experiment loops and preference tuning
+- visible fairness and rollback controls for learned behavior
+
+### User value
+
+- better default routing over time
+- less manual tuning
+- a more personal terminal copilot experience
+
+### Likely surfaces
+
+- `/routing analyze`, `/routing suggest`
+- `/quality predict`
+- `/loop start`, `/loop analyze`, `/loop apply`
+
+### Risk
+
+**High** — learned behavior must stay transparent and reversible, but it builds
+directly on Wave 34 quality data.
+
+### Current shipped slice
+
+Wave 39 ships as a read-only personalization veneer over the existing routing
+trace and rating history.
+
+- `/rate` now captures the last routed slash command alongside each rating when a
+  session trace is available.
+- `/quality predict` uses that local history to highlight the best-rated route
+  and the next-best lane without changing runtime routing behavior.
+- `/routing suggest` and `/routing analyze` expose the same learned route summary
+  in terminal-native plain text so the user can inspect personalization before
+  trusting it.
+- the learned output is advisory only; auto-routing behavior remains unchanged
+  and transparent through the existing `/trace` surface.
+
+### Deferred scope
+
+- automatic route adaptation or live route rewrites
+- local experiment loops and preference-tuning workflows
+- fairness controls, rollback policies, and browser/dashboard mirrors
+
+---
+
+## Wave 40 — Long-Running Automation Dashboard & Operator Intelligence
+
+**Status: ✅ Shipped**
+
+**Goal:** give operators a richer terminal-native control plane for long-running
+automation, alerts, and cross-session health.
+
+### Focus
+
+- automation dashboards for active watches, plans, and pending approvals
+- predictive alerts for stale or risky automation
+- fleet-style health summaries across active sessions
+- incident notes and operator intervention tracking
+
+### User value
+
+- less cognitive load during long-running automation
+- earlier warning before work stalls
+- stronger operator confidence and audit trails
+
+### Likely surfaces
+
+- `/dashboard automation`
+- `/alerts list`, `/alerts acknowledge`
+- `/fleet status`, `/fleet health`
+- `/incident log`, `/incident resolve`
+
+### Risk
+
+**Medium to high** — cross-session alerting adds coordination complexity, but it
+extends Wave 27 visibility and Wave 31 trust cues cleanly.
+
+### Current shipped slice
+
+Wave 40 ships as a computed operator-control veneer over the existing session,
+watch, handoff, and dashboard primitives.
+
+- `/dashboard automation` surfaces a compact cross-session control plane with
+  active sessions, live watches, pending interventions, handoff-ready sessions,
+  and top alerts.
+- `/alerts list` computes operator alerts from local session/watch state and
+  `/alerts acknowledge <index>` lets the operator quiet a known alert without a
+  new alerting backend.
+- `/fleet status` and `/fleet health` reuse the same automation summary to give a
+  fleet-style terminal overview without adding remote orchestration semantics.
+
+### Deferred scope
+
+- predictive alert tuning, escalation automation, and browser/dashboard mirrors
+- remote fleet control or multi-machine automation management
+
+---
+
+## Wave 41 — Incident Log & Operator Resolution
+
+**Status: ✅ Shipped**
+
+**Goal:** turn operator issues into a lightweight local incident log so sessions
+can capture what broke, what is still open, and when it was resolved without
+adding a new backend.
+
+### Focus
+
+- local incident logging for the current session
+- explicit resolve flows for operator follow-through
+- handoff visibility for unresolved incidents
+- automation dashboard counts that reflect real operator pain
+
+### User value
+
+- faster handoff audits when automation or approvals go sideways
+- clearer operator memory of what is still unresolved
+- better collaboration snapshots without leaving the terminal
+
+### Current shipped slice
+
+Wave 41 ships as a lightweight incident-log veneer over the existing
+collaboration snapshot, handoff checks, and automation dashboard.
+
+- `/incident list` shows unresolved session incidents in deterministic plain text
+- `/incident log TEXT` records a new open incident as a collaboration event
+- `/incident resolve <index>` resolves an open incident without introducing a
+  second persistence layer
+- `/collab status` now includes **OPEN INCIDENTS** alongside assignments and
+  risks
+- `/handoff check` blocks readiness on unresolved incidents and prints them in
+  the audit
+- `/dashboard automation` now includes an open-incident count in the operator
+  summary
+
+### Deferred scope
+
+- incident notes, stale-marking, and richer incident lifecycle controls
+- cross-session incident aggregation or fleet-wide incident queues
+- escalation policies, auto-routing, and browser/dashboard mirrors
+
+### Shipped evidence checklist
+
+- [x] `/incident list|log|resolve` works in plain terminal output
+- [x] collaboration snapshots and handoff audits surface unresolved incidents
+- [x] automation dashboard reflects incident count
+- [x] docs updated across roadmap, architecture, quickstart, and dashboard inventory
 
 ---
 
@@ -2427,7 +2843,7 @@ python3 -m pytest tests/test_openclaw_cli.py \
        or test_run_chat_supports_help_command \
        or test_help_output_includes_new_commands)" -q
 ```
-Expected: **180 passed**.
+Expected: **557 passed**.
 
 **Q: What is the deploy command?**
 ```bash
@@ -2437,6 +2853,76 @@ If `openclaw_cli_sessions.py` was changed, also deploy it:
 ```bash
 scp src/openclaw_cli_sessions.py macbook:/Users/davevoyles/.local/share/openclaw-cli/
 ```
+
+---
+
+## Wave 42 — Source Rendering Reliability
+
+Status: ✅ Shipped
+
+**Problem:** Sources sometimes appear twice in CLI output (once inline in the body as unstripped markdown, and once in the 📎 Sources panel). Also, ANSI color codes (`36m`) visually bleed into clickable-link display text when OSC-8 terminal link support is absent.
+
+### Features
+
+- **Source deduplication guard**: If `text` passed to `_render_response_body` still contains a Sources-like heading section after extraction, strip it before rendering the body
+- **Clickable link display fix**: In the ANSI (non-Rich) sources panel, detect when `display` text is corrupted (contains URL-like content concatenated with display label) and fall back to plain URL
+- **Secondary Sources regex**: Add a broader fallback regex in `_preprocess_response_text` to catch sources sections in formats the primary regex misses (e.g., inline bullet list without a blank line before the heading)
+- **ANSI source box width**: Use `shutil.get_terminal_size().columns` correctly so the sources box matches terminal width instead of being too short
+
+### Done-when
+
+- [x] Sources appear at most once per response
+- [x] No ANSI codes appear in source URL/display text
+- [x] Sources box width matches terminal width
+
+**Risk:** 🟢 Low — render-path only, no data or routing changes
+
+---
+
+## Wave 43 — Context & Token Intelligence
+
+Status: 🔲 Ready
+
+**Problem:** Users have no visibility into how much context they've consumed or how full the model's context window is getting.
+
+### Features
+
+- **`/tokeninfo` command**: Shows estimated token usage for the current session. Rough estimate: sum of all message character lengths ÷ 4 (standard chars-per-token heuristic). Displayed as a visual progress bar toward common model limits (128k tokens), with color-coding: green < 50%, yellow 50–80%, red > 80%
+- **Token count in footer**: When the API response includes a token count, display it in the response footer (already has `tokens` field — surface it more prominently)
+- **Session duration in `/session`**: Include session age (time since first message) in the `/session` command output
+- **Tip about `/tokeninfo`**: Add to the rotating startup tips pool
+
+### Done-when
+
+- [ ] `/tokeninfo` shows estimated token count with progress bar
+- [ ] Footer shows token count when available from API
+- [ ] `/session` includes session age
+
+**Risk:** 🟢 Low — new read-only command, no data mutation
+
+---
+
+## Wave 44 — Startup & First-Run Polish
+
+Status: 🔲 Ready
+
+**Problem:** The startup banner does not dynamically adapt its greeting, the tip-of-the-day pool has grown stale, and first-run users lack a brief orientation.
+
+### Features
+
+- **Time-of-day greeting**: Replace static "OpenClaw {ver}" header text with contextual greeting: "Good morning 🌅", "Good afternoon ☀️", "Good evening 🌙" based on local hour
+- **Session count milestone**: After the Nth session (e.g., 10, 50, 100), show a brief celebration line ("🎉 100 sessions with OpenClaw!")
+- **Refreshed tips pool**: Add 10 new tips about recently shipped commands (`/tokeninfo`, `/trace`, `/handoff check`, `/fleet health`, `/alerts`, `/collab decision`, `/bookmark`, `/overlay`, `/pattern`, `/draft multiline`)
+- **`--no-banner` flag**: CLI argument to suppress the startup panel for scripting use
+
+### Done-when
+
+- [ ] Startup greeting reflects time of day
+- [ ] Session milestones celebrated
+- [ ] 10 new tips in pool
+- [ ] `--no-banner` flag suppresses panel
+
+**Risk:** 🟢 Low — cosmetic startup changes only
 
 ---
 

@@ -43,6 +43,11 @@ _RE_SOURCES_BLOCK = re.compile(
     r"\n{1,2}(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
     re.IGNORECASE,
 )
+_RE_SOURCES_BLOCK_LOOSE = re.compile(
+    r"(?:^|\n)(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _MD_TABLE_BLOCK = re.compile(
     r"(?m)^(\|[^\n]+\n\|[-:| ]+\|(?:\n\|[^\n]+)*)",
 )
@@ -657,6 +662,16 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
             text = text[: m.start()] + text[m.end():]
         text = text.rstrip()
 
+    # Fallback: catch Sources blocks with no preceding blank line
+    if sources is None:
+        all_loose = list(_RE_SOURCES_BLOCK_LOOSE.finditer(text))
+        if all_loose:
+            best = max(all_loose, key=lambda m: len(m.group(1)))
+            sources = best.group(0).strip()
+            for m in reversed(all_loose):
+                text = text[: m.start()] + text[m.end():]
+            text = text.rstrip()
+
     # D. Strip bare inline citation markers like [1], [2]
     text = re.sub(r"\[(\d{1,2})\](?!\()", "", text)
 
@@ -686,6 +701,9 @@ def _clean_sources_for_display(sources: str) -> list[tuple[str, str]]:
         if md:
             text, url = md.group(1).strip(), md.group(2).strip()
             display = text if text and text != url else url
+            display = _RE_ANSI_ESCAPE.sub("", display).strip()
+            if not display or "http://" in display or "https://" in display:
+                display = url
             if url not in seen:
                 seen.add(url)
                 results.append((display, url))
@@ -725,6 +743,15 @@ def _render_response_body(
     """Render the main response body (Rich tables or ANSI markdown) plus inline sources panel."""
     if not text.strip():
         text = "_No response text returned._"
+    # Safety: strip any Sources section still in body (regex miss fallback)
+    text = re.sub(
+        r"\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-\*]|\d+\.)\s+.+\n?)+",
+        "",
+        text,
+        flags=re.MULTILINE,
+    ).rstrip()
+    if not text.strip():
+        text = "_No response text returned._"
     if ctx.is_rich and ctx.is_tty:
         _render_body_with_tables(text, ctx)
         if sources:
@@ -753,19 +780,23 @@ def _render_response_body(
         print(_render_markdown_ansi(_linkify_response(text, ctx), ctx))
         if sources:
             src_items = _clean_sources_for_display(sources)
-            w = max(ctx.cols - 4, 40)
+            w = max(shutil.get_terminal_size((ctx.cols or 80, 24)).columns - 2, 40)
             border_style = ctx.theme_ansi if ctx.high_contrast else _DM
             border_reset = _R if border_style else ""
             print(
                 f"\n  {border_style}╭─ 📎 Sources "
-                f"{_separator_fill(max(0, w - 12), high_contrast=False)}╮{border_reset}"
+                f"{_separator_fill(max(0, w - 14), high_contrast=False)}╮{border_reset}"
             )
             for i, (display, url) in enumerate(src_items or [(sources, sources)]):
                 label = f"{i + 1}. " if src_items else ""
-                name_part = f"{_B}{display}{_R}  " if display != url else ""
+                display_clean = re.sub(r"[\x00-\x1f\x7f]", "", display)
+                if display_clean == url or "http" in display_clean or not display_clean.strip():
+                    name_part = ""
+                else:
+                    name_part = f"{_B}{display_clean}{_R}  "
                 link = (
                     _make_clickable_link(url, ctx=ctx)
-                    if ctx.prefs.get("clickable_links", True)
+                    if ctx.prefs.get("clickable_links", True) and ctx.prefs.get("rich", True)
                     else f"{_CY}{url}{_R}"
                 )
                 print(f"  {border_style}│{border_reset}  {_DM}{label}{_R}{name_part}{link}")

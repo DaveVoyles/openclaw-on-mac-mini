@@ -253,7 +253,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave37"  # updated with each UX wave batch
+_CLI_BUILD = "wave42"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -281,6 +281,16 @@ _OPENCLAW_TIPS = [
     "Use /histsearch to find any prompt you've ever typed.",
     "The /stats command shows bar charts of your usage patterns.",
     "Use /plain for maximum compatibility on any terminal.",
+    "Use /tokeninfo to check how full your context window is.",
+    "Use /trace to see the full routing decision with quality context.",
+    "Use /handoff check to audit session readiness before handing off.",
+    "Use /fleet health to get a cross-session automation health summary.",
+    "Use /alerts list to see computed operator alerts from active sessions.",
+    "Use /collab decision to record a tagged decision for later export.",
+    "Use /bookmark to save a replay point in the current session.",
+    "Use /overlay on to enable interactive list pickers for session commands.",
+    "Use /pattern list to browse saved prompt patterns.",
+    "Use /draft multiline on to enter multi-line compose mode.",
 ]
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
@@ -2044,6 +2054,105 @@ def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _acknowledged_alert_ids() -> set[str]:
+    raw = _PREFS.setdefault("acknowledged_alerts", [])
+    if not isinstance(raw, list):
+        raw = []
+        _PREFS["acknowledged_alerts"] = raw
+    return {str(item).strip() for item in raw if str(item).strip()}
+
+
+def _set_acknowledged_alert_ids(values: set[str]) -> None:
+    _PREFS["acknowledged_alerts"] = sorted(values)
+    _save_prefs()
+
+
+def _collect_operator_alerts() -> list[dict[str, Any]]:
+    alerts: list[dict[str, Any]] = []
+    for session in list_sessions(limit=50):
+        watch_state = load_watch_state(session.session_id) or {}
+        snapshot = build_collaboration_snapshot(session.session_id, limit=5)
+        operator = _session_operator_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
+        watch_status = str((watch_state or {}).get("status") or "").strip().lower()
+        failures = int((watch_state or {}).get("failure_count") or 0)
+        pending = len([item for item in list((watch_state or {}).get("interventions") or []) if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "pending"])
+        latest_handoff = str(operator.get("latest_handoff") or "").strip()
+        readiness = str(operator.get("readiness_label") or "").strip().lower()
+        if watch_status in {"retrying"} or failures > 0:
+            alerts.append({
+                "id": f"{session.session_id}:retry:{failures}:{watch_status}",
+                "session_id": session.session_id,
+                "title": session.title,
+                "severity": "warn",
+                "kind": "retry",
+                "message": f"automation retrying · failures {failures}",
+            })
+        if pending:
+            alerts.append({
+                "id": f"{session.session_id}:pending:{pending}",
+                "session_id": session.session_id,
+                "title": session.title,
+                "severity": "info",
+                "kind": "pending",
+                "message": f"{pending} pending operator intervention{'s' if pending != 1 else ''}",
+            })
+        if readiness == "handoff-ready" and not latest_handoff:
+            alerts.append({
+                "id": f"{session.session_id}:handoff-ready",
+                "session_id": session.session_id,
+                "title": session.title,
+                "severity": "info",
+                "kind": "handoff",
+                "message": "ready to hand off · create a snapshot",
+            })
+        if _session_is_stale(session) and watch_status in {"running", "active"}:
+            alerts.append({
+                "id": f"{session.session_id}:stale-watch",
+                "session_id": session.session_id,
+                "title": session.title,
+                "severity": "warn",
+                "kind": "stale",
+                "message": "watch looks stale while still active",
+            })
+    severity_order = {"warn": 0, "retry": 0, "error": 0, "info": 1, "idle": 2}
+    alerts.sort(key=lambda item: (severity_order.get(str(item.get("severity") or ""), 9), str(item.get("title") or ""), str(item.get("message") or "")))
+    return alerts
+
+
+def _print_automation_dashboard() -> None:
+    sessions = list_sessions(limit=50)
+    active_sessions = 0
+    live_watches = 0
+    pending_interventions = 0
+    ready_handoffs = 0
+    open_incidents = 0
+    for session in sessions:
+        watch_state = load_watch_state(session.session_id) or {}
+        snapshot = build_collaboration_snapshot(session.session_id, limit=5)
+        operator = _session_operator_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
+        if not _session_is_stale(session):
+            active_sessions += 1
+        if str((watch_state or {}).get("status") or "").strip().lower() in {"running", "active", "retrying"}:
+            live_watches += 1
+        pending_interventions += len([item for item in list((watch_state or {}).get("interventions") or []) if isinstance(item, dict) and str(item.get("status") or "").strip().lower() == "pending"])
+        if str(operator.get("readiness_label") or "").strip() == "handoff-ready":
+            ready_handoffs += 1
+        open_incidents += len([item for item in list(snapshot.get("open_incidents") or []) if isinstance(item, dict)])
+    alerts = _collect_operator_alerts()
+    print("Automation dashboard")
+    print("--------------------")
+    print(f"  Active sessions:       {active_sessions}")
+    print(f"  Live watches:          {live_watches}")
+    print(f"  Pending interventions: {pending_interventions}")
+    print(f"  Handoff-ready:         {ready_handoffs}")
+    print(f"  Open incidents:        {open_incidents}")
+    print(f"  Alerts:                {len(alerts)}")
+    if alerts:
+        print("  Top alerts:")
+        for alert in alerts[:5]:
+            print(f"    - [{str(alert.get('severity') or 'info').upper()}] {str(alert.get('title') or '')} · {str(alert.get('message') or '')}")
+
+
 def _build_session_share_text(session_id: str) -> str:
     snapshot = build_collaboration_snapshot(session_id, limit=5)
     story = build_session_storyline(session_id, limit=5)
@@ -2052,6 +2161,9 @@ def _build_session_share_text(session_id: str) -> str:
     actors = list(snapshot.get("actors") or [])
     recent_decisions = list(snapshot.get("recent_decisions") or [])
     recent_notes = list(snapshot.get("recent_notes") or [])
+    assignments = list(snapshot.get("assignments") or [])
+    open_risks = list(snapshot.get("open_risks") or [])
+    open_incidents = list(snapshot.get("open_incidents") or [])
     recent_outputs = list(snapshot.get("recent_outputs") or [])
     latest_handoff = snapshot.get("latest_handoff") or {}
     share = snapshot.get("share") or {}
@@ -2108,6 +2220,24 @@ def _build_session_share_text(session_id: str) -> str:
         lines.append("")
         lines.append("RECENT NOTES")
         for entry in recent_notes[:2]:
+            lines.append(f"  - {_format_collaboration_entry(entry)}")
+    if assignments:
+        lines.append("")
+        lines.append("ASSIGNMENTS")
+        for entry in assignments[:3]:
+            assignee = str(entry.get("assignee") or entry.get("actor") or "operator")
+            status = str(entry.get("status") or "active")
+            lines.append(f"  - {assignee} · {status} · {str(entry.get('content') or entry.get('summary') or '').strip()}")
+    if open_risks:
+        lines.append("")
+        lines.append("OPEN RISKS")
+        for entry in open_risks[:3]:
+            level = str(entry.get("risk_level") or "medium").upper()
+            lines.append(f"  - {level} · {_format_collaboration_entry(entry)}")
+    if open_incidents:
+        lines.append("")
+        lines.append("OPEN INCIDENTS")
+        for entry in open_incidents[:3]:
             lines.append(f"  - {_format_collaboration_entry(entry)}")
     if bookmarks:
         lines.append("")
@@ -4174,6 +4304,16 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
             text = text[: m.start()] + text[m.end():]
         text = text.rstrip()
 
+    # Fallback: catch Sources blocks with no preceding blank line
+    if sources is None:
+        all_loose = list(_RE_SOURCES_BLOCK_LOOSE.finditer(text))
+        if all_loose:
+            best = max(all_loose, key=lambda m: len(m.group(1)))
+            sources = best.group(0).strip()
+            for m in reversed(all_loose):
+                text = text[: m.start()] + text[m.end():]
+            text = text.rstrip()
+
     # D. Strip bare inline citation markers like [1], [2], [12]
     # Guard against stripping markdown link text like [text](url) — only remove
     # patterns where the bracket content is purely digits and not followed by (
@@ -4246,6 +4386,11 @@ _RE_SOURCES_BLOCK = re.compile(
     r"\n{1,2}(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
     re.IGNORECASE,
 )
+_RE_SOURCES_BLOCK_LOOSE = re.compile(
+    r"(?:^|\n)(?:\*\*Sources\*\*|Sources):?\s*\n((?:(?:[-\*]|\d+\.)\s+.+\n?)+)",
+    re.IGNORECASE | re.MULTILINE,
+)
+_RE_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
 
 def _strip_inline_md(text: str) -> str:
@@ -4348,6 +4493,9 @@ def _clean_sources_for_display(sources: str) -> list[str]:
         if md:
             text, url = md.group(1).strip(), md.group(2).strip()
             display = text if text and text != url else url
+            display = _RE_ANSI_ESCAPE.sub("", display).strip()
+            if not display or "http://" in display or "https://" in display:
+                display = url
             if url not in seen:
                 seen.add(url)
                 results.append((display, url))
@@ -4412,6 +4560,12 @@ def _render_response_body(
     high_contrast: bool,
 ) -> None:
     """Render the main response body — delegated to openclaw_cli_render."""
+    text = re.sub(
+        r"\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-\*]|\d+\.)\s+.+\n?)+",
+        "",
+        text,
+        flags=re.IGNORECASE | re.MULTILINE,
+    ).rstrip()
     _render_mod._render_response_body(text, sources, _make_render_ctx(is_tty, high_contrast))
 
 
@@ -5731,6 +5885,70 @@ def _last_trace_snapshot(session_id: str) -> dict[str, Any] | None:
     }
 
 
+def _route_quality_summary() -> list[dict[str, Any]]:
+    ratings = list(_PREFS.get("ratings") or [])
+    buckets: dict[str, dict[str, Any]] = {}
+    for item in ratings:
+        if not isinstance(item, dict):
+            continue
+        route = str(item.get("route") or item.get("slash_command") or "").strip().lstrip("/")
+        if not route:
+            continue
+        try:
+            score = int(item.get("score", item.get("rating", 0)))
+        except (TypeError, ValueError):
+            continue
+        entry = buckets.setdefault(route, {"route": route, "scores": [], "count": 0})
+        entry["scores"].append(score)
+        entry["count"] = int(entry.get("count") or 0) + 1
+    rows: list[dict[str, Any]] = []
+    for route, entry in buckets.items():
+        scores = list(entry.get("scores") or [])
+        if not scores:
+            continue
+        avg = sum(scores) / len(scores)
+        rows.append(
+            {
+                "route": route,
+                "count": len(scores),
+                "avg": avg,
+                "high_rate": int(sum(1 for score in scores if score >= 4) / max(1, len(scores)) * 100),
+            }
+        )
+    rows.sort(key=lambda item: (float(item.get("avg") or 0.0), int(item.get("count") or 0), str(item.get("route") or "")), reverse=True)
+    return rows
+
+
+def _cmd_routing(ctx: ChatCommandContext) -> str:
+    """/routing [suggest|analyze] — inspect learned routing hints from past ratings."""
+    arg = (ctx.args or "").strip().lower()
+    sub = arg or "suggest"
+    if sub not in {"suggest", "analyze"}:
+        _print_error("Usage: /routing [suggest|analyze]")
+        return _CMD_CONTINUE
+    rows = _route_quality_summary()
+    if not rows:
+        print("No route-quality history yet. Use /rate after routed responses to build suggestions.")
+        return _CMD_CONTINUE
+    if sub == "suggest":
+        best = rows[0]
+        print("Routing suggestion")
+        print("------------------")
+        print(f"  Best-rated route: /{best['route']}")
+        print(f"  Average score:    {best['avg']:.1f}/5 across {best['count']} rating(s)")
+        print(f"  High-rate share:  {best['high_rate']}%")
+        if len(rows) > 1:
+            runner_up = rows[1]
+            print(f"  Runner-up:        /{runner_up['route']} ({runner_up['avg']:.1f}/5)")
+        print("  Learned behavior is advisory only; auto-routing remains unchanged.")
+        return _CMD_CONTINUE
+    print("Routing quality lanes")
+    print("---------------------")
+    for entry in rows[:5]:
+        print(f"  /{entry['route']:<12} avg {entry['avg']:.1f}/5  ratings {entry['count']:<2}  high-rate {entry['high_rate']}%")
+    return _CMD_CONTINUE
+
+
 def _cmd_why(ctx: ChatCommandContext) -> str:
     """/why — explain the last routing or tool decision from session history."""
     session = _require_session_or_warn(ctx)
@@ -5824,7 +6042,7 @@ def _parse_collab_entry(raw: str) -> tuple[str, list[str], str]:
 
 
 def _cmd_collab(ctx: ChatCommandContext) -> str:
-    """/collab [status|share|note|decision] — collaboration notes, decisions, and handoff summaries."""
+    """/collab [status|share|note|decision|assign] — collaboration notes, decisions, assignments, and handoff summaries."""
     session = _require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
@@ -5838,29 +6056,38 @@ def _cmd_collab(ctx: ChatCommandContext) -> str:
     sub = parts[0].lower()
     remainder = parts[1].strip() if len(parts) > 1 else ""
 
-    if sub not in {"note", "decision"}:
-        _print_error("Usage: /collab [status|share|note [@actor] TEXT|decision [@actor] [#tag] TEXT]")
+    if sub not in {"note", "decision", "assign"}:
+        _print_error("Usage: /collab [status|share|note [@actor] TEXT|decision [@actor] [#tag] TEXT|assign @actor TEXT]")
         return _CMD_CONTINUE
 
     actor, tags, text = _parse_collab_entry(remainder)
     if not text:
-        _print_error(f"Usage: /collab {sub} [@actor] {'[#tag] ' if sub == 'decision' else ''}TEXT")
+        if sub == "assign":
+            _print_error("Usage: /collab assign @actor TEXT")
+        else:
+            _print_error(f"Usage: /collab {sub} [@actor] {'[#tag] ' if sub == 'decision' else ''}TEXT")
         return _CMD_CONTINUE
     actor_label = actor or "operator"
     summary_text = " ".join(text.split())
     if len(summary_text) > 90:
         summary_text = summary_text[:89].rstrip() + "…"
     summary = f"{sub} by {actor_label}: {summary_text}"
+    metadata: dict[str, Any] = {
+        "summary": summary,
+        "actor": actor_label,
+        "tags": tags,
+        "collab_kind": sub,
+    }
+    if sub == "assign":
+        metadata["assignee"] = actor_label
+        metadata["assignment_status"] = "active"
+        metadata["collab_kind"] = "assignment"
+        metadata["summary"] = f"assignment for {actor_label}: {summary_text}"
     append_event(
         session.session_id,
         kind="collab",
         content=text,
-        metadata={
-            "summary": summary,
-            "actor": actor_label,
-            "tags": tags,
-            "collab_kind": sub,
-        },
+        metadata=metadata,
     )
     if tags:
         existing_tags = list(session.tags or [])
@@ -5873,6 +6100,194 @@ def _cmd_collab(ctx: ChatCommandContext) -> str:
     if tags:
         print(f"Tags: {', '.join('#' + tag for tag in tags)}")
     print(text)
+    return _CMD_CONTINUE
+
+
+def _risk_entries(session_id: str) -> list[dict[str, Any]]:
+    snapshot = build_collaboration_snapshot(session_id, limit=25)
+    return [item for item in list(snapshot.get("open_risks") or []) if isinstance(item, dict)]
+
+
+def _handoff_check_snapshot(session_id: str) -> dict[str, Any]:
+    session = require_session(session_id)
+    snapshot = build_collaboration_snapshot(session_id, limit=10)
+    open_risks = [item for item in list(snapshot.get("open_risks") or []) if isinstance(item, dict)]
+    open_incidents = [item for item in list(snapshot.get("open_incidents") or []) if isinstance(item, dict)]
+    assignments = [item for item in list(snapshot.get("assignments") or []) if isinstance(item, dict)]
+    latest_handoff = snapshot.get("latest_handoff") or {}
+    watch_state = load_watch_state(session_id) or {}
+    checks: list[tuple[str, bool, str]] = []
+    checks.append(("plan", bool(session.plan_id), str(session.plan_id or "link a plan with /plan <id>")))
+    checks.append(("task", bool(session.task_id), str(session.task_id or "link a task with /task <id>")))
+    checks.append(("owner", bool(assignments), str(assignments[0].get("assignee") or assignments[0].get("actor") if assignments else "record ownership with /collab assign @actor TEXT")))
+    checks.append(("handoff", bool(latest_handoff), str(latest_handoff.get("id") or "create one with /handoff create")))
+    watch_status = str(watch_state.get("status") or "").strip().lower()
+    checks.append(("watch", watch_status not in {"running", "active"}, watch_status or "idle"))
+    checks.append(("incidents", not open_incidents, "resolve incidents with /incident resolve <index>" if open_incidents else "none"))
+    readiness = "ready"
+    if open_risks or open_incidents:
+        readiness = "blocked"
+    elif not all(ok for _, ok, _ in checks[:3]):
+        readiness = "needs-attention"
+    return {
+        "readiness": readiness,
+        "checks": checks,
+        "open_risks": open_risks,
+        "open_incidents": open_incidents,
+        "assignments": assignments,
+    }
+
+
+def _cmd_risk(ctx: ChatCommandContext) -> str:
+    """/risk [list|add LEVEL TEXT|clear INDEX] — track blocking risks for handoffs."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+    raw = (ctx.args or "").strip()
+    parts = raw.split(None, 2)
+    sub = parts[0].lower() if parts else "list"
+    if sub in {"", "list", "status"}:
+        risks = _risk_entries(session.session_id)
+        print("Open risks:")
+        if not risks:
+            print("  (none)")
+            return _CMD_CONTINUE
+        for index, entry in enumerate(risks, start=1):
+            level = str(entry.get("risk_level") or "medium").upper()
+            actor = str(entry.get("actor") or "operator")
+            text = str(entry.get("content") or entry.get("summary") or "").strip()
+            print(f"  {index}. {level} · {actor} · {text}")
+        return _CMD_CONTINUE
+    if sub == "add":
+        if len(parts) < 3:
+            _print_error("Usage: /risk add <critical|high|medium|low> TEXT")
+            return _CMD_CONTINUE
+        level = parts[1].strip().lower()
+        if level not in {"critical", "high", "medium", "low"}:
+            _print_error("Risk level must be one of: critical, high, medium, low")
+            return _CMD_CONTINUE
+        text = parts[2].strip()
+        if not text:
+            _print_error("Usage: /risk add <critical|high|medium|low> TEXT")
+            return _CMD_CONTINUE
+        append_event(
+            session.session_id,
+            kind="collab",
+            content=text,
+            metadata={
+                "summary": f"risk {level}: {' '.join(text.split())[:90]}",
+                "actor": "operator",
+                "tags": [level, "risk"],
+                "collab_kind": "risk",
+                "risk_level": level,
+                "risk_status": "open",
+            },
+        )
+        print(f"Recorded {level} risk.")
+        print(text)
+        return _CMD_CONTINUE
+    if sub == "clear":
+        if len(parts) < 2 or not parts[1].isdigit():
+            _print_error("Usage: /risk clear <index>")
+            return _CMD_CONTINUE
+        risks = _risk_entries(session.session_id)
+        index = int(parts[1])
+        if index < 1 or index > len(risks):
+            _print_error(f"Risk index out of range: {index}")
+            return _CMD_CONTINUE
+        entry = risks[index - 1]
+        text = str(entry.get("content") or entry.get("summary") or "").strip()
+        level = str(entry.get("risk_level") or "medium").strip().lower()
+        append_event(
+            session.session_id,
+            kind="collab",
+            content=text,
+            metadata={
+                "summary": f"risk cleared: {' '.join(text.split())[:90]}",
+                "actor": "operator",
+                "tags": [level, "risk", "cleared"],
+                "collab_kind": "risk",
+                "risk_level": level,
+                "risk_status": "cleared",
+            },
+        )
+        print(f"Cleared risk {index}.")
+        return _CMD_CONTINUE
+    _print_error("Usage: /risk [list|add LEVEL TEXT|clear INDEX]")
+    return _CMD_CONTINUE
+
+
+def _incident_entries(session_id: str) -> list[dict[str, Any]]:
+    snapshot = build_collaboration_snapshot(session_id, limit=25)
+    return [item for item in list(snapshot.get("open_incidents") or []) if isinstance(item, dict)]
+
+
+def _cmd_incident(ctx: ChatCommandContext) -> str:
+    """/incident [list|log TEXT|resolve INDEX] — track operator incidents for the current session."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+    raw = (ctx.args or "").strip()
+    parts = raw.split(None, 1)
+    sub = parts[0].lower() if parts else "list"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+    if sub in {"", "list", "status"}:
+        incidents = _incident_entries(session.session_id)
+        print("Open incidents:")
+        if not incidents:
+            print("  (none)")
+            return _CMD_CONTINUE
+        for index, entry in enumerate(incidents, start=1):
+            actor = str(entry.get("actor") or "operator")
+            text = str(entry.get("content") or entry.get("summary") or "").strip()
+            print(f"  {index}. {actor} · {text}")
+        return _CMD_CONTINUE
+    if sub == "log":
+        text = rest.strip()
+        if not text:
+            _print_error("Usage: /incident log TEXT")
+            return _CMD_CONTINUE
+        append_event(
+            session.session_id,
+            kind="collab",
+            content=text,
+            metadata={
+                "summary": f"incident: {' '.join(text.split())[:90]}",
+                "actor": "operator",
+                "tags": ["incident"],
+                "collab_kind": "incident",
+                "incident_status": "open",
+            },
+        )
+        print("Recorded incident.")
+        print(text)
+        return _CMD_CONTINUE
+    if sub == "resolve":
+        if not rest.isdigit():
+            _print_error("Usage: /incident resolve <index>")
+            return _CMD_CONTINUE
+        incidents = _incident_entries(session.session_id)
+        index = int(rest)
+        if index < 1 or index > len(incidents):
+            _print_error(f"Incident index out of range: {index}")
+            return _CMD_CONTINUE
+        entry = incidents[index - 1]
+        text = str(entry.get("content") or entry.get("summary") or "").strip()
+        append_event(
+            session.session_id,
+            kind="collab",
+            content=text,
+            metadata={
+                "summary": f"incident resolved: {' '.join(text.split())[:90]}",
+                "actor": "operator",
+                "tags": ["incident", "resolved"],
+                "collab_kind": "incident",
+                "incident_status": "resolved",
+            },
+        )
+        print(f"Resolved incident {index}.")
+        return _CMD_CONTINUE
+    _print_error("Usage: /incident [list|log TEXT|resolve INDEX]")
     return _CMD_CONTINUE
 
 
@@ -6931,6 +7346,39 @@ def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     return _CMD_CONTINUE
 
 
+def _cmd_tokeninfo(ctx: "ChatCommandContext") -> str:
+    """/tokeninfo — show estimated token usage for this session."""
+    history = ctx.history
+    total_chars = sum(len(str(m.get("content", ""))) for m in history)
+    est_tokens = max(0, total_chars // 4)  # rough ~4 chars per token
+    msg_count = len(history)
+
+    limit_128k = 128_000
+    pct_128k = min(100, round(est_tokens / limit_128k * 100))
+
+    if pct_128k < 50:
+        fill_color = _GR
+    elif pct_128k < 80:
+        fill_color = _YE
+    else:
+        fill_color = _RE
+
+    bar_width = 20
+    filled = round(bar_width * pct_128k / 100)
+    bar = f"{fill_color}{'█' * filled}{_DM}{'░' * (bar_width - filled)}{_R}"
+
+    print(f"\n  {_B}Context usage{_R} {_DM}(estimated){_R}")
+    print(f"  Messages:   {_B}{msg_count}{_R}")
+    print(f"  Est. tokens:{_B}{est_tokens:,}{_R}")
+    print(f"  128k limit: {bar} {fill_color}{pct_128k}%{_R}")
+    if pct_128k >= 80:
+        print(f"\n  {_YE}⚠  Context is getting full — consider /clear to reset.{_R}")
+    elif pct_128k >= 50:
+        print(f"\n  {_DM}Tip: Use /clear to reset context if responses feel stale.{_R}")
+    print()
+    return _CMD_CONTINUE
+
+
 def _print_theme_preview(theme_name: str, *, persisted: bool) -> None:
     """Print a compact theme preview without requiring Rich."""
     is_tty = _get_is_tty()
@@ -7953,12 +8401,38 @@ def _cmd_replay(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_handoff(ctx: ChatCommandContext) -> str:
-    """/handoff [create|list|open NAME|note TEXT] — save/restore a resumable workspace handoff."""
+    """/handoff [create|list|open NAME|note TEXT|check] — save/restore a resumable workspace handoff."""
     is_tty = _get_is_tty()
     raw = ctx.args.strip()
     parts = raw.split(None, 1)
     sub = parts[0].lower() if parts else ""
     rest = parts[1].strip() if len(parts) > 1 else ""
+
+    if sub == "check":
+        session = _require_session_or_warn(ctx)
+        if session is None:
+            return _CMD_CONTINUE
+        check = _handoff_check_snapshot(session.session_id)
+        readiness = str(check.get("readiness") or "needs-attention")
+        checks = list(check.get("checks") or [])
+        open_risks = list(check.get("open_risks") or [])
+        open_incidents = list(check.get("open_incidents") or [])
+        print("Handoff readiness")
+        print("-----------------")
+        print(f"state: {readiness}")
+        for name, ok, detail in checks:
+            badge = "OK" if ok else "WARN"
+            print(f"  {badge:<4} {name:<8} {detail}")
+        if open_risks:
+            print("open risks:")
+            for entry in open_risks[:5]:
+                level = str(entry.get('risk_level') or 'medium').upper()
+                print(f"  - {level} · {str(entry.get('content') or entry.get('summary') or '').strip()}")
+        if open_incidents:
+            print("open incidents:")
+            for entry in open_incidents[:5]:
+                print(f"  - {str(entry.get('content') or entry.get('summary') or '').strip()}")
+        return _CMD_CONTINUE
 
     # ── create ──────────────────────────────────────────────────────────────
     if sub == "create":
@@ -8089,7 +8563,7 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     # ── unknown / usage ─────────────────────────────────────────────────────
-    print(f"  {_CY}Usage:{_R} /handoff [create|list|open NAME|note TEXT]")
+    print(f"  {_CY}Usage:{_R} /handoff [create|list|open NAME|note TEXT|check]")
     return _CMD_CONTINUE
 
 
@@ -8799,6 +9273,11 @@ def print_chat_help(*, search: str = "") -> None:
         ("/files rm <path>",               "Remove a file from tracked files"),
         ("/plan [<id>|unlink]",            "Show or link a plan"),
         ("/task [<id>|unlink]",            "Show or link a task"),
+        ("/risk [list|add LEVEL TEXT|clear INDEX]", "Track blocking risks for the current session"),
+        ("/incident [list|log TEXT|resolve INDEX]", "Track and resolve operator incidents for the current session"),
+        ("/dashboard automation",              "Show a compact automation dashboard across active sessions"),
+        ("/alerts [list|acknowledge INDEX]",   "List computed operator alerts and acknowledge one"),
+        ("/fleet [status|health]",             "Show cross-session automation health in a compact view"),
         ("/outputs [promote <i> <name>]",  "List, preview, promote, or overlay-pick saved session outputs"),
         ("/overlay [on|off|status]",       "Toggle opt-in interactive pickers for supported list commands"),
         ("/rollback [last|list|<name>]",   "List git snapshots, preview/exec rollback, or restore checkpoint"),
@@ -8806,11 +9285,13 @@ def print_chat_help(*, search: str = "") -> None:
         ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
         ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
         ("/workspace [status|save|list|restore NAME]", "Manage workspace recovery capsules for the current session"),
-        ("/collab [status|share]",             "Show an actor-oriented handoff summary for the current session"),
+        ("/collab [status|share|assign]",      "Show or extend the actor-oriented handoff summary for the current session"),
         ("/runbook [template] [save <path>]",  "Render a long-form runbook for the active session"),
         ("/exporttemplates [list|show <name>]", "Inspect built-in runbook/export templates"),
         ("/collab note [@actor] TEXT",         "Record a collaboration note in the local session audit trail"),
         ("/collab decision [@actor] [#tag] TEXT", "Record a tagged decision for later handoff/export"),
+        ("/collab assign @actor TEXT",         "Assign an owner to the next shared task or handoff step"),
+        ("/handoff check",                     "Audit readiness using linked plan/task, ownership, and open risks"),
         ("/search <query>",                    "Search this session's event history for matching turns"),
         ("/search --all <query>",              "Search across all session histories"),
         ("/autoroute [on|off]",            "Show or toggle high-confidence REPL auto-routing"),
@@ -8867,6 +9348,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/pattern rm <name>",                  "Delete a saved pattern"),
         ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
         ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
+        ("/quality predict", "Show the best-rated route based on your prior ratings"),
+        ("/routing [suggest|analyze]",         "Inspect learned route suggestions without changing auto-routing"),
         ("/streak",   "Show your current high-rating streak and all-time best"),
         ("/heatmap",  "Show a color-coded 24-hour activity heatmap of openclaw usage"),
         ("/top [n]",  "Show the n most frequently used prompts and commands (default: 10)"),
@@ -8897,6 +9380,7 @@ def print_chat_help(*, search: str = "") -> None:
         ("/benchmark [n]",                       "Measure AI server response latency (n pings, default 3, max 10)"),
         ("/followup",                            "Show contextual follow-up suggestions for your last prompt"),
         ("/followup on|off",                     "Enable or disable the auto-suggestion footer after responses"),
+        ("/tokeninfo",                           "Show estimated context token usage"),
     ]
 
     q = search.strip().lower()
@@ -9393,22 +9877,51 @@ def _print_first_run_tips() -> None:
         print()
 
 
+def _time_greeting() -> str:
+    """Return a time-of-day greeting with emoji."""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning 🌅"
+    elif 12 <= hour < 17:
+        return "Good afternoon ☀️"
+    elif 17 <= hour < 21:
+        return "Good evening 🌙"
+    else:
+        return "Hello 🦞"
+
+
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
     autoroute_on = _session_auto_route_enabled(session_id)
     ver = cli_version()
     cols = _terminal_width()
 
+    # Compute session milestone (best-effort)
+    _milestone = None
+    _session_count = 0
+    try:
+        from openclaw_cli_sessions import list_sessions as _list_sessions  # type: ignore[import]
+        _session_count = len(_list_sessions(limit=1001))
+        for m in (10, 50, 100, 250, 500, 1000):
+            if _session_count == m:
+                _milestone = m
+                break
+    except Exception:  # noqa: BLE001
+        pass
+
     # Plain-mode path: no ANSI, no emoji, no decorative borders.
     if _a11y_plain_mode() or cols < 40:
         autoroute_str = "on" if autoroute_on else "off"
         print(f"🦞 OpenClaw {ver}")
+        print(_time_greeting())
         print(f"Server: {config.base_url}")
         print(f"User: {config.user_name}")
         if session_id:
             print(f"Session: {session_id[:8]}…")
         print("Type /help for commands. /quit to exit.")
         print(f"Auto-routing: {autoroute_str}")
+        if _milestone:
+            print(f"  🎉 {_milestone} sessions with OpenClaw! That's a milestone!")
         return
 
     if _RICH_AVAILABLE and _IS_TTY:
@@ -9417,6 +9930,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         t.append(f"  {ver}", style="cyan dim")
         t.append("  connected to ", style="dim")
         t.append(config.base_url, style="cyan")
+        t.append(f"\n  {_time_greeting()}", style="dim")
         t.append(f"\n  {_e('👤', '[user]')} ", style="dim")
         t.append(config.user_name, style="bold green")
         if session_id:
@@ -9447,6 +9961,8 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
                 padding=(0, 1),
             )
         )
+        if _milestone:
+            _RICH_CONSOLE.print(f"  🎉 [bold cyan]{_milestone} sessions with OpenClaw![/] [dim]That's a milestone![/]")
         _motion_pause("banner")
     else:
         session_line = (
@@ -9458,6 +9974,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
             autoroute_line = f"\n  {_B}Auto-routing{_R} {_YE}is off{_R} {_DM}— use /autoroute on to enable{_R}"
         print(
             f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}  {_DM}{ver}{_R}"
+            f"\n  {_DM}{_time_greeting()}{_R}"
             f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
             f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
             f"{session_line}"
@@ -9465,6 +9982,8 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
             f"\n  Type anything to chat · {_BCY}/help{_R} for commands · {_BCY}/quit{_R} to exit · {_B}Tab{_R}{_DM} completes /commands{_R}"
             f"{autoroute_line}\n"
         )
+        if _milestone:
+            print(f"  🎉 {_BCY}{_milestone} sessions with OpenClaw!{_R} {_DM}That's a milestone!{_R}")
 
 
 def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
@@ -9486,7 +10005,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Core
     "help", "clear", "quit", "exit", "update", "version", "v",
     # Session & context
-    "session", "context", "cwd", "files", "plan", "watch", "task",
+    "session", "context", "cwd", "files", "plan", "watch", "task", "risk", "incident",
     "sessions", "tag", "resume", "replay", "handoff", "workspace", "collab",
     # Outputs & edits
     "outputs", "rollback", "events", "why", "trace", "runbook", "exporttemplates", "edit", "exec", "write",
@@ -9496,10 +10015,10 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Display & UI
     "theme", "emoji", "layout", "colorscheme", "separator", "links",
     "autobold", "jsonformat", "emojiheaders", "pathhints", "ratehint",
-    "promptdebug", "quality", "tip", "shortcuts",
+    "promptdebug", "quality", "routing", "tip", "shortcuts",
     "palette", "overlay", "bindlist", "keybind", "keys",
     # Dashboard & benchmarks
-    "dashboard", "benchmark", "timeline",
+    "dashboard", "alerts", "fleet", "benchmark", "timeline",
     # History & search
     "history", "recall", "histsearch", "freq", "heatmap", "top", "streak",
     # Persistence
@@ -9512,7 +10031,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "accessibility", "a11y",
     # Misc / fun
     "rate", "ratehint", "celebrate", "inject", "system", "prompt",
-    "pasteguard", "followup",
+    "pasteguard", "followup", "tokeninfo",
 })
 
 _MAX_ALIASES = 50
@@ -10254,7 +10773,17 @@ def _cmd_rate(ctx: "ChatCommandContext") -> str:
 
     ts = datetime.now(timezone.utc).isoformat()
     ratings = _PREFS.setdefault("ratings", [])
-    ratings.append({"score": score, "label": label, "ts": ts})
+    rating_entry: dict[str, Any] = {"score": score, "label": label, "ts": ts}
+    if ctx.session_id:
+        snapshot = _last_trace_snapshot(ctx.session_id)
+        if snapshot:
+            route = str(snapshot.get("slash_cmd") or "").strip().lstrip("/")
+            if route:
+                rating_entry["route"] = route
+            conf_label = str(snapshot.get("conf_label") or "").strip()
+            if conf_label:
+                rating_entry["route_confidence"] = conf_label
+    ratings.append(rating_entry)
     if len(ratings) > 500:
         _PREFS["ratings"] = ratings[-500:]
     _save_prefs()
@@ -10577,6 +11106,23 @@ def _cmd_heatmap(ctx: ChatCommandContext) -> str:
 def _cmd_quality(ctx: "ChatCommandContext") -> str:
     """/quality — show a colored histogram of response quality ratings."""
     is_tty = _get_is_tty()
+    arg = (ctx.args or "").strip().lower()
+    if arg == "predict":
+        rows = _route_quality_summary()
+        if not rows:
+            print("No route-quality history yet. Use /rate after routed responses to build predictions.")
+            return _CMD_CONTINUE
+        best = rows[0]
+        print("Quality prediction")
+        print("------------------")
+        print(f"  Highest-confidence lane: /{best['route']}")
+        print(f"  Predicted quality:       {best['avg']:.1f}/5 based on {best['count']} prior rating(s)")
+        print(f"  High-rating share:       {best['high_rate']}%")
+        if len(rows) > 1:
+            next_best = rows[1]
+            print(f"  Next best:               /{next_best['route']} ({next_best['avg']:.1f}/5)")
+        print("  Use /routing analyze for the full learned summary.")
+        return _CMD_CONTINUE
     ratings = _PREFS.get("ratings", [])
     snapshot = _last_trace_snapshot(ctx.session_id) if getattr(ctx, "session_id", "") else None
 
@@ -11433,6 +11979,10 @@ def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
 
 def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     """/dashboard — show the power dashboard: sessions, stats, pins, and system status."""
+    raw = (ctx.args or "").strip().lower()
+    if raw == "automation":
+        _print_automation_dashboard()
+        return _CMD_CONTINUE
     is_tty = _get_is_tty()
 
     # Gather data
@@ -11561,6 +12111,54 @@ def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     return _CMD_CONTINUE
 
 
+def _cmd_alerts(ctx: ChatCommandContext) -> str:
+    """/alerts [list|acknowledge INDEX] — inspect computed operator alerts."""
+    raw = (ctx.args or "").strip()
+    parts = raw.split(None, 1)
+    sub = parts[0].lower() if parts else "list"
+    rest = parts[1].strip() if len(parts) > 1 else ""
+    alerts = _collect_operator_alerts()
+    acked = _acknowledged_alert_ids()
+    visible = [item for item in alerts if str(item.get("id") or "") not in acked]
+    if sub in {"", "list"}:
+        print("Operator alerts")
+        print("---------------")
+        if not visible:
+            print("  (none)")
+            return _CMD_CONTINUE
+        for index, alert in enumerate(visible, start=1):
+            print(
+                f"  {index}. [{str(alert.get('severity') or 'info').upper()}] "
+                f"{str(alert.get('title') or '')} · {str(alert.get('message') or '')}"
+            )
+        return _CMD_CONTINUE
+    if sub in {"ack", "acknowledge"}:
+        if not rest.isdigit():
+            _print_error("Usage: /alerts acknowledge <index>")
+            return _CMD_CONTINUE
+        index = int(rest)
+        if index < 1 or index > len(visible):
+            _print_error(f"Alert index out of range: {index}")
+            return _CMD_CONTINUE
+        acked.add(str(visible[index - 1].get("id") or ""))
+        _set_acknowledged_alert_ids(acked)
+        print(f"Acknowledged alert {index}.")
+        return _CMD_CONTINUE
+    _print_error("Usage: /alerts [list|acknowledge INDEX]")
+    return _CMD_CONTINUE
+
+
+def _cmd_fleet(ctx: ChatCommandContext) -> str:
+    """/fleet [status|health] — show cross-session automation health summaries."""
+    raw = (ctx.args or "").strip().lower()
+    sub = raw or "status"
+    if sub not in {"status", "health"}:
+        _print_error("Usage: /fleet [status|health]")
+        return _CMD_CONTINUE
+    _print_automation_dashboard()
+    return _CMD_CONTINUE
+
+
 def _cmd_benchmark(ctx: ChatCommandContext) -> str:
     """/benchmark [n] — run n quick AI pings to measure response latency (default: 3)."""
     import time
@@ -11650,6 +12248,11 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("plan",         "Show, link, focus, or unlink a plan (/plan [<id>|status|focus|unlink])",                                  _cmd_plan,         ()),
     ("watch",        "Inspect or control active watch sessions (/watch [status|history|retry-limit N|intervene TEXT])",         _cmd_watch,        ()),
     ("task",         "Show, link, or unlink a task (/task [<id>|unlink])",                                                     _cmd_task,         ()),
+    ("risk",         "Track blocking risks for the session (/risk [list|add LEVEL TEXT|clear INDEX])",                        _cmd_risk,         ()),
+    ("incident",     "Track and resolve operator incidents (/incident [list|log TEXT|resolve INDEX])",                        _cmd_incident,     ()),
+    ("dashboard",    "Show dashboard stats or automation summary (/dashboard [automation])",                                   _cmd_dashboard,    ()),
+    ("alerts",       "List computed operator alerts (/alerts [list|acknowledge INDEX])",                                       _cmd_alerts,       ()),
+    ("fleet",        "Show cross-session automation health (/fleet [status|health])",                                           _cmd_fleet,        ()),
     ("outputs",      "List or preview saved outputs (/outputs [<index>|<filename>])",                                           _cmd_outputs,      ()),
     ("overlay",      "Toggle opt-in interactive overlays (/overlay [on|off|status])",                                          _cmd_overlay,      ()),
     ("colorscheme",  "View or set the extended color scheme (/colorscheme [name|list|reset])",                                  _cmd_colorscheme,  ()),
@@ -11681,7 +12284,7 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("bookmarks",    "List saved replay bookmarks for the current session",                                                    _cmd_bookmarks,    ()),
     ("resume",       "Print resume instructions for the most-recent other session (/resume [last|id])",                        _cmd_resume,       ()),
     ("replay",       "Re-print the current or a past session conversation (/replay [session-id] [--from bookmark])",           _cmd_replay,       ()),
-    ("handoff",      "Save/restore a resumable workspace handoff  [create|list|open NAME|note TEXT]",                          _cmd_handoff,      ()),
+    ("handoff",      "Save/restore a resumable workspace handoff  [create|list|open NAME|note TEXT|check]",                    _cmd_handoff,      ()),
     ("draft",        "Save, load, or clear a draft prompt",                                                                    _cmd_draft,        ()),
     ("template",     "Manage reusable prompt templates",                                                                       _cmd_template,     ()),
     ("pasteguard",   "Toggle paste guard for large risky pastes",                                                              _cmd_pasteguard,   ()),
@@ -11698,7 +12301,8 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("pattern",      "Manage reusable pattern-library flows (/pattern [save|list|show|preview|run|rm] [name])",               _cmd_pattern,      ("patterns",)),
     ("rate",         "Rate the last AI response (/rate [good|ok|bad|meh|1-5])",                                               _cmd_rate,         ("feedback",)),
     ("celebrate",    "Trigger a celebration animation (/celebrate [message])",                                                 _cmd_celebrate,    ()),
-    ("quality",      "Show response quality stats and rating history",                                                         _cmd_quality,      ()),
+    ("quality",      "Show response quality stats and predictions (/quality [predict])",                                       _cmd_quality,      ()),
+    ("routing",      "Inspect learned route suggestions (/routing [suggest|analyze])",                                        _cmd_routing,      ()),
     ("heatmap",      "Show a color-coded hourly activity heatmap of openclaw usage",                                           _cmd_heatmap,      ()),
     ("top",          "Show the n most frequently used prompts and commands (default: 10)",                                     _cmd_top,          ()),
     ("freq",         "Show frequency analysis of slash commands used",                                                         _cmd_freq,         ()),
@@ -11723,9 +12327,9 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("diff",         "Show a colorized unified diff (/diff file1 file2  or  /diff --git)",                                    _cmd_diff,         ()),
     ("changes",      "Show session edit log and git status",                                                                   _cmd_changes,      ()),
     ("timeline",     "Show a visual activity timeline of recent openclaw usage",                                               _cmd_timeline,     ()),
-    ("dashboard",    "Show the power dashboard: sessions, stats, pins, and system status",                                     _cmd_dashboard,    ()),
     ("benchmark",    "Measure AI server response latency (/benchmark [n], default 3 pings, max 10)",                           _cmd_benchmark,    ()),
     ("followup",     "Show contextual follow-up suggestions for your last prompt (/followup [on|off])",                        _cmd_followup,     ()),
+    ("tokeninfo",    "Show estimated context token usage for this session",                                                    _cmd_tokeninfo,    ()),
 ]
 # fmt: on
 
@@ -11806,6 +12410,7 @@ def run_chat(
     input_func: Any = input,
     ask_func: Any = invoke_openclaw,
     session_id: str = "",
+    no_banner: bool = False,
 ) -> int:
     """Run an interactive chat session against OpenClaw."""
     _load_prefs()
@@ -11813,7 +12418,8 @@ def run_chat(
     registry = build_chat_command_registry()
     load_shell_history()
     _setup_readline()
-    _print_startup_banner(config, session_id)
+    if not no_banner:
+        _print_startup_banner(config, session_id)
     _maybe_show_startup_tip(config, session_id, history)
     while True:
         try:
@@ -13043,6 +13649,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="Print raw JSON responses")
     parser.add_argument("--no-stream", dest="no_stream", action="store_true", help="Disable streaming output (batch mode)")
+    parser.add_argument("--no-banner", dest="no_banner", action="store_true", help="Suppress startup banner (for scripting)")
     parser.add_argument("--user-name", help="Logical user label sent to OpenClaw")
     parser.add_argument("--client-name", help="Client/machine label for headers and telemetry")
     parser.add_argument("--session", help="Resume or tag a local CLI session")
@@ -13263,8 +13870,14 @@ def main(argv: list[str] | None = None) -> int:
             session_id = session.session_id if session else ""
             scoped_config = bind_config_to_session(config, session_id) if session_id else config
             if session_id:
-                return run_chat(scoped_config, session_id=session_id)
-            return run_chat(scoped_config)
+                _chat_kwargs: dict[str, Any] = {"session_id": session_id}
+                if getattr(args, "no_banner", False):
+                    _chat_kwargs["no_banner"] = True
+                return run_chat(scoped_config, **_chat_kwargs)
+            _chat_kwargs = {}
+            if getattr(args, "no_banner", False):
+                _chat_kwargs["no_banner"] = True
+            return run_chat(scoped_config, **_chat_kwargs)
         if command == "health":
             health = fetch_health(config=config)
             print_health(health, output_json=config.output_json)
