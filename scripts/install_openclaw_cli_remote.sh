@@ -22,6 +22,7 @@ CLI_FILES=(
   openclaw_cli_auth.py
   openclaw_cli_diff.py
   openclaw_cli_path_utils.py
+  openclaw_cli_router.py
   openclaw_cli_sessions.py
   openclaw_cli_ui_core.py
   openclaw_cli_render.py
