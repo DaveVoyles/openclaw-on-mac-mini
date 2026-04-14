@@ -15,8 +15,8 @@
 | TD-3 | Move Regex Compilation to Module Level | 🟢 Low | ✅ Shipped (bundled in TD-1) |
 | TD-4 | Response Pipeline Refactor | 🟡 Medium | ✅ Shipped (`bf4ce70`) |
 | TD-5 | Data-Driven Command Registry | 🟡 Medium | ✅ Shipped (`bf4ce70`) |
-| TD-6 | God Function Decomposition | 🔴 High | 🔄 In Progress |
-| TD-7 | Module Split | 🔴 High | ⏳ Pending |
+| TD-6 | God Function Decomposition | 🔴 High | ✅ Shipped (`437781d`) |
+| TD-7 | Module Split | 🔴 High | 🔵 Deferred (see notes) |
 
 ---
 
@@ -333,9 +333,48 @@ Each into its own helper ≤80 lines.
 
 ---
 
-## TD-7 — Module Split 🔴
+## TD-7 — Module Split 🔴 (Deferred)
 
-**Goal:** Split the 14,954-line monolith into focused, independently testable modules.
+**Status: Deferred — prerequisites not met.**
+
+A structural review identified three blocking issues that make the proposed 3-way split unsafe in the current session:
+
+### Why It Was Deferred
+
+1. **Circular import risk** — `openclaw_cli_render.py` would need `_PREFS`, `_a11y_*()`, `_RICH_AVAILABLE`, `_RICH_CONSOLE`, and all ANSI constants from the main module, creating bidirectional imports. There is no safe leaf boundary for render without first extracting a shared UI-core layer.
+
+2. **Monkeypatch breakage** — `tests/test_openclaw_cli.py` uses `monkeypatch.setattr(mod, "_IS_TTY", ...)` and `monkeypatch.setattr(mod, "_RICH_AVAILABLE", ...)` extensively. If render moves to its own module and reads its own module-level globals, all those patches silently stop working.
+
+3. **Deploy script gap** — `Makefile` copies exactly 4 files to the macbook. Adding a new module requires updating the deploy script, install script, and verifying the remote path — extra surface for error.
+
+### Correct Architecture Path (Future)
+
+Split safely by doing these steps in order:
+
+1. **Create `openclaw_cli_ui_core.py`** as a true leaf:
+   - `_IS_TTY`, `_RICH_AVAILABLE`, `_RICH_CONSOLE`
+   - All ANSI constants (`_R`, `_B`, `_CY`, etc.)
+   - `_get_is_tty()`, `_terminal_width()`, `_separator_fill()`
+   - `_theme_ansi()`, `_e()`, `_a11y_*()` helpers
+
+2. **Update deploy script** to include the new file.
+
+3. **Create `openclaw_cli_prefs.py`** as the second leaf (imports only from `ui_core`):
+   - `_PREFS`, `_save_prefs()`, `_load_prefs()`, `_prefs_set()`
+   - `_THEMES`, `_EMOJI_PACKS`, `_EXTENDED_SCHEMES`
+
+4. **Create `openclaw_cli_render.py`** (imports from `ui_core` + `prefs`):
+   - All rendering pipeline functions
+
+5. **Update `openclaw_cli.py`** to import from sub-modules and re-export for compatibility.
+
+6. **Split test file** last, after all module boundaries are stable.
+
+### What Was Accomplished Without TD-7
+
+TD-1 through TD-6 removed an estimated **~1,300 lines** and eliminated the major structural debt patterns. The monolith is significantly cleaner and more maintainable even without a module split.
+
+
 
 ### Proposed Module Structure
 
