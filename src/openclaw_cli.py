@@ -5512,6 +5512,22 @@ def _cmd_update(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     return _CMD_CONTINUE
 
 
+def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
+    """/version — show the running CLI version and build stamp."""
+    ver = cli_version()
+    server = ctx.config.base_url if ctx.config else "unknown"
+    if _RICH_AVAILABLE and _IS_TTY:
+        t = _RichText()
+        t.append(f"{_e('🦞', '[openclaw]')} OpenClaw  ", style="bold cyan")
+        t.append(ver, style="bold")
+        t.append(f"\n  server  ", style="dim")
+        t.append(server, style="cyan")
+        _RICH_CONSOLE.print(_RichPanel(t, border_style="dim", padding=(0, 1)))
+    else:
+        print(f"\n  openclaw {ver}  ·  server: {server}\n")
+    return _CMD_CONTINUE
+
+
 def _cmd_theme(ctx: ChatCommandContext) -> str:
     """Handler for /theme — display or set the UI colour theme."""
     is_tty = _IS_TTY or sys.stdout.isatty()
@@ -6170,6 +6186,14 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     )
     registry.register(
         SlashCommand(
+            name="version",
+            description="Show the running CLI version",
+            handler=_cmd_version,
+            aliases=("v",),
+        )
+    )
+    registry.register(
+        SlashCommand(
             name="session",
             description="Show current session summary",
             handler=_cmd_session,
@@ -6360,6 +6384,7 @@ def print_chat_help(*, search: str = "") -> None:
         ("/clear",                         "Reset the current conversation history"),
         ("/quit",                          "Exit the CLI"),
         ("/update",                        "Self-upgrade openclaw via pip"),
+        ("/version",                       "Show running CLI version and build stamp"),
         ("/session",                       "Show current session summary"),
         ("/context",                       "Show effective session grounding preview"),
         ("/cwd [path]",                    "Show or switch the session working directory"),
@@ -6744,6 +6769,7 @@ def _print_first_run_tips() -> None:
 
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
+    autoroute_on = _session_auto_route_enabled(session_id)
     if _RICH_AVAILABLE and _IS_TTY:
         t = _RichText()
         t.append(f"{_e('🦞', '[openclaw]')} OpenClaw", style="bold cyan")
@@ -6764,12 +6790,20 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         t.append(" to exit", style="dim")
         t.append("\n  ", style="")
         t.append("Auto-routing", style="bold")
-        t.append(" is on — smart prompts route to analyze/research/exec automatically", style="dim")
+        if autoroute_on:
+            t.append(" is on — smart prompts route to analyze/research/exec automatically", style="dim")
+        else:
+            t.append(" is off", style="dim yellow")
+            t.append(" — use /autoroute on to enable", style="dim")
         _RICH_CONSOLE.print(_RichPanel(t, border_style="cyan", padding=(0, 1)))
     else:
         session_line = (
             f"\n  {_DM}{_e('🗂', '[session]')}  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
         )
+        if autoroute_on:
+            autoroute_line = f"\n  {_B}Auto-routing{_R} {_DM}is on — smart prompts route to analyze/research/exec automatically{_R}"
+        else:
+            autoroute_line = f"\n  {_B}Auto-routing{_R} {_YE}is off{_R} {_DM}— use /autoroute on to enable{_R}"
         print(
             f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}"
             f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
@@ -6777,7 +6811,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
             f"{session_line}"
             f"\n"
             f"\n  Type anything to chat · {_BCY}/help{_R} for commands · {_BCY}/quit{_R} to exit"
-            f"\n  {_B}Auto-routing{_R} {_DM}is on — smart prompts route to analyze/research/exec automatically{_R}\n"
+            f"{autoroute_line}\n"
         )
 
 
