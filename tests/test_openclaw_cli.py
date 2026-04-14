@@ -5367,9 +5367,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave30(self):
-        """_CLI_BUILD must equal 'wave30'."""
-        assert mod._CLI_BUILD == "wave30"
+    def test_cli_build_is_wave31(self):
+        """_CLI_BUILD must equal 'wave31'."""
+        assert mod._CLI_BUILD == "wave31"
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -6277,9 +6277,9 @@ class TestCmdTip:
         assert len(mod._OPENCLAW_TIPS) > 0
         assert all(isinstance(t, str) for t in mod._OPENCLAW_TIPS)
 
-    def test_cli_build_is_wave30(self):
-        """_CLI_BUILD is updated to wave30."""
-        assert mod._CLI_BUILD == "wave30"
+    def test_cli_build_is_wave31(self):
+        """_CLI_BUILD is updated to wave31."""
+        assert mod._CLI_BUILD == "wave31"
 
 
 class TestCmdKeys:
@@ -6332,9 +6332,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave30(self):
-        """_CLI_BUILD == 'wave30'."""
-        assert mod._CLI_BUILD == "wave30"
+    def test_cli_build_is_wave31(self):
+        """_CLI_BUILD == 'wave31'."""
+        assert mod._CLI_BUILD == "wave31"
 
 
 class TestCmdKeybind:
@@ -6592,6 +6592,159 @@ class TestCmdTimeline:
         out = capsys.readouterr().out
         assert "Timeline" in out or "2024-06" in out
 
-    def test_cli_build_is_wave30(self):
-        """_CLI_BUILD == 'wave30' — THE FINAL BUILD ASSERTION."""
-        assert mod._CLI_BUILD == "wave30"
+    def test_cli_build_is_wave31(self):
+        """_CLI_BUILD == 'wave31' — THE FINAL BUILD ASSERTION."""
+        assert mod._CLI_BUILD == "wave31"
+
+
+class TestCmdExport:
+    """Tests for /export command — Wave 31."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_export_md_creates_file(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"cmd_history": ["hello world", "what is 2+2"]})
+        result = mod._cmd_export(self._ctx("md test_export"))
+        assert result == mod._CMD_CONTINUE
+        files = list(tmp_path.glob("*.md"))
+        assert files
+
+    def test_export_json_creates_file(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"cmd_history": ["test prompt"]})
+        result = mod._cmd_export(self._ctx("json"))
+        assert result == mod._CMD_CONTINUE
+        files = list(tmp_path.glob("*.json"))
+        assert files
+
+    def test_export_empty_history(self, monkeypatch, capsys):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"cmd_history": []})
+        result = mod._cmd_export(self._ctx("md"))
+        assert result == mod._CMD_CONTINUE
+
+    def test_export_txt_format(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"cmd_history": ["prompt one", "prompt two"]})
+        result = mod._cmd_export(self._ctx("txt"))
+        assert result == mod._CMD_CONTINUE
+        files = list(tmp_path.glob("*.txt"))
+        assert files
+
+    def test_export_default_format_is_md(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"cmd_history": ["any prompt"]})
+        result = mod._cmd_export(self._ctx(""))
+        assert result == mod._CMD_CONTINUE
+        files = list(tmp_path.glob("*.md"))
+        assert files
+
+
+class TestCmdColorscheme:
+    """Tests for /colorscheme command and _EXTENDED_SCHEMES."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_list_shows_all_schemes(self, monkeypatch, capsys):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_colorscheme(self._ctx("list"))
+        assert result == mod._CMD_CONTINUE
+
+    def test_set_valid_scheme(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        prefs: dict = {}
+        monkeypatch.setattr(mod, "_PREFS", prefs)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_colorscheme(self._ctx("cyberpunk"))
+        assert result == mod._CMD_CONTINUE
+        assert prefs.get("color_scheme") == "cyberpunk"
+
+    def test_set_invalid_scheme(self, monkeypatch, capsys):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {})
+        result = mod._cmd_colorscheme(self._ctx("nonexistent"))
+        assert result == mod._CMD_CONTINUE
+
+    def test_reset_sets_default(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        prefs: dict = {"color_scheme": "matrix"}
+        monkeypatch.setattr(mod, "_PREFS", prefs)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_colorscheme(self._ctx("reset"))
+        assert result == mod._CMD_CONTINUE
+        assert prefs.get("color_scheme") == "default"
+
+    def test_cli_build_is_wave31(self):
+        assert mod._CLI_BUILD == "wave31"
+
+
+class TestCmdFollowup:
+    """Tests for /followup command and _suggest_followups — Wave 31."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_suggest_followups_file_keywords(self):
+        suggestions = mod._suggest_followups("where is the log file?")
+        assert any("pathhints" in s or "exec" in s for s in suggestions)
+
+    def test_suggest_followups_empty_returns_defaults(self):
+        suggestions = mod._suggest_followups("some random text xyz")
+        assert len(suggestions) > 0
+
+    def test_suggest_followups_max_3(self):
+        suggestions = mod._suggest_followups(
+            "find the file with error history recap search compare pin rate"
+        )
+        assert len(suggestions) <= 3
+
+    def test_cmd_followup_no_history(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"_last_prompt": ""})
+        result = mod._cmd_followup(self._ctx(""))
+        assert result == mod._CMD_CONTINUE
+
+    def test_cmd_followup_with_history(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", {"_last_prompt": "find the broken file"})
+        result = mod._cmd_followup(self._ctx(""))
+        assert result == mod._CMD_CONTINUE
+
+    def test_cmd_followup_toggle_off(self, monkeypatch):
+        prefs: dict = {"_last_prompt": "test", "show_suggestions": True}
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", prefs)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_followup(self._ctx("off"))
+        assert result == mod._CMD_CONTINUE
+        assert prefs.get("show_suggestions") is False
+
+    def test_cmd_followup_toggle_on(self, monkeypatch):
+        prefs: dict = {"_last_prompt": "test", "show_suggestions": False}
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_PREFS", prefs)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        result = mod._cmd_followup(self._ctx("on"))
+        assert result == mod._CMD_CONTINUE
+        assert prefs.get("show_suggestions") is True

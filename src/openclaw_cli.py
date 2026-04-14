@@ -135,7 +135,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave30"  # updated with each UX wave batch
+_CLI_BUILD = "wave31"  # updated with each UX wave batch
 
 _OPENCLAW_TIPS = [
     "Press Tab after / to auto-complete slash commands.",
@@ -251,6 +251,54 @@ _EMOJI_FALLBACKS: dict[str, str] = {
     "🗂": "[session]",
     "👤": "[user]",
     "⚡": "!",
+}
+
+_EXTENDED_SCHEMES: dict[str, dict[str, str]] = {
+    "cyberpunk": {
+        "primary": "\033[95m",    # bright magenta
+        "accent":  "\033[96m",    # bright cyan
+        "dim":     "\033[35m",    # magenta dim
+        "ok":      "\033[92m",    # bright green
+        "warn":    "\033[93m",    # bright yellow
+        "error":   "\033[91m",    # bright red
+        "label":   "cyberpunk 🌆",
+    },
+    "ocean": {
+        "primary": "\033[96m",    # bright cyan
+        "accent":  "\033[34m",    # blue
+        "dim":     "\033[36m",    # cyan
+        "ok":      "\033[32m",    # green
+        "warn":    "\033[33m",    # yellow
+        "error":   "\033[31m",    # red
+        "label":   "ocean 🌊",
+    },
+    "sunset": {
+        "primary": "\033[33m",    # yellow
+        "accent":  "\033[31m",    # red
+        "dim":     "\033[35m",    # magenta
+        "ok":      "\033[32m",    # green
+        "warn":    "\033[91m",    # bright red
+        "error":   "\033[31m",    # red
+        "label":   "sunset 🌅",
+    },
+    "matrix": {
+        "primary": "\033[92m",    # bright green
+        "accent":  "\033[32m",    # green
+        "dim":     "\033[2;32m",  # dim green
+        "ok":      "\033[92m",    # bright green
+        "warn":    "\033[33m",    # yellow
+        "error":   "\033[91m",    # bright red
+        "label":   "matrix 🟩",
+    },
+    "default": {
+        "primary": "\033[36m",    # cyan
+        "accent":  "\033[1;36m",  # bold cyan
+        "dim":     "\033[2m",     # dim
+        "ok":      "\033[32m",    # green
+        "warn":    "\033[33m",    # yellow
+        "error":   "\033[31m",    # red
+        "label":   "default 🦞",
+    },
 }
 
 _THEME_ORDER: tuple[str, ...] = tuple(_THEMES.keys())
@@ -8483,6 +8531,56 @@ def _cmd_overlay(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_colorscheme(ctx: ChatCommandContext) -> str:
+    """/colorscheme [name|list|reset] — view or set the extended color scheme."""
+    arg = (ctx.args or "").strip().lower()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if not arg or arg == "list":
+        current = _PREFS.get("color_scheme", "default")
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[bold cyan]🎨 Color Schemes[/]\n")
+            for name, scheme in _EXTENDED_SCHEMES.items():
+                active = " ← active" if name == current else ""
+                primary = scheme.get("primary", "")
+                reset = "\033[0m"
+                label = scheme.get("label", name)
+                _RICH_CONSOLE.print(f"  {primary}■{reset}  [bold]{name}[/]  [dim]{label}{active}[/]")
+            _RICH_CONSOLE.print(f"\n  [dim]Use /colorscheme <name> to activate[/]\n")
+        else:
+            current_marker = lambda n: " ← active" if n == current else ""
+            print(f"\n🎨 Color Schemes\n")
+            for name, scheme in _EXTENDED_SCHEMES.items():
+                p = scheme.get("primary", "")
+                print(f"  {p}■\033[0m  {name}  {scheme.get('label', '')}{current_marker(name)}")
+            print(f"\n  Use /colorscheme <name> to activate\n")
+        return _CMD_CONTINUE
+
+    if arg == "reset":
+        arg = "default"
+
+    if arg not in _EXTENDED_SCHEMES:
+        names = ", ".join(_EXTENDED_SCHEMES.keys())
+        msg = f"Unknown scheme '{arg}'. Available: {names}"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    _PREFS["color_scheme"] = arg
+    _save_prefs()
+    scheme = _EXTENDED_SCHEMES[arg]
+    label = scheme.get("label", arg)
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[bold green]✅ Color scheme set to[/] [bold]{arg}[/] [dim]{label}[/]\n")
+    else:
+        print(f"\n✅ Color scheme → {arg} {label}\n")
+
+    return _CMD_CONTINUE
+
+
 def _cmd_emojiheaders(ctx: ChatCommandContext) -> str:
     """/emojiheaders [on|off] — toggle emoji prefixes on AI response headings."""
     arg = ctx.args.strip().lower()
@@ -9002,87 +9100,87 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_export(ctx: ChatCommandContext) -> str:
-    """/export [md|json|html] — export the current conversation history to a file."""
-    fmt = ctx.args.strip().lower() or "md"
-    if fmt not in ("md", "markdown", "json", "html"):
-        print(f"{_BRE}error:{_R} Unknown format '{fmt}'. Use: md, json, html")
+    """/export [md|json|txt] [filename] — export session history to a file."""
+    import datetime as _dt
+    args = (ctx.args or "").strip().split()
+    fmt = args[0].lower() if args else "md"
+    if fmt not in ("md", "json", "txt", "markdown", "text"):
+        fmt = "md"
+    if fmt == "markdown":
+        fmt = "md"
+    if fmt == "text":
+        fmt = "txt"
+
+    ts = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+    custom_name = args[1] if len(args) > 1 else None
+    ext = {"md": "md", "json": "json", "txt": "txt"}[fmt]
+    filename = custom_name if custom_name else f"openclaw_export_{ts}.{ext}"
+    if not filename.endswith(f".{ext}"):
+        filename = f"{filename}.{ext}"
+
+    cmd_history = _PREFS.get("cmd_history", [])
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if not cmd_history:
+        msg = "No history to export yet."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+        else:
+            print(msg)
         return _CMD_CONTINUE
 
-    history = ctx.history
-    if not history:
-        print(f"  {_DM}No conversation history to export yet.{_R}")
-        return _CMD_CONTINUE
-
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    session_prefix = ctx.session_id[:8] if ctx.session_id else "session"
-    exported_at = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    if fmt == "json":
-        content = json.dumps(history, indent=2, ensure_ascii=False)
-        ext = "json"
-    elif fmt == "html":
-        html_turns: list[str] = []
-        for turn in history:
-            role = turn.get("role", "")
-            msg = (turn.get("content") or "").strip().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            # convert **bold** and *italic* for basic readability
-            msg = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", msg)
-            msg = re.sub(r"\*(.+?)\*", r"<em>\1</em>", msg)
-            msg = msg.replace("\n", "<br>\n")
-            label = "You" if role == "user" else "OpenClaw"
-            css_class = "user" if role == "user" else "assistant"
-            html_turns.append(f'<div class="turn {css_class}"><div class="label">{label}</div><div class="content">{msg}</div></div>')
-        turns_html = "\n".join(html_turns)
-        content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>OpenClaw Export — {session_prefix}</title>
-<style>
-  body {{ font-family: system-ui, sans-serif; max-width: 860px; margin: 40px auto; color: #222; }}
-  h1 {{ color: #1a5299; }}
-  .meta {{ color: #777; font-size: 0.9em; margin-bottom: 2em; }}
-  .turn {{ margin: 1.5em 0; padding: 1em; border-radius: 6px; }}
-  .user {{ background: #f0f4ff; border-left: 4px solid #4a7fd4; }}
-  .assistant {{ background: #f8f8f8; border-left: 4px solid #888; }}
-  .label {{ font-weight: bold; font-size: 0.85em; color: #555; margin-bottom: 0.5em; }}
-  .content {{ line-height: 1.6; }}
-  strong {{ font-weight: 600; }}
-</style>
-</head>
-<body>
-<h1>🦞 OpenClaw Session</h1>
-<p class="meta">Session: {session_prefix}…  ·  Exported: {exported_at}</p>
-{turns_html}
-</body>
-</html>"""
-        ext = "html"
-    else:
-        lines = [f"# OpenClaw Session Export\n\n*Exported: {exported_at}*\n"]
-        for turn in history:
-            role = turn.get("role", "")
-            msg = (turn.get("content") or "").strip()
-            if role == "user":
-                lines.append(f"\n---\n\n## {_e('👤', '>>>')} You\n\n{msg}\n")
-            else:
-                lines.append(f"\n---\n\n## {_e('🤖', '<<<')} OpenClaw\n\n{msg}\n")
-        content = "\n".join(lines)
-        ext = "md"
-
-    export_dir = Path.home() / "Downloads"
     try:
-        export_dir.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        export_dir = Path.cwd()
-    out_path = export_dir / f"openclaw_{session_prefix}_{ts}.{ext}"
-    try:
-        out_path.write_text(content, encoding="utf-8")
-    except OSError as exc:
-        print(f"{_BRE}error:{_R} Could not write export: {exc}")
-        return _CMD_CONTINUE
+        now_str = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        if fmt == "md":
+            lines = [f"# OpenClaw Session Export\n", f"**Exported:** {now_str}\n\n---\n"]
+            for i, entry in enumerate(cmd_history, 1):
+                if isinstance(entry, str):
+                    lines.append(f"### [{i}] Prompt\n\n{entry}\n\n")
+                elif isinstance(entry, dict):
+                    prompt = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
+                    ts_str = entry.get("timestamp", entry.get("ts", ""))
+                    ts_label = f" _{ts_str}_" if ts_str else ""
+                    lines.append(f"### [{i}]{ts_label}\n\n{prompt}\n\n")
+            content = "".join(lines)
 
-    turns = len([t for t in history if t.get("role") == "user"])
-    print(f"  {_e('📄', '[export]')} Exported {turns} turn{'s' if turns != 1 else ''} → {_BCY}{out_path}{_R}")
+        elif fmt == "json":
+            import json as _json
+            export_data = {
+                "exported_at": _dt.datetime.now().isoformat(),
+                "entry_count": len(cmd_history),
+                "history": cmd_history,
+            }
+            content = _json.dumps(export_data, indent=2, default=str)
+
+        else:  # txt
+            lines = [f"OpenClaw Session Export — {now_str}\n", "=" * 60 + "\n\n"]
+            for i, entry in enumerate(cmd_history, 1):
+                if isinstance(entry, str):
+                    lines.append(f"[{i}] {entry}\n\n")
+                elif isinstance(entry, dict):
+                    prompt = entry.get("text", entry.get("prompt", entry.get("cmd", "")))
+                    lines.append(f"[{i}] {prompt}\n\n")
+            content = "".join(lines)
+
+        output_path = Path(filename).expanduser()
+        output_path.write_text(content, encoding="utf-8")
+
+        abs_path = str(output_path.resolve())
+        count = len(cmd_history)
+        size_kb = len(content.encode()) / 1024
+
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"\n[bold green]✅ Exported[/] [dim]{count} entries → [/][bold cyan]{abs_path}[/] [dim]({size_kb:.1f} KB, {fmt.upper()})[/]\n")
+        else:
+            print(f"\n✅ Exported {count} entries → {abs_path} ({size_kb:.1f} KB, {fmt.upper()})\n")
+
+    except Exception as e:
+        msg = f"Export failed: {e}"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[red]{msg}[/]")
+        else:
+            print(msg)
+
     return _CMD_CONTINUE
 
 
@@ -9957,6 +10055,13 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     )
     registry.register(
         SlashCommand(
+            name="colorscheme",
+            description="View or set the extended color scheme (/colorscheme [name|list|reset])",
+            handler=_cmd_colorscheme,
+        )
+    )
+    registry.register(
+        SlashCommand(
             name="rollback",
             description="List/preview git snapshots or restore latest checkpoint (/rollback [last|list|<name>])",
             handler=_cmd_rollback,
@@ -10077,7 +10182,7 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(
         SlashCommand(
             name="export",
-            description="Export current conversation to a file (/export [md|json])",
+            description="Export session history to file (md/json/txt)",
             handler=_cmd_export,
         )
     )
@@ -10312,6 +10417,11 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Measure AI server response latency (/benchmark [n], default 3 pings, max 10)",
         handler=_cmd_benchmark,
     ))
+    registry.register(SlashCommand(
+        name="followup",
+        description="Show contextual follow-up suggestions for your last prompt (/followup [on|off])",
+        handler=_cmd_followup,
+    ))
     return registry
 
 
@@ -10352,7 +10462,7 @@ def print_chat_help(*, search: str = "") -> None:
         ("/emoji [on|off|pack|preview]", "Toggle emoji or switch emoji packs"),
         ("/layout [compact|normal|verbose|plain|preset|show]", "Switch density or preset workspace views"),
         ("/sessions [search|related]",     "Browse or search recent sessions; /sessions overlay opens a picker"),
-        ("/export [md|json|html]",         "Export conversation history to ~/Downloads"),
+        ("/export [md|json|txt] [file]",   "Export session history to file (md/json/txt)"),
         ("/stats [commands|ratings|sessions]", "Show ASCII bar charts of usage statistics"),
         ("/tag [add|rm|list] <tag>",       "Manage tags on the current session"),
         ("/resume [last|<id>]",            "Print resume instructions for a past session"),
@@ -10412,6 +10522,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/timeline",                            "Show a visual activity timeline of recent openclaw usage"),
         ("/dashboard",                           "Show the power dashboard: sessions, stats, pins, and system status"),
         ("/benchmark [n]",                       "Measure AI server response latency (n pings, default 3, max 10)"),
+        ("/followup",                            "Show contextual follow-up suggestions for your last prompt"),
+        ("/followup on|off",                     "Enable or disable the auto-suggestion footer after responses"),
     ]
 
     q = search.strip().lower()
@@ -11005,11 +11117,11 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "help", "clear", "quit", "exit", "update", "version", "v",
     "session", "context", "cwd", "files", "plan", "watch", "task",
     "outputs", "rollback", "events", "why", "autoroute", "analyze",
-    "research", "write", "exec", "edit", "theme", "emoji", "layout",
+    "research", "write", "exec", "edit", "theme", "emoji", "layout", "colorscheme",
     "sessions", "export", "stats", "tag", "resume", "replay", "handoff", "collab",
     "draft", "template", "pasteguard", "accessibility", "a11y",
     "search", "alias", "pin", "pins", "history", "recall",
-    "dashboard",
+    "dashboard", "followup",
 })
 
 _MAX_ALIASES = 50
@@ -12146,6 +12258,70 @@ def _print_path_hints(paths: "list[str]") -> None:
         print(f"\n  {_DM}📁 Files: {hint}  (use /view or /edit){_R}")
 
 
+def _suggest_followups(last_prompt: str) -> list[str]:
+    """Return 2-3 relevant follow-up command suggestions based on the last prompt."""
+    prompt_lower = last_prompt.lower()
+    suggestions: list[str] = []
+
+    if any(w in prompt_lower for w in ["file", "path", "directory", "folder", "ls", "find"]):
+        suggestions.append("/pathhints — show detected file paths in response")
+    if any(w in prompt_lower for w in ["history", "recap", "summary", "week", "yesterday"]):
+        suggestions.append("/recall 5 — review your last 5 prompts")
+    if any(w in prompt_lower for w in ["error", "fail", "broken", "fix", "debug", "crash"]):
+        suggestions.append("/exec — run a shell command to investigate")
+    if any(w in prompt_lower for w in ["json", "data", "api", "response", "output"]):
+        suggestions.append("/jsonformat — format JSON in the response")
+    if any(w in prompt_lower for w in ["link", "url", "http", "website", "source"]):
+        suggestions.append("/links — view clickable source links")
+    if any(w in prompt_lower for w in ["search", "find", "look", "where"]):
+        suggestions.append("/histsearch — search your prompt history")
+    if any(w in prompt_lower for w in ["compare", "diff", "change", "before", "after"]):
+        suggestions.append("/diff — compare files or show git changes")
+    if any(w in prompt_lower for w in ["pin", "save", "remember", "keep", "note"]):
+        suggestions.append("/pin — pin this conversation point")
+    if any(w in prompt_lower for w in ["rate", "quality", "good", "bad", "helpful"]):
+        suggestions.append("/rate — rate this response 1-5")
+
+    if not suggestions:
+        suggestions.append("/export md — save this session as markdown")
+        suggestions.append("/rate — rate this response")
+        suggestions.append("/recall 3 — review recent prompts")
+
+    return suggestions[:3]
+
+
+def _print_followup_suggestions(suggestions: list[str]) -> None:
+    """Print follow-up suggestions in a dim, unobtrusive style."""
+    if not suggestions:
+        return
+    if _a11y_plain_mode() or _a11y_reduced_motion():
+        return
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty:
+        return
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print()
+        _RICH_CONSOLE.print("  [dim]💡 Try next:[/]", end="")
+        for i, s in enumerate(suggestions):
+            sep = "  ·  " if i > 0 else "  "
+            cmd = s.split(" — ")[0]
+            desc = s.split(" — ")[1] if " — " in s else ""
+            _RICH_CONSOLE.print(
+                f"[dim]{sep}[/][bold cyan]{cmd}[/][dim]{' — ' + desc if desc else ''}[/]", end=""
+            )
+        _RICH_CONSOLE.print()
+    else:
+        print(
+            f"\n  {_DM}💡 Try next:{_R}  "
+            + "  ·  ".join(
+                f"{_BCY}{s.split(' — ')[0]}{_R}"
+                f"{_DM}{' — ' + s.split(' — ')[1] if ' — ' in s else ''}{_R}"
+                for s in suggestions
+            )
+        )
+
+
 def _cmd_pathhints(ctx: "ChatCommandContext") -> str:
     """/pathhints [on|off] — toggle file path quick-action hints after responses."""
     arg = ctx.args.strip().lower()
@@ -12187,6 +12363,55 @@ def _cmd_ratehint(ctx: "ChatCommandContext") -> str:
             _RICH_CONSOLE.print(f"[dim]rating hint is [bold]{state}[/] — use /ratehint on|off[/]")
         else:
             print(f"rating hint is {state} — use /ratehint on|off")
+    return _CMD_CONTINUE
+
+
+def _cmd_followup(ctx: "ChatCommandContext") -> str:
+    """/followup [on|off] — show contextually relevant follow-up suggestions for your last prompt, or toggle the auto-suggestion footer."""
+    arg = (ctx.args or "").strip().lower()
+
+    if arg in ("on", "off"):
+        _PREFS["show_suggestions"] = (arg == "on")
+        state = "on" if _PREFS["show_suggestions"] else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] follow-up suggestions [bold]{state}[/]")
+        else:
+            print(f"✓ follow-up suggestions {state}")
+        return _CMD_CONTINUE
+
+    last_prompt = str(_PREFS.get("_last_prompt", "") or "")
+    if not last_prompt:
+        msg = "No recent prompt found. Type a question first, then use /followup."
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    suggestions = _suggest_followups(last_prompt)
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(
+            f"\n[bold cyan]💡 Follow-up suggestions[/] "
+            f"[dim]based on: \"{last_prompt[:50]}{'…' if len(last_prompt) > 50 else ''}\"[/]\n"
+        )
+        for s in suggestions:
+            cmd = s.split(" — ")[0]
+            desc = s.split(" — ")[1] if " — " in s else ""
+            _RICH_CONSOLE.print(f"  [bold cyan]{cmd}[/]  [dim]{desc}[/]")
+        _RICH_CONSOLE.print()
+    else:
+        print(f"\n💡 Follow-up suggestions (based on: \"{last_prompt[:50]}…\")\n")
+        for s in suggestions:
+            print(
+                f"  {_BCY}{s.split(' — ')[0]}{_R}  "
+                f"{_DM}{s.split(' — ')[1] if ' — ' in s else ''}{_R}"
+            )
+        print()
+
     return _CMD_CONTINUE
 
 
@@ -13307,6 +13532,8 @@ def run_chat(
         try:
             _t0 = time.monotonic()
             global _next_inject
+            # Store prompt for /followup and auto-suggestion footer (in-memory only, not saved to disk)
+            _PREFS["_last_prompt"] = prompt.strip()
             if _next_inject:
                 effective_input = f"[Injected context]\n{_next_inject}\n\n[User message]\n{prompt}"
                 _next_inject = ""
@@ -13365,6 +13592,10 @@ def run_chat(
                 _RICH_CONSOLE.print("[dim]  rate this response: /rate good · /rate ok · /rate bad[/]")
             else:
                 print(f"  {_DM}rate this response: /rate good · /rate ok · /rate bad{_R}")
+        # Contextual follow-up suggestions footer
+        if _PREFS.get("show_suggestions", True) and not config.output_json:
+            _suggestions = _suggest_followups(prompt)
+            _print_followup_suggestions(_suggestions)
         global _last_response_text
         _last_response_text = response.response or ""
         if not config.output_json and not _compact:
