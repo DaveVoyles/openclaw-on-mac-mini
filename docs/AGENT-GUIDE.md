@@ -56,6 +56,31 @@ Discord user → src/bot.py → src/ask_orchestrator.py → src/llm/chat.py
 
 ---
 
+## Module Structure (post-TD-7 through TD-13)
+
+The CLI monolith has been split into focused modules:
+
+| Module | Responsibility |
+|--------|---------------|
+| `openclaw_cli.py` | Main REPL, command dispatch, ~13,300 lines |
+| `openclaw_cli_ui_core.py` | ANSI palette, TTY detection |
+| `openclaw_cli_render.py` | Response rendering, RenderContext |
+| `openclaw_cli_auth.py` | Token/keychain, OpenClawCliError |
+| `openclaw_cli_update.py` | Version check, self-update |
+| `openclaw_cli_sessions.py` | Session management, event logging |
+| `openclaw_cli_actions.py` | Shell command execution |
+| `openclaw_cli_router.py` | Routing logic, ReplRouteDecision |
+| `openclaw_cli_diff.py` | Diff colorization |
+| `openclaw_cli_path_utils.py` | Path detection, link formatting |
+| `openclaw_cli_macros.py` | Macro/workflow engine |
+
+**Import rules:** Submodules never import from `openclaw_cli.py`. Globals (`_PREFS`, `_IS_TTY`)
+are passed as parameters at call time. This enables independent testing and import.
+
+See `docs/DEPENDENCY_MAP.md` for the full dependency graph and circular import prevention strategy.
+
+---
+
 ## Key Files (Read Before Editing)
 
 | File | Why It Matters |
