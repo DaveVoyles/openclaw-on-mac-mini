@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import types
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -1354,9 +1355,12 @@ class TestSessionSlashCommands:
     def test_session_shows_summary(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         sess = sessions_mod.create_session(title="Test Session", cwd=str(tmp_path))
-        result = self._registry().dispatch("/session", self._ctx(session_id=sess.session_id))
+        result = mod._cmd_session(self._ctx(session_id=sess.session_id))
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
+        assert "Session Dashboard" in out
+        assert "Summary:" in out
+        assert "Actions:" in out
         assert "Test Session" in out
         assert sess.session_id in out
 
@@ -1378,7 +1382,7 @@ class TestSessionSlashCommands:
             plan_id="plan-1",
             task_id="task-2",
         )
-        self._registry().dispatch("/context", self._ctx(session_id=sess.session_id))
+        mod._cmd_context(self._ctx(session_id=sess.session_id))
         out = capsys.readouterr().out
         assert str(tmp_path) in out
         assert "foo.py" in out
@@ -1414,6 +1418,7 @@ class TestSessionSlashCommands:
         self._registry().dispatch("/context", self._ctx(session_id=sess.session_id))
 
         out = capsys.readouterr().out
+        assert "Context Dashboard" in out
         assert "effective grounding preview:" in out
         assert "Workspace context:" in out
         assert "hello from the tracked file" in out
@@ -1647,12 +1652,25 @@ class TestSessionSlashCommands:
         sessions_mod.save_output(sess.session_id, "first.md", "first output")
         sessions_mod.save_output(sess.session_id, "second.md", "second output")
 
-        self._registry().dispatch("/outputs", self._ctx(session_id=sess.session_id))
+        mod._cmd_outputs(self._ctx(session_id=sess.session_id))
 
         out = capsys.readouterr().out
+        assert "Outputs Dashboard" in out
         assert "saved outputs" in out
         assert "1. second.md" in out
         assert "2. first.md" in out
+
+    def test_outputs_dashboard_includes_focused_preview_excerpt(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="outputs", cwd=str(tmp_path))
+        sessions_mod.save_output(sess.session_id, "preview.md", "line one\nline two with extra detail\nline three")
+
+        mod._cmd_outputs(self._ctx(session_id=sess.session_id))
+
+        out = capsys.readouterr().out
+        assert "focused preview: preview.md" in out
+        assert "excerpt:" in out
+        assert "line one" in out
 
     def test_outputs_preview_supports_index_and_filename(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
@@ -1669,6 +1687,19 @@ class TestSessionSlashCommands:
         out = capsys.readouterr().out
         assert "saved output preview: alpha.md" in out
         assert "alpha body" in out
+
+    def test_outputs_preview_stays_bounded_for_large_artifacts(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="outputs", cwd=str(tmp_path))
+        huge_body = ("preview body " * 400) + "\nTAIL-MARKER-SHOULD-NOT-APPEAR"
+        sessions_mod.save_output(sess.session_id, "huge.md", huge_body)
+
+        self._registry().dispatch("/outputs 1", self._ctx(session_id=sess.session_id))
+
+        out = capsys.readouterr().out
+        assert "saved output preview: huge.md" in out
+        assert f"preview limited to {mod.OUTPUT_PREVIEW_MAX_CHARS} chars" in out
+        assert "TAIL-MARKER-SHOULD-NOT-APPEAR" not in out
 
     def test_outputs_overlay_supports_interactive_filter_and_selection(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
@@ -1743,6 +1774,40 @@ class TestSessionSlashCommands:
         assert "Session overlay" in out
         assert "Beta session" in out
         assert second.session_id in out
+
+    def test_sessions_list_prints_dashboard_header(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sessions_mod.create_session(title="Alpha session", cwd=str(tmp_path))
+        sessions_mod.create_session(title="Beta session", cwd=str(tmp_path))
+
+        mod._cmd_sessions(self._ctx())
+
+        out = capsys.readouterr().out
+        assert "Session Browser" in out
+        assert "Summary:" in out
+        assert "Actions:" in out
+        assert "Alpha session" in out or "Beta session" in out
+
+    def test_session_preview_lines_include_activity_output_and_collab(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        sess = sessions_mod.create_session(title="Preview session", cwd=str(tmp_path))
+        sessions_mod.update_session(sess.session_id, last_summary="Shipped the focused preview lane")
+        sessions_mod.save_output(sess.session_id, "preview.txt", "latest output body for preview")
+        mod.append_event(
+            sess.session_id,
+            kind="collab",
+            content="Shared preview notes",
+            metadata={
+                "summary": "decision by alice: shared preview notes",
+                "actor": "alice",
+                "collab_kind": "decision",
+            },
+        )
+        lines = mod._session_preview_lines(sessions_mod.require_session(sess.session_id))
+
+        assert any("latest activity:" in line for line in lines)
+        assert any("latest output: preview.txt" in line for line in lines)
+        assert any("decision: alice: decision by alice: shared preview notes" in line for line in lines)
 
     def test_collab_note_and_status_capture_actor_summary(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
@@ -2827,6 +2892,27 @@ def test_summarize_session_includes_watch_timing_summary(monkeypatch, tmp_path):
     assert "retry backoff 2.0s" in summary
 
 
+def test_summarize_session_front_loads_wave23_topline_status(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = sessions_mod.create_session(title="dashboard-summary", cwd=str(tmp_path))
+    session = sessions_mod.update_session(
+        session.session_id,
+        status="active",
+        automation_mode="watch",
+        automation_status="retrying",
+    )
+
+    summary = mod.summarize_session(session).splitlines()
+
+    assert summary[0].startswith("session:")
+    assert summary[1].startswith("title:")
+    assert summary[2].startswith("ACTIVE")
+    assert "status: active" in summary[2]
+    assert any(line.startswith("IDLE") and "commands: 0" in line for line in summary)
+    assert any(line.startswith("IDLE") and "outputs: 0" in line for line in summary)
+    assert any(line.startswith("RETRY") and "automation: watch (retrying)" in line for line in summary)
+
+
 def test_print_watch_status_shows_phase_and_backoff(capsys):
     mod._print_watch_status(
         {
@@ -2861,9 +2947,72 @@ def test_print_watch_status_shows_phase_and_backoff(capsys):
     )
 
     out = capsys.readouterr().out
+    assert "Watch Control Tower" in out
+    assert "Actions:" in out
+    assert "RETRY" in out
+    assert "polls: 2/5" in out
     assert "phase:" in out and "persist" in out
-    assert "duration:" in out and "9.0s" in out
-    assert "backoff:" in out and "2.0s total" in out
+    assert "backoff:" in out and "2.0s" in out
+    assert "focus:" in out
+    assert "checkpoint 1: prior run" in out
+
+
+def test_print_watch_history_uses_dashboard_sections(capsys):
+    mod._print_watch_history(
+        {
+            "progress_log": [
+                {
+                    "timestamp": "2026-04-10T00:00:09Z",
+                    "phase": "persist",
+                    "summary": "saved iteration output",
+                    "ok": True,
+                    "created_at": "2026-04-10T00:00:09Z",
+                }
+            ],
+            "retry_history": [
+                {
+                    "timestamp": "2026-04-10T00:00:05Z",
+                    "reason": "transient timeout",
+                    "delay_seconds": 2,
+                }
+            ],
+            "interventions": [
+                {
+                    "action": "operator-note",
+                    "created_at": "2026-04-10T00:00:10Z",
+                    "reason": "waiting on approval",
+                }
+            ],
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "Watch History" in out
+    assert "Focused inspection:" in out
+    assert "Recent progress:" in out
+    assert "Retry checkpoints:" in out
+    assert "Operator notes:" in out
+
+
+def test_print_watch_history_plain_prioritizes_status_labels(capsys):
+    mod._print_watch_history(
+        {
+            "progress_log": [
+                {"timestamp": "2026-04-10T00:00:01Z", "phase": "poll", "note": "checkpoint complete", "ok": True},
+            ],
+            "retry_history": [
+                {"timestamp": "2026-04-10T00:00:02Z", "reason": "network timeout", "delay_seconds": 3},
+            ],
+            "interventions": [
+                {"created_at": "2026-04-10T00:00:03Z", "action": "operator-note", "reason": "hold for review"},
+            ],
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "COMPLETE · poll" in out
+    assert "RETRY" in out and "network timeout" in out
+    assert "INFO · operator-note" in out
 
 
 def test_main_watch_resume_uses_saved_goal(monkeypatch, tmp_path):
@@ -3273,6 +3422,37 @@ def test_inspect_session_includes_watch_state(monkeypatch, tmp_path, capsys):
     assert "all green" in out
 
 
+def test_inspect_session_front_loads_status_cells_in_dashboard_sections(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Hierarchy Inspect", cwd=str(tmp_path))
+    mod.append_event(session.session_id, kind="exec", content="git status", metadata={"summary": "ran git status"})
+    mod.append_event(session.session_id, kind="error", content="oops", metadata={"summary": "approval timed out"})
+    mod.save_watch_state(
+        session.session_id,
+        {
+            "session_id": session.session_id,
+            "mode": "analyze",
+            "goal": "watch hierarchy",
+            "cwd": str(tmp_path),
+            "files": [],
+            "status": "retrying",
+            "poll_count": 1,
+            "max_polls": 3,
+            "last_error": "needs retry",
+            "progress_log": [{"timestamp": "2026-04-10T00:02:00Z", "phase": "poll", "note": "still working"}],
+            "checkpoints": [],
+        },
+    )
+
+    out = mod.inspect_session(session.session_id)
+
+    assert "status   : ACTIVE" in out
+    assert "w.status : RETRY · watch: retrying · 1/3 polls" in out
+    assert "last err : ERROR · needs retry" in out
+    assert "ACTIVE · exec" in out
+    assert "ERROR · error" in out
+
+
 def test_session_show_minimal_session(monkeypatch, tmp_path, capsys):
     """session show works for a bare session with no events, outputs, or watch state."""
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
@@ -3302,6 +3482,28 @@ def test_main_session_list_interactive_overlay(monkeypatch, tmp_path, capsys):
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "Session list overlay" in out
+    assert f"openclaw --session {beta.session_id}" in out
+
+
+def test_main_session_list_interactive_overlay_prints_focused_session_dashboard(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+    monkeypatch.setattr(mod, "_IS_TTY", True)
+    monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+    sessions_mod.create_session(title="Alpha session", cwd=str(tmp_path))
+    beta = sessions_mod.create_session(title="Beta session", cwd=str(tmp_path), files=["src/app.py"])
+    sessions_mod.save_output(beta.session_id, "beta-notes.md", "preview me")
+    prompts = iter(["beta", "1"])
+    monkeypatch.setattr("builtins.input", lambda _label: next(prompts))
+
+    exit_code = mod.main(["session", "list", "--interactive"])
+
+    assert exit_code == 0
+    out = capsys.readouterr().out
+    assert "Session list overlay" in out
+    assert "Session Dashboard" in out
+    assert "outputs: 1" in out
+    assert "/outputs 1 to inspect the newest saved output" in out
     assert f"openclaw --session {beta.session_id}" in out
 
 
@@ -4189,6 +4391,54 @@ class TestAccessibilityPrefs:
 
         assert mod._status_emoji("healthy") == "[ok]"
 
+    def test_status_emoji_covers_wave22_status_families(self):
+        self._reset_prefs()
+        mod._PREFS["emoji_pack"] = "ascii"
+        mod._PREFS["emoji"] = False
+
+        assert mod._status_emoji("running") == "[run]"
+        assert mod._status_emoji("queued") == "[wait]"
+        assert mod._status_emoji("failed") == "[err]"
+        assert mod._status_emoji("paused") == "[pause]"
+
+
+def test_session_badges_cover_wave22_compact_cells():
+    stale_time = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat().replace("+00:00", "Z")
+    session = sessions_mod.SessionSummary(
+        session_id="session-wave22",
+        title="Wave 22 status grammar",
+        cwd="/workspace",
+        created_at=stale_time,
+        updated_at=stale_time,
+        status="active",
+        command_count=4,
+        output_count=2,
+        last_summary="latest output saved",
+        plan_id="",
+        task_id="",
+        files=[],
+        tags=["wave22", "docs"],
+        automation_mode="",
+        automation_status="",
+        checkpoint_count=0,
+        last_checkpoint_at="",
+    )
+
+    badges = mod._session_badges(session)
+
+    assert "ACTIVE" in badges
+    assert "STALE" in badges
+    assert "outputs: 2" in badges
+    assert "#wave22" in badges
+
+
+def test_status_cell_plain_mode_prefers_text_labels(monkeypatch):
+    monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+
+    cell = mod._status_cell("retrying", detail="backoff 2s", rich=True)
+
+    assert cell == "RETRY · backoff 2s"
+
 
 # ── /macro command ─────────────────────────────────────────────────────────────
 
@@ -4329,6 +4579,51 @@ class TestCmdMacroRun:
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
         assert "Skip" in out or "skip" in out or "⚠" in out
+
+
+class TestMacroProgress:
+    """Tests for _print_macro_progress and _cmd_macrostatus."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_print_macro_progress_runs_without_error(self, capsys, monkeypatch):
+        """_print_macro_progress with two steps and no done set runs without error."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        # Should not raise
+        mod._print_macro_progress(["step1", "step2"], 0, set())
+        out = capsys.readouterr().out
+        assert "Step 1/2" in out
+        assert "Step 2/2" in out
+
+    def test_cmd_macrostatus_no_macros(self, capsys, monkeypatch, tmp_path):
+        """/macrostatus returns _CMD_CONTINUE when no macros are saved."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        mod._PREFS.pop("macros", None)
+        result = mod._cmd_macrostatus(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "No macros" in out or "macro" in out.lower()
+
+    def test_cmd_macrostatus_with_macros(self, capsys, monkeypatch, tmp_path):
+        """/macrostatus returns _CMD_CONTINUE and shows macro names and counts."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        mod._load_prefs()
+        mod._PREFS["macros"] = {
+            "myflow": ["/version", "/stats"],
+            "other": ["/help"],
+        }
+        result = mod._cmd_macrostatus(self._ctx())
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "myflow" in out
+        assert "other" in out
 
 
 class TestCmdRate:
@@ -4823,3 +5118,48 @@ class TestSlashCompleter:
         completer = mod._SlashCompleter()
         matches = completer._compute_matches("hello")
         assert matches == []
+
+
+class TestProgressBar:
+    """Tests for the _progress_bar helper."""
+
+    def test_empty_bar_contains_light_shade(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        result = mod._progress_bar(0, 10)
+        assert "░" in result
+
+    def test_full_bar_contains_block_and_100_percent(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        result = mod._progress_bar(10, 10)
+        assert "█" in result
+        assert "100%" in result
+
+    def test_half_bar_contains_50_percent(self, monkeypatch):
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        result = mod._progress_bar(5, 10)
+        assert "50%" in result
+
+class TestCelebrationBurst:
+    """Tests for _celebration_burst and /celebrate command."""
+
+    def test_celebration_burst_runs_without_error(self, monkeypatch):
+        """_celebration_burst() completes without error when TTY is False."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        # Should not raise; non-TTY path just prints message or returns silently
+        mod._celebration_burst()
+        mod._celebration_burst("Test celebration!")
+
+    def test_cmd_celebrate_returns_cmd_continue(self, monkeypatch):
+        """_cmd_celebrate() returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        ctx = mod.ChatCommandContext(history=[], session_id="", args="Woohoo!")
+        result = mod._cmd_celebrate(ctx)
+        assert result == mod._CMD_CONTINUE
+
+    def test_celebration_burst_reduced_motion_prints_message(self, monkeypatch, capsys):
+        """With reduced motion, _celebration_burst prints the message without animation."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_PREFS", {"reduced_motion": True})
+        mod._celebration_burst("Congrats!")
+        captured = capsys.readouterr()
+        assert "Congrats!" in captured.out

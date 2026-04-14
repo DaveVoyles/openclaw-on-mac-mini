@@ -134,7 +134,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave21"  # updated with each UX wave batch
+_CLI_BUILD = "wave22"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -145,6 +145,10 @@ WATCH_RETRY_MAX_DELAY_SECONDS = 8
 CONTEXT_PREVIEW_MAX_CHARS = 5_000
 OUTPUT_LIST_LIMIT = 10
 OUTPUT_PREVIEW_MAX_CHARS = 4_000
+OUTPUT_OVERLAY_EXCERPT_CHARS = 140
+OUTPUT_DASHBOARD_EXCERPT_CHARS = 220
+SESSION_PREVIEW_OUTPUT_CHARS = 160
+WATCH_FOCUS_NOTE_CHARS = 120
 REPL_ROUTE_AUTO_THRESHOLD = 0.74
 REPL_ROUTE_ANNOUNCEMENT_COMMAND_LIMIT = 80
 REPL_ROUTE_ANNOUNCEMENT_REASON_LIMIT = 72
@@ -483,22 +487,175 @@ def _theme_ansi() -> str:
 # Shared display helpers
 # ---------------------------------------------------------------------------
 
+def _status_family(status: str) -> str:
+    """Normalize related status words into a shared rendering family."""
+    s = str(status or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if s in {"ok", "healthy", "done", "completed", "success", "succeeded", "complete"}:
+        return "complete"
+    if s in {"active", "running", "in_progress", "working", "processing", "streaming"}:
+        return "active"
+    if s in {"pending", "queued", "waiting", "idle", "scheduled"}:
+        return "waiting" if s != "idle" else "idle"
+    if s in {"retry", "retrying", "backoff", "recovering"}:
+        return "retry"
+    if s in {"warn", "warning", "degraded", "attention"}:
+        return "warn"
+    if s in {"error", "failed", "failure", "unhealthy"}:
+        return "error"
+    if s in {"blocked", "stuck", "needs_input", "needs-input"}:
+        return "blocked"
+    if s in {"paused", "stopped", "cancelled", "canceled"}:
+        return "paused"
+    if s in {"info", "note", "fresh", "new"}:
+        return "info"
+    if s in {"stale", "old", "expired"}:
+        return "stale"
+    return "unknown"
+
+
+def _status_text(status: str) -> str:
+    """Return the canonical plain-text status label."""
+    family = _status_family(status)
+    return {
+        "complete": "COMPLETE",
+        "active": "ACTIVE",
+        "waiting": "WAITING",
+        "idle": "IDLE",
+        "retry": "RETRY",
+        "warn": "WARN",
+        "error": "ERROR",
+        "blocked": "BLOCKED",
+        "paused": "PAUSED",
+        "info": "INFO",
+        "stale": "STALE",
+        "unknown": "STATUS",
+    }.get(family, "STATUS")
+
+
+def _status_style(status: str) -> str:
+    """Return the Rich/ANSI style token for a status family."""
+    family = _status_family(status)
+    return {
+        "complete": "green",
+        "active": "cyan",
+        "waiting": "yellow",
+        "idle": "dim",
+        "retry": "magenta",
+        "warn": "bold yellow",
+        "error": "bold red",
+        "blocked": "red",
+        "paused": "yellow",
+        "info": "blue",
+        "stale": "dim",
+        "unknown": "dim",
+    }.get(family, "dim")
+
+
 def _status_emoji(status: str) -> str:
     """Map a status string to a representative emoji."""
-    s = str(status or "").lower().strip()
-    if s in {"ok", "healthy", "done", "completed", "success", "active"}:
+    family = _status_family(status)
+    if family == "complete":
         return _e("🟢", "[ok]")
-    if s in {"running", "in_progress"}:
+    if family == "active":
         return _e("🔵", "[run]")
-    if s in {"warn", "warning", "degraded"}:
-        return _e("🟡", "[warn]")
-    if s in {"error", "failed", "unhealthy"}:
-        return _e("🔴", "[err]")
-    if s in {"paused", "stopped", "cancelled"}:
-        return _e("⏸", "[pause]")
-    if s in {"pending", "queued"}:
+    if family == "waiting":
         return _e("⏳", "[wait]")
+    if family == "idle":
+        return _e("⚪", "[idle]")
+    if family == "retry":
+        return _e("🔄", "[retry]")
+    if family == "warn":
+        return _e("🟡", "[warn]")
+    if family == "error":
+        return _e("🔴", "[err]")
+    if family == "blocked":
+        return _e("⛔", "[block]")
+    if family == "paused":
+        return _e("⏸", "[pause]")
+    if family == "info":
+        return _e("ℹ️", "[info]")
+    if family == "stale":
+        return _e("🕰️", "[stale]")
     return _e("●", "[*]")
+
+
+def _status_cell(status: str, *, detail: str = "", rich: bool = False) -> str:
+    """Return a compact badge-like status cell with plain-text parity."""
+    label = _status_text(status)
+    suffix = f" · {detail}" if detail else ""
+    if rich and _RICH_AVAILABLE and _IS_TTY and not _a11y_plain_mode():
+        emoji = _status_emoji(status)
+        style = _status_style(status)
+        return f"[{style}]{emoji} {label}[/]{suffix}"
+    return f"{label}{suffix}"
+
+
+def _progress_cell(label: str, value: str, *, status: str = "", rich: bool = False) -> str:
+    """Return a dense progress/status cell that degrades to readable plain text."""
+    cell = f"{label}: {value}".strip()
+    if not status:
+        return cell
+    badge = _status_cell(status, rich=rich)
+    return f"{badge} · {cell}"
+
+
+def _dashboard_section_lines(title: str, lines: list[str]) -> list[str]:
+    """Return normalized lines for a plain-text dashboard section."""
+    clean = [str(line).strip() for line in lines if str(line or "").strip()]
+    if not clean:
+        return []
+    return [f"{title}:"] + [f"  - {line}" for line in clean]
+
+
+def _append_dashboard_rich_section(
+    body: "_RichText",
+    title: str,
+    lines: list[str],
+    *,
+    title_style: str = "bold cyan",
+    line_style: str = "",
+) -> None:
+    """Append a dashboard section to a Rich text buffer."""
+    clean = [str(line).strip() for line in lines if str(line or "").strip()]
+    if not clean:
+        return
+    if body.plain:
+        body.append("\n")
+    body.append(f"{title}\n", style=title_style)
+    for line in clean:
+        body.append("  • ", style="dim")
+        body.append(f"{line}\n", style=line_style)
+
+
+def _print_dashboard_surface(
+    title: str,
+    *,
+    summary_lines: list[str],
+    detail_lines: list[str] | None = None,
+    action_lines: list[str] | None = None,
+    border_style: str = "dim",
+) -> None:
+    """Render a summary → details → actions dashboard surface with safe fallbacks."""
+    detail_lines = detail_lines or []
+    action_lines = action_lines or []
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if _RICH_AVAILABLE and is_tty and not _a11y_plain_mode():
+        body = _RichText()
+        _append_dashboard_rich_section(body, "Summary", summary_lines)
+        _append_dashboard_rich_section(body, "Details", detail_lines, title_style="bold white")
+        _append_dashboard_rich_section(body, "Actions", action_lines, title_style="bold yellow")
+        _RICH_CONSOLE.print(
+            _RichPanel(body, title=f"[bold]{title}[/]", border_style=border_style, padding=(0, 1))
+        )
+        return
+    lines = [title, *(_dashboard_section_lines("Summary", summary_lines))]
+    detail_block = _dashboard_section_lines("Details", detail_lines)
+    if detail_block:
+        lines.extend(["", *detail_block])
+    action_block = _dashboard_section_lines("Actions", action_lines)
+    if action_block:
+        lines.extend(["", *action_block])
+    print("\n".join(lines))
 
 
 def _print_meta_footer(*pairs: tuple[str, str]) -> None:
@@ -1365,10 +1522,12 @@ def summarize_session(session: SessionSummary) -> str:
     parts = [
         f"session: {session.session_id}",
         f"title: {session.title}",
+        _progress_cell("status", str(session.status or "active"), status=session.status or "active"),
         f"cwd: {session.cwd}",
         f"updated: {session.updated_at}",
-        f"commands: {session.command_count}",
-        f"outputs: {session.output_count}",
+        f"freshness: {'stale' if _session_is_stale(session) else 'fresh'}",
+        _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
+        _progress_cell("outputs", str(session.output_count), status="complete" if session.output_count else "idle"),
     ]
     if session.plan_id:
         parts.append(f"plan: {session.plan_id}")
@@ -1380,7 +1539,7 @@ def summarize_session(session: SessionSummary) -> str:
         parts.append(f"last: {session.last_summary}")
     if session.automation_mode:
         status = session.automation_status or "active"
-        parts.append(f"automation: {session.automation_mode} ({status})")
+        parts.append(_progress_cell("automation", f"{session.automation_mode} ({status})", status=status))
         try:
             watch_state = load_watch_state(session.session_id)
             if watch_state:
@@ -1400,7 +1559,7 @@ def summarize_session(session: SessionSummary) -> str:
         except Exception:
             pass
     if session.checkpoint_count:
-        parts.append(f"checkpoints: {session.checkpoint_count}")
+        parts.append(_progress_cell("checkpoints", str(session.checkpoint_count), status="complete"))
     if session.last_checkpoint_at:
         parts.append(f"last checkpoint: {session.last_checkpoint_at}")
     return "\n".join(parts)
@@ -1408,60 +1567,80 @@ def summarize_session(session: SessionSummary) -> str:
 
 def _print_session_summary(session: SessionSummary) -> None:
     """Print a compact session summary, with rich formatting when available."""
-    if _RICH_AVAILABLE and _IS_TTY:
-        grid = _RichTable.grid(padding=(0, 2))
-        grid.add_column(style="dim", min_width=12)
-        grid.add_column()
-        grid.add_row("🆔 id", f"[dim]{session.session_id}[/]")
-        grid.add_row("📋 title", f"[bold]{session.title}[/]")
-        if session.cwd:
-            grid.add_row("📁 cwd", f"[dim]{session.cwd}[/]")
-        grid.add_row("🕐 updated", f"[yellow]{session.updated_at}[/]")
-        grid.add_row("📊 stats", f"[cyan]{session.command_count}[/] commands  [cyan]{session.output_count}[/] outputs")
-        if session.plan_id:
-            grid.add_row("📋 plan", f"[magenta]{session.plan_id}[/]")
-        if session.task_id:
-            grid.add_row("✅ task", f"[magenta]{session.task_id}[/]")
-        if session.files:
-            grid.add_row("📄 files", f"[dim]{', '.join(session.files[:4])}{'…' if len(session.files) > 4 else ''}[/]")
-        if session.last_summary:
-            grid.add_row("💬 last", f"[dim]{session.last_summary[:80]}[/]")
-        if session.automation_mode:
-            a_status = session.automation_status or "active"
-            grid.add_row("🤖 automation", f"[cyan]{session.automation_mode}[/] [dim]({a_status})[/]")
-            # Surface watch state details inline if available
-            try:
-                _w = load_watch_state(session.session_id)
-                if _w:
-                    _timing = _watch_timing_summary(_w)
-                    _polls = int(_w.get("poll_count") or 0)
-                    _max = int(_w.get("max_polls") or 0)
-                    _fails = int(_w.get("failure_count") or 0)
-                    _limit = int(_w.get("retry_limit") or 3)
-                    _poll_str = f"[cyan]{_polls}[/] / {_max or '∞'} polls"
-                    if _fails:
-                        _poll_str += f"  [red]{_fails}/{_limit} failures[/]"
-                    grid.add_row("", _poll_str)
-                    _timing_parts = []
-                    if _timing["active_phase"]:
-                        _phase = f"{_timing['active_phase']}"
-                        if _timing["active_phase_elapsed"] is not None:
-                            _phase += f" {_format_elapsed_compact(_timing['active_phase_elapsed'])}"
-                        _timing_parts.append(f"phase {_phase}")
-                    if _timing["latest_duration"] is not None:
-                        _timing_parts.append(f"last run {_format_elapsed_compact(_timing['latest_duration'])}")
-                    if _timing["retry_delay_total"]:
-                        _timing_parts.append(f"backoff {_format_elapsed_compact(_timing['retry_delay_total'])}")
-                    if _timing_parts:
-                        grid.add_row("", "[dim]" + "  •  ".join(_timing_parts) + "[/]")
-                    _last_err = str(_w.get("last_error") or "").strip()
-                    if _last_err:
-                        grid.add_row("", f"[red dim]last err: {_last_err[:70]}[/]")
-            except Exception:
-                pass
-        _RICH_CONSOLE.print(_RichPanel(grid, border_style="cyan", padding=(0, 1)))
+    watch_state = None
+    try:
+        watch_state = load_watch_state(session.session_id)
+    except Exception:
+        watch_state = None
+
+    summary_lines = [
+        session.title,
+        f"id {session.session_id}",
+        _progress_cell("status", str(session.status or "active"), status=session.status or "active"),
+        _status_cell("stale" if _session_is_stale(session) else "info", detail="freshness"),
+        _progress_cell("updated", session.updated_at or "—", status="info"),
+    ]
+    detail_lines = [
+        _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
+        _progress_cell("outputs", str(session.output_count), status="complete" if session.output_count else "idle"),
+        _progress_cell("checkpoints", str(session.checkpoint_count), status="complete" if session.checkpoint_count else "idle"),
+        f"cwd: {session.cwd}" if session.cwd else "",
+        f"plan: {session.plan_id}" if session.plan_id else "",
+        f"task: {session.task_id}" if session.task_id else "",
+        (
+            "files: "
+            + ", ".join(session.files[:4])
+            + ("…" if len(session.files) > 4 else "")
+        )
+        if session.files
+        else "files: none tracked",
+        f"last: {session.last_summary[:100]}" if session.last_summary else "",
+    ]
+    action_lines = []
+    if session.automation_mode:
+        a_status = session.automation_status or "active"
+        detail_lines.append(_progress_cell("automation", f"{session.automation_mode} ({a_status})", status=a_status))
+        if watch_state:
+            timing = _watch_timing_summary(watch_state)
+            polls = int(watch_state.get("poll_count") or 0)
+            max_polls = int(watch_state.get("max_polls") or 0)
+            failures = int(watch_state.get("failure_count") or 0)
+            retry_limit = int(watch_state.get("retry_limit") or 3)
+            detail_lines.append(_progress_cell("polls", f"{polls}/{max_polls or '∞'}", status=a_status))
+            if failures:
+                detail_lines.append(_progress_cell("failures", f"{failures}/{retry_limit}", status="retry"))
+            if timing["active_phase"]:
+                phase = timing["active_phase"]
+                if timing["active_phase_elapsed"] is not None:
+                    phase += f" {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+                detail_lines.append(_progress_cell("phase", phase, status="active"))
+            if timing["latest_duration"] is not None:
+                detail_lines.append(f"last run {_format_elapsed_compact(timing['latest_duration'])}")
+            if timing["retry_delay_total"]:
+                detail_lines.append(f"retry backoff {_format_elapsed_compact(timing['retry_delay_total'])}")
+            last_error = str(watch_state.get("last_error") or "").strip()
+            if last_error:
+                detail_lines.append(f"last error: {last_error[:80]}")
+        action_lines.append("/watch status to inspect the live control tower")
+        action_lines.append("/watch history to review retries and checkpoints")
+    elif session.output_count:
+        action_lines.append("/outputs 1 to inspect the newest saved output")
+    elif session.files:
+        action_lines.append("/context to preview the next request grounding")
     else:
-        print(summarize_session(session))
+        action_lines.append("/files add <path> to attach workspace context")
+    if session.plan_id or session.task_id:
+        action_lines.append("/context to verify linked plan/task grounding")
+    if session.last_checkpoint_at:
+        detail_lines.append(f"last checkpoint: {session.last_checkpoint_at}")
+
+    _print_dashboard_surface(
+        "Session Dashboard",
+        summary_lines=summary_lines,
+        detail_lines=detail_lines,
+        action_lines=action_lines,
+        border_style="cyan",
+    )
 
 
 def _print_session_list(items: list[SessionSummary]) -> None:
@@ -1500,6 +1679,85 @@ def _format_collaboration_entry(entry: dict[str, Any]) -> str:
     tags = [str(tag or "").strip() for tag in list(entry.get("tags") or []) if str(tag or "").strip()]
     suffix = f" [{' '.join('#' + tag for tag in tags)}]" if tags else ""
     return f"{actor}: {summary}{suffix}".strip()
+
+
+def _watch_focus_lines(state: dict[str, Any]) -> list[str]:
+    state = normalize_watch_state(state)
+    timing = _watch_timing_summary(state)
+    lines: list[str] = []
+    active_checkpoint = state.get("active_checkpoint") or {}
+    if timing["active_phase"]:
+        phase_line = timing["active_phase"]
+        if timing["active_phase_elapsed"] is not None:
+            phase_line += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+        lines.append(f"focus: {_progress_cell('phase', phase_line, status='active')}")
+    latest_checkpoint = None
+    checkpoints = list(state.get("checkpoints") or [])
+    if checkpoints:
+        latest_checkpoint = checkpoints[-1]
+    if not latest_checkpoint and active_checkpoint:
+        latest_checkpoint = active_checkpoint
+    if latest_checkpoint:
+        poll_value = latest_checkpoint.get("poll")
+        note = str(
+            latest_checkpoint.get("note")
+            or latest_checkpoint.get("summary")
+            or latest_checkpoint.get("status")
+            or latest_checkpoint.get("phase")
+            or ""
+        ).strip()
+        checkpoint_label = f"checkpoint {poll_value}" if poll_value else "checkpoint"
+        if note:
+            lines.append(f"{checkpoint_label}: {_single_line_excerpt(note, max_chars=WATCH_FOCUS_NOTE_CHARS)}")
+    interventions = [item for item in list(state.get("interventions") or []) if isinstance(item, dict)]
+    if interventions:
+        latest = interventions[-1]
+        action = str(latest.get("action") or "intervention").strip().replace("-", " ")
+        reason = _single_line_excerpt(str(latest.get("reason") or "").strip(), max_chars=WATCH_FOCUS_NOTE_CHARS)
+        status = str(latest.get("status") or "info").strip()
+        detail = action if not reason else f"{action} · {reason}"
+        lines.append(f"intervention: {_status_cell(status if status != 'pending' else 'info', detail=detail)}")
+    last_error = str(state.get("last_error") or "").strip()
+    if last_error:
+        lines.append(f"focus error: {_single_line_excerpt(last_error, max_chars=WATCH_FOCUS_NOTE_CHARS)}")
+    return lines
+
+
+def _session_preview_lines(session: SessionSummary) -> list[str]:
+    lines: list[str] = []
+    if session.last_summary:
+        lines.append(f"latest activity: {_single_line_excerpt(session.last_summary, max_chars=100)}")
+    if session.automation_mode:
+        try:
+            watch_state = load_watch_state(session.session_id)
+        except Exception:
+            watch_state = None
+        if watch_state:
+            lines.extend(_watch_focus_lines(watch_state)[:2])
+    outputs = list_saved_outputs(session.session_id, limit=1)
+    if outputs:
+        output_item = outputs[0]
+        preview = load_saved_output_preview(
+            session.session_id,
+            str(output_item.get("name") or "").strip(),
+            max_chars=SESSION_PREVIEW_OUTPUT_CHARS,
+        )
+        output_line = f"latest output: {str(output_item.get('name') or '').strip()}"
+        if preview:
+            excerpt = _single_line_excerpt(str(preview.get("preview") or ""), max_chars=90)
+            if excerpt:
+                output_line += f" — {excerpt}"
+        lines.append(output_line)
+    snapshot = build_collaboration_snapshot(session.session_id, limit=3)
+    actors = list(snapshot.get("actors") or [])
+    decisions = list(snapshot.get("recent_decisions") or [])
+    if actors:
+        actor_names = ", ".join(str(actor.get("name") or "operator").strip() for actor in actors[:2] if str(actor.get("name") or "").strip())
+        if actor_names:
+            lines.append(f"collab: {actor_names}")
+    if decisions:
+        lines.append(f"decision: {_single_line_excerpt(_format_collaboration_entry(decisions[0]), max_chars=100)}")
+    return lines[:4]
 
 
 def _build_session_share_text(session_id: str) -> str:
@@ -1596,13 +1854,18 @@ def inspect_session(session_id: str) -> str:
         sep,
         f"  id       : {session_data.get('session_id', session_id)}",
         f"  title    : {session_data.get('title', '')}",
-        f"  status   : {session_data.get('status', 'active')}",
+        f"  status   : {_status_cell(str(session_data.get('status') or 'active'))}",
         f"  cwd      : {session_data.get('cwd', '')}",
         f"  created  : {session_data.get('created_at', '')}",
         f"  updated  : {session_data.get('updated_at', '')}",
-        f"  commands : {session_data.get('command_count', 0)}  "
-        f"outputs: {session_data.get('output_count', 0)}  "
-        f"edits: {session_data.get('file_edit_count', 0)}",
+        "  "
+        + "  |  ".join(
+            [
+                _progress_cell("commands", str(session_data.get("command_count", 0)), status="active" if int(session_data.get("command_count", 0) or 0) else "idle"),
+                _progress_cell("outputs", str(session_data.get("output_count", 0)), status="complete" if int(session_data.get("output_count", 0) or 0) else "idle"),
+                _progress_cell("edits", str(session_data.get("file_edit_count", 0)), status="active" if int(session_data.get("file_edit_count", 0) or 0) else "idle"),
+            ]
+        ),
     ]
 
     # ── Plan / task linkage ───────────────────────────────────────
@@ -1634,21 +1897,22 @@ def inspect_session(session_id: str) -> str:
         if automation_mode:
             a_status = str(session_data.get("automation_status") or "active").strip()
             interval = int(session_data.get("watch_interval_seconds") or 0)
-            lines.append(f"  mode     : {automation_mode}  status: {a_status}")
+            lines.append(f"  mode     : {_progress_cell('automation', f'{automation_mode} ({a_status})', status=a_status)}")
             if interval:
-                lines.append(f"  interval : {interval}s")
+                lines.append(f"  interval : {_progress_cell('loop', f'{interval}s', status=a_status)}")
         if watch:
             w_status = str(watch.get("status") or "").strip()
             poll_count = int(watch.get("poll_count") or 0)
             max_polls = int(watch.get("max_polls") or 0)
+            polls_value = f"{poll_count}/{max_polls or '∞'} polls"
             goal = str(watch.get("goal") or "").strip()
             if goal:
                 lines.append(f"  goal     : {goal[:120]}")
             if w_status:
-                lines.append(f"  w.status : {w_status}  polls: {poll_count}/{max_polls or '∞'}")
+                lines.append(f"  w.status : {_progress_cell('watch', f'{w_status} · {polls_value}', status=w_status)}")
             last_error = str(watch.get("last_error") or "").strip()
             if last_error:
-                lines.append(f"  last err : {last_error[:200]}")
+                lines.append(f"  last err : {_status_cell('error', detail=last_error[:180])}")
 
     # ── Checkpoints ───────────────────────────────────────────────
     checkpoint_count = int(session_data.get("checkpoint_count") or 0)
@@ -1657,7 +1921,9 @@ def inspect_session(session_id: str) -> str:
     if checkpoint_count or watch_checkpoints or routed_checkpoints:
         lines.append("")
         lines.append("CHECKPOINTS")
-        lines.append(f"  total : {checkpoint_count}  last: {last_checkpoint_at or 'n/a'}")
+        lines.append(
+            f"  total : {_progress_cell('count', str(checkpoint_count), status='complete' if checkpoint_count else 'idle')}  last: {last_checkpoint_at or 'n/a'}"
+        )
         for ckpt in routed_checkpoints[:3]:
             step_index = int(ckpt.get("step_index") or 0)
             step_total = int(ckpt.get("step_total") or 0)
@@ -1685,7 +1951,8 @@ def inspect_session(session_id: str) -> str:
             ts = str(entry.get("timestamp") or entry.get("at") or "").strip()
             phase = str(entry.get("phase") or "").strip()
             note = str(entry.get("note") or entry.get("summary") or entry.get("content") or "").strip()
-            lines.append(f"  [{ts}] ({phase}) {note[:120]}")
+            entry_status = "warn" if entry.get("warning") else "complete" if entry.get("ok") else "active"
+            lines.append(f"  [{ts}] {_status_cell(entry_status, detail=phase or 'progress')} · {note[:120]}")
 
     # ── Recent events ─────────────────────────────────────────────
     if events:
@@ -1698,7 +1965,8 @@ def inspect_session(session_id: str) -> str:
             meta = event.get("metadata") or {}
             summary_note = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
             label = summary_note or content[:80]
-            lines.append(f"  [{ts}] {kind}: {label}")
+            event_status = "error" if kind == "error" else "complete" if kind in {"assistant", "checkpoint"} else "active" if kind in {"exec", "edit"} else "info"
+            lines.append(f"  [{ts}] {_status_cell(event_status, detail=kind or 'event')} · {label}")
 
     # ── Saved outputs ─────────────────────────────────────────────
     if outputs:
@@ -1749,22 +2017,24 @@ def _inspect_session_rich(
     sid = session_data.get("session_id", session_id)
     title = session_data.get("title") or "Session"
     status = str(session_data.get("status") or "active")
-    emoji = _status_emoji(status)
-
     # Metadata panel
     meta = _RichTable.grid(padding=(0, 2))
     meta.add_column(style="dim", min_width=12)
     meta.add_column()
     meta.add_row("🆔 id", f"[dim]{sid}[/]")
-    meta.add_row(f"{emoji} status", f"[bold]{status}[/]")
+    meta.add_row("status", _status_cell(status, rich=True))
     meta.add_row("📁 cwd", f"[dim]{session_data.get('cwd', '')}[/]")
     meta.add_row("🕐 created", f"[dim]{session_data.get('created_at', '')}[/]")
     meta.add_row("🕐 updated", f"[yellow]{session_data.get('updated_at', '')}[/]")
     meta.add_row(
         "📊 stats",
-        f"[cyan]{session_data.get('command_count', 0)}[/] commands  "
-        f"[cyan]{session_data.get('output_count', 0)}[/] outputs  "
-        f"[cyan]{session_data.get('file_edit_count', 0)}[/] edits",
+        "  •  ".join(
+            [
+                _progress_cell("commands", str(session_data.get("command_count", 0)), status="active" if int(session_data.get("command_count", 0) or 0) else "idle", rich=True),
+                _progress_cell("outputs", str(session_data.get("output_count", 0)), status="complete" if int(session_data.get("output_count", 0) or 0) else "idle", rich=True),
+                _progress_cell("edits", str(session_data.get("file_edit_count", 0)), status="active" if int(session_data.get("file_edit_count", 0) or 0) else "idle", rich=True),
+            ]
+        ),
     )
     plan_id = str(session_data.get("plan_id") or "").strip()
     task_id = str(session_data.get("task_id") or "").strip()
@@ -1783,7 +2053,7 @@ def _inspect_session_rich(
         kind_styles = {"prompt": "cyan", "assistant": "green", "exec": "yellow", "edit": "magenta", "error": "red"}
         ev_table = _RichTable(border_style="dim", show_edge=False, pad_edge=True, header_style="bold dim")
         ev_table.add_column("Time", style="dim", no_wrap=True)
-        ev_table.add_column("Kind", no_wrap=True)
+        ev_table.add_column("Status", no_wrap=True)
         ev_table.add_column("Summary")
         for event in events[-8:]:
             ts = str(event.get("timestamp") or event.get("created_at") or "").strip()[-8:]
@@ -1791,7 +2061,8 @@ def _inspect_session_rich(
             meta_d = event.get("metadata") or {}
             summary = str(meta_d.get("summary") if isinstance(meta_d, dict) else "") or str(event.get("content") or "")
             style = kind_styles.get(kind, "dim")
-            ev_table.add_row(ts, f"[{style}]{kind}[/]", summary[:80])
+            event_status = "error" if kind == "error" else "complete" if kind in {"assistant", "checkpoint"} else "active" if kind in {"exec", "edit"} else "info"
+            ev_table.add_row(ts, f"[{style}]{_status_text(event_status)}[/]", f"{kind}: {summary[:80]}")
         _RICH_CONSOLE.print(_RichPanel(ev_table, title="[bold dim]Recent Events[/]", border_style="dim", padding=(0, 1)))
 
     # Outputs panel
@@ -1924,6 +2195,23 @@ def _truncate_preview(text: str, *, max_chars: int) -> str:
     if len(clipped) <= max_chars:
         return clipped
     return clipped[: max_chars - 15].rstrip() + "\n...[truncated]..."
+
+
+def _single_line_excerpt(text: str, *, max_chars: int) -> str:
+    compact = " ".join(str(text or "").split())
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 1].rstrip() + "…"
+
+
+def _preview_block_lines(title: str, text: str, *, max_chars: int, max_lines: int = 3) -> list[str]:
+    preview = _truncate_preview(text, max_chars=max_chars)
+    if not preview:
+        return []
+    lines = preview.splitlines()[:max_lines]
+    block = [f"{title}:"]
+    block.extend(f"  {line}" for line in lines if line.strip())
+    return block
 
 
 def _format_byte_count(size_bytes: int) -> str:
@@ -5051,69 +5339,49 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
     session = _require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
-    if _RICH_AVAILABLE and _IS_TTY:
-        from rich.table import Table as _RichTableLocal
-        grid = _RichText()
-        grid.append("📁 cwd    ", style="dim")
-        grid.append(session.cwd or "(none)", style="bold")
-        grid.append("\n")
-        if session.files:
-            grid.append("📄 files  ", style="dim")
-            grid.append("\n")
-            for f in session.files:
-                grid.append(f"   {f}\n", style="cyan")
-        else:
-            grid.append("📄 files  ", style="dim")
-            grid.append("(none tracked)\n", style="dim italic")
-        if session.plan_id:
-            plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
-            suffix = _link_validation_suffix(plan_validation)
-            grid.append("📋 plan   ", style="dim")
-            grid.append(f"{session.plan_id}{suffix}\n", style="yellow")
-        if session.task_id:
-            task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
-            suffix = _link_validation_suffix(task_validation)
-            grid.append("✅ task   ", style="dim")
-            grid.append(f"{session.task_id}{suffix}\n", style="yellow")
-        grounding_preview = _render_effective_grounding_preview(session)
-        if grounding_preview:
-            grid.append("\neffective grounding preview:\n", style="dim italic")
-            grid.append(grounding_preview, style="dim")
-        sys_prompt = _PREFS.get("system_prompt", "").strip()
-        if sys_prompt:
-            grid.append("\n🔧 system  ", style="dim")
-            preview = sys_prompt[:80] + ("…" if len(sys_prompt) > 80 else "")
-            grid.append(f"{preview}\n", style="yellow")
-        _inj = globals().get("_next_inject", "")
-        if _inj:
-            grid.append("📎 inject  ", style="dim")
-            grid.append(f"({len(_inj)} chars pending)\n", style="cyan")
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold]context[/]", border_style="dim", padding=(0, 1)))
+    summary_lines = [
+        f"cwd: {session.cwd or '(none)'}",
+        _progress_cell("files", str(len(session.files or [])), status="active" if session.files else "idle"),
+        _progress_cell("plan", session.plan_id or "none", status="active" if session.plan_id else "idle"),
+        _progress_cell("task", session.task_id or "none", status="active" if session.task_id else "idle"),
+    ]
+    detail_lines = []
+    if session.files:
+        detail_lines.extend(f"file: {path}" for path in session.files)
     else:
-        lines = [f"cwd  : {session.cwd}"]
-        if session.files:
-            lines.append("files:")
-            for f in session.files:
-                lines.append(f"  {f}")
-        else:
-            lines.append("files: (none tracked)")
-        if session.plan_id:
-            plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
-            lines.append(f"plan : {session.plan_id}{_link_validation_suffix(plan_validation)}")
-        if session.task_id:
-            task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
-            lines.append(f"task : {session.task_id}{_link_validation_suffix(task_validation)}")
-        grounding_preview = _render_effective_grounding_preview(session)
-        if grounding_preview:
-            lines.extend(["", "effective grounding preview:", grounding_preview])
-        sys_prompt = _PREFS.get("system_prompt", "").strip()
-        if sys_prompt:
-            preview = sys_prompt[:80] + ("…" if len(sys_prompt) > 80 else "")
-            lines.append(f"system: {preview}")
-        _inj = globals().get("_next_inject", "")
-        if _inj:
-            lines.append(f"inject: ({len(_inj)} chars pending)")
-        print("\n".join(lines))
+        detail_lines.append("files: (none tracked)")
+    if session.plan_id:
+        plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
+        detail_lines.append(f"plan: {session.plan_id}{_link_validation_suffix(plan_validation)}")
+    if session.task_id:
+        task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
+        detail_lines.append(f"task: {session.task_id}{_link_validation_suffix(task_validation)}")
+    grounding_preview = _render_effective_grounding_preview(session)
+    if grounding_preview:
+        detail_lines.append("effective grounding preview:")
+        detail_lines.extend(str(grounding_preview).splitlines())
+    sys_prompt = _PREFS.get("system_prompt", "").strip()
+    if sys_prompt:
+        preview = sys_prompt[:80] + ("…" if len(sys_prompt) > 80 else "")
+        detail_lines.append(f"system: {preview}")
+    _inj = globals().get("_next_inject", "")
+    if _inj:
+        detail_lines.append(f"inject: ({len(_inj)} chars pending)")
+    action_lines = []
+    if not session.files:
+        action_lines.append("/files add <path> to add grounding files")
+    else:
+        action_lines.append("/files to review or remove tracked files")
+    if session.plan_id or session.task_id:
+        action_lines.append("/session to compare grounding against session health")
+    else:
+        action_lines.append("/plan <id> or /task <id> to strengthen work context")
+    _print_dashboard_surface(
+        "Context Dashboard",
+        summary_lines=summary_lines,
+        detail_lines=detail_lines,
+        action_lines=action_lines,
+    )
     return _CMD_CONTINUE
 
 
@@ -5239,6 +5507,7 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
 
 def _print_watch_status(state: dict[str, Any]) -> None:
     """Render a compact watch-state status panel."""
+    state = normalize_watch_state(state)
     goal = str(state.get("goal") or "").strip()
     mode = str(state.get("mode") or "").strip()
     w_status = str(state.get("status") or "").strip()
@@ -5251,69 +5520,62 @@ def _print_watch_status(state: dict[str, Any]) -> None:
     last_error = str(state.get("last_error") or "").strip()
     last_summary = str(state.get("last_summary") or "").strip()
     timing = _watch_timing_summary(state)
+    polls_value = f"{poll_count}/{max_polls or '∞'}"
 
-    if _RICH_AVAILABLE and _IS_TTY:
-        grid = _RichTable.grid(padding=(0, 2))
-        grid.add_column(style="dim", min_width=12)
-        grid.add_column()
-        if goal:
-            grid.add_row("goal", f"[bold]{goal[:80]}[/]")
-        if mode:
-            grid.add_row("mode", f"[cyan]{mode}[/]")
-        status_color = "green" if w_status == "running" else "yellow" if w_status == "idle" else "dim"
-        grid.add_row("status", f"[{status_color}]{w_status or 'unknown'}[/]")
-        grid.add_row("polls", f"[cyan]{poll_count}[/] / {max_polls or '∞'}")
-        if failure_count:
-            grid.add_row("failures", f"[red]{failure_count}[/] of {retry_limit} retry limit")
-        else:
-            grid.add_row("retry limit", f"{retry_limit}")
-        if interval_seconds:
-            grid.add_row("interval", f"{interval_seconds}s")
-        if timing["active_phase"]:
-            phase_label = timing["active_phase"]
-            if timing["active_phase_elapsed"] is not None:
-                phase_label += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
-            grid.add_row("phase", f"[magenta]{phase_label}[/]")
-        if timing["latest_duration"] is not None:
-            grid.add_row("last duration", f"{_format_elapsed_compact(timing['latest_duration'])}")
-        if timing["retry_delay_total"]:
-            grid.add_row("backoff", f"{_format_elapsed_compact(timing['retry_delay_total'])} total")
-        if last_run_at:
-            grid.add_row("last run", f"[dim]{last_run_at}[/]")
-        if last_summary:
-            grid.add_row("last out", f"[dim]{last_summary[:80]}[/]")
-        if last_error:
-            grid.add_row("last err", f"[red]{last_error[:80]}[/]")
-        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]🤖 Watch Status[/]", border_style="cyan", padding=(0, 1)))
+    phase_status = "retry" if w_status == "retrying" else "active"
+    summary_lines = []
+    if goal:
+        summary_lines.append(goal[:80])
+    summary_lines.extend(
+        [
+            _progress_cell("mode", mode or "watch", status=w_status or "active"),
+            _progress_cell("status", w_status or "unknown", status=w_status or "unknown"),
+            _progress_cell("polls", polls_value, status=w_status or "active"),
+        ]
+    )
+    detail_lines = []
+    if failure_count:
+        detail_lines.append(_progress_cell("failures", f"{failure_count}/{retry_limit}", status="retry"))
     else:
-        print("Watch Status")
-        if goal:
-            print(f"  goal:      {goal[:80]}")
-        print(f"  mode:      {mode}  status: {w_status}")
-        print(f"  polls:     {poll_count}/{max_polls or '∞'}")
-        if failure_count:
-            print(f"  failures:  {failure_count}/{retry_limit} retry limit")
-        if interval_seconds:
-            print(f"  interval:  {interval_seconds}s")
-        if timing["active_phase"]:
-            phase_line = timing["active_phase"]
-            if timing["active_phase_elapsed"] is not None:
-                phase_line += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
-            print(f"  phase:     {phase_line}")
-        if timing["latest_duration"] is not None:
-            print(f"  duration:  {_format_elapsed_compact(timing['latest_duration'])}")
-        if timing["retry_delay_total"]:
-            print(f"  backoff:   {_format_elapsed_compact(timing['retry_delay_total'])} total")
-        if last_run_at:
-            print(f"  last run:  {last_run_at}")
-        if last_summary:
-            print(f"  last out:  {last_summary[:80]}")
-        if last_error:
-            print(f"  last err:  {last_error[:80]}")
+        detail_lines.append(_progress_cell("retry budget", str(retry_limit), status="idle"))
+    if interval_seconds:
+        detail_lines.append(_progress_cell("interval", f"{interval_seconds}s", status="waiting"))
+    if timing["active_phase"]:
+        phase_line = timing["active_phase"]
+        if timing["active_phase_elapsed"] is not None:
+            phase_line += f" · {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+        detail_lines.append(_progress_cell("phase", phase_line, status=phase_status))
+    if timing["latest_duration"] is not None:
+        detail_lines.append(_progress_cell("last duration", _format_elapsed_compact(timing["latest_duration"]), status="info"))
+    if timing["retry_delay_total"]:
+        detail_lines.append(_progress_cell("backoff", _format_elapsed_compact(timing["retry_delay_total"]), status="retry"))
+    if last_run_at:
+        detail_lines.append(f"last run: {last_run_at}")
+    if last_summary:
+        detail_lines.append(f"last output: {last_summary[:80]}")
+    if last_error:
+        detail_lines.append(f"last error: {last_error[:80]}")
+    detail_lines.extend(_watch_focus_lines(state))
+    action_lines = [
+        "/watch history to inspect checkpoint history",
+        "/watch intervene <msg> to leave an operator breadcrumb",
+    ]
+    if w_status in {"completed", "complete"}:
+        action_lines.insert(0, "/session to review the resulting session snapshot")
+    else:
+        action_lines.insert(0, "/watch retry-limit N to tune retry budget")
+    _print_dashboard_surface(
+        "Watch Control Tower",
+        summary_lines=summary_lines,
+        detail_lines=detail_lines,
+        action_lines=action_lines,
+        border_style="cyan",
+    )
 
 
 def _print_watch_history(state: dict[str, Any]) -> None:
     """Render recent watch progress log, retries, and operator notes."""
+    state = normalize_watch_state(state)
     progress_log = list(state.get("progress_log") or [])
     retry_history = list(state.get("retry_history") or [])
     notes = [e for e in list(state.get("interventions") or []) if e.get("action") == "operator-note"]
@@ -5325,42 +5587,53 @@ def _print_watch_history(state: dict[str, Any]) -> None:
             print("No watch history yet.")
         return
 
-    if _RICH_AVAILABLE and _IS_TTY:
-        table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan")
-        table.add_column("Time", style="dim", no_wrap=True, max_width=10)
-        table.add_column("Kind", no_wrap=True, max_width=10)
-        table.add_column("Summary")
+    summary_lines = [
+        _progress_cell("recent checkpoints", str(len(progress_log[-10:])), status="active" if progress_log else "idle"),
+        _progress_cell("retries", str(len(retry_history[-3:])), status="retry" if retry_history else "idle"),
+        _progress_cell("operator notes", str(len(notes[-3:])), status="info" if notes else "idle"),
+    ]
+    detail_lines = []
+    focus_lines = _watch_focus_lines(state)
+    if focus_lines:
+        detail_lines.append("Focused inspection:")
+        detail_lines.extend(focus_lines)
+    if progress_log:
+        detail_lines.append("Recent progress:")
         for entry in progress_log[-10:]:
             ts = str(entry.get("timestamp") or entry.get("at") or "").strip()
             ts_short = ts[11:19] if len(ts) > 10 else ts
             phase = str(entry.get("phase") or "poll").strip()
             note = str(entry.get("note") or entry.get("summary") or entry.get("content") or "").strip()
             elapsed = _elapsed_seconds(entry.get("created_at"))
-            icon = "✅" if entry.get("ok") else "⚠️" if entry.get("warning") else "•"
-            suffix = f"  [dim]{_format_elapsed_compact(elapsed)} ago[/]" if elapsed is not None else ""
-            table.add_row(ts_short, f"[dim]{phase}[/]", f"{icon} {note[:100]}{suffix}")
+            suffix = f" ({_format_elapsed_compact(elapsed)} ago)" if elapsed is not None else ""
+            entry_status = "complete" if entry.get("ok") else "warn" if entry.get("warning") else "active"
+            detail_lines.append(f"{ts_short}  {_status_cell(entry_status, detail=phase)}  {note[:100]}{suffix}")
+    if retry_history:
+        detail_lines.append("Retry checkpoints:")
         for entry in retry_history[-3:]:
             ts = str(entry.get("at") or entry.get("timestamp") or "").strip()
             ts_short = ts[11:19] if len(ts) > 10 else ts
             reason = str(entry.get("reason") or entry.get("error") or "").strip()
             delay = entry.get("delay_seconds")
             delay_text = f" · backoff {_format_elapsed_compact(delay)}" if delay else ""
-            table.add_row(ts_short, "[red]retry[/]", f"🔄 {reason[:100]}{delay_text}")
+            detail_lines.append(f"{ts_short}  {_status_cell('retry')}  {reason[:100]}{delay_text}")
+    if notes:
+        detail_lines.append("Operator notes:")
         for note_entry in notes[-3:]:
             ts = str(note_entry.get("created_at") or "").strip()
             ts_short = ts[11:19] if len(ts) > 10 else ts
             reason = str(note_entry.get("reason") or "").strip()
-            table.add_row(ts_short, "[yellow]note[/]", f"📝 {reason[:100]}")
-        _RICH_CONSOLE.print(table)
-    else:
-        for entry in (progress_log[-10:] + retry_history[-3:] + notes[-3:]):
-            ts = str(entry.get("timestamp") or entry.get("at") or entry.get("created_at") or "").strip()
-            label = str(entry.get("phase") or entry.get("action") or "").strip()
-            text = str(entry.get("note") or entry.get("summary") or entry.get("reason") or "").strip()
-            suffix = ""
-            if entry in retry_history[-3:] and entry.get("delay_seconds"):
-                suffix = f" (backoff {_format_elapsed_compact(entry.get('delay_seconds'))})"
-            print(f"  [{ts}] {label}: {text[:100]}{suffix}")
+            detail_lines.append(f"{ts_short}  {_status_cell('info', detail='operator-note')}  {reason[:100]}")
+    _print_dashboard_surface(
+        "Watch History",
+        summary_lines=summary_lines,
+        detail_lines=detail_lines,
+        action_lines=[
+            "/watch status to return to the live control tower",
+            "/watch intervene <msg> to annotate the next checkpoint",
+        ],
+        border_style="dim",
+    )
 
 
 def _cmd_watch(ctx: ChatCommandContext) -> str:
@@ -6142,6 +6415,16 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         print(f"  {_e('📄', '[promoted]')} {src.name} → {_BCY}{dst}{_R}")
         return _CMD_CONTINUE
     if wants_overlay or (_interactive_overlays_enabled() and not token):
+        output_previews: dict[str, dict[str, Any] | None] = {}
+        for item in outputs[: min(len(outputs), OUTPUT_LIST_LIMIT)]:
+            name = str(item.get("name") or "").strip()
+            if name:
+                output_previews[name] = load_saved_output_preview(
+                    session.session_id,
+                    name,
+                    max_chars=OUTPUT_OVERLAY_EXCERPT_CHARS,
+                )
+
         def _preview_output(item: dict[str, Any]) -> None:
             preview = load_saved_output_preview(
                 session.session_id,
@@ -6169,7 +6452,8 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
             label_fn=lambda item: (
                 f"{str(item.get('name') or '').strip()}  "
                 f"{_format_byte_count(int(item.get('size_bytes') or 0))}  "
-                f"{str(item.get('modified_at') or '').strip()}".strip()
+                f"{str(item.get('modified_at') or '').strip()}  "
+                f"{_single_line_excerpt(str((output_previews.get(str(item.get('name') or '').strip()) or {}).get('preview') or ''), max_chars=70)}".strip()
             ),
             on_select=_preview_output,
             initial_query=overlay_query,
@@ -6184,6 +6468,47 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
         if wants_overlay and overlay_result in {"fallback", "empty"}:
             token = ""
     if not token:
+        newest = outputs[0]
+        newest_preview = load_saved_output_preview(
+            session.session_id,
+            str(newest.get("name") or "").strip(),
+            max_chars=OUTPUT_DASHBOARD_EXCERPT_CHARS,
+        )
+        summary_lines = [
+            _progress_cell("shown", str(len(outputs)), status="active"),
+            _progress_cell("recent", str(newest.get("name") or "—"), status="complete"),
+            _progress_cell("freshness", "freshest first", status="info"),
+        ]
+        detail_lines = []
+        if newest_preview:
+            detail_lines.append(
+                f"focused preview: {str(newest_preview.get('name') or '').strip()} · "
+                f"{_format_byte_count(int(newest_preview.get('size_bytes') or 0))}"
+            )
+            detail_lines.extend(
+                _preview_block_lines(
+                    "excerpt",
+                    str(newest_preview.get("preview") or ""),
+                    max_chars=OUTPUT_DASHBOARD_EXCERPT_CHARS,
+                )
+            )
+        for index, item in enumerate(outputs[:3], start=1):
+            name = str(item.get("name") or "").strip()
+            size = _format_byte_count(int(item.get("size_bytes") or 0))
+            modified_at = str(item.get("modified_at") or "").strip()
+            suffix = f" · {modified_at}" if modified_at else ""
+            detail_lines.append(f"{index}. {name} ({size}{suffix})")
+        action_lines = [
+            "/outputs 1 to preview the newest artifact",
+            "/outputs promote <index> <name> to pin a stable filename",
+        ]
+        _print_dashboard_surface(
+            "Outputs Dashboard",
+            summary_lines=summary_lines,
+            detail_lines=detail_lines,
+            action_lines=action_lines,
+            border_style="dim",
+        )
         if _RICH_AVAILABLE and _IS_TTY:
             table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan",
                                caption=f"[dim]{len(outputs)} output(s)[/]")
@@ -6499,6 +6824,75 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _progress_bar(current: int, total: int, width: int = 30, label: str = "") -> str:
+    """Return a colored ANSI progress bar string."""
+    if total <= 0:
+        return ""
+    pct = min(current / total, 1.0)
+    filled = int(width * pct)
+    empty = width - filled
+
+    if pct < 0.33:
+        color = _RE
+    elif pct < 0.66:
+        color = _YE
+    else:
+        color = _GR
+
+    bar = f"{color}{'█' * filled}{_DM}{'░' * empty}{_R}"
+    pct_str = f"{int(pct * 100):>3}%"
+    if label:
+        return f"  {bar} {_B}{pct_str}{_R}  {_DM}{label}{_R}"
+    return f"  {bar} {_B}{pct_str}{_R}"
+
+
+def _exec_progress_animate(proc: Any, label: str = "") -> tuple:
+    """Animate an indeterminate progress bar while proc runs. Returns (stdout, stderr, returncode)."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty or _a11y_reduced_motion() or _a11y_plain_mode():
+        stdout, stderr = proc.communicate()
+        return stdout, stderr, proc.returncode
+
+    width = 30
+    frames = []
+    for pos in list(range(0, width - 8)) + list(range(width - 8, 0, -1)):
+        bar = "░" * pos + "█████████" + "░" * (width - pos - 9)
+        bar = bar[:width]
+        frames.append(bar)
+
+    frame_idx = 0
+    import threading
+    done = threading.Event()
+    stdout_buf: list[bytes] = []
+    stderr_buf: list[bytes] = []
+    rc_buf: list[int] = []
+
+    def _run() -> None:
+        o, e = proc.communicate()
+        stdout_buf.append(o)
+        stderr_buf.append(e)
+        rc_buf.append(proc.returncode)
+        done.set()
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    start = time.time()
+    while not done.is_set():
+        elapsed = time.time() - start
+        frame = frames[frame_idx % len(frames)]
+        elapsed_str = f"{elapsed:.1f}s"
+        sys.stdout.write(f"\r  {_CY}{frame}{_R}  {_DM}{elapsed_str}  {label}{_R}")
+        sys.stdout.flush()
+        frame_idx += 1
+        done.wait(0.08)
+
+    sys.stdout.write(f"\r{' ' * 60}\r")
+    sys.stdout.flush()
+
+    return stdout_buf[0] if stdout_buf else b"", stderr_buf[0] if stderr_buf else b"", rc_buf[0] if rc_buf else -1
+
+
 def _cmd_exec(ctx: ChatCommandContext) -> str:
     """/exec [--] <command> — run a shell command with session tracking and approval."""
     raw = ctx.args.strip()
@@ -6567,8 +6961,29 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
     ):
         return _CMD_CONTINUE
     exec_started = time.monotonic()
+    _exec_cwd = session.cwd or None
+    _use_animation = (_IS_TTY or sys.stdout.isatty()) and not _a11y_reduced_motion() and not _a11y_plain_mode()
     try:
-        result = run_async(run_shell_command(command_parts, cwd=session.cwd or None, timeout=60))
+        if _use_animation:
+            import subprocess as _sp
+            _proc = _sp.Popen(
+                command_parts,
+                cwd=_exec_cwd,
+                stdout=_sp.PIPE,
+                stderr=_sp.PIPE,
+            )
+            _raw_stdout, _raw_stderr, _rc = _exec_progress_animate(_proc, label=raw[:50])
+            from openclaw_cli_actions import ShellCommandResult, normalize_cwd
+            result = ShellCommandResult(
+                command=shlex.join(command_parts),
+                cwd=str(normalize_cwd(_exec_cwd)),
+                returncode=_rc,
+                stdout=_raw_stdout.decode(errors="replace"),
+                stderr=_raw_stderr.decode(errors="replace"),
+                timed_out=False,
+            )
+        else:
+            result = run_async(run_shell_command(command_parts, cwd=_exec_cwd, timeout=60))
     except Exception as exc:
         _print_error(str(exc))
         _set_command_result(ctx, ok=False, summary=str(exc))
@@ -7130,14 +7545,17 @@ def _cmd_template(ctx: ChatCommandContext) -> str:
 def _session_badges(s: "SessionSummary") -> str:
     """Build a compact badge string for a session summary row."""
     parts: list[str] = []
-    if s.status == "active":
-        parts.append("●")
-    else:
-        parts.append("○")
+    parts.append(_status_cell(s.status or "active", rich=_RICH_AVAILABLE and _IS_TTY))
+    if s.automation_mode:
+        parts.append(_progress_cell("auto", s.automation_mode, status=s.automation_status or "active", rich=_RICH_AVAILABLE and _IS_TTY))
     if _session_is_stale(s):
-        parts.append("stale")
+        parts.append(_status_cell("stale", rich=_RICH_AVAILABLE and _IS_TTY))
+    elif s.updated_at:
+        parts.append(_status_cell("info", detail="fresh", rich=_RICH_AVAILABLE and _IS_TTY))
     if (s.output_count or 0) > 0:
-        parts.append("outputs")
+        parts.append(_progress_cell("outputs", str(s.output_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY))
+    if (s.checkpoint_count or 0) > 0:
+        parts.append(_progress_cell("ckpt", str(s.checkpoint_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY))
     if getattr(s, "tags", []):
         parts.append(" ".join(f"#{t}" for t in s.tags[:3]))
     return "  ".join(parts)
@@ -7253,6 +7671,19 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             ),
             on_select=lambda s: (
                 _print_session_summary(s),
+                _print_dashboard_surface(
+                    "Focused Session Preview",
+                    summary_lines=[
+                        _progress_cell("session", s.session_id[:8] + "…", status=s.status or "active"),
+                        _progress_cell("resume", "ready", status="info"),
+                    ],
+                    detail_lines=_session_preview_lines(s),
+                    action_lines=[
+                        f"openclaw --session {s.session_id}",
+                        f"openclaw session share {s.session_id}",
+                    ],
+                    border_style="cyan",
+                ),
                 _print_meta_footer(("resume", f"openclaw --session {s.session_id}")),
             ),
             initial_query=overlay_query or query,
@@ -7266,6 +7697,27 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
 
     title_str = "Recent sessions" + (f" matching '{query}'" if query else "")
+    fresh_count = sum(1 for s in sessions if not _session_is_stale(s))
+    active_count = sum(1 for s in sessions if _status_family(s.status or "active") in {"active", "complete", "retry", "waiting"})
+    _print_dashboard_surface(
+        "Session Browser",
+        summary_lines=[
+            _progress_cell("shown", str(len(sessions)), status="active"),
+            _progress_cell("fresh", str(fresh_count), status="info" if fresh_count else "idle"),
+            _progress_cell("active-ish", str(active_count), status="active" if active_count else "idle"),
+        ],
+        detail_lines=[
+            f"query: {query}" if query else "query: recent sessions",
+            f"top session: {sessions[0].title or sessions[0].session_id}",
+            *_session_preview_lines(sessions[0]),
+        ],
+        action_lines=[
+            "/sessions open <id> to get resume instructions",
+            "/sessions overlay to inspect one session without leaving the browser",
+            "/session after resuming to inspect the focused dashboard",
+        ],
+        border_style="dim",
+    )
     if _RICH_AVAILABLE and is_tty:
         tbl = _RichTable(title=title_str, show_header=True, header_style="bold", box=None, pad_edge=False)
         tbl.add_column("ID", style="cyan", no_wrap=True, min_width=10)
@@ -7710,6 +8162,31 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _print_macro_progress(steps: list, current_idx: int, done_indices: set) -> None:
+    """Print a live macro step progress tracker."""
+    if _a11y_plain_mode():
+        return
+    total = len(steps)
+    print()
+    for i, step in enumerate(steps):
+        step_str = str(step)[:50]
+        if i in done_indices:
+            marker = f"{_GR}✓{_R}"
+            style = _DM
+            end_style = _R
+        elif i == current_idx:
+            marker = f"{_CY}▸{_R}"
+            style = _B
+            end_style = _R
+        else:
+            marker = " "
+            style = _DM
+            end_style = _R
+        num = f"Step {i+1}/{total}:"
+        print(f"  {marker} {style}{num} {step_str}{end_style}")
+    print()
+
+
 def _macro_run(ctx: ChatCommandContext, name: str) -> str:
     """Execute a named macro's commands in sequence."""
     macros = _PREFS.get("macros", {})
@@ -7728,11 +8205,9 @@ def _macro_run(ctx: ChatCommandContext, name: str) -> str:
         print(f"▶ Running macro '{name}' ({len(commands)} commands)")
 
     registry = build_chat_command_registry()
-    for i, cmd in enumerate(commands, 1):
-        if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[dim]  [{i}/{len(commands)}] {cmd}[/]")
-        else:
-            print(f"  [{i}/{len(commands)}] {cmd}")
+    done_set: set = set()
+    for i, cmd in enumerate(commands):
+        _print_macro_progress(commands, i, done_set)
 
         if cmd.startswith("/"):
             parts = cmd[1:].split(None, 1)
@@ -7753,6 +8228,8 @@ def _macro_run(ctx: ChatCommandContext, name: str) -> str:
                 _RICH_CONSOLE.print(f"[dim yellow]  ⚠ Skipped (natural language — run manually): {cmd}[/]")
             else:
                 print(f"  ⚠ Skipped (natural language): {cmd}")
+
+        done_set.add(i)
 
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print(f"[green]✓ Macro '{name}' complete[/]")
@@ -8370,10 +8847,20 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         handler=_cmd_macro,
     ))
     registry.register(SlashCommand(
+        name="macrostatus",
+        description="Show saved macros with step counts (/macrostatus)",
+        handler=_cmd_macrostatus,
+    ))
+    registry.register(SlashCommand(
         name="rate",
         description="Rate the last AI response (/rate [good|ok|bad|meh|1-5])",
         handler=_cmd_rate,
         aliases=("feedback",),
+    ))
+    registry.register(SlashCommand(
+        name="celebrate",
+        description="Trigger a celebration animation (/celebrate [message])",
+        handler=_cmd_celebrate,
     ))
     registry.register(SlashCommand(
         name="quality",
@@ -9226,6 +9713,50 @@ def _cmd_macro(ctx: "ChatCommandContext") -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_macrostatus(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
+    """/macrostatus — show saved macros with step counts."""
+    macros = _PREFS.get("macros", {})
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not macros:
+        msg = "No macros saved. Use /macro save <name> to create one."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table as _RichTableLocal
+        from rich.box import SIMPLE as _RICH_BOX_SIMPLE
+        tbl = _RichTableLocal(box=_RICH_BOX_SIMPLE, show_header=True, header_style="bold cyan")
+        tbl.add_column("Macro", style="bold green")
+        tbl.add_column("Steps", justify="right")
+        tbl.add_column("Preview", style="dim")
+        for name, steps in macros.items():
+            if isinstance(steps, list):
+                count = str(len(steps))
+                preview = str(steps[0])[:40] if steps else ""
+            else:
+                count = "1"
+                preview = str(steps)[:40]
+            tbl.add_row(name, count, preview)
+        _RICH_CONSOLE.print("\n[bold cyan]📋 Saved Macros[/]\n")
+        _RICH_CONSOLE.print(tbl)
+    else:
+        print("\n📋 Saved Macros")
+        print(f"{'Name':<20} {'Steps':>6}  Preview")
+        print("─" * 55)
+        for name, steps in macros.items():
+            if isinstance(steps, list):
+                count = len(steps)
+                preview = str(steps[0])[:30] if steps else ""
+            else:
+                count = 1
+                preview = str(steps)[:30]
+            print(f"  {name:<18} {count:>6}  {preview}")
+    return _CMD_CONTINUE
+
+
 def _cmd_history(ctx: "ChatCommandContext") -> str:
     """Show or clear recent command history."""
     args = (ctx.args or "").strip()
@@ -9403,6 +9934,54 @@ def _cmd_pins(ctx: "ChatCommandContext") -> str:
     return _cmd_pin(ctx)
 
 
+def _celebration_burst(message: str = "") -> None:
+    """Print a short animated celebration burst (confetti + message)."""
+    import random
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty or _a11y_reduced_motion() or _a11y_plain_mode():
+        if message:
+            print(f"🎉 {message}")
+        return
+
+    confetti_chars = ["✦", "✧", "★", "◆", "◇", "❋", "✿", "❀", "🎊", "🎉", "⭐", "💫"]
+    colors = [_RE, _YE, _GR, _CY, _MA, _BBL]
+
+    width = 60
+
+    for frame in range(3):
+        line1 = ""
+        line2 = ""
+        for _ in range(width // 3):
+            char = random.choice(confetti_chars)
+            color = random.choice(colors)
+            line1 += f"{color}{char}{_R} "
+        for _ in range(width // 3):
+            char = random.choice(confetti_chars)
+            color = random.choice(colors)
+            line2 += f"{color}{char}{_R} "
+        sys.stdout.write(f"\r  {line1}\n  {line2}\n")
+        sys.stdout.flush()
+        time.sleep(0.15)
+        sys.stdout.write("\033[2A")
+        sys.stdout.flush()
+
+    sys.stdout.write(f"\r{' ' * 80}\n{' ' * 80}\n")
+    sys.stdout.write("\033[2A")
+
+    stars = "⭐" * 5
+    if _RICH_AVAILABLE:
+        _RICH_CONSOLE.print(f"\n  [bold yellow]{stars}  {message or 'Perfect rating!'}  {stars}[/]\n")
+    else:
+        print(f"\n  {_BYE}{stars}  {message or 'Perfect rating!'}  {stars}{_R}\n")
+
+
+def _cmd_celebrate(ctx: "ChatCommandContext") -> str:
+    """/celebrate — trigger a celebration animation (just for fun!)."""
+    msg = ctx.args.strip() or "Woohoo! 🎉"
+    _celebration_burst(msg)
+    return _CMD_CONTINUE
+
+
 def _cmd_rate(ctx: "ChatCommandContext") -> str:
     """Rate the last AI response (/rate [good|ok|bad|meh|1-5])."""
     global _last_response_text
@@ -9460,6 +10039,8 @@ def _cmd_rate(ctx: "ChatCommandContext") -> str:
     else:
         color = _DM
     print(f"{color}{msg}{_R}")
+    if score == 5:
+        _celebration_burst("5-star rating — thanks! 🎉")
     return _CMD_CONTINUE
 
 
