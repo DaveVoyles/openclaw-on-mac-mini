@@ -10917,7 +10917,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     cols = _terminal_width()
 
     # Plain-mode path: no ANSI, no emoji, no decorative borders.
-    if _a11y_plain_mode() or cols < 72:
+    if _a11y_plain_mode() or cols < 40:
         autoroute_str = "on" if autoroute_on else "off"
         print(f"🦞 OpenClaw {ver}")
         print(f"Server: {config.base_url}")
