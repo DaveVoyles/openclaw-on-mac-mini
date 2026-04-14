@@ -333,6 +333,24 @@ def load_events(session_id: str, *, limit: int | None = None) -> list[dict[str, 
     return events
 
 
+_DECISION_KINDS = {"route", "plan", "approval", "checkpoint", "exec", "edit"}
+
+
+def get_last_decision_event(session_id: str) -> dict[str, Any] | None:
+    """Return the most recent decision event for a session.
+
+    A decision event is any event whose ``kind`` is one of: ``route``,
+    ``plan``, ``approval``, ``checkpoint``, ``exec``, or ``edit``.  This is
+    used by the ``/why`` command to explain what the CLI last decided to do.
+
+    Returns ``None`` when no matching event exists.
+    """
+    for event in reversed(load_events(session_id)):
+        if str(event.get("kind") or "").strip().lower() in _DECISION_KINDS:
+            return event
+    return None
+
+
 def load_conversation_history(session_id: str, *, limit_turns: int = 10) -> list[dict[str, str]]:
     """Rebuild ask/chat history from recorded session events."""
     history: list[dict[str, str]] = []
@@ -353,8 +371,21 @@ def load_conversation_history(session_id: str, *, limit_turns: int = 10) -> list
     return history[-(limit_turns * 2) :]
 
 
-def save_output(session_id: str, name: str, content: str) -> Path:
-    """Persist a text output artifact beneath the session directory."""
+def save_output(
+    session_id: str,
+    name: str,
+    content: str,
+    *,
+    command: str = "",
+    model: str = "",
+) -> Path:
+    """Persist a text output artifact beneath the session directory.
+
+    Optional keyword arguments ``command`` and ``model`` are recorded in a
+    companion ``.provenance.json`` sidecar file written alongside the output
+    file.  If writing the sidecar fails for any reason, the failure is
+    silently ignored so that ``save_output`` always succeeds.
+    """
     summary = require_session(session_id)
     outputs_dir = _outputs_dir(session_id)
     outputs_dir.mkdir(parents=True, exist_ok=True)
@@ -367,10 +398,36 @@ def save_output(session_id: str, name: str, content: str) -> Path:
         target = outputs_dir / f"{stem}-{index}{suffix}"
         index += 1
     atomic_write(target, str(content or ""))
+    try:
+        provenance = {
+            "session_id": session_id,
+            "name": original_name,
+            "command": str(command or ""),
+            "model": str(model or ""),
+            "saved_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        sidecar = target.with_suffix(".provenance.json")
+        atomic_write(sidecar, json.dumps(provenance, indent=2, sort_keys=True))
+    except Exception:  # noqa: BLE001
+        pass
     summary.output_count += 1
     summary.last_summary = f"saved output {target.name}"
     save_session(summary)
     return target
+
+
+def load_output_provenance(session_id: str, output_path: Path) -> dict[str, Any]:
+    """Read and return the provenance sidecar for a saved output file.
+
+    Returns an empty dict when the sidecar is missing, unreadable, or
+    contains invalid JSON.  ``session_id`` is accepted for API consistency
+    but the sidecar is located solely from ``output_path``.
+    """
+    try:
+        sidecar = Path(output_path).with_suffix(".provenance.json")
+        return dict(json.loads(sidecar.read_text(encoding="utf-8")))
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def list_saved_outputs(session_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
@@ -381,6 +438,8 @@ def list_saved_outputs(session_id: str, *, limit: int = 20) -> list[dict[str, An
         for path in outputs_dir.iterdir():
             if not path.is_file():
                 continue
+            if path.name.endswith(".provenance.json"):
+                continue  # skip sidecar files
             try:
                 stat = path.stat()
             except OSError:

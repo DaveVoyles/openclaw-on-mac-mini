@@ -3849,7 +3849,17 @@ def _session_auto_route_enabled(session_id: str) -> bool:
     return bool(getattr(session, "repl_auto_route", True))
 
 
+def _confidence_badge(confidence: float) -> str:
+    """Return a color-coded ANSI badge string for the given confidence value."""
+    if confidence >= 0.80:
+        return f"{_BGR}[HIGH]{_R}"
+    if confidence >= 0.50:
+        return f"{_YE}[MED]{_R}"
+    return f"{_RE}[LOW]{_R}"
+
+
 def _format_route_announcement(decision: ReplRouteDecision) -> str:
+    badge = _confidence_badge(decision.confidence)
     if decision.kind == ReplRouteKind.PLAN:
         step_summary = " → ".join(f"{step.index}:{step.kind.value}" for step in decision.steps)
         preview = _truncate_repl_route_text(step_summary, limit=REPL_ROUTE_ANNOUNCEMENT_COMMAND_LIMIT)
@@ -3859,7 +3869,7 @@ def _format_route_announcement(decision: ReplRouteDecision) -> str:
         )
         return (
             f"{_BYE}⚡ plan{_R} {_YE}{len(decision.steps)} steps ({preview}){_R}  "
-            f"{_DM}confidence {decision.confidence:.2f} · {rationale}{_R}"
+            f"{badge} {_DM}{decision.confidence:.2f} · {rationale}{_R}"
         )
     slash_command = _truncate_repl_route_text(
         decision.to_slash_command(),
@@ -3871,7 +3881,7 @@ def _format_route_announcement(decision: ReplRouteDecision) -> str:
     )
     return (
         f"{_BYE}⚡ auto-route{_R} {_CY}→ {slash_command}{_R}  "
-        f"{_DM}confidence {decision.confidence:.2f} · {rationale}{_R}"
+        f"{badge} {_DM}{decision.confidence:.2f} · {rationale}{_R}"
     )
 
 
@@ -4869,28 +4879,58 @@ def _cmd_task(ctx: ChatCommandContext) -> str:
 
 
 def _cmd_events(ctx: ChatCommandContext) -> str:
-    """/events [n] — show the last n events for this session (default 5)."""
+    """/events [n|decisions [n]] — show the last n events; 'decisions' filters to routing/decision kinds."""
     session = _require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
-    try:
-        n = int(ctx.args.strip()) if ctx.args.strip() else 5
-    except ValueError:
-        _print_error("Usage: /events [n]")
-        return _CMD_CONTINUE
-    events = load_events(ctx.session_id, limit=n)
+
+    _DECISION_KINDS = {"route", "plan", "approval", "checkpoint", "exec", "edit"}
+
+    args = ctx.args.strip()
+    decisions_only = False
+    n = 5
+
+    if args.startswith("decisions"):
+        decisions_only = True
+        remainder = args[len("decisions"):].strip()
+        if remainder:
+            try:
+                n = int(remainder)
+            except ValueError:
+                _print_error("Usage: /events decisions [n]")
+                return _CMD_CONTINUE
+    elif args:
+        try:
+            n = int(args)
+        except ValueError:
+            _print_error("Usage: /events [n|decisions [n]]")
+            return _CMD_CONTINUE
+
+    # Load more events when filtering so we have enough after the filter
+    load_limit = n * 10 if decisions_only else n
+    events = load_events(ctx.session_id, limit=load_limit)
+
+    if decisions_only:
+        events = [ev for ev in events if str(ev.get("kind") or "").strip() in _DECISION_KINDS]
+        events = events[:n]
+
     if not events:
         if _RICH_AVAILABLE and _IS_TTY:
-            _RICH_CONSOLE.print(f"[dim]No events recorded yet.[/]  [dim]Events appear after /analyze, /write, /exec, /edit, or chat turns.[/]")
+            _RICH_CONSOLE.print("[dim]No events recorded yet.[/]  [dim]Events appear after /analyze, /write, /exec, /edit, or chat turns.[/]")
         else:
             print("No events recorded yet. Events appear after /analyze, /write, /exec, /edit, or chat turns.")
         return _CMD_CONTINUE
+
     _KIND_COLORS = {
         "chat": "dim", "prompt": "white", "analyze": "cyan", "research": "blue",
         "write": "yellow", "exec": "bold yellow", "assistant": "green",
         "edit": "magenta", "error": "red", "watch": "cyan",
+        "route": "bold cyan", "plan": "bold blue", "approval": "bold yellow",
+        "checkpoint": "bold green", "exec": "bold yellow",
     }
     if _RICH_AVAILABLE and _IS_TTY:
+        if decisions_only:
+            _RICH_CONSOLE.print("[dim]Decision-only view — routing, approval, exec, edit events[/]")
         table = _RichTable(border_style="dim", show_edge=True, pad_edge=True, header_style="bold cyan")
         table.add_column("Time", style="dim", no_wrap=True)
         table.add_column("Kind", no_wrap=True)
@@ -4907,6 +4947,8 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
             table.add_row(ts_short, f"[{color}]{kind}[/]", label)
         _RICH_CONSOLE.print(table)
     else:
+        if decisions_only:
+            print("Decision-only view — routing, approval, exec, edit events")
         for ev in events:
             ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
             kind = str(ev.get("kind") or "").strip()
@@ -4915,6 +4957,89 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
             content = str(ev.get("content") or "").strip()
             label = summary or content[:100]
             print(f"[{ts}] {kind}: {label}")
+    return _CMD_CONTINUE
+
+
+def _cmd_why(ctx: ChatCommandContext) -> str:
+    """/why — explain the last routing or tool decision from session history."""
+    session = _require_session_or_warn(ctx)
+    if session is None:
+        return _CMD_CONTINUE
+
+    _DECISION_KINDS = {"route", "exec", "edit", "analyze", "research", "write", "plan"}
+    events = load_events(ctx.session_id, limit=50)
+    last_ev = None
+    for ev in reversed(events):
+        if str(ev.get("kind") or "").strip() in _DECISION_KINDS:
+            last_ev = ev
+            break
+
+    if last_ev is None:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[dim]No routing decisions recorded yet. Try a prompt that triggers auto-routing.[/]")
+        else:
+            print("No routing decisions recorded yet. Try a prompt that triggers auto-routing.")
+        return _CMD_CONTINUE
+
+    kind = str(last_ev.get("kind") or "").strip()
+    meta = last_ev.get("metadata") or {}
+    if not isinstance(meta, dict):
+        meta = {}
+    content = str(last_ev.get("content") or "").strip()
+    ts = str(last_ev.get("timestamp") or last_ev.get("at") or last_ev.get("created_at") or "").strip()
+
+    slash_cmd = meta.get("slash_command") or ""
+    rationale = meta.get("rationale") or content[:200] or "(no rationale recorded)"
+    target_text = meta.get("target_text") or ""
+    args_text = meta.get("args_text") or ""
+
+    raw_conf = meta.get("confidence")
+    try:
+        confidence = float(raw_conf) if raw_conf is not None else None
+    except (ValueError, TypeError):
+        confidence = None
+
+    if confidence is not None and confidence >= 0.80:
+        conf_label = f"{confidence:.2f} (HIGH)"
+        conf_color = "green"
+        border_style = "green"
+    elif confidence is not None and confidence >= 0.50:
+        conf_label = f"{confidence:.2f} (MEDIUM)"
+        conf_color = "yellow"
+        border_style = "yellow"
+    elif confidence is not None:
+        conf_label = f"{confidence:.2f} (LOW)"
+        conf_color = "red"
+        border_style = "red"
+    else:
+        conf_label = "(unknown)"
+        conf_color = "dim"
+        border_style = "dim"
+
+    what_happened = f"{kind}" + (f" → /{slash_cmd}" if slash_cmd else (f" — {content[:60]}" if content else ""))
+
+    if _RICH_AVAILABLE and _IS_TTY:
+        grid = _RichTable.grid(padding=(0, 1))
+        grid.add_column(style="bold cyan", no_wrap=True)
+        grid.add_column()
+        grid.add_row("What happened:", what_happened)
+        grid.add_row("Why:", rationale[:300])
+        grid.add_row("Confidence:", f"[{conf_color}]{conf_label}[/]")
+        if target_text:
+            grid.add_row("Target:", str(target_text)[:120])
+        if args_text:
+            grid.add_row("Args:", str(args_text)[:120])
+        grid.add_row("When:", ts)
+        _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Last Decision[/]", border_style=border_style, padding=(0, 1)))
+    else:
+        print(f"  What happened: {what_happened}")
+        print(f"  Why:           {rationale[:300]}")
+        print(f"  Confidence:    {conf_label}")
+        if target_text:
+            print(f"  Target:        {str(target_text)[:120]}")
+        if args_text:
+            print(f"  Args:          {str(args_text)[:120]}")
+        print(f"  When:          {ts}")
     return _CMD_CONTINUE
 
 
@@ -6258,8 +6383,15 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(
         SlashCommand(
             name="events",
-            description="Show recent session events (/events [n])",
+            description="Show recent session events (/events [n|decisions])",
             handler=_cmd_events,
+        )
+    )
+    registry.register(
+        SlashCommand(
+            name="why",
+            description="Explain the last routing or tool decision",
+            handler=_cmd_why,
         )
     )
     registry.register(
@@ -6395,7 +6527,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/task [<id>|unlink]",            "Show or link a task"),
         ("/outputs [promote <i> <name>]",  "List, preview, or promote saved session outputs"),
         ("/rollback [last|list]",          "Restore latest checkpoint or list all checkpoints"),
-        ("/events [n]",                    "Show last n session events (default 5)"),
+        ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
+        ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
         ("/autoroute [on|off]",            "Show or toggle high-confidence REPL auto-routing"),
         ("/analyze <goal>",                "Analyze the session workspace"),
         ("/research <query>",              "Run the research agent on a query"),
@@ -6926,6 +7059,10 @@ def run_chat(
                     return 0
                 if routed == _CMD_CONTINUE:
                     continue
+            # Prompt was classified but confidence was too low — show a brief hint.
+            if route_decision.kind == ReplRouteKind.CHAT and session_id:
+                _hint_rationale = (route_decision.rationale or "")[:80]
+                print(f"  {_DM}↳ stayed in chat — confidence below threshold · {_hint_rationale}{_R}")
 
         try:
             _t0 = time.monotonic()

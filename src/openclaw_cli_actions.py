@@ -209,6 +209,13 @@ def request_cli_approval(
     else:
         risk_colored = f"{_bold_yellow}{risk_val}{_reset}"
         prefix = "⚠️  "
+    if "HIGH" in risk_val or "CRITICAL" in risk_val:
+        _rationale_line = f"⚠️   High risk — this action modifies files or runs code that could have side effects"
+    elif "MEDIUM" in risk_val:
+        _rationale_line = f"⚡  Medium risk — review the command before approving"
+    else:
+        _rationale_line = f"✅  Low risk — limited scope, safe to approve"
+    print(f"  {_dim}{_rationale_line}{_reset}")
     prompt = (
         f"\n{prefix}{risk_colored} risk  {_dim}`{action}`{_reset}"
         f"  on  {_dim}`{target}`{_reset}"
