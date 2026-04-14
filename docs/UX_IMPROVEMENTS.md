@@ -121,10 +121,10 @@ For the canonical inventory and reusable checklist, see
 | [Wave 20](#wave-20--collaboration-handoff-ux) | Collaboration Handoff UX | ✅ Shipped |
 | [Wave 21](#wave-21--command-palette--tab-complete) | Command Palette & Tab-Complete | ✅ Shipped |
 | [Wave 22](#wave-22--animated-progress-bars--celebrations) | Animated Progress Bars & Celebrations | ✅ Shipped |
-| [Wave 23](#wave-23--visual-hierarchy-renaissance--dashboard-elevation) | Visual Hierarchy Renaissance & Dashboard Elevation | 🔲 Ready |
+| [Wave 23](#wave-23--visual-hierarchy-renaissance--dashboard-elevation) | Visual Hierarchy Renaissance & Dashboard Elevation | ✅ Shipped |
 | [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | 🟡 In progress |
 | [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | 🟡 In progress |
-| [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🔲 Ready |
+| [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🟡 In progress |
 | [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | 🔲 Ready |
 | [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | 🔲 Ready |
 | [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | 🔲 Ready |
@@ -1322,6 +1322,26 @@ The active implementation/docs lane currently covers:
 
 ---
 
+---
+
+## Wave 23 — ASCII Data Visualizations
+
+**Status:** ✅ Shipped
+
+### Features
+- **`/stats [category]`**: Horizontal ASCII bar charts (`█` blocks) for command frequency, rating distribution, and session counts by date. Supports `all`, `commands`, `ratings`, `sessions` categories. Top 10 results sorted by frequency.
+- **`/quality`**: 8-row tall vertical histogram with per-score color coding (red=1★ → magenta=5★). Shows `██`/`░░` blocks, per-score counts, and average rating summary.
+- **`/heatmap`**: 24-hour activity grid with color intensity (🔴 hot >75%, 🟡 warm >50%, 🟢 mild >25%, 🔵 cool). Shows peak hour and legend. Reads from timestamped `cmd_history` entries.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/stats [category]` | Usage bar charts (commands/ratings/sessions) |
+| `/quality` | Colored rating quality histogram |
+| `/heatmap` | Hourly activity heatmap |
+
+---
+
 ## Wave 23 — Visual Hierarchy Renaissance & Dashboard Elevation
 
 **Status:** 🟡 In progress (shipped slice)
@@ -1577,7 +1597,7 @@ canvas remains follow-up work.
 
 ## Wave 26 — Session Mood, Celebration & Emotional Feedback
 
-**Status: 🔲 Ready**
+**Status: 🟡 In progress**
 
 **Goal:** add tasteful emotional feedback so OpenClaw acknowledges progress,
 milestones, and session tone without turning status output into novelty chrome.
@@ -1592,7 +1612,25 @@ milestones, and session tone without turning status output into novelty chrome.
 | Collaboration-aware tone | Shared or handed-off sessions should reflect team context, not just single-user completion cues |
 | Accessibility-safe emotion | Emotional feedback must remain meaningful in plain mode, reduced motion, and low-emoji packs |
 
-### Scope for implementation
+### Current shipped slice
+
+Wave 26 is currently shipping as a **celebration + restraint** slice rather than
+the full mood-model roadmap:
+
+- **`_celebration_burst()`** is the live milestone-feedback primitive. It emits a
+  short confetti burst for interactive TTY sessions, but degrades to a single
+  `🎉 {message}` line when reduced motion or plain mode is active and stays quiet
+  when no message is supplied in non-interactive output.
+- **`/celebrate [message]`** is the explicit user-triggered celebration surface
+  for this wave.
+- **`/rate 5`** reuses the same celebration helper after printing the rating
+  confirmation, so celebratory feedback remains brief and opt-in through the
+  rating path.
+- **`/collab` / `openclaw session share`** remain neutral, pasteable handoff
+  summaries. The broader morale/momentum language for collaboration surfaces is
+  still deferred.
+
+### Remaining scope
 
 | Area | Planned work |
 |---|---|
@@ -1602,7 +1640,7 @@ milestones, and session tone without turning status output into novelty chrome.
 | Collaboration sentiment hints | Allow actor-aware notes and handoff summaries to reflect whether momentum is rising, stalled, or newly resolved |
 | Preference + fallback rules | Document how users can tone down or disable emotional feedback, and how cues degrade in ASCII/minimal/plain paths |
 
-### Implementation notes for the future wave
+### Implementation notes for the remaining wave
 
 - Mood cues must remain subordinate to objective state. A “celebration” badge can
   never obscure an error, blocker, or approval requirement.
@@ -1619,19 +1657,19 @@ milestones, and session tone without turning status output into novelty chrome.
 | Surface group | Wave 26 expectation |
 |---|---|
 | `/session`, `/sessions` | Mood and momentum cues appear in top-line summaries without displacing objective health and next-step state |
-| `/collab`, session share/export | Collaboration handoff summaries can express morale/momentum in neutral, pasteable language |
+| `/collab`, session share/export | The shipped slice keeps handoff summaries neutral and pasteable; richer morale/momentum wording is still deferred |
 | Completion/recap flows | Milestone and closure rituals remain brief, skippable, and documented with plain-text equivalents |
 | `/watch*`, `/events` | Emotional cues may annotate recoveries or successful completions but must not replace timing/risk detail |
 | Browser/dashboard mirrors | Shared monitoring views can reuse the same mood vocabulary and accessibility fallbacks for milestone cards or recaps |
 
 ### Done-when
 
-- [ ] A restrained mood/celebration vocabulary exists with explicit text
-      equivalents and disable/reduction rules.
+- [x] A restrained celebration primitive exists with explicit text equivalents
+      and reduction rules.
 - [ ] Session, recap, and collaboration surfaces can express momentum or
       milestones without obscuring core status.
-- [ ] Emotional feedback respects plain mode, reduced motion, and alternate emoji
-      packs.
+- [x] Emotional feedback respects plain mode and reduced motion for the shipped
+      celebration paths.
 - [ ] `docs/DASHBOARD_SURFACES.md` documents where mood cues are allowed and how
       they degrade.
 - [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated

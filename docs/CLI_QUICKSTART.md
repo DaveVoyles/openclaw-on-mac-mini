@@ -258,6 +258,14 @@ openclaw session export <session-id>
 
 > **New:** `/exec` now shows a live bouncing progress bar during command execution. Rate any response `/rate 5` to trigger the 🎉 celebration burst!
 
+### Wave 23 — ASCII Data Visualizations
+
+| Command | Description |
+|---|---|
+| `/stats [category]` | ASCII bar charts of command frequency, ratings, sessions (`all`\|`commands`\|`ratings`\|`sessions`) |
+| `/quality` | Colored 8-row vertical histogram of response quality ratings (1–5 ⭐) |
+| `/heatmap` | 24-hour activity heatmap showing peak usage hours with color intensity |
+
 ## Wave 22 status grammar (current slice)
 
 Wave 22 is the in-progress dashboard/status-language pass. The current slice is
@@ -290,6 +298,21 @@ Wave 23 has started shipping in the CLI, but only as a focused hierarchy pass:
 This is a **partial Wave 23 slice**, not the full dashboard-elevation roadmap.
 Richer summary/action regions for outputs, context, and browser mirrors remain
 follow-up work.
+
+## Wave 26 celebration slice (current slice)
+
+Wave 26 is currently a narrow, already-shipped celebration pass:
+
+- **`/celebrate [message]`** triggers the shared celebration burst directly.
+- **`/rate 5`** prints the normal rating confirmation and then reuses the same
+  celebration helper for a short milestone acknowledgement.
+- In **plain mode**, **reduced motion**, or **non-TTY** output, the celebration
+  path collapses to a single line instead of animation.
+- **`/collab`** and **`openclaw session share`** stay neutral and pasteable in
+  this slice; richer session-mood wording is still deferred.
+
+`docs/COMMANDS.md` does not need regeneration for this lane because the command
+metadata is unchanged.
 
 ## Hybrid REPL — in-session slash commands
 

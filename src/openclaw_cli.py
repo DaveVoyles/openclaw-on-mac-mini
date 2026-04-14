@@ -134,7 +134,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave23"  # updated with each UX wave batch
+_CLI_BUILD = "wave24"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -1804,6 +1804,12 @@ def bind_config_to_session(config: CliConfig, session_id: str) -> CliConfig:
 
 def summarize_session(session: SessionSummary) -> str:
     """Render a compact single-session summary for terminal output."""
+    try:
+        watch_state = load_watch_state(session.session_id)
+    except Exception:
+        watch_state = None
+    snapshot = build_collaboration_snapshot(session.session_id, limit=3)
+    mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
     parts = [
         f"session: {session.session_id}",
         f"title: {session.title}",
@@ -1814,6 +1820,9 @@ def summarize_session(session: SessionSummary) -> str:
         _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
         _progress_cell("outputs", str(session.output_count), status="complete" if session.output_count else "idle"),
     ]
+    mood_cell = _session_mood_cell(mood)
+    if mood_cell:
+        parts.append(mood_cell)
     if session.plan_id:
         parts.append(f"plan: {session.plan_id}")
     if session.task_id:
@@ -1825,24 +1834,20 @@ def summarize_session(session: SessionSummary) -> str:
     if session.automation_mode:
         status = session.automation_status or "active"
         parts.append(_progress_cell("automation", f"{session.automation_mode} ({status})", status=status))
-        try:
-            watch_state = load_watch_state(session.session_id)
-            if watch_state:
-                timing = _watch_timing_summary(watch_state)
-                timing_parts = []
-                if timing["active_phase"]:
-                    detail = f"{timing['active_phase']}"
-                    if timing["active_phase_elapsed"] is not None:
-                        detail += f" {_format_elapsed_compact(timing['active_phase_elapsed'])}"
-                    timing_parts.append(f"phase {detail}")
-                if timing["latest_duration"] is not None:
-                    timing_parts.append(f"last run {_format_elapsed_compact(timing['latest_duration'])}")
-                if timing["retry_delay_total"]:
-                    timing_parts.append(f"retry backoff {_format_elapsed_compact(timing['retry_delay_total'])}")
-                if timing_parts:
-                    parts.append("timing: " + " · ".join(timing_parts))
-        except Exception:
-            pass
+        if watch_state:
+            timing = _watch_timing_summary(watch_state)
+            timing_parts = []
+            if timing["active_phase"]:
+                detail = f"{timing['active_phase']}"
+                if timing["active_phase_elapsed"] is not None:
+                    detail += f" {_format_elapsed_compact(timing['active_phase_elapsed'])}"
+                timing_parts.append(f"phase {detail}")
+            if timing["latest_duration"] is not None:
+                timing_parts.append(f"last run {_format_elapsed_compact(timing['latest_duration'])}")
+            if timing["retry_delay_total"]:
+                timing_parts.append(f"retry backoff {_format_elapsed_compact(timing['retry_delay_total'])}")
+            if timing_parts:
+                parts.append("timing: " + " · ".join(timing_parts))
     if session.checkpoint_count:
         parts.append(_progress_cell("checkpoints", str(session.checkpoint_count), status="complete"))
     if session.last_checkpoint_at:
@@ -1857,6 +1862,8 @@ def _print_session_summary(session: SessionSummary) -> None:
         watch_state = load_watch_state(session.session_id)
     except Exception:
         watch_state = None
+    snapshot = build_collaboration_snapshot(session.session_id, limit=3)
+    mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
 
     summary_lines = [
         session.title,
@@ -1865,6 +1872,9 @@ def _print_session_summary(session: SessionSummary) -> None:
         _status_cell("stale" if _session_is_stale(session) else "info", detail="freshness"),
         _progress_cell("updated", session.updated_at or "—", status="info"),
     ]
+    mood_cell = _session_mood_cell(mood, rich=_RICH_AVAILABLE and _IS_TTY)
+    if mood_cell:
+        summary_lines.append(mood_cell)
     detail_lines = [
         _progress_cell("commands", str(session.command_count), status="active" if session.command_count else "idle"),
         _progress_cell("outputs", str(session.output_count), status="complete" if session.output_count else "idle"),
@@ -1943,14 +1953,17 @@ def _print_session_list(items: list[SessionSummary]) -> None:
         table.add_column("Updated", style="yellow", no_wrap=True)
         table.add_column("Cmds", justify="right", style="cyan")
         table.add_column("Outputs", justify="right", style="cyan")
+        table.add_column("Mood", style="dim")
         table.add_column("Mode", style="dim")
         for s in items:
+            mood = _session_mood_snapshot(s)
             table.add_row(
                 s.session_id,
                 s.title or "—",
                 s.updated_at or "—",
                 str(s.command_count),
                 str(s.output_count),
+                str(mood.get("label") or "—"),
                 s.automation_mode or "—",
             )
         _RICH_CONSOLE.print(table)
@@ -2008,8 +2021,102 @@ def _watch_focus_lines(state: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _session_mood_snapshot(
+    session: SessionSummary,
+    *,
+    watch_state: dict[str, Any] | None = None,
+    collaboration_snapshot: dict[str, Any] | None = None,
+) -> dict[str, str]:
+    """Derive a restrained mood/momentum cue from objective session state."""
+    try:
+        normalized_watch = normalize_watch_state(watch_state or {}) if watch_state else {}
+    except Exception:
+        normalized_watch = {}
+    snapshot = collaboration_snapshot or {}
+    actors = [item for item in list(snapshot.get("actors") or []) if isinstance(item, dict)]
+    decisions = [item for item in list(snapshot.get("recent_decisions") or []) if isinstance(item, dict)]
+    latest_handoff = snapshot.get("latest_handoff") or {}
+
+    outputs = int(session.output_count or 0)
+    checkpoints = int(session.checkpoint_count or 0)
+    commands = int(session.command_count or 0)
+    failures = int(normalized_watch.get("failure_count") or 0)
+    watch_status = str(normalized_watch.get("status") or "").strip().lower()
+    active_phase = str(_watch_timing_summary(normalized_watch).get("active_phase") or "").strip()
+    actor_count = len(actors)
+
+    if (
+        session.status in {"complete", "completed"}
+        or watch_status in {"complete", "completed"}
+        or (outputs > 0 and checkpoints > 0 and commands > 0)
+    ):
+        detail = "outputs ready to review" if outputs else "checkpoint captured cleanly"
+        if actor_count >= 2:
+            detail += f" · {actor_count} collaborators in the loop"
+        return {
+            "status": "complete",
+            "label": "milestone",
+            "detail": detail,
+            "headline": f"milestone: {detail}",
+            "share_line": f"momentum   : milestone reached; {detail}",
+        }
+
+    if watch_status == "retrying" or failures > 0:
+        detail = "recovering with checkpoints" if checkpoints else "retry loop staying engaged"
+        if active_phase:
+            detail += f" · phase {active_phase}"
+        return {
+            "status": "retry",
+            "label": "resilient",
+            "detail": detail,
+            "headline": f"mood: resilient recovery · {detail}",
+            "share_line": f"momentum   : resilient recovery; {detail}",
+        }
+
+    if actor_count >= 2 or decisions or latest_handoff:
+        detail = f"{max(actor_count, 1)} collaborators aligned" if actor_count else "handoff context is ready"
+        if decisions:
+            detail += f" · {len(decisions)} recent decision{'s' if len(decisions) != 1 else ''}"
+        return {
+            "status": "info",
+            "label": "shared",
+            "detail": detail,
+            "headline": f"mood: shared momentum · {detail}",
+            "share_line": f"momentum   : shared momentum; {detail}",
+        }
+
+    if commands >= 3 or outputs > 0 or checkpoints > 0:
+        detail = "signals are stacking up"
+        if outputs > 0:
+            detail = f"{outputs} output{'s' if outputs != 1 else ''} landed"
+        elif checkpoints > 0:
+            detail = f"{checkpoints} checkpoint{'s' if checkpoints != 1 else ''} recorded"
+        elif commands >= 3:
+            detail = f"{commands} command{'s' if commands != 1 else ''} into the flow"
+        return {
+            "status": "active",
+            "label": "steady",
+            "detail": detail,
+            "headline": f"mood: building momentum · {detail}",
+            "share_line": f"momentum   : building momentum; {detail}",
+        }
+
+    return {}
+
+
+def _session_mood_cell(snapshot: dict[str, str], *, rich: bool = False) -> str:
+    """Render a compact mood/momentum cell with text-first fallback."""
+    label = str(snapshot.get("label") or "").strip()
+    detail = str(snapshot.get("detail") or "").strip()
+    if not label:
+        return ""
+    value = label if not detail else f"{label} · {detail}"
+    return _progress_cell("mood", value, status=str(snapshot.get("status") or "info"), rich=rich)
+
+
 def _session_preview_lines(session: SessionSummary) -> list[str]:
     lines: list[str] = []
+    watch_state = None
     if session.last_summary:
         lines.append(f"latest activity: {_single_line_excerpt(session.last_summary, max_chars=100)}")
     if session.automation_mode:
@@ -2042,6 +2149,10 @@ def _session_preview_lines(session: SessionSummary) -> list[str]:
             lines.append(f"collab: {actor_names}")
     if decisions:
         lines.append(f"decision: {_single_line_excerpt(_format_collaboration_entry(decisions[0]), max_chars=100)}")
+    mood = _session_mood_snapshot(session, watch_state=watch_state, collaboration_snapshot=snapshot)
+    mood_cell = _session_mood_cell(mood)
+    if mood_cell:
+        lines.append(mood_cell)
     return lines[:4]
 
 
@@ -2054,6 +2165,11 @@ def _build_session_share_text(session_id: str) -> str:
     recent_outputs = list(snapshot.get("recent_outputs") or [])
     latest_handoff = snapshot.get("latest_handoff") or {}
     share = snapshot.get("share") or {}
+    mood = _session_mood_snapshot(
+        require_session(session_id),
+        watch_state=load_watch_state(session_id),
+        collaboration_snapshot=snapshot,
+    )
 
     lines = [
         "SESSION HANDOFF",
@@ -2071,6 +2187,8 @@ def _build_session_share_text(session_id: str) -> str:
     last_summary = str(session_data.get("last_summary") or "").strip()
     if last_summary:
         lines.append(f"summary    : {last_summary}")
+    if mood.get("share_line"):
+        lines.append(str(mood.get("share_line")))
     session_tags = [str(tag or "").strip() for tag in list(session_data.get("tags") or []) if str(tag or "").strip()]
     if session_tags:
         lines.append(f"tags       : {', '.join(session_tags[:6])}")
@@ -2124,6 +2242,7 @@ def inspect_session(session_id: str) -> str:
     watch: dict[str, Any] = export.get("watch_state") or {}
     routed_checkpoints: list[dict[str, Any]] = export.get("routed_action_checkpoints") or []
     collaboration: dict[str, Any] = export.get("collaboration") or {}
+    mood = _session_mood_snapshot(require_session(session_id), watch_state=watch, collaboration_snapshot=collaboration)
 
     if _RICH_AVAILABLE and _IS_TTY:
         _inspect_session_rich(session_id, session_data, events, outputs, watch, routed_checkpoints)
@@ -2152,6 +2271,9 @@ def inspect_session(session_id: str) -> str:
             ]
         ),
     ]
+    mood_cell = _session_mood_cell(mood)
+    if mood_cell:
+        lines.append(f"  {mood_cell}")
 
     # ── Plan / task linkage ───────────────────────────────────────
     plan_id = str(session_data.get("plan_id") or "").strip()
@@ -2302,6 +2424,7 @@ def _inspect_session_rich(
     sid = session_data.get("session_id", session_id)
     title = session_data.get("title") or "Session"
     status = str(session_data.get("status") or "active")
+    mood = _session_mood_snapshot(require_session(session_id), watch_state=watch, collaboration_snapshot=build_collaboration_snapshot(session_id, limit=5))
     # Metadata panel
     meta = _RichTable.grid(padding=(0, 2))
     meta.add_column(style="dim", min_width=12)
@@ -2321,6 +2444,9 @@ def _inspect_session_rich(
             ]
         ),
     )
+    mood_cell = _session_mood_cell(mood, rich=True)
+    if mood_cell:
+        meta.add_row("🙂 mood", mood_cell)
     plan_id = str(session_data.get("plan_id") or "").strip()
     task_id = str(session_data.get("task_id") or "").strip()
     if plan_id:
@@ -2368,11 +2494,12 @@ def format_session_list(items: list[SessionSummary]) -> str:
     """Render a recent-session table as plain text."""
     if not items:
         return "No OpenClaw CLI sessions have been recorded yet."
-    rows = ["SESSION ID | UPDATED | MODE | COMMANDS | OUTPUTS | TITLE", "-" * 104]
+    rows = ["SESSION ID | UPDATED | MODE | COMMANDS | OUTPUTS | MOOD | TITLE", "-" * 132]
     for session in items:
+        mood = _session_mood_snapshot(session)
         rows.append(
             f"{session.session_id} | {session.updated_at} | {session.automation_mode or '-'} | {session.command_count} | "
-            f"{session.output_count} | {session.title}"
+            f"{session.output_count} | {str(mood.get('label') or '-')} | {session.title}"
         )
     return "\n".join(rows)
 
@@ -3527,6 +3654,40 @@ def _inject_heading_emojis(text: str) -> str:
     return "\n".join(result)
 
 
+_URL_PATTERN = re.compile(r'(https?://[^\s\)\]\>\"\']+)', re.IGNORECASE)
+
+
+def _make_clickable_link(url: str, text: str = "") -> str:
+    """Return an OSC 8 clickable hyperlink if supported, otherwise plain URL."""
+    if not _PREFS.get("clickable_links", True) or _a11y_plain_mode():
+        return text or url
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty:
+        return text or url
+    display = text or url
+    return f"\033]8;;{url}\033\\{_UL}{_CY}{display}{_R}\033]8;;\033\\"
+
+
+def _linkify_response(text: str) -> str:
+    """Replace bare URLs in response text with OSC 8 clickable links."""
+    if not _PREFS.get("clickable_links", True) or _a11y_plain_mode():
+        return text
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty:
+        return text
+
+    lines = text.split("\n")
+    result = []
+    in_code = False
+    for line in lines:
+        if line.strip().startswith("```"):
+            in_code = not in_code
+        if not in_code and not line.startswith("|"):
+            line = _URL_PATTERN.sub(lambda m: _make_clickable_link(m.group(1)), line)
+        result.append(line)
+    return "\n".join(result)
+
+
 def _render_markdown_ansi(text: str) -> str:
     """Convert markdown to ANSI-formatted terminal text (fallback when Rich is absent).
 
@@ -3765,6 +3926,93 @@ def _convert_bullet_tables(text: str) -> str:
     return "\n".join(result)
 
 
+def _colorize_json(text: str) -> str:
+    """Apply ANSI color coding to a JSON string."""
+    if _a11y_plain_mode():
+        return text
+    import re as _re_json
+    # Keys (quoted strings before colon) → cyan
+    text = _re_json.sub(r'"([^"]+)"(\s*:)', f'{_CY}"\\1"{_R}\\2', text)
+    # String values → green
+    text = _re_json.sub(r':\s*"([^"]*)"', f': {_GR}"\\1"{_R}', text)
+    # Numbers → yellow
+    text = _re_json.sub(r':\s*(-?\d+(?:\.\d+)?)', f': {_YE}\\1{_R}', text)
+    # Booleans and null → magenta
+    text = _re_json.sub(r'\b(true|false|null)\b', f'{_MA}\\1{_R}', text)
+    return text
+
+
+def _detect_and_format_json(text: str) -> str:
+    """Detect bare JSON objects/arrays in response text and pretty-print them."""
+    if not _PREFS.get("json_autoformat", True) or _a11y_plain_mode():
+        return text
+
+    lines = text.split("\n")
+    result: list[str] = []
+    i = 0
+    in_code_block = False
+
+    while i < len(lines):
+        line = lines[i]
+
+        # Track code blocks — don't touch content inside them
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            result.append(line)
+            i += 1
+            continue
+
+        if in_code_block:
+            result.append(line)
+            i += 1
+            continue
+
+        stripped = line.strip()
+
+        # Detect start of JSON: line starts with { or [
+        if stripped.startswith("{") or stripped.startswith("["):
+            # First try just this single line
+            try:
+                obj = json.loads(stripped)
+                pretty = json.dumps(obj, indent=2)
+                pretty_colored = _colorize_json(pretty)
+                result.append("```json")
+                result.extend(pretty_colored.split("\n"))
+                result.append("```")
+                i += 1
+                continue
+            except json.JSONDecodeError:
+                pass
+            # Then try accumulating more lines (multi-line JSON)
+            json_lines = [line]
+            j = i + 1
+            matched = False
+            while j < len(lines) and j < i + 50:
+                json_lines.append(lines[j])
+                candidate = "\n".join(json_lines)
+                try:
+                    obj = json.loads(candidate.strip())
+                    pretty = json.dumps(obj, indent=2)
+                    pretty_colored = _colorize_json(pretty)
+                    result.append("```json")
+                    result.extend(pretty_colored.split("\n"))
+                    result.append("```")
+                    i = j + 1
+                    matched = True
+                    break
+                except json.JSONDecodeError:
+                    j += 1
+            if not matched:
+                result.append(line)
+                i += 1
+            continue
+
+        result.append(line)
+        i += 1
+
+    return "\n".join(result)
+
+
 def _preprocess_response_text(text: str) -> tuple[str, str | None]:
     """Clean up raw LLM response text for better CLI rendering.
 
@@ -3990,6 +4238,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
     if response.response:
         body, sources = _preprocess_response_text(response.response)
         body = _auto_bold_response(body)
+        body = _detect_and_format_json(body)
         body = _inject_heading_emojis(body)
         if not body.strip():
             body = "_No response text returned._"
@@ -4006,7 +4255,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
                 )
         elif is_tty:
             # Rich not available but interactive TTY — use ANSI markdown renderer
-            print(_render_markdown_ansi(body))
+            print(_render_markdown_ansi(_linkify_response(body)))
             if sources:
                 term_cols = shutil.get_terminal_size((80, 24)).columns
                 w = min(term_cols - 4, 64)
@@ -5818,6 +6067,12 @@ def _print_watch_status(state: dict[str, Any]) -> None:
             _progress_cell("polls", polls_value, status=w_status or "active"),
         ]
     )
+    if w_status in {"completed", "complete"}:
+        summary_lines.append(_progress_cell("mood", "milestone reached · latest watch loop finished cleanly", status="complete"))
+    elif w_status == "retrying" or failure_count:
+        summary_lines.append(_progress_cell("mood", "resilient recovery · retry budget still active", status="retry"))
+    elif poll_count >= 2 or last_summary:
+        summary_lines.append(_progress_cell("mood", "building momentum · signals are settling in", status="active"))
     detail_lines = []
     if failure_count:
         detail_lines.append(_progress_cell("failures", f"{failure_count}/{retry_limit}", status="retry"))
@@ -6324,6 +6579,12 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
                     timing_bits.append(f"backoff {_format_elapsed_compact(meta.get('retry_delay_seconds'))}")
                 if timing_bits:
                     label = f"{label}  ({', '.join(timing_bits)})"
+            if kind == "checkpoint":
+                label = f"{label} · milestone"
+            elif kind == "collab":
+                label = f"{label} · shared momentum"
+            elif kind == "error":
+                label = f"{label} · recovery needed"
             color = _KIND_COLORS.get(kind, "dim")
             table.add_row(ts_short, f"[{color}]{kind}[/]", label)
         _RICH_CONSOLE.print(table)
@@ -6347,6 +6608,12 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
                     timing_bits.append(f"backoff {_format_elapsed_compact(meta.get('retry_delay_seconds'))}")
                 if timing_bits:
                     label = f"{label} ({', '.join(timing_bits)})"
+            if kind == "checkpoint":
+                label = f"{label} · milestone"
+            elif kind == "collab":
+                label = f"{label} · shared momentum"
+            elif kind == "error":
+                label = f"{label} · recovery needed"
             print(f"[{ts}] {kind}: {label}")
     return _CMD_CONTINUE
 
@@ -7906,6 +8173,9 @@ def _session_badges(s: "SessionSummary") -> str:
         parts.append(_progress_cell("outputs", str(s.output_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY))
     if (s.checkpoint_count or 0) > 0:
         parts.append(_progress_cell("ckpt", str(s.checkpoint_count), status="complete", rich=_RICH_AVAILABLE and _IS_TTY))
+    mood_cell = _session_mood_cell(_session_mood_snapshot(s), rich=_RICH_AVAILABLE and _IS_TTY)
+    if mood_cell:
+        parts.append(mood_cell)
     if getattr(s, "tags", []):
         parts.append(" ".join(f"#{t}" for t in s.tags[:3]))
     return "  ".join(parts)
@@ -8816,6 +9086,28 @@ def _cmd_autobold(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_jsonformat(ctx: ChatCommandContext) -> str:
+    """/jsonformat [on|off] — toggle automatic JSON detection and pretty-printing in responses."""
+    arg = ctx.args.strip().lower()
+    if arg in ("on", "off"):
+        _PREFS["json_autoformat"] = (arg == "on")
+        _save_prefs()
+        state = "on" if _PREFS["json_autoformat"] else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] JSON auto-format [bold]{state}[/]")
+        else:
+            print(f"✓ JSON auto-format {state}")
+    else:
+        state = "on" if _PREFS.get("json_autoformat", True) else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]JSON auto-format is [bold]{state}[/] — /jsonformat on|off[/]")
+        else:
+            print(f"JSON auto-format is {state}")
+    return _CMD_CONTINUE
+
+
 def _cmd_separator(ctx: ChatCommandContext) -> str:
     """/separator [style] — set or preview response separator style (gradient|pulse|dots|wave|none)."""
     arg = ctx.args.strip().lower()
@@ -8842,6 +9134,28 @@ def _cmd_separator(ctx: ChatCommandContext) -> str:
             _RICH_CONSOLE.print(f"[dim]separator style: [bold]{current}[/] — /separator gradient|pulse|dots|wave|none[/]")
         else:
             print(f"separator style: {current} — /separator gradient|pulse|dots|wave|none")
+    return _CMD_CONTINUE
+
+
+def _cmd_links(ctx: "ChatCommandContext") -> str:
+    """/links [on|off] — toggle clickable OSC 8 hyperlinks in responses (requires modern terminal)."""
+    arg = ctx.args.strip().lower()
+    if arg in ("on", "off"):
+        _PREFS["clickable_links"] = (arg == "on")
+        _save_prefs()
+        state = "on" if _PREFS["clickable_links"] else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] clickable links [bold]{state}[/]")
+        else:
+            print(f"✓ clickable links {state}")
+    else:
+        state = "on" if _PREFS.get("clickable_links", True) else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]clickable links is [bold]{state}[/] — /links on|off[/]")
+        else:
+            print(f"clickable links is {state}")
     return _CMD_CONTINUE
 
 
@@ -9249,9 +9563,19 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         handler=_cmd_autobold,
     ))
     registry.register(SlashCommand(
+        name="jsonformat",
+        description="Toggle automatic JSON detection and pretty-printing in responses (/jsonformat [on|off])",
+        handler=_cmd_jsonformat,
+    ))
+    registry.register(SlashCommand(
         name="separator",
         description="Set or preview response separator style (/separator gradient|pulse|dots|wave|none)",
         handler=_cmd_separator,
+    ))
+    registry.register(SlashCommand(
+        name="links",
+        description="Toggle clickable OSC 8 hyperlinks in responses (/links [on|off])",
+        handler=_cmd_links,
     ))
     registry.register(SlashCommand(
         name="palette",
@@ -9267,6 +9591,11 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         name="stats",
         description="Show ASCII bar charts of usage stats (/stats [commands|ratings|sessions])",
         handler=_cmd_stats,
+    ))
+    registry.register(SlashCommand(
+        name="pathhints",
+        description="Toggle file path quick-action hints after responses (/pathhints [on|off])",
+        handler=_cmd_pathhints,
     ))
     return registry
 
@@ -9348,7 +9677,9 @@ def print_chat_help(*, search: str = "") -> None:
         ("/system append <text>",               "Append to the existing system prompt"),
         ("/system clear",                        "Clear the system prompt"),
         ("/autobold [on|off]",                   "Toggle automatic bolding of numbers and filenames in responses"),
+        ("/jsonformat [on|off]",                 "Toggle automatic JSON detection and pretty-printing in responses"),
         ("/separator [style]",                   "Set or preview response separator style (gradient|pulse|dots|wave|none)"),
+        ("/links [on|off]",                      "Toggle clickable OSC 8 hyperlinks in responses (requires modern terminal)"),
         ("/palette [query]",                     "Search slash commands by keyword (fuzzy)"),
         ("/shortcuts",                           "Show keyboard shortcuts and quick-access reference card"),
     ]
@@ -10662,6 +10993,69 @@ def _cmd_quality(ctx: "ChatCommandContext") -> str:
     return _CMD_CONTINUE
 
 
+import re as _re
+
+_FILE_PATH_PATTERN = _re.compile(
+    r'(?<!\w)((?:~|\.{1,2})?/[\w\-./]+\.\w{1,8}|(?:src|tests|docs|scripts|config|plugins)/[\w\-./]+\.\w{1,8})',
+    _re.IGNORECASE
+)
+
+
+def _detect_file_paths(text: str) -> "list[str]":
+    """Extract file path candidates from text."""
+    paths = []
+    for m in _FILE_PATH_PATTERN.finditer(text):
+        p = m.group(1)
+        if p not in paths:
+            paths.append(p)
+    return paths[:5]  # max 5 suggestions
+
+
+def _print_path_hints(paths: "list[str]") -> None:
+    """Print quick-action hints for file paths mentioned in the response."""
+    if not _PREFS.get("path_hints", True) or _a11y_plain_mode():
+        return
+    is_tty = _IS_TTY or sys.stdout.isatty()
+    if not is_tty:
+        return
+
+    import os as _os
+    existing = [p for p in paths if _os.path.exists(_os.path.expanduser(p))]
+    if not existing:
+        return
+
+    if _RICH_AVAILABLE and is_tty:
+        _RICH_CONSOLE.print(f"\n[dim]📁 File{'s' if len(existing) > 1 else ''} mentioned:[/]", end="")
+        for p in existing[:3]:
+            _RICH_CONSOLE.print(f"  [dim cyan]{p}[/]", end="")
+        _RICH_CONSOLE.print(f"  [dim](use /view or /edit)[/]\n")
+    else:
+        hint = "  ".join(existing[:3])
+        print(f"\n  {_DM}📁 Files: {hint}  (use /view or /edit){_R}")
+
+
+def _cmd_pathhints(ctx: "ChatCommandContext") -> str:
+    """/pathhints [on|off] — toggle file path quick-action hints after responses."""
+    arg = ctx.args.strip().lower()
+    if arg in ("on", "off"):
+        _PREFS["path_hints"] = (arg == "on")
+        _save_prefs()
+        state = "on" if _PREFS["path_hints"] else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[green]✓[/] path hints [bold]{state}[/]")
+        else:
+            print(f"✓ path hints {state}")
+    else:
+        state = "on" if _PREFS.get("path_hints", True) else "off"
+        is_tty = _IS_TTY or sys.stdout.isatty()
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[dim]path hints is [bold]{state}[/] — /pathhints on|off[/]")
+        else:
+            print(f"path hints is {state}")
+    return _CMD_CONTINUE
+
+
 def _cmd_ratehint(ctx: "ChatCommandContext") -> str:
     """/ratehint [on|off] — toggle the post-response rating hint."""
     arg = ctx.args.strip().lower()
@@ -10714,6 +11108,7 @@ def _cmd_shortcuts(ctx: "ChatCommandContext") -> str:
             ("/separator [style]",  "Set response separator style"),
             ("/emojiheaders on|off", "Toggle emoji on headings"),
             ("/autobold on|off",     "Toggle auto-bold in responses"),
+            ("/jsonformat on|off",   "Toggle JSON auto-detect & pretty-print"),
             ("/theme",               "Switch color theme"),
         ]),
         ("🔧  Power", [
@@ -11064,6 +11459,10 @@ def run_chat(
             _print_response_separator(label="Response")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
+        if body := (response.response or ""):
+            _paths = _detect_file_paths(body)
+            if _paths:
+                _print_path_hints(_paths)
         _print_animated_separator()
         if _PREFS.get("show_rate_hint", True) and not _a11y_plain_mode() and (_IS_TTY or sys.stdout.isatty()):
             if _RICH_AVAILABLE:

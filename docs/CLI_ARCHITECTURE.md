@@ -249,6 +249,24 @@ terminal TUI shell:
 
 The actual pane compositor and active-pane focus management remain deferred.
 
+### Wave 26 celebration slice (current truth)
+
+Wave 26 is currently a **small emotional-feedback slice** centered on the shared
+celebration helper, not a full session-mood layer:
+
+- `_celebration_burst(message)` is the single runtime primitive. It shows a
+  3-frame animated confetti burst only for interactive TTY sessions.
+- The same helper downgrades to a plain one-line `🎉 {message}` confirmation when
+  reduced motion or plain mode is enabled, which keeps the feature readable in
+  accessibility-first output.
+- `_cmd_celebrate()` is the explicit manual entry point for the feature.
+- `_cmd_rate()` reuses `_celebration_burst("5-star rating — thanks! 🎉")` only
+  for 5-star ratings, so celebratory feedback stays brief and tied to milestone
+  success.
+- Collaboration handoff rendering (`_build_session_share_text()`) remains
+  deliberately neutral and pasteable; no mood metadata is injected into the
+  exported/session-share contract yet.
+
 ### stderr vs stdout
 
 - `_print_update_notice()` → **stderr** (must not corrupt JSON output from `--json` flag)

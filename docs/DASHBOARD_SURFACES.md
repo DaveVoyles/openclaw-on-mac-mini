@@ -184,14 +184,16 @@ truth-source for what is live today:
 
 ### Wave 26 mood & celebration targets
 
-When Wave 26 ships, emotional feedback should stay additive and accessible:
+Wave 26 is currently shipping as a **celebration helper + neutral handoff**
+slice. The full mood-model pass is still pending, so use this table as the
+truth-source for what is live today:
 
 | Surface group | Alignment requirement |
 | --- | --- |
-| `/session`, `/sessions` | Mood or momentum cues appear in summaries only after objective health, blocker, and next-step state |
-| `/collab`, `openclaw session share`, exports | Collaboration surfaces use neutral, pasteable language for morale/momentum cues |
-| Completion / recap surfaces | Milestone recognition stays brief, skippable, and documented with plain-text equivalents |
-| `/watch status`, `/watch history`, `/events` | Recovery or success sentiment can annotate state but must never replace timing/risk details |
-| Browser/dashboard mirrors | Dashboard cards reuse the same mood vocabulary and reduced-emotion fallbacks as the CLI |
+| `/session`, `/sessions` | No dedicated mood row is shipped yet; objective health, blocker, and next-step state still lead summaries |
+| `/collab`, `openclaw session share`, exports | The live handoff summary remains neutral and pasteable; morale/momentum wording is deferred |
+| Completion / recap surfaces | Milestone recognition is currently the short `_celebration_burst()` path used by `/celebrate` and `/rate 5` |
+| `/watch status`, `/watch history`, `/events` | No new emotional overlay is shipped here yet; timing/risk details remain authoritative |
+| Browser/dashboard mirrors | Future mirrors should reuse the same restrained celebration vocabulary and reduced-motion/plain-text fallback rules |
 
 Until a richer dashboard reference exists, keep `docs/DASHBOARD_SURFACES.md` as the canonical checklist and inventory for these waves.

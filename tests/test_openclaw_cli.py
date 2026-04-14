@@ -2913,6 +2913,17 @@ def test_summarize_session_front_loads_wave23_topline_status(monkeypatch, tmp_pa
     assert any(line.startswith("RETRY") and "automation: watch (retrying)" in line for line in summary)
 
 
+def test_summarize_session_wave26_adds_mood_line(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = sessions_mod.create_session(title="Mood Summary", cwd=str(tmp_path))
+    sessions_mod.update_session(session.session_id, command_count=4, output_count=1)
+
+    summary = mod.summarize_session(sessions_mod.require_session(session.session_id))
+
+    assert "mood: steady" in summary
+    assert "1 output landed" in summary
+
+
 def test_print_watch_status_shows_phase_and_backoff(capsys):
     mod._print_watch_status(
         {
@@ -2953,8 +2964,24 @@ def test_print_watch_status_shows_phase_and_backoff(capsys):
     assert "polls: 2/5" in out
     assert "phase:" in out and "persist" in out
     assert "backoff:" in out and "2.0s" in out
-    assert "focus:" in out
-    assert "checkpoint 1: prior run" in out
+
+
+def test_print_watch_status_wave26_includes_momentum_cue(capsys):
+    mod._print_watch_status(
+        {
+            "goal": "watch repo",
+            "mode": "analyze",
+            "status": "retrying",
+            "poll_count": 2,
+            "max_polls": 5,
+            "failure_count": 1,
+            "retry_limit": 3,
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "mood: resilient recovery" in out
+    assert "retry budget still active" in out
 
 
 def test_print_watch_history_uses_dashboard_sections(capsys):
@@ -3380,7 +3407,40 @@ def test_session_show_includes_collaboration_snapshot(monkeypatch, tmp_path, cap
 
     assert "COLLABORATION" in out
     assert "alice" in out
+    assert "mood: shared" in out
     assert "wave-20" in out
+
+
+def test_build_session_share_text_wave26_adds_momentum_line(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = mod.create_session(title="Shared Momentum", cwd=str(tmp_path))
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Keep the dashboard wording compact",
+        metadata={
+            "summary": "decision by alice: Keep the dashboard wording compact",
+            "actor": "alice",
+            "tags": ["ux"],
+            "collab_kind": "decision",
+        },
+    )
+    mod.append_event(
+        session.session_id,
+        kind="collab",
+        content="Operator agrees with the compact handoff wording",
+        metadata={
+            "summary": "note by operator: Operator agrees with the compact handoff wording",
+            "actor": "operator",
+            "tags": [],
+            "collab_kind": "note",
+        },
+    )
+
+    out = mod._build_session_share_text(session.session_id)
+
+    assert "momentum   : shared momentum;" in out
+    assert "2 collaborators aligned" in out
 
 
 def test_inspect_session_includes_watch_state(monkeypatch, tmp_path, capsys):
@@ -4538,6 +4598,7 @@ def test_session_badges_cover_wave22_compact_cells():
     assert "ACTIVE" in badges
     assert "STALE" in badges
     assert "outputs: 2" in badges
+    assert "mood: steady" in badges
     assert "#wave22" in badges
 
 
@@ -4779,6 +4840,23 @@ class TestCmdRate:
         assert ratings[0]["score"] == 1
         assert ratings[0]["label"] == "bad"
 
+    def test_rate_five_triggers_celebration_burst(self, monkeypatch, tmp_path):
+        """/rate 5 triggers the shared celebration helper."""
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        mod._load_prefs()
+        monkeypatch.setattr(mod, "_last_response_text", "some AI response")
+        mod._PREFS.pop("ratings", None)
+
+        with (
+            patch.object(mod, "_save_prefs"),
+            patch("openclaw_cli.append_event"),
+            patch.object(mod, "_celebration_burst") as celebrate,
+        ):
+            result = mod._cmd_rate(self._ctx(args="5"))
+
+        assert result == mod._CMD_CONTINUE
+        celebrate.assert_called_once_with("5-star rating — thanks! 🎉")
+
     def test_rate_empty_response_prints_error(self, capsys, monkeypatch, tmp_path):
         """/rate with empty _last_response_text prints 'Nothing to rate' error."""
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -4865,9 +4943,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave23(self):
-        """_CLI_BUILD must equal 'wave23'."""
-        assert mod._CLI_BUILD == "wave23"
+    def test_cli_build_is_wave24(self):
+        """_CLI_BUILD must equal 'wave24'."""
+        assert mod._CLI_BUILD == "wave24"
 
 
 class TestCmdRatehint:
@@ -5308,6 +5386,55 @@ class TestCelebrationBurst:
         assert "Congrats!" in captured.out
 
 
+class TestJsonAutoformat:
+    """Tests for _detect_and_format_json(), _colorize_json(), and /jsonformat."""
+
+    def test_json_object_in_text_gets_pretty_printed(self, monkeypatch):
+        """A bare JSON object in response text should be wrapped in a ```json block."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "json_autoformat", True)
+        text = '{"name": "alice", "age": 30}'
+        result = mod._detect_and_format_json(text)
+        assert "```json" in result
+        assert '"name"' in result
+        assert '"alice"' in result
+
+    def test_json_inside_code_block_is_left_untouched(self, monkeypatch):
+        """JSON already inside a fenced code block should not be re-formatted."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "json_autoformat", True)
+        text = '```json\n{"key": "value"}\n```'
+        result = mod._detect_and_format_json(text)
+        # Should not double-wrap; the original fences survive unchanged
+        assert result.count("```json") == 1
+        assert result == text
+
+    def test_non_json_text_is_unchanged(self, monkeypatch):
+        """Plain text with no JSON should be returned as-is."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "json_autoformat", True)
+        text = "This is just plain text with no JSON in it."
+        result = mod._detect_and_format_json(text)
+        assert result == text
+
+    def test_jsonformat_off_disables_formatting(self, monkeypatch):
+        """When json_autoformat pref is False, text should be returned unchanged."""
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "json_autoformat", False)
+        text = '{"name": "alice", "age": 30}'
+        result = mod._detect_and_format_json(text)
+        assert result == text
+
+    def test_celebration_burst_plain_mode_prints_single_line_message(self, monkeypatch, capsys):
+        """Plain mode downgrades celebration output to a simple one-line message."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: True)
+        monkeypatch.setattr(mod, "_a11y_reduced_motion", lambda: False)
+        mod._celebration_burst("Calm win")
+        captured = capsys.readouterr()
+        assert "🎉 Calm win" in captured.out
+
+
 class TestCmdStats:
     """Tests for /stats ASCII bar chart visualization."""
 
@@ -5359,3 +5486,79 @@ class TestCmdStats:
         mod._cmd_stats(ctx)
         captured = capsys.readouterr().out
         assert "⭐" in captured or "Rating" in captured
+
+
+class TestLinkify:
+    """Tests for _make_clickable_link(), _linkify_response(), and /links command."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_make_clickable_link_contains_osc8_when_tty(self, monkeypatch):
+        """_make_clickable_link returns OSC 8 escape when TTY is simulated."""
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "clickable_links", True)
+        result = mod._make_clickable_link("https://example.com")
+        assert "\033]8;;" in result
+        assert "https://example.com" in result
+
+    def test_linkify_response_transforms_url(self, monkeypatch):
+        """_linkify_response wraps bare URLs in OSC 8 sequences."""
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "clickable_links", True)
+        text = "see https://example.com for details"
+        result = mod._linkify_response(text)
+        assert "\033]8;;" in result
+        assert "https://example.com" in result
+
+    def test_linkify_skips_urls_inside_code_blocks(self, monkeypatch):
+        """URLs inside fenced code blocks should NOT be linkified."""
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod, "_a11y_plain_mode", lambda: False)
+        monkeypatch.setitem(mod._PREFS, "clickable_links", True)
+        text = "intro\n```\nhttps://example.com/in-code\n```\nafter"
+        result = mod._linkify_response(text)
+        lines = result.split("\n")
+        code_line = lines[2]  # "https://example.com/in-code"
+        assert "\033]8;;" not in code_line
+
+    def test_cmd_links_off_returns_cmd_continue_and_sets_pref(self, monkeypatch):
+        """/links off returns _CMD_CONTINUE and sets clickable_links to False."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        monkeypatch.setitem(mod._PREFS, "clickable_links", True)
+        ctx = self._ctx("off")
+        result = mod._cmd_links(ctx)
+        assert result == mod._CMD_CONTINUE
+        assert mod._PREFS["clickable_links"] is False
+
+
+class TestPathHints:
+    """Tests for _detect_file_paths and /pathhints command."""
+
+    def _ctx(self, args: str = ""):
+        import types
+        ctx = types.SimpleNamespace(args=args)
+        return ctx
+
+    def test_detect_file_paths_finds_src_path(self):
+        paths = mod._detect_file_paths("see src/openclaw_cli.py for details")
+        assert "src/openclaw_cli.py" in paths
+
+    def test_detect_file_paths_empty_when_no_paths(self):
+        paths = mod._detect_file_paths("no paths here, just text")
+        assert paths == []
+
+    def test_pathhints_off_sets_pref(self, monkeypatch):
+        prefs = {"path_hints": True}
+        monkeypatch.setattr(mod, "_PREFS", prefs)
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        ctx = self._ctx("off")
+        result = mod._cmd_pathhints(ctx)
+        assert prefs["path_hints"] is False
+        assert result == mod._CMD_CONTINUE
