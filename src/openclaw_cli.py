@@ -155,6 +155,11 @@ _PREFS: dict[str, Any] = {
     "layout": "normal",   # "normal" | "compact" (compact hides separator + status bar)
 }
 
+# Accessibility mode keys in _PREFS
+_A11Y_REDUCED_MOTION = "reduced_motion"   # bool: disable spinner/animations
+_A11Y_PLAIN_MODE = "plain_mode"            # bool: simplify chrome to plain text
+_A11Y_HIGH_CONTRAST = "high_contrast"     # bool: high-contrast colour palette
+
 # Maps theme name → Rich rule style + ANSI accent escape code
 _THEMES: dict[str, tuple[str, str]] = {
     "default":  ("dim blue",    "\033[2;34m"),
@@ -200,6 +205,21 @@ def _save_prefs() -> None:
         _PREFS_FILE.write_text(json.dumps(_PREFS, indent=2), "utf-8")
     except OSError:
         pass
+
+
+def _a11y_reduced_motion() -> bool:
+    """Return True when reduced-motion mode is active."""
+    return bool(_PREFS.get(_A11Y_REDUCED_MOTION, False))
+
+
+def _a11y_plain_mode() -> bool:
+    """Return True when plain/screen-reader mode is active."""
+    return bool(_PREFS.get(_A11Y_PLAIN_MODE, False))
+
+
+def _a11y_high_contrast() -> bool:
+    """Return True when high-contrast mode is active."""
+    return bool(_PREFS.get(_A11Y_HIGH_CONTRAST, False))
 
 
 def _e(emoji: str, fallback: str = "") -> str:
@@ -314,9 +334,18 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
 
     Falls back to a direct call when output is not a TTY or when --json output
     is requested so that machine-readable output is never corrupted.
+
+    When reduced-motion mode is active, skips the animation and prints a single
+    static "thinking..." line instead, then runs *fn* directly.
     """
     is_tty = _IS_TTY or sys.stdout.isatty()
     if not (is_tty and not output_json):
+        return fn(*args, **kwargs)
+
+    # Reduced-motion path: no animation, just a static status line.
+    if _a11y_reduced_motion():
+        sys.stdout.write(f"  {_DM}⏳ thinking...{_R}\n")
+        sys.stdout.flush()
         return fn(*args, **kwargs)
 
     result_holder: list[Any] = []
@@ -2213,28 +2242,59 @@ def analyze_health_payload(payload: Any) -> tuple[str, bool | None]:
     return "", None
 
 
+def _terminal_width(*, fallback: int = 80) -> int:
+    """Return current terminal width, with a sensible fallback."""
+    try:
+        return os.get_terminal_size().columns
+    except OSError:
+        return fallback
+
+
 def _render_table_ansi(rows: list[list[str]]) -> list[str]:
     """Render a list of rows as an ANSI-aligned table, capped to terminal width."""
     if not rows:
         return []
     num_cols = max(len(r) for r in rows)
+    w = _terminal_width()
 
     def _plain(cell: str) -> str:
         return re.sub(r"\*\*(.+?)\*\*", r"\1", re.sub(r"\*(.+?)\*", r"\1", cell))
 
-    # Natural column widths from content
+    if w < 80:
+        # Narrow terminal: list format — one "Header: value" line per cell per row
+        headers = [_plain(c) for c in rows[0]] if rows else []
+        result: list[str] = []
+        sep = "  " + _DM + "─" * max(1, w - 4) + _R
+        for row_i, row in enumerate(rows):
+            if row_i == 0:
+                # First row is the header — skip it as a data row
+                continue
+            result.append(sep)
+            for j in range(num_cols):
+                cell = row[j] if j < len(row) else ""
+                header = headers[j] if j < len(headers) else f"Col {j + 1}"
+                result.append(f"  {_B}{header}:{_R} {_apply_inline_ansi(cell)}")
+            result.append("")
+        if result:
+            result.append(sep)
+        return result
+
+    # Wide terminal (>= 80): existing column formatting with proportional cap
     col_widths = [0] * num_cols
     for row in rows:
         for i, cell in enumerate(row[:num_cols]):
             col_widths[i] = max(col_widths[i], len(_plain(cell)))
 
-    # Cap to terminal width (leave a 4-char margin for the left indent + safety)
-    terminal_width = shutil.get_terminal_size((80, 24)).columns - 4
+    max_col_width = max(10, (w - 4) // num_cols)
+    col_widths = [min(cw, max_col_width) for cw in col_widths]
+
+    # Further scale down if total still exceeds terminal
+    terminal_width = w - 4
     total = sum(col_widths) + num_cols * 3 + 1
     if total > terminal_width and sum(col_widths) > 0:
         available = max(num_cols * 6, terminal_width - num_cols * 3 - 1)
         scale = available / sum(col_widths)
-        col_widths = [max(6, int(w * scale)) for w in col_widths]
+        col_widths = [max(6, int(cw * scale)) for cw in col_widths]
 
     sep_len = min(sum(col_widths) + num_cols * 3 + 1, terminal_width)
     sep = "  " + _DM + "─" * sep_len + _R
@@ -2273,8 +2333,8 @@ def _render_markdown_ansi(text: str) -> str:
     Handles headings (H1–H4), bold/italic/code, blockquotes, tables, bullet
     lists (including nested), numbered lists, fenced code blocks, and rules.
     """
-    term_cols = shutil.get_terminal_size((80, 24)).columns
-    rule_width = min(term_cols - 2, 72)
+    term_cols = _terminal_width()
+    rule_width = min(term_cols - 2, 72) if term_cols >= 80 else max(1, term_cols - 4)
 
     lines = text.split("\n")
     result: list[str] = []
@@ -2657,6 +2717,8 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
     # Re-check TTY at call time — module-level _IS_TTY can be False in some
     # terminal emulators (tmux, iTerm, etc.) even during an interactive session.
     is_tty = _IS_TTY or sys.stdout.isatty()
+    if _a11y_plain_mode():
+        is_tty = False  # force plain ANSI path; skip Rich rendering
     if response.response:
         body, sources = _preprocess_response_text(response.response)
         if not body.strip():
@@ -6651,6 +6713,12 @@ def build_chat_command_registry() -> ChatCommandRegistry:
     registry.register(SlashCommand(name="draft", description="Save, load, or clear a draft prompt", handler=_cmd_draft))
     registry.register(SlashCommand(name="template", description="Manage reusable prompt templates", handler=_cmd_template))
     registry.register(SlashCommand(name="pasteguard", description="Toggle paste guard for large risky pastes", handler=_cmd_pasteguard))
+    registry.register(SlashCommand(
+        name="accessibility",
+        description="Show or set accessibility modes (reduced-motion, plain, high-contrast)",
+        handler=_cmd_accessibility,
+        aliases=("a11y",),
+    ))
     return registry
 
 
@@ -6693,6 +6761,10 @@ def print_chat_help(*, search: str = "") -> None:
         ("/draft multiline [on|off]",           "Toggle multiline compose mode"),
         ("/template [list|use|save|delete]",    "Manage reusable prompt templates"),
         ("/pasteguard [on|off]",                "Toggle paste guard for large risky pastes"),
+        ("/accessibility [status|mode]",        "Show or set accessibility modes (a11y)"),
+        ("/accessibility reduced-motion on|off","Toggle reduced-motion (no spinner animation)"),
+        ("/accessibility plain on|off",         "Toggle plain/screen-reader mode"),
+        ("/accessibility high-contrast on|off", "Toggle high-contrast colour palette"),
     ]
 
     q = search.strip().lower()
@@ -6990,11 +7062,12 @@ def _print_status_bar(
     is_tty = _IS_TTY or sys.stdout.isatty()
     if not is_tty:
         return
+    narrow = _terminal_width() < 60
     parts: list[str] = []
     if session_id:
         parts.append(f"{_e('📍', '@')} {session_id[:10]}…")
     turns = history_len // 2  # history contains alternating user/assistant pairs
-    if turns:
+    if turns and not narrow:
         parts.append(f"{_e('💬', 'msgs:')} {turns} turn{'s' if turns != 1 else ''}")
     parts.append("autoroute \033[32mon\033[0m" if autoroute_on else "autoroute \033[33moff\033[0m")
     line = "  ·  ".join(parts)
@@ -7006,6 +7079,8 @@ def _print_status_bar(
 
 def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False) -> str:
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
+    if _a11y_plain_mode():
+        return "openclaw> "
     is_tty = _IS_TTY or sys.stdout.isatty()
     if is_tty:
         name = "\033[1;34mopenclaw\033[0m"  # bold blue
@@ -7053,6 +7128,17 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
     autoroute_on = _session_auto_route_enabled(session_id)
     ver = cli_version()
+
+    # Plain-mode path: no ANSI, no emoji, no decorative borders.
+    if _a11y_plain_mode():
+        autoroute_str = "on" if autoroute_on else "off"
+        print(f"OpenClaw {ver}")
+        print(f"Server: {config.base_url}")
+        print(f"User: {config.user_name}")
+        print("Type /help for commands. /quit to exit.")
+        print(f"Auto-routing: {autoroute_str}")
+        return
+
     if _RICH_AVAILABLE and _IS_TTY:
         t = _RichText()
         t.append(f"{_e('🦞', '[openclaw]')} OpenClaw", style="bold cyan")
@@ -7113,6 +7199,85 @@ def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
     else:
         state = "on" if _PREFS.get("paste_guard", True) else "off"
         print(f"  Paste guard is currently {_B}{state}{_R}. Use /pasteguard on|off to change.")
+    return _CMD_CONTINUE
+
+
+def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
+    """Show or configure accessibility modes (reduced-motion, plain, high-contrast)."""
+    args = (ctx.args or "").strip()
+    parts = args.split() if args else []
+    sub = parts[0].lower() if parts else "status"
+    val = parts[1].lower() if len(parts) > 1 else ""
+
+    def _on_off(val: str, key: str, label: str) -> str:
+        if val == "on":
+            _PREFS[key] = True
+            _save_prefs()
+            return f"  {_GR}{_e('✅', '[OK]')} {label} enabled.{_R}"
+        elif val == "off":
+            _PREFS[key] = False
+            _save_prefs()
+            return f"  {_YE}{_e('⚠️', '[warn]')} {label} disabled.{_R}"
+        else:
+            state = "ON" if _PREFS.get(key, False) else "off"
+            return f"  {label}: {_B}{state}{_R}. Use on|off to change."
+
+    if sub in ("status", ""):
+        try:
+            import shutil as _shutil
+            cols = _shutil.get_terminal_size(fallback=(80, 24)).columns
+        except Exception:
+            try:
+                cols = os.get_terminal_size(fallback=(80, 24)).columns
+            except Exception:
+                cols = 80
+
+        rm   = "ON" if _a11y_reduced_motion() else "off"
+        pm   = "ON" if _a11y_plain_mode()     else "off"
+        hc   = "ON" if _a11y_high_contrast()  else "off"
+        rich = "yes" if _RICH_AVAILABLE else "no"
+        tty  = "yes" if _IS_TTY else "no"
+
+        if _RICH_AVAILABLE and _IS_TTY:
+            from rich.text import Text as _Text  # noqa: PLC0415
+            lines = _RichText()
+            lines.append(f"  Reduced motion:   {rm}\n",   style="bold" if rm == "ON" else "dim")
+            lines.append(f"  Plain mode:       {pm}\n",   style="bold" if pm == "ON" else "dim")
+            lines.append(f"  High contrast:    {hc}\n",   style="bold" if hc == "ON" else "dim")
+            lines.append(f"  Rich available:   {rich}\n", style="dim")
+            lines.append(f"  TTY detected:     {tty}\n",  style="dim")
+            lines.append(f"  Terminal width:   {cols} columns", style="dim")
+            _RICH_CONSOLE.print(_RichPanel(lines, title=f"{_e('♿', '[a11y]')} Accessibility Status", border_style="cyan"))
+        else:
+            print(f"{_e('♿', '[a11y]')} Accessibility Status")
+            print(f"  Reduced motion:   {rm}")
+            print(f"  Plain mode:       {pm}")
+            print(f"  High contrast:    {hc}")
+            print(f"  Rich available:   {rich}")
+            print(f"  TTY detected:     {tty}")
+            print(f"  Terminal width:   {cols} columns")
+        return _CMD_CONTINUE
+
+    if sub == "reduced-motion":
+        print(_on_off(val, _A11Y_REDUCED_MOTION, "Reduced motion"))
+        return _CMD_CONTINUE
+
+    if sub == "plain":
+        print(_on_off(val, _A11Y_PLAIN_MODE, "Plain mode"))
+        return _CMD_CONTINUE
+
+    if sub == "high-contrast":
+        print(_on_off(val, _A11Y_HIGH_CONTRAST, "High contrast"))
+        return _CMD_CONTINUE
+
+    if sub == "reset":
+        for key in (_A11Y_REDUCED_MOTION, _A11Y_PLAIN_MODE, _A11Y_HIGH_CONTRAST):
+            _PREFS.pop(key, None)
+        _save_prefs()
+        print(f"  {_GR}All accessibility modes reset to defaults.{_R}")
+        return _CMD_CONTINUE
+
+    print("  Usage: /accessibility [status|reduced-motion|plain|high-contrast|reset] [on|off]")
     return _CMD_CONTINUE
 
 

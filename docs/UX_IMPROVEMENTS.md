@@ -77,8 +77,8 @@ Steps:
 | [Wave 11](#wave-11--workspace-handoffs) | Workspace Handoffs | ✅ Shipped |
 | [Wave 12](#wave-12--automation-control-tower) | Automation Control Tower | ✅ Shipped |
 | [Wave 13](#wave-13--trust--explainability) | Trust & Explainability | ✅ Shipped |
-| [Wave 14](#wave-14--composer--input-flow) | Composer & Input Flow | 🔲 Ready |
-| [Wave 15](#wave-15--accessibility--adaptive-layout) | Accessibility & Adaptive Layout | 🔲 Ready |
+| [Wave 14](#wave-14--composer--input-flow) | Composer & Input Flow | ✅ Shipped |
+| [Wave 15](#wave-15--accessibility--adaptive-layout) | Accessibility & Adaptive Layout | ✅ Shipped |
 
 ---
 
@@ -737,7 +737,7 @@ feel inspectable, not mysterious.
 
 ## Wave 14 — Composer & Input Flow
 
-**Status: 🔲 Ready**
+**Status: ✅ Shipped**
 
 **Goal:** Make entering prompts feel as polished as reading responses. The REPL
 should support drafting, multiline composition, safe pastes, and clearer input
