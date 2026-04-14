@@ -23,6 +23,7 @@ CLI_FILES=(
   openclaw_cli_content_cmds.py
   openclaw_cli_diff.py
   openclaw_cli_exec.py
+  openclaw_cli_health.py
   openclaw_cli_layout.py
   openclaw_cli_macros.py
   openclaw_cli_path_utils.py
@@ -35,6 +36,7 @@ CLI_FILES=(
   openclaw_cli_sessions.py
   openclaw_cli_settings.py
   openclaw_cli_ui_core.py
+  openclaw_cli_ui_utils.py
   openclaw_cli_render.py
   openclaw_cli_update.py
   openclaw_cli_watch.py

@@ -229,6 +229,8 @@ try:
 except ImportError:  # pragma: no cover
     _RICH_AVAILABLE = False
 
+import openclaw_cli_health as _health_mod
+from openclaw_cli_health import HealthResponse
 import openclaw_cli_render as _render_mod
 from openclaw_cli_render import _render_markdown_ansi  # re-exported; implementation lives in render module
 import openclaw_cli_preprocess as _preprocess_mod
@@ -245,6 +247,7 @@ import openclaw_cli_path_utils as _path_utils
 import openclaw_cli_macros as _macros_mod
 import openclaw_cli_layout as _layout_mod
 import openclaw_cli_session_cmds as _session_cmds_mod
+import openclaw_cli_ui_utils as _ui_utils_mod
 import openclaw_cli_content_cmds as _content_cmds_mod
 import openclaw_cli_session_display as _session_display_mod
 import openclaw_cli_session_utils as _session_utils_mod
@@ -1057,128 +1060,7 @@ def _print_file_edit_result(result: Any) -> None:
 
 
 def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **kwargs: Any) -> Any:
-    """Run *fn* in a background thread while showing an animated braille spinner.
-
-    Falls back to a direct call when output is not a TTY or when --json output
-    is requested so that machine-readable output is never corrupted.
-
-    When reduced-motion mode is active, skips the animation and prints a single
-    static "thinking..." line instead, then runs *fn* directly.
-    """
-    is_tty = _get_is_tty()
-    if not (is_tty and not output_json):
-        return fn(*args, **kwargs)
-
-    result_holder: list[Any] = []
-    exc_holder: list[BaseException] = []
-
-    def _run() -> None:
-        try:
-            result_holder.append(fn(*args, **kwargs))
-        except BaseException as exc:  # noqa: BLE001
-            exc_holder.append(exc)
-
-    thread = threading.Thread(target=_run, daemon=True)
-    thread.start()
-    start = time.monotonic()
-    heartbeat_every = max(0.01, float(_SPINNER_HEARTBEAT_SECONDS))
-
-    # Reduced-motion path: no animation, but still emit periodic liveness cues.
-    if _a11y_reduced_motion():
-        snapshot = _spinner_progress_snapshot(0.0)
-        prefix = "[working]" if _a11y_plain_mode() else f"{_theme_ansi()}{_e('⏳', '[working]')}{_R}"
-        status_style = "" if (_a11y_plain_mode() or _a11y_high_contrast()) else _DM
-        sys.stdout.write(
-            f"  {prefix} {status_style}{label}... "
-            f"{snapshot['phase']} · step {snapshot['step_index']}/{snapshot['step_total']} · "
-            f"{snapshot['trust_copy']}{_R if status_style else ''}\n"
-        )
-        sys.stdout.flush()
-        last_heartbeat = 0.0
-        join_timeout = min(0.1, heartbeat_every / 2.0)
-        while thread.is_alive():
-            thread.join(timeout=join_timeout)
-            elapsed = time.monotonic() - start
-            if elapsed - last_heartbeat >= heartbeat_every:
-                snapshot = _spinner_progress_snapshot(elapsed)
-                _print_feedback(
-                    f"Still working on {label}",
-                    level="info",
-                    detail=(
-                        f"phase {snapshot['step_index']}/{snapshot['step_total']} · "
-                        f"{snapshot['trust_copy']} · {elapsed:.0f}s elapsed"
-                    ),
-                )
-                last_heartbeat = elapsed
-        if exc_holder:
-            raise exc_holder[0]
-        snapshot = _spinner_progress_snapshot(max(time.monotonic() - start, 4.0))
-        _print_feedback(
-            "response ready.",
-            level="success",
-            detail=(
-                f"step {snapshot['step_total']}/{snapshot['step_total']} · "
-                f"{snapshot['trust_copy']} · {label} · {time.monotonic() - start:.1f}s"
-            ),
-        )
-        return result_holder[0] if result_holder else None
-
-    spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    frame_idx = 0
-    last_heartbeat = 0.0
-    while thread.is_alive():
-        elapsed = time.monotonic() - start
-        frame = spinner_frames[frame_idx % len(spinner_frames)]
-        snapshot = _spinner_progress_snapshot(elapsed)
-        extra = " · still working" if elapsed - last_heartbeat >= heartbeat_every else ""
-        sys.stdout.write(
-            f"\r{frame} {label} · {snapshot['phase']} · "
-            f"step {snapshot['step_index']}/{snapshot['step_total']} · "
-            f"{snapshot['trust_copy']}  {elapsed:.0f}s{extra}"
-        )
-        sys.stdout.flush()
-        frame_idx += 1
-        if extra:
-            last_heartbeat = elapsed
-        time.sleep(0.1)
-
-    thread.join()
-    # Clear the spinner line.
-    sys.stdout.write("\r" + " " * (len(label) + 20) + "\r")
-    sys.stdout.flush()
-
-    if exc_holder:
-        raise exc_holder[0]
-    snapshot = _spinner_progress_snapshot(max(time.monotonic() - start, 4.0))
-    _print_feedback(
-        "response ready.",
-        level="success",
-        detail=(
-            f"step {snapshot['step_total']}/{snapshot['step_total']} · "
-            f"{snapshot['trust_copy']} · {label} · {time.monotonic() - start:.1f}s"
-        ),
-    )
-    return result_holder[0]
-
-
-TRANSIENT_WATCH_ERROR_MARKERS = (
-    "timed out",
-    "timeout",
-    "unable to reach",
-    "connection refused",
-    "refused the connection",
-    "temporarily unavailable",
-    "temporary failure",
-    "network is unreachable",
-    "connection reset",
-    "connection aborted",
-    "remote end closed connection",
-    "http 429",
-    "http 500",
-    "http 502",
-    "http 503",
-    "http 504",
-)
+    return _ui_utils_mod._with_spinner(label, fn, *args, output_json=output_json, _override_is_tty=_IS_TTY, _override_heartbeat_secs=_SPINNER_HEARTBEAT_SECONDS, **kwargs)
 
 
 @dataclass
@@ -1191,15 +1073,7 @@ class AskResponse:
     raw: dict[str, Any]
 
 
-@dataclass
-class HealthResponse:
-    """Structured response from the OpenClaw health endpoint."""
-
-    payload: Any
-    raw_text: str
-    status: str = ""
-    healthy: bool | None = None
-
+# HealthResponse — moved to openclaw_cli_health; imported at top of file.
 
 @dataclass(frozen=True)
 class LocalLinkValidation:
@@ -1497,43 +1371,7 @@ def _session_operator_snapshot(
 
 
 def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
-    """Render human-readable lines for the operator snapshot."""
-    lines = [
-        _progress_cell("visibility", str(snapshot.get("access") or "read-only local snapshot"), status="info"),
-    ]
-    readiness_label = str(snapshot.get("readiness_label") or "").strip()
-    readiness_detail = str(snapshot.get("readiness_detail") or "").strip()
-    if readiness_label:
-        readiness_value = readiness_label if not readiness_detail else f"{readiness_label} · {readiness_detail}"
-        lines.append(
-            _progress_cell(
-                "readiness",
-                readiness_value,
-                status=str(snapshot.get("readiness_status") or "info"),
-            )
-        )
-    watch_summary = str(snapshot.get("watch_summary") or "").strip()
-    if watch_summary:
-        lines.append(f"operator watch: {watch_summary}")
-    queue_summary = str(snapshot.get("queue_summary") or "").strip()
-    if queue_summary:
-        lines.append(f"operator queue: {queue_summary}")
-    latest_output = str(snapshot.get("latest_output") or "").strip()
-    if latest_output:
-        lines.append(f"latest output: {latest_output}")
-    latest_decision = str(snapshot.get("latest_decision") or "").strip()
-    if latest_decision:
-        lines.append(f"latest decision: {_single_line_excerpt(latest_decision, max_chars=100)}")
-    latest_note = str(snapshot.get("latest_note") or "").strip()
-    if latest_note:
-        lines.append(f"latest note: {_single_line_excerpt(latest_note, max_chars=100)}")
-    latest_handoff = str(snapshot.get("latest_handoff") or "").strip()
-    if latest_handoff:
-        lines.append(f"latest handoff: {latest_handoff}")
-    control = str(snapshot.get("control") or "").strip()
-    if control:
-        lines.append(f"control: {control}")
-    return lines
+    return _health_mod._operator_snapshot_lines(snapshot)
 
 
 def _acknowledged_alert_ids() -> set[str]:
@@ -2433,44 +2271,8 @@ def _render_md_table_rich(headers: list[str], rows: list[list[str]]) -> None:
     return _preprocess_mod._render_md_table_rich(headers, rows)
 
 
-def _clean_sources_for_display(sources: str) -> list[str]:
-    """Extract clean URLs from a sources block, stripping markdown link syntax.
-
-    Handles:
-      - Bare URLs: https://example.com
-      - Markdown links: [text](https://example.com)  → https://example.com
-      - Numbered/bulleted prefixes: 1. / - / * stripped
-    Returns a list of (display_text, url) tuples, or (url, url) if no text.
-    """
-    results: list[tuple[str, str]] = []
-    seen: set[str] = set()
-    for line in sources.splitlines():
-        line = line.strip()
-        # Strip bullet/number prefix
-        line = re.sub(r"^(?:\d+\.|[-\*])\s+", "", line)
-        line = line.strip()
-        if not line:
-            continue
-        # Check for markdown link [text](url)
-        md = _RE_MD_LINK.search(line)
-        if md:
-            text, url = md.group(1).strip(), md.group(2).strip()
-            display = text if text and text != url else url
-            display = _RE_ANSI_ESCAPE.sub("", display).strip()
-            if not display or "http://" in display or "https://" in display:
-                display = url
-            if url not in seen:
-                seen.add(url)
-                results.append((display, url))
-            continue
-        # Check for bare URL
-        bare = _RE_BARE_URL.search(line)
-        if bare:
-            url = bare.group(1).rstrip(")")
-            if url not in seen:
-                seen.add(url)
-                results.append((url, url))
-    return results
+def _clean_sources_for_display(sources: str) -> list[tuple[str, str]]:
+    return _health_mod._clean_sources_for_display(sources)
 
 
 def _render_body_with_tables(body: str) -> None:
@@ -2567,72 +2369,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
 
 
 def print_health(response: HealthResponse, *, output_json: bool) -> None:
-    """Render a health response to stdout."""
-    if output_json:
-        if isinstance(response.payload, str):
-            print(json.dumps({"health": response.payload}, indent=2, sort_keys=True))
-            return
-        print(json.dumps(response.payload, indent=2, sort_keys=True))
-        return
-    status = (response.status or "unknown").upper()
-    emoji = _status_emoji(response.status or "")
-    if _RICH_AVAILABLE and _IS_TTY:
-        border = "green" if response.healthy is True else ("yellow" if response.healthy is False else "dim")
-        status_style = "bold green" if response.healthy is True else ("bold yellow" if response.healthy is False else "dim")
-        t = _RichText()
-        t.append(f"{emoji}  OpenClaw  ", style="bold")
-        t.append(status, style=status_style)
-        if isinstance(response.payload, dict):
-            grid = _RichTable.grid(padding=(0, 2))
-            grid.add_column(style="dim", min_width=14)
-            grid.add_column()
-            labels = {
-                "uptime_seconds": "uptime",
-                "bot_user": "bot",
-                "guilds": "guilds",
-                "python": "python",
-                "discord_py": "discord.py",
-            }
-            for key, label in labels.items():
-                if key in response.payload:
-                    val = str(response.payload[key])
-                    if key == "uptime_seconds":
-                        val = f"{val}s"
-                    grid.add_row(label, val)
-            checks = response.payload.get("checks")
-            if isinstance(checks, dict) and checks:
-                for name, value in sorted(checks.items()):
-                    chk_emoji = "✅" if str(value).lower() in {"ok", "true", "healthy"} else "⚠️"
-                    grid.add_row(f"  {name}", f"{chk_emoji} {value}")
-            from rich.console import Group as _RichGroup
-            _RICH_CONSOLE.print(_RichPanel(_RichGroup(t, grid), border_style=border, padding=(0, 1)))
-        elif isinstance(response.payload, str) and response.payload.strip():
-            from rich.console import Group as _RichGroup
-            _RICH_CONSOLE.print(_RichPanel(_RichGroup(t, _RichText(response.payload.strip(), style="dim")), border_style=border, padding=(0, 1)))
-        else:
-            _RICH_CONSOLE.print(_RichPanel(t, border_style=border, padding=(0, 1)))
-    else:
-        if response.healthy is True:
-            prefix = f"{_BGR}OK{_R}"
-        elif response.healthy is False:
-            prefix = f"{_BYE}WARN{_R}"
-        else:
-            prefix = f"{_DM}INFO{_R}"
-        print(f"{emoji}  {prefix} OpenClaw health: {_B}{status}{_R}")
-        if isinstance(response.payload, dict):
-            for key in ("uptime_seconds", "bot_user", "guilds", "python", "discord_py"):
-                if key in response.payload:
-                    val = str(response.payload[key])
-                    if key == "uptime_seconds":
-                        val = f"{val}s"
-                    print(f"  {_DM}{key}:{_R}  {val}")
-            checks = response.payload.get("checks")
-            if isinstance(checks, dict) and checks:
-                for name, value in sorted(checks.items()):
-                    print(f"  {_DM}{name}:{_R}  {value}")
-            return
-        if isinstance(response.payload, str) and response.payload.strip():
-            print(response.payload.strip())
+    return _health_mod.print_health(response, output_json=output_json)
 
 
 def maybe_warn_missing_token(config: CliConfig) -> None:
@@ -6310,46 +6047,7 @@ def _cmd_handoff(ctx: ChatCommandContext) -> str:
 
 
 def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace Capsule") -> None:
-    """Render a compact workspace recovery summary."""
-    tracked_files = list(capsule.get("tracked_files") or [])
-    bookmarks = list(capsule.get("bookmarks") or [])
-    recent_outputs = list(capsule.get("recent_outputs") or [])
-    if _RICH_AVAILABLE and _IS_TTY:
-        lines = [
-            f"cwd: {capsule.get('cwd', '')}",
-            _progress_cell("files", str(capsule.get("tracked_file_count", len(tracked_files))), status="active" if tracked_files else "idle"),
-            _progress_cell("bookmarks", str(capsule.get("bookmark_count", len(bookmarks))), status="complete" if bookmarks else "idle"),
-            _progress_cell("outputs", str(capsule.get("output_count", len(recent_outputs))), status="complete" if recent_outputs else "idle"),
-        ]
-        watch_status = str(capsule.get("watch_status") or "").strip()
-        if watch_status:
-            lines.append(_progress_cell("watch", watch_status, status="active" if watch_status not in {"idle", "waiting"} else "idle"))
-        signature = str(capsule.get("workspace_signature") or "").strip()
-        if signature:
-            lines.append(f"signature: {signature}")
-        if capsule.get("plan_id"):
-            lines.append(f"plan: {capsule.get('plan_id')}")
-        if capsule.get("task_id"):
-            lines.append(f"task: {capsule.get('task_id')}")
-        if recent_outputs:
-            lines.append("recent outputs:")
-            lines.extend(f"  - {item.get('name', '')}" for item in recent_outputs[:3])
-        if bookmarks:
-            lines.append("recent bookmarks:")
-            lines.extend(f"  - [{item.get('id', '')}] {item.get('label', '')}" for item in bookmarks[-3:])
-        grid = _RichTable.grid(padding=(0, 1))
-        grid.add_column()
-        for line in lines:
-            grid.add_row(str(line))
-        _RICH_CONSOLE.print(_RichPanel(grid, title=f"[bold cyan]{title}[/]", border_style="cyan", padding=(0, 1)))
-    else:
-        plain_lines = _session_cmds_mod._build_workspace_capsule_plain_lines(capsule)
-        print(title)
-        print("-" * len(title))
-        for line in plain_lines:
-            print(line)
-
-
+    _ui_utils_mod._print_workspace_capsule(capsule, title=title)
 def _cmd_workspace(ctx: ChatCommandContext) -> str:
     """/workspace [status|save|list|restore NAME] — manage workspace recovery capsules."""
     raw = (ctx.args or "").strip()
@@ -7452,48 +7150,7 @@ def _print_status_bar(
     autoroute_on: bool = True,
     history_len: int = 0,
 ) -> None:
-    """Print a compact dim status line below the response.
-
-    Shows session, context size, and autoroute state so the user always has
-    situational awareness without cluttering the response output itself.
-    """
-    is_tty = _get_is_tty()
-    if not is_tty:
-        return
-    cols = _terminal_width()
-    narrow = cols < 60
-    parts: list[str] = []
-    if session_id:
-        short = session_id[:6] if narrow else session_id[:10]
-        parts.append(f"{_e('📍', '@')} {short}…")
-    turns = history_len // 2  # history contains alternating user/assistant pairs
-    if turns and not narrow:
-        parts.append(f"{_e('💬', 'msgs:')} {turns} turn{'s' if turns != 1 else ''}")
-    autoroute_state = "on" if autoroute_on else "off"
-    if _a11y_plain_mode():
-        parts.append(f"autoroute {autoroute_state}")
-        print("Status: " + " | ".join(parts))
-        return
-    if _a11y_high_contrast():
-        color = "\033[1;92m" if autoroute_on else "\033[1;93m"
-    else:
-        color = "\033[32m" if autoroute_on else "\033[33m"
-    parts.append(f"autoroute {color}{autoroute_state}{_R}")
-    if narrow:
-        for idx, part in enumerate(parts):
-            prefix = "Status:" if idx == 0 else "       "
-            print(f"  {prefix} {part}")
-    else:
-        line = "  ·  ".join(parts)
-        if _RICH_AVAILABLE and is_tty:
-            style = "bold white" if _a11y_high_contrast() else "dim"
-            _RICH_CONSOLE.print(f"[{style}]  {line}[/]")
-        else:
-            style = _theme_ansi() if _a11y_high_contrast() else _DM
-            reset = _R if style else ""
-            print(f"  {style}{line}{reset}")
-
-
+    _ui_utils_mod._print_status_bar(session_id=session_id, autoroute_on=autoroute_on, history_len=history_len, _override_is_tty=_IS_TTY, _override_rich_available=_RICH_AVAILABLE, _override_cols=_terminal_width())
 def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False) -> str:
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
     if _a11y_plain_mode():
@@ -7634,101 +7291,7 @@ def _time_greeting() -> str:
 
 
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
-    """Print a colored startup banner for the interactive REPL."""
-    autoroute_on = _session_auto_route_enabled(session_id)
-    ver = cli_version()
-    cols = _terminal_width()
-
-    # Compute session milestone (best-effort)
-    _milestone = None
-    _session_count = 0
-    try:
-        from openclaw_cli_sessions import list_sessions as _list_sessions  # type: ignore[import]
-        _session_count = len(_list_sessions(limit=1001))
-        for m in (10, 50, 100, 250, 500, 1000):
-            if _session_count == m:
-                _milestone = m
-                break
-    except Exception:  # noqa: BLE001
-        pass
-
-    # Plain-mode path: no ANSI, no emoji, no decorative borders.
-    if _a11y_plain_mode() or cols < 40:
-        autoroute_str = "on" if autoroute_on else "off"
-        print(f"🦞 OpenClaw {ver}")
-        print(_time_greeting())
-        print(f"Server: {config.base_url}")
-        print(f"User: {config.user_name}")
-        if session_id:
-            print(f"Session: {session_id[:8]}…")
-        print("Type /help for commands. /quit to exit.")
-        print(f"Auto-routing: {autoroute_str}")
-        if _milestone:
-            print(f"  🎉 {_milestone} sessions with OpenClaw! That's a milestone!")
-        return
-
-    if _RICH_AVAILABLE and _IS_TTY:
-        t = _RichText()
-        t.append(f"{_e('🦞', '[openclaw]')} OpenClaw", style="bold cyan")
-        t.append(f"  {ver}", style="cyan dim")
-        t.append("  connected to ", style="dim")
-        t.append(config.base_url, style="cyan")
-        t.append(f"\n  {_time_greeting()}", style="dim")
-        t.append(f"\n  {_e('👤', '[user]')} ", style="dim")
-        t.append(config.user_name, style="bold green")
-        if session_id:
-            t.append(f"  ·  {_e('🗂', '[session]')}  session: ", style="dim")
-            t.append(session_id[:8] + "…", style="yellow")
-        t.append("\n\n  ", style="")
-        t.append("Type anything to chat", style="dim")
-        t.append(" · ", style="dim")
-        t.append("/help", style="bold cyan")
-        t.append(" for commands", style="dim")
-        t.append(" · ", style="dim")
-        t.append("/quit", style="bold cyan")
-        t.append(" to exit", style="dim")
-        t.append(" · ", style="dim")
-        t.append("Tab", style="bold")
-        t.append(" completes /commands", style="dim")
-        t.append("\n  ", style="")
-        t.append("Auto-routing", style="bold")
-        if autoroute_on:
-            t.append(" is on — smart prompts route to analyze/research/exec automatically", style="dim")
-        else:
-            t.append(" is off", style="dim yellow")
-            t.append(" — use /autoroute on to enable", style="dim")
-        _RICH_CONSOLE.print(
-            _RichPanel(
-                t,
-                border_style="bold white" if _a11y_high_contrast() else "cyan",
-                padding=(0, 1),
-            )
-        )
-        if _milestone:
-            _RICH_CONSOLE.print(f"  🎉 [bold cyan]{_milestone} sessions with OpenClaw![/] [dim]That's a milestone![/]")
-        _motion_pause("banner")
-    else:
-        session_line = (
-            f"\n  {_DM}{_e('🗂', '[session]')}  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
-        )
-        if autoroute_on:
-            autoroute_line = f"\n  {_B}Auto-routing{_R} {_DM}is on — smart prompts route to analyze/research/exec automatically{_R}"
-        else:
-            autoroute_line = f"\n  {_B}Auto-routing{_R} {_YE}is off{_R} {_DM}— use /autoroute on to enable{_R}"
-        print(
-            f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}  {_DM}{ver}{_R}"
-            f"\n  {_DM}{_time_greeting()}{_R}"
-            f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
-            f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
-            f"{session_line}"
-            f"\n"
-            f"\n  Type anything to chat · {_BCY}/help{_R} for commands · {_BCY}/quit{_R} to exit · {_B}Tab{_R}{_DM} completes /commands{_R}"
-            f"{autoroute_line}\n"
-        )
-        if _milestone:
-            print(f"  🎉 {_BCY}{_milestone} sessions with OpenClaw!{_R} {_DM}That's a milestone!{_R}")
-
-
+    _ui_utils_mod._print_startup_banner(config, session_id)
 def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
     """Toggle or inspect the paste guard setting."""
     token = (ctx.args or "").strip().lower()
@@ -8438,46 +8001,7 @@ def _cmd_pins(ctx: "ChatCommandContext") -> str:
 
 
 def _celebration_burst(message: str = "") -> None:
-    """Print a short animated celebration burst (confetti + message)."""
-    import random
-    is_tty = _get_is_tty()
-    if not is_tty or _a11y_reduced_motion() or _a11y_plain_mode():
-        if message:
-            print(f"🎉 {message}")
-        return
-
-    confetti_chars = ["✦", "✧", "★", "◆", "◇", "❋", "✿", "❀", "🎊", "🎉", "⭐", "💫"]
-    colors = [_RE, _YE, _GR, _CY, _MA, _BBL]
-
-    width = 60
-
-    for frame in range(3):
-        line1 = ""
-        line2 = ""
-        for _ in range(width // 3):
-            char = random.choice(confetti_chars)
-            color = random.choice(colors)
-            line1 += f"{color}{char}{_R} "
-        for _ in range(width // 3):
-            char = random.choice(confetti_chars)
-            color = random.choice(colors)
-            line2 += f"{color}{char}{_R} "
-        sys.stdout.write(f"\r  {line1}\n  {line2}\n")
-        sys.stdout.flush()
-        time.sleep(0.15)
-        sys.stdout.write("\033[2A")
-        sys.stdout.flush()
-
-    sys.stdout.write(f"\r{' ' * 80}\n{' ' * 80}\n")
-    sys.stdout.write("\033[2A")
-
-    stars = "⭐" * 5
-    if _RICH_AVAILABLE:
-        _RICH_CONSOLE.print(f"\n  [bold yellow]{stars}  {message or 'Perfect rating!'}  {stars}[/]\n")
-    else:
-        print(f"\n  {_BYE}{stars}  {message or 'Perfect rating!'}  {stars}{_R}\n")
-
-
+    _ui_utils_mod._celebration_burst(message)
 def _cmd_celebrate(ctx: "ChatCommandContext") -> str:
     """/celebrate — trigger a celebration animation (just for fun!)."""
     msg = ctx.args.strip() or "Woohoo! 🎉"
