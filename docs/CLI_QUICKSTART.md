@@ -246,6 +246,14 @@ vocabulary, persistence, and fallback reporting first.
 | `/snapshot [name]` | Save current git HEAD as a named restore point |
 | `/rollback [name\|list]` | Preview or execute rollback to a saved snapshot |
 
+### Wave 30 — Power Dashboard 🖥️
+
+| Command | Description |
+|---------|-------------|
+| `/dashboard` | Rich stats + pins + activity + quick reference layout |
+| `/benchmark [n]` | Benchmark AI server latency (n pings, default 3) |
+| `/timeline` | Visual activity timeline grouped by day (last 7 days) |
+
 ## Wave 20 collaboration handoffs
 
 Wave 20 adds local-first collaboration affordances without requiring any new

@@ -2203,3 +2203,20 @@ If `openclaw_cli_sessions.py` was changed, also deploy it:
 ```bash
 scp src/openclaw_cli_sessions.py macbook:/Users/davevoyles/.local/share/openclaw-cli/
 ```
+
+---
+
+## Wave 30 — Power Dashboard 🖥️ ✅ Shipped
+
+**Goal:** Give power users a rich at-a-glance view of their openclaw session and server health.
+
+### Features
+- **`/dashboard`** — Rich multi-panel layout: session stats, pinned notes, recent activity feed, quick command reference card
+- **`/benchmark [n]`** — Measures AI server TCP latency over n pings (1–10, default 3). Color-coded timing bars + Min/Avg/Max summary + quality badge (🟢/🟡/🔴)
+- **`/timeline`** — Scrollable ASCII activity timeline showing last 7 days of usage, grouped by date with activity bars and event previews
+
+### Implementation Notes
+- Rich layout used for `/dashboard` when Rich is available, falls back to ANSI/plain
+- `/benchmark` uses TCP socket ping (no auth required, works with any endpoint)
+- `/timeline` groups `cmd_history` entries by ISO date, shows last 3 events per day
+- All three commands respect accessibility flags (`_a11y_plain_mode`, `_a11y_reduced_motion`)
