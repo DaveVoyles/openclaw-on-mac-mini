@@ -4704,3 +4704,122 @@ class TestSeparator:
 
         assert result == mod._CMD_CONTINUE
         assert mod._PREFS["separator_style"] == "gradient"
+
+
+class TestCmdPalette:
+    """Tests for /palette fuzzy command search."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def _make_registry(self):
+        """Build a fresh real registry for inspection."""
+        return mod.build_chat_command_registry()
+
+    def test_no_query_shows_all_commands(self, capsys, monkeypatch):
+        """/palette with no query shows all registered commands including 'palette'."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_CMD_REGISTRY_CACHE", None)
+
+        ctx = self._ctx("")
+        result = mod._cmd_palette(ctx)
+
+        assert result == mod._CMD_CONTINUE
+        captured = capsys.readouterr().out
+        assert "palette" in captured
+
+    def test_query_edit_returns_matching_commands(self, capsys, monkeypatch):
+        """/palette edit returns commands whose name or description contains 'edit'."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_CMD_REGISTRY_CACHE", None)
+
+        ctx = self._ctx("edit")
+        result = mod._cmd_palette(ctx)
+
+        assert result == mod._CMD_CONTINUE
+        captured = capsys.readouterr().out
+        assert "edit" in captured.lower()
+
+    def test_no_match_shows_not_found_message(self, capsys, monkeypatch):
+        """/palette xyznotfound shows 'No commands matching' message."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_CMD_REGISTRY_CACHE", None)
+
+        ctx = self._ctx("xyznotfound")
+        result = mod._cmd_palette(ctx)
+
+        assert result == mod._CMD_CONTINUE
+        captured = capsys.readouterr().out
+        assert "No commands matching" in captured
+
+    def test_results_sorted_alphabetically(self, monkeypatch):
+        """Results from /palette are sorted alphabetically by command name."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_CMD_REGISTRY_CACHE", None)
+
+        registry = mod.build_chat_command_registry()
+        commands = registry.list_commands()
+        matches = sorted(commands, key=lambda c: c.name)
+        names = [c.name for c in matches]
+        assert names == sorted(names)
+
+
+class TestCmdShortcuts:
+    """Tests for /shortcuts keyboard shortcuts reference card."""
+
+    def _ctx(self, args: str = "") -> mod.ChatCommandContext:
+        return mod.ChatCommandContext(history=[], session_id="", args=args)
+
+    def test_returns_cmd_continue(self, monkeypatch):
+        """/shortcuts returns _CMD_CONTINUE."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        ctx = self._ctx("")
+        result = mod._cmd_shortcuts(ctx)
+        assert result == mod._CMD_CONTINUE
+
+    def test_output_contains_tab_and_ctrl(self, capsys, monkeypatch):
+        """/shortcuts output contains 'Tab' and 'Ctrl'."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        ctx = self._ctx("")
+        mod._cmd_shortcuts(ctx)
+        captured = capsys.readouterr().out
+        assert "Tab" in captured
+        assert "Ctrl" in captured
+
+    def test_output_contains_section_headers(self, capsys, monkeypatch):
+        """/shortcuts output contains 'Navigation' and 'Quick Commands' section headers."""
+        monkeypatch.setattr(mod, "_IS_TTY", False)
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        ctx = self._ctx("")
+        mod._cmd_shortcuts(ctx)
+        captured = capsys.readouterr().out
+        assert "Navigation" in captured
+        assert "Quick Commands" in captured
+
+
+class TestSlashCompleter:
+    """Tests for the _SlashCompleter readline completer."""
+
+    def test_compute_matches_prefix_returns_matching_commands(self, monkeypatch):
+        monkeypatch.setattr(mod, "_PREFS", {})
+        completer = mod._SlashCompleter()
+        matches = completer._compute_matches("/hel")
+        assert "/help" in matches
+
+    def test_compute_matches_exact_returns_single_result(self, monkeypatch):
+        monkeypatch.setattr(mod, "_PREFS", {})
+        completer = mod._SlashCompleter()
+        matches = completer._compute_matches("/quit")
+        assert matches == ["/quit"]
+
+    def test_compute_matches_no_slash_returns_empty(self, monkeypatch):
+        monkeypatch.setattr(mod, "_PREFS", {})
+        completer = mod._SlashCompleter()
+        matches = completer._compute_matches("hello")
+        assert matches == []

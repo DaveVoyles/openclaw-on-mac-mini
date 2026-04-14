@@ -134,7 +134,7 @@ DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 KEYCHAIN_SERVICE = "OpenClaw CLI"
 DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave20"  # updated with each UX wave batch
+_CLI_BUILD = "wave21"  # updated with each UX wave batch
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
 TOKEN_ENV_VARS = "OPENCLAW_TOKEN or DASHBOARD_API_TOKEN"
@@ -8018,6 +8018,66 @@ def _cmd_separator(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+_CMD_REGISTRY_CACHE: "dict | None" = None
+
+
+def _get_cmd_registry() -> "ChatCommandRegistry":
+    """Return the cached command registry, building it once on first call."""
+    global _CMD_REGISTRY_CACHE
+    if _CMD_REGISTRY_CACHE is None:
+        _CMD_REGISTRY_CACHE = build_chat_command_registry()
+    return _CMD_REGISTRY_CACHE
+
+
+def _cmd_palette(ctx: "ChatCommandContext") -> str:
+    """/palette [query] — search slash commands by keyword (fuzzy)."""
+    query = ctx.args.strip().lower()
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    commands = list(_get_cmd_registry().list_commands())
+
+    if query:
+        matches = [
+            cmd for cmd in commands
+            if query in cmd.name.lower() or
+               (cmd.description and query in cmd.description.lower())
+        ]
+    else:
+        matches = commands
+
+    if not matches:
+        msg = f"No commands matching '{query}'"
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[yellow]{msg}[/]")
+        else:
+            print(msg)
+        return _CMD_CONTINUE
+
+    matches.sort(key=lambda c: c.name)
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table
+        from rich.box import SIMPLE
+        tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
+        tbl.add_column("Command", style="bold green", no_wrap=True)
+        tbl.add_column("Description", style="default")
+        for cmd in matches:
+            tbl.add_row(f"/{cmd.name}", cmd.description or "")
+        _RICH_CONSOLE.print(
+            f"\n[bold cyan]🎯 Command Palette[/] "
+            f"[dim]({len(matches)} match{'es' if len(matches) != 1 else ''})[/]\n"
+        )
+        _RICH_CONSOLE.print(tbl)
+    else:
+        print(f"\n🎯 Command Palette ({len(matches)} matches)")
+        print(f"{'Command':<22} Description")
+        print("─" * 60)
+        for cmd in matches:
+            print(f"  /{cmd.name:<20} {cmd.description or ''}")
+
+    return _CMD_CONTINUE
+
+
 def build_chat_command_registry() -> ChatCommandRegistry:
     """Build and return the default interactive-chat command registry."""
     registry = ChatCommandRegistry()
@@ -8351,6 +8411,16 @@ def build_chat_command_registry() -> ChatCommandRegistry:
         description="Set or preview response separator style (/separator gradient|pulse|dots|wave|none)",
         handler=_cmd_separator,
     ))
+    registry.register(SlashCommand(
+        name="palette",
+        description="Search slash commands by keyword (/palette [query])",
+        handler=_cmd_palette,
+    ))
+    registry.register(SlashCommand(
+        name="shortcuts",
+        description="Show keyboard shortcuts and quick-access reference card",
+        handler=_cmd_shortcuts,
+    ))
     return registry
 
 
@@ -8431,6 +8501,8 @@ def print_chat_help(*, search: str = "") -> None:
         ("/system clear",                        "Clear the system prompt"),
         ("/autobold [on|off]",                   "Toggle automatic bolding of numbers and filenames in responses"),
         ("/separator [style]",                   "Set or preview response separator style (gradient|pulse|dots|wave|none)"),
+        ("/palette [query]",                     "Search slash commands by keyword (fuzzy)"),
+        ("/shortcuts",                           "Show keyboard shortcuts and quick-access reference card"),
     ]
 
     q = search.strip().lower()
@@ -8698,6 +8770,35 @@ def _make_completer(registry: "ChatCommandRegistry") -> "Any":
     return _completer
 
 
+class _SlashCompleter:
+    """readline completer for slash commands.
+
+    Uses ``_BUILTIN_COMMAND_NAMES`` and user-defined aliases from ``_PREFS``
+    so it works correctly even before the full command registry is built.
+    """
+
+    def __init__(self) -> None:
+        self._matches: "list[str]" = []
+
+    def complete(self, text: str, state: int) -> "str | None":
+        if state == 0:
+            self._matches = self._compute_matches(text)
+        try:
+            return self._matches[state]
+        except IndexError:
+            return None
+
+    def _compute_matches(self, text: str) -> "list[str]":
+        if not text.startswith("/"):
+            return []
+        prefix = text[1:].lower()
+        names = sorted(_BUILTIN_COMMAND_NAMES)
+        aliases = list(_PREFS.get("aliases", {}).keys())
+        all_names = names + aliases
+        matches = [f"/{n}" for n in all_names if n.lower().startswith(prefix)]
+        return matches
+
+
 def build_config(args: argparse.Namespace) -> CliConfig:
     """Build resolved CLI config from parsed args and environment."""
     timeout_seconds = max(1, int(args.timeout))
@@ -8848,6 +8949,9 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
         t.append(" · ", style="dim")
         t.append("/quit", style="bold cyan")
         t.append(" to exit", style="dim")
+        t.append(" · ", style="dim")
+        t.append("Tab", style="bold")
+        t.append(" completes /commands", style="dim")
         t.append("\n  ", style="")
         t.append("Auto-routing", style="bold")
         if autoroute_on:
@@ -8876,7 +8980,7 @@ def _print_startup_banner(config: CliConfig, session_id: str) -> None:
             f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
             f"{session_line}"
             f"\n"
-            f"\n  Type anything to chat · {_BCY}/help{_R} for commands · {_BCY}/quit{_R} to exit"
+            f"\n  Type anything to chat · {_BCY}/help{_R} for commands · {_BCY}/quit{_R} to exit · {_B}Tab{_R}{_DM} completes /commands{_R}"
             f"{autoroute_line}\n"
         )
 
@@ -9561,6 +9665,76 @@ def _cmd_ratehint(ctx: "ChatCommandContext") -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_shortcuts(ctx: "ChatCommandContext") -> str:
+    """/shortcuts — show keyboard shortcuts and quick-access reference card."""
+    is_tty = _IS_TTY or sys.stdout.isatty()
+
+    sections = [
+        ("⌨️  Navigation", [
+            ("Tab",          "Auto-complete slash commands"),
+            ("↑ / ↓",        "Scroll through command history"),
+            ("Ctrl+A",       "Jump to start of line"),
+            ("Ctrl+E",       "Jump to end of line"),
+            ("Ctrl+W",       "Delete last word"),
+            ("Ctrl+U",       "Clear current line"),
+        ]),
+        ("🔄  Session", [
+            ("Ctrl+C",       "Interrupt current response"),
+            ("Ctrl+D",       "Exit openclaw"),
+            ("/quit",        "Exit gracefully"),
+            ("/clear",       "Clear screen"),
+        ]),
+        ("📋  Quick Commands", [
+            ("/last",        "Re-print last response"),
+            ("/retry",       "Retry last prompt"),
+            ("/draft",       "Edit current draft buffer"),
+            ("/history",     "Browse recent prompts"),
+            ("/palette",     "Search all commands (new!)"),
+        ]),
+        ("🎨  Appearance", [
+            ("/separator [style]",  "Set response separator style"),
+            ("/emojiheaders on|off", "Toggle emoji on headings"),
+            ("/autobold on|off",     "Toggle auto-bold in responses"),
+            ("/theme",               "Switch color theme"),
+        ]),
+        ("🔧  Power", [
+            ("/macro [name]",   "Run saved macro"),
+            ("/pin [key]",      "Pin a value for quick reference"),
+            ("/export",         "Export session to file"),
+            ("/help",           "Full command reference"),
+        ]),
+    ]
+
+    if _RICH_AVAILABLE and is_tty:
+        from rich.table import Table
+        from rich.box import ROUNDED
+
+        _RICH_CONSOLE.print()
+        _RICH_CONSOLE.print(_RichPanel.fit("[bold cyan]⌨️  Keyboard Shortcuts & Quick Reference[/]", border_style="cyan"))
+        _RICH_CONSOLE.print()
+
+        for section_title, items in sections:
+            tbl = Table(box=None, show_header=False, padding=(0, 2))
+            tbl.add_column("Key", style="bold yellow", no_wrap=True, min_width=24)
+            tbl.add_column("Action", style="default")
+            for key, desc in items:
+                tbl.add_row(key, desc)
+            _RICH_CONSOLE.print(f"[bold]{section_title}[/]")
+            _RICH_CONSOLE.print(tbl)
+            _RICH_CONSOLE.print()
+    else:
+        print("\n⌨️  Keyboard Shortcuts & Quick Reference")
+        print("=" * 50)
+        for section_title, items in sections:
+            print(f"\n{section_title}")
+            print("─" * 40)
+            for key, desc in items:
+                print(f"  {key:<24} {desc}")
+        print()
+
+    return _CMD_CONTINUE
+
+
 def _paste_guard(
     prompt: str,
     *,
@@ -9621,7 +9795,9 @@ def run_chat(
     load_shell_history()
     # Wire tab completion for /commands when readline is available.
     if readline is not None:
-        readline.set_completer(_make_completer(registry))
+        _slash_completer = _SlashCompleter()
+        readline.set_completer(_slash_completer.complete)
+        readline.set_completer_delims(" \t\n")
         readline.parse_and_bind("tab: complete")
     _print_startup_banner(config, session_id)
     # First-run checklist: show tips when starting a brand-new empty session

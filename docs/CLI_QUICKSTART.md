@@ -192,6 +192,14 @@ openclaw session export <session-id>
 - **`openclaw session export`** now includes a `collaboration` block in its
   JSON payload, and handoff manifests capture the same structure.
 
+### Wave 20 — Response Typography
+
+| Command | Description |
+|---|---|
+| `/autobold [on\|off]` | Toggle auto-bolding of dollar amounts, percentages, and filenames in responses |
+| `/emojiheaders [on\|off]` | Toggle emoji prefixes on AI response headings (`## 🔹`, `### ▸`) |
+| `/separator [style]` | Set separator style after responses: `gradient`, `pulse`, `dots`, `wave`, `none` |
+
 ## Hybrid REPL — in-session slash commands
 
 The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural-language prompts and slash commands coexist in the same input stream. Every slash command is handled locally before the input reaches the LLM.

@@ -121,6 +121,14 @@ For the canonical inventory and reusable checklist, see
 | [Wave 20](#wave-20--collaboration-handoff-ux) | Collaboration Handoff UX | ✅ Shipped |
 | [Wave 21](#wave-21--motion-language--staggered-feedback) | Motion Language & Staggered Feedback | 🔲 Ready |
 | [Wave 22](#wave-22--emoji-badges-progress-cells--live-status-lattice) | Emoji Badges, Progress Cells & Live Status Lattice | 🔲 Ready |
+| [Wave 23](#wave-23--visual-hierarchy-renaissance--dashboard-elevation) | Visual Hierarchy Renaissance & Dashboard Elevation | 🔲 Ready |
+| [Wave 24](#wave-24--terminal-preview--focused-inspection) | Terminal Preview & Focused Inspection | 🔲 Ready |
+| [Wave 25](#wave-25--multi-pane-layout-presets) | Multi-Pane Layout Presets | 🔲 Ready |
+| [Wave 26](#wave-26--session-mood-celebration--emotional-feedback) | Session Mood, Celebration & Emotional Feedback | 🔲 Ready |
+| [Wave 27](#wave-27--live-dashboard-shares--operator-visibility) | Live Dashboard Shares & Operator Visibility | 🔲 Ready |
+| [Wave 28](#wave-28--gesture-language--predictive-affordances) | Gesture Language & Predictive Affordances | 🔲 Ready |
+| [Wave 29](#wave-29--narrative-recaps--session-storytelling) | Narrative Recaps & Session Storytelling | 🔲 Ready |
+| [Wave 30](#wave-30--premium-motion--choreography-layer) | Premium Motion & Choreography Layer | 🔲 Ready |
 
 ---
 
@@ -1135,6 +1143,31 @@ and handoff data.
 
 ---
 
+## Wave 20 — Response Typography & Auto-Bold
+
+**Status:** ✅ Shipped
+
+### Features
+- **Auto-bold responses** (`/autobold`): Dollar amounts (`$69M`), percentages (`47%`), and filenames (`openclaw_cli.py`) are automatically bolded/formatted in AI responses. Respects `auto_bold` pref. Skips code blocks, table rows, blockquotes.
+- **Emoji markdown headers** (`/emojiheaders`): H2 headings get `🔹`, H3 get `▸`, H1 get `✨`. Applied in both ANSI and Rich render paths. Controlled by `emoji_headers` pref.
+- **Animated response separator** (`/separator`): A 3-frame braille animation followed by a static `─` rule separates each AI response from the next prompt. 5 styles: `gradient`, `pulse`, `dots`, `wave`, `none`. Respects reduced-motion and plain-mode a11y.
+
+### New Commands
+| Command | Description |
+|---|---|
+| `/autobold [on\|off]` | Toggle automatic bolding of key terms |
+| `/emojiheaders [on\|off]` | Toggle emoji heading prefixes |
+| `/separator [style]` | Set post-response separator animation style |
+
+### New Prefs
+| Key | Default | Description |
+|---|---|---|
+| `auto_bold` | `True` | Enable auto-bolding in responses |
+| `emoji_headers` | `True` | Enable emoji on markdown headings |
+| `separator_style` | `"gradient"` | Separator animation style |
+
+---
+
 ## Wave 21 — Motion Language & Staggered Feedback
 
 **Status: 🔲 Ready**
@@ -1263,6 +1296,595 @@ instantly without forcing users to read full prose lines.
 | C — dense history surfaces | `/events`, `/outputs`, `/context`, and other scan-heavy views |
 | D — validation + parity | Focused pytest/manual checks for non-TTY, plain mode, high contrast, and reduced-motion output |
 | E — docs/dashboard sync | Architecture, quickstart, and dashboard-surface terminology updates |
+
+---
+
+## Wave 23 — Visual Hierarchy Renaissance & Dashboard Elevation
+
+**Status: 🔲 Ready**
+
+**Goal:** make OpenClaw’s terminal surfaces read like intentional dashboards
+instead of long transcripts by strengthening hierarchy, grouping, and
+surface-specific color/spacing patterns.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Header taxonomy | Users should immediately distinguish page title, section title, subsection, metric row, and action hint without re-learning each command |
+| Dashboard composition | `/session`, `/sessions`, `/watch`, and `/outputs` should feel like related dashboards with repeatable layout regions rather than ad-hoc blocks |
+| Surface identity | Each major surface should have a stable visual signature without abandoning the shared status grammar from Wave 22 |
+| Summary-first scanning | Critical state, next action, and recent changes should appear before verbose detail |
+| Plain-text structure parity | Non-Rich output must still preserve section ordering, labels, and grouping so the information architecture survives without panels/colors |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Heading + divider primitives | Introduce shared helpers for page headers, section headers, compact metric strips, and summary blocks that work in Rich and ANSI/plain paths |
+| Session + watch dashboards | Recompose `/session`, `/sessions`, `/watch status`, and `/watch history` around a predictable summary → details → actions hierarchy |
+| Artifact + context elevation | Make `/outputs`, `/context`, and adjacent inspection surfaces emphasize latest/high-value items before secondary metadata |
+| Color-by-surface taxonomy | Define restrained surface accents for session, watch, artifact, accessibility, and collaboration views while keeping status meaning owned by the Wave 22 lattice |
+| Dashboard entrypoint planning | Document whether a consolidated summary/dashboard command should reuse existing surface primitives rather than invent a separate rendering stack |
+
+### Implementation notes for the future wave
+
+- Treat Wave 23 as a composition layer on top of Wave 22; do not fork the badge
+  grammar just to make one dashboard look unique.
+- Prefer reusable “summary card” and “section shell” helpers over bespoke,
+  command-local panel trees.
+- Keep the first screenful action-oriented: highlight health, freshness,
+  blockers, and next commands before historical detail.
+- Preserve deterministic ordering and labels for plain mode, non-TTY output, and
+  tests that assert on text.
+- If a new top-level dashboard command is proposed, document it here and in
+  `docs/DASHBOARD_SURFACES.md` before implementation starts.
+
+### Dashboard/docs alignment
+
+| Surface group | Wave 23 expectation |
+|---|---|
+| `/session`, `/sessions` | Shared summary block for overall health, latest activity, pending actions, and collaboration state |
+| `/watch status`, `/watch history` | Strong “control tower” hierarchy with current phase and intervention needs above detailed checkpoint history |
+| `/outputs`, `/context`, `/events` | Recent/high-value items surface first; dense rows remain available but visually subordinate |
+| `/accessibility status`, `/layout` | Hierarchy updates must still explain mode, density, and fallback state without relying on panel chrome alone |
+| Browser/dashboard mirrors | Dashboard cards and web session detail views should reuse the same section names, priority order, and top-line summaries |
+
+### Done-when
+
+- [ ] Shared header/section primitives exist for dashboard-style CLI output in
+      both Rich and plain/ANSI paths.
+- [ ] `/session`, `/sessions`, and `/watch*` adopt a visibly consistent summary →
+      detail → actions hierarchy.
+- [ ] Surface-specific accents improve scanability without conflicting with Wave
+      22 status semantics.
+- [ ] `docs/DASHBOARD_SURFACES.md` documents the elevated dashboard structure and
+      any new/renamed surfaces.
+- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — hierarchy primitives | Shared header, summary-strip, divider, and section-shell helpers |
+| B — session/watch elevation | `/session`, `/sessions`, `/watch status`, and `/watch history` composition updates |
+| C — artifact/context elevation | `/outputs`, `/context`, `/events`, and related dense surfaces |
+| D — validation + parity | Focused regression checks for plain mode, non-TTY ordering, and dashboard scanability |
+| E — docs/dashboard sync | Roadmap, architecture, quickstart, and dashboard-surface inventory updates |
+
+---
+
+## Wave 24 — Terminal Preview & Focused Inspection
+
+**Status: 🔲 Ready**
+
+**Goal:** let users inspect sessions, outputs, and watch artifacts in place with
+low-friction previews so list browsing does not require repeated context
+switching or command hopping.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Inline preview model | Users should be able to glance into an item without fully leaving the current list or browser flow |
+| Focused inspection windows | Preview affordances should support “look closer” states that still feel lighter than a full context switch |
+| Consistent preview scaffolding | Session, output, event, and watch previews should share structure, controls, and fallback wording |
+| Controlled density | Preview content should surface the most useful excerpt first instead of dumping the entire artifact inline |
+| Accessibility-safe interaction | Preview affordances must stay usable in plain mode, reduced-motion, and non-overlay paths |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Preview rendering helpers | Add reusable helpers for title + metadata + excerpt + next-action preview blocks that can be embedded in list workflows |
+| Overlay/list integration | Extend existing overlay-capable surfaces so `/outputs`, `/sessions`, and future list views can show structured previews before or after selection |
+| Watch/session inspection | Design “watch window” and session-focus views that show recent checkpoints, latest output, or pending intervention without requiring a full dashboard jump |
+| Preview truncation strategy | Define safe excerpt lengths, metadata priority, and affordances for “expand/show full detail” behavior |
+| Fallback patterns | Ensure preview flows degrade to ordinary summary lines and explicit follow-up commands when interactive overlays are unavailable |
+
+### Implementation notes for the future wave
+
+- Build on the lightweight overlay model from Wave 19B; do not assume full-screen
+  TUIs, arrow-key navigation, or third-party terminal UI dependencies.
+- Reuse Wave 23 hierarchy primitives so previews look like part of the same
+  dashboard family rather than a separate widget system.
+- Keep previews intentionally scoped: enough detail to decide “open, resume,
+  inspect further, or ignore,” not enough to overwhelm the list.
+- Prefer additive commands/flags such as preview modes over replacing existing
+  plain list behavior.
+- Document any “focused inspection” affordance with explicit non-interactive
+  equivalents.
+
+### Dashboard/docs alignment
+
+| Surface group | Wave 24 expectation |
+|---|---|
+| `/outputs`, `/outputs overlay` | Preview blocks show artifact type, freshness, excerpt, and next available action before full open/export workflows |
+| `/sessions`, `openclaw session list --interactive` | Session previews show summary health, last activity, collaboration hints, and resume/share actions |
+| `/watch status`, `/watch history` | Focused inspection windows highlight active phase, recent checkpoints, and intervention context without losing list chronology |
+| `/context`, `/events` | Dense inspection surfaces may expose short preview strips or expanded rows while keeping deterministic text fallback |
+| Browser/dashboard mirrors | Shared monitoring/detail panes should mirror the same preview fields, labels, and truncation rules |
+
+### Done-when
+
+- [ ] Shared preview helpers exist for session/output/watch inspection in Rich
+      and plain/ANSI-compatible forms.
+- [ ] At least the primary list/browse surfaces can show focused previews without
+      forcing a full context switch.
+- [ ] Preview truncation and fallback behavior are documented and consistent
+      across overlay and non-overlay flows.
+- [ ] `docs/DASHBOARD_SURFACES.md` records preview-capable surfaces and focused
+      inspection expectations.
+- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — preview primitives | Shared preview block helpers, excerpt rules, and metadata ordering |
+| B — session/output browsing | `/sessions*`, `openclaw session list --interactive`, and `/outputs*` preview adoption |
+| C — watch/context inspection | Watch-focused windows plus preview-friendly `/context` or `/events` expansions |
+| D — validation + parity | Interactive/non-interactive regression checks plus plain-mode and reduced-motion validation |
+| E — docs/dashboard sync | Roadmap, dashboard inventory, architecture, and quickstart updates |
+
+---
+
+## Wave 25 — Multi-Pane Layout Presets
+
+**Status: 🔲 Ready**
+
+**Goal:** introduce opt-in workspace presets that keep multiple related surfaces
+visible together for power users without turning the default CLI into a
+full-screen terminal app.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Preset-based complexity | Users should opt into richer workspaces through named layouts instead of manually wiring every pane every time |
+| Focus switching model | Multi-pane views need predictable rules for active pane, keyboard focus, and action routing |
+| Persistence with restraint | Useful layout state should persist, but transient pane clutter should not surprise users on the next launch |
+| Shared surface composition | Session, watch, outputs, and collaboration panes should reuse the same rendering primitives established in Waves 22–24 |
+| Escape hatch clarity | Users must always know how to exit, collapse, or fall back to single-surface mode |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Layout preset model | Define named presets such as focus, watch-monitor, and handoff/collaboration, including which surfaces appear together |
+| Pane state management | Add lightweight state for active pane, remembered preset, and focus transitions without hard-coupling every command to a TUI shell |
+| Pane rendering shells | Reuse dashboard and preview primitives to draw side-by-side or stacked pane groups when the terminal width and mode allow it |
+| Persistence + commands | Document the preference keys and command entry points needed to enable, switch, inspect, and reset presets |
+| Fallback + width rules | Specify how multi-pane presets collapse on narrow terminals, plain mode, non-TTY execution, or overlay-disabled sessions |
+
+### Implementation notes for the future wave
+
+- This is the highest-risk wave in the current tranche; keep it opt-in and
+  reversible.
+- Prefer preset bundles over arbitrary pane composition so docs, tests, and
+  fallback paths remain manageable.
+- Avoid introducing a dependency on a full-screen curses/Textual stack unless a
+  future roadmap revision explicitly approves that direction.
+- Width and accessibility guards should decide whether a preset renders as
+  multi-pane, stacked, or single-pane fallback using the same underlying data.
+- Any persistence added here must be normalized and safe to ignore when the
+  runtime cannot honor the requested layout.
+
+### Dashboard/docs alignment
+
+| Surface group | Wave 25 expectation |
+|---|---|
+| `/layout`, `/accessibility`, preset commands | Users can discover current preset, width fallback, and how to reset to single-pane/default mode |
+| Session + watch combinations | Focus presets pair session summary, watch control, and next actions without duplicating state labels |
+| Artifact + collaboration combinations | Handoff/collaboration presets surface recent outputs and actor notes beside session state |
+| Preview-capable surfaces | Wave 24 preview rules still apply inside panes; panes should not dump unbounded detail |
+| Browser/dashboard mirrors | Future web layouts can reuse the same preset vocabulary and “primary pane vs supporting pane” model |
+
+### Done-when
+
+- [ ] Named layout presets and their fallback rules are documented before code
+      lands.
+- [ ] Multi-pane rendering is opt-in, accessibility-aware, and collapses cleanly
+      on unsupported terminals.
+- [ ] Focus switching, preset persistence, and reset behavior are defined with
+      non-interactive equivalents.
+- [ ] `docs/DASHBOARD_SURFACES.md` records each preset’s intended surfaces and
+      downgrade behavior.
+- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — preset model | Layout vocabulary, persistence keys, and command contract |
+| B — pane shells | Multi-pane/stacked rendering helpers plus focus affordances |
+| C — surface adoption | Session/watch/output/collab surfaces integrated into the approved presets |
+| D — validation + fallback | Width, non-TTY, plain-mode, and reduced-motion regression coverage |
+| E — docs/dashboard sync | Roadmap, layout reference, architecture, and quickstart updates |
+
+---
+
+## Wave 26 — Session Mood, Celebration & Emotional Feedback
+
+**Status: 🔲 Ready**
+
+**Goal:** add tasteful emotional feedback so OpenClaw acknowledges progress,
+milestones, and session tone without turning status output into novelty chrome.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Session mood model | Users should be able to sense whether a session is cruising, blocked, recovering, or wrapping up from concise cues |
+| Celebration restraint | Milestones should feel rewarding but never interrupt core work or overwhelm serious/error states |
+| Momentum visibility | Streaks, milestone counts, or closure rituals can reinforce progress and session continuity |
+| Collaboration-aware tone | Shared or handed-off sessions should reflect team context, not just single-user completion cues |
+| Accessibility-safe emotion | Emotional feedback must remain meaningful in plain mode, reduced motion, and low-emoji packs |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Mood/status vocabulary | Define additive mood families such as focused, recovering, blocked, celebrating, and handed-off, plus their text equivalents |
+| Session + recap surfaces | Apply mood cues to `/session`, `/sessions`, collaboration summaries, and end-of-flow recap/closure surfaces |
+| Milestone recognition | Design modest celebration patterns for first success, cleared blocker, completed plan, or long-running streak events |
+| Collaboration sentiment hints | Allow actor-aware notes and handoff summaries to reflect whether momentum is rising, stalled, or newly resolved |
+| Preference + fallback rules | Document how users can tone down or disable emotional feedback, and how cues degrade in ASCII/minimal/plain paths |
+
+### Implementation notes for the future wave
+
+- Mood cues must remain subordinate to objective state. A “celebration” badge can
+  never obscure an error, blocker, or approval requirement.
+- Reuse Wave 22 badge semantics and Wave 23 hierarchy so emotional feedback feels
+  additive, not like a second competing status language.
+- Prefer short-lived or summary-scope celebration cues over long-running
+  animation loops.
+- Keep any persistence optional; session mood should be derivable from existing
+  events/metadata whenever possible.
+- Provide a clear reduced-emotion story for operators who want neutral output.
+
+### Dashboard/docs alignment
+
+| Surface group | Wave 26 expectation |
+|---|---|
+| `/session`, `/sessions` | Mood and momentum cues appear in top-line summaries without displacing objective health and next-step state |
+| `/collab`, session share/export | Collaboration handoff summaries can express morale/momentum in neutral, pasteable language |
+| Completion/recap flows | Milestone and closure rituals remain brief, skippable, and documented with plain-text equivalents |
+| `/watch*`, `/events` | Emotional cues may annotate recoveries or successful completions but must not replace timing/risk detail |
+| Browser/dashboard mirrors | Shared monitoring views can reuse the same mood vocabulary and accessibility fallbacks for milestone cards or recaps |
+
+### Done-when
+
+- [ ] A restrained mood/celebration vocabulary exists with explicit text
+      equivalents and disable/reduction rules.
+- [ ] Session, recap, and collaboration surfaces can express momentum or
+      milestones without obscuring core status.
+- [ ] Emotional feedback respects plain mode, reduced motion, and alternate emoji
+      packs.
+- [ ] `docs/DASHBOARD_SURFACES.md` documents where mood cues are allowed and how
+      they degrade.
+- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — mood vocabulary | Status/mood families, text equivalents, and preference boundaries |
+| B — session/recap adoption | `/session`, `/sessions`, recap, and completion/closure surfaces |
+| C — collaboration sentiment | `/collab`, share/export, and actor-aware tone cues |
+| D — validation + restraint | Accessibility, plain-mode, and “no excessive celebration” regression checks |
+| E — docs/dashboard sync | Roadmap, dashboard inventory, architecture, and quickstart updates |
+
+---
+
+## Wave 27 — Live Dashboard Shares & Operator Visibility
+
+**Status: 🔲 Ready**
+
+**Goal:** expose richer read-only monitoring and dashboard-ready status snapshots
+outside the active REPL so teammates and operators can observe session health,
+approval pressure, and automation progress without introducing shared write
+infrastructure.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Read-only monitoring model | Teams need shared visibility without turning local-first session data into a multi-writer system |
+| Operator-ready summaries | Session, watch, approval, and intervention state should be visible from a single concise snapshot |
+| Shared terminology | Browser/dashboard mirrors, exports, and CLI dashboards must reuse the same badge grammar and state names from earlier waves |
+| Safe broadcasting boundaries | Shared visibility should never imply remote control, silent mutation, or hidden background services |
+| Plain-text portability | Every monitoring view must remain copy/pasteable for terminals, tickets, and chat handoffs |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Shared snapshot model | Define a documented read-only summary shape for session health, watch checkpoints, approval queue state, accessibility mode, and latest collaboration context |
+| Dashboard entry surfaces | Extend `/session`, `/sessions`, `/watch status`, `/collab`, and related CLI summaries so they can emit a consistent operator-facing snapshot without requiring interactive mode |
+| Approval visibility | Surface pending approvals, stale waits, resume cues, and intervention-needed state in a form that operators can scan quickly |
+| Browser/dashboard parity | Document how Terminal Agent Sessions, Watch Insights, and future monitoring cards reuse the same field names, labels, and fallback wording |
+| Export/handoff hooks | Plan additive export/share paths so monitoring summaries can be saved or pasted without introducing new remote infrastructure |
+
+### Dashboard surface alignment
+
+| Surface group | Wave 27 expectation |
+|---|---|
+| `/session`, `openclaw session show` | Provide a single-session operator snapshot with health, phase, approvals, latest outputs, and collaboration readiness |
+| `/sessions`, `openclaw session list` | Add a fleet-style rollup for active, waiting, blocked, and recently completed sessions using shared status lattice terms |
+| `/watch status`, `/watch history` | Highlight freshness, checkpoint drift, retry/backoff, and intervention need in a read-only monitoring shape |
+| `/collab`, `openclaw session share` | Reuse actor-aware handoff summaries as a source for operator-facing read-only context |
+| Browser/dashboard mirrors | Map the same fields into Terminal Agent Sessions, Watch Insights, and future shared monitoring cards without renaming core concepts |
+
+### Implementation notes for the future wave
+
+- Keep the architecture strictly **read-only**: no sockets, remote mutation APIs,
+  or shared presence is required to complete this wave.
+- Treat Wave 27 as a documentation and serialization foundation for later
+  dashboard work rather than a commitment to a hosted control plane.
+- Reuse the status grammar from Wave 22 and any dashboard hierarchy patterns from
+  adjacent future waves instead of inventing a separate operator dialect.
+- Preserve local/session-file ownership boundaries and ensure exported monitoring
+  data is explicitly additive, redactable, and optional.
+- Keep Python 3.9 compatibility and avoid dependencies that assume live Rich-only
+  dashboards.
+
+### Done-when
+
+- [ ] A documented read-only monitoring snapshot exists for session, watch, approval, and collaboration state.
+- [ ] CLI dashboard surfaces identify which summary fields are operator-facing and how they degrade to plain text.
+- [ ] `docs/DASHBOARD_SURFACES.md` explains how terminal and browser/dashboard monitoring views share terminology and fallback behavior.
+- [ ] Export/share guidance makes it clear that Wave 27 introduces visibility only, not remote control.
+- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — monitoring snapshot design | Read-only summary schema, serialization boundaries, and operator terminology |
+| B — CLI surface adoption | `/session`, `/sessions`, `/watch*`, and collaboration summaries that expose the shared snapshot |
+| C — dashboard parity | Browser/dashboard field mapping, fallback wording, and shared monitoring guidance |
+| D — validation + privacy review | Plain-text parity, export checks, and guardrails against accidental write-capable behavior |
+| E — docs | Architecture, quickstart, and dashboard-surface updates for monitoring workflows |
+
+---
+
+## Wave 28 — Gesture Language & Predictive Affordances
+
+**Status: 🔲 Ready**
+
+**Goal:** reduce navigation and recovery friction by teaching the CLI to suggest
+the most useful next action, expose repeatable shortcut patterns, and make
+stateful flows feel guided without becoming opaque.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Contextual next-step hints | Users should not have to remember every follow-up command after approvals, failures, exports, or watch interruptions |
+| Gesture/shortcut grammar | Common moves such as retry, inspect, resume, share, and export should have predictable verbs and aliases |
+| Recovery-first menus | Errors and blocked states should point to the safest next command instead of leaving users at a dead end |
+| Stateful completion | Tab completion and interactive hints should reflect session/watch state, not static command lists alone |
+| Accessible guidance | Suggestions must remain useful in plain text, non-TTY, and reduced-motion modes without relying on visual flourish |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Next-action engine | Define helper rules that derive likely follow-up actions from session state, approval queues, last command outcome, and watch checkpoints |
+| Shortcut vocabulary | Document canonical verbs, aliases, and “gesture” patterns for inspect/resume/retry/share/export flows so future commands stay coherent |
+| Recovery surfaces | Upgrade approval waits, empty states, blocked flows, and failed commands with concise next-step menus or hint lines |
+| Completion strategy | Plan how shell completion and in-CLI suggestions can surface state-aware commands without hiding the raw command model |
+| Docs/examples | Add task-focused examples that show how predictive hints should appear in terminal-first and plain-text workflows |
+
+### Dashboard surface alignment
+
+| Surface group | Wave 28 expectation |
+|---|---|
+| `/watch status`, `/watch history` | Suggest resume, inspect, retry, or intervene actions based on freshness and failure state |
+| `/session`, `/sessions`, `/collab` | Recommend share, resume, export, or review commands from the current session lifecycle stage |
+| `/outputs`, `/context`, `/events` | Offer low-friction follow-ups such as preview, copy, reopen, or explain-current-state actions |
+| Approval and error flows | Present a consistent “next best action” line that remains readable in non-interactive output |
+| Browser/dashboard mirrors | Reuse the same action labels and help text for dashboard cards, notifications, or detail panels |
+
+### Implementation notes for the future wave
+
+- Keep predictive guidance **assistive, not mandatory**: users must still be able
+  to run raw commands directly without accepting suggestions.
+- Prefer small derivation helpers over one monolithic intent engine so hints can
+  be tested and adopted incrementally across commands.
+- Reuse the status grammar from Wave 22 and any monitoring snapshot fields from
+  Wave 27 so suggestions reference consistent state names.
+- Avoid shell-specific assumptions in docs; completion examples should describe
+  the behavior, not require one shell integration path.
+- Ensure hints stay deterministic enough for screenshots, tests, and scripted
+  documentation examples.
+
+### Done-when
+
+- [ ] A documented next-action model exists for approvals, retries, blocked states, exports, and session handoffs.
+- [ ] Shortcut/gesture terminology is normalized so future commands reuse the same verbs and aliases.
+- [ ] Dashboard and terminal surfaces use the same action labels and fallback phrasing for predictive hints.
+- [ ] Plain-text, non-TTY, and reduced-motion examples show how suggestions remain readable without interactive chrome.
+- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — next-action rules | Predictive hint derivation, state mapping, and deterministic wording |
+| B — recovery + approvals | Error, blocked, retry, and approval surfaces with safer follow-up guidance |
+| C — completion + gesture docs | Shortcut vocabulary, completion behavior, and examples across shell/CLI surfaces |
+| D — validation | Hint determinism, accessibility parity, and command discoverability checks |
+| E — docs | Architecture, quickstart, and dashboard-surface guidance for predictive affordances |
+
+---
+
+## Wave 29 — Narrative Recaps & Session Storytelling
+
+**Status: 🔲 Ready**
+
+**Goal:** turn raw session history into durable recap artifacts that explain what
+happened, who acted, what changed, and what should happen next so handoffs,
+reviews, and onboarding do not require reading full event logs.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Structured session chapters | Long-running work needs narrative sections such as setup, execution, decisions, blockers, and outcomes |
+| Multi-format recap modes | Different consumers need prose, bullets, and timeline views over the same underlying session facts |
+| Actor-aware storytelling | Collaboration cues should distinguish user, agent, automation, and reviewer contributions clearly |
+| Actionable endings | Recaps should close with pending approvals, unresolved risks, and recommended next steps instead of passive summaries |
+| Export-ready portability | Storytelling output must remain usable in plain text, saved manifests, and future dashboard summaries |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Recap composition model | Define reusable chapter structure for goals, key events, decisions, outputs, blockers, and next actions |
+| Session history transforms | Plan helper logic that can derive bullet, timeline, and prose recap modes from existing session/export metadata |
+| Collaboration narration | Integrate actor-tagged notes, decisions, and handoff snapshots into the narrative flow without duplicating raw logs |
+| Export and share surfaces | Extend `openclaw session share`, `openclaw session export`, and recap-style commands with storytelling-oriented variants |
+| Review/onboarding guidance | Document which recap mode fits review, handoff, audit, or onboarding use cases and how plain-text fallbacks should read |
+
+### Dashboard surface alignment
+
+| Surface group | Wave 29 expectation |
+|---|---|
+| `/session`, `/collab` | Summaries and handoff surfaces expose concise chapter-style recaps and recommended follow-ups |
+| `openclaw session show`, `openclaw session export`, `openclaw session share` | Shared narrative structure across terminal inspection, pasted summaries, and saved artifacts |
+| `/events`, `/outputs`, `/context` | Dense evidence remains linkable/referenceable from recaps instead of being duplicated verbatim |
+| Browser/dashboard mirrors | Session detail pages and handoff cards reuse the same recap sections, chapter names, and next-step wording |
+| Future review flows | Narrative exports support onboarding, async review, and audit trails without requiring the raw transcript first |
+
+### Implementation notes for the future wave
+
+- Treat narrative recaps as **derived views over existing facts**, not a separate
+  source of truth that can drift from the underlying session data.
+- Reuse collaboration metadata from Wave 20, sentiment/momentum cues from nearby
+  UX work, and predictive next-step language from Wave 28 where helpful.
+- Keep dense evidence discoverable: narrative views should link back to commands,
+  outputs, and decisions instead of flattening all detail into prose.
+- Preserve pasteable plain-text output first; richer formatting can layer on top
+  of the same chapter structure later.
+- Avoid promising automatic summarization quality beyond what the local session
+  metadata can support deterministically.
+
+### Done-when
+
+- [ ] A documented recap model exists for prose, bullet, and timeline session storytelling.
+- [ ] Narrative sections identify actors, decisions, blockers, outputs, and next steps using existing session facts.
+- [ ] Export/share/dashboard guidance stays aligned on recap chapter names and fallback wording.
+- [ ] Review and onboarding use cases are documented without requiring access to the full transcript.
+- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — recap model | Chapter structure, recap modes, and source-data mapping |
+| B — export/share adoption | Session export/share/show surfaces that emit the narrative structure |
+| C — collaboration + review guidance | Actor-aware storytelling, onboarding use cases, and dashboard mirror terminology |
+| D — validation | Plain-text portability, deterministic recap shape, and evidence/backlink checks |
+| E — docs | Architecture, quickstart, and dashboard-surface updates for recap workflows |
+
+---
+
+## Wave 30 — Premium Motion & Choreography Layer
+
+**Status: 🔲 Ready**
+
+**Goal:** apply a final polish layer across startup, transitions, approvals, and
+completion states so OpenClaw feels intentionally choreographed once the motion,
+status, monitoring, guidance, and recap primitives from earlier waves are in
+place.
+
+### Design targets
+
+| Target | Why it matters |
+|---|---|
+| Product-level choreography | Startup, command execution, approvals, and completion should feel like parts of one system rather than isolated microinteractions |
+| Attention management | Motion and reveal pacing should guide users toward the next important detail instead of adding decorative noise |
+| Preference-aware polish | Personalization, reduced motion, plain mode, and density preferences must shape the choreography rather than disable the product feel entirely |
+| Error/approval dignity | Failure and waiting states should feel calm, clear, and intentional instead of abrupt or chaotic |
+| Sustainable implementation | The final polish layer should sit on reusable primitives from prior waves, not hard-code one-off animations into commands |
+
+### Scope for implementation
+
+| Area | Planned work |
+|---|---|
+| Startup choreography | Refine banner, session bootstrap, and first-response pacing using motion-language primitives and accessibility preferences |
+| Transition pacing | Define reveal order and settle timing for session summaries, dashboards, recap surfaces, and approval flows |
+| Completion + celebration cues | Add tasteful completion cascades, milestone acknowledgements, and closure rituals that remain optional and subdued |
+| Error + approval choreography | Harmonize warning, blocked, approval-waiting, and retry output so they share consistent pacing and emphasis rules |
+| Preference controls | Document how users opt out, reduce intensity, or choose denser/faster presentation without losing information |
+
+### Dashboard surface alignment
+
+| Surface group | Wave 30 expectation |
+|---|---|
+| Startup banner and first session surfaces | The first seconds of the CLI should reflect the same hierarchy and pacing as later dashboards |
+| `/session`, `/watch`, `/collab`, recap flows | Summary surfaces adopt shared reveal ordering, completion cues, and calm error/wait choreography |
+| Approval and retry paths | Waiting, escalation, retry, and success transitions use the same choreography rules across commands |
+| Accessibility and personalization surfaces | `/accessibility status`, `/layout`, and preference docs clearly explain motion intensity and fallback controls |
+| Browser/dashboard mirrors | Any mirrored polish language stays terminology-compatible even when the dashboard cannot reproduce terminal motion exactly |
+
+### Implementation notes for the future wave
+
+- Wave 30 should be the **last** premium-polish wave; do not start it until the
+  underlying motion, status grammar, monitoring, guidance, and recap primitives
+  are stable enough to choreograph.
+- Prefer composition of existing helpers over introducing a new animation engine
+  or large framework dependency.
+- Treat reduced-motion, plain mode, and high-density preferences as first-class
+  choreography inputs, not after-the-fact fallbacks.
+- Keep startup and completion polish measurable enough that docs, screenshots,
+  and tests can describe the intended behavior consistently.
+- Ensure celebratory feedback remains tasteful, optional, and subordinate to
+  operational clarity.
+
+### Done-when
+
+- [ ] A documented choreography model exists for startup, transitions, waiting, error, approval, and completion states.
+- [ ] Preference and accessibility docs explain how motion intensity, density, and plain mode affect the final polish layer.
+- [ ] Shared summary surfaces reuse the same pacing and emphasis rules instead of inventing per-command flourish.
+- [ ] Dashboard/docs guidance explains which polish concepts mirror to browser surfaces and which remain terminal-specific.
+- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+
+### Recommended fleet split
+
+| Lane | Ownership |
+|---|---|
+| A — choreography primitives | Startup/transition/completion timing model and helper boundaries |
+| B — surface adoption | Startup banner, summaries, approvals, retries, and recap surfaces using the shared polish rules |
+| C — preferences + accessibility | Motion intensity controls, plain-mode parity, and density-aware presentation guidance |
+| D — validation | Reduced-motion/plain-text checks plus consistency review across touched surfaces |
+| E — docs | Architecture, quickstart, and dashboard-surface updates for premium choreography |
 
 ---
 

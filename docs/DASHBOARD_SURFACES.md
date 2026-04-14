@@ -87,6 +87,31 @@ The approved next planning tranche should follow this order:
 2. implement Wave 21 and Wave 22 with a dedicated docs/dashboard lane
 3. implement Wave 23 with explicit dashboard-elevation ownership
 
+### Waves 27–30 dashboard alignment targets
+
+| Wave | Surface focus | Docs/dashboard expectation |
+| --- | --- | --- |
+| Wave 27 — Live Dashboard Shares & Operator Visibility | `/session`, `/sessions`, `/watch*`, `/collab`, browser session cards | Define the read-only monitoring snapshot, keep approval/intervention labels aligned, and document that visibility does not imply remote control |
+| Wave 28 — Gesture Language & Predictive Affordances | `/watch*`, `/session*`, `/outputs`, `/context`, error/approval flows | Reuse the same next-action labels across terminal and dashboard surfaces, with plain-text examples for hints and recovery menus |
+| Wave 29 — Narrative Recaps & Session Storytelling | `openclaw session show/share/export`, `/collab`, browser session detail views | Standardize recap chapter names, actor labels, and next-step wording across terminal, saved artifacts, and dashboard summaries |
+| Wave 30 — Premium Motion & Choreography Layer | startup banner, summary dashboards, approval/retry paths, accessibility surfaces | Document which choreography concepts are terminal-specific, which mirror to dashboards as static hierarchy, and how preference controls shape both |
+
+#### Shared checklist for Waves 27–30
+
+1. **Monitoring parity**
+   - keep session, watch, approval, and collaboration summaries portable as plain text
+   - document whether browser/dashboard mirrors are read-only, interactive, or intentionally deferred
+2. **Vocabulary reuse**
+   - reuse Wave 22 badge/status grammar and Wave 28 next-action wording rather than inventing dashboard-only terms
+   - keep recap chapter titles and operator labels identical across CLI and dashboard surfaces
+3. **Fallback behavior**
+   - explain the non-TTY, reduced-motion, and plain-mode story for every new surface or hint pattern
+   - note where browser surfaces can only mirror hierarchy/statics rather than terminal motion itself
+4. **Command/doc sync**
+   - update `docs/UX_IMPROVEMENTS.md` with shipped evidence before closing a wave
+   - update `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` when implementation begins
+   - regenerate `docs/COMMANDS.md` only if command metadata changed
+
 ### Wave 22 dashboard alignment targets
 
 When Wave 22 ships, keep these surfaces on the same status grammar:
@@ -98,5 +123,55 @@ When Wave 22 ships, keep these surfaces on the same status grammar:
 | `/events`, `/outputs`, `/context` | Use compact prefixes/cells that stay readable in dense history output and degrade cleanly to plain text |
 | `/accessibility status`, `/layout` | Document how badge semantics survive plain mode, reduced motion, and high-contrast rendering |
 | Browser/dashboard mirrors | Keep dashboard cards and shared monitoring terminology aligned with the CLI badge grammar |
+
+### Wave 23 dashboard elevation targets
+
+When Wave 23 ships, treat these surfaces as dashboard families instead of
+isolated command outputs:
+
+| Surface group | Alignment requirement |
+| --- | --- |
+| `/session`, `/sessions` | Use the same summary → details → actions hierarchy, with top-line health, freshness, and next-step blocks |
+| `/watch status`, `/watch history` | Recast watch views as a control tower: active phase first, intervention cues second, historical checkpoints after that |
+| `/outputs`, `/context`, `/events` | Promote recent/high-value items and keep verbose history visually subordinate |
+| `/accessibility status`, `/layout` | Explain hierarchy changes in plain text too, not only through panel borders or color accents |
+| Browser/dashboard mirrors | Reuse the same section names, card ordering, and summary labels in web/dashboard views |
+
+### Wave 24 preview & focused inspection targets
+
+When Wave 24 ships, preview-capable surfaces should share one inspection model:
+
+| Surface group | Alignment requirement |
+| --- | --- |
+| `/outputs`, `/outputs overlay` | Preview blocks should show title, freshness, excerpt, and next action before full open/export flows |
+| `/sessions`, `openclaw session list --interactive` | Session previews should expose health, latest activity, collaboration hints, and resume/share actions in a consistent order |
+| `/watch status`, `/watch history` | Focused inspection windows should show active phase, latest checkpoint, and intervention context without losing chronology |
+| `/context`, `/events` | Expanded rows or preview strips must preserve deterministic text fallback and bounded excerpt sizes |
+| Browser/dashboard mirrors | Reuse the same preview fields, truncation rules, and labels for side-panel or detail-card inspection views |
+
+### Wave 25 multi-pane preset targets
+
+When Wave 25 ships, layout presets should be documented as first-class dashboard
+surfaces:
+
+| Preset / surface group | Alignment requirement |
+| --- | --- |
+| Focus preset | Pair session summary with the highest-value supporting surface and show clear active-pane affordances |
+| Watch-monitor preset | Combine watch status/history with intervention actions and recent outputs using the same badge grammar |
+| Collaboration / handoff preset | Pair collaboration snapshot with session health and recent artifacts without duplicating labels |
+| `/layout`, `/accessibility`, preset commands | Always expose current preset, width fallback, and how to reset to the default single-pane mode |
+| Browser/dashboard mirrors | Keep preset naming and “primary vs supporting pane” vocabulary aligned across CLI and web/dashboard docs |
+
+### Wave 26 mood & celebration targets
+
+When Wave 26 ships, emotional feedback should stay additive and accessible:
+
+| Surface group | Alignment requirement |
+| --- | --- |
+| `/session`, `/sessions` | Mood or momentum cues appear in summaries only after objective health, blocker, and next-step state |
+| `/collab`, `openclaw session share`, exports | Collaboration surfaces use neutral, pasteable language for morale/momentum cues |
+| Completion / recap surfaces | Milestone recognition stays brief, skippable, and documented with plain-text equivalents |
+| `/watch status`, `/watch history`, `/events` | Recovery or success sentiment can annotate state but must never replace timing/risk details |
+| Browser/dashboard mirrors | Dashboard cards reuse the same mood vocabulary and reduced-emotion fallbacks as the CLI |
 
 Until a richer dashboard reference exists, keep `docs/DASHBOARD_SURFACES.md` as the canonical checklist and inventory for these waves.
