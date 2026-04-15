@@ -16,6 +16,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import require_auth, truncate_for_embed
+from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw.email_cog")
 
@@ -58,7 +59,7 @@ class EmailCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("email inbox failed")
-            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/email inbox"), ephemeral=True)
 
     # ── /email search ─────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ class EmailCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("email search failed")
-            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/email search"), ephemeral=True)
 
     # ── /email read ───────────────────────────────────────────────────────
 
@@ -124,7 +125,7 @@ class EmailCog(commands.Cog):
                 await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("email read failed")
-            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/email read"), ephemeral=True)
 
     # ── /email send ───────────────────────────────────────────────────────
 
@@ -160,7 +161,7 @@ class EmailCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("email send failed")
-            await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/email send"), ephemeral=True)
 
 
 async def setup(bot):

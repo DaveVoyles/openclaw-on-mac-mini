@@ -15,6 +15,7 @@ from discord.ext import commands
 
 from cog_helpers import audit_log, require_auth, truncate_for_embed
 from config import cfg
+from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw")
 
@@ -73,9 +74,9 @@ class GDocCog(commands.Cog):
                 embed.add_field(name="🔗 Link", value=doc_url, inline=False)
             embed.set_footer(text="Saved to Google Docs (not NAS vault)")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception as e:
             log.exception("gdoc save failed")
-            await interaction.followup.send("❌ Failed to create Google Doc.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/gdoc save"), ephemeral=True)
 
     # ── /gdoc list ────────────────────────────────────────────────────────
 
@@ -116,9 +117,9 @@ class GDocCog(commands.Cog):
             )
             embed.set_footer(text="Google Docs via Maton")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception as e:
             log.exception("gdoc list failed")
-            await interaction.followup.send("❌ Failed to list Google Docs.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/gdoc list"), ephemeral=True)
 
 
 async def setup(bot):

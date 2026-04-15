@@ -34,6 +34,8 @@ from skills import (
 )
 from subprocess_utils import run as _run
 from ui_components import EmbedColors
+from discord_error import build_error_embed
+from discord_progress import ProgressTracker
 
 log = logging.getLogger("openclaw.docker_cog")
 
@@ -167,7 +169,7 @@ class ContainerActionView(discord.ui.View):
                 await interaction.followup.send(embed=embed)
             audit_log(interaction.user, "containers_logs", detail=self.container_name)
         except Exception as e:
-            await interaction.followup.send(f"❌ Failed to fetch logs: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/containers logs"), ephemeral=True)
         finally:
             await interaction.message.edit(view=self)
 
@@ -185,7 +187,7 @@ class ContainerActionView(discord.ui.View):
             await interaction.followup.send(embed=embed)
             audit_log(interaction.user, "containers_stats", detail=self.container_name)
         except Exception as e:
-            await interaction.followup.send(f"❌ Failed to fetch stats: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/containers stats"), ephemeral=True)
         finally:
             await interaction.message.edit(view=self)
 
@@ -375,11 +377,11 @@ class DockerCog(commands.Cog, name="Docker"):
         self.bot = bot
 
     async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        msg = f"❌ Command failed: {error}"
+        embed = build_error_embed(error, context="docker command")
         if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            await interaction.response.send_message(msg, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="containers", description="List all Docker containers with interactive management")
     async def containers_cmd(self, interaction: discord.Interaction):
@@ -420,8 +422,11 @@ class DockerCog(commands.Cog, name="Docker"):
     @app_commands.describe(service="Container name (e.g. sonarr, radarr, plex)")
     @app_commands.autocomplete(service=_container_autocomplete)
     async def status_cmd(self, interaction: discord.Interaction, service: str):
-        await interaction.response.defer()
+        progress = ProgressTracker(interaction, title="🐳 Container Status")
+        await progress.start()
+        await progress.update(f"🐳 Checking {service}…")
         result = await get_container_status(service)
+        await progress.done(service)
         embed = discord.Embed(
             title=f"📦 Status: {service}",
             description=f"```\n{result}\n```",

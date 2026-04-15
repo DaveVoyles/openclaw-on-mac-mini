@@ -17,6 +17,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import require_auth, truncate_for_embed
+from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw")
 
@@ -140,9 +141,9 @@ class NtfyCog(commands.Cog):
                 await interaction.followup.send(
                     "❌ Failed to send notification. Check ntfy logs.", ephemeral=True
                 )
-        except Exception:
+        except Exception as e:
             log.exception("ntfy send failed")
-            await interaction.followup.send("❌ Failed to send push notification.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/ntfy send"), ephemeral=True)
 
     # ── /ntfy test ────────────────────────────────────────────────────────
 

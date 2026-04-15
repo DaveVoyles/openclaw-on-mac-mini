@@ -14,6 +14,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import truncate_for_embed
+from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw")
 
@@ -100,9 +101,9 @@ class PerfCog(commands.Cog):
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-        except Exception:
+        except Exception as e:
             log.exception("perf command failed")
-            await interaction.followup.send("❌ Failed to fetch performance stats.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/perf"), ephemeral=True)
 
 
 async def setup(bot):

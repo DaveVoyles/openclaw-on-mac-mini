@@ -11,6 +11,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import audit_log
+from discord_error import build_error_embed
 from overseerr import _get as _overseerr_get
 from overseerr import (
     _media_title,
@@ -337,7 +338,7 @@ class MediaCog(commands.Cog, name="Media"):
         await interaction.response.defer()
         data = await _overseerr_get("/request?filter=pending&take=25&sort=added")
         if isinstance(data, str):
-            await interaction.followup.send(f"❌ Overseerr error: {data}")
+            await interaction.followup.send(embed=build_error_embed(Exception(str(data)), context="/overseerr pending"), ephemeral=True)
             return
 
         results = data.get("results", []) if isinstance(data, dict) else []

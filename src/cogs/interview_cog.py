@@ -12,6 +12,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import audit_log, truncate_for_embed
+from discord_error import build_error_embed
 from llm.chat import chat
 
 log = logging.getLogger("openclaw.interview_cog")
@@ -71,7 +72,7 @@ class _InterviewOutputView(discord.ui.View):
             await interaction.followup.send(f"📁 Saved to vault: {result}", ephemeral=True)
         except Exception as e:
             log.exception("interview vault save failed")
-            await interaction.followup.send(f"❌ Failed to save: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/interview save"), ephemeral=True)
 
 
 # ── Modal ─────────────────────────────────────────────────────────────────────
@@ -141,7 +142,7 @@ class InterviewModal(discord.ui.Modal):
                 )
             except Exception as e:
                 log.exception("interview synthesize failed")
-                await interaction.followup.send(f"❌ Failed to synthesize: {e}", ephemeral=True)
+                await interaction.followup.send(embed=build_error_embed(e, context="/interview"), ephemeral=True)
             finally:
                 _sessions.pop(self.user_id, None)
 
