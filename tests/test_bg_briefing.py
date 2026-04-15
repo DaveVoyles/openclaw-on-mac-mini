@@ -22,41 +22,61 @@ class _FakeEmbed:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
         self.footer = _FakeFooter()
-        self._fields = []
+        self.fields = []
+        if not hasattr(self, "color"):
+            self.color = type("Color", (), {"value": 0})()
 
-    def set_footer(self, *, text=""):
+    def set_footer(self, *, text="", icon_url=None):
         self.footer = _FakeFooter(text=text)
 
     def add_field(self, **kwargs):
-        self._fields.append(kwargs)
+        self.fields.append(kwargs)
+
+    def set_author(self, **kwargs): pass
+    def set_image(self, **kwargs): pass
+    def set_thumbnail(self, **kwargs): pass
 
 
-# Stub discord before importing bg_briefing (discord.py not installed in test env)
+import importlib as _importlib
+
+
+def _try_stub(mod_name):
+    """Stub a module only if it cannot actually be imported."""
+    if mod_name in sys.modules:
+        return
+    try:
+        _importlib.import_module(mod_name)
+    except (ImportError, ModuleNotFoundError):
+        sys.modules[mod_name] = MagicMock()
+
+
+# Stub discord before importing bg_briefing only when not installed.
 if "discord" not in sys.modules:
-    _discord_stub = MagicMock()
-    _discord_stub.Embed = _FakeEmbed
-    sys.modules["discord"] = _discord_stub
-    sys.modules["discord.ext"] = MagicMock()
-    sys.modules["discord.ext.commands"] = MagicMock()
-else:
-    # Patch Embed on already-loaded stub so send_*_briefing tests work
-    import discord as _discord_already
-    _discord_already.Embed = _FakeEmbed
+    try:
+        _importlib.import_module("discord")
+    except (ImportError, ModuleNotFoundError):
+        _discord_stub = MagicMock()
+        _discord_stub.Embed = _FakeEmbed
+        sys.modules["discord"] = _discord_stub
+        sys.modules["discord.ext"] = MagicMock()
+        sys.modules["discord.ext.commands"] = MagicMock()
 
-# Stub other heavy dependencies not available in the test environment
+# Stub other heavy dependencies only when not installed in the environment.
 for _mod in [
     "google", "google.genai", "google.genai.types",
     "aiohttp", "pandas", "scipy", "scipy.stats",
     "psutil", "prometheus_client", "metrics_collector",
     "skills", "skills.advanced_skills",
 ]:
-    if _mod not in sys.modules:
-        sys.modules[_mod] = MagicMock()
+    _try_stub(_mod)
 
 if "llm" not in sys.modules:
-    _llm_mock = MagicMock()
-    _llm_mock.chat = AsyncMock(return_value=("", [], "model"))
-    sys.modules["llm"] = _llm_mock
+    try:
+        _importlib.import_module("llm")
+    except (ImportError, ModuleNotFoundError):
+        _llm_mock = MagicMock()
+        _llm_mock.chat = AsyncMock(return_value=("", [], "model"))
+        sys.modules["llm"] = _llm_mock
 
 import bg_briefing
 
