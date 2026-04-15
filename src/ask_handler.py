@@ -6,6 +6,7 @@ import asyncio
 import datetime
 import io
 import logging
+import re
 import time
 from typing import Any
 
@@ -420,7 +421,17 @@ async def handle_ask(
             if model_used == "perplexity-direct":
                 recovery_block = None
             if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
-                response_text = f"{response_text.rstrip()}{recovery_block}"
+                # W4-1: Strip duplicate sources — if response already has a Sources section,
+                # remove it from the recovery block before appending.
+                if re.search(r'(?:\*\*Sources\*\*|Sources)\s*:', response_text, re.IGNORECASE):
+                    recovery_block = re.sub(
+                        r'\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-*]|\d+\.)\s+.+\n?)+',
+                        '',
+                        recovery_block,
+                        flags=re.IGNORECASE,
+                    ).rstrip()
+                if recovery_block:
+                    response_text = f"{response_text.rstrip()}{recovery_block}"
             log.info("ask_cmd LLM done model=%s chars=%d", model_used, len(response_text))
 
         except asyncio.TimeoutError:
@@ -539,6 +550,7 @@ async def handle_ask(
         thread_id=context_thread_id,
         follow_ups=follow_ups,
         bot=None,
+        show_download=len(chunks) > 3,
     )
 
     # Auto-create thread for /ask responses (if not already in a thread/DM)
@@ -562,7 +574,8 @@ async def handle_ask(
         except Exception as e:
             log.debug("Auto-thread creation failed: %s", e)
 
-    def _build_footer() -> str:
+    def _build_footer(chunk_idx: int = 0, total_chunks: int = 1) -> str:
+        elapsed = time.monotonic() - _ask_start
         display_model = model_used.replace("models/", "") if model_used else "unknown"
         if "gemini" not in display_model.lower() and "gpt" not in display_model.lower() and "claude" not in display_model.lower():
             rate_str = "local · unlimited"
@@ -578,7 +591,8 @@ async def handle_ask(
             actual_icon = "🟣"
         else:
             actual_icon = "🔄"
-        ft = f"💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model}"
+        chunk_str = f"[{chunk_idx + 1}/{total_chunks}] • " if total_chunks > 1 else ""
+        ft = f"{chunk_str}💬 {conv.message_count} msgs | {rate_str} | {actual_icon} {display_model} | ⏱ {elapsed:.1f}s"
         ft = _append_explainability_footer(ft, _context_explainability_note)
         if _routing_notes:
             ft += " | ⚠️ " + " → ".join(_routing_notes)
@@ -641,8 +655,8 @@ async def handle_ask(
                     if image_url:
                         embed.set_image(url=image_url)
                 is_last = i == len(chunks) - 1
-                if is_last:
-                    embed.set_footer(text=_build_footer())
+                # W4-4: Footer on ALL chunks with chunk index
+                embed.set_footer(text=_build_footer(chunk_idx=i, total_chunks=len(chunks)))
                 send_kwargs = {"embed": embed}
                 if is_last:
                     send_kwargs["view"] = action_view
@@ -660,10 +674,9 @@ async def handle_ask(
                     )
                     if image_url:
                         embed.set_image(url=image_url)
-
                 is_last = i == len(chunks) - 1
-                if is_last:
-                    embed.set_footer(text=_build_footer())
+                # W4-4: Footer on ALL chunks with chunk index
+                embed.set_footer(text=_build_footer(chunk_idx=i, total_chunks=len(chunks)))
 
                 if i == 0:
                     kwargs: dict[str, Any] = {"content": None, "embed": embed}
