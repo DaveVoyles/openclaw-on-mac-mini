@@ -469,6 +469,102 @@ class PluginRegistry:
         # Skill conflicts are handled by PluginAPI: each skill is registered with a
         # "<plugin>." prefix in the global registry, so cross-plugin skill name
         # collisions are only possible when plugin names themselves conflict.
-        # TODO: Check for incompatible versions
+
+        # Check plugin version compatibility
+        compat_warnings = _check_plugin_version_compat(metadata.name, metadata.to_dict())
+        for warn in compat_warnings:
+            log.warning(warn)
 
         return None
+
+
+# ---------------------------------------------------------------------------
+# Version compatibility helpers (module-level, used by _check_conflicts)
+# ---------------------------------------------------------------------------
+
+def _get_host_version_fallback() -> str:
+    """Read OpenClaw version from pyproject.toml as fallback."""
+    import tomllib
+    import pathlib
+    try:
+        pyproject = pathlib.Path(__file__).parent.parent.parent / "pyproject.toml"
+        with open(pyproject, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("project", {}).get("version", "0.0.0")
+    except Exception:
+        return "0.0.0"
+
+
+def _parse_version(v: str) -> tuple[int, ...]:
+    """Parse 'X.Y.Z' into (X, Y, Z) tuple. Strips leading 'v' and pre-release suffix."""
+    v = v.lstrip("v").split("-")[0]
+    parts = v.split(".")
+    return tuple(int(p) for p in parts if p.isdigit())
+
+
+def _version_satisfies(current: str, minimum: str) -> bool:
+    """Return True if current >= minimum."""
+    try:
+        return _parse_version(current) >= _parse_version(minimum)
+    except Exception:
+        return True  # if parsing fails, don't block loading
+
+
+def _version_at_most(current: str, maximum: str) -> bool:
+    """Return True if current <= maximum."""
+    try:
+        return _parse_version(current) <= _parse_version(maximum)
+    except Exception:
+        return True
+
+
+def _is_valid_semver(v: str) -> bool:
+    """Basic semver validity check."""
+    import re
+    v = v.lstrip("v")
+    return bool(re.match(r'^\d+\.\d+(\.\d+)?(-[\w.]+)?(\+[\w.]+)?$', v))
+
+
+def _check_plugin_version_compat(plugin_name: str, plugin_meta: dict) -> list[str]:
+    """Check plugin version compatibility. Returns list of warning strings (empty = OK)."""
+    warnings = []
+
+    # Get current host version
+    try:
+        from importlib.metadata import version as pkg_version
+        host_version = pkg_version("openclaw")
+    except Exception:
+        host_version = _get_host_version_fallback()
+
+    # Check min version requirement (support multiple field name conventions)
+    min_version = (
+        plugin_meta.get("min_openclaw_version")
+        or plugin_meta.get("min_host_version")
+        or plugin_meta.get("requires_openclaw")
+    )
+    if min_version and not _version_satisfies(host_version, min_version):
+        warnings.append(
+            f"Plugin '{plugin_name}' requires OpenClaw >= {min_version} "
+            f"(running {host_version}). Plugin may not function correctly."
+        )
+
+    # Check max version if declared
+    max_version = (
+        plugin_meta.get("max_openclaw_version")
+        or plugin_meta.get("max_host_version")
+    )
+    if max_version and not _version_at_most(host_version, max_version):
+        warnings.append(
+            f"Plugin '{plugin_name}' was tested up to OpenClaw {max_version} "
+            f"(running {host_version}). Compatibility not guaranteed."
+        )
+
+    # Check plugin's own version format validity
+    plugin_version = plugin_meta.get("version")
+    if plugin_version and not _is_valid_semver(plugin_version):
+        warnings.append(
+            f"Plugin '{plugin_name}' declares version '{plugin_version}' "
+            f"which is not a valid semver string."
+        )
+
+    return warnings
