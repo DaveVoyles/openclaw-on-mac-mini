@@ -60,4 +60,12 @@ data/ssh/
 data/backups/
 data/exports/
 data/chromadb/
+data/health_history.db
+data/onboarding_seen.json
 .hypothesis/
+
+# Session export files
+openclaw_export_*.md
+
+# Local notes
+notes.txt
