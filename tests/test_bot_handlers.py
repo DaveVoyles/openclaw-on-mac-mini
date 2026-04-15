@@ -1,8 +1,11 @@
 """Tests for bot message/attachment handlers."""
 
 import asyncio
+import importlib
+import importlib.util
 import json
 import os
+import pathlib
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -12,6 +15,18 @@ from discord import app_commands
 
 os.environ.setdefault("LOG_DIR", "/tmp/_test_bot_handlers_logs")
 os.environ.setdefault("AUDIT_DIR", "/tmp/_test_bot_handlers_audit")
+
+# Load quality_helpers from disk rather than from sys.modules — guards against
+# other test files in the same xdist worker having stubbed quality_helpers via
+# sys.modules.setdefault() before this file was collected.
+_qh_src = pathlib.Path(__file__).parent.parent / "src" / "quality_helpers.py"
+_qh_spec = importlib.util.spec_from_file_location("quality_helpers", _qh_src)
+_real_quality_helpers = importlib.util.module_from_spec(_qh_spec)
+try:
+    _qh_spec.loader.exec_module(_real_quality_helpers)
+except Exception:
+    # Fallback: just import normally if the disk load fails
+    import quality_helpers as _real_quality_helpers  # type: ignore[assignment]
 
 import bot as bot_mod
 import discord_events as discord_events_mod
@@ -600,6 +615,19 @@ class TestDefaultAskChannelMode:
         monkeypatch.setattr(bot_mod.conversation_store, "get", lambda **kwargs: conv)
         monkeypatch.setattr(bot_mod.conversation_store, "auto_save_thread", MagicMock())
         discord_events_mod._DEFAULT_ASK_THREAD_CACHE.clear()
+
+        # Patch _b()-resolved functions so quality repair path is deterministic
+        # regardless of worker-to-file assignment in pytest-xdist.
+        monkeypatch.setattr(bot_mod, "get_effective_channel_profile", lambda: {"retrieval_profile": "general"})
+        monkeypatch.setattr(bot_mod, "get_latency_load_snapshot", lambda command_hint="": None)
+        monkeypatch.setattr(bot_mod, "_record_quality_metric", lambda *a, **kw: None)
+        monkeypatch.setattr(bot_mod, "_record_budget_policy_metric", lambda **kw: None)
+        monkeypatch.setattr(bot_mod, "_score_answer_quality", _real_quality_helpers._score_answer_quality)
+        monkeypatch.setattr(bot_mod, "_safe_score_answer_quality", _real_quality_helpers._safe_score_answer_quality)
+        # test_discord_events.py stubs quality_helpers via sys.modules before importing discord_events;
+        # if they share a worker and run first, discord_events._run_quality_auto_repair is a MagicMock and
+        # await-ing it throws TypeError (caught by handle_message's outer except).  Restore it here.
+        monkeypatch.setattr(discord_events_mod, "_run_quality_auto_repair", _real_quality_helpers._run_quality_auto_repair)
 
         channel = MagicMock()
         channel.id = 123

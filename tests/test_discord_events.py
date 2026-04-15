@@ -7,7 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import discord
 
-# Mock all heavy dependencies before importing discord_events
+# Mock all heavy dependencies before importing discord_events.
+# Use save/restore (not setdefault) so these stubs don't persist in sys.modules
+# after discord_events is imported.  setdefault would permanently corrupt
+# quality_helpers / ask_orchestrator for other test files sharing this xdist worker.
 _mocks = {
     "approvals": MagicMock(is_emergency_stopped=MagicMock(return_value=False)),
     "ask_orchestrator": MagicMock(),
@@ -17,10 +20,23 @@ _mocks = {
     "llm": MagicMock(chat_stream=AsyncMock(), is_configured=MagicMock(return_value=True)),
     "memory": MagicMock(store=MagicMock(), get_model_preference=MagicMock(return_value=None)),
 }
-for name, mock in _mocks.items():
-    sys.modules.setdefault(name, mock)
 
-import discord_events as de  # noqa: E402
+# Only stub and import discord_events fresh if it hasn't been imported yet.
+# If it's already cached (imported by an earlier test file in this worker), reuse
+# the cached version — its local bindings are already set and won't change.
+if "discord_events" not in sys.modules:
+    _saved = {name: sys.modules.pop(name, None) for name in _mocks}
+    for name, mock in _mocks.items():
+        sys.modules[name] = mock
+    import discord_events as de  # noqa: E402
+    # Restore originals so other test files in this worker see the real modules.
+    for name, original in _saved.items():
+        if original is not None:
+            sys.modules[name] = original
+        else:
+            sys.modules.pop(name, None)
+else:
+    import discord_events as de  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Helpers
