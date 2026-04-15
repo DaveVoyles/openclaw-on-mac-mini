@@ -2,9 +2,61 @@
 
 import asyncio
 import datetime
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# Module-level stubs (must run before importing bg_briefing)
+# ---------------------------------------------------------------------------
+
+class _FakeFooter:
+    def __init__(self, text=""):
+        self.text = text
+
+
+class _FakeEmbed:
+    """Minimal discord.Embed stub that preserves constructor kwargs as attributes."""
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        self.footer = _FakeFooter()
+        self._fields = []
+
+    def set_footer(self, *, text=""):
+        self.footer = _FakeFooter(text=text)
+
+    def add_field(self, **kwargs):
+        self._fields.append(kwargs)
+
+
+# Stub discord before importing bg_briefing (discord.py not installed in test env)
+if "discord" not in sys.modules:
+    _discord_stub = MagicMock()
+    _discord_stub.Embed = _FakeEmbed
+    sys.modules["discord"] = _discord_stub
+    sys.modules["discord.ext"] = MagicMock()
+    sys.modules["discord.ext.commands"] = MagicMock()
+else:
+    # Patch Embed on already-loaded stub so send_*_briefing tests work
+    import discord as _discord_already
+    _discord_already.Embed = _FakeEmbed
+
+# Stub other heavy dependencies not available in the test environment
+for _mod in [
+    "google", "google.genai", "google.genai.types",
+    "aiohttp", "pandas", "scipy", "scipy.stats",
+    "psutil", "prometheus_client", "metrics_collector",
+    "skills", "skills.advanced_skills",
+]:
+    if _mod not in sys.modules:
+        sys.modules[_mod] = MagicMock()
+
+if "llm" not in sys.modules:
+    _llm_mock = MagicMock()
+    _llm_mock.chat = AsyncMock(return_value=("", [], "model"))
+    sys.modules["llm"] = _llm_mock
 
 import bg_briefing
 
@@ -90,7 +142,7 @@ class TestMorningBriefingLoop:
     async def test_matching_hour_triggers_briefing_task(self, monkeypatch):
         """When hour matches BRIEFING_HOUR and minute < BRIEFING_MINUTE_WINDOW, task is created."""
         monkeypatch.setattr(bg_briefing, "BRIEFING_CHECK_INTERVAL", 0)
-        monkeypatch.setattr(bg_briefing, "BRIEFING_HOUR", datetime.datetime.now().hour)
+        monkeypatch.setattr(bg_briefing, "BRIEFING_HOUR", bg_briefing._owner_local_now().hour)
         monkeypatch.setattr(bg_briefing, "BRIEFING_MINUTE_WINDOW", 60)  # always within window
 
         sleep_count = 0
@@ -116,7 +168,7 @@ class TestMorningBriefingLoop:
     async def test_briefing_not_duplicated_same_day(self, monkeypatch):
         """Briefing is only triggered once per day even if loop runs multiple times."""
         monkeypatch.setattr(bg_briefing, "BRIEFING_CHECK_INTERVAL", 0)
-        monkeypatch.setattr(bg_briefing, "BRIEFING_HOUR", datetime.datetime.now().hour)
+        monkeypatch.setattr(bg_briefing, "BRIEFING_HOUR", bg_briefing._owner_local_now().hour)
         monkeypatch.setattr(bg_briefing, "BRIEFING_MINUTE_WINDOW", 60)
         mock_collector = MagicMock()
         monkeypatch.setattr(bg_briefing, "get_collector", lambda: mock_collector)
@@ -141,7 +193,7 @@ class TestMorningBriefingLoop:
     async def test_exception_in_loop_body_caught(self, monkeypatch):
         """Exception in the loop body is caught and loop continues."""
         monkeypatch.setattr(bg_briefing, "BRIEFING_CHECK_INTERVAL", 0)
-        monkeypatch.setattr(bg_briefing, "BRIEFING_HOUR", datetime.datetime.now().hour)
+        monkeypatch.setattr(bg_briefing, "BRIEFING_HOUR", bg_briefing._owner_local_now().hour)
         monkeypatch.setattr(bg_briefing, "BRIEFING_MINUTE_WINDOW", 60)
 
         sleep_count = 0
@@ -304,7 +356,7 @@ class TestEveningDigestLoop:
     @pytest.mark.asyncio
     async def test_matching_hour_triggers_digest(self, monkeypatch):
         monkeypatch.setattr(bg_briefing, "BRIEFING_CHECK_INTERVAL", 0)
-        monkeypatch.setattr(bg_briefing, "EVENING_DIGEST_HOUR", datetime.datetime.now().hour)
+        monkeypatch.setattr(bg_briefing, "EVENING_DIGEST_HOUR", bg_briefing._owner_local_now().hour)
         monkeypatch.setattr(bg_briefing, "BRIEFING_MINUTE_WINDOW", 60)
 
         sleep_count = 0
@@ -325,7 +377,7 @@ class TestEveningDigestLoop:
     @pytest.mark.asyncio
     async def test_digest_not_duplicated_same_day(self, monkeypatch):
         monkeypatch.setattr(bg_briefing, "BRIEFING_CHECK_INTERVAL", 0)
-        monkeypatch.setattr(bg_briefing, "EVENING_DIGEST_HOUR", datetime.datetime.now().hour)
+        monkeypatch.setattr(bg_briefing, "EVENING_DIGEST_HOUR", bg_briefing._owner_local_now().hour)
         monkeypatch.setattr(bg_briefing, "BRIEFING_MINUTE_WINDOW", 60)
 
         sleep_count = 0
@@ -346,7 +398,7 @@ class TestEveningDigestLoop:
     @pytest.mark.asyncio
     async def test_exception_in_loop_caught(self, monkeypatch):
         monkeypatch.setattr(bg_briefing, "BRIEFING_CHECK_INTERVAL", 0)
-        monkeypatch.setattr(bg_briefing, "EVENING_DIGEST_HOUR", datetime.datetime.now().hour)
+        monkeypatch.setattr(bg_briefing, "EVENING_DIGEST_HOUR", bg_briefing._owner_local_now().hour)
         monkeypatch.setattr(bg_briefing, "BRIEFING_MINUTE_WINDOW", 60)
 
         sleep_count = 0

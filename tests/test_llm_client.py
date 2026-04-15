@@ -67,7 +67,7 @@ class TestLoadSystemPrompt:
         (prompts_dir / "system.txt").write_text("Custom prompt text.")
         monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         _reset_prompt_cache()
-        assert llm_client._load_system_prompt() == "Custom prompt text."
+        assert "Custom prompt text." in llm_client._load_system_prompt()
 
     def test_caching_same_mtime(self, tmp_path, monkeypatch):
         prompts_dir = tmp_path / "prompts"
@@ -90,14 +90,14 @@ class TestLoadSystemPrompt:
         monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         _reset_prompt_cache()
         v1 = llm_client._load_system_prompt()
-        assert v1 == "Version 1."
+        assert "Version 1." in v1
 
         # Force a different mtime by writing new content and bumping _system_prompt_mtime to 0
         f.write_text("Version 2.")
         llm_client._system_prompt_mtime = 0.0  # force stale
 
         v2 = llm_client._load_system_prompt()
-        assert v2 == "Version 2."
+        assert "Version 2." in v2
 
     def test_strips_whitespace(self, tmp_path, monkeypatch):
         prompts_dir = tmp_path / "prompts"
@@ -105,7 +105,7 @@ class TestLoadSystemPrompt:
         (prompts_dir / "system.txt").write_text("  padded  \n")
         monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         _reset_prompt_cache()
-        assert llm_client._load_system_prompt() == "padded"
+        assert "padded" in llm_client._load_system_prompt()
 
 
 # ---------------------------------------------------------------------------

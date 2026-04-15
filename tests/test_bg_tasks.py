@@ -1,9 +1,60 @@
 """Tests for bg_tasks.py — background task lifecycle management."""
 
 import asyncio
+import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# Module-level stubs (must run before importing bg_tasks)
+# ---------------------------------------------------------------------------
+
+class _FakeFooter:
+    def __init__(self, text=""):
+        self.text = text
+
+
+class _FakeEmbed:
+    """Minimal discord.Embed stub that preserves constructor kwargs as attributes."""
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        self.footer = _FakeFooter()
+        self._fields = []
+
+    def set_footer(self, *, text=""):
+        self.footer = _FakeFooter(text=text)
+
+    def add_field(self, **kwargs):
+        self._fields.append(kwargs)
+
+
+# Stub discord before importing bg_tasks (which imports bg_briefing which needs discord)
+if "discord" not in sys.modules:
+    _discord_stub = MagicMock()
+    _discord_stub.Embed = _FakeEmbed
+    sys.modules["discord"] = _discord_stub
+    sys.modules["discord.ext"] = MagicMock()
+    sys.modules["discord.ext.commands"] = MagicMock()
+else:
+    import discord as _discord_already
+    _discord_already.Embed = _FakeEmbed
+
+# Stub other heavy dependencies not available in the test environment
+for _mod in [
+    "google", "google.genai", "google.genai.types",
+    "aiohttp", "pandas", "scipy", "scipy.stats",
+    "psutil", "prometheus_client", "metrics_collector",
+    "skills", "skills.advanced_skills",
+]:
+    if _mod not in sys.modules:
+        sys.modules[_mod] = MagicMock()
+
+if "llm" not in sys.modules:
+    _llm_mock = MagicMock()
+    _llm_mock.chat = AsyncMock(return_value=("", [], "model"))
+    sys.modules["llm"] = _llm_mock
 
 import bg_tasks
 
@@ -259,6 +310,8 @@ class TestHandleBackgroundTaskDone:
     async def test_error_task_schedules_restart(self, monkeypatch):
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_STOPPING", False)
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_RESTART_DELAY_SECONDS", 0)
+        monkeypatch.setattr(bg_tasks._BackoffTracker, "DELAYS", [0])
+        bg_tasks._BACKGROUND_BACKOFF.clear()
         task = MagicMock(spec=asyncio.Task)
         task.cancelled.return_value = False
         task.exception.return_value = RuntimeError("boom")
@@ -276,6 +329,8 @@ class TestHandleBackgroundTaskDone:
     async def test_clean_exit_schedules_restart(self, monkeypatch):
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_STOPPING", False)
         monkeypatch.setattr(bg_tasks, "_BACKGROUND_RESTART_DELAY_SECONDS", 0)
+        monkeypatch.setattr(bg_tasks._BackoffTracker, "DELAYS", [0])
+        bg_tasks._BACKGROUND_BACKOFF.clear()
         task = MagicMock(spec=asyncio.Task)
         task.cancelled.return_value = False
         task.exception.return_value = None
