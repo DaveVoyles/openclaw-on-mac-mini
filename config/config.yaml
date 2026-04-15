@@ -128,3 +128,73 @@ vector_store:
   contextual_recall: true     # inject relevant memories before each LLM call
   contextual_top_k: 5         # max context items to inject per query
   embedding_model: ""          # Ollama model name (e.g. "embeddinggemma", "nomic-embed-text"). Empty = built-in MiniLM
+  thresholds:
+    # Similarity threshold for factual queries (who/what/when/where)
+    factual: 0.75
+    # Similarity threshold for conversational queries (explain/describe/tell me)
+    conversational: 0.65
+    # Default similarity threshold
+    default: 0.70
+    # Threshold above which two recalled memories are considered duplicates
+    dedup: 0.90
+  # Set to true to enable strict domain suppression (only recall on-topic memories)
+  # Env var: RECALL_DOMAIN_GUARD_STRICT (default: false)
+  recall_domain_guard_strict: false
+
+# ---------------------------------------------------------------------------
+# Alert & Notification Settings (W13)
+# ---------------------------------------------------------------------------
+alerting:
+  # Seconds before the same alert can fire again (default: 3600 = 1 hour)
+  cooldown_seconds: 3600
+  # Seconds before a duplicate alert is suppressed (default: 1800 = 30 min)
+  dedup_window_seconds: 1800
+  # Seconds an alert is snoozed when owner reacts with ⏰ (default: 3600 = 1 hour)
+  snooze_seconds: 3600
+  # Discord user ID to DM for CRITICAL alerts (also reads OWNER_USER_ID / BOT_OWNER_ID env vars)
+  owner_user_id: null
+
+# ---------------------------------------------------------------------------
+# Model Routing Settings (W9)
+# ---------------------------------------------------------------------------
+routing:
+  # Providers with p95 latency above this threshold (ms) are skipped (default: 10000)
+  latency_threshold_ms: 10000
+  # Whether to include Anthropic Claude in tool-call routing (requires ANTHROPIC_API_KEY)
+  anthropic_tools_enabled: true
+  # Whether to include OpenAI GPT-4o in tool-call routing (requires OPENAI_API_KEY)
+  openai_tools_enabled: true
+
+# ---------------------------------------------------------------------------
+# Background Task Settings (W10)
+# ---------------------------------------------------------------------------
+background_tasks:
+  # Restart backoff delays in seconds: [first, second, third, fourth+]
+  backoff_delays: [5, 15, 60, 300]
+  # Minutes of clean operation before resetting backoff counter
+  clean_window_minutes: 30
+  # Number of active conversations before skipping optional background scans
+  active_conversation_threshold: 3
+
+# ---------------------------------------------------------------------------
+# Quality Auto-Repair Settings (W11)
+# ---------------------------------------------------------------------------
+quality_repair:
+  # Maximum number of repair attempts before falling back to original answer
+  max_attempts: 2
+  # Provider-specific timeouts for repair LLM calls (seconds)
+  timeouts:
+    copilot: 20
+    gemini: 45
+    ollama: 60
+
+# ---------------------------------------------------------------------------
+# Streaming Settings (W12)
+# ---------------------------------------------------------------------------
+streaming:
+  # Enable Gemini streaming (requires testing; off by default)
+  # Env var: GEMINI_STREAMING_ENABLED
+  gemini_enabled: false
+  # Number of chars to accumulate before sending a stream chunk to Discord
+  # Env var: PROVIDER_STREAM_INTERVAL_CHARS
+  interval_chars: 200

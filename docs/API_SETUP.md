@@ -14,8 +14,9 @@ Step-by-step instructions for configuring all external APIs used in OpenClaw.
 6. [Infrastructure APIs](#infrastructure-apis)
 7. [Productivity APIs](#productivity-apis)
 8. [Other Services](#other-services)
-9. [Verification](#verification)
-10. [Troubleshooting](#troubleshooting)
+9. [Feature Configuration (W9–W13)](#feature-configuration-w9w13)
+10. [Verification](#verification)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -822,6 +823,27 @@ curl -u admin:password http://192.168.1.8:3053/control/status
 ```
 /network  # Includes DNS stats
 ```
+
+---
+
+## Feature Configuration (W9–W13)
+
+Environment variables for features added in Discord improvement waves W9–W13. These supplement `config/config.yaml` and can be set in `.env`.
+
+### Routing & Provider Selection (W9)
+- `ROUTING_LATENCY_THRESHOLD_MS` — Skip providers with p95 latency above this threshold in milliseconds (default: `10000`)
+- `GEMINI_STREAMING_ENABLED` — Set to `true` to enable real-time Gemini streaming responses (default: `false`)
+- `PROVIDER_STREAM_INTERVAL_CHARS` — Characters to buffer before sending a streaming chunk (default: `200`)
+
+### Memory & Recall (W6)
+- `RECALL_DOMAIN_GUARD_STRICT` — Set to `true` to suppress off-topic memories more aggressively (default: `false`)
+
+### Alerts & Notifications (W13)
+- `OWNER_USER_ID` — Discord user ID to DM for CRITICAL severity alerts (falls back to `BOT_OWNER_ID`)
+- `BOT_OWNER_ID` — Alias for `OWNER_USER_ID` (legacy; prefer `OWNER_USER_ID`)
+
+### Quality Repair (W11)
+- `QUALITY_REPAIR_MAX_ATTEMPTS` — Maximum LLM repair attempts for low-quality responses (default: `2`)
 
 ---
 

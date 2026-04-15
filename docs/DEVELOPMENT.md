@@ -180,3 +180,36 @@ Check which version is deployed:
 ```bash
 make verify-deploy
 ```
+
+---
+
+## Testing New Features
+
+### Streaming (W12)
+
+To test Gemini streaming locally:
+
+```bash
+export GEMINI_STREAMING_ENABLED=true
+export PROVIDER_STREAM_INTERVAL_CHARS=50  # lower for faster visual feedback
+```
+
+Then start the bot and send a question that routes to Gemini.
+
+### Alert System (W13)
+
+To test alert severity routing:
+
+```bash
+export OWNER_USER_ID=<your-discord-user-id>
+```
+
+CRITICAL alerts will DM that user. Use the `⏰` reaction to snooze, `✅` to resolve.
+
+### Memory Recall Domain Guard (W6)
+
+```bash
+export RECALL_DOMAIN_GUARD_STRICT=true
+```
+
+Enables strict domain suppression — only memories relevant to the query domain are injected.
