@@ -25,6 +25,7 @@ ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 _BACKGROUND_TASKS: dict[str, asyncio.Task] = {}
 _BACKGROUND_FACTORIES: dict[str, Callable[[], Awaitable[None]]] = {}
 _BACKGROUND_STOPPING = False
+_BACKGROUND_RESTART_DELAY_SECONDS: int = 5  # initial restart delay before exponential backoff
 
 
 class _BackoffTracker:
