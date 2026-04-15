@@ -64,16 +64,26 @@ _ALLOWED_CONDITION_NODES: tuple[type[ast.AST], ...] = (
 
 def _safe_condition_eval(expression: str, context: dict[str, Any]) -> bool:
     expr = expression.strip()
-    if not expr or len(expr) > 500:
+    if not expr:
         return False
+    if len(expr) > 500:
+        raise ValueError(f"Condition expression too long ({len(expr)} chars, max 500)")
     tree = ast.parse(expr, mode="eval")
     for node in ast.walk(tree):
         if not isinstance(node, _ALLOWED_CONDITION_NODES):
             raise ValueError(f"Unsupported expression node: {type(node).__name__}")
         if isinstance(node, ast.Name) and node.id not in context:
             raise ValueError(f"Unknown variable in expression: {node.id}")
-    result = eval(compile(tree, "<condition>", "eval"), {"__builtins__": {}}, context)
+    try:
+        result = eval(compile(tree, "<condition>", "eval"), {"__builtins__": {}}, context)
+    except (MemoryError, RecursionError) as e:
+        raise ValueError(f"Condition evaluation resource limit exceeded: {e}") from e
     return bool(result)
+
+
+def evaluate_condition(expression: str, context: dict) -> bool:
+    """Safely evaluate a boolean condition expression."""
+    return _safe_condition_eval(expression, context)
 
 
 # Database path for advanced scheduler

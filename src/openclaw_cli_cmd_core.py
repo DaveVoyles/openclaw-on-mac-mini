@@ -560,6 +560,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],
             capture_output=True, text=True, timeout=5
+            # Security: shell=False, timeout=5, hardcoded command with no user input interpolation
         )
         sha = result.stdout.strip()[:12]
 
@@ -696,12 +697,22 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
         return _CMD_CONTINUE
 
     sha = snapshots[snap_name].get("sha", "")
+    # Security: validate sha is a hex git SHA (alphanumeric only) to prevent argument injection
+    import re as _re
+    if not _re.fullmatch(r"[0-9a-f]{1,40}", sha or ""):
+        msg = f"Invalid snapshot SHA '{sha}': must be a hex git SHA."
+        if _RICH_AVAILABLE and is_tty:
+            _RICH_CONSOLE.print(f"[red]Error:[/] {msg}")
+        else:
+            print(f"Error: {msg}")
+        return _CMD_CONTINUE
 
     if exec_mode:
         try:
             result = subprocess.run(
                 ["git", "checkout", sha],
                 capture_output=True, text=True, timeout=10
+                # Security: shell=False, timeout=10, sha validated as hex git SHA above
             )
             if result.returncode == 0:
                 if _RICH_AVAILABLE and is_tty:
@@ -723,6 +734,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
             result = subprocess.run(
                 ["git", "diff", "--stat", f"{sha}..HEAD"],
                 capture_output=True, text=True, timeout=10
+                # Security: shell=False, timeout=10, sha validated as hex git SHA above
             )
             diff_stat = result.stdout.strip() or "(no differences)"
             if _RICH_AVAILABLE and is_tty:
