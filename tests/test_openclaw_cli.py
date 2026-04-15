@@ -316,6 +316,8 @@ def test_print_startup_banner_shows_session_milestone(monkeypatch, capsys):
     monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 120)
     monkeypatch.setattr(mod, "_session_auto_route_enabled", lambda _session_id: True)
     monkeypatch.setattr(mod, "_time_greeting", lambda: "Good afternoon ☀️")
+    import openclaw_cli_ui_utils as _ui_utils_mod
+    monkeypatch.setattr(_ui_utils_mod, "_time_greeting", lambda: "Good afternoon ☀️")
     monkeypatch.setattr(sessions_mod, "list_sessions", lambda limit=1001: [object()] * 10)
 
     mod._print_startup_banner(_config(), "session-12345678")
