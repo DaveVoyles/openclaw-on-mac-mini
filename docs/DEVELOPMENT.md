@@ -102,6 +102,52 @@ make test
 ./run_tests.sh
 ```
 
+---
+
+## ⛔ CI Gate Policy — Read Before Starting Any Wave of Work
+
+**CI must be green (or at baseline) before beginning new work.**
+
+This rule exists because failing tests accumulate silently and make it impossible to tell whether a new change broke something or the build was already broken. Always check first.
+
+### Before starting any new wave, feature, or fix
+
+1. **Check CI status:**
+   ```bash
+   gh run list --limit 5
+   ```
+
+2. **If the latest run is failing**, investigate before writing new code:
+   ```bash
+   gh run view <RUN_ID> --log | grep "FAILED"
+   ```
+
+3. **Classify each failure** as either:
+   - **Pre-existing** — was already failing before your change (acceptable to leave, document it)
+   - **New regression** — introduced by recent work (must fix before proceeding)
+
+4. **Fix all new regressions** before starting the next wave. Pre-existing failures may be left if they are tracked and acknowledged.
+
+5. **After pushing fixes**, confirm the new run does not add failures:
+   ```bash
+   gh run watch <RUN_ID>
+   ```
+
+### CI baseline
+
+The Mac Mini self-hosted runner runs the full test suite on every push. The **current known-failing baseline** is tracked in `docs/TESTING.md`. If your push increases the failure count above baseline, stop and fix before continuing.
+
+### Quick reference
+
+| Situation | Action |
+|-----------|--------|
+| CI green | ✅ Safe to start new work |
+| CI failing, failures are pre-existing | ✅ Safe to start (document baseline) |
+| CI failing, failures are new | 🛑 Fix regressions first |
+| CI failing, cause unknown | 🛑 Investigate before starting |
+
+---
+
 ### Linting
 
 ```bash

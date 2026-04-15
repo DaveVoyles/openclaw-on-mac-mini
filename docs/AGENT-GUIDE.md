@@ -54,6 +54,8 @@ Discord user → src/bot.py → src/ask_orchestrator.py → src/llm/chat.py
 
 10. **Two test virtualenvs.** `.venv` is the main dev venv; `.venv-test` is used by `run_tests.sh` in Docker. For local development, always use `.venv`.
 
+11. **⛔ CI gate: always check before starting new work.** Run `gh run list --limit 3` before beginning any wave or feature. If CI is red, classify failures as pre-existing vs. new regressions. Fix new regressions before proceeding. See [DEVELOPMENT.md → CI Gate Policy](DEVELOPMENT.md#-ci-gate-policy--read-before-starting-any-wave-of-work) for the full checklist.
+
 ---
 
 ## Module Structure (post-TD-7 through TD-34)

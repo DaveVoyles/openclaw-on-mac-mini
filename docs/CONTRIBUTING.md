@@ -30,6 +30,9 @@ pip install -r requirements-test.txt
 python -m pytest tests/ -x -q
 ```
 
+> ⛔ **CI Gate:** Always verify CI is passing (or at the known baseline) before starting new work.
+> See [`docs/DEVELOPMENT.md` → CI Gate Policy](DEVELOPMENT.md#-ci-gate-policy--read-before-starting-any-wave-of-work) for the full policy and commands.
+
 ### 4. Run locally (outside Docker)
 
 ```bash
