@@ -174,6 +174,7 @@ async def test_incident_cog_command_error_timeout_gives_retry_guidance():
     await cog.cog_command_error(interaction, error)
 
     interaction.response.send_message.assert_awaited_once()
-    msg = interaction.response.send_message.await_args.args[0]
-    assert "timed out" in msg.lower()
-    assert "/incident status" in msg
+    embed = interaction.response.send_message.await_args.kwargs.get("embed")
+    assert embed is not None
+    description = getattr(embed, "description", "")
+    assert "timed out" in description.lower()

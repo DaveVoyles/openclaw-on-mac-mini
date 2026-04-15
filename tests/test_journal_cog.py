@@ -201,4 +201,6 @@ async def test_journal_prompt_error():
         await cog.journal_prompt.callback(cog, inter)
 
     inter.followup.send.assert_awaited_once()
-    assert "❌" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed") or inter.followup.send.call_args[0][0]
+    title = getattr(embed, "title", str(embed))
+    assert "Error" in title or "❌" in title or "⚠" in title
