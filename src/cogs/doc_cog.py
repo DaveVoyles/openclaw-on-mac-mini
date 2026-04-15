@@ -20,6 +20,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import audit_log, require_auth, truncate_for_embed
+from discord_error import build_error_embed
 from document_skills import (
     create_excel,
     create_word,
@@ -196,7 +197,7 @@ class DocCog(commands.Cog, name="Documents"):
             audit_log(interaction, "doc_read", file.filename)
         except Exception as exc:
             log.exception("doc_read failed")
-            await interaction.followup.send(f"❌ Failed to read document: {exc}")
+            await interaction.followup.send(embed=build_error_embed(exc, context="/doc read"), ephemeral=True)
 
     @doc.command(name="edit", description="Edit a Word document using AI instructions")
     @app_commands.describe(
@@ -245,11 +246,12 @@ class DocCog(commands.Cog, name="Documents"):
 
         except json.JSONDecodeError:
             await interaction.followup.send(
-                "❌ AI returned invalid edit instructions. Please try rephrasing."
+                "❌ AI returned invalid edit instructions. Please try rephrasing.",
+                ephemeral=True,
             )
         except Exception as exc:
             log.exception("doc_edit failed")
-            await interaction.followup.send(f"❌ Failed to edit document: {exc}")
+            await interaction.followup.send(embed=build_error_embed(exc, context="/doc edit"), ephemeral=True)
 
     @doc.command(name="create", description="Create a new Word document from a description")
     @app_commands.describe(instructions="Describe the document to create")
@@ -274,11 +276,12 @@ class DocCog(commands.Cog, name="Documents"):
 
         except json.JSONDecodeError:
             await interaction.followup.send(
-                "❌ AI returned invalid content. Please try rephrasing."
+                "❌ AI returned invalid content. Please try rephrasing.",
+                ephemeral=True,
             )
         except Exception as exc:
             log.exception("doc_create failed")
-            await interaction.followup.send(f"❌ Failed to create document: {exc}")
+            await interaction.followup.send(embed=build_error_embed(exc, context="/doc create"), ephemeral=True)
 
     # ======================================================================
     # /sheet commands
@@ -321,7 +324,7 @@ class DocCog(commands.Cog, name="Documents"):
             audit_log(interaction, "sheet_read", file.filename)
         except Exception as exc:
             log.exception("sheet_read failed")
-            await interaction.followup.send(f"❌ Failed to read spreadsheet: {exc}")
+            await interaction.followup.send(embed=build_error_embed(exc, context="/sheet read"), ephemeral=True)
 
     @sheet.command(name="edit", description="Edit an Excel spreadsheet using AI instructions")
     @app_commands.describe(
@@ -370,11 +373,12 @@ class DocCog(commands.Cog, name="Documents"):
 
         except json.JSONDecodeError:
             await interaction.followup.send(
-                "❌ AI returned invalid edit instructions. Please try rephrasing."
+                "❌ AI returned invalid edit instructions. Please try rephrasing.",
+                ephemeral=True,
             )
         except Exception as exc:
             log.exception("sheet_edit failed")
-            await interaction.followup.send(f"❌ Failed to edit spreadsheet: {exc}")
+            await interaction.followup.send(embed=build_error_embed(exc, context="/sheet edit"), ephemeral=True)
 
     @sheet.command(name="create", description="Create a new Excel spreadsheet from a description")
     @app_commands.describe(instructions="Describe the spreadsheet to create")
@@ -400,11 +404,12 @@ class DocCog(commands.Cog, name="Documents"):
 
         except json.JSONDecodeError:
             await interaction.followup.send(
-                "❌ AI returned invalid content. Please try rephrasing."
+                "❌ AI returned invalid content. Please try rephrasing.",
+                ephemeral=True,
             )
         except Exception as exc:
             log.exception("sheet_create failed")
-            await interaction.followup.send(f"❌ Failed to create spreadsheet: {exc}")
+            await interaction.followup.send(embed=build_error_embed(exc, context="/sheet create"), ephemeral=True)
 
     # -- error handler ------------------------------------------------------
 

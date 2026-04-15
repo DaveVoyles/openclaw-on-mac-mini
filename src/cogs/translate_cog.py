@@ -8,6 +8,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from discord_error import build_error_embed
+
 log = logging.getLogger("openclaw")
 
 
@@ -40,7 +42,7 @@ class TranslateCog(commands.Cog, name="Translate"):
             await interaction.followup.send(embed=embed)
         except Exception as e:
             log.exception("Translation failed")
-            await interaction.followup.send(f"❌ Translation failed: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/translate"), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

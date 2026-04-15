@@ -21,6 +21,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from cog_helpers import require_auth
+from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw.github_cog")
 
@@ -158,10 +159,10 @@ class GitHubCog(commands.Cog):
 
         except httpx.HTTPStatusError as e:
             log.exception("github prs HTTP error")
-            await interaction.followup.send(f"❌ GitHub API error: {e.response.status_code}", ephemeral=True)
-        except Exception:
+            await interaction.followup.send(embed=build_error_embed(e, context="/github prs"), ephemeral=True)
+        except Exception as e:
             log.exception("github prs failed")
-            await interaction.followup.send("❌ Failed to fetch pull requests.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/github prs"), ephemeral=True)
 
     # ── /github issues ────────────────────────────────────────────────────
 
@@ -231,10 +232,10 @@ class GitHubCog(commands.Cog):
 
         except httpx.HTTPStatusError as e:
             log.exception("github issues HTTP error")
-            await interaction.followup.send(f"❌ GitHub API error: {e.response.status_code}", ephemeral=True)
-        except Exception:
+            await interaction.followup.send(embed=build_error_embed(e, context="/github issues"), ephemeral=True)
+        except Exception as e:
             log.exception("github issues failed")
-            await interaction.followup.send("❌ Failed to fetch issues.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/github issues"), ephemeral=True)
 
     # ── /github watch ─────────────────────────────────────────────────────
 
@@ -271,9 +272,9 @@ class GitHubCog(commands.Cog):
             await interaction.followup.send(
                 f"👁 Now watching **{repo}** — I'll DM you when PRs or issues are opened/closed."
             )
-        except Exception:
+        except Exception as e:
             log.exception("github watch failed")
-            await interaction.followup.send("❌ Failed to save watch.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/github watch"), ephemeral=True)
 
     # ── /github unwatch ───────────────────────────────────────────────────
 
@@ -304,9 +305,9 @@ class GitHubCog(commands.Cog):
             await _save_watches(watches)
             log.info("User %s unwatched %s", interaction.user, repo)
             await interaction.followup.send(f"✅ Stopped watching **{repo}**", ephemeral=True)
-        except Exception:
+        except Exception as e:
             log.exception("github unwatch failed")
-            await interaction.followup.send("❌ Failed to remove watch.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/github unwatch"), ephemeral=True)
 
     # ── Background monitor ────────────────────────────────────────────────
 

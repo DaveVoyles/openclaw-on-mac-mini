@@ -13,6 +13,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import truncate_for_embed
+from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw")
 
@@ -114,7 +115,7 @@ class _ReviewView(discord.ui.View):
             await interaction.followup.send(f"✅ Saved to vault: {result}", ephemeral=True)
         except Exception as e:
             log.exception("review vault save failed")
-            await interaction.followup.send(f"❌ Failed to save: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/review save"), ephemeral=True)
 
 
 # ── Core review helper ────────────────────────────────────────────────────────
@@ -169,7 +170,7 @@ class ReviewTextModal(discord.ui.Modal, title="Paste Text for Review"):
             )
         except Exception as e:
             log.exception("review text modal submit failed")
-            await interaction.followup.send(f"❌ Review failed: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/review"), ephemeral=True)
 
 
 # ── Cog ───────────────────────────────────────────────────────────────────────
@@ -243,7 +244,7 @@ class ReviewCog(commands.Cog):
             )
         except Exception as e:
             log.exception("review file failed")
-            await interaction.followup.send(f"❌ Review failed: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/review"), ephemeral=True)
 
 
 async def setup(bot):

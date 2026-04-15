@@ -29,6 +29,7 @@ from permissions import is_allowed
 from runtime_state import record_channel_profile_signal
 from scheduler import scheduler
 from ui_components import EmbedColors
+from discord_progress import ProgressTracker
 
 log = logging.getLogger("openclaw.reports_cog")
 
@@ -542,12 +543,18 @@ class ReportsCog(commands.Cog, name="Reports"):
             return
         await interaction.response.defer(thinking=True)  # Progress indicator
 
+        progress = ProgressTracker(interaction, title="🗓️ Weekly Recap")
+        await progress.start()
+        await progress.update("📊 Gathering data…")
+
         report = await generate_channel_recap_report(
             channel_id=interaction.channel_id,
             days=days,
             focus=focus,
             style=style,
         )
+        await progress.update("🤖 Generating report…")
+        await progress.done()
         await self._send_chunks(
             interaction,
             title="🗓️ Weekly Recap",
@@ -624,6 +631,10 @@ class ReportsCog(commands.Cog, name="Reports"):
 
         await interaction.response.defer()
 
+        progress = ProgressTracker(interaction, title="🥍 Sports Watch Guide")
+        await progress.start()
+        await progress.update("📊 Gathering data…")
+
         effective_query = build_sports_watch_query(
             query=query,
             sport=sport,
@@ -631,6 +642,7 @@ class ReportsCog(commands.Cog, name="Reports"):
             team=team,
             days=days,
         )
+        await progress.update("🤖 Generating report…")
         report = await generate_sports_watch_report(
             query=query,
             sport=sport,
@@ -639,6 +651,7 @@ class ReportsCog(commands.Cog, name="Reports"):
             days=days,
             include_watch_info=include_watch_info,
         )
+        await progress.done()
         await self._send_chunks(
             interaction,
             title="🥍 Sports Watch Guide",

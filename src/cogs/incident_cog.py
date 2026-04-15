@@ -14,6 +14,8 @@ from discord.ext import commands
 
 from approvals import ApprovalView, RiskLevel, approval_store, build_approval_embed
 from audit import audit_log
+from discord_error import build_error_embed
+from discord_progress import ProgressTracker
 from incident_copilot import execute_incident_action, generate_incident_report
 from incident_workflows import incident_store
 
@@ -151,22 +153,15 @@ class IncidentCog(commands.Cog, name="Incident"):
     ) -> None:
         root_error = getattr(error, "original", error)
         if isinstance(error, app_commands.CheckFailure):
-            msg = str(error)
+            embed = build_error_embed(error, context="incident command", category="auth")
         elif isinstance(root_error, asyncio.TimeoutError):
-            msg = (
-                "⏰ Incident command timed out while contacting a backend service. "
-                "Please retry in a few seconds.\n"
-                f"{self._incident_operator_next_steps()}"
-            )
+            embed = build_error_embed(root_error, context="incident command", category="timeout")
         else:
-            msg = (
-                f"❌ Incident command failed: {root_error}\n"
-                f"{self._incident_operator_next_steps()}"
-            )
+            embed = build_error_embed(root_error, context="incident command")
         if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            await interaction.response.send_message(msg, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @incident_group.command(name="start", description="Start an incident with Copilot summary and approval-gated actions")
     @app_commands.describe(
@@ -184,7 +179,9 @@ class IncidentCog(commands.Cog, name="Incident"):
         details: str = "",
         services: str = "",
     ) -> None:
-        await interaction.response.defer()
+        progress = ProgressTracker(interaction, title="🚨 Starting Incident")
+        await progress.start()
+        await progress.update("📊 Gathering data…")
         channel = interaction.channel
         channel_id = getattr(channel, "id", None)
         channel_name = getattr(channel, "name", "") if channel else ""
@@ -223,6 +220,7 @@ class IncidentCog(commands.Cog, name="Incident"):
             )
 
         report_error: str | None = None
+        await progress.update("🤖 Generating report…")
         try:
             report = await asyncio.wait_for(
                 generate_incident_report(incident, requested_services=services),
@@ -327,6 +325,7 @@ class IncidentCog(commands.Cog, name="Incident"):
             value=self._incident_operator_next_steps()[:1000],
             inline=False,
         )
+        await progress.done(f"Incident #{incident['id']} started")
         await interaction.followup.send(embed=launch_embed)
         audit_log(interaction.user, "incident_start", f"incident#{incident['id']} {incident['severity']} {incident['title']}")
 
@@ -421,7 +420,7 @@ class IncidentCog(commands.Cog, name="Incident"):
                 actor_name=str(interaction.user),
             )
         except ValueError as exc:
-            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+            await interaction.response.send_message(embed=build_error_embed(exc, context="/incident status"), ephemeral=True)
             return
 
         if incident is None:
@@ -498,7 +497,7 @@ class IncidentCog(commands.Cog, name="Incident"):
             else:
                 incidents = incident_store.list_recent(limit=limit, status=selected_state)
         except ValueError as exc:
-            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+            await interaction.response.send_message(embed=build_error_embed(exc, context="/incident list"), ephemeral=True)
             return
 
         if not incidents:

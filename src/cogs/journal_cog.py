@@ -19,6 +19,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from discord_error import build_error_embed
+
 log = logging.getLogger("openclaw.journal_cog")
 
 VAULT_DIR = Path(os.getenv("VAULT_DIR", "/vault"))
@@ -104,7 +106,7 @@ class JournalEntryModal(discord.ui.Modal, title="📓 Journal Entry"):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("journal modal save failed")
-            await interaction.followup.send(f"❌ Failed to save journal entry: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/journal write"), ephemeral=True)
 
 
 # ── Cog ───────────────────────────────────────────────────────────────────────
@@ -137,7 +139,7 @@ class JournalCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("journal write failed")
-            await interaction.followup.send(f"❌ Failed to save journal entry: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/journal write"), ephemeral=True)
 
     # ── /journal read ─────────────────────────────────────────────────────────
 
@@ -148,7 +150,7 @@ class JournalCog(commands.Cog):
         try:
             target = _parse_date(date)
         except ValueError as e:
-            await interaction.followup.send(f"❌ {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/journal read"), ephemeral=True)
             return
 
         try:
@@ -178,7 +180,7 @@ class JournalCog(commands.Cog):
                 await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("journal read failed")
-            await interaction.followup.send(f"❌ Failed to read journal: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/journal read"), ephemeral=True)
 
     # ── /journal streak ───────────────────────────────────────────────────────
 
@@ -212,7 +214,7 @@ class JournalCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("journal streak failed")
-            await interaction.followup.send(f"❌ Failed to calculate streak: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/journal streak"), ephemeral=True)
 
     # ── /journal prompt ───────────────────────────────────────────────────────
 
@@ -237,7 +239,7 @@ class JournalCog(commands.Cog):
             await interaction.followup.send(embed=embed, ephemeral=True)
         except Exception as e:
             log.exception("journal prompt failed")
-            await interaction.followup.send(f"❌ Failed to generate prompt: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/journal prompt"), ephemeral=True)
 
 
 async def setup(bot):

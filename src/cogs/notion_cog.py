@@ -15,6 +15,7 @@ from discord.ext import commands
 
 from cog_helpers import audit_log, require_auth, truncate_for_embed
 from config import cfg
+from discord_error import build_error_embed
 
 log = logging.getLogger("openclaw")
 
@@ -88,9 +89,9 @@ class NotionCog(commands.Cog):
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception as e:
             log.exception("notion search failed")
-            await interaction.followup.send("❌ Notion search failed.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/notion search"), ephemeral=True)
 
     # ── /notion page ──────────────────────────────────────────────────────
 
@@ -130,9 +131,9 @@ class NotionCog(commands.Cog):
             if page_url:
                 msg += f"\n🔗 {page_url}"
             await interaction.followup.send(msg, ephemeral=True)
-        except Exception:
+        except Exception as e:
             log.exception("notion page create failed")
-            await interaction.followup.send("❌ Failed to create Notion page.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/notion page"), ephemeral=True)
 
     # ── /notion todo ──────────────────────────────────────────────────────
 
@@ -174,9 +175,9 @@ class NotionCog(commands.Cog):
             await _notion_request("v1/pages", "POST", body)
             audit_log(interaction.user, "notion_todo_add", item)
             await interaction.followup.send(f"✅ Added to Notion: {item}", ephemeral=True)
-        except Exception:
+        except Exception as e:
             log.exception("notion todo add failed")
-            await interaction.followup.send("❌ Failed to add Notion todo.", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/notion todo"), ephemeral=True)
 
 
 async def setup(bot):

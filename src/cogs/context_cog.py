@@ -10,6 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import audit_log, require_auth
+from discord_error import build_error_embed
 
 
 class ContextMenuCog(commands.Cog, name="ContextMenus"):
@@ -65,7 +66,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             await interaction.followup.send(embed=embed, ephemeral=True)
             audit_log(interaction.user, "context_analyze", detail=content[:100])
         except Exception as e:
-            await interaction.followup.send(f"❌ Analysis failed: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="Analyze with AI"), ephemeral=True)
 
     async def _save_to_memory(self, interaction: discord.Interaction, message: discord.Message):
         """Right-click → Save to Memory: store message content as a memory fact."""
@@ -84,7 +85,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             )
             audit_log(interaction.user, "context_save", detail=content[:100])
         except Exception as e:
-            await interaction.response.send_message(f"❌ Save failed: {e}", ephemeral=True)
+            await interaction.response.send_message(embed=build_error_embed(e, context="Save to Memory"), ephemeral=True)
 
     async def _research_message(self, interaction: discord.Interaction, message: discord.Message):
         """Right-click → Research This: run a research query on message content."""
@@ -112,7 +113,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             await interaction.followup.send(embed=embed)
             audit_log(interaction.user, "context_research", detail=content[:100])
         except Exception as e:
-            await interaction.followup.send(f"❌ Research failed: {e}")
+            await interaction.followup.send(embed=build_error_embed(e, context="Research This"), ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

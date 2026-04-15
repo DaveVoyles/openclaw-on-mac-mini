@@ -12,6 +12,7 @@ from discord.ext import commands
 
 from cog_helpers import audit_log, require_auth, split_response, truncate_for_embed
 from constants import MEMORY_SNIPPET_MAX_CHARS
+from discord_error import build_error_embed
 from ui_components import EmbedColors
 
 log = logging.getLogger("openclaw")
@@ -77,7 +78,7 @@ class _ResearchView(discord.ui.View):
             )
             await interaction.followup.send(f"💾 {result}", ephemeral=True)
         except Exception as e:
-            await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
+            await interaction.followup.send(embed=build_error_embed(e, context="/research save"), ephemeral=True)
         audit_log(interaction.user, "research_save_vault", detail=self._query[:80])
 
     @discord.ui.button(label="🔄 Re-run full research in 24h", style=discord.ButtonStyle.secondary)
@@ -106,14 +107,11 @@ class ResearchCog(commands.Cog, name="Research"):
         self.bot = bot
 
     async def cog_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.CheckFailure):
-            msg = str(error)
-        else:
-            msg = f"❌ Command failed: {error}"
+        embed = build_error_embed(error, context="research command")
         if interaction.response.is_done():
-            await interaction.followup.send(msg, ephemeral=True)
+            await interaction.followup.send(embed=embed, ephemeral=True)
         else:
-            await interaction.response.send_message(msg, ephemeral=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # ── /websearch ────────────────────────────────────────────────────
     @app_commands.command(name="websearch", description="Search the live web for current information")
@@ -212,7 +210,7 @@ class ResearchCog(commands.Cog, name="Research"):
                 name=f"Research: {query[:80]}",
                 auto_archive_duration=1440,
             )
-            await thread.send("🗺️ Planning research strategy…")
+            await thread.send("🔍 Decomposing query…")
         except discord.HTTPException as e:
             log.warning("Could not create research thread: %s", e)
             thread = None
