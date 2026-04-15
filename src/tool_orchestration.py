@@ -327,7 +327,15 @@ class ToolOrchestrator:
         on_tool_call: Any | None = None,
         parallel: bool = True,
         label: str = "LLM",
+        notification_callback: Any | None = None,
     ) -> tuple[Any, int]:
+        """Run the tool loop.
+
+        Args:
+            notification_callback: Optional async callable ``(message: str) -> None``.
+                When provided, called with human-readable streaming notifications
+                before and after each tool execution (W12-2).
+        """
         rounds = 0
 
         while rounds < max_rounds:
@@ -360,6 +368,14 @@ class ToolOrchestrator:
                     except Exception as exc:
                         log.debug("on_tool_call callback failed: %s", exc)
 
+            # W12-2: emit pre-call streaming notifications
+            if notification_callback:
+                for tool_call in tool_calls:
+                    try:
+                        await notification_callback(f"🔧 Calling `{tool_call.name}`…")
+                    except Exception as exc:
+                        log.debug("notification_callback pre-call failed: %s", exc)
+
             results = await asyncio.gather(*[
                 self._execute_tool_call(tool_call.name, tool_call.args)
                 for tool_call in tool_calls
@@ -371,6 +387,14 @@ class ToolOrchestrator:
                         await on_tool_call(tool_call.name, rounds + 1, result_preview=result[:200])
                     except Exception as exc:
                         log.debug("on_tool_call result callback failed: %s", exc)
+
+            # W12-2: emit post-call streaming notifications
+            if notification_callback:
+                for tool_call in tool_calls:
+                    try:
+                        await notification_callback(f"✅ Got results from `{tool_call.name}`")
+                    except Exception as exc:
+                        log.debug("notification_callback post-call failed: %s", exc)
 
             self._rate_limiter.record()
 

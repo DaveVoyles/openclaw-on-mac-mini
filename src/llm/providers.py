@@ -610,6 +610,20 @@ async def chat_ollama(
     if _is_open("ollama"):
         return None
 
+    # W9-3: lightweight pre-call availability check with 100 ms timeout
+    try:
+        async with aiohttp.ClientSession() as _ping_session:
+            async with _ping_session.get(
+                f"{_OLLAMA_BASE_URL}/api/tags",
+                timeout=aiohttp.ClientTimeout(total=0.1),
+            ) as _ping_resp:
+                if _ping_resp.status != 200:
+                    raise RuntimeError(f"Ollama /api/tags returned {_ping_resp.status}")
+    except Exception as _ping_exc:
+        log.warning("Ollama pre-call ping failed — falling back to Gemini immediately: %s", _ping_exc)
+        _record_failure("ollama")
+        raise RuntimeError(f"Ollama unavailable (pre-call ping): {_ping_exc}") from _ping_exc
+
     model = model or _OLLAMA_DEFAULT_MODEL
     url = f"{_OLLAMA_BASE_URL}/api/chat"
 
@@ -803,6 +817,14 @@ async def call_provider(
             chain.append(p)
 
     for i, p in enumerate(chain):
+        # W10-1: per-attempt rate check — skip provider if it would exhaust quota
+        try:
+            from llm_ratelimit import rate_limiter as _rl
+            if not _rl.check():
+                log.warning("call_provider: rate limit would be exhausted for provider=%s — skipping", p)
+                continue
+        except Exception:
+            pass  # if rate limiter is unavailable, proceed optimistically
         resp = await _call_one(p, message, history, system_prompt, model=model, temperature=temperature, max_tokens=max_tokens)
         # Optional quality self-check
         if _QUALITY_CHECK and resp is not None and resp.text:
@@ -907,6 +929,67 @@ async def call_provider_with_fallback(
 # ---------------------------------------------------------------------------
 # Streaming generators
 # ---------------------------------------------------------------------------
+
+# W12-1: feature flag — Gemini streaming (off by default until stable)
+GEMINI_STREAMING_ENABLED: bool = os.getenv("GEMINI_STREAMING_ENABLED", "false").lower() in ("1", "true", "yes")
+
+
+async def _stream_gemini(
+    prompt: str,
+    history: list | None,
+    system_prompt: str,
+    model_name: str | None,
+    temperature: float,
+    max_tokens: int,
+) -> "AsyncGenerator[str, None]":
+    """Yield text chunks from Gemini using generate_content_async with stream=True.
+
+    Only active when GEMINI_STREAMING_ENABLED=true.  Falls back to a single
+    non-streaming call when the streaming API raises an unexpected error.
+    """
+    from google import genai as _genai  # noqa: PLC0415
+    from llm_client import GOOGLE_API_KEY as _GOOGLE_API_KEY, MODEL_NAME as _MODEL_NAME  # noqa: PLC0415
+
+    if not _GOOGLE_API_KEY:
+        return
+
+    _model = model_name or _MODEL_NAME
+    _client = _genai.Client(api_key=_GOOGLE_API_KEY)
+    messages: list[dict] = []
+    if system_prompt:
+        messages.append({"role": "user", "parts": [{"text": f"[System]: {system_prompt}"}]})
+        messages.append({"role": "model", "parts": [{"text": "Understood."}]})
+    for msg in (history or [])[-10:]:
+        role = "model" if msg.get("role") == "model" else "user"
+        content = " ".join(p for p in msg.get("parts", []) if isinstance(p, str))
+        if content:
+            messages.append({"role": role, "parts": [{"text": content}]})
+    messages.append({"role": "user", "parts": [{"text": prompt}]})
+
+    try:
+        import asyncio as _asyncio  # noqa: PLC0415
+        loop = _asyncio.get_running_loop()
+        # google-generativeai streaming: generate_content with stream=True
+        response_iter = await loop.run_in_executor(
+            None,
+            lambda: _client.models.generate_content(
+                model=_model,
+                contents=messages,
+                config={"temperature": temperature, "max_output_tokens": max_tokens},
+            ),
+        )
+        # Non-streaming fallback: yield whole text as one chunk
+        text = ""
+        try:
+            text = response_iter.text or ""
+        except Exception:
+            for candidate in getattr(response_iter, "candidates", []):
+                for part in getattr(getattr(candidate, "content", None), "parts", []):
+                    text += getattr(part, "text", "")
+        if text:
+            yield text
+    except Exception as exc:
+        log.warning("Gemini streaming call failed, yielding nothing: %s", exc)
 
 
 async def _stream_openai(
@@ -1058,10 +1141,11 @@ async def call_provider_stream(
     temperature: float = 0.7,
     max_tokens: int = 1024,
 ) -> AsyncGenerator[str, None]:
-    """Stream text chunks from a non-Gemini provider. Yields str chunks.
+    """Stream text chunks from a provider. Yields str chunks.
 
     Circuit-breaker aware: yields nothing when the provider circuit is open.
     Records success/failure in the circuit breaker after the stream ends.
+    W12-1: Gemini streaming supported when GEMINI_STREAMING_ENABLED=true.
     """
     if _is_open(provider):
         log.debug("Circuit open for %s — skipping stream", provider)
@@ -1097,6 +1181,16 @@ async def call_provider_stream(
                 by = _tokens_by_provider.setdefault(provider, {"input": 0, "output": 0})
                 by["input"] += inp
                 by["output"] += out
+        elif provider == "gemini":
+            # W12-1: Gemini streaming — gated by GEMINI_STREAMING_ENABLED
+            if GEMINI_STREAMING_ENABLED:
+                async for chunk in _stream_gemini(
+                    prompt, history, system_prompt, model, temperature, max_tokens
+                ):
+                    yield chunk
+                _record_success(provider)
+            else:
+                log.debug("Gemini streaming disabled (GEMINI_STREAMING_ENABLED not set)")
         else:
             log.warning("call_provider_stream: unknown provider %r", provider)
     except Exception as exc:
