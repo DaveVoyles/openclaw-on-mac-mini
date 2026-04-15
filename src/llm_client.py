@@ -4,6 +4,7 @@ OpenClaw LLM Client — Gemini client setup, model config, and tool declarations
 
 import asyncio
 import dataclasses
+import datetime
 import logging
 import os
 import threading
@@ -52,7 +53,12 @@ _system_prompt_lock = threading.Lock()
 
 
 def _load_system_prompt() -> str:
-    """Load the system prompt from config/prompts/system.txt with mtime cache."""
+    """Load the system prompt from config/prompts/system.txt with mtime cache.
+
+    The file content is cached and invalidated on mtime change. The current
+    date/time is injected at call time (not cached) so the LLM always has an
+    accurate timestamp regardless of how long the process has been running.
+    """
     global _system_prompt_cache, _system_prompt_mtime
     prompt_file = CONFIG_DIR / "prompts" / "system.txt"
     try:
@@ -60,17 +66,24 @@ def _load_system_prompt() -> str:
     except OSError:
         current_mtime = 0.0
     with _system_prompt_lock:
-        if _system_prompt_cache is not None and current_mtime == _system_prompt_mtime:
-            return _system_prompt_cache
-        if prompt_file.exists():
-            _system_prompt_cache = prompt_file.read_text().strip()
-        else:
-            _system_prompt_cache = (
-                "You are OpenClaw, a helpful AI assistant managing a home media server. "
-                "Be concise, professional, and use emojis sparingly."
-            )
-        _system_prompt_mtime = current_mtime
-        return _system_prompt_cache
+        if _system_prompt_cache is None or current_mtime != _system_prompt_mtime:
+            if prompt_file.exists():
+                _system_prompt_cache = prompt_file.read_text().strip()
+            else:
+                _system_prompt_cache = (
+                    "You are OpenClaw, a helpful AI assistant managing a home media server. "
+                    "Be concise, professional, and use emojis sparingly."
+                )
+            _system_prompt_mtime = current_mtime
+
+        now = datetime.datetime.now()
+        date_header = (
+            f"## Current Date & Time\n"
+            f"Today is {now.strftime('%A, %B %-d, %Y')}. "
+            f"The current time is {now.strftime('%-I:%M %p')}. "
+            f"Use this as the authoritative date/time — do NOT use your training cutoff.\n\n"
+        )
+        return date_header + _system_prompt_cache
 
 
 # ---------------------------------------------------------------------------

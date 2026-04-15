@@ -57,7 +57,7 @@ class TestSystemPrompt:
         monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         llm._system_prompt_cache = None
         llm._system_prompt_mtime = 0.0
-        assert llm._load_system_prompt() == "You are TestBot."
+        assert "You are TestBot." in llm._load_system_prompt()
 
     def test_cache_invalidation_on_mtime_change(self, tmp_path, monkeypatch):
         """Prompt is reloaded when the file mtime changes."""
@@ -68,14 +68,14 @@ class TestSystemPrompt:
         monkeypatch.setattr(llm_client, "CONFIG_DIR", tmp_path)
         llm._system_prompt_cache = None
         llm._system_prompt_mtime = 0.0
-        assert llm._load_system_prompt() == "v1"
+        assert "v1" in llm._load_system_prompt()
 
         # Modify the file
         system_file.write_text("v2")
         # Touch to ensure mtime changes
         import os
         os.utime(system_file, (time.time() + 1, time.time() + 1))
-        assert llm._load_system_prompt() == "v2"
+        assert "v2" in llm._load_system_prompt()
 
 
 # ---------------------------------------------------------------------------
