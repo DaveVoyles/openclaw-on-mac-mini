@@ -47,6 +47,50 @@ _RE_SOURCES_BLOCK_LOOSE = re.compile(
 )
 _RE_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 
+# ---------------------------------------------------------------------------
+# W4-2: URL sanitizer for mangled source URLs
+# ---------------------------------------------------------------------------
+
+def _sanitize_source_url(url: str) -> str:
+    """Strip filename prefix garbage from URLs like '36mabout.htmlhttps://example.com'."""
+    match = re.search(r'https?://', url)
+    return url[match.start():] if match else url
+
+
+def _sanitize_sources_block(sources: str) -> str:
+    """Fix all mangled URLs in a sources block."""
+    return re.sub(r'\S*https?://\S+', lambda m: _sanitize_source_url(m.group(0)), sources)
+
+
+# ---------------------------------------------------------------------------
+# W4-3: Domain blocklist for generic/irrelevant source domains
+# ---------------------------------------------------------------------------
+
+_GENERIC_SOURCE_BLOCKLIST: frozenset[str] = frozenset({
+    "adobe.com",
+    "medium.com",
+    "quora.com",
+    "pinterest.com",
+    "slideshare.net",
+    "scribd.com",
+    "academia.edu",
+})
+
+
+def _filter_sources_block(sources: str) -> str:
+    """Remove source lines whose domain is in the generic blocklist."""
+    lines = sources.split('\n')
+    filtered = []
+    for line in lines:
+        hosts = re.findall(r'https?://([^/\s]+)', line)
+        blocked = any(
+            any(blocked_domain in host for blocked_domain in _GENERIC_SOURCE_BLOCKLIST)
+            for host in hosts
+        )
+        if not blocked:
+            filtered.append(line)
+    return '\n'.join(filtered)
+
 
 # ---------------------------------------------------------------------------
 # Bullet-to-table helpers
@@ -325,6 +369,11 @@ def _preprocess_response_text(text: str) -> tuple[str, str | None]:
             for m in reversed(all_loose):
                 text = text[: m.start()] + text[m.end():]
             text = text.rstrip()
+
+    # W4-2 + W4-3: Sanitize URLs and filter generic domains in sources block
+    if sources is not None:
+        sources = _sanitize_sources_block(sources)
+        sources = _filter_sources_block(sources)
 
     # D. Strip bare inline citation markers like [1], [2], [12]
     # Guard against stripping markdown link text like [text](url) — only remove

@@ -30,6 +30,33 @@ _EMBED_LIMIT = EMBED_SPLIT_LIMIT
 PACKAGE_CHUNK_THRESHOLD = 2
 PACKAGE_SUMMARY_LIMIT = 500
 
+# W8-2: Max line width for code block content on mobile Discord
+_CODE_LINE_WRAP_LIMIT = 80
+
+
+def _wrap_long_code_lines(text: str, limit: int = _CODE_LINE_WRAP_LIMIT) -> str:
+    """Wrap lines longer than *limit* chars inside fenced code blocks with a ↵ marker."""
+    result: list[str] = []
+    in_code_block = False
+    for line in text.split("\n"):
+        if line.strip().startswith("```"):
+            in_code_block = not in_code_block
+            result.append(line)
+            continue
+        if in_code_block and len(line) > limit:
+            # Soft-wrap the long line at limit-1 chars, adding ↵ continuation marker
+            remaining = line
+            first = True
+            while len(remaining) > limit:
+                cut = limit - 1 if first else limit - 3
+                result.append(remaining[:cut] + "↵")
+                remaining = ("  " if first else "  ") + remaining[cut:]
+                first = False
+            result.append(remaining)
+        else:
+            result.append(line)
+    return "\n".join(result)
+
 
 def truncate_for_embed(text: str, limit: int = EMBED_DESC_LIMIT) -> str:
     """Truncate *text* to fit in a Discord embed description."""
@@ -320,6 +347,8 @@ def _split_code_block_segment(block: str, limit: int) -> list[str]:
 
 def split_response(text: str, limit: int = _EMBED_LIMIT) -> list[str]:
     """Split a long response into chunks that fit within Discord's embed limit."""
+    # W8-2: Wrap long lines inside code blocks before splitting
+    text = _wrap_long_code_lines(text)
     if len(text) <= limit:
         return [text]
 

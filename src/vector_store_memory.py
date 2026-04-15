@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from typing import Any, Optional
 
@@ -24,6 +25,79 @@ from vector_store_scope import (
 )
 
 log = logging.getLogger("openclaw.vector_store")
+
+# W6-2: feature flag for stricter domain guard (defaults to safe existing behavior)
+_RECALL_DOMAIN_GUARD_STRICT = os.getenv("RECALL_DOMAIN_GUARD_STRICT", "false").lower() in ("1", "true", "yes")
+
+
+def _get_recall_threshold(query: str) -> float:
+    """Return similarity threshold based on query type (W6-1)."""
+    query_lower = query.lower()
+    factual_signals = ("who ", "what is", "when did", "where is", "how many", "which ")
+    if any(query_lower.startswith(s) or f" {s}" in query_lower for s in factual_signals):
+        return 0.75
+    conversational_signals = ("tell me", "explain", "describe", "talk about", "what do you think")
+    if any(s in query_lower for s in conversational_signals):
+        return 0.65
+    return 0.70
+
+
+def _deduplicate_recalled(results: list[dict], threshold: float = 0.9) -> list[dict]:
+    """Remove near-duplicate recalled memories, keeping the more recent one (W6-3).
+
+    Uses token-level Jaccard similarity as a proxy for semantic similarity.
+    O(n²) is acceptable since top-K is typically ≤ 5.
+    """
+    if len(results) <= 1:
+        return results
+
+    def _token_set(text: str) -> frozenset[str]:
+        return frozenset(text.lower().split())
+
+    def _jaccard(a: frozenset, b: frozenset) -> float:
+        if not a and not b:
+            return 1.0
+        inter = len(a & b)
+        union = len(a | b)
+        return inter / union if union else 0.0
+
+    token_sets = [_token_set(r.get("text", "")) for r in results]
+    keep = [True] * len(results)
+
+    for i in range(len(results)):
+        if not keep[i]:
+            continue
+        for j in range(i + 1, len(results)):
+            if not keep[j]:
+                continue
+            if _jaccard(token_sets[i], token_sets[j]) >= threshold:
+                ts_i = float((results[i].get("metadata") or {}).get("added_at") or 0)
+                ts_j = float((results[j].get("metadata") or {}).get("added_at") or 0)
+                if ts_j >= ts_i:
+                    keep[i] = False
+                    break
+                else:
+                    keep[j] = False
+
+    deduped = [r for r, k in zip(results, keep) if k]
+    dropped = len(results) - len(deduped)
+    if dropped:
+        log.debug("Recall dedup: dropped %d near-duplicate result(s)", dropped)
+    return deduped
+
+
+def _query_has_domain_signal(query: str, domains: set[str]) -> bool:
+    """Return True if query contains ANY keyword signal for the given domains (W6-2 strict mode)."""
+    from vector_store_config import _RECALL_DOMAIN_TERMS
+
+    lowered = query.lower()
+    for domain in domains:
+        if domain in lowered:
+            return True
+        for term in _RECALL_DOMAIN_TERMS.get(domain, []):
+            if term in lowered:
+                return True
+    return False
 
 
 async def get_scoped_memory_summary(
@@ -381,11 +455,15 @@ async def recall_for_context(
     top_k = top_k or cfg.auto_recall_top_k
     _set_recall_guard_notes([])
 
+    # W6-1: compute query-type threshold early so it can be passed to retrieval
+    query_threshold = _get_recall_threshold(query)
+
     where = {"anchor_id": anchor_id} if anchor_id else None
     from vector_store_client import search_all  # lazy — allows test patching
     results = await search_all(
         query,
         top_k=top_k,
+        threshold=query_threshold,
         where=where,
         channel_id=channel_id,
         thread_id=thread_id,
@@ -395,6 +473,7 @@ async def recall_for_context(
         results = await search_all(
             query,
             top_k=top_k,
+            threshold=query_threshold,
             channel_id=channel_id,
             thread_id=thread_id,
             cross_channel=cross_channel,
@@ -408,7 +487,7 @@ async def recall_for_context(
     suppressed_domain = 0
     suppressed_low_similarity = 0
     guarded_results: list[dict] = []
-    min_similarity = max(SIMILARITY_THRESHOLD, _RECALL_GUARD_MIN_SIMILARITY)
+    min_similarity = max(query_threshold, _RECALL_GUARD_MIN_SIMILARITY)
     for item in results:
         similarity = float(item.get("similarity") or 0.0)
         if similarity < min_similarity:
@@ -417,10 +496,17 @@ async def recall_for_context(
 
         item_text = str(item.get("text") or "")
         item_domains = _infer_recall_domains(item_text)
+        # W6-2: domain guard — suppress only genuinely off-topic sports/WWE memories.
+        # In strict mode, use a single-keyword check on the query so that even a
+        # short sports question ("who won?") is not wrongly flagged as non-sports.
+        if _RECALL_DOMAIN_GUARD_STRICT:
+            query_in_domain = _query_has_domain_signal(query, guard_target_domains)
+        else:
+            query_in_domain = bool(query_domains & guard_target_domains)
         if (
             not cross_channel
             and not explicit_domains
-            and not (query_domains & guard_target_domains)
+            and not query_in_domain
             and (item_domains & guard_target_domains)
         ):
             suppressed_domain += 1
@@ -465,6 +551,16 @@ async def recall_for_context(
 
     if not results:
         return ""
+
+    # W6-3: deduplicate near-identical recalled memories before injection
+    results = _deduplicate_recalled(results)
+
+    # W6-4: DEBUG log for recall transparency
+    log.debug(
+        "Injected %d memories: %s",
+        len(results),
+        [(r.get("id", r["text"][:40]), r.get("similarity")) for r in results],
+    )
 
     lines = ["[Your Memory]"]
     for r in results:
