@@ -183,7 +183,7 @@ async def _proxy_health_loop() -> None:
         await asyncio.sleep(_PROXY_HEALTH_INTERVAL)
         try:
             await check_proxy_health()
-        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
+        except Exception as exc:  # noqa: BLE001 — background loop must never crash
             log.debug("Proxy health loop error (non-fatal): %s", exc)
 
 

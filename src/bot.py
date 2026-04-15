@@ -1032,6 +1032,7 @@ async def on_message(message: discord.Message) -> None:
             )
         except (discord.HTTPException, discord.Forbidden, discord.NotFound):
             pass
+    from discord_events import handle_message  # lazy to avoid circular import
     await handle_message(message, channel_roles=_CHANNEL_ROLES)
 
 
