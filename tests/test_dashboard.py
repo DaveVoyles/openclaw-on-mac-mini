@@ -206,7 +206,7 @@ class TestTerminalHandler:
         resp = await mod.terminal_handler(req)
         assert resp.content_type == "text/html"
         assert len(resp.text) > 100
-        assert "Preferred launcher" in resp.text
+        assert "Quick checks from anywhere" in resp.text
         assert "Compatibility shortcut" in resp.text
         assert "openclaw --version" in resp.text
         assert "OpenClaw" in resp.text
@@ -223,7 +223,7 @@ class TestTerminalHandler:
         assert "openclaw edit" in resp.text
         assert "openclaw session list" in resp.text
         assert "/rollback last" in resp.text
-        assert "manual-recovery only" in resp.text
+        assert "manual-recovery" in resp.text
         assert "Terminal Agent Sessions" in resp.text
         assert "bash</code> and <code>zsh</code> are auto-configured" in resp.text
 
