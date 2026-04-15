@@ -117,6 +117,7 @@ from quality_helpers import (
 )
 from response_actions import ResponseActions, _generate_follow_ups
 from bot_formatting import truncate_for_embed
+from onboarding import OnboardingManager
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -151,6 +152,34 @@ _DEFAULT_ASK_THREAD_CACHE: dict[tuple[int, int, int], tuple[int, float]] = {}
 _DEFAULT_ASK_THREAD_CACHE_TTL_SECONDS = 60 * 60 * 24
 _MESSAGE_CONTENT_HINT_CACHE: dict[int, float] = {}
 _MESSAGE_CONTENT_HINT_COOLDOWN_SECONDS = 60 * 30
+
+# ---------------------------------------------------------------------------
+# First-ask tip tracking (W1-2)
+# ---------------------------------------------------------------------------
+
+_ONBOARDING_SEEN_PATH = Path("data/onboarding_seen.json")
+_onboarding_seen_ids: set[int] = set()
+
+
+def _load_onboarding_seen() -> None:
+    """Load set of user IDs who have already received the first-ask tip."""
+    global _onboarding_seen_ids
+    if _ONBOARDING_SEEN_PATH.exists():
+        try:
+            with open(_ONBOARDING_SEEN_PATH) as f:
+                _onboarding_seen_ids = set(json.load(f))
+        except Exception:
+            _onboarding_seen_ids = set()
+
+
+def _save_onboarding_seen() -> None:
+    """Persist the set of greeted user IDs to disk."""
+    _ONBOARDING_SEEN_PATH.parent.mkdir(exist_ok=True)
+    with open(_ONBOARDING_SEEN_PATH, "w") as f:
+        json.dump(list(_onboarding_seen_ids), f)
+
+
+_load_onboarding_seen()
 
 
 def _resolve_channel_thread_scope(
@@ -971,8 +1000,38 @@ async def metrics_cmd(interaction: discord.Interaction) -> None:
 # ---------------------------------------------------------------------------
 
 @bot.event
+async def on_member_join(member: discord.Member) -> None:
+    """Send welcome DM and start onboarding when a new member joins."""
+    try:
+        dm_channel = await member.create_dm()
+        manager = OnboardingManager()
+        await manager.send_welcome_message(member, dm_channel)
+        log.info("Sent onboarding welcome to new member %s (%s)", member, member.id)
+    except discord.Forbidden:
+        log.warning("Could not DM new member %s (%s) — DMs disabled", member, member.id)
+    except Exception as exc:
+        log.error("on_member_join error for %s: %s", member, exc)
+
+
+@bot.event
 async def on_message(message: discord.Message) -> None:
     """Handle thread follow-ups and default plain-text /ask messages."""
+    # W1-2: one-time first-message tip per user
+    if (
+        not message.author.bot
+        and message.author.id not in _onboarding_seen_ids
+        and message.guild is not None  # only in guild channels, not DMs
+    ):
+        _onboarding_seen_ids.add(message.author.id)
+        _save_onboarding_seen()
+        try:
+            await message.channel.send(
+                f"💡 New here, {message.author.mention}? Run `/help` to explore all commands.",
+                delete_after=60,
+            )
+        except Exception:
+            pass
+
     from discord_events import handle_message  # lazy to avoid circular import
     await handle_message(message, channel_roles=_CHANNEL_ROLES)
 

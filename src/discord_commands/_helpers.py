@@ -40,7 +40,9 @@ def require_auth(func: F) -> F:
     async def wrapper(interaction: discord.Interaction, *args, **kwargs):
         if not _is_allowed(interaction):
             await interaction.response.send_message(
-                "🔒 You are not authorized to use this command.", ephemeral=True
+                "🔒 You don't have access to this command.\n"
+                "Run `/whoami` to check your permission level, or contact your admin.",
+                ephemeral=True,
             )
             return
         return await func(interaction, *args, **kwargs)
