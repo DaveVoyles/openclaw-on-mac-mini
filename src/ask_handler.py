@@ -253,6 +253,13 @@ async def handle_ask(
         anchor=anchor,
     )
 
+    # Thread channel name for context-aware LLM hints
+    channel = interaction.channel
+    if channel and hasattr(channel, 'name'):
+        context_controls["channel_name"] = channel.name
+    elif channel and hasattr(channel, 'parent') and channel.parent:
+        context_controls["channel_name"] = channel.parent.name
+
     # Guardrail: if user picks "local" but query clearly needs tools, auto-upgrade
     from llm import _needs_tools as llm_needs_tools
     model_pref, upgraded_to_gemini = normalize_model_preference(

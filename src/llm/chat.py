@@ -637,6 +637,30 @@ async def _recover_stream_provider_failure(
     )
 
 
+def _channel_context_prefix(channel_name: str | None) -> str:
+    """Return a brief channel context hint for the system prompt."""
+    if not channel_name:
+        return ""
+    name = channel_name.lstrip("#").lower().strip()
+    _HINTS = {
+        "research": "You are helping with research. Favor citations and structured findings.",
+        "docker": "You are helping with Docker/container infrastructure. Be precise and technical.",
+        "journal": "You are in a personal journaling context. Be thoughtful and reflective.",
+        "logs": "You are helping analyze logs and system events. Be concise and diagnostic.",
+        "reports": "You are generating a structured report. Use headers and bullet points.",
+        "incident": "You are in an incident response context. Be direct, concise, and actionable.",
+        "memory": "You are in a memory/recall context. Help the user recall and connect past information.",
+        "analytics": "You are in an analytics context. Focus on data patterns and quantitative insights.",
+        "real-estate": "You are in a real estate research context. Focus on property data and market analysis.",
+        "bookmarks": "You are helping manage bookmarks and saved content. Be organized and concise.",
+        "general": "",  # no hint for general channel
+    }
+    for key, hint in _HINTS.items():
+        if key in name:
+            return f"\n\n[Channel context: {hint}]\n" if hint else ""
+    return ""
+
+
 async def chat_stream(
     user_message: str,
     history: list[dict] | None = None,
@@ -693,8 +717,10 @@ async def chat_stream(
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
         model_message = cleaned_user_message
-    # TODO: prepend channel_context_prefix(channel_name) here once channel_name is
-    # threaded into chat_stream (e.g. via context_controls["channel_name"] from the Discord layer).
+    channel_name = context_controls.get("channel_name") if context_controls else None
+    channel_prefix = _channel_context_prefix(channel_name)
+    if channel_prefix:
+        model_message = channel_prefix + model_message
     metadata = {}
     metadata["context_quality"] = dict(context_quality)
     explainability = _build_context_explainability(
@@ -1204,8 +1230,10 @@ async def chat(
         model_message = f"{recalled_context}\n\n---\nUser's question: {cleaned_user_message}"
     else:
         model_message = cleaned_user_message
-    # TODO: prepend channel_context_prefix(channel_name) here once channel_name is
-    # threaded into chat() (e.g. via context_controls["channel_name"] from the Discord layer).
+    channel_name = context_controls.get("channel_name") if context_controls else None
+    channel_prefix = _channel_context_prefix(channel_name)
+    if channel_prefix:
+        model_message = channel_prefix + model_message
 
     # Unified web-search fast-path — uses cleaned_user_message to avoid cross-topic
     # contamination from recalled context (e.g., lacrosse memories polluting gaming queries).

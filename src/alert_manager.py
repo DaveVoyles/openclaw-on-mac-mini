@@ -73,9 +73,6 @@ _alert_messages: dict[int, str] = {}
 
 _OWNER_USER_ID = int(os.getenv("OWNER_USER_ID", os.getenv("BOT_OWNER_ID", "0")))
 
-# TODO: wire into on_raw_reaction_add in discord_events.py
-#   Call: await alert_manager.handle_alert_reaction(payload.message_id, str(payload.emoji), payload.user_id)
-
 
 async def handle_alert_reaction(message_id: int, emoji: str, user_id: int) -> None:
     """Handle a Discord reaction on an alert message.
@@ -83,7 +80,7 @@ async def handle_alert_reaction(message_id: int, emoji: str, user_id: int) -> No
     ⏰ → snooze the alert class for 1 hour.
     ✅ → mark as resolved and post a resolved follow-up.
 
-    This function is meant to be called from discord_events.py's on_raw_reaction_add.
+    Called from bot.py's on_raw_reaction_add event handler.
     """
     if _OWNER_USER_ID and user_id != _OWNER_USER_ID:
         return  # Only the bot owner can snooze/resolve via reaction

@@ -421,6 +421,12 @@ async def handle_message(
                 make_discord_stream_handler(flow_channel) if PROVIDER_STREAM else (None, lambda: None)
             )
 
+            context_controls: dict[str, Any] = {}
+            if hasattr(message.channel, 'name'):
+                context_controls["channel_name"] = message.channel.name
+            elif hasattr(message.channel, 'parent') and message.channel.parent:
+                context_controls["channel_name"] = message.channel.parent.name
+
             result = await run_ask_stream(
                 llm_stream=llm_chat_stream,
                 user_message=user_question,
@@ -433,6 +439,7 @@ async def handle_message(
                 update_history=_update_history,
                 routing_profile=user_routing_profile,
                 on_partial_chunk=_on_partial,
+                context_controls=context_controls,
             )
 
             # Remove the streaming placeholder before sending the formatted final reply.
