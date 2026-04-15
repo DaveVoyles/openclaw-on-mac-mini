@@ -71,11 +71,12 @@ network:
   ollama_port: 11434
   monstervision_port: 8766
 
-# Channel roles — prevents context bleed between different workflows.
-# Set the matching env vars (DISCORD_CHANNEL_<ROLE>_ID) in .env with real IDs.
-# Each channel gets a prompt override injected at conversation start so the
-# bot behaves consistently with the channel's purpose.
+# Channel roles — per-channel AI personas (currently disabled).
+# Channels are used as organizational labels only; all channels behave generically.
+# To re-enable: set roles_enabled: true and set the matching env vars in .env.
+# Templates are preserved below for future use.
 channels:
+  roles_enabled: false  # set true to re-enable per-channel prompt injection
   roles:
     research:
       prompt_override: >-

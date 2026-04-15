@@ -297,20 +297,33 @@ async def _collect_feedback(
 
 
 async def _load_channel_config() -> None:
-    """Load channel roles from config.yaml and map them to env-provided IDs."""
+    """Load channel roles from config.yaml and map them to env-provided IDs.
+
+    Channel role injection is controlled by ``channels.roles_enabled`` in
+    config.yaml. When false (the default), channels act as organizational
+    labels only and the bot responds generically in all channels.
+    """
     config_file = CONFIG_DIR / "config.yaml"
+    roles_enabled = False
     if config_file.exists():
         try:
             async with aiofiles.open(config_file) as f:
                 content = await f.read()
                 cfg_yaml = yaml.safe_load(content) or {}
-            roles = cfg_yaml.get("channels", {}).get("roles", {})
-            for role_name, role_cfg in roles.items():
-                prompt = role_cfg.get("prompt_override", "")
-                if prompt:
-                    _CHANNEL_PROMPTS[role_name] = prompt
+            channels_cfg = cfg_yaml.get("channels", {})
+            roles_enabled = bool(channels_cfg.get("roles_enabled", False))
+            if roles_enabled:
+                roles = channels_cfg.get("roles", {})
+                for role_name, role_cfg in roles.items():
+                    prompt = role_cfg.get("prompt_override", "")
+                    if prompt:
+                        _CHANNEL_PROMPTS[role_name] = prompt
         except Exception as e:
             log.warning("Failed to load channel config: %s", e)
+
+    if not roles_enabled:
+        log.info("Channel roles disabled (channels.roles_enabled=false) — all channels use generic behavior")
+        return
 
     for role in ("research", "analytics", "bookmarks", "real_estate"):
         raw = os.getenv(f"DISCORD_CHANNEL_{role.upper()}_ID", "0")
