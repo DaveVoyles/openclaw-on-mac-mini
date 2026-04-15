@@ -875,7 +875,8 @@ class TestRunProactiveScan:
         with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
              patch("bg_healing.llm_chat", AsyncMock(return_value=(analysis, None, None))), \
              patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Issue found!", ["🤖 Copilot fix pending"]))), \
-             patch("bg_healing.audit_log"):
+             patch("bg_healing.audit_log"), \
+             patch("llm_ratelimit.background_quota_guard.check_background_allowed", return_value=True):
             await bg_healing._run_proactive_scan(bot)
 
         msg.edit.assert_awaited_once()

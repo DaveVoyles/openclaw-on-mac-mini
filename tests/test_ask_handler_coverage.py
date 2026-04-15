@@ -367,6 +367,8 @@ def _reset_stubs() -> None:
     }
     _qh_stub._run_quality_auto_repair.side_effect = None
     _qh_stub._build_ask_recovery_block.return_value = ""
+    _qh_stub._build_ask_failure_message.reset_mock()
+    _qh_stub._build_ask_timeout_message.reset_mock()
     _fmt_stub.split_response.return_value = ["chunk1"]
     _fmt_stub.extract_file_attachment.return_value = None
     _fmt_stub.extract_image_url.return_value = None
