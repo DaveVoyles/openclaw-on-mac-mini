@@ -168,7 +168,7 @@ def _load_onboarding_seen() -> None:
         try:
             with open(_ONBOARDING_SEEN_PATH) as f:
                 _onboarding_seen_ids = set(json.load(f))
-        except Exception:
+        except (json.JSONDecodeError, ValueError, OSError):
             _onboarding_seen_ids = set()
 
 
@@ -238,12 +238,12 @@ def make_discord_stream_handler(channel: Any) -> tuple[
             try:
                 _placeholder_msg = await channel.send("_⏳ Thinking…_")
                 _placeholder.append(_placeholder_msg)
-            except Exception:
+            except (discord.HTTPException, discord.Forbidden, discord.NotFound):
                 _placeholder_claimed[0] = False
 
         try:
             asyncio.ensure_future(_send_thinking_placeholder())
-        except Exception:
+        except RuntimeError:
             pass
 
     async def _on_partial_chunk(chunk_text: str) -> None:
@@ -267,7 +267,7 @@ def make_discord_stream_handler(channel: Any) -> tuple[
             embed = discord.Embed(description=preview + suffix, color=discord.Color.purple())
             await _placeholder[0].edit(embed=embed)
             _last_edit_len[0] = len(chunk_text)
-        except Exception as exc:
+        except (discord.HTTPException, discord.Forbidden, discord.NotFound) as exc:
             log.debug("Stream placeholder update failed: %s", exc)
 
     def _get_placeholder() -> Any | None:
@@ -289,7 +289,7 @@ async def _collect_feedback(
     try:
         await bot_message.add_reaction("👍")
         await bot_message.add_reaction("👎")
-    except Exception:
+    except (discord.HTTPException, discord.Forbidden, discord.NotFound):
         return
 
     def check(reaction: discord.Reaction, user: discord.User) -> bool:
@@ -316,12 +316,12 @@ async def _collect_feedback(
         Path(_FEEDBACK_LOG_PATH).parent.mkdir(parents=True, exist_ok=True)
         with open(_FEEDBACK_LOG_PATH, "a") as f:
             f.write(json.dumps(entry) + "\n")
-    except (asyncio.TimeoutError, Exception):
+    except (asyncio.TimeoutError, OSError):
         pass  # No feedback received — that's fine
     finally:
         try:
             await bot_message.clear_reactions()
-        except Exception:
+        except (discord.HTTPException, discord.Forbidden, discord.NotFound):
             pass
 
 
@@ -347,7 +347,7 @@ async def _load_channel_config() -> None:
                     prompt = role_cfg.get("prompt_override", "")
                     if prompt:
                         _CHANNEL_PROMPTS[role_name] = prompt
-        except Exception as e:
+        except (yaml.YAMLError, OSError, KeyError, TypeError) as e:
             log.warning("Failed to load channel config: %s", e)
 
     if not roles_enabled:
@@ -483,7 +483,7 @@ def _pick_most_recent_thread(candidates: list[discord.Thread]) -> discord.Thread
         last_msg = getattr(thread, "last_message_id", None)
         try:
             return int(last_msg or thread.id)
-        except Exception:
+        except (TypeError, ValueError):
             return int(thread.id)
 
     return sorted(candidates, key=_thread_sort_key, reverse=True)[0]
@@ -544,7 +544,7 @@ async def _get_or_create_default_ask_thread(
         )
         _remember_default_ask_thread(channel, user_id, int(created.id))
         return created, True
-    except Exception as exc:
+    except (discord.HTTPException, discord.Forbidden) as exc:
         log.debug("Default ask auto-thread creation failed: %s", exc)
         return None, False
 
@@ -595,7 +595,7 @@ class OpenClawBot(commands.Bot):
                 await self.load_extension(module)
                 loaded.append(module)
                 log.info("Loaded cog: %s", module)
-            except Exception as e:
+            except (commands.ExtensionError, ImportError) as e:
                 log.error("Failed to load cog %s: %s", module, e)
         log.info("Loaded %d cogs: %s", len(loaded), ", ".join(loaded))
 
@@ -617,7 +617,7 @@ class OpenClawBot(commands.Bot):
             from metrics_collector import start_metrics_collector
 
             await start_metrics_collector()
-        except Exception as exc:
+        except (ImportError, AttributeError, RuntimeError) as exc:
             log.warning("Failed to start metrics collector: %s", exc)
 
         # Startup provider capability scan
@@ -630,7 +630,7 @@ class OpenClawBot(commands.Bot):
             log.info("Providers available: %s", ", ".join(available) or "none")
             if unavailable:
                 log.warning("Providers unavailable: %s", ", ".join(unavailable))
-        except Exception as exc:
+        except (ImportError, RuntimeError, asyncio.TimeoutError) as exc:
             log.warning("Provider scan failed: %s", exc)
 
         from llm.providers import start_proxy_health_loop
@@ -723,7 +723,7 @@ class OpenClawBot(commands.Bot):
                     if idx == len(chunks) - 1:
                         embed.set_footer(text=f"Task {task_id} • {action}")
                     await channel.send(embed=embed)
-            except Exception as e:
+            except (discord.HTTPException, discord.Forbidden, discord.NotFound) as e:
                 log.error("Failed to post scheduler result for %s: %s", task_id, e)
 
         scheduler.notify_callback = _scheduler_notify
@@ -734,7 +734,7 @@ class OpenClawBot(commands.Bot):
         active_background_loops = 0
         try:
             active_background_loops = int(start_background_tasks(self))
-        except Exception as exc:
+        except (ImportError, RuntimeError, AttributeError) as exc:
             log.error("Failed to start background task supervisor: %s", exc)
 
         if active_background_loops <= 0:
@@ -749,7 +749,7 @@ class OpenClawBot(commands.Bot):
                             "⚠️ Background monitoring loops failed to start. "
                             "Slash commands remain online, but proactive alerts are paused.",
                         )
-                    except Exception as exc:
+                    except (discord.HTTPException, discord.Forbidden, discord.NotFound) as exc:
                         log.debug("Failed to post background-loop warning: %s", exc)
 
         # Set bot presence/activity
@@ -780,7 +780,7 @@ class OpenClawBot(commands.Bot):
                             f"🔄 Found **{len(interrupted)}** interrupted plan(s) from a previous session: {names}\n"
                             f"Use `/resume <plan_id>` to continue, or `/plans` to review."
                         )
-                    except Exception as e:
+                    except (discord.HTTPException, discord.Forbidden, discord.NotFound) as e:
                         log.warning("Failed to post interrupted plan notice: %s", e)
                 log.info("Found %d interrupted plan(s) on startup", len(interrupted))
 
@@ -799,7 +799,7 @@ class OpenClawBot(commands.Bot):
                 async with aiofiles.open(audit_file, "a") as f:
                     for e in entries:
                         await f.write(json.dumps(e) + "\n")
-            except Exception as exc:
+            except (OSError, IOError) as exc:
                 log.warning("Failed to flush audit buffer on shutdown: %s", exc)
 
         _close_fns = [
@@ -811,13 +811,13 @@ class OpenClawBot(commands.Bot):
         for name, fn in _close_fns:
             try:
                 await fn()
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 — cleanup code; keep broad
                 log.debug("close %s: %s", name, exc)
         try:
             from metrics_collector import stop_metrics_collector
 
             await stop_metrics_collector()
-        except Exception as exc:
+        except (ImportError, RuntimeError, AttributeError) as exc:
             log.debug("close metrics_collector: %s", exc)
         if self._health_runner:
             await self._health_runner.cleanup()
@@ -913,7 +913,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
     try:
         await _send_app_command_error_message(interaction, user_message)
-    except Exception as send_exc:
+    except (discord.HTTPException, discord.Forbidden, discord.NotFound) as send_exc:
         log.exception(
             "Failed to send app command error response command=%s user_id=%s channel_id=%s guild_id=%s",
             command_name,
@@ -1010,7 +1010,7 @@ async def on_member_join(member: discord.Member) -> None:
         log.info("Sent onboarding welcome to new member %s (%s)", member, member.id)
     except discord.Forbidden:
         log.warning("Could not DM new member %s (%s) — DMs disabled", member, member.id)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — Discord event callback; must not raise
         log.error("on_member_join error for %s: %s", member, exc)
 
 
@@ -1030,10 +1030,8 @@ async def on_message(message: discord.Message) -> None:
                 f"💡 New here, {message.author.mention}? Run `/help` to explore all commands.",
                 delete_after=60,
             )
-        except Exception:
+        except (discord.HTTPException, discord.Forbidden, discord.NotFound):
             pass
-
-    from discord_events import handle_message  # lazy to avoid circular import
     await handle_message(message, channel_roles=_CHANNEL_ROLES)
 
 

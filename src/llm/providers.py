@@ -149,7 +149,7 @@ async def check_proxy_health(timeout: float = 5.0) -> bool:
                     resp.status,
                 )
                 return _proxy_healthy
-    except Exception as exc:
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
         _proxy_healthy = False
         log.warning("Copilot proxy unreachable: %s", exc)
         return False
@@ -183,7 +183,7 @@ async def _proxy_health_loop() -> None:
         await asyncio.sleep(_PROXY_HEALTH_INTERVAL)
         try:
             await check_proxy_health()
-        except Exception as exc:
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as exc:
             log.debug("Proxy health loop error (non-fatal): %s", exc)
 
 
@@ -263,8 +263,6 @@ async def _call_with_retry(
                 provider, attempt + 1, attempts, exc, delay,
             )
             await asyncio.sleep(delay)
-        except Exception:
-            raise  # non-transient, don't retry
     raise last_exc  # type: ignore[misc]
 
 
@@ -416,7 +414,7 @@ async def chat_openai(
             try:
                 from spending import tracker as _spending
                 await _spending.record_copilot(model=model)
-            except Exception:
+            except (ImportError, AttributeError):
                 pass
         elif COPILOT_PROXY_ENABLED:
             from spending import tracker as spending_tracker
@@ -433,7 +431,7 @@ async def chat_openai(
             log.warning("Proxy marked unhealthy after connection error")
         _record_failure("openai")
         return None
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as e:
         log.warning("OpenAI call failed: %s", e)
         _record_failure("openai")
         return None
@@ -504,7 +502,7 @@ async def chat_openai_vision(
                 return None
             data = await resp.json()
             return data["choices"][0]["message"]["content"]
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, KeyError, ValueError) as e:
         log.warning("OpenAI vision call failed: %s", e)
         return None
 
@@ -585,14 +583,14 @@ async def chat_anthropic(
             try:
                 from spending import tracker as _spending
                 await _spending.record_copilot(model=model)
-            except Exception:
+            except (ImportError, AttributeError):
                 pass
         return content
     except aiohttp.ClientResponseError as e:
         log.warning("Anthropic returned HTTP %d", e.status)
         _record_failure("anthropic")
         return None
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as e:
         log.warning("Anthropic call failed: %s", e)
         _record_failure("anthropic")
         return None
@@ -619,7 +617,7 @@ async def chat_ollama(
             ) as _ping_resp:
                 if _ping_resp.status != 200:
                     raise RuntimeError(f"Ollama /api/tags returned {_ping_resp.status}")
-    except Exception as _ping_exc:
+    except (aiohttp.ClientError, asyncio.TimeoutError, OSError, RuntimeError) as _ping_exc:
         log.warning("Ollama pre-call ping failed — falling back to Gemini immediately: %s", _ping_exc)
         _record_failure("ollama")
         raise RuntimeError(f"Ollama unavailable (pre-call ping): {_ping_exc}") from _ping_exc
@@ -670,7 +668,7 @@ async def chat_ollama(
         log.warning("Ollama call failed (connection error): %s", e)
         _record_failure("ollama")
         return None
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as e:
         log.warning("Ollama call failed: %s", e)
         _record_failure("ollama")
         return None
@@ -823,7 +821,7 @@ async def call_provider(
             if not _rl.check():
                 log.warning("call_provider: rate limit would be exhausted for provider=%s — skipping", p)
                 continue
-        except Exception:
+        except (ImportError, AttributeError):
             pass  # if rate limiter is unavailable, proceed optimistically
         resp = await _call_one(p, message, history, system_prompt, model=model, temperature=temperature, max_tokens=max_tokens)
         # Optional quality self-check
@@ -982,13 +980,13 @@ async def _stream_gemini(
         text = ""
         try:
             text = response_iter.text or ""
-        except Exception:
+        except (AttributeError, TypeError):
             for candidate in getattr(response_iter, "candidates", []):
                 for part in getattr(getattr(candidate, "content", None), "parts", []):
                     text += getattr(part, "text", "")
         if text:
             yield text
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         log.warning("Gemini streaming call failed, yielding nothing: %s", exc)
 
 
@@ -1193,7 +1191,7 @@ async def call_provider_stream(
                 log.debug("Gemini streaming disabled (GEMINI_STREAMING_ENABLED not set)")
         else:
             log.warning("call_provider_stream: unknown provider %r", provider)
-    except Exception as exc:
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError, ValueError) as exc:
         _record_failure(provider)
         log.warning("Stream error from %s: %s", provider, exc)
 
@@ -1210,7 +1208,7 @@ async def scan_providers() -> dict[str, dict]:
         t0 = _time.monotonic()
         try:
             ok = await coro
-        except Exception:
+        except Exception:  # noqa: BLE001 — any ping failure means unavailable
             ok = False
         latency_ms = round((_time.monotonic() - t0) * 1000, 1) if ok else None
         return bool(ok), latency_ms
@@ -1225,10 +1223,8 @@ async def scan_providers() -> dict[str, dict]:
             from model_routing_policy import is_ollama_alive
 
             return await is_ollama_alive()
-        except Exception:
+        except (ImportError, AttributeError, OSError, RuntimeError):
             return False
-
-    async def _ping_openai() -> bool:
         import os as _os
 
         return bool(_os.getenv("OPENAI_API_KEY"))
