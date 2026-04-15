@@ -13,7 +13,6 @@ from vector_store_config import (
     CONVERSATIONS_COLLECTION,
     MEMORIES_COLLECTION,
     RESEARCH_COLLECTION,
-    SIMILARITY_THRESHOLD,
     _set_recall_guard_notes,
 )
 from vector_store_scope import (

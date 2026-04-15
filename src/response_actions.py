@@ -358,8 +358,8 @@ class ResponseActions(discord.ui.View):
         """W8-4: Send full response as a downloadable .txt file."""
         await interaction.response.defer(ephemeral=True)
         try:
-            import io as _io
             import datetime as _dt
+            import io as _io
             ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
             buf = _io.BytesIO(self._response_text.encode("utf-8"))
             file = discord.File(buf, filename=f"openclaw-response-{ts}.txt")

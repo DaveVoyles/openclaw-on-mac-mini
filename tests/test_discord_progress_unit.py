@@ -1,6 +1,7 @@
 """Unit tests for discord_progress.ProgressTracker."""
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 
 def _make_discord_stub():

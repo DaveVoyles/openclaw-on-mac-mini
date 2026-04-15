@@ -24,12 +24,12 @@ from bot_formatting import (
 )
 from cog_helpers import audit_log, require_auth
 from copy_workflow_formatter import build_copy_workflow_payload
+from discord_progress import ProgressTracker
 from memory import store as conversation_store
 from permissions import is_allowed
 from runtime_state import record_channel_profile_signal
 from scheduler import scheduler
 from ui_components import EmbedColors
-from discord_progress import ProgressTracker
 
 log = logging.getLogger("openclaw.reports_cog")
 

@@ -1,15 +1,11 @@
 """Unit tests for openclaw_cli_sessions.py."""
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 import openclaw_cli_sessions as mod  # type: ignore
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures

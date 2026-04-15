@@ -1,11 +1,7 @@
 """Unit tests for openclaw_cli_render.py — pure rendering helpers."""
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
-
 import openclaw_cli_render as mod  # type: ignore
-
 
 # ---------------------------------------------------------------------------
 # Helpers

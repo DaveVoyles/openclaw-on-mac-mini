@@ -7718,10 +7718,11 @@ class TestCmdTrace:
 # === TD-16: Plugin Loader / Registry Tests ===
 # =============================================================================
 
-import pytest
 import types as _types
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
+
+import pytest
 
 # Pre-mock discord and permissions so plugin_system can be imported without
 # the real discord library installed. This must happen before the import below.
@@ -7742,8 +7743,7 @@ if "permissions" not in sys.modules:
     _fake_perms.set_plugin_permission = lambda name, level: None
     sys.modules["permissions"] = _fake_perms
 
-from plugin_system import PluginLoader, PluginMetadata, Plugin, PluginRegistry
-from plugin_system.plugin_api import PluginAPI
+from plugin_system import PluginLoader, PluginMetadata, PluginRegistry
 
 
 def _make_loader(tmp_path: Path) -> PluginLoader:

@@ -15,13 +15,13 @@ import json
 import os
 import re
 import shlex
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any, Callable
 
 try:
-    from openclaw_cli_sessions import SessionSummary, load_session, append_event
+    from openclaw_cli_sessions import SessionSummary, append_event, load_session
 except ImportError:  # pragma: no cover
     SessionSummary = Any  # type: ignore[assignment,misc]
 
@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover
 
 
 try:
-    from openclaw_cli_ui_core import _R, _CY, _DM, _YE, _RE, _BGR, _BYE
+    from openclaw_cli_ui_core import _BGR, _BYE, _CY, _DM, _R, _RE, _YE
 except ImportError:  # pragma: no cover
     _R = _CY = _DM = _YE = _RE = _BGR = _BYE = ""
 

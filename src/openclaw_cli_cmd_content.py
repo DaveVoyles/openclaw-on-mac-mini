@@ -11,15 +11,16 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from openclaw_cli_types import ChatCommandContext
-from openclaw_cli_prefs import _PREFS, _save_prefs
-from openclaw_cli_ui_core import (
-    _get_is_tty,
-    _IS_TTY,
-    _R, _B, _DM, _CY, _GR, _YE, _RE, _MA,
-    _BCY, _BGR, _BYE, _BRE, _BBL, _IT, _UL,
+import openclaw_cli_macros as _macros_mod
+from openclaw_cli_content_cmds import (
+    _build_ascii_bar_rows,
+    _build_session_stats_agg,
+    _compute_cmd_freq,
+    _compute_rating_freq,
 )
-from openclaw_cli_ui_utils import _e
+from openclaw_cli_prefs import _PREFS, _save_prefs
+from openclaw_cli_session_cmds import _highlight_ansi, _highlight_rich
+from openclaw_cli_session_display import _build_session_share_text
 from openclaw_cli_sessions import (
     append_event,
     list_saved_outputs,
@@ -28,15 +29,24 @@ from openclaw_cli_sessions import (
     load_saved_output_preview,
     update_session,
 )
-from openclaw_cli_session_cmds import _highlight_ansi, _highlight_rich
-from openclaw_cli_session_display import _build_session_share_text
-from openclaw_cli_content_cmds import (
-    _build_ascii_bar_rows,
-    _build_session_stats_agg,
-    _compute_cmd_freq,
-    _compute_rating_freq,
+from openclaw_cli_types import ChatCommandContext
+from openclaw_cli_ui_core import (
+    _B,
+    _BBL,
+    _BCY,
+    _BRE,
+    _BYE,
+    _CY,
+    _DM,
+    _GR,
+    _IS_TTY,
+    _MA,
+    _R,
+    _RE,
+    _YE,
+    _get_is_tty,
 )
-import openclaw_cli_macros as _macros_mod
+from openclaw_cli_ui_utils import _e
 
 try:
     from rich.console import Console as _RichConsole
@@ -543,21 +553,21 @@ def _cmd_stats(ctx: ChatCommandContext) -> str:
 
     if _RICH_AVAILABLE and is_tty:
         grid = _RichText()
-        grid.append(f"  sessions    ", style="dim")
+        grid.append("  sessions    ", style="dim")
         grid.append(f"{total_sessions}", style="bold")
         grid.append(f"  ({active} active)\n", style="dim")
-        grid.append(f"  commands    ", style="dim")
+        grid.append("  commands    ", style="dim")
         grid.append(f"{total_commands}\n", style="bold")
-        grid.append(f"  file edits  ", style="dim")
+        grid.append("  file edits  ", style="dim")
         grid.append(f"{total_edits}\n", style="bold")
-        grid.append(f"  checkpoints ", style="dim")
+        grid.append("  checkpoints ", style="dim")
         grid.append(f"{total_checkpoints}\n", style="bold")
-        grid.append(f"  date range  ", style="dim")
+        grid.append("  date range  ", style="dim")
         grid.append(f"{oldest}", style="bold")
-        grid.append(f" → ", style="dim")
+        grid.append(" → ", style="dim")
         grid.append(f"{newest}\n", style="bold")
         if top_cwds:
-            grid.append(f"\n  top dirs\n", style="dim")
+            grid.append("\n  top dirs\n", style="dim")
             for cwd, count in top_cwds:
                 short = cwd[-45:] if len(cwd) > 45 else cwd
                 if len(cwd) > 45:
@@ -573,7 +583,7 @@ def _cmd_stats(ctx: ChatCommandContext) -> str:
         print(f"  checkpoints : {total_checkpoints}")
         print(f"  date range  : {oldest} → {newest}")
         if top_cwds:
-            print(f"\n  top dirs:")
+            print("\n  top dirs:")
             for cwd, count in top_cwds:
                 short = ("…" + cwd[-45:]) if len(cwd) > 45 else cwd
                 print(f"    {count:>3}×  {short}")
@@ -723,7 +733,7 @@ def _cmd_history(ctx: "ChatCommandContext") -> str:
         try:
             page = max(1, int(args))
         except ValueError:
-            _get_cli_mod()._print_error(f"Usage: /history [page] | /history clear")
+            _get_cli_mod()._print_error("Usage: /history [page] | /history clear")
             return _CMD_CONTINUE
 
     total = len(hist)
@@ -744,8 +754,8 @@ def _cmd_history(ctx: "ChatCommandContext") -> str:
         return ""
 
     if _RICH_AVAILABLE and is_tty:
-        from rich.text import Text as _RichText
         from rich.console import Group as _RichGroup
+        from rich.text import Text as _RichText
         content_lines: list[_RichText] = []
         if not entries:
             content_lines.append(_RichText("(no history yet)", style="dim"))
@@ -815,7 +825,7 @@ def _cmd_pin(ctx: "ChatCommandContext") -> str:
             if sub in ("list", "ls"):
                 if not pins:
                     if _RICH_AVAILABLE and is_tty:
-                        _RICH_CONSOLE.print(_RichPanel(f"[dim](no pins)[/dim]", title="📌 Pins", border_style="cyan", padding=(0, 1)))
+                        _RICH_CONSOLE.print(_RichPanel("[dim](no pins)[/dim]", title="📌 Pins", border_style="cyan", padding=(0, 1)))
                     else:
                         print(f"  {_B}📌 Pins{_R}")
                         print(f"  {_DM}(no pins){_R}")
@@ -845,7 +855,8 @@ def _cmd_pin(ctx: "ChatCommandContext") -> str:
         if match is None:
             _get_cli_mod()._print_error(f"No pin named '{rest}'")
             return _CMD_CONTINUE
-        from dataclasses import dataclass as _dc, field as _field
+        from dataclasses import dataclass as _dc
+        from dataclasses import field as _field
 
         @_dc
         class _PinResponse:

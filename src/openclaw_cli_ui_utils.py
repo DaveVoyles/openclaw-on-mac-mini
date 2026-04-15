@@ -26,35 +26,35 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from openclaw_cli_exec import _spinner_progress_snapshot
+from openclaw_cli_prefs import (
+    _A11Y_HIGH_CONTRAST,
+    _A11Y_PLAIN_MODE,
+    _A11Y_REDUCED_MOTION,
+    _EMOJI_PACKS,
+    _PREFS,
+    _emoji_pack_name,
+)
+from openclaw_cli_router import _session_auto_route_enabled
+from openclaw_cli_session_cmds import _build_workspace_capsule_plain_lines
+from openclaw_cli_session_display import _progress_cell
 from openclaw_cli_ui_core import (
-    _R,
     _B,
-    _DM,
-    _CY,
-    _GR,
-    _YE,
-    _RE,
-    _MA,
+    _BBL,
     _BCY,
     _BGR,
     _BYE,
-    _BBL,
+    _CY,
+    _DM,
+    _GR,
     _IS_TTY,
+    _MA,
+    _R,
+    _RE,
+    _YE,
     _get_is_tty,
 )
-from openclaw_cli_prefs import (
-    _PREFS,
-    _A11Y_PLAIN_MODE,
-    _A11Y_HIGH_CONTRAST,
-    _A11Y_REDUCED_MOTION,
-    _EMOJI_PACKS,
-    _emoji_pack_name,
-)
-from openclaw_cli_exec import _spinner_progress_snapshot
 from openclaw_cli_update import cli_version
-from openclaw_cli_router import _session_auto_route_enabled
-from openclaw_cli_session_display import _progress_cell
-from openclaw_cli_session_cmds import _build_workspace_capsule_plain_lines
 
 if TYPE_CHECKING:
     from openclaw_cli import CliConfig
@@ -200,7 +200,7 @@ def _with_spinner(
     if _a11y_reduced_motion():
         snapshot = _spinner_progress_snapshot(0.0)
         # Lazy import to avoid circular dependency
-        from openclaw_cli import _theme_ansi, _print_feedback  # noqa: PLC0415
+        from openclaw_cli import _print_feedback, _theme_ansi  # noqa: PLC0415
         prefix = "[working]" if _a11y_plain_mode() else f"{_theme_ansi()}{_e('⏳', '[working]')}{_R}"
         status_style = "" if (_a11y_plain_mode() or _a11y_high_contrast()) else _DM
         sys.stdout.write(

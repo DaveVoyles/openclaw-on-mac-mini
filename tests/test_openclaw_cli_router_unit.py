@@ -7,7 +7,6 @@ import pytest
 
 import openclaw_cli_router as mod  # type: ignore
 
-
 # ---------------------------------------------------------------------------
 # ReplRouteDecision – should_auto_route
 # ---------------------------------------------------------------------------

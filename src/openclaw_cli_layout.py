@@ -12,8 +12,6 @@ import os
 import textwrap
 from typing import Any, Callable
 
-from openclaw_cli_ui_core import _get_is_tty
-
 from openclaw_cli_sessions import (
     SessionSummary,
     build_collaboration_snapshot,
@@ -22,6 +20,7 @@ from openclaw_cli_sessions import (
     load_session,
     load_watch_state,
 )
+from openclaw_cli_ui_core import _get_is_tty
 
 # Constant also used by the main module (kept in sync).
 _OUTPUT_DASHBOARD_EXCERPT_CHARS = 220

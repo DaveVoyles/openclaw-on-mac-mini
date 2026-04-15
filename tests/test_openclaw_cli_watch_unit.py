@@ -1,13 +1,11 @@
 """Unit tests for openclaw_cli_watch.py — pure/utility functions."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime
 
 import pytest
 
 import openclaw_cli_watch as mod  # type: ignore
-
 
 # ---------------------------------------------------------------------------
 # utc_timestamp

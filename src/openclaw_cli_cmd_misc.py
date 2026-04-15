@@ -16,9 +16,17 @@ def _get_cli_mod():
 
 
 from openclaw_cli_ui_core import (
+    _B,
+    _BCY,
+    _BGR,
+    _BYE,
+    _CY,
+    _DM,
+    _GR,
+    _R,
+    _RE,
+    _YE,
     _get_is_tty,
-    _R, _B, _DM, _CY, _GR, _YE, _RE,
-    _BCY, _BGR, _BYE,
 )
 
 _CMD_CONTINUE: str = "continue"  # matches openclaw_cli._CMD_CONTINUE
@@ -80,7 +88,7 @@ def _cmd_recall(ctx: ChatCommandContext) -> str:
             for i, p in enumerate(prompts[:10], 1):
                 preview = p[:70] + "…" if len(p) > 70 else p
                 _RICH_CONSOLE.print(f"  [dim]{i:>2}.[/] [default]{preview}[/]")
-            _RICH_CONSOLE.print(f"\n[dim]Use /recall <n> to re-send prompt #n[/]\n")
+            _RICH_CONSOLE.print("\n[dim]Use /recall <n> to re-send prompt #n[/]\n")
         else:
             print("\n📜 Recent Prompts")
             for i, p in enumerate(prompts[:10], 1):
@@ -228,7 +236,7 @@ def _cmd_rate(ctx: ChatCommandContext) -> str:
     _cli = _get_cli_mod()
     raw = (ctx.args or "").strip().lower()
     if not raw:
-        print(f"Usage: /rate [good|ok|bad|meh|1-5]")
+        print("Usage: /rate [good|ok|bad|meh|1-5]")
         return _CMD_CONTINUE
 
     _RATING_MAP = {
@@ -361,14 +369,14 @@ def _cmd_streak(ctx: ChatCommandContext) -> str:
 
     if _RICH_AVAILABLE and is_tty:
         streak_color = "green" if current_streak >= 5 else "yellow" if current_streak >= 2 else "default"
-        _RICH_CONSOLE.print(f"\n[bold cyan]🔥 Rating Streak[/]\n")
+        _RICH_CONSOLE.print("\n[bold cyan]🔥 Rating Streak[/]\n")
         _RICH_CONSOLE.print(f"  Current streak:  [{streak_color}]{current_streak} high ratings[/]  {'🔥' * min(current_streak, 10)}")
         _RICH_CONSOLE.print(f"  Best streak:     [bold]{best_streak}[/]")
         _RICH_CONSOLE.print(f"  High rate (4+):  [bold]{high_pct}%[/] of {total} ratings")
         _RICH_CONSOLE.print()
     else:
         fire = "🔥" * min(current_streak, 10)
-        print(f"\n🔥 Rating Streak\n")
+        print("\n🔥 Rating Streak\n")
         print(f"  Current streak:  {current_streak} high ratings  {fire}")
         print(f"  Best streak:     {best_streak}")
         print(f"  High rate (4+):  {high_pct}% of {total} ratings\n")
@@ -566,7 +574,6 @@ def _cmd_shortcuts(ctx: ChatCommandContext) -> str:
 
     if _RICH_AVAILABLE and is_tty:
         from rich.table import Table
-        from rich.box import ROUNDED
 
         _RICH_CONSOLE.print()
         _RICH_CONSOLE.print(_RichPanel.fit("[bold cyan]⌨️  Keyboard Shortcuts & Quick Reference[/]", border_style="cyan"))
@@ -631,8 +638,8 @@ def _cmd_top(ctx: ChatCommandContext) -> str:
     max_count = top[0][1] if top else 1
 
     if _RICH_AVAILABLE and is_tty:
-        from rich.table import Table
         from rich.box import SIMPLE
+        from rich.table import Table
         _RICH_CONSOLE.print(f"\n[bold cyan]🔝 Top {len(top)} Most Used[/]\n")
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("#", justify="right", style="dim", width=4)
@@ -691,14 +698,14 @@ def _cmd_freq(ctx: ChatCommandContext) -> str:
     max_count = sorted_cmds[0][1] if sorted_cmds else 1
 
     if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"\n[bold cyan]📊 Slash Command Frequency[/]\n")
+        _RICH_CONSOLE.print("\n[bold cyan]📊 Slash Command Frequency[/]\n")
         for cmd, count in sorted_cmds:
             bar_len = int((count / max_count) * 25)
             bar = "█" * bar_len
             _RICH_CONSOLE.print(f"  [bold green]{cmd:<20}[/] [cyan]{bar:<25}[/] [bold yellow]{count}[/]")
         _RICH_CONSOLE.print()
     else:
-        print(f"\n📊 Slash Command Frequency\n")
+        print("\n📊 Slash Command Frequency\n")
         for cmd, count in sorted_cmds:
             bar_len = int((count / max_count) * 25)
             bar = "█" * bar_len
@@ -748,9 +755,9 @@ def _print_key_bindings() -> None:
     ]
 
     if _RICH_AVAILABLE and is_tty:
-        from rich.table import Table
         from rich.box import SIMPLE
-        _RICH_CONSOLE.print(f"\n[bold cyan]⌨️  Active Key Bindings[/]\n")
+        from rich.table import Table
+        _RICH_CONSOLE.print("\n[bold cyan]⌨️  Active Key Bindings[/]\n")
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Key", style="bold yellow", no_wrap=True, width=16)
         tbl.add_column("Action")
@@ -759,7 +766,7 @@ def _print_key_bindings() -> None:
         _RICH_CONSOLE.print(tbl)
         _RICH_CONSOLE.print()
     else:
-        print(f"\n⌨️  Active Key Bindings\n")
+        print("\n⌨️  Active Key Bindings\n")
         for key, desc in bindings:
             print(f"  {_BYE}{key:<16}{_R} {desc}")
         print()
@@ -795,9 +802,9 @@ def _cmd_bindlist(ctx: ChatCommandContext) -> str:
     custom_bindings = list(_get_cli_mod()._PREFS.get("custom_keybinds", {}).items())
 
     if _RICH_AVAILABLE and is_tty:
-        from rich.table import Table
         from rich.box import SIMPLE
-        _RICH_CONSOLE.print(f"\n[bold cyan]⌨️  All Key Bindings[/]\n")
+        from rich.table import Table
+        _RICH_CONSOLE.print("\n[bold cyan]⌨️  All Key Bindings[/]\n")
 
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Key", style="bold yellow", no_wrap=True, width=16)
@@ -812,11 +819,11 @@ def _cmd_bindlist(ctx: ChatCommandContext) -> str:
 
         _RICH_CONSOLE.print(tbl)
         if custom_bindings:
-            _RICH_CONSOLE.print(f"\n[dim]Custom binds: use /keybind to add more, /keybind clear <key> to remove[/]\n")
+            _RICH_CONSOLE.print("\n[dim]Custom binds: use /keybind to add more, /keybind clear <key> to remove[/]\n")
         else:
-            _RICH_CONSOLE.print(f"\n[dim]No custom binds yet — try: /keybind Ctrl+H /histsearch[/]\n")
+            _RICH_CONSOLE.print("\n[dim]No custom binds yet — try: /keybind Ctrl+H /histsearch[/]\n")
     else:
-        print(f"\n⌨️  All Key Bindings\n")
+        print("\n⌨️  All Key Bindings\n")
         print(f"  {'Key':<16} {'Action':<35} Type")
         print("─" * 60)
         for key, desc in builtin_bindings:
@@ -900,15 +907,15 @@ def _cmd_changes(ctx: ChatCommandContext) -> str:
         git_changes = ""
 
     if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"\n[bold cyan]📝 Session Changes[/]\n")
+        _RICH_CONSOLE.print("\n[bold cyan]📝 Session Changes[/]\n")
         if edits:
             for edit in edits[-20:]:
                 _RICH_CONSOLE.print(f"  [dim]→[/] {edit}")
         else:
-            _RICH_CONSOLE.print(f"  [dim]No session edits tracked yet[/]")
+            _RICH_CONSOLE.print("  [dim]No session edits tracked yet[/]")
 
         if git_changes:
-            _RICH_CONSOLE.print(f"\n[bold cyan]🔀 Git Status[/]\n")
+            _RICH_CONSOLE.print("\n[bold cyan]🔀 Git Status[/]\n")
             for line in git_changes.split("\n"):
                 if line.startswith("M") or line.startswith(" M"):
                     _RICH_CONSOLE.print(f"  [yellow]{line}[/]")
@@ -922,14 +929,14 @@ def _cmd_changes(ctx: ChatCommandContext) -> str:
                     _RICH_CONSOLE.print(f"  {line}")
         _RICH_CONSOLE.print()
     else:
-        print(f"\n📝 Session Changes\n")
+        print("\n📝 Session Changes\n")
         if edits:
             for edit in edits[-20:]:
                 print(f"  → {edit}")
         else:
-            print(f"  No session edits tracked yet")
+            print("  No session edits tracked yet")
         if git_changes:
-            print(f"\n🔀 Git Status\n")
+            print("\n🔀 Git Status\n")
             for line in git_changes.split("\n"):
                 print(f"  {line}")
         print()

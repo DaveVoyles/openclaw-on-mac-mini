@@ -14,8 +14,13 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from openclaw_cli_ui_core import (
+    _CY,
+    _DM,
+    _GR,
+    _R,
+    _RE,
+    _YE,
     _get_is_tty,
-    _R, _DM, _CY, _GR, _YE, _RE,
 )
 
 if TYPE_CHECKING:
@@ -64,12 +69,12 @@ def _cmd_system(ctx: "ChatCommandContext") -> str:
             if current:
                 _RICH_CONSOLE.print(_RichPanel(current, title="🔧 System Prompt", border_style="cyan", padding=(0, 1)))
             else:
-                _RICH_CONSOLE.print(_RichPanel(f"[dim](not set)[/]", title="🔧 System Prompt", border_style="dim", padding=(0, 1)))
+                _RICH_CONSOLE.print(_RichPanel("[dim](not set)[/]", title="🔧 System Prompt", border_style="dim", padding=(0, 1)))
         else:
             if current:
                 print(f"System prompt:\n  {current}")
             else:
-                print(f"System prompt: (not set)")
+                print("System prompt: (not set)")
         return _CMD_CONTINUE
 
     if sub == "clear":
@@ -205,8 +210,8 @@ def _cmd_palette(ctx: "ChatCommandContext") -> str:
     matches.sort(key=lambda c: c.name)
 
     if _RICH_AVAILABLE and is_tty:
-        from rich.table import Table
         from rich.box import SIMPLE
+        from rich.table import Table
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Command", style="bold green", no_wrap=True)
         tbl.add_column("Description", style="default")
@@ -244,28 +249,28 @@ def _cmd_prompt(ctx: "ChatCommandContext") -> str:
         current = cli._PREFS.get("prompt_format", cli._DEFAULT_PROMPT_FORMAT)
         preview = cli._render_prompt_format(current)
         if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"\n[bold cyan]Current prompt format:[/]")
+            _RICH_CONSOLE.print("\n[bold cyan]Current prompt format:[/]")
             _RICH_CONSOLE.print(f"  Format:  [dim]{current}[/]")
             _RICH_CONSOLE.print(f"  Preview: [bold]{preview}[/]")
-            _RICH_CONSOLE.print(f"\n[dim]Tokens: {{route}} {{session}} {{model}} {{build}} {{time}}[/]")
-            _RICH_CONSOLE.print(f"[dim]Use /prompt reset to restore default[/]\n")
+            _RICH_CONSOLE.print("\n[dim]Tokens: {route} {session} {model} {build} {time}[/]")
+            _RICH_CONSOLE.print("[dim]Use /prompt reset to restore default[/]\n")
         else:
             print(f"\nCurrent: {current}")
             print(f"Preview: {preview}")
-            print(f"Tokens: {{route}} {{session}} {{model}} {{build}} {{time}}")
+            print("Tokens: {route} {session} {model} {build} {time}")
         return _CMD_CONTINUE
 
     if arg == "reset":
         cli._prefs_set("prompt_format", cli._DEFAULT_PROMPT_FORMAT)
         if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[green]✓[/] prompt format reset to default")
+            _RICH_CONSOLE.print("[green]✓[/] prompt format reset to default")
         else:
             print("✓ prompt format reset")
         return _CMD_CONTINUE
 
     if len(arg) < 2:
         if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"[yellow]Prompt format too short[/]")
+            _RICH_CONSOLE.print("[yellow]Prompt format too short[/]")
         else:
             print("Prompt format too short")
         return _CMD_CONTINUE
@@ -273,7 +278,7 @@ def _cmd_prompt(ctx: "ChatCommandContext") -> str:
     cli._prefs_set("prompt_format", arg)
     preview = cli._render_prompt_format(arg)
     if _RICH_AVAILABLE and is_tty:
-        _RICH_CONSOLE.print(f"[green]✓[/] prompt format updated")
+        _RICH_CONSOLE.print("[green]✓[/] prompt format updated")
         _RICH_CONSOLE.print(f"  Preview: [bold]{preview}[/]")
     else:
         print(f"✓ prompt format: {preview}")

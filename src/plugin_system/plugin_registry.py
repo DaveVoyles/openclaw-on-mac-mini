@@ -484,8 +484,8 @@ class PluginRegistry:
 
 def _get_host_version_fallback() -> str:
     """Read OpenClaw version from pyproject.toml as fallback."""
-    import tomllib
     import pathlib
+    import tomllib
     try:
         pyproject = pathlib.Path(__file__).parent.parent.parent / "pyproject.toml"
         with open(pyproject, "rb") as f:

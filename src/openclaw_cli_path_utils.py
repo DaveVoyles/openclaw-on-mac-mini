@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import os
 import re
-from typing import Any
 
 try:
-    from openclaw_cli_ui_core import _B, _R, _CY, _DM, _GR, _IT, _UL, _BCY, _get_is_tty
+    from openclaw_cli_ui_core import _B, _BCY, _CY, _DM, _GR, _IT, _R, _UL, _get_is_tty
 except ImportError:
     _B = _R = _CY = _DM = _GR = _IT = _UL = _BCY = ""
 
@@ -149,7 +148,7 @@ def _print_path_hints(paths: list[str], *, prefs: dict | None = None, is_tty: bo
         _RICH_CONSOLE.print(f"\n[dim]📁 File{'s' if len(existing) > 1 else ''} mentioned:[/]", end="")
         for p in existing[:3]:
             _RICH_CONSOLE.print(f"  [dim cyan]{p}[/]", end="")
-        _RICH_CONSOLE.print(f"  [dim](use /view or /edit)[/]\n")
+        _RICH_CONSOLE.print("  [dim](use /view or /edit)[/]\n")
     else:
         hint = "  ".join(existing[:3])
         print(f"\n  {_DM}📁 Files: {hint}  (use /view or /edit){_R}")

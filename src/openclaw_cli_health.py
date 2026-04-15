@@ -19,8 +19,8 @@ from typing import Any
 
 from openclaw_cli_preprocess import (
     _RE_ANSI_ESCAPE,
-    _RE_MD_LINK,
     _RE_BARE_URL,
+    _RE_MD_LINK,
 )
 from openclaw_cli_session_display import (
     _progress_cell,
@@ -28,9 +28,12 @@ from openclaw_cli_session_display import (
     _status_emoji,
 )
 from openclaw_cli_ui_core import (
+    _B,
+    _BGR,
+    _BYE,
+    _DM,
     _IS_TTY,
-    _R, _B, _DM,
-    _BGR, _BYE,
+    _R,
 )
 
 # ---------------------------------------------------------------------------

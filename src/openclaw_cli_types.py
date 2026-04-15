@@ -5,7 +5,7 @@ All other modules may safely import from here without circular-import risk.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 

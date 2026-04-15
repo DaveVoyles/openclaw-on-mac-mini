@@ -4,10 +4,9 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from typing import Any
 
-from openclaw_cli_prefs import _PREFS, _A11Y_PLAIN_MODE, _A11Y_HIGH_CONTRAST
-from openclaw_cli_ui_core import _CY, _R, _GR, _YE, _MA
+from openclaw_cli_prefs import _A11Y_HIGH_CONTRAST, _A11Y_PLAIN_MODE, _PREFS
+from openclaw_cli_ui_core import _CY, _GR, _MA, _R, _YE
 
 try:
     from rich.console import Console as _RichConsole
@@ -176,10 +175,10 @@ def _unwrap_code_block_tables(text: str) -> str:
     """
     def _replace(m: re.Match) -> str:
         content = m.group(1).strip()
-        non_empty = [l for l in content.split("\n") if l.strip()]
+        non_empty = [line for line in content.split("\n") if line.strip()]
         if len(non_empty) >= 2 and all(
-            re.match(r"^[•\-\*]\s+.+$", l) and " | " in l
-            for l in non_empty
+            re.match(r"^[•\-\*]\s+.+$", line) and " | " in line
+            for line in non_empty
         ):
             return content  # strip the fences
         return m.group(0)  # leave unchanged
@@ -457,7 +456,7 @@ def _strip_inline_md(text: str) -> str:
 
 def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]] | None:
     """Parse a markdown table block into (headers, rows). Returns None on failure."""
-    lines = [l for l in block.strip().splitlines() if l.strip()]
+    lines = [line for line in block.strip().splitlines() if line.strip()]
     if len(lines) < 2:
         return None
     sep_line = lines[1]
@@ -468,7 +467,7 @@ def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]] | None:
         return [_strip_inline_md(p) for p in line.strip().strip("|").split("|")]
 
     headers = _parse_row(lines[0])
-    rows = [_parse_row(l) for l in lines[2:] if l.strip() and "|" in l]
+    rows = [_parse_row(line) for line in lines[2:] if line.strip() and "|" in line]
     if not headers:
         return None
     return headers, rows

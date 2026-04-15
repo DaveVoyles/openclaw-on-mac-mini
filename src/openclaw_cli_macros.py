@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover
     load_session = None  # type: ignore[assignment]
 
 try:
-    from openclaw_cli_ui_core import _B, _R, _CY, _GR, _DM
+    from openclaw_cli_ui_core import _B, _CY, _DM, _GR, _R
 except ImportError:  # pragma: no cover
     _B = _R = _CY = _GR = _DM = ""
 

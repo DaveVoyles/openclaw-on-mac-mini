@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
 
-from openclaw_cli_types import ChatCommandContext
+import openclaw_cli_session_cmds as _session_cmds_mod
 from openclaw_cli_sessions import (
     append_event,
     apply_handoff,
@@ -24,12 +23,16 @@ from openclaw_cli_sessions import (
     save_watch_state,
     update_session,
 )
-from openclaw_cli_watch import _print_watch_history, _print_watch_status
-import openclaw_cli_session_cmds as _session_cmds_mod
+from openclaw_cli_types import ChatCommandContext
 from openclaw_cli_ui_core import (
+    _B,
+    _CY,
+    _DM,
+    _GR,
+    _R,
     _get_is_tty,
-    _R, _B, _DM, _CY, _GR,
 )
+from openclaw_cli_watch import _print_watch_history, _print_watch_status
 
 # Sentinel strings — mirror openclaw_cli._CMD_CONTINUE / _CMD_QUIT.
 _CMD_CONTINUE: str = "continue"
@@ -106,7 +109,8 @@ def _cmd_watch(ctx: ChatCommandContext) -> str:
             m._print_error("No active watch session to add a note to.")
             return _CMD_CONTINUE
         import uuid as _uuid_mod
-        from datetime import datetime as _dt, timezone as _tz
+        from datetime import datetime as _dt
+        from datetime import timezone as _tz
         interventions = list(state.get("interventions") or [])
         note_entry = {
             "request_id": _uuid_mod.uuid4().hex[:10],
@@ -167,8 +171,8 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
         validation = m._validate_plan_id_local(session.plan_id, cwd=session.cwd)
         if m._RICH_AVAILABLE and m._IS_TTY:
-            from rich.table import Table as _RichTable
             from rich.panel import Panel as _RichPanel
+            from rich.table import Table as _RichTable
             grid = _RichTable.grid(padding=(0, 2))
             grid.add_column(style="dim", min_width=10)
             grid.add_column()
@@ -213,8 +217,8 @@ def _cmd_plan(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
         # Find first unchecked task (- [ ]) and the next one after it
         lines = plan_text.splitlines()
-        unchecked = [(i, l) for i, l in enumerate(lines) if re.match(r"^\s*-\s+\[ \]", l)]
-        done_count = sum(1 for l in lines if re.match(r"^\s*-\s+\[x\]", l, re.IGNORECASE))
+        unchecked = [(i, line) for i, line in enumerate(lines) if re.match(r"^\s*-\s+\[ \]", line)]
+        done_count = sum(1 for line in lines if re.match(r"^\s*-\s+\[x\]", line, re.IGNORECASE))
         if not unchecked:
             msg = "All tasks complete!" if done_count > 0 else "No task items found in plan."
             if m._RICH_AVAILABLE and m._IS_TTY:
@@ -647,8 +651,8 @@ def _cmd_macro(ctx: ChatCommandContext) -> str:
     # ── list ──────────────────────────────────────────────────────────────────
     if token in ("list", "ls") or not args:
         if m._RICH_AVAILABLE and is_tty:
-            from rich.table import Table as _RichTable
             from rich.panel import Panel as _RichPanel
+            from rich.table import Table as _RichTable
             grid = _RichTable.grid(padding=(0, 2))
             grid.add_column(style="cyan", no_wrap=True)
             grid.add_column(style="dim")
@@ -730,9 +734,9 @@ def _cmd_macro(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
         cmds = macros[name]
         if m._RICH_AVAILABLE and is_tty:
-            from rich.text import Text as _RichText
             from rich.console import Group as _RichGroup
             from rich.panel import Panel as _RichPanel
+            from rich.text import Text as _RichText
             lines = []
             for i, cmd in enumerate(cmds, start=1):
                 line = _RichText()
@@ -794,8 +798,8 @@ def _cmd_macrostatus(ctx: ChatCommandContext) -> str:  # noqa: ARG001
         return _CMD_CONTINUE
 
     if m._RICH_AVAILABLE and is_tty:
-        from rich.table import Table as _RichTableLocal
         from rich.box import SIMPLE as _RICH_BOX_SIMPLE
+        from rich.table import Table as _RichTableLocal
         tbl = _RichTableLocal(box=_RICH_BOX_SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Macro", style="bold green")
         tbl.add_column("Steps", justify="right")
@@ -922,10 +926,10 @@ def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
     est_tokens = total_chars // 4
 
     if m._RICH_AVAILABLE and is_tty:
-        from rich.table import Table
-        from rich.panel import Panel
-        from rich.columns import Columns
         from rich.box import SIMPLE
+        from rich.columns import Columns
+        from rich.panel import Panel
+        from rich.table import Table
 
         m._RICH_CONSOLE.print()
 
@@ -1008,10 +1012,10 @@ def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
         print(f"  Snapshots:    {len(snapshots)}")
         print(f"  Commands reg: {len(m._BUILTIN_COMMAND_NAMES)}")
         if pins:
-            print(f"\n  📌 Pins:")
+            print("\n  📌 Pins:")
             for k, v in list(pins.items())[:5]:
                 print(f"     {k}: {str(v)[:40]}")
-        print(f"\n  Type /help for full reference.")
+        print("\n  Type /help for full reference.")
         print(f"{'='*60}\n")
 
     return _CMD_CONTINUE

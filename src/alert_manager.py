@@ -129,7 +129,6 @@ async def send_severity_alert(
 
     Returns True if a Discord message was sent.
     """
-    from config import cfg
 
     alert_channel_id = int(os.getenv("ALERT_CHANNEL_ID", "0"))
     severity_lower = severity.lower()

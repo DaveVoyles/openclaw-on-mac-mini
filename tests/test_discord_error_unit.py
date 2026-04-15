@@ -1,7 +1,8 @@
 """Unit tests for discord_error module."""
-import pytest
-from unittest.mock import MagicMock, patch
 import types
+from unittest.mock import MagicMock
+
+import pytest
 
 
 def _make_discord_stub():
@@ -38,7 +39,7 @@ def patch_discord(monkeypatch):
     monkeypatch.setattr(discord_error, "discord", _make_discord_stub())
 
 
-from discord_error import build_error_embed, classify_error, ERROR_CATEGORIES
+from discord_error import ERROR_CATEGORIES, build_error_embed, classify_error
 
 
 def test_classify_error_timeout():

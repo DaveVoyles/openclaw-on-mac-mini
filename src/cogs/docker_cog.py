@@ -21,6 +21,8 @@ from approvals import (
     is_emergency_stopped,
 )
 from cog_helpers import audit_log, is_service_allowed
+from discord_error import build_error_embed
+from discord_progress import ProgressTracker
 from resource_monitor import resource_monitor
 from skills import (
     get_container_logs,
@@ -34,8 +36,6 @@ from skills import (
 )
 from subprocess_utils import run as _run
 from ui_components import EmbedColors
-from discord_error import build_error_embed
-from discord_progress import ProgressTracker
 
 log = logging.getLogger("openclaw.docker_cog")
 

@@ -18,22 +18,27 @@ import sys
 from typing import TYPE_CHECKING, Any
 
 from openclaw_cli_prefs import (
-    _PREFS as _PREFS_ORIG,  # direct reference used only for module-check; real access via _m()
-    _THEMES,
-    _THEME_ORDER,
-    _THEME_DESCRIPTIONS,
-    _THEME_ALIASES,
-    _EMOJI_PACKS,
-    _A11Y_REDUCED_MOTION,
-    _A11Y_PLAIN_MODE,
     _A11Y_HIGH_CONTRAST,
-    _normalize_theme_name,
+    _A11Y_PLAIN_MODE,
+    _A11Y_REDUCED_MOTION,
+    _EMOJI_PACKS,
+    _THEME_ALIASES,
+    _THEME_DESCRIPTIONS,
+    _THEME_ORDER,
+    _THEMES,
     _emoji_pack_name,
+    _normalize_theme_name,
     _save_prefs,
 )
 from openclaw_cli_ui_core import (
-    _get_is_tty,
-    _R, _B, _DM, _CY, _GR, _YE, _RE, _BRE, _BGR, _BYE,
+    _B,
+    _BGR,
+    _BRE,
+    _BYE,
+    _DM,
+    _GR,
+    _R,
+    _YE,
 )
 
 if TYPE_CHECKING:
@@ -171,21 +176,22 @@ def _cmd_colorscheme(ctx: "ChatCommandContext") -> str:
     if not arg or arg == "list":
         current = m._PREFS.get("color_scheme", "default")
         if m._RICH_AVAILABLE and is_tty:
-            m._RICH_CONSOLE.print(f"\n[bold cyan]🎨 Color Schemes[/]\n")
+            m._RICH_CONSOLE.print("\n[bold cyan]🎨 Color Schemes[/]\n")
             for name, scheme in m._EXTENDED_SCHEMES.items():
                 active = " ← active" if name == current else ""
                 primary = scheme.get("primary", "")
                 reset = "\033[0m"
                 label = scheme.get("label", name)
                 m._RICH_CONSOLE.print(f"  {primary}■{reset}  [bold]{name}[/]  [dim]{label}{active}[/]")
-            m._RICH_CONSOLE.print(f"\n  [dim]Use /colorscheme <name> to activate[/]\n")
+            m._RICH_CONSOLE.print("\n  [dim]Use /colorscheme <name> to activate[/]\n")
         else:
-            current_marker = lambda n: " ← active" if n == current else ""
-            print(f"\n🎨 Color Schemes\n")
+            def current_marker(n: str) -> str:
+                return " ← active" if n == current else ""
+            print("\n🎨 Color Schemes\n")
             for name, scheme in m._EXTENDED_SCHEMES.items():
                 p = scheme.get("primary", "")
                 print(f"  {p}■\033[0m  {name}  {scheme.get('label', '')}{current_marker(name)}")
-            print(f"\n  Use /colorscheme <name> to activate\n")
+            print("\n  Use /colorscheme <name> to activate\n")
         return _CMD_CONTINUE
 
     if arg == "reset":
@@ -520,12 +526,12 @@ def _cmd_keybind(ctx: "ChatCommandContext") -> str:
             return _CMD_CONTINUE
 
         if m._RICH_AVAILABLE and is_tty:
-            m._RICH_CONSOLE.print(f"\n[bold cyan]⌨️  Custom Keybinds[/]\n")
+            m._RICH_CONSOLE.print("\n[bold cyan]⌨️  Custom Keybinds[/]\n")
             for key, action in custom.items():
                 m._RICH_CONSOLE.print(f"  [bold yellow]{key:<16}[/] → [bold green]{action}[/]")
             m._RICH_CONSOLE.print()
         else:
-            print(f"\n⌨️  Custom Keybinds\n")
+            print("\n⌨️  Custom Keybinds\n")
             for key, action in custom.items():
                 print(f"  {_BYE}{key:<16}{_R} → {_BGR}{action}{_R}")
             print()
@@ -562,14 +568,14 @@ def _cmd_keybind(ctx: "ChatCommandContext") -> str:
 
     if not (key_name.startswith("Ctrl+") or key_name.startswith("Alt+")):
         if m._RICH_AVAILABLE and is_tty:
-            m._RICH_CONSOLE.print(f"[yellow]Key must start with Ctrl+ or Alt+ (e.g. Ctrl+H)[/]")
+            m._RICH_CONSOLE.print("[yellow]Key must start with Ctrl+ or Alt+ (e.g. Ctrl+H)[/]")
         else:
             print("Key must start with Ctrl+ or Alt+ (e.g. Ctrl+H)")
         return _CMD_CONTINUE
 
     if not action.startswith("/"):
         if m._RICH_AVAILABLE and is_tty:
-            m._RICH_CONSOLE.print(f"[yellow]Action must be a slash command (e.g. /histsearch)[/]")
+            m._RICH_CONSOLE.print("[yellow]Action must be a slash command (e.g. /histsearch)[/]")
         else:
             print("Action must be a slash command")
         return _CMD_CONTINUE

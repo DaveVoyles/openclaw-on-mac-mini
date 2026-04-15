@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Module-level stubs (must run before importing bg_tasks)
 # ---------------------------------------------------------------------------

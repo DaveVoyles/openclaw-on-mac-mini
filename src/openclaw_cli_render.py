@@ -19,8 +19,21 @@ from typing import Any
 # ANSI constants from ui_core (leaf module — no circular risk)
 try:
     from openclaw_cli_ui_core import (
-        _R, _B, _DM, _CY, _GR, _YE, _RE, _MA,
-        _BCY, _BGR, _BYE, _BRE, _BBL, _IT, _UL,
+        _B,
+        _BBL,
+        _BCY,
+        _BGR,
+        _BRE,
+        _BYE,
+        _CY,
+        _DM,
+        _GR,
+        _IT,
+        _MA,
+        _R,
+        _RE,
+        _UL,
+        _YE,
         _get_is_tty,
     )
 except ImportError:
@@ -196,10 +209,10 @@ def _unwrap_code_block_tables(text: str) -> str:
     """Unwrap fenced code blocks that contain only pipe-in-bullet table rows."""
     def _replace(m: re.Match) -> str:
         content = m.group(1).strip()
-        non_empty = [l for l in content.split("\n") if l.strip()]
+        non_empty = [line for line in content.split("\n") if line.strip()]
         if len(non_empty) >= 2 and all(
-            re.match(r"^[•\-\*]\s+.+$", l) and " | " in l
-            for l in non_empty
+            re.match(r"^[•\-\*]\s+.+$", line) and " | " in line
+            for line in non_empty
         ):
             return content
         return m.group(0)
@@ -236,7 +249,7 @@ def _convert_bullet_tables(text: str) -> str:
 
 def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]] | None:
     """Parse a markdown table block into (headers, rows). Returns None on failure."""
-    lines = [l for l in block.strip().splitlines() if l.strip()]
+    lines = [line for line in block.strip().splitlines() if line.strip()]
     if len(lines) < 2:
         return None
     sep_line = lines[1]
@@ -247,7 +260,7 @@ def _parse_md_table(block: str) -> tuple[list[str], list[list[str]]] | None:
         return [_strip_inline_md(p) for p in line.strip().strip("|").split("|")]
 
     headers = _parse_row(lines[0])
-    rows = [_parse_row(l) for l in lines[2:] if l.strip() and "|" in l]
+    rows = [_parse_row(line) for line in lines[2:] if line.strip() and "|" in line]
     if not headers:
         return None
     return headers, rows

@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import shlex
 import shutil
-from datetime import datetime, timezone
-from typing import Any
 
-from openclaw_cli_types import ChatCommandContext
+from openclaw_cli_prefs import _PREFS
+from openclaw_cli_session_cmds import (
+    _build_event_label,
+    _build_handoff_check_lines,
+)
 from openclaw_cli_sessions import (
     SessionSummary,
     apply_handoff,
@@ -19,7 +21,6 @@ from openclaw_cli_sessions import (
     create_session,
     create_session_bookmark,
     find_session_bookmark,
-    get_last_decision_event,
     list_handoffs,
     list_session_bookmarks,
     list_sessions,
@@ -29,14 +30,17 @@ from openclaw_cli_sessions import (
     load_session,
     save_session,
 )
-from openclaw_cli_session_cmds import (
-    _build_event_label,
-    _build_handoff_check_lines,
-)
-from openclaw_cli_prefs import _PREFS
+from openclaw_cli_types import ChatCommandContext
 from openclaw_cli_ui_core import (
+    _B,
+    _BCY,
+    _BRE,
+    _CY,
+    _DM,
+    _GR,
+    _R,
+    _YE,
     _get_is_tty,
-    _R, _B, _DM, _CY, _GR, _YE, _BCY, _BYE, _BRE,
 )
 
 # Sentinel strings — mirror openclaw_cli._CMD_CONTINUE / _CMD_QUIT.
@@ -169,7 +173,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
 
     if token_lower.startswith("open "):
         target = token[5:].strip()
-        print(f"\n  To resume that session, exit and run:")
+        print("\n  To resume that session, exit and run:")
         print(f"    {_BCY}openclaw session resume {target}{_R}\n")
         return _CMD_CONTINUE
 
@@ -211,7 +215,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             badges = m._session_badges(s)
             badge_str = f"  {_DM}{badges}{_R}" if badges else ""
             print(f"  {_CY}{short_id}{_R}  {title:<42} {_DM}{updated}{_R}{badge_str}")
-        print(f"\n  Use /sessions open <id> to get resume instructions.\n")
+        print("\n  Use /sessions open <id> to get resume instructions.\n")
         return _CMD_CONTINUE
 
     query = ""
@@ -316,7 +320,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             tbl.add_row(short_id, title, str(s.command_count), updated, badges)
         m._RICH_CONSOLE.print()
         m._RICH_CONSOLE.print(tbl)
-        m._RICH_CONSOLE.print(f"\n  [dim]Use /sessions open <id> to get resume instructions.[/]\n")
+        m._RICH_CONSOLE.print("\n  [dim]Use /sessions open <id> to get resume instructions.[/]\n")
     else:
         print(f"\n  {title_str}:\n")
         print(f"  {'ID':<10}  {'Title':<36}  {'Cmds':>4}  {'Updated':<10}  Badges")
@@ -327,7 +331,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
             updated = s.updated_at[:10] if s.updated_at else "—"
             badges = m._session_badges(s) or "—"
             print(f"  {short_id:<10}  {title:<36}  {s.command_count:>4}  {updated:<10}  {badges}")
-        print(f"\n  Use /sessions open <id> to get resume instructions.\n")
+        print("\n  Use /sessions open <id> to get resume instructions.\n")
     return _CMD_CONTINUE
 
 
@@ -525,7 +529,7 @@ def _cmd_resume(ctx: ChatCommandContext) -> str:
     updated = target.updated_at[:10] if target.updated_at else "—"
     print(f"\n  {m._e('📍', '@')} Most recent session:")
     print(f"    {_B}{title}{_R}  {_DM}({short_id}…  updated {updated}){_R}")
-    print(f"\n  To resume, exit and run:")
+    print("\n  To resume, exit and run:")
     print(f"    {_BCY}openclaw session resume {target.session_id}{_R}\n")
     return _CMD_CONTINUE
 

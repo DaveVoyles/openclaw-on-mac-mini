@@ -946,7 +946,9 @@ async def _stream_gemini(
     non-streaming call when the streaming API raises an unexpected error.
     """
     from google import genai as _genai  # noqa: PLC0415
-    from llm_client import GOOGLE_API_KEY as _GOOGLE_API_KEY, MODEL_NAME as _MODEL_NAME  # noqa: PLC0415
+
+    from llm_client import GOOGLE_API_KEY as _GOOGLE_API_KEY  # noqa: PLC0415
+    from llm_client import MODEL_NAME as _MODEL_NAME
 
     if not _GOOGLE_API_KEY:
         return
@@ -1225,6 +1227,8 @@ async def scan_providers() -> dict[str, dict]:
             return await is_ollama_alive()
         except (ImportError, AttributeError, OSError, RuntimeError):
             return False
+
+    async def _ping_openai() -> bool:
         import os as _os
 
         return bool(_os.getenv("OPENAI_API_KEY"))

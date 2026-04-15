@@ -1,9 +1,10 @@
 """Print the interactive chat help table."""
 from __future__ import annotations
+
 try:
     from rich.console import Console as _RichConsole
-    from rich.table import Table as _RichTable
     from rich.panel import Panel as _RichPanel
+    from rich.table import Table as _RichTable
     _RICH_CONSOLE = _RichConsole(highlight=False)
     _RICH_AVAILABLE = True
 except ImportError:
@@ -11,7 +12,8 @@ except ImportError:
     _RichTable = None  # type: ignore[assignment,misc]
     _RichPanel = None  # type: ignore[assignment,misc]
     _RICH_CONSOLE = None  # type: ignore[assignment]
-from openclaw_cli_ui_core import _IS_TTY, _R, _DM
+from openclaw_cli_ui_core import _DM, _IS_TTY, _R
+
 
 def print_chat_help(*, search: str = "") -> None:
     """Print built-in interactive chat commands, optionally filtered by *search*."""
@@ -153,7 +155,7 @@ def print_chat_help(*, search: str = "") -> None:
         "[autoroute:off] in the prompt means auto-routing is disabled — use /autoroute on to re-enable."
     )
     if _RICH_AVAILABLE and _IS_TTY:
-        title = f"[bold cyan]OpenClaw Commands[/bold cyan]" + (f"  [dim]matching '{q}'[/]" if q else "")
+        title = "[bold cyan]OpenClaw Commands[/bold cyan]" + (f"  [dim]matching '{q}'[/]" if q else "")
         t = _RichTable.grid(padding=(0, 2))
         t.add_column(style="bold cyan", no_wrap=True)
         t.add_column(style="dim")

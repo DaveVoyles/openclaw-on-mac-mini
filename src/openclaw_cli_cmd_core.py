@@ -20,44 +20,42 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from openclaw_cli_types import ChatCommandContext
+from openclaw_cli_actions import (
+    infer_command_risk,
+    infer_file_edit_risk,
+    replace_text_in_file,
+    write_text_file,
+)
 from openclaw_cli_auth import OpenClawCliError
+from openclaw_cli_exec import (
+    _exec_progress_animate as _exec_animate_fn,
+)
 from openclaw_cli_sessions import (
-    append_event,
-    collect_workspace_context,
     load_conversation_history,
     restore_last_routed_action_checkpoint,
     update_session,
 )
-from openclaw_cli_actions import (
-    infer_command_risk,
-    infer_file_edit_risk,
-    request_cli_approval,
-    run_shell_command,
-    write_text_file,
-    replace_text_in_file,
-)
-from openclaw_cli_exec import (
-    _progress_bar as _exec_progress_bar,
-    _exec_progress_animate as _exec_animate_fn,
-    _analyze_exec_error as _exec_analyze_exec_error,
-    _print_exec_error_hints as _exec_print_exec_error_hints,
-)
-import openclaw_cli_update as _update_mod
-from openclaw_cli_update import (
-    cli_version,
-    _standalone_install_dir,
-    _update_standalone_install,
-    handle_update_command,
-)
+from openclaw_cli_types import ChatCommandContext
 from openclaw_cli_ui_core import (
-    _get_is_tty,
+    _B,
+    _CY,
+    _DM,
+    _GR,
     _IS_TTY,
-    _R, _B, _DM, _CY, _GR, _YE, _RE,
+    _R,
+    _RE,
+    _YE,
+    _get_is_tty,
 )
 from openclaw_cli_ui_utils import _e
+from openclaw_cli_update import (
+    _standalone_install_dir,
+    _update_standalone_install,
+    cli_version,
+    handle_update_command,
+)
 
 try:
     from rich.console import Console as _RichConsole
@@ -612,14 +610,14 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
                 print(msg)
             return _CMD_CONTINUE
         if _RICH_AVAILABLE and is_tty:
-            _RICH_CONSOLE.print(f"\n[bold cyan]📸 Saved Snapshots[/]\n")
+            _RICH_CONSOLE.print("\n[bold cyan]📸 Saved Snapshots[/]\n")
             for snap_name, snap_data in snapshots.items():
                 sha = snap_data.get("sha", "?")
                 ts = snap_data.get("ts", "")[:10]
                 _RICH_CONSOLE.print(f"  [bold green]{snap_name:<20}[/] [dim]{sha}[/]  {ts}")
             _RICH_CONSOLE.print()
         else:
-            print(f"\n📸 Saved Snapshots\n")
+            print("\n📸 Saved Snapshots\n")
             for snap_name, snap_data in snapshots.items():
                 sha = snap_data.get("sha", "?")
                 ts = snap_data.get("ts", "")[:10]
@@ -1242,7 +1240,7 @@ def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
         t = _RichText()
         t.append(f"{_e('🦞', '[openclaw]')} OpenClaw  ", style="bold cyan")
         t.append(ver, style="bold")
-        t.append(f"\n  server  ", style="dim")
+        t.append("\n  server  ", style="dim")
         t.append(server, style="cyan")
         _RICH_CONSOLE.print(_RichPanel(t, border_style="dim", padding=(0, 1)))
     else:
@@ -1352,7 +1350,7 @@ def _cmd_draft(ctx: ChatCommandContext) -> str:
             print(f"  {_GR}Multiline mode: ON{_R} — type \\end on its own line to submit")
         elif rest == "off":
             m._multiline_mode = False
-            print(f"  Multiline mode: OFF")
+            print("  Multiline mode: OFF")
         else:
             state = "ON" if m._multiline_mode else "OFF"
             print(f"  Multiline mode is currently {_B}{state}{_R}. Usage: /draft multiline on | off")

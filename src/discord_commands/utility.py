@@ -276,15 +276,11 @@ def _build_help_overview(
 
 def _resolve_user_permission_level(interaction: discord.Interaction) -> PermissionLevel:
     """Determine the highest PermissionLevel for the interaction's user."""
-    from permissions import check_permission
-
-    user = interaction.user
-    guild = interaction.guild
-
     # Check from highest to lowest
     # OWNER: bot owner (application owner) — use app_info if available; fall
     # back to checking if user is first in ALLOWED_USER_IDS list
     from config import cfg as _cfg
+    from permissions import check_permission
     owner_id = _cfg.allowed_user_ids[0] if _cfg.allowed_user_ids else None
     if check_permission(PermissionLevel.OWNER, interaction, owner_id=owner_id):
         return PermissionLevel.OWNER

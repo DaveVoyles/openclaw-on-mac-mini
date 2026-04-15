@@ -1,12 +1,10 @@
 """Unit tests for openclaw_cli_cmd_misc.py — miscellaneous command handlers."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, call
-import pytest
+from unittest.mock import MagicMock, patch
 
 import openclaw_cli_cmd_misc as mod  # type: ignore
 from openclaw_cli_types import ChatCommandContext
-
 
 # ---------------------------------------------------------------------------
 # Helpers

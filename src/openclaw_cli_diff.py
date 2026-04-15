@@ -7,7 +7,7 @@ Does NOT import from: openclaw_cli.py (no circular deps)
 from __future__ import annotations
 
 try:
-    from openclaw_cli_ui_core import _B, _R, _GR, _RE, _CY, _DM
+    from openclaw_cli_ui_core import _B, _CY, _DM, _GR, _R, _RE
 except ImportError:
     _B = _R = _GR = _RE = _CY = _DM = ""
 

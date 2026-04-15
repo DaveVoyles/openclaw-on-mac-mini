@@ -11,7 +11,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Local copy of _format_elapsed_compact (pure stdlib; avoids circular import)
 # ---------------------------------------------------------------------------

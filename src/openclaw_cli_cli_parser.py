@@ -1,8 +1,11 @@
 """CLI argument parser for OpenClaw."""
 from __future__ import annotations
+
 import argparse
+
 from openclaw_cli_auth import TOKEN_ENV_VARS
 from openclaw_cli_update import cli_version
+
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 

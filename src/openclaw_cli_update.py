@@ -18,8 +18,12 @@ from pathlib import Path
 from urllib import request
 
 from openclaw_cli_ui_core import (
+    _BCY,
+    _BGR,
+    _BYE,
+    _DM,
     _IS_TTY,
-    _R, _DM, _BCY, _BYE, _BGR,
+    _R,
 )
 
 try:
@@ -190,7 +194,7 @@ def _update_standalone_install(install_dir: str, *, current: str, base_url: str)
         except Exception as exc:
             failed.append((fname, str(exc)))
             if _RICH_AVAILABLE and _IS_TTY:
-                _RICH_CONSOLE.print(f"  [red]✗[/]")
+                _RICH_CONSOLE.print("  [red]✗[/]")
             else:
                 print("  ✗")
 

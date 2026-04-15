@@ -14,7 +14,10 @@ import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable
 
+from openclaw_cli_actions import write_text_file
 from openclaw_cli_auth import OpenClawCliError
+from openclaw_cli_path_utils import missing_feature_hint, output_name_from_title
+from openclaw_cli_prefs import _A11Y_PLAIN_MODE, _PREFS
 from openclaw_cli_sessions import (
     SessionSummary,
     append_event,
@@ -25,15 +28,11 @@ from openclaw_cli_sessions import (
     load_conversation_history,
     load_session,
     load_watch_state,
-    recent_output_context,
     require_session,
     save_output,
     save_watch_state,
     update_session,
 )
-from openclaw_cli_actions import write_text_file
-from openclaw_cli_path_utils import missing_feature_hint, output_name_from_title
-from openclaw_cli_prefs import _A11Y_PLAIN_MODE, _A11Y_REDUCED_MOTION, _PREFS
 from openclaw_cli_ui_core import _DM, _IS_TTY, _R, _get_is_tty
 
 if TYPE_CHECKING:
@@ -615,21 +614,21 @@ def print_watch_resume_snapshot(session_id: str, state: dict[str, Any], *, outpu
         body = _RichText()
         body.append(f"{emoji} status    ", style="dim")
         body.append(f"{status}", style=f"bold {border}")
-        body.append(f"\n🔢 polls    ", style="dim")
+        body.append("\n🔢 polls    ", style="dim")
         body.append(f"{poll_count}", style="cyan")
         if last_summary:
-            body.append(f"\n📝 last     ", style="dim")
+            body.append("\n📝 last     ", style="dim")
             body.append(last_summary, style="white")
         if last_error:
-            body.append(f"\n⚠️  error    ", style="dim")
+            body.append("\n⚠️  error    ", style="dim")
             body.append(last_error, style="red")
         if isinstance(active_checkpoint, dict) and active_checkpoint:
             partial = str(active_checkpoint.get("last_message") or "").strip()
             if partial:
-                body.append(f"\n⏳ partial  ", style="dim")
+                body.append("\n⏳ partial  ", style="dim")
                 body.append(partial, style="yellow")
         if recent_progress:
-            body.append(f"\n📋 recent   ", style="dim")
+            body.append("\n📋 recent   ", style="dim")
             for entry in recent_progress:
                 body.append(f"\n   • {entry.get('message', '')}", style="dim")
         _RICH_CONSOLE.print(_RichPanel(body, title=f"[bold]resuming watch[/] [dim]{session_id}[/]", border_style=border, padding=(0, 1)))
@@ -1229,13 +1228,13 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
             print_watch_resume_snapshot(session.session_id, resume_snapshot, output_json=config.output_json)
         if _RICH_AVAILABLE and _IS_TTY:
             _body = _RichText()
-            _body.append(f"  session  ", style="dim")
+            _body.append("  session  ", style="dim")
             _body.append(f"{session.session_id}\n")
-            _body.append(f"  mode     ", style="dim")
+            _body.append("  mode     ", style="dim")
             _body.append(f"{mode}\n")
-            _body.append(f"  goal     ", style="dim")
+            _body.append("  goal     ", style="dim")
             _body.append(f"{goal[:60]}\n")
-            _body.append(f"  interval ", style="dim")
+            _body.append("  interval ", style="dim")
             _body.append(f"{interval_seconds}s")
             _body.append("  ·  max ", style="dim")
             _body.append(f"{'infinite' if max_polls == 0 else max_polls}\n")

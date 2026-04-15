@@ -10,24 +10,27 @@ import json
 import os
 import platform
 import re
-import shlex
 import shutil
 import socket
-import subprocess
 import sys
+import textwrap
 import threading
 import time
-import textwrap
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from enum import Enum
-from importlib import metadata
 from pathlib import Path
 from typing import Any, Callable
 from urllib import error, request
 
+from openclaw_cli_actions import (
+    infer_command_risk,
+    infer_file_edit_risk,
+    replace_text_in_file,
+    request_cli_approval,
+    risk_level_from_name,
+    run_shell_command,
+    write_text_file,
+)
 from openclaw_cli_auth import (
-    AUTH_FILE_NAME,
     KEYCHAIN_SERVICE,
     TOKEN_ENV_VARS,
     OpenClawCliError,
@@ -37,50 +40,25 @@ from openclaw_cli_auth import (
     read_keychain_token,
     write_keychain_token,
 )
-from openclaw_cli_actions import (
-    format_shell_result,
-    infer_command_risk,
-    infer_file_edit_risk,
-    preview_file_result,
-    replace_text_in_file,
-    request_cli_approval,
-    risk_level_from_name,
-    run_shell_command,
-    write_text_file,
-)
 from openclaw_cli_sessions import (
     SessionSummary,
     append_event,
-    apply_handoff,
     build_collaboration_snapshot,
-    build_session_storyline,
-    build_workspace_capsule,
     build_workspace_signature,
     collect_workspace_context,
-    create_handoff,
     create_routed_action_checkpoint,
-    create_session_bookmark,
     create_session,
     export_session,
     extract_prompt_targets,
-    find_session_bookmark,
     get_last_decision_event,
-    list_handoffs,
-    list_saved_outputs,
-    list_session_bookmarks,
     list_sessions,
     load_conversation_history,
-    load_events,
-    load_handoff,
-    load_saved_output_preview,
     load_session,
     load_watch_state,
     recent_output_context,
     require_session,
-    restore_last_routed_action_checkpoint,
     save_output,
     save_session,
-    save_watch_state,
     update_session,
 )
 
@@ -90,99 +68,52 @@ except ImportError:  # pragma: no cover - platform-dependent
     readline = None
 
 import openclaw_cli_update as _update_mod
-from openclaw_cli_update import (
-    cli_version,
-    _version_tuple,
-    _fetch_latest_pypi_version,
-    _find_pip,
-    _print_update_notice,
-    _standalone_install_dir,
-    _update_standalone_install,
-    handle_update_command,
-    check_for_update,
-)
 from openclaw_cli_diff import _render_diff_ansi as _render_diff_ansi_impl
+from openclaw_cli_exec import (
+    _analyze_exec_error as _exec_analyze_exec_error,
+)
+from openclaw_cli_exec import (
+    _exec_progress_animate as _exec_animate_fn,
+)
+from openclaw_cli_exec import (
+    _motion_pause as _exec_motion_pause,
+)
+from openclaw_cli_exec import (
+    _print_exec_error_hints as _exec_print_exec_error_hints,
+)
+from openclaw_cli_exec import (
+    _progress_bar as _exec_progress_bar,
+)
+from openclaw_cli_exec import (
+    _response_footer_lines as _exec_response_footer_lines,
+)
+from openclaw_cli_exec import (
+    _separator_fill as _exec_separator_fill,
+)
+from openclaw_cli_exec import (
+    _spinner_phase_label as _exec_spinner_phase_label,
+)
+from openclaw_cli_exec import (
+    _spinner_progress_snapshot as _exec_spinner_progress_snapshot,
+)
 
 # ---------------------------------------------------------------------------
 # Router — REPL routing and intent classification
 # ---------------------------------------------------------------------------
 from openclaw_cli_router import (
     REPL_ROUTE_AUTO_THRESHOLD,
-    REPL_ROUTE_ANNOUNCEMENT_COMMAND_LIMIT,
-    REPL_ROUTE_ANNOUNCEMENT_REASON_LIMIT,
-    ReplRouteStepContext,
-    ReplRouteGrounding,
-    ReplRouteKind,
     ReplPlanStep,
     ReplRouteDecision,
-    _ROUTE_DOC_HINTS,
-    _ROUTE_ANALYZE_HINTS,
-    _ROUTE_SHELL_HINTS,
-    _ROUTE_ACTION_HINTS,
-    _PLAN_ROUTE_SPLIT_RE,
-    _PLAN_ROUTE_LEAD_RE,
-    _EDIT_ROUTE_RE,
-    _PLAN_CREATE_RESULT_RE,
-    _ROUTE_STEP_REF_RE,
-    _ROUTE_CURRENT_STEP_RE,
-    _ROUTE_CURRENT_TASK_RE,
-    _ROUTE_PROGRESS_PREFIXES,
-    _ROUTE_STEP_WORDS,
-    _candidate_workspace_roots as _router_candidate_workspace_roots,
-    _resolve_local_source as _router_resolve_local_source,
-    _find_local_tasks_file,
-    _load_task_record,
-    _load_route_plan,
-    _normalize_route_step_context,
-    _active_plan_step,
-    _find_plan_step_context,
-    _load_repl_route_grounding,
-    _normalize_prompt_text,
-    _clean_route_token,
-    _unwrap_route_text,
-    _normalize_route_field,
-    _extract_fenced_route_block,
-    _iter_route_quoted_segments,
-    _shell_split_route_tokens,
-    _first_shell_token,
-    _shell_quote_route_arg,
-    _looks_like_path,
-    _extract_first_path,
-    _strip_request_lead,
-    _extract_after_prefix,
-    _strip_route_prefixes,
-    _clean_route_fragment,
-    _extract_route_quoted_content,
-    _find_route_path_span,
-    _extract_append_content,
-    _extract_replace_values,
-    _extract_structured_edit_route,
-    _extract_write_payload,
-    _parse_route_step_number,
-    _remove_route_span,
-    _build_chat_route,
-    _build_route_decision,
-    _grounded_subject_route,
-    _grounding_intent,
-    _grounded_prompt_route,
-    _apply_grounding_to_route,
-    _maybe_route_with_grounding,
-    _clean_plan_clause,
-    _classify_repl_clause,
-    _maybe_build_plan_route,
-    _deterministic_repl_route,
-    _looks_action_like,
-    _extract_exec_args,
-    _extract_route_payload,
-    lightweight_classify_repl_prompt,
-    route_repl_prompt as _router_route_repl_prompt,
-    _truncate_repl_route_text,
-    _session_auto_route_enabled,
-    _confidence_badge,
-    _format_route_announcement,
+    ReplRouteKind,
     _append_repl_route_event,
-    _plan_step_slash_command,
     _extract_created_plan_id,
+    _format_route_announcement,
+    _plan_step_slash_command,
+    _session_auto_route_enabled,
+    lightweight_classify_repl_prompt,
+)
+from openclaw_cli_router import (
+    route_repl_prompt as _router_route_repl_prompt,
 )
 
 # ---------------------------------------------------------------------------
@@ -190,22 +121,24 @@ from openclaw_cli_router import (
 # Re-exported here for backward compatibility with existing code and tests.
 # ---------------------------------------------------------------------------
 from openclaw_cli_ui_core import (
+    _B,
+    _BCY,
+    _BGR,
+    _BRE,
+    _BYE,
+    _CY,
+    _DM,
     _IS_TTY,
-    _c,
-    _get_is_tty,
-    _R, _B, _DM, _CY, _GR, _YE, _RE, _MA,
-    _BCY, _BGR, _BYE, _BRE, _BBL, _IT, _UL,
+    _R,
+    _YE,
 )
-from openclaw_cli_exec import (
-    _separator_fill as _exec_separator_fill,
-    _motion_pause as _exec_motion_pause,
-    _spinner_phase_label as _exec_spinner_phase_label,
-    _spinner_progress_snapshot as _exec_spinner_progress_snapshot,
-    _response_footer_lines as _exec_response_footer_lines,
-    _progress_bar as _exec_progress_bar,
-    _exec_progress_animate as _exec_animate_fn,
-    _analyze_exec_error as _exec_analyze_exec_error,
-    _print_exec_error_hints as _exec_print_exec_error_hints,
+from openclaw_cli_update import (
+    _fetch_latest_pypi_version,
+    _print_update_notice,
+    _standalone_install_dir,
+    _version_tuple,
+    cli_version,
+    handle_update_command,
 )
 
 
@@ -229,42 +162,19 @@ try:
 except ImportError:  # pragma: no cover
     _RICH_AVAILABLE = False
 
-import openclaw_cli_health as _health_mod
-from openclaw_cli_health import HealthResponse
-import openclaw_cli_types as _types_mod
-from openclaw_cli_types import (
-    AskResponse,
-    ChatCommandContext,
-    ChatCommandRegistry,
-    CliConfig,
-    LocalLinkValidation,
-    SlashCommand,
-)
-import openclaw_cli_render as _render_mod
-from openclaw_cli_render import _render_markdown_ansi  # re-exported; implementation lives in render module
-import openclaw_cli_preprocess as _preprocess_mod
-from openclaw_cli_preprocess import (
-    _MD_TABLE_BLOCK,
-    _RE_ANSI_ESCAPE,
-    _RE_MD_LINK,
-    _RE_BARE_URL,
-    _RE_SOURCES_BLOCK,
-    _RE_SOURCES_BLOCK_LOOSE,
-    _parse_md_table,
-)
-import openclaw_cli_path_utils as _path_utils
-import openclaw_cli_macros as _macros_mod
-import openclaw_cli_layout as _layout_mod
-import openclaw_cli_session_cmds as _session_cmds_mod
-import openclaw_cli_cmd_core as _core_cmd_mod
-import openclaw_cli_cmd_session as _cmd_session_mod
-import openclaw_cli_cmd_workflow as _workflow_cmd_mod
-import openclaw_cli_ui_utils as _ui_utils_mod
-import openclaw_cli_content_cmds as _content_cmds_mod
-import openclaw_cli_cmd_content as _content_cmd_mod
+import logging as _logging
+
 import openclaw_cli_cmd_settings as _settings_cmd_mod
-import openclaw_cli_cmd_system as _system_cmd_mod
-import openclaw_cli_cmd_misc as _misc_cmd_mod
+import openclaw_cli_health as _health_mod
+import openclaw_cli_layout as _layout_mod
+import openclaw_cli_macros as _macros_mod
+import openclaw_cli_path_utils as _path_utils
+import openclaw_cli_preprocess as _preprocess_mod
+import openclaw_cli_render as _render_mod
+import openclaw_cli_session_display as _session_display_mod
+import openclaw_cli_session_utils as _session_utils_mod
+import openclaw_cli_ui_utils as _ui_utils_mod
+from openclaw_cli_cli_parser import build_parser  # noqa: F401
 
 # Re-exported command functions (wrappers extracted; TD-34)
 from openclaw_cli_cmd_content import _cmd_collab as _cmd_collab  # noqa: F401
@@ -359,34 +269,26 @@ from openclaw_cli_cmd_workflow import _cmd_task as _cmd_task  # noqa: F401
 from openclaw_cli_cmd_workflow import _cmd_watch as _cmd_watch  # noqa: F401
 from openclaw_cli_cmd_workflow import _cmd_workflow as _cmd_workflow  # noqa: F401
 from openclaw_cli_cmd_workflow import _cmd_workspace as _cmd_workspace  # noqa: F401
+from openclaw_cli_health import HealthResponse
 from openclaw_cli_help import print_chat_help  # noqa: F401
-from openclaw_cli_cli_parser import build_parser  # noqa: F401
-
-import openclaw_cli_session_display as _session_display_mod
-import openclaw_cli_session_utils as _session_utils_mod
-import openclaw_cli_watch as _watch_mod
-from openclaw_cli_watch import (
-    normalize_watch_state,
-    _watch_timing_summary,
-    _watch_focus_lines,
-    _print_watch_status,
-    _print_watch_history,
-    handle_watch_command,
-    execute_watch_iteration,
-    build_watch_state,
-    watch_retry_delay_seconds,
-    is_transient_watch_error,
-    start_watch_checkpoint,
-    record_watch_progress,
-    print_watch_resume_snapshot,
-    refresh_watch_controls,
-    resolve_watch_intervention,
-    stop_watch_from_intervention,
-    render_watch_iteration,
-    load_plan_goal,
-    _watch_retry_delay_total,
+from openclaw_cli_preprocess import (
+    _MD_TABLE_BLOCK,
+    _parse_md_table,
 )
-import logging as _logging
+from openclaw_cli_types import (
+    AskResponse,
+    ChatCommandContext,
+    ChatCommandRegistry,
+    CliConfig,
+    LocalLinkValidation,
+    SlashCommand,
+)
+from openclaw_cli_watch import (
+    _watch_focus_lines,
+    _watch_timing_summary,
+    handle_watch_command,
+    normalize_watch_state,
+)
 
 _LOG = _logging.getLogger("openclaw_cli")
 
@@ -426,27 +328,18 @@ WATCH_FOCUS_NOTE_CHARS = 120
 # ---------------------------------------------------------------------------
 # User preferences — imported from openclaw_cli_prefs
 # ---------------------------------------------------------------------------
-import openclaw_cli_prefs as _prefs_mod
 from openclaw_cli_prefs import (
-    _OPENCLAW_DIR,
-    _PREFS_FILE,
+    _A11Y_HIGH_CONTRAST,
+    _A11Y_PLAIN_MODE,
+    _A11Y_REDUCED_MOTION,
+    _EMOJI_PACKS,
+    _OPENCLAW_TIPS,
     _PREFS,
     _THEMES,
-    _THEME_ORDER,
-    _THEME_DESCRIPTIONS,
-    _THEME_ALIASES,
-    _OPENCLAW_TIPS,
-    _A11Y_REDUCED_MOTION,
-    _A11Y_PLAIN_MODE,
-    _A11Y_HIGH_CONTRAST,
-    _EMOJI_PACKS,
-    _load_prefs,
-    _save_prefs,
-    _prefs_dir_path,
-    _prefs_file_path,
-    _normalize_theme_name,
     _emoji_pack_name,
-    _normalize_personalization_prefs,
+    _load_prefs,
+    _normalize_theme_name,
+    _save_prefs,
 )
 
 
@@ -2602,7 +2495,7 @@ def _capture_routed_action_checkpoint(
         return True
     workspace_targets = list(file_paths or session.files)
     try:
-        checkpoint = create_routed_action_checkpoint(
+        create_routed_action_checkpoint(
             session.session_id,
             action_kind=action_kind,
             target=target,
@@ -3363,7 +3256,7 @@ def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: boo
     narrow = _terminal_width() < 56
     if is_tty:
         name = "\033[1;34moc\033[0m" if narrow else "\033[1;34mopenclaw\033[0m"
-        ml_badge = f" \033[2;33m[multiline]\033[0m" if multiline else ""
+        ml_badge = " \033[2;33m[multiline]\033[0m" if multiline else ""
         if not autoroute_on:
             return f"{name} \033[33m[autoroute:off]\033[0m{ml_badge} ❯ "
         if session_id:
@@ -3527,7 +3420,6 @@ def _print_ascii_trophy(streak: int) -> None:
         print()
 
 
-import re as _re
 
 _FILE_PATH_PATTERN = _path_utils._FILE_PATH_PATTERN
 
@@ -3611,9 +3503,9 @@ def _print_key_bindings() -> None:
     ]
 
     if _RICH_AVAILABLE and is_tty:
-        from rich.table import Table
         from rich.box import SIMPLE
-        _RICH_CONSOLE.print(f"\n[bold cyan]⌨️  Active Key Bindings[/]\n")
+        from rich.table import Table
+        _RICH_CONSOLE.print("\n[bold cyan]⌨️  Active Key Bindings[/]\n")
         tbl = Table(box=SIMPLE, show_header=True, header_style="bold cyan")
         tbl.add_column("Key", style="bold yellow", no_wrap=True, width=16)
         tbl.add_column("Action")
@@ -3622,7 +3514,7 @@ def _print_key_bindings() -> None:
         _RICH_CONSOLE.print(tbl)
         _RICH_CONSOLE.print()
     else:
-        print(f"\n⌨️  Active Key Bindings\n")
+        print("\n⌨️  Active Key Bindings\n")
         for key, desc in bindings:
             print(f"  {_BYE}{key:<16}{_R} {desc}")
         print()
