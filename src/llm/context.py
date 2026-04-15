@@ -556,6 +556,10 @@ async def _auto_recall_context(
             )
         if context:
             parts.append(context)
+            log.debug(
+                "Auto-RAG: recalled context injected for query %.60s…",
+                user_message,
+            )
     except Exception as e:
         log.debug("Auto-RAG vector recall failed (non-fatal): %s", e)
 
