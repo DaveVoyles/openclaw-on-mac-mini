@@ -1251,7 +1251,7 @@ def test_main_auth_status_reports_saved_file_source(monkeypatch, tmp_path, capsy
 
     assert exit_code == 0
     stdout = capsys.readouterr().out
-    assert "credential file" in stdout
+    assert "credential file" in stdout.lower()
     assert str(auth_path) in stdout
 
 

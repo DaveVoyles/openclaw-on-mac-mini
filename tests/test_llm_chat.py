@@ -166,6 +166,8 @@ class TestConfigHelpers:
     def test_not_configured_when_nothing_set(self, monkeypatch):
         monkeypatch.setattr(llm, "GOOGLE_API_KEY", "")
         monkeypatch.setattr(llm, "LOCAL_LLM_ENABLED", False)
+        import llm.providers as _providers
+        monkeypatch.setattr(_providers, "COPILOT_PROXY_ENABLED", False)
         assert llm.is_configured() is False
 
     def test_get_rate_info_format(self):

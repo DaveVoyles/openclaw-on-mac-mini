@@ -9,6 +9,19 @@ import pytest
 from research_agent import ResearchAgent, run_scheduled_research
 
 
+@pytest.fixture(autouse=True)
+def _disable_copilot_proxy():
+    """Prevent xdist worker contamination from COPILOT_PROXY_ENABLED=True.
+
+    Some test files in the same worker may enable the Copilot proxy. Patch it
+    to False here so research_agent functions route through llm.chat_deep as
+    the tests expect.
+    """
+    import llm.providers as _prov
+    with patch.object(_prov, "COPILOT_PROXY_ENABLED", False):
+        yield
+
+
 @pytest.fixture
 def agent():
     return ResearchAgent(max_searches=2, browse_top_n=1, timeout_seconds=10, max_concurrent=2)
