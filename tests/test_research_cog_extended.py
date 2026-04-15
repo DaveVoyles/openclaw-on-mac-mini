@@ -81,7 +81,9 @@ async def test_cog_command_error_check_failure_not_done():
     err = app_commands.CheckFailure("Not authorized")
     await cog.cog_command_error(inter, err)
     inter.response.send_message.assert_awaited_once()
-    assert "Not authorized" in inter.response.send_message.call_args[0][0]
+    embed = inter.response.send_message.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 @pytest.mark.asyncio
@@ -101,8 +103,9 @@ async def test_cog_command_error_generic():
     inter = _make_interaction(done=False)
     err = app_commands.AppCommandError("boom")
     await cog.cog_command_error(inter, err)
-    msg = inter.response.send_message.call_args[0][0]
-    assert "Command failed" in msg
+    embed = inter.response.send_message.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /websearch ────────────────────────────────────────────────────────────────
@@ -517,4 +520,6 @@ async def test_research_view_save_to_vault_failure():
          patch("cogs.research_cog.audit_log"):
         await vault_btn.callback(inter)
 
-    assert "Save failed" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title

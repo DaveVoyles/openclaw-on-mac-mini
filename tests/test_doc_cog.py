@@ -181,7 +181,9 @@ async def test_doc_read_exception():
     with patch("cogs.doc_cog.read_word", AsyncMock(side_effect=Exception("corrupt file"))):
         await cog.doc_read.callback(cog, inter, file=file)
 
-    assert "Failed to read" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /doc edit ────────────────────────────────────────────────────────────────
@@ -251,7 +253,9 @@ async def test_doc_edit_exception():
     with patch("cogs.doc_cog.read_word", AsyncMock(side_effect=Exception("IO error"))):
         await cog.doc_edit.callback(cog, inter, file=file, instructions="edit it")
 
-    assert "Failed to edit" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /doc create ───────────────────────────────────────────────────────────────
@@ -290,7 +294,9 @@ async def test_doc_create_exception():
     with patch("cogs.doc_cog._generate_doc_content", AsyncMock(side_effect=Exception("LLM down"))):
         await cog.doc_create.callback(cog, inter, instructions="create doc")
 
-    assert "Failed to create" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /sheet read ───────────────────────────────────────────────────────────────
@@ -357,7 +363,9 @@ async def test_sheet_read_exception():
     with patch("cogs.doc_cog.read_excel", AsyncMock(side_effect=Exception("parse error"))):
         await cog.sheet_read.callback(cog, inter, file=file)
 
-    assert "Failed to read" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /sheet edit ───────────────────────────────────────────────────────────────
@@ -426,7 +434,9 @@ async def test_sheet_edit_exception():
     with patch("cogs.doc_cog.read_excel", AsyncMock(side_effect=Exception("parse fail"))):
         await cog.sheet_edit.callback(cog, inter, file=file, instructions="edit it")
 
-    assert "Failed to edit" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /sheet create ─────────────────────────────────────────────────────────────
@@ -466,7 +476,9 @@ async def test_sheet_create_exception():
     with patch("cogs.doc_cog._generate_sheet_content", AsyncMock(side_effect=Exception("LLM error"))):
         await cog.sheet_create.callback(cog, inter, instructions="create sheet")
 
-    assert "Failed to create" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── cog_app_command_error ─────────────────────────────────────────────────────

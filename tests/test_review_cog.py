@@ -175,4 +175,6 @@ async def test_review_file_error():
     await cog.review_file.callback(cog, inter, file=attachment, mode="writing")
 
     inter.followup.send.assert_awaited_once()
-    assert "❌" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title

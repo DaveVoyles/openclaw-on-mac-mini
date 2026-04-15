@@ -98,7 +98,9 @@ async def test_journal_write_with_entry_error():
         await cog.journal_write.callback(cog, inter, entry="Some entry text")
 
     inter.followup.send.assert_awaited_once()
-    assert "❌" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── journal_read ──────────────────────────────────────────────────────────────
@@ -137,7 +139,9 @@ async def test_journal_read_invalid_date():
     await cog.journal_read.callback(cog, inter, date="not-a-date-xyz")
 
     inter.followup.send.assert_awaited_once()
-    assert "❌" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── journal_streak ────────────────────────────────────────────────────────────

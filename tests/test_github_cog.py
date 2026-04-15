@@ -286,7 +286,9 @@ async def test_github_prs_generic_exception():
          patch("httpx.AsyncClient", side_effect=Exception("network error")):
         await cog.github_prs.callback(cog, inter, repo="owner/repo")
 
-    assert "Failed to fetch" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /github issues ───────────────────────────────────────────────────────────
@@ -444,7 +446,9 @@ async def test_github_issues_generic_exception():
          patch("httpx.AsyncClient", side_effect=Exception("boom")):
         await cog.github_issues.callback(cog, inter, repo="owner/repo", label="")
 
-    assert "Failed to fetch" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /github watch ─────────────────────────────────────────────────────────────
@@ -502,7 +506,9 @@ async def test_github_watch_exception():
     with patch("cogs.github_cog._load_watches", AsyncMock(side_effect=Exception("disk error"))):
         await cog.github_watch.callback(cog, inter, repo="owner/repo")
 
-    assert "Failed to save" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── /github unwatch ───────────────────────────────────────────────────────────
@@ -563,7 +569,9 @@ async def test_github_unwatch_exception():
     with patch("cogs.github_cog._load_watches", AsyncMock(side_effect=Exception("disk error"))):
         await cog.github_unwatch.callback(cog, inter, repo="owner/repo")
 
-    assert "Failed to remove" in inter.followup.send.call_args[0][0]
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 # ── _check_repo_changes ───────────────────────────────────────────────────────

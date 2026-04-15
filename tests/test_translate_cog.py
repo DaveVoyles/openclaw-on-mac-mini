@@ -90,8 +90,9 @@ async def test_translate_cmd_error():
         await cog.translate_cmd.callback(cog, inter, text="Hello", to="French")
 
     inter.followup.send.assert_awaited_once()
-    call_kwargs = inter.followup.send.call_args
-    assert "❌" in str(call_kwargs)
+    embed = inter.followup.send.call_args.kwargs.get("embed")
+    assert embed is not None
+    assert "Error" in embed.title
 
 
 @pytest.mark.asyncio
