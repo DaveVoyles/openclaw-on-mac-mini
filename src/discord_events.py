@@ -54,6 +54,9 @@ _DEFAULT_ASK_THREAD_CACHE_TTL_SECONDS = 60 * 60 * 24
 _MESSAGE_CONTENT_HINT_CACHE: dict[int, float] = {}
 _MESSAGE_CONTENT_HINT_COOLDOWN_SECONDS = 60 * 30
 
+# W5-2: Track threads where archive warning has already been sent (once per thread)
+_ARCHIVE_WARNING_SENT: set[int] = set()
+
 
 # ---------------------------------------------------------------------------
 # Copied helper functions from bot.py
@@ -204,6 +207,27 @@ async def _get_or_create_default_ask_thread(
             _remember_default_ask_thread(channel, user_id, int(chosen.id))
             return chosen, False
 
+    # W5-1: Also check archived threads — unarchive and reuse if possible
+    if hasattr(channel, "archived_threads"):
+        try:
+            async for archived_thread in channel.archived_threads(limit=15):
+                if (
+                    _bot is not None and _bot.user is not None
+                    and getattr(archived_thread, "owner_id", None) == _bot.user.id
+                    and getattr(archived_thread, "parent_id", None) == int(channel.id)
+                    and not getattr(archived_thread, "locked", False)
+                    and user_tag in str(getattr(archived_thread, "name", ""))
+                ):
+                    try:
+                        await archived_thread.edit(archived=False)
+                        log.debug("Unarchived thread %d for user %d", archived_thread.id, user_id)
+                        _remember_default_ask_thread(channel, user_id, int(archived_thread.id))
+                        return archived_thread, False
+                    except Exception as unarchive_exc:
+                        log.debug("Failed to unarchive thread %d: %s", archived_thread.id, unarchive_exc)
+        except Exception as archived_exc:
+            log.debug("Archived thread search failed: %s", archived_exc)
+
     try:
         archive_duration = 60 if cfg.thread_archive_minutes <= 60 else 1440
         created = await channel.create_thread(
@@ -216,6 +240,32 @@ async def _get_or_create_default_ask_thread(
     except Exception as exc:
         log.debug("Default ask auto-thread creation failed: %s", exc)
         return None, False
+
+
+async def _maybe_send_archive_warning(thread: discord.Thread) -> None:
+    """W5-2: Send a one-time warning when a thread is within 10 minutes of auto-archiving."""
+    thread_id = int(thread.id)
+    if thread_id in _ARCHIVE_WARNING_SENT:
+        return
+    archive_duration_minutes = getattr(thread, "auto_archive_duration", None)
+    if not archive_duration_minutes:
+        return
+    last_msg_id = getattr(thread, "last_message_id", None)
+    if not last_msg_id:
+        return
+    # Derive timestamp from Discord snowflake
+    last_msg_ts = ((int(last_msg_id) >> 22) + 1420070400000) / 1000
+    elapsed_since_last = time.time() - last_msg_ts
+    archive_in_seconds = archive_duration_minutes * 60 - elapsed_since_last
+    if 0 < archive_in_seconds <= 600:
+        try:
+            await thread.send(
+                "⚠️ This thread will auto-archive soon. "
+                "Keep chatting to extend it, or start a new `/ask`."
+            )
+            _ARCHIVE_WARNING_SENT.add(thread_id)
+        except Exception as exc:
+            log.debug("Failed to send archive warning for thread %d: %s", thread_id, exc)
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +387,7 @@ async def handle_message(
         model_pref, _ = normalize_model_preference(user_question, model_pref, llm_needs_tools)
 
         response_text = ""
+        model_used = "unknown"
 
         try:
             scoped_channel_id, scoped_thread_id = _resolve_channel_thread_scope(
@@ -416,7 +467,16 @@ async def handle_message(
             if model_used == "perplexity-direct":
                 recovery_block = None
             if recovery_block and "Recovery note" not in response_text and not _is_memory_store:
-                response_text = f"{response_text.rstrip()}{recovery_block}"
+                # W4-1: Strip duplicate sources from recovery block
+                if re.search(r'(?:\*\*Sources\*\*|Sources)\s*:', response_text, re.IGNORECASE):
+                    recovery_block = re.sub(
+                        r'\n{0,2}(?:\*\*Sources\*\*|Sources):?\s*\n(?:(?:[-*]|\d+\.)\s+.+\n?)+',
+                        '',
+                        recovery_block,
+                        flags=re.IGNORECASE,
+                    ).rstrip()
+                if recovery_block:
+                    response_text = f"{response_text.rstrip()}{recovery_block}"
             log.info(
                 "message ask quality status=%s path=%s",
                 final_meta.get("answer_quality", {}).get("status", "unknown"),
@@ -425,6 +485,7 @@ async def handle_message(
         except Exception as e:
             log.error("Message ask-flow LLM error: %s", e)
             response_text = f"❌ **Error:** {e}"
+            model_used = "error"
 
         if not response_text or len(response_text.strip()) < 5:
             response_text = "⚠️ I wasn't able to generate a useful response. Try rephrasing your question."
@@ -453,18 +514,30 @@ async def handle_message(
         )
         chunks = _split_response(response_text)
 
+        # W5-2: Warn if the thread is close to auto-archiving
+        if isinstance(flow_channel, discord.Thread):
+            await _maybe_send_archive_warning(flow_channel)
+
+        # W4-4: Compute elapsed for footer
+        _elapsed = time.monotonic() - _ask_start
+        _display_model = (model_used or "unknown").replace("models/", "")
+
         _last_sent_msg: discord.Message | None = None
         try:
-            for chunk in chunks:
+            for i, chunk in enumerate(chunks):
                 embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                chunk_str = f"[{i + 1}/{len(chunks)}] • " if len(chunks) > 1 else ""
+                embed.set_footer(text=f"{chunk_str}{_display_model} • ⏱ {_elapsed:.1f}s")
                 _last_sent_msg = await flow_channel.send(embed=embed)
             if table_image_file:
                 _last_sent_msg = await flow_channel.send(file=table_image_file)
         except Exception as exc:
             log.warning("Failed to send default ask response in flow channel: %s", exc)
             if flow_channel is not message.channel:
-                for chunk in chunks:
+                for i, chunk in enumerate(chunks):
                     embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                    chunk_str = f"[{i + 1}/{len(chunks)}] • " if len(chunks) > 1 else ""
+                    embed.set_footer(text=f"{chunk_str}{_display_model} • ⏱ {_elapsed:.1f}s")
                     _last_sent_msg = await message.channel.send(embed=embed)
                 if table_image_file:
                     _last_sent_msg = await message.channel.send(file=table_image_file)

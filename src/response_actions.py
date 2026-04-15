@@ -110,6 +110,7 @@ class ResponseActions(discord.ui.View):
         timeout: float = 300,
         follow_ups: list[str] | None = None,
         bot=None,
+        show_download: bool = False,
     ):
         super().__init__(timeout=timeout)
         self._response_text = response_text
@@ -137,6 +138,16 @@ class ResponseActions(discord.ui.View):
         )
         deeper_btn.callback = self._go_deeper_callback
         self.add_item(deeper_btn)
+        # W8-4: Download button when response spans more than 3 chunks
+        if show_download:
+            dl_btn = discord.ui.Button(
+                label="📄 Download",
+                style=discord.ButtonStyle.secondary,
+                custom_id="download_response",
+                row=1,
+            )
+            dl_btn.callback = self._download_callback
+            self.add_item(dl_btn)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self._user_id:
@@ -144,7 +155,16 @@ class ResponseActions(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label="📌 Save", style=discord.ButtonStyle.secondary)
+    # W8-3: Feedback buttons in row 0 FIRST so they're always visible on mobile
+    @discord.ui.button(label="👍 Helpful", style=discord.ButtonStyle.success, row=0)
+    async def thumbs_up_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._record_feedback(interaction, "helpful")
+
+    @discord.ui.button(label="👎 Not helpful", style=discord.ButtonStyle.danger, row=0)
+    async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._record_feedback(interaction, "not_helpful")
+
+    @discord.ui.button(label="📌 Save", style=discord.ButtonStyle.secondary, row=0)
     async def save_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
@@ -156,7 +176,7 @@ class ResponseActions(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
 
-    @discord.ui.button(label="🔄 Regenerate", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🔄 Regenerate", style=discord.ButtonStyle.secondary, row=0)
     async def regen_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer()
         conv = _b("conversation_store", conversation_store).get(
@@ -185,7 +205,7 @@ class ResponseActions(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Regeneration failed: {e}")
 
-    @discord.ui.button(label="📧 Email", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="📧 Email", style=discord.ButtonStyle.secondary, row=0)
     async def email_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         await interaction.response.defer(ephemeral=True)
         try:
@@ -196,14 +216,6 @@ class ResponseActions(discord.ui.View):
             await interaction.followup.send(f"📧 Emailed!\n{result}", ephemeral=True)
         except Exception as e:
             await interaction.followup.send(f"❌ Email failed: {e}", ephemeral=True)
-
-    @discord.ui.button(label="👍 Helpful", style=discord.ButtonStyle.success)
-    async def thumbs_up_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        await self._record_feedback(interaction, "helpful")
-
-    @discord.ui.button(label="👎 Not helpful", style=discord.ButtonStyle.danger)
-    async def thumbs_down_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
-        await self._record_feedback(interaction, "not_helpful")
 
     @discord.ui.button(label="🔒 Lock to Channel", style=discord.ButtonStyle.secondary, row=2)
     async def lock_channel_btn(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -342,6 +354,19 @@ class ResponseActions(discord.ui.View):
         except Exception as e:
             await interaction.followup.send(f"❌ Failed: {e}")
 
+    async def _download_callback(self, interaction: discord.Interaction) -> None:
+        """W8-4: Send full response as a downloadable .txt file."""
+        await interaction.response.defer(ephemeral=True)
+        try:
+            import io as _io
+            import datetime as _dt
+            ts = _dt.datetime.now(_dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+            buf = _io.BytesIO(self._response_text.encode("utf-8"))
+            file = discord.File(buf, filename=f"openclaw-response-{ts}.txt")
+            await interaction.followup.send("📄 Full response:", file=file, ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(f"❌ Download failed: {e}", ephemeral=True)
+
     async def _record_feedback(self, interaction: discord.Interaction, rating: str) -> None:
         normalized_rating = (
             "helpful"
@@ -412,18 +437,43 @@ class ResponseActions(discord.ui.View):
 
 
 async def _generate_follow_ups(question: str, response: str) -> list[str]:
-    """Generate 2 short follow-up questions based on the Q&A exchange."""
+    """Generate up to 3 short follow-up questions based on the Q&A exchange."""
     try:
         from llm.chat import chat
         prompt = (
-            f"Based on this Q&A exchange, suggest exactly 2 short follow-up questions the user might want to ask next.\n"
-            f"Q: {question[:300]}\n"
-            f"A: {response[:500]}\n\n"
-            f"Return ONLY the 2 questions, one per line, no numbering, no extra text. Keep each under 60 characters."
+            f"Based on this Q&A exchange, suggest up to 3 short follow-up questions "
+            f"the user might want to ask next.\n"
+            f"Q: {question[:800]}\n"
+            f"A: {response[:1200]}\n\n"
+            f'Return ONLY a JSON object: {{"follow_ups": ["question 1", "question 2", "question 3"]}}\n'
+            f"Keep each question under 60 characters."
         )
         text, _, _ = await chat(prompt, model_preference="auto")
-        lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
-        return lines[:2]
+        # Try JSON parse first, fall back to line-split
+        try:
+            data = json.loads(text.strip())
+            lines = data.get("follow_ups", [])
+            if not isinstance(lines, list):
+                raise ValueError("Not a list")
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
+
+        # Validate and filter suggestions
+        question_lower = question.lower().strip()
+        filtered: list[str] = []
+        for line in lines:
+            line = line.strip().strip('"').strip("'")
+            if len(line) < 15:
+                continue
+            line_lower = line.lower()
+            if line_lower == question_lower:
+                continue
+            # Filter vapid filler suggestions
+            import re as _re
+            if _re.match(r'^(explain more|can you)\b', line_lower) and len(line) < 40:
+                continue
+            filtered.append(line)
+        return filtered[:3]
     except (ImportError, RuntimeError, TimeoutError):
         # LLM may be unavailable; return empty list to skip follow-ups
         return []

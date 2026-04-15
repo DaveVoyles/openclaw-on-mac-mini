@@ -8,6 +8,7 @@ from pathlib import Path
 
 from memory_helpers import (
     _THREAD_NAME_RE,
+    CONTEXT_TTL,
     MAX_HISTORY_LENGTH,
     THREADS_DIR,
     _atomic_write,
@@ -109,6 +110,17 @@ class ThreadPersistence:
             history = payload.get("history", [])
             user_name = payload.get("user_name", "User")
             saved_at = payload.get("saved_at", 0)
+
+            # W5-3: Align disk TTL with in-memory TTL (CONTEXT_TTL from cfg)
+            if saved_at and (time.time() - saved_at) > CONTEXT_TTL:
+                log.info(
+                    "Thread '%s' for user %d has expired (TTL=%ds) — treating as stale",
+                    name, user_id, CONTEXT_TTL,
+                )
+                return None, (
+                    f"⚠️ Thread **{name}** has expired "
+                    f"({int(CONTEXT_TTL // 60)} min TTL). Start a fresh conversation with `/ask`."
+                )
 
             conv = Conversation(user_name=user_name)
             conv.history = history[-MAX_HISTORY_LENGTH:]

@@ -151,10 +151,14 @@ def should_render_table_image(
     table_text: str,
     *,
     min_rows_for_image: int = 8,
-    min_cols_for_image: int = 6,
+    min_cols_for_image: int = 5,
     min_cell_chars_for_image: int = 48,
+    max_table_width_chars: int = 60,
 ) -> bool:
-    """Return True when a table is large/complex enough to benefit from image fallback."""
+    """Return True when a table is large/complex enough to benefit from image fallback.
+
+    Triggers on: 5+ columns, table wider than 60 chars, 8+ rows, or longest cell >= 48 chars.
+    """
     parsed = _parse_markdown_table(table_text)
     if not parsed:
         return False
@@ -165,10 +169,18 @@ def should_render_table_image(
         [len(cell) for cell in headers] + [len(cell) for row in rows for cell in row],
         default=0,
     )
+    # Estimate rendered table width: sum of max column widths + separators
+    all_rows = [headers] + rows
+    col_widths = [
+        max((len(r[j]) if j < len(r) else 0) for r in all_rows)
+        for j in range(cols)
+    ]
+    table_width = sum(col_widths) + (cols + 1) * 3
     return (
         row_count >= min_rows_for_image
         or cols >= min_cols_for_image
         or longest_cell >= min_cell_chars_for_image
+        or table_width > max_table_width_chars
     )
 
 
