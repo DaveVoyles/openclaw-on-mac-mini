@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import time
+import zoneinfo
 from pathlib import Path
 
 import discord
@@ -35,6 +36,18 @@ from trace_context import trace_context
 log = logging.getLogger("openclaw")
 
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
+_OWNER_USER_ID = int(os.getenv("OWNER_USER_ID", os.getenv("BOT_OWNER_ID", "0")))
+
+
+def _owner_local_now() -> datetime.datetime:
+    """Return the current datetime in the bot owner's configured timezone (default UTC)."""
+    from notification_prefs import get_user_timezone
+    tz_str = get_user_timezone(_OWNER_USER_ID) if _OWNER_USER_ID else "UTC"
+    try:
+        tz = zoneinfo.ZoneInfo(tz_str)
+    except Exception:
+        tz = zoneinfo.ZoneInfo("UTC")
+    return datetime.datetime.now(tz)
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +59,7 @@ async def morning_briefing_loop(bot):
     last_briefing_date: str = ""
     while True:
         try:
-            now = datetime.datetime.now()
+            now = _owner_local_now()
             if now.hour == BRIEFING_HOUR and now.minute < BRIEFING_MINUTE_WINDOW:
                 today_str = now.strftime("%Y-%m-%d")
                 if today_str != last_briefing_date:
@@ -196,7 +209,7 @@ async def evening_digest_loop(bot):
     last_digest_date: str = ""
     while True:
         try:
-            now = datetime.datetime.now()
+            now = _owner_local_now()
             if now.hour == EVENING_DIGEST_HOUR and now.minute < BRIEFING_MINUTE_WINDOW:
                 today_str = now.strftime("%Y-%m-%d")
                 if today_str != last_digest_date:

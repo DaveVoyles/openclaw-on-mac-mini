@@ -180,6 +180,7 @@ async def _check_quality_drift_alert(bot) -> bool:
     score_value = int(severity.get("score", 0) or 0)
     reason_lines = [f"• {item}" for item in severity.get("reasons", []) if isinstance(item, str) and item.strip()]
     metrics_line = ", ".join(regressed_metrics[:6]) if regressed_metrics else "none"
+    drift_category = str(drift.get("category") or drift.get("drift_category") or "").lower().strip()
     embed = discord.Embed(
         title="🚨 Severe Quality Calibration Drift",
         description=(
@@ -192,6 +193,14 @@ async def _check_quality_drift_alert(bot) -> bool:
     embed.add_field(name="Policy", value="Advisory only (no auto threshold mutation)", inline=True)
     if reason_lines:
         embed.add_field(name="Reasons", value="\n".join(reason_lines)[:1024], inline=False)
+    # W13-5: remediation hint
+    try:
+        from alert_manager import get_remediation_hint
+        hint = get_remediation_hint(drift_category)
+        if hint:
+            embed.add_field(name="Remediation", value=hint, inline=False)
+    except Exception:
+        pass
     embed.set_footer(text="Quality drift monitor • bounded alert routing")
     await channel.send(embed=embed)
     audit_log(None, "quality_drift_alert", detail=f"severe drift score={score_value} metrics={metrics_line}")
@@ -521,6 +530,11 @@ async def _run_proactive_scan(bot):
     )
 
     try:
+        from llm_ratelimit import background_quota_guard
+
+        if not background_quota_guard.check_background_allowed():
+            log.warning("Background LLM quota exhausted — skipping proactive scan LLM call")
+            return
         analysis, _, _ = await asyncio.wait_for(llm_chat(prompt), timeout=35)
         if not analysis or "NO_ALERT" in analysis.upper():
             log.debug("Proactive scan: LLM found nothing notable")
