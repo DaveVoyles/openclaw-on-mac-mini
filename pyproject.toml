@@ -79,6 +79,10 @@ ignore = ["E501", "E402"]  # E501: line length handled by formatter; E402: defer
     "F401",  # discord_events.py re-exports symbols that tests patch via discord_events_mod.*
     "I001",  # Import sorting suppressed alongside F401
 ]
+"src/openclaw_cli.py" = [
+    "F401",  # openclaw_cli.py is a re-export facade; many imports are accessed as openclaw_cli.* in tests
+    "I001",  # Import sorting suppressed alongside F401
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["skills"]
