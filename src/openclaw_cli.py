@@ -265,6 +265,103 @@ import openclaw_cli_cmd_content as _content_cmd_mod
 import openclaw_cli_cmd_settings as _settings_cmd_mod
 import openclaw_cli_cmd_system as _system_cmd_mod
 import openclaw_cli_cmd_misc as _misc_cmd_mod
+
+# Re-exported command functions (wrappers extracted; TD-34)
+from openclaw_cli_cmd_content import _cmd_collab as _cmd_collab  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_history as _cmd_history  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_outputs as _cmd_outputs  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_pattern as _cmd_pattern  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_pin as _cmd_pin  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_pins as _cmd_pins  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_quality as _cmd_quality  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_search as _cmd_search  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_stats as _cmd_stats  # noqa: F401
+from openclaw_cli_cmd_content import _cmd_timeline as _cmd_timeline  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_analyze as _cmd_analyze  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_autoroute as _cmd_autoroute  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_clear as _cmd_clear  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_context as _cmd_context  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_cwd as _cmd_cwd  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_draft as _cmd_draft  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_edit as _cmd_edit  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_exec as _cmd_exec  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_exporttemplates as _cmd_exporttemplates  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_files as _cmd_files  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_help as _cmd_help  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_inject as _cmd_inject  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_research as _cmd_research  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_rollback as _cmd_rollback  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_routing as _cmd_routing  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_runbook as _cmd_runbook  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_snapshot as _cmd_snapshot  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_template as _cmd_template  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_tokeninfo as _cmd_tokeninfo  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_trace as _cmd_trace  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_update as _cmd_update  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_version as _cmd_version  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_why as _cmd_why  # noqa: F401
+from openclaw_cli_cmd_core import _cmd_write as _cmd_write  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_bindlist as _cmd_bindlist  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_celebrate as _cmd_celebrate  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_changes as _cmd_changes  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_diff as _cmd_diff  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_followup as _cmd_followup  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_freq as _cmd_freq  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_heatmap as _cmd_heatmap  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_histsearch as _cmd_histsearch  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_keys as _cmd_keys  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_rate as _cmd_rate  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_recall as _cmd_recall  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_shortcuts as _cmd_shortcuts  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_streak as _cmd_streak  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_tip as _cmd_tip  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_top as _cmd_top  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_bookmark as _cmd_bookmark  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_bookmarks as _cmd_bookmarks  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_events as _cmd_events  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_export as _cmd_export  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_handoff as _cmd_handoff  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_replay as _cmd_replay  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_resume as _cmd_resume  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_session as _cmd_session  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_sessions as _cmd_sessions  # noqa: F401
+from openclaw_cli_cmd_session import _cmd_tag as _cmd_tag  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_accessibility as _cmd_accessibility  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_colorscheme as _cmd_colorscheme  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_emoji as _cmd_emoji  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_emojiheaders as _cmd_emojiheaders  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_keybind as _cmd_keybind  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_layout as _cmd_layout  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_links as _cmd_links  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_overlay as _cmd_overlay  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_pasteguard as _cmd_pasteguard  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_theme as _cmd_theme  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_alias as _cmd_alias  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_autobold as _cmd_autobold  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_benchmark as _cmd_benchmark  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_jsonformat as _cmd_jsonformat  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_palette as _cmd_palette  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_pathhints as _cmd_pathhints  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_prompt as _cmd_prompt  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_promptdebug as _cmd_promptdebug  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_ratehint as _cmd_ratehint  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_separator as _cmd_separator  # noqa: F401
+from openclaw_cli_cmd_system import _cmd_system as _cmd_system  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_alerts as _cmd_alerts  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_dashboard as _cmd_dashboard  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_fleet as _cmd_fleet  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_incident as _cmd_incident  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_macro as _cmd_macro  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_macrostatus as _cmd_macrostatus  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_plan as _cmd_plan  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_risk as _cmd_risk  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_task as _cmd_task  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_watch as _cmd_watch  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_workflow as _cmd_workflow  # noqa: F401
+from openclaw_cli_cmd_workflow import _cmd_workspace as _cmd_workspace  # noqa: F401
+from openclaw_cli_help import print_chat_help  # noqa: F401
+from openclaw_cli_cli_parser import build_parser  # noqa: F401
+
 import openclaw_cli_session_display as _session_display_mod
 import openclaw_cli_session_utils as _session_utils_mod
 import openclaw_cli_watch as _watch_mod
@@ -1443,16 +1540,6 @@ def _build_session_runbook_text(session_id: str, *, template_name: str = "operat
     return _session_display_mod._build_session_runbook_text(session_id, template_name=template_name)
 
 
-def _cmd_exporttemplates(ctx: ChatCommandContext) -> str:
-    """/exporttemplates [list|show <name>] — inspect built-in runbook/export templates."""
-    return _core_cmd_mod._cmd_exporttemplates(ctx)
-
-
-def _cmd_runbook(ctx: ChatCommandContext) -> str:
-    """/runbook [template] [save <path>] — render a long-form session runbook."""
-    return _core_cmd_mod._cmd_runbook(ctx)
-
-
 def inspect_session(session_id: str) -> str:
     """Render a human-readable inspection view of a persisted session."""
     return _session_display_mod.inspect_session(session_id)
@@ -2540,17 +2627,9 @@ def _cmd_quit(ctx: ChatCommandContext) -> str:
     return _CMD_QUIT
 
 
-def _cmd_help(ctx: ChatCommandContext) -> str:
-    return _core_cmd_mod._cmd_help(ctx)
-
-
 def _set_command_result(ctx: ChatCommandContext, *, ok: bool, summary: str = "") -> None:
     ctx.command_ok = ok
     ctx.command_summary = str(summary or "").strip()
-
-
-def _cmd_clear(ctx: ChatCommandContext) -> str:
-    return _core_cmd_mod._cmd_clear(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -2574,52 +2653,12 @@ def _require_session_or_warn(ctx: ChatCommandContext) -> "SessionSummary | None"
     return session
 
 
-def _cmd_session(ctx: ChatCommandContext) -> str:
-    """/session — show a compact summary of the current session."""
-    return _cmd_session_mod._cmd_session(ctx)
-
-
-def _cmd_context(ctx: ChatCommandContext) -> str:
-    """/context — show the effective local grounding for the active session."""
-    return _core_cmd_mod._cmd_context(ctx)
-
-
-def _cmd_cwd(ctx: ChatCommandContext) -> str:
-    """/cwd [path] — show or switch the session working directory."""
-    return _core_cmd_mod._cmd_cwd(ctx)
-
-
-def _cmd_files(ctx: ChatCommandContext) -> str:
-    """/files [add <path> | rm <path>] — list, add, or remove tracked files."""
-    return _core_cmd_mod._cmd_files(ctx)
-
-
 # ---------------------------------------------------------------------------
 # Wave 12: Watch status helpers + /watch REPL command
 # ---------------------------------------------------------------------------
 
 
 
-
-
-def _cmd_watch(ctx: ChatCommandContext) -> str:
-    """/watch [status|history|retry-limit N|intervene TEXT] — inspect or control an active watch session."""
-    return _workflow_cmd_mod._cmd_watch(ctx)
-
-
-def _cmd_plan(ctx: ChatCommandContext) -> str:
-    """/plan [<id> | status | focus | unlink] — show, link, focus, or unlink a plan for this session."""
-    return _workflow_cmd_mod._cmd_plan(ctx)
-
-
-def _cmd_task(ctx: ChatCommandContext) -> str:
-    """/task [<id> | unlink] — show, link, or unlink a task for this session."""
-    return _workflow_cmd_mod._cmd_task(ctx)
-
-
-def _cmd_events(ctx: ChatCommandContext) -> str:
-    """/events [n|decisions [n]] — show the last n events; 'decisions' filters to routing/decision kinds."""
-    return _cmd_session_mod._cmd_events(ctx)
 
 
 def _last_trace_snapshot(session_id: str) -> dict[str, Any] | None:
@@ -2722,21 +2761,6 @@ def _route_quality_summary() -> list[dict[str, Any]]:
     return rows
 
 
-def _cmd_routing(ctx: ChatCommandContext) -> str:
-    """/routing [suggest|analyze] — inspect learned routing hints from past ratings."""
-    return _core_cmd_mod._cmd_routing(ctx)
-
-
-def _cmd_why(ctx: ChatCommandContext) -> str:
-    """/why — explain the last routing or tool decision from session history."""
-    return _core_cmd_mod._cmd_why(ctx)
-
-
-def _cmd_trace(ctx: ChatCommandContext) -> str:
-    """/trace — show the latest routing trace plus the current quality context."""
-    return _core_cmd_mod._cmd_trace(ctx)
-
-
 def _parse_collab_entry(raw: str) -> tuple[str, list[str], str]:
     actor = ""
     tags: list[str] = []
@@ -2752,11 +2776,6 @@ def _parse_collab_entry(raw: str) -> tuple[str, list[str], str]:
             continue
         remainder.append(token)
     return actor, tags, " ".join(remainder).strip()
-
-
-def _cmd_collab(ctx: ChatCommandContext) -> str:
-    """/collab [status|share|note|decision|assign] — collaboration notes, decisions, assignments, and handoff summaries."""
-    return _content_cmd_mod._cmd_collab(ctx)
 
 
 def _risk_entries(session_id: str) -> list[dict[str, Any]]:
@@ -2794,46 +2813,9 @@ def _handoff_check_snapshot(session_id: str) -> dict[str, Any]:
     }
 
 
-def _cmd_risk(ctx: ChatCommandContext) -> str:
-    """/risk [list|add LEVEL TEXT|clear INDEX] — track blocking risks for handoffs."""
-    return _workflow_cmd_mod._cmd_risk(ctx)
-
-
 def _incident_entries(session_id: str) -> list[dict[str, Any]]:
     snapshot = build_collaboration_snapshot(session_id, limit=25)
     return [item for item in list(snapshot.get("open_incidents") or []) if isinstance(item, dict)]
-
-
-def _cmd_incident(ctx: ChatCommandContext) -> str:
-    """/incident [list|log TEXT|resolve INDEX] — track operator incidents for the current session."""
-    return _workflow_cmd_mod._cmd_incident(ctx)
-
-
-def _cmd_search(ctx: ChatCommandContext) -> str:
-    """/search [--all] <query> — full-text search across session event content."""
-    return _content_cmd_mod._cmd_search(ctx)
-
-
-def _cmd_autoroute(ctx: ChatCommandContext) -> str:
-    """/autoroute [on|off] — show or set session-level REPL auto-routing."""
-    return _core_cmd_mod._cmd_autoroute(ctx)
-
-
-def _cmd_outputs(ctx: ChatCommandContext) -> str:
-    """/outputs [<index>|<filename>|promote <index> <name>] — list or preview saved outputs."""
-    return _content_cmd_mod._cmd_outputs(ctx)
-
-
-def _cmd_snapshot(ctx: ChatCommandContext) -> str:
-    """/snapshot [name] — save current git HEAD as a named restore point."""
-    return _core_cmd_mod._cmd_snapshot(ctx)
-
-
-def _cmd_rollback(ctx: ChatCommandContext) -> str:
-    """/rollback [last|list|<name>] — restore latest checkpoint, list git snapshots, or preview/exec a git snapshot rollback."""
-    return _core_cmd_mod._cmd_rollback(ctx)
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -2847,21 +2829,6 @@ def _require_config_or_warn(ctx: ChatCommandContext) -> "CliConfig | None":
         _set_command_result(ctx, ok=False, summary="missing active config")
         return None
     return ctx.config
-
-
-def _cmd_analyze(ctx: ChatCommandContext) -> str:
-    """/analyze <goal> — run an analysis using the current session context."""
-    return _core_cmd_mod._cmd_analyze(ctx)
-
-
-def _cmd_research(ctx: ChatCommandContext) -> str:
-    """/research <query> — run the research agent using the current session context."""
-    return _core_cmd_mod._cmd_research(ctx)
-
-
-def _cmd_write(ctx: ChatCommandContext) -> str:
-    """/write <task> — generate a markdown document using the current session context."""
-    return _core_cmd_mod._cmd_write(ctx)
 
 
 def _progress_bar(current: int, total: int, width: int = 30, label: str = "") -> str:
@@ -2896,26 +2863,6 @@ def _print_exec_error_hints(cmd: str, stderr: str, returncode: int) -> None:
     )
 
 
-def _cmd_exec(ctx: ChatCommandContext) -> str:
-    """/exec [--] <command> — run a shell command with session tracking and approval."""
-    return _core_cmd_mod._cmd_exec(ctx)
-
-
-def _cmd_edit(ctx: ChatCommandContext) -> str:
-    """/edit <path> [--content <text> | --append <text> | --replace OLD NEW] — inspect or write a file."""
-    return _core_cmd_mod._cmd_edit(ctx)
-
-
-def _cmd_update(ctx: ChatCommandContext) -> str:  # noqa: ARG001
-    """/update — self-upgrade openclaw via pip without leaving the REPL."""
-    return _core_cmd_mod._cmd_update(ctx)
-
-
-def _cmd_version(ctx: ChatCommandContext) -> str:  # noqa: ARG001
-    """/version — show the running CLI version and build stamp."""
-    return _core_cmd_mod._cmd_version(ctx)
-
-
 def _estimate_token_count(value: object) -> int:
     """Estimate token count using the shared rough character heuristic."""
     return max(0, len(str(value or "")) // 4)
@@ -2947,11 +2894,6 @@ def _history_token_breakdown(history: list[dict[str, object]]) -> dict[str, obje
     }
 
 
-def _cmd_tokeninfo(ctx: "ChatCommandContext") -> str:
-    """/tokeninfo — show estimated token usage for this session."""
-    return _core_cmd_mod._cmd_tokeninfo(ctx)
-
-
 def _print_theme_preview(theme_name: str, *, persisted: bool) -> None:
     """Print a compact theme preview without requiring Rich."""
     _settings_cmd_mod._print_theme_preview(theme_name, persisted=persisted)
@@ -2960,46 +2902,6 @@ def _print_theme_preview(theme_name: str, *, persisted: bool) -> None:
 def _cycle_theme(direction: str) -> None:
     """Advance the stored theme forward or backward through the palette."""
     _settings_cmd_mod._cycle_theme(direction)
-
-
-def _cmd_theme(ctx: ChatCommandContext) -> str:
-    """Handler for /theme — display or set the UI colour theme."""
-    return _settings_cmd_mod._cmd_theme(ctx)
-
-
-def _cmd_overlay(ctx: ChatCommandContext) -> str:
-    """/overlay [on|off|status] — manage opt-in interactive overlays."""
-    return _settings_cmd_mod._cmd_overlay(ctx)
-
-
-def _cmd_colorscheme(ctx: ChatCommandContext) -> str:
-    """/colorscheme [name|list|reset] — view or set the extended color scheme."""
-    return _settings_cmd_mod._cmd_colorscheme(ctx)
-
-
-def _cmd_emojiheaders(ctx: ChatCommandContext) -> str:
-    """/emojiheaders [on|off] — toggle emoji prefixes on AI response headings."""
-    return _settings_cmd_mod._cmd_emojiheaders(ctx)
-
-
-def _cmd_emoji(ctx: ChatCommandContext) -> str:
-    """Handler for /emoji — toggle emoji display on or off."""
-    return _settings_cmd_mod._cmd_emoji(ctx)
-
-
-def _cmd_layout(ctx: ChatCommandContext) -> str:
-    """Handler for /layout — switch density or render preset workspaces."""
-    return _settings_cmd_mod._cmd_layout(ctx)
-
-
-def _cmd_draft(ctx: ChatCommandContext) -> str:
-    """Handler for /draft — save, load, clear, or restore a draft prompt."""
-    return _core_cmd_mod._cmd_draft(ctx)
-
-
-def _cmd_template(ctx: ChatCommandContext) -> str:
-    """Handler for /template — manage reusable prompt templates."""
-    return _core_cmd_mod._cmd_template(ctx)
 
 
 def _session_badges(s: "SessionSummary") -> str:
@@ -3033,58 +2935,8 @@ def _session_is_stale(s: "SessionSummary", days: int = 7) -> bool:
         return False
 
 
-def _cmd_sessions(ctx: ChatCommandContext) -> str:
-    """/sessions [search QUERY | related] — browse recent sessions."""
-    return _cmd_session_mod._cmd_sessions(ctx)
-
-
-def _cmd_export(ctx: ChatCommandContext) -> str:
-    """/export [md|json|txt] [filename] — export session history to a file."""
-    return _cmd_session_mod._cmd_export(ctx)
-
-
-def _cmd_stats(ctx: ChatCommandContext) -> str:
-    """/stats — show aggregate usage statistics across all sessions."""
-    return _content_cmd_mod._cmd_stats(ctx)
-
-
-def _cmd_tag(ctx: ChatCommandContext) -> str:
-    """/tag [add <tag>|rm <tag>|list] — manage tags on the current session."""
-    return _cmd_session_mod._cmd_tag(ctx)
-
-
-def _cmd_bookmark(ctx: ChatCommandContext) -> str:
-    """/bookmark [label] — save a replay bookmark for the current session."""
-    return _cmd_session_mod._cmd_bookmark(ctx)
-
-
-def _cmd_bookmarks(ctx: ChatCommandContext) -> str:
-    """/bookmarks — list replay bookmarks for the current session."""
-    return _cmd_session_mod._cmd_bookmarks(ctx)
-
-
-def _cmd_resume(ctx: ChatCommandContext) -> str:
-    """/resume [last] — print resume instructions for the most recent other session."""
-    return _cmd_session_mod._cmd_resume(ctx)
-
-
-def _cmd_replay(ctx: ChatCommandContext) -> str:
-    """/replay [session-id] [--from bookmark] — re-print the current or a past session's conversation."""
-    return _cmd_session_mod._cmd_replay(ctx)
-
-
-def _cmd_handoff(ctx: ChatCommandContext) -> str:
-    """/handoff [create|list|open NAME|note TEXT|check] — save/restore a resumable workspace handoff."""
-    return _cmd_session_mod._cmd_handoff(ctx)
-
-
 def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace Capsule") -> None:
     _ui_utils_mod._print_workspace_capsule(capsule, title=title)
-def _cmd_workspace(ctx: ChatCommandContext) -> str:
-    """/workspace [status|save|list|restore NAME] — manage workspace recovery capsules."""
-    return _workflow_cmd_mod._cmd_workspace(ctx)
-
-
 def _print_macro_progress(steps: list, current_idx: int, done_indices: set) -> None:
     """Print a live macro step progress tracker."""
     _macros_mod._print_macro_progress(steps, current_idx, done_indices, a11y_plain=_a11y_plain_mode())
@@ -3175,26 +3027,6 @@ def _pattern_steps(entry: dict[str, Any]) -> list[str]:
     return [str(step) for step in steps if str(step or "").strip()]
 
 
-def _cmd_pattern(ctx: "ChatCommandContext") -> str:
-    """/pattern — manage reusable workflow patterns backed by history or workflows."""
-    return _content_cmd_mod._cmd_pattern(ctx)
-
-
-def _cmd_inject(ctx: "ChatCommandContext") -> str:
-    """/inject — inject file or URL content as context prefix for the next message."""
-    return _core_cmd_mod._cmd_inject(ctx)
-
-
-def _cmd_system(ctx: ChatCommandContext) -> str:
-    """View or set a persistent system prompt prefix for all AI messages."""
-    return _system_cmd_mod._cmd_system(ctx)
-
-
-def _cmd_promptdebug(ctx: ChatCommandContext) -> str:
-    """/promptdebug — preview what would be sent to the AI for the next message."""
-    return _system_cmd_mod._cmd_promptdebug(ctx)
-
-
 def _handle_simple_toggle_pref(
     ctx: "ChatCommandContext",
     key: str,
@@ -3222,26 +3054,6 @@ def _handle_simple_toggle_pref(
     return _CMD_CONTINUE
 
 
-def _cmd_autobold(ctx: ChatCommandContext) -> str:
-    """/autobold [on|off] — toggle automatic bolding of numbers and filenames in responses."""
-    return _system_cmd_mod._cmd_autobold(ctx)
-
-
-def _cmd_jsonformat(ctx: ChatCommandContext) -> str:
-    """/jsonformat [on|off] — toggle automatic JSON detection and pretty-printing in responses."""
-    return _system_cmd_mod._cmd_jsonformat(ctx)
-
-
-def _cmd_separator(ctx: ChatCommandContext) -> str:
-    """/separator [style] — set or preview response separator style (gradient|pulse|dots|wave|none)."""
-    return _system_cmd_mod._cmd_separator(ctx)
-
-
-def _cmd_links(ctx: "ChatCommandContext") -> str:
-    """/links [on|off] — toggle clickable OSC 8 hyperlinks in responses (requires modern terminal)."""
-    return _settings_cmd_mod._cmd_links(ctx)
-
-
 _CMD_REGISTRY_CACHE: "dict | None" = None
 
 
@@ -3251,11 +3063,6 @@ def _get_cmd_registry() -> "ChatCommandRegistry":
     if _CMD_REGISTRY_CACHE is None:
         _CMD_REGISTRY_CACHE = build_chat_command_registry()
     return _CMD_REGISTRY_CACHE
-
-
-def _cmd_palette(ctx: "ChatCommandContext") -> str:
-    """/palette [query] — search slash commands by keyword (fuzzy)."""
-    return _system_cmd_mod._cmd_palette(ctx)
 
 
 def build_chat_command_registry() -> ChatCommandRegistry:
@@ -3269,186 +3076,6 @@ def build_chat_command_registry() -> ChatCommandRegistry:
             aliases=aliases,
         ))
     return registry
-
-
-def print_chat_help(*, search: str = "") -> None:
-    """Print built-in interactive chat commands, optionally filtered by *search*."""
-    commands = [
-        ("/help [search QUERY]",           "Show this help, or filter commands by keyword"),
-        ("/clear",                         "Reset the current conversation history"),
-        ("/quit",                          "Exit the CLI"),
-        ("/update",                        "Self-upgrade openclaw via pip"),
-        ("/version",                       "Show running CLI version and build stamp"),
-        ("/session",                       "Show current session summary"),
-        ("/context",                       "Show effective session grounding preview"),
-        ("/cwd [path]",                    "Show or switch the session working directory"),
-        ("/files",                         "List tracked files"),
-        ("/files add <path>",              "Add a file to tracked files"),
-        ("/files rm <path>",               "Remove a file from tracked files"),
-        ("/plan [<id>|unlink]",            "Show or link a plan"),
-        ("/task [<id>|unlink]",            "Show or link a task"),
-        ("/risk [list|add LEVEL TEXT|clear INDEX]", "Track blocking risks for the current session"),
-        ("/incident [list|log TEXT|resolve INDEX]", "Track and resolve operator incidents for the current session"),
-        ("/dashboard automation",              "Show a compact automation dashboard across active sessions"),
-        ("/alerts [list|acknowledge INDEX]",   "List computed operator alerts and acknowledge one"),
-        ("/fleet [status|health]",             "Show cross-session automation health in a compact view"),
-        ("/outputs [promote <i> <name>]",  "List, preview, promote, or overlay-pick saved session outputs"),
-        ("/overlay [on|off|status]",       "Toggle opt-in interactive pickers for supported list commands"),
-        ("/rollback [last|list|<name>]",   "List git snapshots, preview/exec rollback, or restore checkpoint"),
-        ("/snapshot [name]",               "Save current git HEAD as a named restore point"),
-        ("/events [n|decisions]",              "Show last n session events, or decision-only view"),
-        ("/why",                               "Explain the last routing/tool decision (confidence, rationale, grounding)"),
-        ("/workspace [status|save|list|restore NAME]", "Manage workspace recovery capsules for the current session"),
-        ("/collab [status|share|assign]",      "Show or extend the actor-oriented handoff summary for the current session"),
-        ("/runbook [template] [save <path>]",  "Render a long-form runbook for the active session"),
-        ("/exporttemplates [list|show <name>]", "Inspect built-in runbook/export templates"),
-        ("/collab note [@actor] TEXT",         "Record a collaboration note in the local session audit trail"),
-        ("/collab decision [@actor] [#tag] TEXT", "Record a tagged decision for later handoff/export"),
-        ("/collab assign @actor TEXT",         "Assign an owner to the next shared task or handoff step"),
-        ("/handoff check",                     "Audit readiness using linked plan/task, ownership, and open risks"),
-        ("/search <query>",                    "Search this session's event history for matching turns"),
-        ("/search --all <query>",              "Search across all session histories"),
-        ("/autoroute [on|off]",            "Show or toggle high-confidence REPL auto-routing"),
-        ("/analyze <goal>",                "Analyze the session workspace"),
-        ("/research <query>",              "Run the research agent on a query"),
-        ("/write <task>",                  "Generate a markdown document"),
-        ("/exec [--] <command>",           "Run a shell command with approval + session tracking"),
-        ("/edit <path> [--content TEXT]",  "Inspect or write a file (--append to append)"),
-        ("/theme [name|list|preview|next|prev|reset]", "Manage UI themes and previews"),
-        ("/emoji [on|off|pack|preview]", "Toggle emoji or switch emoji packs"),
-        ("/layout [compact|normal|verbose|plain|preset|show]", "Switch density or preset workspace views"),
-        ("/sessions [search|related]",     "Browse or search recent sessions; /sessions overlay opens a picker"),
-        ("/export [md|json|txt] [file]",   "Export session history to file (md/json/txt)"),
-        ("/stats [commands|ratings|sessions]", "Show ASCII bar charts of usage statistics"),
-        ("/tag [add|rm|list] <tag>",       "Manage tags on the current session"),
-        ("/bookmark [label]",              "Save a replay bookmark for the current session"),
-        ("/bookmarks",                     "List saved replay bookmarks for the current session"),
-        ("/resume [last|<id>]",            "Print resume instructions for a past session"),
-        ("/replay [session-id] [--from <bookmark>]", "Re-print the current or a past session conversation"),
-        ("/draft [save|load|clear|restore]",    "Save, load, clear, or restore a draft prompt"),
-        ("/draft multiline [on|off]",           "Toggle multiline compose mode"),
-        ("/template [list|use|save|delete]",    "Manage reusable prompt templates"),
-        ("/pasteguard [on|off]",                "Toggle paste guard for large risky pastes"),
-        ("/pin [name]",                         "Pin the last AI response (auto-named if no name given)"),
-        ("/pin recall <name>",                  "Re-display a pinned response"),
-        ("/pin rm <name>",                      "Remove a pin by name"),
-        ("/pins",                               "List all pinned responses"),
-        ("/accessibility [status|mode]",        "Show or set accessibility modes (a11y)"),
-        ("/accessibility reduced-motion on|off","Toggle reduced-motion (no spinner animation)"),
-        ("/accessibility plain on|off",         "Toggle plain/screen-reader mode"),
-        ("/accessibility high-contrast on|off", "Toggle high-contrast colour palette"),
-        ("/alias",                              "List all defined command aliases"),
-        ("/alias <name> <expansion>",           "Define a command shorthand alias"),
-        ("/alias rm <name>",                    "Remove a defined alias"),
-        ("/history [page]",                     "Show command history, 15 per page (color-coded)"),
-        ("/history clear",                      "Clear command history"),
-        ("/recall",                             "List recent prompts (non-slash-command inputs)"),
-        ("/recall <n>",                         "Re-inject the nth most recent prompt into chat"),
-        ("/histsearch <query>",                 "Search prompt history for matching entries"),
-        ("/macro list",                         "List all saved macros"),
-        ("/macro save <name> [last N]",         "Save last N commands as a named macro"),
-        ("/macro show <name>",                  "Show the commands stored in a macro"),
-        ("/macro run <name>",                   "Execute a saved macro's commands in sequence"),
-        ("/macro rm <name>",                    "Delete a named macro"),
-        ("/workflow list",                      "List previewable workflows backed by the macro store"),
-        ("/workflow save <name> [last N]",      "Save recent commands as a workflow"),
-        ("/workflow preview <name>",            "Show the resolved workflow steps without executing them"),
-        ("/workflow run <name>",                "Execute a saved workflow with session placeholders resolved"),
-        ("/workflow rm <name>",                 "Delete a saved workflow"),
-        ("/pattern list",                       "Browse saved reusable patterns with lightweight source metadata"),
-        ("/pattern save <name> [last N|workflow NAME]", "Save recent commands or a workflow as a reusable pattern"),
-        ("/pattern preview <name>",             "Preview a saved pattern before execution"),
-        ("/pattern run <name>",                 "Execute a saved pattern with session placeholders resolved"),
-        ("/pattern rm <name>",                  "Delete a saved pattern"),
-        ("/rate [good|ok|bad|meh|1-5]",         "Rate the last AI response and store feedback"),
-        ("/quality",  "Show response quality stats — avg score, distribution, recent ratings"),
-        ("/quality predict", "Show the best-rated route based on your prior ratings"),
-        ("/routing [suggest|analyze]",         "Inspect learned route suggestions without changing auto-routing"),
-        ("/streak",   "Show your current high-rating streak and all-time best"),
-        ("/heatmap",  "Show a color-coded 24-hour activity heatmap of openclaw usage"),
-        ("/top [n]",  "Show the n most frequently used prompts and commands (default: 10)"),
-        ("/freq",     "Show frequency analysis of slash commands used"),
-        ("/ratehint [on|off]",                   "Show or toggle the post-response rating hint"),
-        ("/inject <path>",                       "Inject file content as context prefix for next message"),
-        ("/inject --url <url>",                  "Inject URL content as context prefix for next message"),
-        ("/inject clear",                        "Clear the pending injection"),
-        ("/inject status",                       "Show what content is queued for injection"),
-        ("/promptdebug",                         "Preview the full prompt that would be sent to AI (system + inject + message)"),
-        ("/system",                              "View the current system prompt"),
-        ("/system set <text>",                   "Set a persistent system prompt prefix for all messages"),
-        ("/system append <text>",               "Append to the existing system prompt"),
-        ("/system clear",                        "Clear the system prompt"),
-        ("/autobold [on|off]",                   "Toggle automatic bolding of numbers and filenames in responses"),
-        ("/jsonformat [on|off]",                 "Toggle automatic JSON detection and pretty-printing in responses"),
-        ("/separator [style]",                   "Set or preview response separator style (gradient|pulse|dots|wave|none)"),
-        ("/links [on|off]",                      "Toggle clickable OSC 8 hyperlinks in responses (requires modern terminal)"),
-        ("/palette [query]",                     "Search slash commands by keyword (fuzzy)"),
-        ("/shortcuts",                           "Show keyboard shortcuts and quick-access reference card"),
-        ("/keys",                                "Show active keyboard shortcuts and readline bindings"),
-        ("/bindlist",                            "Show all keyboard bindings — built-in readline + custom"),
-        ("/keybind [list|Ctrl+X /cmd|clear X]", "Manage custom readline key bindings"),
-        ("/diff [file1 file2 | --git]",          "Show a colorized unified diff"),
-        ("/changes",                             "Show session edit log and git status"),
-        ("/timeline",                            "Show a visual activity timeline of recent openclaw usage"),
-        ("/dashboard",                           "Show the power dashboard: sessions, stats, pins, and system status"),
-        ("/benchmark [n]",                       "Measure AI server response latency (n pings, default 3, max 10)"),
-        ("/followup",                            "Show contextual follow-up suggestions for your last prompt"),
-        ("/followup on|off",                     "Enable or disable the auto-suggestion footer after responses"),
-        ("/tokeninfo",                           "Show estimated context token usage"),
-    ]
-
-    q = search.strip().lower()
-    if q:
-        commands = [(cmd, desc) for cmd, desc in commands if q in cmd.lower() or q in desc.lower()]
-        if not commands:
-            print(f"  {_DM}No commands match '{q}'.{_R}")
-            return
-
-    notes = (
-        "High-confidence freeform prompts can auto-route to /analyze, /research, /write, /exec, or /edit.\n"
-        "Multi-step prompts can decompose into linked plans and auto-run step-by-step with [n/N] progress.\n"
-        "Ambiguous prompts stay in normal chat. High/critical /exec and /edit steps still require approval.\n"
-        "[autoroute:off] in the prompt means auto-routing is disabled — use /autoroute on to re-enable."
-    )
-    if _RICH_AVAILABLE and _IS_TTY:
-        title = f"[bold cyan]OpenClaw Commands[/bold cyan]" + (f"  [dim]matching '{q}'[/]" if q else "")
-        t = _RichTable.grid(padding=(0, 2))
-        t.add_column(style="bold cyan", no_wrap=True)
-        t.add_column(style="dim")
-        for cmd, desc in commands:
-            t.add_row(cmd, desc)
-        _RICH_CONSOLE.print(_RichPanel(t, title=title, border_style="cyan", padding=(0, 1)))
-        if not q:
-            _RICH_CONSOLE.print(f"[dim]{notes}[/dim]")
-            examples = [
-                ("Ask a question",       "What does this repo do?"),
-                ("Analyze a directory",  "openclaw analyze --cwd ./src"),
-                ("Run a command",        "/exec -- git diff HEAD"),
-                ("Research a topic",     "/research latest Python async patterns"),
-                ("Link a plan",          "/plan my-feature-plan"),
-            ]
-            ex_grid = _RichTable.grid(padding=(0, 2))
-            ex_grid.add_column(style="dim")
-            ex_grid.add_column(style="bold cyan")
-            for label, cmd in examples:
-                ex_grid.add_row(label, cmd)
-            _RICH_CONSOLE.print(_RichPanel(ex_grid, title="[bold]Examples[/]", border_style="dim", padding=(0, 1)))
-    else:
-        if q:
-            print(f"  Commands matching '{q}':")
-        else:
-            print("Interactive commands:")
-        for cmd, desc in commands:
-            print(f"  {cmd:<42} {desc}")
-        print()
-        if not q:
-            print(notes)
-            print("\nExamples:")
-            print('  Ask a question         What does this repo do?')
-            print('  Analyze a directory    openclaw analyze --cwd ./src')
-            print('  Run a command          /exec -- git diff HEAD')
-            print('  Research a topic       /research latest Python async patterns')
-            print('  Link a plan            /plan my-feature-plan')
 
 
 def handle_auth_command(args: argparse.Namespace) -> int:
@@ -3769,18 +3396,6 @@ def _render_prompt_format(fmt: str) -> str:
     return result
 
 
-def _cmd_prompt(ctx: "ChatCommandContext") -> str:
-    """/prompt [format] — customize the REPL prompt. Use {route}, {session}, {model}, {build}, {time}.
-
-    Examples:
-      /prompt {route} openclaw>
-      /prompt openclaw [{time}]>
-      /prompt {build} ❯
-      /prompt reset          (restore default)
-    """
-    return _system_cmd_mod._cmd_prompt(ctx)
-
-
 def _print_first_run_tips() -> None:
     """Print a compact new-session tip panel (shown once, only in TTY mode)."""
     is_tty = _get_is_tty()
@@ -3825,11 +3440,6 @@ def _time_greeting() -> str:
 
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     _ui_utils_mod._print_startup_banner(config, session_id)
-def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
-    """Toggle or inspect the paste guard setting."""
-    return _settings_cmd_mod._cmd_pasteguard(ctx)
-
-
 _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Core
     "help", "clear", "quit", "exit", "update", "version", "v",
@@ -3866,26 +3476,6 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
 _MAX_ALIASES = 50
 
 
-def _cmd_alias(ctx: "ChatCommandContext") -> str:
-    """Define, list, or remove command aliases."""
-    return _system_cmd_mod._cmd_alias(ctx)
-
-
-def _cmd_macro(ctx: "ChatCommandContext") -> str:
-    """Manage named command macros. Sub-commands: list, save, show, rm, run."""
-    return _workflow_cmd_mod._cmd_macro(ctx)
-
-
-def _cmd_macrostatus(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
-    """/macrostatus — show saved macros with step counts."""
-    return _workflow_cmd_mod._cmd_macrostatus(ctx)
-
-
-def _cmd_workflow(ctx: "ChatCommandContext") -> str:
-    """/workflow — manage previewable workflows backed by the macro store."""
-    return _workflow_cmd_mod._cmd_workflow(ctx)
-
-
 def _relative_time(ts_str: str) -> str:
     """Convert ISO timestamp to relative time string."""
     try:
@@ -3906,43 +3496,8 @@ def _relative_time(ts_str: str) -> str:
         return ""
 
 
-def _cmd_history(ctx: "ChatCommandContext") -> str:
-    """Show or clear recent command history with color-coding and pagination."""
-    return _content_cmd_mod._cmd_history(ctx)
-
-
-def _cmd_recall(ctx: "ChatCommandContext") -> str:
-    """/recall <n> — re-inject the nth most recent prompt into the chat (1=most recent)."""
-    return _misc_cmd_mod._cmd_recall(ctx)
-
-
-def _cmd_histsearch(ctx: "ChatCommandContext") -> str:
-    """/histsearch <query> — search prompt history for matching entries."""
-    return _misc_cmd_mod._cmd_histsearch(ctx)
-
-
-def _cmd_pin(ctx: "ChatCommandContext") -> str:
-    """Pin the last AI response for quick recall. Sub-commands: [name] | recall <name> | rm <name> | list."""
-    return _content_cmd_mod._cmd_pin(ctx)
-
-
-def _cmd_pins(ctx: "ChatCommandContext") -> str:
-    """List all pinned responses (alias for /pin list)."""
-    return _content_cmd_mod._cmd_pins(ctx)
-
-
 def _celebration_burst(message: str = "") -> None:
     _ui_utils_mod._celebration_burst(message)
-def _cmd_celebrate(ctx: "ChatCommandContext") -> str:
-    """/celebrate — trigger a celebration animation (just for fun!)."""
-    return _misc_cmd_mod._cmd_celebrate(ctx)
-
-
-def _cmd_rate(ctx: "ChatCommandContext") -> str:
-    """Rate the last AI response (/rate [good|ok|bad|meh|1-5])."""
-    return _misc_cmd_mod._cmd_rate(ctx)
-
-
 def _print_ascii_trophy(streak: int) -> None:
     """Print an ASCII trophy for streak achievements."""
     is_tty = _get_is_tty()
@@ -3972,26 +3527,6 @@ def _print_ascii_trophy(streak: int) -> None:
         print()
 
 
-def _cmd_streak(ctx: "ChatCommandContext") -> str:
-    """/streak — show your current rating streak and all-time best."""
-    return _misc_cmd_mod._cmd_streak(ctx)
-
-
-def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
-    """Show or configure accessibility modes (reduced-motion, plain, high-contrast)."""
-    return _settings_cmd_mod._cmd_accessibility(ctx)
-
-
-def _cmd_heatmap(ctx: ChatCommandContext) -> str:
-    """/heatmap — show a color-coded hourly activity heatmap of openclaw usage."""
-    return _misc_cmd_mod._cmd_heatmap(ctx)
-
-
-def _cmd_quality(ctx: "ChatCommandContext") -> str:
-    """/quality — show a colored histogram of response quality ratings."""
-    return _content_cmd_mod._cmd_quality(ctx)
-
-
 import re as _re
 
 _FILE_PATH_PATTERN = _path_utils._FILE_PATH_PATTERN
@@ -4011,46 +3546,6 @@ def _suggest_followups(last_prompt: str, *, response_text: str = "", session_id:
 
 def _print_followup_suggestions(suggestions: list[str], *, mode: str = "chat") -> None:
     return _path_utils._print_followup_suggestions(suggestions, mode=mode, prefs=_PREFS, is_tty=_get_is_tty(), rich_available=_RICH_AVAILABLE)
-
-
-def _cmd_pathhints(ctx: "ChatCommandContext") -> str:
-    """/pathhints [on|off] — toggle file path quick-action hints after responses."""
-    return _system_cmd_mod._cmd_pathhints(ctx)
-
-
-def _cmd_ratehint(ctx: "ChatCommandContext") -> str:
-    """/ratehint [on|off] — toggle the post-response rating hint."""
-    return _system_cmd_mod._cmd_ratehint(ctx)
-
-
-def _cmd_followup(ctx: "ChatCommandContext") -> str:
-    """/followup [on|off] — show contextually relevant follow-up suggestions for your last prompt, or toggle the auto-suggestion footer."""
-    return _misc_cmd_mod._cmd_followup(ctx)
-
-
-def _cmd_shortcuts(ctx: "ChatCommandContext") -> str:
-    """/shortcuts — show keyboard shortcuts and quick-access reference card."""
-    return _misc_cmd_mod._cmd_shortcuts(ctx)
-
-
-def _cmd_stats(ctx: "ChatCommandContext") -> str:
-    """/stats [category] — show ASCII bar charts of usage statistics (commands, ratings, sessions)."""
-    return _content_cmd_mod._cmd_stats(ctx)
-
-
-def _cmd_top(ctx: "ChatCommandContext") -> str:
-    """/top [n] — show the n most frequently used prompts and commands (default: 10)."""
-    return _misc_cmd_mod._cmd_top(ctx)
-
-
-def _cmd_freq(ctx: "ChatCommandContext") -> str:
-    """/freq — show frequency analysis of slash commands used."""
-    return _misc_cmd_mod._cmd_freq(ctx)
-
-
-def _cmd_tip(ctx: "ChatCommandContext") -> str:
-    """/tip — show a random openclaw usage tip."""
-    return _misc_cmd_mod._cmd_tip(ctx)
 
 
 def _paste_guard(
@@ -4133,59 +3628,9 @@ def _print_key_bindings() -> None:
         print()
 
 
-def _cmd_keys(ctx: "ChatCommandContext") -> str:
-    """/keys — show active keyboard shortcuts and readline bindings."""
-    return _misc_cmd_mod._cmd_keys(ctx)
-
-
-def _cmd_bindlist(ctx: "ChatCommandContext") -> str:
-    """/bindlist — show all keyboard bindings (built-in readline + custom)."""
-    return _misc_cmd_mod._cmd_bindlist(ctx)
-
-
-def _cmd_keybind(ctx: "ChatCommandContext") -> str:
-    """/keybind [key action | list | clear <key>] — manage custom readline key bindings."""
-    return _settings_cmd_mod._cmd_keybind(ctx)
-
-
 def _render_diff_ansi(diff_text: str) -> str:
     """Apply ANSI colors to unified diff output (+ green, - red, @@ cyan)."""
     return _render_diff_ansi_impl(diff_text, plain_mode=_a11y_plain_mode())
-
-
-def _cmd_diff(ctx: ChatCommandContext) -> str:
-    """/diff [file1 file2 | --git] — show a colorized unified diff."""
-    return _misc_cmd_mod._cmd_diff(ctx)
-
-
-def _cmd_changes(ctx: ChatCommandContext) -> str:
-    """/changes — show files mentioned/edited in this session."""
-    return _misc_cmd_mod._cmd_changes(ctx)
-
-
-def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
-    """/timeline — show a visual activity timeline of recent openclaw usage."""
-    return _content_cmd_mod._cmd_timeline(ctx)
-
-
-def _cmd_dashboard(ctx: ChatCommandContext) -> str:  # noqa: ARG001
-    """/dashboard — show the power dashboard: sessions, stats, pins, and system status."""
-    return _workflow_cmd_mod._cmd_dashboard(ctx)
-
-
-def _cmd_alerts(ctx: ChatCommandContext) -> str:
-    """/alerts [list|acknowledge INDEX] — inspect computed operator alerts."""
-    return _workflow_cmd_mod._cmd_alerts(ctx)
-
-
-def _cmd_fleet(ctx: ChatCommandContext) -> str:
-    """/fleet [status|health] — show cross-session automation health summaries."""
-    return _workflow_cmd_mod._cmd_fleet(ctx)
-
-
-def _cmd_benchmark(ctx: ChatCommandContext) -> str:
-    """/benchmark [n] — run n quick AI pings to measure response latency (default: 3)."""
-    return _system_cmd_mod._cmd_benchmark(ctx)
 
 
 # fmt: off
@@ -5052,166 +4497,6 @@ def handle_edit_command(args: argparse.Namespace) -> int:
     )
     _print_meta_footer(("session", session.session_id))
     return 0
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Build the CLI argument parser."""
-    parser = argparse.ArgumentParser(
-        description="Launch OpenClaw from the terminal.",
-        epilog=(
-            "Running with no prompt starts interactive chat.\n"
-            "Passing a bare prompt auto-wraps to `ask`.\n"
-            "`OpenClaw` is a shell shim for `openclaw` in the installer/setup scripts.\n\n"
-            "Examples:\n"
-            "  OpenClaw\n"
-            "  openclaw \"what changed overnight?\"\n"
-            "  openclaw analyze --cwd . @README.md \"summarize the repo\"\n"
-            "  openclaw watch --cwd . --on-change --iterations 5 \"keep an eye on test regressions\"\n"
-            "  openclaw research \"best async Python patterns\"\n"
-            "  openclaw write --title \"Weekly recap\" \"Draft the report\"\n"
-            "  openclaw exec -- git status\n"
-            "  openclaw ask \"summarize the latest alerts\"\n"
-            "  openclaw --health\n"
-            "  openclaw auth login\n"
-            "  openclaw auth status"
-        ),
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {cli_version()}")
-    parser.add_argument("--health", action="store_true", help="Check the OpenClaw /health endpoint and exit")
-    parser.add_argument("--url", help="OpenClaw base URL (default: OPENCLAW_URL or http://localhost:8765)")
-    parser.add_argument("--token", help=f"API token (default: {TOKEN_ENV_VARS}, plus macOS Keychain on macOS)")
-    parser.add_argument(
-        "--model",
-        default=DEFAULT_MODEL,
-        help="Model preference: auto, gemini, openai, anthropic, or local",
-    )
-    parser.add_argument(
-        "--timeout",
-        default=DEFAULT_TIMEOUT_SECONDS,
-        type=int,
-        help="HTTP timeout in seconds",
-    )
-    parser.add_argument("--json", action="store_true", help="Print raw JSON responses")
-    parser.add_argument("--no-stream", dest="no_stream", action="store_true", help="Disable streaming output (batch mode)")
-    parser.add_argument("--no-banner", dest="no_banner", action="store_true", help="Suppress startup banner (for scripting)")
-    parser.add_argument("--user-name", help="Logical user label sent to OpenClaw")
-    parser.add_argument("--client-name", help="Client/machine label for headers and telemetry")
-    parser.add_argument("--session", help="Resume or tag a local CLI session")
-
-    subparsers = parser.add_subparsers(dest="command")
-
-    ask_parser = subparsers.add_parser("ask", help="Send a single prompt")
-    ask_parser.add_argument("prompt", nargs="*", help="Prompt text (or pipe via stdin)")
-
-    subparsers.add_parser("chat", help="Start an interactive chat session")
-    subparsers.add_parser("health", help="Check the OpenClaw /health endpoint")
-    auth_parser = subparsers.add_parser("auth", help="Manage stored CLI authentication")
-    auth_subparsers = auth_parser.add_subparsers(dest="auth_command", required=True)
-    login_parser = auth_subparsers.add_parser("login", help="Persist a token for future CLI use")
-    login_parser.add_argument("--token", help="Token to store; if omitted, prompt securely")
-    auth_subparsers.add_parser("status", help="Show where the CLI token is currently resolved from")
-    auth_subparsers.add_parser("logout", help="Remove persisted CLI token(s)")
-
-    analyze_parser = subparsers.add_parser("analyze", help="Analyze a project, directory, or file set")
-    analyze_parser.add_argument("--cwd", help="Working directory to inspect")
-    analyze_parser.add_argument("--file", dest="files", action="append", default=[], help="Explicit file or directory target")
-    analyze_parser.add_argument("--plan-id", help="Optional related plan identifier")
-    analyze_parser.add_argument("--task-id", help="Optional related task identifier")
-    analyze_parser.add_argument("prompt", nargs="*", help="Analysis goal; @path references are treated as targets")
-
-    session_parser = subparsers.add_parser("session", help="Manage local CLI sessions")
-    session_subparsers = session_parser.add_subparsers(dest="session_command", required=True)
-    session_create = session_subparsers.add_parser("create", help="Create a new local CLI session")
-    session_create.add_argument("--title", help="Human-readable session title")
-    session_create.add_argument("--cwd", help="Working directory associated with the session")
-    session_create.add_argument("--file", dest="files", action="append", default=[], help="Initial tracked file or directory")
-    session_create.add_argument("--plan-id", help="Optional related plan identifier")
-    session_create.add_argument("--task-id", help="Optional related task identifier")
-    session_list = session_subparsers.add_parser("list", help="List recent local sessions")
-    session_list.add_argument("--limit", type=int, default=20, help="Maximum number of sessions to print")
-    session_list.add_argument("--filter", help="Optional text filter for titles, IDs, summaries, or tags")
-    session_list.add_argument("--interactive", action="store_true", help="Open an opt-in interactive session picker when running in a TTY")
-    session_show = session_subparsers.add_parser("show", help="Show a local session summary")
-    session_show.add_argument("session_id", help="Session identifier")
-    session_resume = session_subparsers.add_parser("resume", help="Show a session and print its resume command")
-    session_resume.add_argument("session_id", help="Session identifier")
-    session_export = session_subparsers.add_parser("export", help="Export a local session as JSON or runbook text")
-    session_export.add_argument("session_id", help="Session identifier")
-    session_export.add_argument("--format", choices=("json", "runbook"), default="json", help="Export format")
-    session_export.add_argument("--template", default="operator", help="Runbook template when --format runbook")
-    session_share = session_subparsers.add_parser("share", help="Print a shareable collaboration handoff summary")
-    session_share.add_argument("session_id", help="Session identifier")
-
-    plan_parser = subparsers.add_parser("plan", help="Manage agent loop plans")
-    plan_subparsers = plan_parser.add_subparsers(dest="plan_command", required=True)
-    plan_create = plan_subparsers.add_parser("create", help="Create a new plan")
-    plan_create.add_argument("goal", nargs="*", help="Plan goal")
-    plan_create.add_argument("--steps-text", default="", help="Optional newline-delimited steps")
-    plan_list = plan_subparsers.add_parser("list", help="List plans")
-    plan_list.add_argument("--status", default="all", help="Plan status filter")
-    plan_show = plan_subparsers.add_parser("show", help="Show a plan")
-    plan_show.add_argument("plan_id", help="Plan identifier")
-    plan_resume = plan_subparsers.add_parser("resume", help="Resume an interrupted plan")
-    plan_resume.add_argument("plan_id", help="Plan identifier")
-    plan_cancel = plan_subparsers.add_parser("cancel", help="Cancel a plan")
-    plan_cancel.add_argument("plan_id", help="Plan identifier")
-
-    research_parser = subparsers.add_parser("research", help="Run deep research with saved session outputs")
-    research_parser.add_argument("--cwd", help="Working directory to include as context")
-    research_parser.add_argument("--file", dest="files", action="append", default=[], help="Explicit file or directory target")
-    research_parser.add_argument("--plan-id", help="Optional related plan identifier")
-    research_parser.add_argument("--task-id", help="Optional related task identifier")
-    research_parser.add_argument("--deep", action="store_true", help="Use iterative gap-filling research mode")
-    research_parser.add_argument("--output", help="Optional output file path")
-    research_parser.add_argument("query", nargs="*", help="Research query; @path references are treated as targets")
-
-    write_parser = subparsers.add_parser("write", help="Draft a document and save it to the current session")
-    write_parser.add_argument("--cwd", help="Working directory to include as context")
-    write_parser.add_argument("--file", dest="files", action="append", default=[], help="Explicit file or directory target")
-    write_parser.add_argument("--plan-id", help="Optional related plan identifier")
-    write_parser.add_argument("--task-id", help="Optional related task identifier")
-    write_parser.add_argument("--title", help="Document title")
-    write_parser.add_argument("--output", help="Optional output file path")
-    write_parser.add_argument("task", nargs="*", help="Writing task; @path references are treated as targets")
-
-    watch_parser = subparsers.add_parser("watch", help="Run a bounded, resumable automation watch loop")
-    watch_parser.add_argument("--cwd", help="Working directory to inspect")
-    watch_parser.add_argument("--file", dest="files", action="append", default=[], help="Explicit file or directory target")
-    watch_parser.add_argument("--plan-id", help="Optional related plan identifier")
-    watch_parser.add_argument("--task-id", help="Optional related task identifier")
-    watch_parser.add_argument("--mode", choices=["analyze", "research", "write"], default="analyze", help="Watch action to run each poll")
-    watch_parser.add_argument("--interval", type=int, default=30, help="Seconds between polls")
-    watch_parser.add_argument("--iterations", type=int, default=5, help="Maximum polls before exiting (0 means keep running)")
-    watch_parser.add_argument("--on-change", action="store_true", help="Skip iterations until tracked workspace content changes")
-    watch_parser.add_argument("--resume", help="Resume a prior watch session by session id")
-    watch_parser.add_argument("--deep", action="store_true", help="Use deep research when mode=research")
-    watch_parser.add_argument("--title", help="Document title override when mode=write")
-    watch_parser.add_argument("--output", help="Optional output file to overwrite each poll")
-    watch_parser.add_argument("goal", nargs="*", help="Automation goal; @path references are treated as targets")
-
-    exec_parser = subparsers.add_parser("exec", help="Run a shell command with session and approval tracking")
-    exec_parser.add_argument("--cwd", help="Working directory for the command")
-    exec_parser.add_argument("--command-timeout", type=int, default=60, help="Shell command timeout in seconds")
-    exec_parser.add_argument("--risk", choices=["low", "medium", "high", "critical"], help="Override the inferred command risk")
-    exec_parser.add_argument("--yes", action="store_true", help="Auto-approve high-risk commands")
-    exec_parser.add_argument("--plan-id", help="Optional related plan identifier")
-    exec_parser.add_argument("--task-id", help="Optional related task identifier")
-    exec_parser.add_argument("shell_command", nargs=argparse.REMAINDER, help="Command to execute; prefix with -- to stop option parsing")
-
-    edit_parser = subparsers.add_parser("edit", help="Apply a text edit with diff preview support")
-    edit_parser.add_argument("path", help="File path to edit")
-    edit_parser.add_argument("--replace", nargs=2, metavar=("OLD", "NEW"), help="Replace text in the file")
-    edit_parser.add_argument("--content", help="Replace the full file content (or append with --append)")
-    edit_parser.add_argument("--append", action="store_true", help="Append content instead of replacing the file")
-    edit_parser.add_argument("--dry-run", action="store_true", help="Preview the diff without writing the file")
-    edit_parser.add_argument("--risk", choices=["low", "medium", "high", "critical"], help="Override the inferred edit risk")
-    edit_parser.add_argument("--yes", action="store_true", help="Auto-approve high-risk edits")
-    edit_parser.add_argument("--plan-id", help="Optional related plan identifier")
-    edit_parser.add_argument("--task-id", help="Optional related task identifier")
-    subparsers.add_parser("status", help="Show version, server health, and token status")
-    subparsers.add_parser("update", help="Upgrade openclaw to the latest version from PyPI")
-    return parser
 
 
 def main(argv: list[str] | None = None) -> int:
