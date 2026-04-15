@@ -54,8 +54,22 @@ _DEFAULT_ASK_THREAD_CACHE_TTL_SECONDS = 60 * 60 * 24
 _MESSAGE_CONTENT_HINT_CACHE: dict[int, float] = {}
 _MESSAGE_CONTENT_HINT_COOLDOWN_SECONDS = 60 * 30
 
-# W5-2: Track threads where archive warning has already been sent (once per thread)
-_ARCHIVE_WARNING_SENT: set[int] = set()
+# W5-2: Track threads where archive warning has already been sent (TTL-bounded cache)
+_ARCHIVE_WARNING_SENT: dict[int, float] = {}  # thread_id → timestamp
+_ARCHIVE_WARNING_TTL = 86400  # 24 hours
+
+
+def _has_archive_warning_been_sent(thread_id: int) -> bool:
+    """Check if archive warning was sent for this thread recently."""
+    cutoff = time.monotonic() - _ARCHIVE_WARNING_TTL
+    stale = [tid for tid, ts in _ARCHIVE_WARNING_SENT.items() if ts < cutoff]
+    for tid in stale:
+        del _ARCHIVE_WARNING_SENT[tid]
+    return thread_id in _ARCHIVE_WARNING_SENT
+
+
+def _mark_archive_warning_sent(thread_id: int) -> None:
+    _ARCHIVE_WARNING_SENT[thread_id] = time.monotonic()
 
 
 # ---------------------------------------------------------------------------
@@ -245,7 +259,7 @@ async def _get_or_create_default_ask_thread(
 async def _maybe_send_archive_warning(thread: discord.Thread) -> None:
     """W5-2: Send a one-time warning when a thread is within 10 minutes of auto-archiving."""
     thread_id = int(thread.id)
-    if thread_id in _ARCHIVE_WARNING_SENT:
+    if _has_archive_warning_been_sent(thread_id):
         return
     archive_duration_minutes = getattr(thread, "auto_archive_duration", None)
     if not archive_duration_minutes:
@@ -263,7 +277,7 @@ async def _maybe_send_archive_warning(thread: discord.Thread) -> None:
                 "⚠️ This thread will auto-archive soon. "
                 "Keep chatting to extend it, or start a new `/ask`."
             )
-            _ARCHIVE_WARNING_SENT.add(thread_id)
+            _mark_archive_warning_sent(thread_id)
         except Exception as exc:
             log.debug("Failed to send archive warning for thread %d: %s", thread_id, exc)
 

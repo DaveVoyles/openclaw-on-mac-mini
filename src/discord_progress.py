@@ -1,7 +1,10 @@
 """Shared Discord progress indicator for long-running bot operations."""
+import logging
 import time
 
 import discord
+
+log = logging.getLogger(__name__)
 
 
 class ProgressTracker:
@@ -29,8 +32,8 @@ class ProgressTracker:
         if self._message:
             try:
                 await self._message.edit(embed=self._build_embed())
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                log.debug("ProgressTracker edit failed (message may be deleted): %s", exc)
 
     async def done(self, summary=""):
         """Mark as complete."""
@@ -40,8 +43,8 @@ class ProgressTracker:
         if self._message:
             try:
                 await self._message.edit(embed=self._build_embed())
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001
+                log.debug("ProgressTracker edit failed (message may be deleted): %s", exc)
 
     def _build_embed(self):
         body = "\n".join(self._lines[-10:]) or "Starting…"

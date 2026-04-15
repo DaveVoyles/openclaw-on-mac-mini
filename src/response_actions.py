@@ -455,8 +455,10 @@ async def _generate_follow_ups(question: str, response: str) -> list[str]:
             lines = data.get("follow_ups", [])
             if not isinstance(lines, list):
                 raise ValueError("Not a list")
-        except (json.JSONDecodeError, ValueError, AttributeError):
-            lines = [line.strip() for line in text.strip().split("\n") if line.strip()]
+            # Validate each item is a non-empty string
+            lines = [s for s in lines if isinstance(s, str) and s.strip()]
+        except (json.JSONDecodeError, ValueError, AttributeError, TypeError):
+            lines = [line.strip().lstrip("-•").strip() for line in text.strip().splitlines() if line.strip()]
 
         # Validate and filter suggestions
         question_lower = question.lower().strip()

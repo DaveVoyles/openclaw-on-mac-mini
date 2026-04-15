@@ -375,12 +375,12 @@ class OnboardingManager:
 
 
 # Global onboarding manager
-_manager: Optional[OnboardingManager] = None
+_manager_instance: Optional[OnboardingManager] = None
 
 
 def get_onboarding_manager() -> OnboardingManager:
     """Get or create the global onboarding manager."""
-    global _manager
-    if _manager is None:
-        _manager = OnboardingManager()
-    return _manager
+    global _manager_instance
+    if _manager_instance is None:
+        _manager_instance = OnboardingManager()
+    return _manager_instance
