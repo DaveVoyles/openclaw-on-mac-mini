@@ -872,9 +872,9 @@ class TestRunProactiveScan:
         bot = _make_bot(channel)
 
         analysis = "Issue found!\nSELF_HEAL: copilot_fix check the logs"
-        with patch.object(mod, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
+        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
              patch("bg_healing.llm_chat", AsyncMock(return_value=(analysis, None, None))), \
-             patch.object(mod, "_execute_self_healing", AsyncMock(return_value=("Issue found!", ["🤖 Copilot fix pending"]))), \
+             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Issue found!", ["🤖 Copilot fix pending"]))), \
              patch("bg_healing.audit_log"):
             await bg_healing._run_proactive_scan(bot)
 

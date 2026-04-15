@@ -849,7 +849,7 @@ class TestDefaultAskChannelMode:
         monkeypatch.setattr(discord_events_mod, "get_bot", MagicMock(return_value=bot_mod.bot))
 
         message = MagicMock()
-        message.author = MagicMock(bot=False)
+        message.author = MagicMock(bot=False, id=42)
         message.channel = MagicMock()
         message.content = "/ask hello"
 

@@ -196,6 +196,13 @@ class TestBackgroundTaskSupervisor:
         monkeypatch.setattr(tasks_mod, "reminder_loop", idle_loop)
         monkeypatch.setattr(tasks_mod, "get_collector", lambda: mock_collector)
 
+        class _ZeroDelay:
+            def next_delay(self): return 0
+            def mark_clean(self): pass
+
+        monkeypatch.setattr(tasks_mod, "_BackoffTracker", _ZeroDelay)
+        tasks_mod._BACKGROUND_BACKOFF.clear()
+
         mod.start_background_tasks(object())
         await asyncio.sleep(0.05)
 

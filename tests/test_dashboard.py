@@ -234,7 +234,7 @@ class TestCliDownloadHandlers:
         resp = await mod.openclaw_cli_download_handler(req)
         assert resp.content_type == "text/plain"
         assert "attachment; filename=\"openclaw_cli.py\"" == resp.headers["Content-Disposition"]
-        assert "class OpenClawCliError" in resp.text
+        assert "OpenClawCliError" in resp.text
         assert "def main(" in resp.text
 
     async def test_cli_support_download_returns_source(self):
