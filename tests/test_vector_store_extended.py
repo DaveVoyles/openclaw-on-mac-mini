@@ -1014,26 +1014,17 @@ class TestAddResearchReport:
 
     @pytest.mark.asyncio
     async def test_sets_anchor_state_when_channel_id_present(self):
-        add_mock = AsyncMock()
+        import runtime_state as _rs_mod
 
+        add_mock = AsyncMock()
+        mock_set_anchor = MagicMock()
+
+        # add_research_report does a lazy `from runtime_state import set_anchor_state`.
+        # Use patch.object so the attribute is restored after the block — the old
+        # builtins.__import__ approach permanently mutated runtime_state.set_anchor_state.
         with patch("vector_store_client.add_document", add_mock):
             with patch("vector_store._resolve_scope", return_value=("10", "20")):
-                with patch("vector_store.runtime_state", create=True) as _:
-                    pass  # just ensure it exists
-
-            # Patch the import inside add_research_report directly
-            mock_set_anchor = MagicMock()
-            import builtins
-            real_import = builtins.__import__
-
-            def patched_import(name, *args, **kwargs):
-                mod_obj = real_import(name, *args, **kwargs)
-                if name == "runtime_state":
-                    mod_obj.set_anchor_state = mock_set_anchor
-                return mod_obj
-
-            with patch("vector_store._resolve_scope", return_value=("10", "20")):
-                with patch("builtins.__import__", side_effect=patched_import):
+                with patch.object(_rs_mod, "set_anchor_state", mock_set_anchor):
                     report_id = await mod.add_research_report(
                         query="test", report="report text",
                         channel_id=10, thread_id=20,
