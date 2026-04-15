@@ -3,19 +3,37 @@
 import sys
 from unittest.mock import MagicMock
 
-# Stub modules before importing bot_formatting
+# Stub modules before importing bot_formatting.
+# Use save/restore (not setdefault) so stubs don't persist in sys.modules after
+# bot_formatting is imported.  setdefault permanently corrupts runtime_state for
+# other test files sharing this xdist worker (e.g. test_runtime_state.py).
 _cwf_mock = MagicMock()
 _cwf_mock.build_copy_workflow_payload = MagicMock(return_value="")
-sys.modules.setdefault("copy_workflow_formatter", _cwf_mock)
 
 _rs_mock = MagicMock()
 _rs_mock.get_effective_channel_profile = MagicMock(return_value={"table_style": "discord"})
 _rs_mock.record_channel_profile_signal = MagicMock()
-sys.modules.setdefault("runtime_state", _rs_mock)
 
-import discord
+_mocks = {
+    "copy_workflow_formatter": _cwf_mock,
+    "runtime_state": _rs_mock,
+}
 
-import bot_formatting as bf  # noqa: E402 — must come after sys.modules patching
+import discord  # noqa: E402
+
+if "bot_formatting" not in sys.modules:
+    _saved = {name: sys.modules.pop(name, None) for name in _mocks}
+    for name, mock in _mocks.items():
+        sys.modules[name] = mock
+    import bot_formatting as bf  # noqa: E402
+    # Restore originals so other test files in this worker see the real modules.
+    for name, original in _saved.items():
+        if original is not None:
+            sys.modules[name] = original
+        else:
+            sys.modules.pop(name, None)
+else:
+    import bot_formatting as bf  # noqa: E402
 from constants import EMBED_DESC_LIMIT
 
 # ---------------------------------------------------------------------------
