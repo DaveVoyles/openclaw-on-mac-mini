@@ -418,4 +418,4 @@ async def test_plugin_list_unauthorized(monkeypatch):
     await _get_plugin_sub(bot, "list").callback(interaction)
     interaction.response.send_message.assert_awaited_once()
     msg = interaction.response.send_message.await_args.args[0]
-    assert "not authorized" in msg.lower()
+    assert "don't have access" in msg.lower()

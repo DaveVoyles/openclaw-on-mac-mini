@@ -669,7 +669,7 @@ async def test_ping_unauthorized():
     with patch.object(helpers_mod, "ALLOWED_USER_IDS", [111]):
         await _get_utility_cmd(bot, "ping").callback(interaction)
     msg = interaction.response.send_message.await_args.args[0]
-    assert "not authorized" in msg.lower()
+    assert "don't have access" in msg.lower()
 
 
 # --- /about ---
@@ -796,7 +796,7 @@ async def test_diff_unauthorized():
     with patch.object(helpers_mod, "ALLOWED_USER_IDS", [111]):
         await _get_code_cmd(bot, "diff").callback(interaction)
     msg = interaction.response.send_message.await_args.args[0]
-    assert "not authorized" in msg.lower()
+    assert "don't have access" in msg.lower()
 
 
 # --- /run-code ---

@@ -283,8 +283,10 @@ class TestContainerActionView:
         with patch("cogs.docker_cog.get_container_logs", new=AsyncMock(side_effect=Exception("conn refused"))):
             with patch("cogs.docker_cog.audit_log"):
                 await view.logs_button.callback(interaction)
-                call_args = interaction.followup.send.call_args
-                assert "Failed to fetch logs" in str(call_args)
+                call_kwargs = interaction.followup.send.call_args.kwargs
+                embed = call_kwargs.get("embed")
+                assert embed is not None
+                assert "Error" in (embed.title or "")
 
     async def test_stats_button_success(self):
         container = _sample_container()
@@ -307,8 +309,10 @@ class TestContainerActionView:
         with patch("cogs.docker_cog.get_container_status", new=AsyncMock(side_effect=Exception("err"))):
             with patch("cogs.docker_cog.audit_log"):
                 await view.stats_button.callback(interaction)
-                call_args = interaction.followup.send.call_args
-                assert "Failed to fetch stats" in str(call_args)
+                call_kwargs = interaction.followup.send.call_args.kwargs
+                embed = call_kwargs.get("embed")
+                assert embed is not None
+                assert "Error" in (embed.title or "")
 
     async def test_restart_button_emergency_stopped(self):
         container = _sample_container()
@@ -583,7 +587,7 @@ class TestStatusCmd:
         with patch("cogs.docker_cog.get_container_status", new=AsyncMock(return_value="running fine")):
             with patch("cogs.docker_cog.audit_log"):
                 await cog.status_cmd.callback(cog, interaction, "nginx")
-                interaction.response.defer.assert_called_once()
+                interaction.response.send_message.assert_called_once()
                 interaction.followup.send.assert_called_once()
 
 
@@ -849,7 +853,9 @@ class TestCogCommandError:
         error = app_commands.AppCommandError("Something went wrong")
         await cog.cog_command_error(interaction, error)
         interaction.response.send_message.assert_called_once()
-        assert "Command failed" in str(interaction.response.send_message.call_args)
+        embed = interaction.response.send_message.call_args.kwargs.get("embed")
+        assert embed is not None
+        assert "Error" in (embed.title or "")
 
     async def test_error_when_response_already_done(self):
         bot = _make_bot()
