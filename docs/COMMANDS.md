@@ -4,7 +4,7 @@
 >
 > This file is generated from runtime command metadata used by the dashboard and guide command finder.
 
-Total documented commands: **134**
+Total documented commands: **137**
 
 ## Quick Start
 
@@ -21,8 +21,10 @@ Total documented commands: **134**
 | --- | --- |
 | `/ping` | Check if bot is alive |
 | `/about` | Version and system info |
-| `/whoami` | Your Discord identity & permissions |
-| `/help` | List all commands |
+| `/whoami` | Your Discord identity, PermissionLevel, and unlocked command categories |
+| `/help` | List all commands; supports `keyword:<term>` for fuzzy search across all commands |
+| `/commands [category]` | Shortcut alias for `/help` with optional category filter |
+| `/tutorial [step]` | Multi-step onboarding walkthrough. `step`: `start` \| `next` \| `skip` \| `restart` |
 
 ## 🐳 Docker & System
 
@@ -113,6 +115,7 @@ Total documented commands: **134**
 | `/auditlog [lines]` | View audit trail |
 | `/estop [stop\|resume]` | Emergency stop all actions |
 | `/mail <to> <subject> <body>` | Send email via AgentMail |
+| `/permissions list` | Show all permission levels and the command categories each level unlocks |
 
 ## 📋 Copy/Paste Workflow
 

@@ -2,11 +2,12 @@
 
 Quick reference for all source files. Consult this before exploring the codebase.
 
-## Core Modules (src/\*.py) — 144 files
+## Core Modules (src/\*.py) — 149 files
 
 | File                    | Purpose                                                                  | Key Exports                                                          |
 | ----------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
 | `agentmail.py`          | Email integration via AgentMail.to API                                   | `send_agent_mail()`                                                  |
+| `alert_manager.py`      | Severity-based alert routing with deduplication, snooze, and resolve     | `send_severity_alert()`, `handle_alert_reaction()`, `send_alert_resolved()`, `get_remediation_hint()` |
 | `analyzer.py`           | AI-powered container log analysis using Gemini                           | `analyze_logs()`                                                     |
 | `approvals.py`          | Security & approval workflows with Discord UI                            | `ApprovalStore`, `ApprovalRequest`, `RiskLevel`                      |
 | `audit.py`              | Audit event recording helpers                                            | `audit_event()`                                                      |
@@ -39,8 +40,10 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `nas.py`                | Synology DSM REST API queries (storage, health, alerts)                  | `get_nas_storage_health()`, `get_nas_alerts()`                       |
 | `network.py`            | Network status, Tailscale VPN, DNS, speed test                           | `get_network_status()`, `get_tailscale_status()`, `run_speed_test()` |
 | `obsidian_writer.py`    | Markdown + YAML frontmatter writer to Obsidian vault                     | `save_to_vault()`, `build_frontmatter()`                             |
-| `openclaw_cli.py`       | Terminal launcher for interactive chat and authenticated `/api/agent/ask` requests | `main()`, `invoke_openclaw()`, `run_chat()`                          |
+| `openclaw_cli.py`       | Terminal REPL entry point (~4,654 lines after TD-34 extraction): `run_chat()`, `main()`, shims to extracted handler modules | `main()`, `invoke_openclaw()`, `run_chat()`                          |
 | `openclaw_cli_actions.py` | CLI shell execution, risk-aware approvals, and diffable file edits                | `run_shell_command()`, `request_cli_approval()`, `replace_text_in_file()` |
+| `openclaw_cli_cli_parser.py` | Extracted CLI argument parser (TD-34). Pure function, no side effects.      | `build_parser()`                                                     |
+| `openclaw_cli_help.py`  | Extracted chat-help renderer (TD-34). Generates the `/help` command table from the command registry | `print_chat_help()`                                                  |
 | `openclaw_cli_sessions.py` | Local CLI session persistence, workspace context capture, and saved outputs       | `create_session()`, `list_sessions()`, `collect_workspace_context()` |
 | `ontology_skills.py`    | Graph memory via ontology ClawHub script                                 | `add_fact()`, `query_graph()`, `list_entities()`                     |
 | `overseerr.py`          | Overseerr media request management API                                   | `get_overseerr_requests()`, `update_request_status()`                |
@@ -66,6 +69,8 @@ Quick reference for all source files. Consult this before exploring the codebase
 | `model_router.py`       | Multi-model query classification and routing (Gemini/GPT-4o/Claude/Gemma) | `classify_query()`, `route_to_model()`, `MODEL_CONFIGS`            |
 | `discord_commands.py`   | Slash commands extracted from bot.py (1,130 lines)                       | `register_commands(bot)`                                             |
 | `discord_background.py` | Background loop tasks (702 lines) (audit writer, cleanup, briefing, proactive, error monitor, container health alerts) | `start_background_tasks(bot)`                                       |
+| `discord_error.py`      | Shared Discord error formatting — classifies exceptions and builds uniform error embeds | `build_error_embed()`, `classify_error()`, `ERROR_CATEGORIES`        |
+| `discord_progress.py`   | Live-updating Discord progress embeds for long-running cog commands      | `ProgressTracker` class (`start()`, `update()`, `done()`)            |
 | `discord_web.py`        | aiohttp health/metrics/smoke/webhook web server (332 lines)              | `create_web_app(bot)`                                                |
 | `fact_extractor.py`     | Automatic fact extraction from conversations for long-term memory        | `extract_facts()`, `should_store()`, `deduplicate()`                 |
 
@@ -493,3 +498,90 @@ Web page content extraction extracted from `advanced_skills.py`. Three-tier extr
 ---
 
 Last updated: July 2026
+
+---
+
+## Module Details — W1–W14 Discord Improvements (April 2026)
+
+### discord_error.py — Shared Discord Error Formatting
+
+Centralises error handling across all Discord cogs. Classifies exceptions into
+known categories (permissions, rate-limit, network, validation, timeout, unknown)
+and builds a consistent embed that is safe to send as an ephemeral response.
+
+**Key Exports:**
+- `build_error_embed(exc, *, context: str = "") -> discord.Embed` — build a
+  colour-coded error embed from any exception; `context` is typically the
+  invoking slash command name (e.g. `"/ask"`).
+- `classify_error(exc) -> str` — map an exception to an `ERROR_CATEGORIES` key.
+- `ERROR_CATEGORIES: dict[str, dict]` — severity + user-facing label per
+  exception class.
+
+**Dependencies:** `discord.py`, `config`.
+
+---
+
+### discord_progress.py — Live-Updating Progress Embeds
+
+Provides `ProgressTracker` for Discord cog commands that may take several
+seconds. Sends an initial "in progress" embed and edits it in place as work
+advances, reducing perceived latency without flooding the channel.
+
+**Key Class:** `ProgressTracker`
+- `start(interaction, title, *, steps: int = 0)` — send the initial embed and
+  store the message handle.
+- `update(message: str, *, step: int = 0)` — edit the live embed with a new
+  status line.
+- `done(final_message: str)` — mark complete (green embed) and stop further
+  edits.
+
+**Dependencies:** `discord.py`.
+
+---
+
+### alert_manager.py — Severity-Based Alert Routing
+
+Routes monitoring alerts by severity, deduplicates repeat alerts within a
+configurable window, and tracks snooze/resolve state. Integrates with Discord
+reaction buttons for acknowledge/resolve flows.
+
+**Key Functions:**
+- `send_severity_alert(severity, title, body, *, service="")` — route alert:
+  `DEBUG`/`INFO` → log only; `WARNING` → configured alert channel;
+  `CRITICAL` → alert channel + DM to owner.
+- `handle_alert_reaction(payload)` — process Discord reaction events for alert
+  acknowledge/snooze/resolve.
+- `send_alert_resolved(alert_id, summary)` — post a resolution notice to the
+  original alert message.
+- `get_remediation_hint(error_type)` — return a canned remediation suggestion
+  for a known error category.
+
+**Dependencies:** `discord.py`, `config`, `error_tracker`.
+
+---
+
+### openclaw_cli_cli_parser.py — CLI Argument Parser (TD-34)
+
+Pure-function leaf module extracted from `openclaw_cli.py` as part of the TD-34
+CLI extraction wave. Contains no module-level side effects and no imports from
+`openclaw_cli.py`, making it independently testable.
+
+**Key Export:**
+- `build_parser() -> argparse.ArgumentParser` — construct and return the full
+  `openclaw` argument parser with all sub-commands and flags.
+
+**Dependencies:** `argparse` (stdlib only).
+
+---
+
+### openclaw_cli_help.py — Chat Help Renderer (TD-34)
+
+Generates the formatted `/help` output table from the live command registry.
+Extracted from `openclaw_cli.py` as part of the TD-34 CLI extraction wave.
+
+**Key Export:**
+- `print_chat_help(registry, *, is_tty: bool, prefs: dict)` — print the
+  grouped command help table, respecting the caller's TTY state and preferences.
+
+**Dependencies:** `openclaw_cli_types` (for `ChatCommandRegistry`), `openclaw_cli_ui_core`.
+

@@ -7,8 +7,12 @@ update mechanism, standalone install, and key code locations.
 
 | File | Role |
 | --- | --- |
-| `src/openclaw_cli.py` | Primary CLI (~6200 lines). All commands, REPL loop, UX helpers, update logic |
+| `src/openclaw_cli.py` | Primary CLI (~4,654 lines). Main REPL loop, `run_chat`, `main`; all `_cmd_*` handlers now live in extracted modules (see below) |
+| `src/openclaw_cli_cli_parser.py` | Extracted argument parser — exports `build_parser()`. TD-34 extraction. |
+| `src/openclaw_cli_help.py` | Extracted chat-help renderer — exports `print_chat_help()`. TD-34 extraction. |
 | `src/openclaw_cli_actions.py` | Approval prompts (`request_cli_approval`) with colored risk levels |
+| `src/openclaw_cli_cli_parser.py` | Extracted `build_parser()` — pure argparse module, no side effects (TD-34) |
+| `src/openclaw_cli_help.py` | Extracted `print_chat_help()` — generates help table from command registry (TD-34) |
 | `src/openclaw_cli_sessions.py` | Session persistence (load/save conversation history, watch state) |
 | `src/subprocess_utils.py` | Shell execution helpers used by `/exec` |
 | `src/discord_web.py` | aiohttp server — health, dashboard, `/cli-update/*` endpoints |

@@ -56,13 +56,15 @@ Discord user → src/bot.py → src/ask_orchestrator.py → src/llm/chat.py
 
 ---
 
-## Module Structure (post-TD-7 through TD-13)
+## Module Structure (post-TD-7 through TD-34)
 
 The CLI monolith has been split into focused modules:
 
 | Module | Responsibility |
 |--------|---------------|
-| `openclaw_cli.py` | Main REPL, command dispatch, ~13,300 lines |
+| `openclaw_cli.py` | Main REPL, command dispatch shims, ~4,654 lines |
+| `openclaw_cli_cli_parser.py` | `build_parser()` — extracted CLI argument parser (TD-34) |
+| `openclaw_cli_help.py` | `print_chat_help()` — extracted help renderer (TD-34) |
 | `openclaw_cli_ui_core.py` | ANSI palette, TTY detection |
 | `openclaw_cli_render.py` | Response rendering, RenderContext |
 | `openclaw_cli_auth.py` | Token/keychain, OpenClawCliError |
@@ -142,6 +144,68 @@ print('Firecrawl:', sp['firecrawl']['calls'], 'calls')
    - Wire fast-path in `src/llm/chat.py` `chat()` and `chat_stream()`
 5. Write tests in `tests/`
 6. Rebuild: `cd ~/docker-stack/openclaw && docker compose up -d --build`
+
+---
+
+## Discord Cog Guidance (W1–W14)
+
+### Error Handling in Cogs
+
+Use `build_error_embed(e, context='/cmd-name')` from `discord_error.py` for **all** Discord cog error responses. Always pass `ephemeral=True` so errors are visible only to the invoking user.
+
+```python
+from src.discord_error import build_error_embed
+
+@app_commands.command()
+async def my_command(self, interaction: discord.Interaction):
+    try:
+        ...
+    except Exception as e:
+        embed = build_error_embed(e, context="/my-command")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+```
+
+`classify_error(exc)` maps the exception to an `ERROR_CATEGORIES` key so the embed colour and title are consistent across all cogs.
+
+### Progress Indicators for Long-Running Commands
+
+For cog commands that may take more than ~2 seconds, use `ProgressTracker` from `discord_progress.py` to show a live-updating embed instead of leaving Discord's "thinking…" spinner running indefinitely.
+
+```python
+from src.discord_progress import ProgressTracker
+
+@app_commands.command()
+async def slow_command(self, interaction: discord.Interaction):
+    await interaction.response.defer()
+    tracker = ProgressTracker()
+    await tracker.start(interaction, "Running analysis…", steps=3)
+    await tracker.update("Fetching data…", step=1)
+    # … do work …
+    await tracker.update("Processing results…", step=2)
+    # … do work …
+    await tracker.done("Analysis complete.")
+```
+
+### Alert Routing
+
+Use `send_severity_alert()` from `alert_manager.py` for **all** monitoring alerts instead of posting directly to a channel. Severity routing:
+
+| Severity | Destination |
+| --- | --- |
+| `DEBUG` / `INFO` | Log only (no Discord message) |
+| `WARNING` | Configured alert channel |
+| `CRITICAL` | Alert channel **+** DM to bot owner |
+
+```python
+from src.alert_manager import send_severity_alert
+
+await send_severity_alert("WARNING", "Disk usage high", "Usage at 85%", service="nas")
+await send_severity_alert("CRITICAL", "Container down", "openclaw container exited", service="openclaw")
+```
+
+### Memory Recall — Domain Guard
+
+Set `RECALL_DOMAIN_GUARD_STRICT=true` in the environment to enable strict domain suppression for memory recall. When enabled, results whose stored domain does not match the active conversation domain are silently suppressed rather than returned with a low-confidence warning.
 
 ---
 
