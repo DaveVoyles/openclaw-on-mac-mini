@@ -80,3 +80,40 @@ class RateLimiter:
 
 
 rate_limiter = RateLimiter()
+
+
+class BackgroundQuotaGuard:
+    """Separate token bucket reserving 10% of the per-minute limit for background tasks.
+
+    Background tasks call check_background_allowed() before any LLM call.
+    Returns False immediately (without waiting) when the reserved quota is exhausted.
+    User requests use rate_limiter and are entirely unaffected.
+    """
+
+    def __init__(self, per_minute: int = MAX_CALLS_PER_MINUTE):
+        self._reserved = max(1, per_minute // 10)  # 10 % of per-minute capacity
+        self._timestamps: deque[float] = deque()
+        self._lock = threading.Lock()
+
+    def _evict(self) -> None:
+        cutoff = time.monotonic() - 60
+        while self._timestamps and self._timestamps[0] < cutoff:
+            self._timestamps.popleft()
+
+    def check_background_allowed(self) -> bool:
+        """Return True and consume a slot if background quota is available; else False."""
+        with self._lock:
+            self._evict()
+            if len(self._timestamps) < self._reserved:
+                self._timestamps.append(time.monotonic())
+                return True
+            return False
+
+    @property
+    def remaining(self) -> int:
+        with self._lock:
+            self._evict()
+            return max(0, self._reserved - len(self._timestamps))
+
+
+background_quota_guard = BackgroundQuotaGuard()

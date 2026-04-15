@@ -13,6 +13,9 @@ PREFS_FILE = Path(
     os.getenv("NOTIFICATION_PREFS_PATH", "/app/data/notification_prefs.json")
 )
 
+# Separate file for extended per-user preferences (e.g. timezone)
+_USER_PREFS_FILE = Path(os.getenv("USER_PREFS_PATH", "data/user_prefs.json"))
+
 SEVERITY_LEVELS = {"info": 0, "warning": 1, "critical": 2}
 
 
@@ -84,3 +87,49 @@ class NotificationPrefsStore:
 
 # Module-level singleton
 notif_prefs = NotificationPrefsStore()
+
+
+# ---------------------------------------------------------------------------
+# W13-4 — Timezone support for per-user briefing scheduling
+# ---------------------------------------------------------------------------
+
+def _load_user_prefs() -> dict:
+    if _USER_PREFS_FILE.exists():
+        try:
+            return json.loads(_USER_PREFS_FILE.read_text())
+        except Exception as exc:
+            log.warning("Failed to load user_prefs.json: %s", exc)
+    return {}
+
+
+def _save_user_prefs(data: dict) -> None:
+    try:
+        _USER_PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _USER_PREFS_FILE.write_text(json.dumps(data, indent=2))
+    except Exception as exc:
+        log.warning("Failed to save user_prefs.json: %s", exc)
+
+
+def get_user_timezone(user_id: int) -> str:
+    """Return the IANA timezone string for *user_id*, defaulting to 'UTC'."""
+    data = _load_user_prefs()
+    return str(data.get(str(user_id), {}).get("timezone", "UTC"))
+
+
+def set_user_timezone(user_id: int, tz: str) -> None:
+    """Persist an IANA timezone string for *user_id* to data/user_prefs.json."""
+    import zoneinfo
+
+    # Validate the timezone before saving
+    try:
+        zoneinfo.ZoneInfo(tz)
+    except (zoneinfo.ZoneInfoNotFoundError, KeyError) as exc:
+        raise ValueError(f"Invalid timezone: {tz!r}") from exc
+
+    data = _load_user_prefs()
+    uid_str = str(user_id)
+    if uid_str not in data:
+        data[uid_str] = {}
+    data[uid_str]["timezone"] = tz
+    _save_user_prefs(data)
+    log.info("Set timezone for user %d to %s", user_id, tz)

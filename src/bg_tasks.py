@@ -22,10 +22,36 @@ log = logging.getLogger("openclaw")
 
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 
-_BACKGROUND_RESTART_DELAY_SECONDS = 5
 _BACKGROUND_TASKS: dict[str, asyncio.Task] = {}
 _BACKGROUND_FACTORIES: dict[str, Callable[[], Awaitable[None]]] = {}
 _BACKGROUND_STOPPING = False
+
+
+class _BackoffTracker:
+    """Per-task exponential backoff tracker for background task restarts."""
+
+    DELAYS = [5, 15, 60, 300]  # 5 s, 15 s, 1 min, 5 min
+
+    def __init__(self):
+        self._attempt = 0
+        self._clean_start: float | None = None
+
+    def next_delay(self) -> int:
+        delay = self.DELAYS[min(self._attempt, len(self.DELAYS) - 1)]
+        self._attempt += 1
+        return delay
+
+    def mark_clean(self):
+        """Call when the task runs cleanly; resets after 30 min of clean operation."""
+        now = time.monotonic()
+        if self._clean_start is None:
+            self._clean_start = now
+        elif now - self._clean_start > 1800:  # 30 minutes
+            self._attempt = 0
+            self._clean_start = None
+
+
+_BACKGROUND_BACKOFF: dict[str, _BackoffTracker] = {}
 
 
 def _build_background_task_factories(bot) -> dict[str, Callable[[], Awaitable[None]]]:
@@ -58,23 +84,25 @@ def _handle_background_task_done(task_name: str, task: asyncio.Task) -> None:
         return
 
     if error:
+        delay = _BACKGROUND_BACKOFF.setdefault(task_name, _BackoffTracker()).next_delay()
         log.warning(
             "Background task %s crashed: %s; restarting in %ss",
             task_name,
             error,
-            _BACKGROUND_RESTART_DELAY_SECONDS,
+            delay,
         )
     else:
+        delay = _BACKGROUND_BACKOFF.setdefault(task_name, _BackoffTracker()).next_delay()
         log.warning(
             "Background task %s exited unexpectedly; restarting in %ss",
             task_name,
-            _BACKGROUND_RESTART_DELAY_SECONDS,
+            delay,
         )
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         return
-    loop.call_later(_BACKGROUND_RESTART_DELAY_SECONDS, _restart_background_task, task_name)
+    loop.call_later(delay, _restart_background_task, task_name)
 
 
 def _launch_background_task(task_name: str, task_factory: Callable[[], Awaitable[None]]) -> None:
@@ -99,6 +127,8 @@ async def _run_supervised_background_task(
     try:
         with trace_context(command=f"background:{task_name}", user_id=0, channel_id=ALERT_CHANNEL_ID, component="background"):
             await task_factory()
+        # Task completed cleanly — notify backoff tracker
+        _BACKGROUND_BACKOFF.setdefault(task_name, _BackoffTracker()).mark_clean()
     except asyncio.CancelledError:
         cancelled = True
         raise
@@ -141,6 +171,7 @@ def start_background_tasks(bot) -> int:
     _BACKGROUND_STOPPING = False
     _BACKGROUND_TASKS.clear()
     _BACKGROUND_FACTORIES.clear()
+    _BACKGROUND_BACKOFF.clear()
 
     for task_name, task_factory in _build_background_task_factories(bot).items():
         _launch_background_task(task_name, task_factory)
@@ -172,6 +203,7 @@ async def stop_background_tasks() -> None:
 
     _BACKGROUND_TASKS.clear()
     _BACKGROUND_FACTORIES.clear()
+    _BACKGROUND_BACKOFF.clear()
     log.info("Background task supervisor stopped")
 
 

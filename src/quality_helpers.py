@@ -204,7 +204,13 @@ def _build_ask_failure_message(
 # ---------------------------------------------------------------------------
 
 _QUALITY_RETRY_TIMEOUT_SECONDS = 45
-_QUALITY_RETRY_MAX_ATTEMPTS = 1
+_QUALITY_RETRY_MAX_ATTEMPTS = 2
+# W11-1: provider-aware repair timeouts
+_REPAIR_TIMEOUTS: dict[str, int] = {
+    "copilot": 20,
+    "gemini": 45,
+    "ollama": 60,
+}
 _UNCERTAINTY_MARKERS = (
     "not sure",
     "unclear",
@@ -674,7 +680,9 @@ def _build_quality_broadening_prompt(question: str, quality_reasons: list[str]) 
         "- Include multiple independent sources when available.\n"
         "- Add freshness cues (dates/timeframe) when relevant.\n"
         "- Keep uncertainty notes brief and explicit if data is incomplete.\n"
-        f"Prior quality signals: {reason_text or 'low confidence detected'}."
+        f"Prior quality signals: {reason_text or 'low confidence detected'}.\n\n"
+        "Do NOT change the scope, timeframe, or subject of the original query. "
+        "Only expand source coverage and add freshness. Answer the exact same question."
     )
 
 
@@ -703,8 +711,14 @@ async def _run_quality_auto_repair(
     context: str,
     run_retry_stream: Any,
     think_hook: Any | None = None,
+    run_copilot_retry_stream: Any | None = None,
 ) -> dict[str, Any]:
-    """Run a strict one-attempt quality repair path with bounded timeout."""
+    """Run quality repair path with bounded timeout and optional second Copilot attempt.
+
+    W11-1: uses provider-aware timeout from _REPAIR_TIMEOUTS.
+    W11-3: tries up to _QUALITY_RETRY_MAX_ATTEMPTS (2); second attempt uses Copilot if available.
+    W11-4: returns repair_skipped / repair_improved flags for caller transparency.
+    """
     profile_values = _b("get_effective_channel_profile", get_effective_channel_profile)()
     profile_name = str(
         (profile_values.get("retrieval_profile") if isinstance(profile_values, dict) else None)
@@ -718,8 +732,17 @@ async def _run_quality_auto_repair(
         profile_name=profile_name,
         load_stats=load_stats,
     )
-    base_attempts = 1 if _QUALITY_RETRY_MAX_ATTEMPTS > 0 else 0
-    base_timeout_seconds = int(_QUALITY_RETRY_TIMEOUT_SECONDS)
+    base_attempts = min(_QUALITY_RETRY_MAX_ATTEMPTS, 2) if _QUALITY_RETRY_MAX_ATTEMPTS > 0 else 0
+
+    # W11-1: derive provider from model_used label and select provider-aware timeout
+    _provider_hint = "gemini"
+    _model_lower = (model_used or "").lower()
+    if "copilot" in _model_lower or "gpt" in _model_lower or "claude" in _model_lower:
+        _provider_hint = "copilot"
+    elif "ollama" in _model_lower or "gemma" in _model_lower:
+        _provider_hint = "ollama"
+    base_timeout_seconds = _REPAIR_TIMEOUTS.get(_provider_hint, int(_QUALITY_RETRY_TIMEOUT_SECONDS))
+
     repair_budget = _b("apply_repair_budget", apply_repair_budget)(
         max_attempts=base_attempts,
         timeout_seconds=base_timeout_seconds,
@@ -775,11 +798,15 @@ async def _run_quality_auto_repair(
         "outcome": "skipped",
         "status_path": [status],
         "improved": False,
+        "repair_skipped": False,
+        "repair_improved": False,
         "requested_item_count": requested_item_count,
     }
 
     if not eligible:
         retry_summary["skip_reason"] = "high_quality" if status != "low" else "ineligible"
+        # W11-4: load-based skip flag
+        retry_summary["repair_skipped"] = latency_policy.get("decision") in ("skip", "degrade")
         current_meta["answer_quality_retry"] = retry_summary
         _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_skipped", context=context)
         return {
@@ -789,6 +816,8 @@ async def _run_quality_auto_repair(
             "quality_meta": quality_meta,
             "retry_summary": retry_summary,
             "retry_result": None,
+            "repair_skipped": retry_summary["repair_skipped"],
+            "repair_improved": False,
         }
 
     _b("_record_quality_metric", _record_quality_metric)("ask_low_score_detected", context=context)
@@ -803,11 +832,20 @@ async def _run_quality_auto_repair(
     if think_hook is not None:
         await think_hook("Low confidence detected — broadening once…")
 
+    # --- Attempt 1: primary repair (Gemini via run_retry_stream) ---
+    first_result = None
+    first_quality = None
     try:
-        retry_result = await asyncio.wait_for(
+        first_result = await asyncio.wait_for(
             run_retry_stream(retry_question),
             timeout=timeout_seconds,
         )
+        first_quality = _b("_safe_score_answer_quality", _safe_score_answer_quality)(
+            first_result.response_text,
+            final_meta=_with_requested_item_target(first_result.final_meta, question=question),
+            context=context,
+        )
+        retry_summary["status_path"].append(first_quality.get("status", "unknown"))
     except asyncio.TimeoutError:
         retry_summary["outcome"] = "failed"
         retry_summary["error"] = "timeout"
@@ -820,6 +858,8 @@ async def _run_quality_auto_repair(
             "quality_meta": quality_meta,
             "retry_summary": retry_summary,
             "retry_result": None,
+            "repair_skipped": False,
+            "repair_improved": False,
         }
     except Exception as retry_exc:
         retry_summary["outcome"] = "failed"
@@ -834,29 +874,66 @@ async def _run_quality_auto_repair(
             "quality_meta": quality_meta,
             "retry_summary": retry_summary,
             "retry_result": None,
+            "repair_skipped": False,
+            "repair_improved": False,
         }
 
-    retry_quality = _b("_safe_score_answer_quality", _safe_score_answer_quality)(
-        retry_result.response_text,
-        final_meta=_with_requested_item_target(retry_result.final_meta, question=question),
-        context=context,
-    )
-    retry_summary["status_path"].append(retry_quality.get("status", "unknown"))
-    if _b("_quality_retry_improved", _quality_retry_improved)(original=quality_meta, retried=retry_quality):
-        improved_meta = _with_requested_item_target(retry_result.final_meta, question=question)
-        improved_meta["answer_quality"] = retry_quality
+    if _b("_quality_retry_improved", _quality_retry_improved)(original=quality_meta, retried=first_quality):
+        improved_meta = _with_requested_item_target(first_result.final_meta, question=question)
+        improved_meta["answer_quality"] = first_quality
         retry_summary["improved"] = True
+        retry_summary["repair_improved"] = True
         retry_summary["outcome"] = "improved"
         improved_meta["answer_quality_retry"] = retry_summary
         _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_improved", context=context)
         return {
-            "response_text": retry_result.response_text,
-            "model_used": retry_result.model_used,
+            "response_text": first_result.response_text,
+            "model_used": first_result.model_used,
             "final_meta": improved_meta,
-            "quality_meta": retry_quality,
+            "quality_meta": first_quality,
             "retry_summary": retry_summary,
-            "retry_result": retry_result,
+            "retry_result": first_result,
+            "repair_skipped": False,
+            "repair_improved": True,
         }
+
+    # --- Attempt 2 (W11-3): Copilot second attempt if first didn't improve ---
+    if max_attempts >= 2 and run_copilot_retry_stream is not None:
+        retry_summary["attempt_count"] = 2
+        copilot_timeout = _REPAIR_TIMEOUTS.get("copilot", 20)
+        try:
+            if think_hook is not None:
+                await think_hook("First repair attempt didn't improve — trying Copilot…")
+            second_result = await asyncio.wait_for(
+                run_copilot_retry_stream(retry_question),
+                timeout=copilot_timeout,
+            )
+            second_quality = _b("_safe_score_answer_quality", _safe_score_answer_quality)(
+                second_result.response_text,
+                final_meta=_with_requested_item_target(second_result.final_meta, question=question),
+                context=context,
+            )
+            retry_summary["status_path"].append(second_quality.get("status", "unknown"))
+            if _b("_quality_retry_improved", _quality_retry_improved)(original=quality_meta, retried=second_quality):
+                improved_meta = _with_requested_item_target(second_result.final_meta, question=question)
+                improved_meta["answer_quality"] = second_quality
+                retry_summary["improved"] = True
+                retry_summary["repair_improved"] = True
+                retry_summary["outcome"] = "improved_copilot"
+                improved_meta["answer_quality_retry"] = retry_summary
+                _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_improved_copilot", context=context)
+                return {
+                    "response_text": second_result.response_text,
+                    "model_used": second_result.model_used,
+                    "final_meta": improved_meta,
+                    "quality_meta": second_quality,
+                    "retry_summary": retry_summary,
+                    "retry_result": second_result,
+                    "repair_skipped": False,
+                    "repair_improved": True,
+                }
+        except Exception as second_exc:
+            log.debug("Copilot second repair attempt failed (%s): %s", context, second_exc)
 
     retry_summary["outcome"] = "no_improvement"
     current_meta["answer_quality_retry"] = retry_summary
@@ -868,6 +945,8 @@ async def _run_quality_auto_repair(
         "quality_meta": quality_meta,
         "retry_summary": retry_summary,
         "retry_result": None,
+        "repair_skipped": False,
+        "repair_improved": False,
     }
 
 # ---------------------------------------------------------------------------

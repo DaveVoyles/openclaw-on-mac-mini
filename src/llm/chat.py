@@ -5,6 +5,7 @@ Core LLM chat logic — chat(), chat_stream(), chat_deep(), summarize_conversati
 import asyncio
 import logging
 import os
+import time as _time
 from typing import Any
 
 from google import genai
@@ -58,8 +59,10 @@ _GEMINI_CIRCUIT_KEY = "gemini"
 _RECOVERY_LOCAL_TIMEOUT_SECONDS = 25.0
 _RECOVERY_COPILOT_TIMEOUT_SECONDS = 20.0
 _RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS = 30.0
+# W12-3: configurable chunk interval — replace hard-coded 200 with env var
+STREAM_INTERVAL_CHARS = int(os.getenv("PROVIDER_STREAM_INTERVAL_CHARS", "200"))
 # Minimum accumulated chars between partial-chunk yields when PROVIDER_STREAM=1.
-_PROVIDER_STREAM_PARTIAL_INTERVAL = 200
+_PROVIDER_STREAM_PARTIAL_INTERVAL = STREAM_INTERVAL_CHARS
 
 log = logging.getLogger("openclaw.llm")
 
@@ -146,6 +149,7 @@ async def _gemini_chat(
 
     try:
         loop = asyncio.get_running_loop()
+        _t0 = _time.monotonic()
         _rate_limiter.record()
         response = await loop.run_in_executor(
             None, lambda: chat_session.send_message(user_message)
@@ -182,6 +186,11 @@ async def _gemini_chat(
         # Phase 15: append provider attribution for direct (non-tool) answers.
         if rounds == 0 and text and "_via " not in text:
             text = text + f"\n\n_via {_format_model_label(model_name)}_"
+
+        # W9-4: structured route logging
+        _latency_ms = int((_time.monotonic() - _t0) * 1000)
+        log.info("route: query_type=%s provider=%s latency_ms=%d", label, "gemini", _latency_ms)
+
         return text, updated_history, model_name
 
     except Exception:
@@ -396,6 +405,8 @@ async def _try_copilot_proxy_reply(
             if trace is not None:
                 trace.provider = "copilot"
                 trace.model_used = candidate
+            # W9-4: structured route logging
+            log.info("route: query_type=%s provider=%s latency_ms=%d", context, "copilot", 0)
             return reply, updated, model_label
         if reply:
             log.info(
@@ -456,6 +467,17 @@ async def _stream_copilot_chunks(
                 "Copilot stream candidate %s failed (%s): %s",
                 candidate, context, exc,
             )
+            # W12-4: emit partial content with warning footer if we accumulated something
+            if accumulated:
+                partial = accumulated + "\n\n⚠️ *Stream interrupted — showing partial response.*"
+                yield partial, True, {
+                    "model_used": f"copilot/{candidate}",
+                    "updated_history": history + [
+                        {"role": "user", "parts": [cleaned_user_message]},
+                        {"role": "model", "parts": [partial]},
+                    ],
+                }
+                return
             continue
 
         reply = accumulated or None
@@ -1464,6 +1486,26 @@ def is_configured() -> bool:
     """
     from llm.providers import COPILOT_PROXY_ENABLED  # local import avoids circular deps
     return bool(GOOGLE_API_KEY) or LOCAL_LLM_ENABLED or COPILOT_PROXY_ENABLED
+
+
+def apply_repair_transparency_footer(text: str, *, repair_result: dict) -> str:
+    """W11-4: Append a subtle footer indicating quality repair outcome.
+
+    Args:
+        text: The response text to append to.
+        repair_result: The dict returned by ``_run_quality_auto_repair``.
+
+    Returns:
+        The original text with an appropriate footer appended, or the
+        original text unchanged if no repair was performed.
+    """
+    if not isinstance(repair_result, dict):
+        return text
+    if repair_result.get("repair_improved"):
+        return text + "\n\n✨ *This response was improved by quality auto-repair.*"
+    if repair_result.get("repair_skipped"):
+        return text + "\n\nℹ️ *Quality review was skipped due to system load.*"
+    return text
 
 
 def get_rate_info() -> str:

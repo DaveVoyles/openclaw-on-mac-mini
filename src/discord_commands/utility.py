@@ -1,7 +1,8 @@
-"""Utility commands: /ping, /about, /whoami, /help, /tutorial, /permissions."""
+"""Utility commands: /ping, /about, /whoami, /help, /tutorial, /permissions, /commands."""
 
 import platform
 import time
+from typing import Optional
 
 import discord
 from discord import app_commands
@@ -15,6 +16,93 @@ from permissions import PermissionLevel
 from ._helpers import _is_allowed, require_auth
 
 VERSION = cfg.version
+
+# ---------------------------------------------------------------------------
+# Disambiguation hints for overlapping commands
+# ---------------------------------------------------------------------------
+
+DISAMBIGUATION_HINTS: dict[str, str] = {
+    "logs": "Use `/logs` for raw output; `/analyze` for AI-powered insights.",
+    "analyze": "Use `/analyze` for AI insights; `/logs` for raw log lines.",
+    "status": "Use `/status` for quick health check; `/health` for full diagnostics.",
+    "health": "Use `/health` for full diagnostics; `/status` for quick check.",
+    "search": "Use `/search` for memory/history; `/research` for live web research.",
+    "research": "Use `/research` for live web research; `/search` for past conversations.",
+}
+
+# ---------------------------------------------------------------------------
+# Category emoji mapping for dynamic help categories
+# ---------------------------------------------------------------------------
+
+_CATEGORY_EMOJIS: dict[str, str] = {
+    "Ask": "🤖", "Chat": "💬", "Clear": "🧹",
+    "Docker": "🐳", "Container": "🐳",
+    "Memory": "🧠", "Remember": "🧠", "Recall": "🧠", "Rules": "🧠",
+    "Search": "🎬", "Watch": "🎬", "Queue": "🎬", "Recent": "🎬",
+    "Admin": "⚙️", "Audit": "⚙️", "Spending": "⚙️", "Schedule": "📅",
+    "Analyze": "🔍", "Research": "🔍",
+    "Log": "📋", "Logs": "📋",
+    "System": "💻", "Status": "📊", "Health": "🏥",
+    "Calendar": "📅", "Email": "📧",
+    "Tutorial": "📚", "Help": "❓", "Commands": "📖",
+    "Permissions": "🔐", "Ping": "🏓", "About": "ℹ️",
+    "Whoami": "👤", "General": "🔧",
+}
+
+# ---------------------------------------------------------------------------
+# Static fallback categories (used when bot.tree.get_commands() is empty)
+# ---------------------------------------------------------------------------
+
+_STATIC_CATEGORIES: dict[str, list[str]] = {
+    "🤖 AI & Chat": [
+        "`/ask` — Ask naturally in plain English - OpenClaw can choose tools and skills for you",
+        "`/clear` — Clear your conversation history",
+        "`/websearch` — Search the live web",
+        "`/browse` — Fetch and read a web page",
+        "`/research` — Deep multi-source research",
+        "`/recap` — Summarize the current Discord channel or thread",
+        "`/sports` — Create a sports watch guide with table output",
+        "`/analyze-image` — Analyze an image with Gemini Vision",
+        "`/analyze-file` — Analyze a document/PDF with AI",
+    ],
+    "🐳 Docker & System": [
+        "`/containers` — List running Docker containers",
+        "`/status` — Detailed container status",
+        "`/logs` — View container logs",
+        "`/system` — System resource usage",
+        "`/dockerstats` — Per-container resource usage",
+        "`/restart` — Restart a container (approval required)",
+        "`/ports` — Check service port connectivity",
+        "`/report` — Full system status report",
+        "`/analyze` — AI-powered log analysis",
+    ],
+    "🎬 Media & Downloads": [
+        "`/search` — Search Sonarr/Radarr for media",
+        "`/queue` — Active downloads (SABnzbd + qBit)",
+        "`/recent` — Recently added media",
+        "`/health` — Check *arr services & download clients",
+        "`/nowplaying` — What's playing on Plex",
+        "`/watch` — Manage monitoring watches",
+    ],
+    "🧠 Memory & Knowledge": [
+        "`/remember` — Store a long-term memory",
+        "`/recall` — Search stored memories",
+        "`/rules` — View learned behavioral rules",
+        "`/profile` — View your user profile",
+        "`/goals` — View active goals",
+        "`/dream` — Trigger memory consolidation",
+        "`/memory-health` — Memory system health metrics",
+    ],
+    "⚙️ Admin & Analytics": [
+        "`/spending` — Gemini API spending & budget",
+        "`/schedule` — Manage scheduled tasks",
+        "`/auditlog` — Recent audit log entries",
+        "`/skills` — List all available skills",
+        "`/pending` — Pending approval requests",
+        "`/estop` — Emergency stop / resume",
+        "`/help` — This help message",
+    ],
+}
 
 # ---------------------------------------------------------------------------
 # Permission level description table (used by /whoami and /permissions list)
@@ -49,6 +137,143 @@ _LEVEL_INFO: dict[PermissionLevel, dict] = {
 }
 
 
+def _get_commands_by_category(bot) -> dict[str, list[str]]:
+    """Auto-enumerate slash commands grouped by name prefix, returning labeled category dict."""
+    if not bot or not hasattr(bot, "tree"):
+        return {}
+    cmds = bot.tree.get_commands()
+    if not cmds:
+        return {}
+    raw: dict[str, list[str]] = {}
+    for cmd in cmds:
+        parts = cmd.name.split("_")
+        category = parts[0].title() if parts else "General"
+        raw.setdefault(category, [])
+        desc = cmd.description or "No description"
+        raw[category].append(f"`/{cmd.name}` — {desc}")
+    labeled: dict[str, list[str]] = {}
+    for cat in sorted(raw):
+        emoji = _CATEGORY_EMOJIS.get(cat, "🔧")
+        labeled[f"{emoji} {cat}"] = raw[cat]
+    return labeled
+
+
+def _score_command_match(cmd, keyword: str) -> int:
+    """Score how well a command matches a search keyword (higher = better)."""
+    kw = keyword.lower()
+    score = 0
+    if kw in cmd.name.lower():
+        score += 10
+    if cmd.description and kw in cmd.description.lower():
+        score += 5
+    for word in kw.split():
+        if word in cmd.name.lower():
+            score += 3
+    return score
+
+
+def _build_category_embed(cat_name: str, cmd_lines: list[str]) -> discord.Embed:
+    """Build a category detail embed from pre-formatted command lines."""
+    embed = discord.Embed(title=f"📖 {cat_name}", color=discord.Color.blurple())
+    # Chunk lines to stay under Discord's 1024-char field value limit
+    chunk: list[str] = []
+    chunks: list[list[str]] = []
+    for line in cmd_lines:
+        test = "\n".join(chunk + [line])
+        if len(test) > 1000 and chunk:
+            chunks.append(chunk)
+            chunk = [line]
+        else:
+            chunk.append(line)
+    if chunk:
+        chunks.append(chunk)
+    for i, ch in enumerate(chunks):
+        embed.add_field(
+            name="Commands" if i == 0 else "…continued",
+            value="\n".join(ch),
+            inline=False,
+        )
+    # Append disambiguation hints for any commands in this category
+    hints_shown: set[str] = set()
+    for line in cmd_lines:
+        if "`/" in line:
+            cmd_name = line.split("`/")[1].split("`")[0]
+            hint = DISAMBIGUATION_HINTS.get(cmd_name)
+            if hint and hint not in hints_shown:
+                embed.add_field(name=f"ℹ️ {cmd_name}", value=hint, inline=False)
+                hints_shown.add(hint)
+    embed.set_footer(text="Use the dropdown to switch categories")
+    return embed
+
+
+class _HelpSelect(discord.ui.Select):
+    """Dropdown selector for browsing help categories."""
+
+    def __init__(self, categories: dict[str, list[str]]):
+        self._categories = categories
+        options: list[discord.SelectOption] = []
+        # Cap at 24 to leave room for the "New here?" entry (Discord max = 25)
+        for cat in list(categories)[:24]:
+            parts = cat.split(" ", 1)
+            emoji, label = (parts[0], parts[1]) if len(parts) == 2 else ("🔧", cat)
+            options.append(discord.SelectOption(label=label[:100], emoji=emoji, value=cat))
+        options.append(discord.SelectOption(label="New here?", emoji="👋", value="__new_here__"))
+        super().__init__(placeholder="Choose a category…", options=options)
+
+    async def callback(self, inter: discord.Interaction):
+        cat = self.values[0]
+        if cat == "__new_here__":
+            new_embed = discord.Embed(
+                title="👋 New Here? Welcome to OpenClaw!",
+                description=(
+                    "OpenClaw is your AI-powered assistant that lives in Discord.\n\n"
+                    "**Quick Start:**\n"
+                    "• Use `/ask <question>` to chat with the AI\n"
+                    "• Use `/tutorial start` for an interactive walkthrough\n"
+                    "• Use `/help` to browse all commands by category\n"
+                    "• Use `/whoami` to see your permission level\n\n"
+                    "**What I can do:**\n"
+                    "🤖 Natural language AI conversations\n"
+                    "📅 Schedule tasks and reminders\n"
+                    "🌐 Browse web and analyze content\n"
+                    "📊 Monitor systems and services\n"
+                    "🔧 Manage Docker containers and NAS"
+                ),
+                color=discord.Color.gold(),
+            )
+            new_embed.set_footer(text="Run /tutorial start for an interactive walkthrough!")
+            await inter.response.edit_message(embed=new_embed)
+            return
+        cmd_lines = self._categories.get(cat, [])
+        await inter.response.edit_message(embed=_build_category_embed(cat, cmd_lines))
+
+
+def _build_help_overview(
+    categories: dict[str, list[str]], version: str
+) -> tuple[discord.Embed, discord.ui.View]:
+    """Build the main help overview embed and dropdown view."""
+    total = sum(len(v) for v in categories.values())
+    embed = discord.Embed(
+        title="📖 OpenClaw Commands",
+        description=(
+            "Choose a category below, or use `/help keyword:<search>` to find a specific command:"
+        ),
+        color=discord.Color.blurple(),
+    )
+    for cat_name, cmd_lines in categories.items():
+        names: list[str] = []
+        for line in cmd_lines:
+            if "`/" in line:
+                cmd_name = line.split("`/")[1].split("`")[0]
+                names.append(f"`/{cmd_name}`")
+        preview = ", ".join(names[:8]) + ("…" if len(names) > 8 else "")
+        embed.add_field(name=cat_name, value=preview or "—", inline=False)
+    embed.set_footer(text=f"OpenClaw v{version} • {total} commands")
+    view = discord.ui.View(timeout=300)
+    view.add_item(_HelpSelect(categories))
+    return embed, view
+
+
 def _resolve_user_permission_level(interaction: discord.Interaction) -> PermissionLevel:
     """Determine the highest PermissionLevel for the interaction's user."""
     from permissions import check_permission
@@ -77,7 +302,7 @@ def _resolve_user_permission_level(interaction: discord.Interaction) -> Permissi
 
 
 def _register_utility_commands(bot: commands.Bot) -> None:
-    """Register /ping, /about, /whoami, and /help."""
+    """Register /ping, /about, /whoami, /help, /tutorial, /permissions, /commands."""
 
     # ------------------------------------------------------------------
     # /ping
@@ -157,125 +382,56 @@ def _register_utility_commands(bot: commands.Bot) -> None:
     # /help
     # ------------------------------------------------------------------
 
-    @bot.tree.command(name="help", description="List available OpenClaw commands")
+    @bot.tree.command(name="help", description="List available OpenClaw commands, or search by keyword")
+    @app_commands.describe(keyword="Optional keyword to search for a specific command")
     @require_auth
-    async def help_cmd(interaction: discord.Interaction):
-        """Display comprehensive help for all OpenClaw commands and features.
+    async def help_cmd(interaction: discord.Interaction, keyword: Optional[str] = None):
+        if keyword:
+            all_cmds = interaction.client.tree.get_commands()
+            scored = [
+                (cmd, _score_command_match(cmd, keyword))
+                for cmd in all_cmds
+            ]
+            matches = sorted(
+                [(cmd, s) for cmd, s in scored if s > 0],
+                key=lambda x: x[1],
+                reverse=True,
+            )[:5]
 
-        Shows:
-        - Core commands (/ask, /research, /plan)
-        - Utility commands (help, logs, config, estop)
-        - Docker/NAS management
-        - Conversation/memory management
-        - Calendar, email, media features
-        """
-        categories = {
-            "🤖 AI & Chat": [
-                ("`/ask <question>`", "Ask naturally in plain English - OpenClaw can choose tools and skills for you"),
-                ("`/clear`", "Clear your conversation history"),
-                ("`/websearch <query>`", "Search the live web"),
-                ("`/browse <url>`", "Fetch and read a web page"),
-                ("`/research <topic>`", "Deep multi-source research"),
-                ("`/recap weekly`", "Summarize the current Discord channel or thread"),
-                ("`/sports upcoming`", "Create a sports watch guide with table output"),
-                ("`/analyze-image <image>`", "Analyze an image with Gemini Vision"),
-                ("`/analyze-file <file>`", "Analyze a document/PDF with AI"),
-            ],
-            "🐳 Docker & System": [
-                ("`/containers`", "List running Docker containers"),
-                ("`/status <service>`", "Detailed container status"),
-                ("`/logs <service>`", "View container logs"),
-                ("`/system`", "System resource usage"),
-                ("`/dockerstats`", "Per-container resource usage"),
-                ("`/restart <service>`", "Restart a container (approval required)"),
-                ("`/ports`", "Check service port connectivity"),
-                ("`/report`", "Full system status report"),
-                ("`/analyze <service>`", "AI-powered log analysis"),
-            ],
-            "🎬 Media & Downloads": [
-                ("`/search <query>`", "Search Sonarr/Radarr for media"),
-                ("`/queue`", "Active downloads (SABnzbd + qBit)"),
-                ("`/recent`", "Recently added media"),
-                ("`/health`", "Check *arr services & download clients"),
-                ("`/nowplaying`", "What's playing on Plex"),
-                ("`/watch`", "Manage monitoring watches"),
-            ],
-            "🧠 Memory & Knowledge": [
-                ("`/remember <fact>`", "Store a long-term memory"),
-                ("`/recall <query>`", "Search stored memories"),
-                ("`/rules`", "View learned behavioral rules"),
-                ("`/profile`", "View your user profile"),
-                ("`/goals`", "View active goals"),
-                ("`/dream`", "Trigger memory consolidation"),
-                ("`/memory-health`", "Memory system health metrics"),
-            ],
-            "⚙️ Admin & Analytics": [
-                ("`/spending`", "Gemini API spending & budget"),
-                ("`/schedule`", "Manage scheduled tasks"),
-                ("`/auditlog`", "Recent audit log entries"),
-                ("`/skills`", "List all available skills"),
-                ("`/pending`", "Pending approval requests"),
-                ("`/estop`", "Emergency stop / resume"),
-                ("`/help`", "This help message"),
-            ],
-        }
-
-        embed = discord.Embed(
-            title="📖 OpenClaw Commands",
-            description="Choose a category below, or browse all commands:",
-            color=discord.Color.blurple(),
-        )
-        for cat_name, cmds in categories.items():
-            cmd_names = ", ".join(c[0].split("`")[1].split(" ")[0] for c in cmds)
-            embed.add_field(name=cat_name, value=cmd_names, inline=False)
-        embed.set_footer(text=f"OpenClaw v{VERSION} • {len(sum(categories.values(), []))} commands")
-
-        class HelpSelect(discord.ui.Select):
-            def __init__(self):
-                options = [
-                    discord.SelectOption(label=cat.split(" ", 1)[1], emoji=cat.split(" ")[0], value=cat)
-                    for cat in categories
-                ]
-                options.append(discord.SelectOption(label="New here?", emoji="👋", value="__new_here__"))
-                super().__init__(placeholder="Choose a category…", options=options)
-
-            async def callback(self, inter: discord.Interaction):
-                cat = self.values[0]
-                if cat == "__new_here__":
-                    new_embed = discord.Embed(
-                        title="👋 New Here? Welcome to OpenClaw!",
-                        description=(
-                            "OpenClaw is your AI-powered assistant that lives in Discord.\n\n"
-                            "**Quick Start:**\n"
-                            "• Use `/ask <question>` to chat with the AI\n"
-                            "• Use `/tutorial start` for an interactive walkthrough\n"
-                            "• Use `/help` to browse all commands by category\n"
-                            "• Use `/whoami` to see your permission level\n\n"
-                            "**What I can do:**\n"
-                            "🤖 Natural language AI conversations\n"
-                            "📅 Schedule tasks and reminders\n"
-                            "🌐 Browse web and analyze content\n"
-                            "📊 Monitor systems and services\n"
-                            "🔧 Manage Docker containers and NAS"
-                        ),
-                        color=discord.Color.gold(),
-                    )
-                    new_embed.set_footer(text="Run /tutorial start for an interactive walkthrough!")
-                    await inter.response.edit_message(embed=new_embed)
-                    return
-                cmds = categories.get(cat, [])
-                cat_embed = discord.Embed(
-                    title=f"📖 {cat}",
-                    color=discord.Color.blurple(),
+            if not matches:
+                embed = discord.Embed(
+                    title="🔍 No Results",
+                    description=(
+                        f"No commands found matching `{keyword}`. "
+                        "Try `/help` to browse all categories."
+                    ),
+                    color=discord.Color.red(),
                 )
-                for name, desc in cmds:
-                    cat_embed.add_field(name=name, value=desc, inline=False)
-                cat_embed.set_footer(text="Use the dropdown to switch categories")
-                await inter.response.edit_message(embed=cat_embed)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                audit_log(interaction.user, "help", f"search={keyword} results=0")
+                return
 
-        view = discord.ui.View(timeout=300)
-        view.add_item(HelpSelect())
+            embed = discord.Embed(
+                title=f"🔍 Search Results for `{keyword}`",
+                description=f"Top {len(matches)} matching commands:",
+                color=discord.Color.blurple(),
+            )
+            for cmd, _ in matches:
+                desc = cmd.description or "No description"
+                embed.add_field(name=f"`/{cmd.name}`", value=desc, inline=False)
+                hint = DISAMBIGUATION_HINTS.get(cmd.name)
+                if hint:
+                    embed.add_field(name="ℹ️ Note", value=hint, inline=False)
+            embed.set_footer(text="Use /help to browse all categories")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            audit_log(interaction.user, "help", f"search={keyword} results={len(matches)}")
+            return
 
+        categories = _get_commands_by_category(interaction.client)
+        if not categories:
+            categories = _STATIC_CATEGORIES
+
+        embed, view = _build_help_overview(categories, VERSION)
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
         audit_log(interaction.user, "help")
 
@@ -378,3 +534,42 @@ def _register_utility_commands(bot: commands.Bot) -> None:
         embed.set_footer(text="Run /whoami to see your current permission level")
         await interaction.response.send_message(embed=embed, ephemeral=True)
         audit_log(interaction.user, "permissions", "list")
+
+    # ------------------------------------------------------------------
+    # /commands  (alias for /help with optional category filter)
+    # ------------------------------------------------------------------
+
+    @bot.tree.command(name="commands", description="Browse commands by category (alias for /help)")
+    @app_commands.describe(category="Filter to a specific category (e.g. Docker, Memory, Ai)")
+    @require_auth
+    async def commands_cmd(interaction: discord.Interaction, category: Optional[str] = None):
+        categories = _get_commands_by_category(interaction.client)
+        if not categories:
+            categories = _STATIC_CATEGORIES
+
+        if category:
+            cat_lower = category.lower()
+            matched = next(
+                (c for c in categories if cat_lower in c.lower()),
+                None,
+            )
+            if not matched:
+                available = ", ".join(f"`{c}`" for c in categories)
+                embed = discord.Embed(
+                    title="❌ Category Not Found",
+                    description=f"No category matching `{category}` found.\nAvailable: {available}",
+                    color=discord.Color.red(),
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                audit_log(interaction.user, "commands", f"category={category} found=False")
+                return
+
+            cmd_lines = categories[matched]
+            embed = _build_category_embed(matched, cmd_lines)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            audit_log(interaction.user, "commands", f"category={matched}")
+            return
+
+        embed, view = _build_help_overview(categories, VERSION)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        audit_log(interaction.user, "commands", "browse")

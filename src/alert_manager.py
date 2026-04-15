@@ -6,6 +6,7 @@ Includes rate limiting, configurable thresholds, and alert formatting.
 """
 
 import logging
+import os
 import time
 from collections import OrderedDict
 from datetime import datetime
@@ -24,6 +25,239 @@ QUALITY_DRIFT_ALERT_COOLDOWN = 6 * 3600
 # would otherwise accumulate ~3,650 entries; 10k cap = ~27 years headroom).
 _CACHE_MAX_SIZE = 10_000
 _BOUNDED_ALERT_CACHE: OrderedDict[str, tuple[float, str]] = OrderedDict()
+
+# ---------------------------------------------------------------------------
+# W13-5 — Remediation hints per drift category
+# ---------------------------------------------------------------------------
+
+REMEDIATION_HINTS: dict[str, str] = {
+    "provider_degradation": "💡 Switch primary model: set `MODEL_PRIMARY` to an alternative provider.",
+    "tool_failure_spike": "💡 Check API key validity and tool endpoint health.",
+    "recall_drop": "💡 Run vector store maintenance: `/admin rebuild-index`.",
+    "latency_spike": "💡 Check network connectivity and provider status pages.",
+}
+
+
+def get_remediation_hint(drift_category: str) -> str | None:
+    """Return a remediation hint string for the given drift category, or None."""
+    return REMEDIATION_HINTS.get(str(drift_category).lower().strip())
+
+
+# ---------------------------------------------------------------------------
+# W13-2 — 30-minute deduplication window with resolved follow-up
+# ---------------------------------------------------------------------------
+
+_DEDUP_WINDOW_SECONDS = 1800  # 30 minutes
+# alert_key → (sent_at, channel_id, message_id, severity)
+_recent_alerts: dict[str, tuple[float, int, int, str]] = {}
+
+_SEVERITY_ORDER = ["debug", "info", "warning", "critical"]
+
+
+def _escalate_severity(severity: str) -> str:
+    """Return the next severity level up, capped at critical."""
+    lower = severity.lower()
+    idx = _SEVERITY_ORDER.index(lower) if lower in _SEVERITY_ORDER else 1
+    return _SEVERITY_ORDER[min(idx + 1, len(_SEVERITY_ORDER) - 1)]
+
+
+# ---------------------------------------------------------------------------
+# W13-3 — Alert snooze/resolve via reaction
+# ---------------------------------------------------------------------------
+
+_SNOOZE_DURATION = 3600  # 1 hour
+# alert_key → snoozed-until timestamp
+_snoozed: dict[str, float] = {}
+# message_id → alert_key (for reaction lookup)
+_alert_messages: dict[int, str] = {}
+
+_OWNER_USER_ID = int(os.getenv("OWNER_USER_ID", os.getenv("BOT_OWNER_ID", "0")))
+
+# TODO: wire into on_raw_reaction_add in discord_events.py
+#   Call: await alert_manager.handle_alert_reaction(payload.message_id, str(payload.emoji), payload.user_id)
+
+
+async def handle_alert_reaction(message_id: int, emoji: str, user_id: int) -> None:
+    """Handle a Discord reaction on an alert message.
+
+    ⏰ → snooze the alert class for 1 hour.
+    ✅ → mark as resolved and post a resolved follow-up.
+
+    This function is meant to be called from discord_events.py's on_raw_reaction_add.
+    """
+    if _OWNER_USER_ID and user_id != _OWNER_USER_ID:
+        return  # Only the bot owner can snooze/resolve via reaction
+
+    alert_key = _alert_messages.get(message_id)
+    if not alert_key:
+        return
+
+    if emoji in ("⏰", "⏰"):
+        _snoozed[alert_key] = time.time() + _SNOOZE_DURATION
+        log.info("Alert snoozed for 1 hour: %s", alert_key)
+
+    elif emoji in ("✅", "✅"):
+        await _send_resolved_followup(alert_key)
+
+
+def _is_snoozed(alert_key: str) -> bool:
+    """Return True if the alert is currently snoozed."""
+    until = _snoozed.get(alert_key, 0)
+    if until and time.time() < until:
+        return True
+    _snoozed.pop(alert_key, None)
+    return False
+
+
+# ---------------------------------------------------------------------------
+# W13-1 — Severity-based alert routing
+# ---------------------------------------------------------------------------
+
+async def send_severity_alert(
+    bot: discord.Client,
+    *,
+    title: str,
+    description: str,
+    severity: str,
+    component: str = "system",
+    alert_type: str = "generic",
+    embed_fields: list[tuple[str, str, bool]] | None = None,
+    color: discord.Color | None = None,
+) -> bool:
+    """Send an alert routed by severity level.
+
+    - DEBUG / INFO  → log only, no Discord message
+    - WARNING       → post to ALERT_CHANNEL_ID
+    - CRITICAL      → post to ALERT_CHANNEL_ID **and** DM the bot owner
+
+    Returns True if a Discord message was sent.
+    """
+    from config import cfg
+
+    alert_channel_id = int(os.getenv("ALERT_CHANNEL_ID", "0"))
+    severity_lower = severity.lower()
+
+    if severity_lower in ("debug", "info"):
+        log.info("[%s] %s — %s", severity.upper(), title, description[:200])
+        return False
+
+    alert_key = f"{alert_type}:{component}"
+
+    # W13-3 snooze check
+    if _is_snoozed(alert_key):
+        log.debug("Alert suppressed (snoozed): %s", alert_key)
+        return False
+
+    # W13-2 dedup check
+    now = time.time()
+    cached = _recent_alerts.get(alert_key)
+    effective_severity = severity_lower
+    if cached:
+        sent_at, cached_channel_id, cached_msg_id, cached_severity = cached
+        elapsed = now - sent_at
+        if elapsed < _DEDUP_WINDOW_SECONDS:
+            log.debug("Alert suppressed (dedup %ds remaining): %s", int(_DEDUP_WINDOW_SECONDS - elapsed), alert_key)
+            return False
+        # Persisted past window → escalate
+        effective_severity = _escalate_severity(cached_severity)
+        log.info("Alert re-sent with escalated severity %s: %s", effective_severity, alert_key)
+
+    if not alert_channel_id:
+        log.warning("[%s] %s — no ALERT_CHANNEL_ID set", severity.upper(), title)
+        return False
+
+    channel = bot.get_channel(alert_channel_id)
+    if not channel:
+        log.warning("Alert channel %d not found", alert_channel_id)
+        return False
+
+    # Build embed
+    _color = color or (discord.Color.red() if effective_severity == "critical" else discord.Color.orange())
+    embed = discord.Embed(title=title, description=description, color=_color)
+    for field_name, field_value, inline in (embed_fields or []):
+        embed.add_field(name=field_name, value=field_value, inline=inline)
+    embed.set_footer(text=f"Severity: {effective_severity.upper()} • {component}")
+
+    sent_msg = None
+    try:
+        sent_msg = await channel.send(embed=embed)
+        if effective_severity == "critical":
+            # Add reactions for snooze/resolve
+            try:
+                await sent_msg.add_reaction("⏰")
+                await sent_msg.add_reaction("✅")
+            except discord.HTTPException:
+                pass
+    except discord.HTTPException as exc:
+        log.error("Failed to send alert embed: %s", exc)
+        return False
+
+    # Record in dedup cache
+    msg_id = sent_msg.id if sent_msg else 0
+    _recent_alerts[alert_key] = (now, alert_channel_id, msg_id, effective_severity)
+    if msg_id:
+        _alert_messages[msg_id] = alert_key
+
+    # W13-1 CRITICAL: also DM the bot owner
+    if effective_severity == "critical" and _OWNER_USER_ID:
+        try:
+            owner = await bot.fetch_user(_OWNER_USER_ID)
+            if owner:
+                dm_embed = discord.Embed(
+                    title=f"🚨 CRITICAL: {title}",
+                    description=description,
+                    color=discord.Color.red(),
+                )
+                await owner.send(embed=dm_embed)
+        except Exception as exc:
+            log.warning("Failed to DM owner for critical alert: %s", exc)
+
+    log.warning("[%s] Alert sent: %s", effective_severity.upper(), title)
+    return True
+
+
+async def _send_resolved_followup(alert_key: str) -> None:
+    """Post a '✅ Resolved' follow-up message to the channel where the alert was posted."""
+    cached = _recent_alerts.get(alert_key)
+    if not cached:
+        return
+    _, channel_id, _, _ = cached
+
+    # Remove from caches so the alert can fire again if the issue recurs
+    _recent_alerts.pop(alert_key, None)
+    _snoozed.pop(alert_key, None)
+
+    log.info("Alert resolved: %s", alert_key)
+    # Note: posting the resolved follow-up requires the bot instance.
+    # Callers that have the bot should use send_alert_resolved() instead.
+
+
+async def send_alert_resolved(bot: discord.Client, *, alert_type: str, component: str, title: str) -> None:
+    """Post a '✅ Resolved' message to the channel where the alert was posted.
+
+    Call this from monitoring code when an alert condition clears.
+    """
+    alert_key = f"{alert_type}:{component}"
+    cached = _recent_alerts.get(alert_key)
+    channel_id = cached[1] if cached else int(os.getenv("ALERT_CHANNEL_ID", "0"))
+
+    _recent_alerts.pop(alert_key, None)
+    _snoozed.pop(alert_key, None)
+
+    if not channel_id:
+        return
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        return
+    try:
+        embed = discord.Embed(
+            title=f"✅ Resolved: {title}",
+            color=discord.Color.green(),
+        )
+        embed.set_footer(text=f"Alert resolved • {component}")
+        await channel.send(embed=embed)
+    except discord.HTTPException as exc:
+        log.warning("Failed to send resolved follow-up: %s", exc)
 
 
 def should_route_bounded_alert(

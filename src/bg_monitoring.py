@@ -20,6 +20,23 @@ log = logging.getLogger("openclaw")
 
 ALERT_CHANNEL_ID = int(os.getenv("ALERT_CHANNEL_ID", "0"))
 
+# ---------------------------------------------------------------------------
+# W10-4 — User-load awareness
+# ---------------------------------------------------------------------------
+
+_ACTIVE_CONVERSATION_COUNT: int = 0
+
+
+def set_active_conversation_count(n: int) -> None:
+    """Set the number of currently active user conversations (call from ask_handler.py)."""
+    global _ACTIVE_CONVERSATION_COUNT
+    _ACTIVE_CONVERSATION_COUNT = max(0, int(n))
+
+
+def get_active_conversation_count() -> int:
+    """Return the current number of active user conversations."""
+    return _ACTIVE_CONVERSATION_COUNT
+
 _bg_sessions = _SessionManager(timeout=10, name="discord-background")
 
 _SAFE_RESTART_TARGETS = frozenset({
@@ -43,10 +60,17 @@ _cookie_alert_sent = False  # only alert once per expiry cycle
 # ---------------------------------------------------------------------------
 
 async def error_monitor_loop(bot):
-    """Fast error pattern check — runs every 5 minutes."""
+    """Fast error pattern check — runs every 5 minutes (optional scan)."""
     await asyncio.sleep(300)
     while True:
         try:
+            # W10-4: skip optional scan when users are actively conversing
+            active = get_active_conversation_count()
+            if active >= 3:
+                log.info("Skipping optional scan: %d active conversations", active)
+                await asyncio.sleep(300)
+                continue
+
             from error_tracker import check_error_patterns
 
             patterns = check_error_patterns(window_minutes=30)
@@ -57,55 +81,60 @@ async def error_monitor_loop(bot):
 
                     # E3+E4+E5: Auto-diagnosis → fix → learn pipeline
                     try:
-                        from error_tracker import (
-                            diagnose_error_pattern,
-                            execute_fix,
-                            get_recent_outcomes,
-                            record_incident,
-                        )
-                        recent = get_recent_outcomes(hours=1)
-                        recent_errors = [e for e in recent if not e.get("success")]
+                        from llm_ratelimit import background_quota_guard
 
-                        diagnosis = await diagnose_error_pattern(patterns, recent_errors)
-                        log.info(
-                            "Auto-diagnosis: %s (confidence: %.0f%%)",
-                            diagnosis.get("cause", "?"),
-                            diagnosis.get("confidence", 0) * 100,
-                        )
+                        if not background_quota_guard.check_background_allowed():
+                            log.warning("Background LLM quota exhausted — skipping auto-diagnosis")
+                        else:
+                            from error_tracker import (
+                                diagnose_error_pattern,
+                                execute_fix,
+                                get_recent_outcomes,
+                                record_incident,
+                            )
+                            recent = get_recent_outcomes(hours=1)
+                            recent_errors = [e for e in recent if not e.get("success")]
 
-                        fix_result = await execute_fix(diagnosis)
-                        log.info(
-                            "Auto-fix result: %s (success: %s)",
-                            fix_result.get("action_taken", "none"),
-                            fix_result.get("success"),
-                        )
+                            diagnosis = await diagnose_error_pattern(patterns, recent_errors)
+                            log.info(
+                                "Auto-diagnosis: %s (confidence: %.0f%%)",
+                                diagnosis.get("cause", "?"),
+                                diagnosis.get("confidence", 0) * 100,
+                            )
 
-                        await record_incident(patterns, diagnosis, fix_result)
+                            fix_result = await execute_fix(diagnosis)
+                            log.info(
+                                "Auto-fix result: %s (success: %s)",
+                                fix_result.get("action_taken", "none"),
+                                fix_result.get("success"),
+                            )
 
-                        if fix_result.get("success"):
-                            embed = discord.Embed(
-                                title="🔧 Auto-Fix Applied",
-                                color=discord.Color.green(),
-                            )
-                            embed.add_field(
-                                name="Diagnosis",
-                                value=diagnosis.get("explanation", "")[:200],
-                                inline=False,
-                            )
-                            embed.add_field(
-                                name="Action",
-                                value=fix_result.get("action_taken", ""),
-                                inline=True,
-                            )
-                            embed.add_field(
-                                name="Result",
-                                value=fix_result.get("detail", "")[:200],
-                                inline=True,
-                            )
-                            embed.set_footer(text="Self-Healing System • auto-diagnosed and fixed")
-                            channel = bot.get_channel(ALERT_CHANNEL_ID)
-                            if channel:
-                                await channel.send(embed=embed)
+                            await record_incident(patterns, diagnosis, fix_result)
+
+                            if fix_result.get("success"):
+                                embed = discord.Embed(
+                                    title="🔧 Auto-Fix Applied",
+                                    color=discord.Color.green(),
+                                )
+                                embed.add_field(
+                                    name="Diagnosis",
+                                    value=diagnosis.get("explanation", "")[:200],
+                                    inline=False,
+                                )
+                                embed.add_field(
+                                    name="Action",
+                                    value=fix_result.get("action_taken", ""),
+                                    inline=True,
+                                )
+                                embed.add_field(
+                                    name="Result",
+                                    value=fix_result.get("detail", "")[:200],
+                                    inline=True,
+                                )
+                                embed.set_footer(text="Self-Healing System • auto-diagnosed and fixed")
+                                channel = bot.get_channel(ALERT_CHANNEL_ID)
+                                if channel:
+                                    await channel.send(embed=embed)
                     except Exception as e:
                         log.warning("Auto-diagnosis/fix pipeline failed: %s", e)
                 else:

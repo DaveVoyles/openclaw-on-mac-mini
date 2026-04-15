@@ -131,7 +131,7 @@ def build_provider_capability_registry(
         "openai": ProviderCapabilities(
             name="openai",
             available=bool(has_openai_key or copilot_available),
-            supports_native_tools=False,
+            supports_native_tools=True,
             supports_multimodal=bool(has_openai_key or copilot_available),  # GPT-4o-vision
             supports_raw_output=False,
             low_cost=False,
@@ -139,7 +139,7 @@ def build_provider_capability_registry(
         "anthropic": ProviderCapabilities(
             name="anthropic",
             available=bool(has_anthropic_key or copilot_available),
-            supports_native_tools=False,
+            supports_native_tools=True,
             supports_multimodal=False,
             supports_raw_output=False,
             low_cost=False,
@@ -158,6 +158,8 @@ def build_provider_capability_registry(
 _LATENCY_SWITCH_THRESHOLD_MS: float = float(_os.getenv("LATENCY_SWITCH_THRESHOLD_MS", "2000"))
 _LATENCY_AUDIT_TAIL: int = int(_os.getenv("LATENCY_AUDIT_TAIL", "100"))
 _AUDIT_LOG_PATH: str = _os.getenv("ROUTING_AUDIT_LOG", "data/routing_audit.jsonl")
+# W9-2: configurable per-provider latency skip threshold (default 10 000 ms)
+ROUTING_LATENCY_THRESHOLD_MS: float = float(_os.getenv("ROUTING_LATENCY_THRESHOLD_MS", "10000"))
 
 
 def _get_provider_p95_latency(provider: str) -> float | None:
@@ -323,6 +325,15 @@ def select_auto_route(
     _primary = _decision.provider
     if _primary in ("copilot", "openai", "anthropic"):
         _p95 = _get_provider_p95_latency(_primary)
+        # W9-2: skip provider if its p95 latency exceeds ROUTING_LATENCY_THRESHOLD_MS
+        if _p95 is not None and _p95 > ROUTING_LATENCY_THRESHOLD_MS:
+            for _fallback in ("gemini", "ollama"):
+                if registry.get(_fallback) and registry[_fallback].available:
+                    return AutoRouteDecision(
+                        _fallback,
+                        f"latency-skip: {_primary} p95={_p95:.0f}ms > {ROUTING_LATENCY_THRESHOLD_MS:.0f}ms threshold",
+                        profile,
+                    )
         if _p95 is not None and _p95 > _LATENCY_SWITCH_THRESHOLD_MS:
             _ollama_p95 = _get_provider_p95_latency("ollama")
             if _ollama_p95 is not None and _ollama_p95 < _p95 * 0.5:  # 50% faster
