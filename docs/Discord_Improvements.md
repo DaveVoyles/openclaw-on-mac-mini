@@ -1,12 +1,17 @@
 # Discord Bot Improvements Roadmap
 
-> **Status:** Planning
+> **Status:** ✅ All 14 waves shipped (April 2026)
 > **Last Updated:** April 2026
 > **Baseline:** Discord channel personas removed; current date injected into system prompt
 
 This document captures all identified improvement opportunities for the OpenClaw Discord bot,
 organized into implementation waves ordered by impact and dependency. Each wave is self-contained
 and can be shipped independently.
+
+**All waves have been implemented.** See commit history for details. Deploy with:
+```bash
+ssh 192.168.1.93 "DOCKER_CONFIG=/tmp/dockercfg /usr/local/bin/docker-compose build openclaw && /usr/local/bin/docker-compose up -d openclaw"
+```
 
 ---
 

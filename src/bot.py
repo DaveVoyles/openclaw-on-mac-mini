@@ -572,6 +572,7 @@ _bot_sessions = _SessionManager(timeout=HTTP_TIMEOUT_DEFAULT, name="bot")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.reactions = True
 
 
 class OpenClawBot(commands.Bot):
@@ -1034,6 +1035,22 @@ async def on_message(message: discord.Message) -> None:
 
     from discord_events import handle_message  # lazy to avoid circular import
     await handle_message(message, channel_roles=_CHANNEL_ROLES)
+
+
+# ---------------------------------------------------------------------------
+# Reaction handling — alert snooze / resolve
+# ---------------------------------------------------------------------------
+
+
+@bot.event
+async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
+    """Forward reactions on alert messages to the alert manager (snooze/resolve)."""
+    from alert_manager import handle_alert_reaction  # lazy import — alert_manager optional
+
+    try:
+        await handle_alert_reaction(payload.message_id, str(payload.emoji), payload.user_id)
+    except Exception as exc:  # noqa: BLE001
+        log.debug("on_raw_reaction_add error: %s", exc)
 
 
 # ---------------------------------------------------------------------------
