@@ -341,18 +341,16 @@ async def _load_channel_config() -> None:
                 cfg_yaml = yaml.safe_load(content) or {}
             channels_cfg = cfg_yaml.get("channels", {})
             roles_enabled = bool(channels_cfg.get("roles_enabled", False))
-            if roles_enabled:
-                roles = channels_cfg.get("roles", {})
-                for role_name, role_cfg in roles.items():
-                    prompt = role_cfg.get("prompt_override", "")
-                    if prompt:
-                        _CHANNEL_PROMPTS[role_name] = prompt
+            roles = channels_cfg.get("roles", {})
+            for role_name, role_cfg in roles.items():
+                prompt = role_cfg.get("prompt_override", "")
+                if prompt:
+                    _CHANNEL_PROMPTS[role_name] = prompt
         except (yaml.YAMLError, OSError, KeyError, TypeError) as e:
             log.warning("Failed to load channel config: %s", e)
 
     if not roles_enabled:
         log.info("Channel roles disabled (channels.roles_enabled=false) — all channels use generic behavior")
-        return
 
     for role in ("research", "analytics", "bookmarks", "real_estate"):
         raw = os.getenv(f"DISCORD_CHANNEL_{role.upper()}_ID", "0")
@@ -544,7 +542,7 @@ async def _get_or_create_default_ask_thread(
         )
         _remember_default_ask_thread(channel, user_id, int(created.id))
         return created, True
-    except (discord.HTTPException, discord.Forbidden) as exc:
+    except Exception as exc:  # noqa: BLE001
         log.debug("Default ask auto-thread creation failed: %s", exc)
         return None, False
 
@@ -913,7 +911,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
     try:
         await _send_app_command_error_message(interaction, user_message)
-    except (discord.HTTPException, discord.Forbidden, discord.NotFound) as send_exc:
+    except Exception as send_exc:  # noqa: BLE001
         log.exception(
             "Failed to send app command error response command=%s user_id=%s channel_id=%s guild_id=%s",
             command_name,

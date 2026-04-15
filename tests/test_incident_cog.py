@@ -15,7 +15,8 @@ class _InteractionStub:
         self.user = SimpleNamespace(id=42, __str__=lambda _self: "Alice")
         self.channel = channel or SimpleNamespace(id=channel_id, parent_id=None)
         self.channel_id = channel_id
-        self.response = SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock())
+        self.response = SimpleNamespace(send_message=AsyncMock(), defer=AsyncMock(), is_done=MagicMock(return_value=False))
+        self.original_response = AsyncMock(return_value=MagicMock(edit=AsyncMock()))
         self.followup = SimpleNamespace(send=AsyncMock())
 
 

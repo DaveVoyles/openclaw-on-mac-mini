@@ -537,8 +537,10 @@ class TestSafeConditionEval:
     def test_empty_expression_returns_false(self):
         assert _safe_condition_eval("", {}) is False
 
-    def test_too_long_expression_returns_false(self):
-        assert _safe_condition_eval("x" * 501, {"x": 1}) is False
+    def test_too_long_expression_raises_value_error(self):
+        import pytest
+        with pytest.raises(ValueError, match="too long"):
+            _safe_condition_eval("x" * 501, {"x": 1})
 
     def test_unsafe_call_raises(self):
         import pytest

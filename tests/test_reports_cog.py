@@ -512,6 +512,10 @@ async def test_recap_weekly_save_to_vault(monkeypatch):
     monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
     monkeypatch.setattr(cog, "_send_chunks", AsyncMock())
     monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        mod, "ProgressTracker",
+        MagicMock(return_value=MagicMock(start=AsyncMock(), update=AsyncMock(), done=AsyncMock())),
+    )
 
     fake_obsidian = types.SimpleNamespace(
         save_to_vault=AsyncMock(return_value="✅ Saved to vault: Weekly Recap - general")
@@ -538,6 +542,10 @@ async def test_recap_weekly_schedule_weekly(monkeypatch):
     monkeypatch.setitem(sys.modules, "skills.reporting_skills", fake_reporting)
     monkeypatch.setattr(cog, "_send_chunks", AsyncMock())
     monkeypatch.setattr(mod, "record_channel_profile_signal", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        mod, "ProgressTracker",
+        MagicMock(return_value=MagicMock(start=AsyncMock(), update=AsyncMock(), done=AsyncMock())),
+    )
 
     fake_task = SimpleNamespace(task_id="task-abc-123")
     fake_scheduler = SimpleNamespace(create=lambda **_kw: fake_task)
