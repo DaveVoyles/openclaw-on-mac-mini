@@ -15,7 +15,7 @@ concurrency:
 jobs:
   pre-commit:
     name: Run Pre-commit Hooks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     timeout-minutes: 15
 
     steps:
@@ -30,7 +30,10 @@ jobs:
       - name: Check changed markdown links
         run: |
           git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-          mapfile -t files < <(git diff --name-only --diff-filter=ACMRT "origin/${{ github.base_ref }}"...HEAD -- '*.md')
+          files=()
+          while IFS= read -r file; do
+            files+=("$file")
+          done < <(git diff --name-only --diff-filter=ACMRT "origin/${{ github.base_ref }}"...HEAD -- '*.md')
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No markdown changes detected."
             exit 0
@@ -68,7 +71,7 @@ jobs:
 
   conventional-commits:
     name: Check Commit Messages
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     timeout-minutes: 5
 
     steps:
@@ -84,7 +87,7 @@ jobs:
 
   security-scan:
     name: Quick Security Scan
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     timeout-minutes: 10
 
     steps:
