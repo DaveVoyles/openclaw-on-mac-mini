@@ -16,7 +16,10 @@ SRC_DIR="$REPO_ROOT/src"
 INSTALL_DIR="\$HOME/.local/share/openclaw-cli"
 BIN_DIR="\$HOME/.local/bin"
 
-mapfile -t CLI_FILES < <(
+CLI_FILES=()
+while IFS= read -r f; do
+  CLI_FILES+=("$f")
+done < <(
   find "$SRC_DIR" -maxdepth 1 -type f \
     \( -name 'openclaw_cli*.py' -o -name 'subprocess_utils.py' \) \
     -exec basename {} \; | sort
