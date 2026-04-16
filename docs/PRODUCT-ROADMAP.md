@@ -117,10 +117,17 @@ relevant section of `docs/UX_IMPROVEMENTS.md`.
 
 ### Initiative: Wave 25 — Finish-Line Sprint + Docs Refresh + Coverage
 
-- **Status:** in progress
+- **Status:** shipped
 - **Owner area:** cli, cross-cutting
 - **Why now:** Five partial UX items remain incomplete, docs are stale relative to W21–W24 shipped features and the TD-28–TD-34 module refactor, and test coverage has gaps in router/watch/session_display.
-- **Next step:** Three workstreams — finish the 5 partial UX items, update stale docs (CLI_ARCHITECTURE.md, CLI_QUICKSTART.md, DASHBOARD_SURFACES.md, PRODUCT-ROADMAP.md), and fill test coverage gaps in router, watch, and session_display modules.
+- **What shipped:** 5 partial UX features wired (`_print_approval_recap`, `_make_prompt` draft badge, `↺ Watch auto-retried` text, `_a11y_plain_mode`, `_session_mood_snapshot`) — Han; 218 new tests bringing suite to 600 passing — Rey; docs refresh (CLI_ARCHITECTURE.md, CLI_QUICKSTART.md, DASHBOARD_SURFACES.md) — Leia; exception format normalized across src/ — solo.
+- **Next step:** Complete. W26 stale-audit lane (Leia) flipped 30 more stale checkboxes in UX_IMPROVEMENTS.md.
+
+### Initiative: Wave 26 — Stale Audit + Checkbox Reconciliation
+
+- **Status:** in progress
+- **Owner area:** docs, cross-cutting
+- **Why now:** 51 open checkboxes in UX_IMPROVEMENTS.md were identified at W26 start; W21–W25 shipped code but boxes were never flipped, causing false signal about open work.
 
 ### 3. CLI technical-debt follow-up
 

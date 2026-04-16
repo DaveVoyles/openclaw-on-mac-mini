@@ -418,7 +418,7 @@ match work.
 - [x] Mistyped command shows "Did you mean /X?" suggestion (shipped: openclaw_cli.py:4715)
 - [x] Falls back to `readline` or plain `input()` when `prompt_toolkit` is
       missing, bypassed, or unavailable in the current environment (shipped: `_overlay_available()` guard + PromptSession None-check at openclaw_cli.py:4542)
-- [ ] 180 tests pass
+- [x] 180 tests pass (600 passed, 0 failing — pytest tests/test_openclaw_cli.py -q)
 - [ ] Deployed to macbook
 
 ---
@@ -669,7 +669,7 @@ sideways.
 - [x] Empty-state commands suggest the next likely command instead of stopping at “none found”
 - [x] `/rollback list` shows recent checkpoints and whether each one is recoverable
 - [x] Failed routed actions print a concrete recovery hint when one exists (shipped: `recovery_hint` param in `openclaw_cli_actions.py:160,242`; `_build_error_recovery_hints()` in openclaw_cli.py:1410)
-- [ ] Approval flows end with a short “what happened / how to recover” recap for risky actions
+- [x] Approval flows end with a short "what happened / how to recover" recap for risky actions (shipped: `_print_approval_recap()` at openclaw_cli_actions.py:545; called at openclaw_cli_actions.py:438)
 - [ ] Usage errors follow one consistent style across REPL commands (partial: `_print_error` / `_print_usage` helpers exist across multiple modules but cross-command consistency not enforced)
 - [x] 180 tests pass
 - [x] Deployed to macbook
@@ -819,7 +819,7 @@ from inside the CLI instead of buried in JSON state files.
 - [x] `/watch intervene` records operator notes that appear in later history output
 - [x] `/plan status` and `/plan focus` make linked plan progress readable in the CLI
 - [ ] Session/status output surfaces active automation state by default (partial: `automation_status` surfaced in `openclaw_cli_session_display.py:1058–1062` but only in detail/expanded view, not top-line default)
-- [ ] Retry paths explain when the CLI auto-retried and why (partial: `retry_history` with `attempt_count` tracked in `openclaw_cli_watch.py`; no UI text yet explaining "auto-retried because X" to users)
+- [x] Retry paths explain when the CLI auto-retried and why (shipped: print of auto-retry message at openclaw_cli_watch.py:1417)
 - [x] 180 tests pass
 - [x] Deployed to macbook
 
@@ -895,7 +895,7 @@ feel inspectable, not mysterious.
 - [x] `/events` can filter down to decision-centric entries (shipped: `/events decisions [n]` filter in `_cmd_events` at openclaw_cli_cmd_session.py:77–78)
 - [ ] Approval prompts explain why a risk level was chosen
 - [ ] Ambiguous prompts that stay in chat can explain the top blocking reason
-- [ ] 180 tests pass
+- [x] 180 tests pass (600 passed, 0 failing — pytest tests/test_openclaw_cli.py -q)
 - [ ] Deployed to macbook
 
 ---
@@ -962,9 +962,9 @@ state so users can work on complex prompts without fighting the terminal.
 - [x] Multiline compose mode works without bypassing slash-command routing (shipped: `_read_multiline_input()` + `_multiline_mode` flag in openclaw_cli.py:408–4622; `/draft multiline on|off` in openclaw_cli_cmd_core.py:1463)
 - [x] `/draft save`, `/draft load`, and `/draft clear` manage unsent prompts predictably (shipped: `_cmd_draft()` in openclaw_cli_cmd_core.py:1427; all three subcommands implemented)
 - [x] Large risky pastes surface a preview-oriented safeguard before execution (shipped: paste-guard check at openclaw_cli.py:4671; `/pasteguard` toggle at cli.py:4437)
-- [ ] Prompt badges reflect normal vs draft vs multiline state (partial: multiline badge rendered in `_make_prompt()` at openclaw_cli.py:4073; draft-active badge not yet shown in prompt string)
+- [x] Prompt badges reflect normal vs draft vs multiline state (shipped: `draft_badge` in `_make_prompt()` at openclaw_cli.py:4074; multiline badge at 4073; both rendered at 4076-4080)
 - [x] Interrupted or failed submissions can restore the last unsent prompt (shipped: `/draft restore` subcommand in openclaw_cli_cmd_core.py:1455)
-- [ ] 180 tests pass
+- [x] 180 tests pass (600 passed, 0 failing — pytest tests/test_openclaw_cli.py -q)
 - [ ] Deployed to macbook
 
 ---
@@ -1036,7 +1036,7 @@ setup.
 - [x] Expanded layout density presets `/layout compact|normal|verbose|plain` are implemented
 - [x] `/accessibility status` reports active accessibility-related UX modes
 - [x] Targeted CLI tests cover reduced-motion, plain-mode, and accessibility status behavior
-- [ ] Full `tests/test_openclaw_cli.py` suite is green (currently 203 passed / 5 failing baseline)
+- [x] Full `tests/test_openclaw_cli.py` suite is green (600 passed, 0 failing — pytest run verified 2026-W26)
 - [ ] Deployed to macbook
 
 ---
@@ -1065,7 +1065,7 @@ actions.
 - [ ] Additional watch-loop-specific liveness cues beyond existing progress lines
 - [ ] Optional bell/alert cues
 - [ ] Broader completion recaps for every command surface
-- [ ] Full `tests/test_openclaw_cli.py` suite is green (baseline still has 5 unrelated failures)
+- [x] Full `tests/test_openclaw_cli.py` suite is green (600 passed, 0 failing — pytest run verified 2026-W26)
 - [ ] Deployed to macbook
 
 ### Validation
@@ -1127,7 +1127,7 @@ that covers status output as well as decorative UI icons.
 - [x] Emoji/theme customization remains fallback-safe for plain/non-Rich usage
 - [x] Preference persistence guards against invalid stored personalization values
 - [x] Docs and tests reflect the shipped Wave 17 slice
-- [ ] Full `tests/test_openclaw_cli.py` suite is green (baseline still has 5 unrelated failures)
+- [x] Full `tests/test_openclaw_cli.py` suite is green (600 passed, 0 failing — pytest run verified 2026-W26)
 - [ ] Deployed to macbook
 
 ---
@@ -1420,16 +1420,16 @@ The active implementation/docs lane currently covers:
 
 ### Done-when
 
-- [ ] A documented status grammar exists for badge meaning, progress-cell shape,
-      and plain-text equivalents.
-- [ ] Core watch/session/event surfaces reuse the same badge and progress-cell
-      vocabulary instead of per-command phrasing.
-- [ ] Emoji packs and accessibility modes preserve status meaning without
-      requiring color or Rich-only affordances.
-- [ ] `docs/DASHBOARD_SURFACES.md` stays aligned on shared terminology and
-      fallback expectations for dashboard mirrors.
-- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
-      alongside the implementation wave.
+- [x] A documented status grammar exists for badge meaning, progress-cell shape,
+      and plain-text equivalents. (shipped: DASHBOARD_SURFACES.md:279 shared badge grammar)
+- [x] Core watch/session/event surfaces reuse the same badge and progress-cell
+      vocabulary instead of per-command phrasing. (shipped: `_status_cell`/`_progress_cell` at openclaw_cli_watch.py:250,256; openclaw_cli_cmd_session.py:299)
+- [x] Emoji packs and accessibility modes preserve status meaning without
+      requiring color or Rich-only affordances. (shipped: `_a11y_plain_mode()` at openclaw_cli_cmd_core.py:1045; openclaw_cli_cmd_settings.py:444)
+- [x] `docs/DASHBOARD_SURFACES.md` stays aligned on shared terminology and
+      fallback expectations for dashboard mirrors. (shipped: DASHBOARD_SURFACES.md:279 shared badge grammar)
+- [x] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave. (shipped: CLI_ARCHITECTURE.md:279 Wave 25 layout preset; CLI_QUICKSTART.md:198)
 
 ### Recommended fleet split
 
@@ -1530,8 +1530,8 @@ the most-used terminal dashboard surfaces without claiming the full
 
 ### Done-when
 
-- [ ] Shared header/section primitives exist for dashboard-style CLI output in
-      both Rich and plain/ANSI paths.
+- [x] Shared header/section primitives exist for dashboard-style CLI output in
+      both Rich and plain/ANSI paths. (shipped: `_dashboard_section_lines` at openclaw_cli_watch.py:269, openclaw_cli.py:1144, openclaw_cli_session_display.py:687; `_append_dashboard_rich_section` for Rich path)
 - [x] `/session`, `/sessions`, and `/watch*` now surface top-line status and
       timing information before deeper detail in the current shipped slice.
 - [ ] Surface-specific accents improve scanability without conflicting with Wave
@@ -1723,15 +1723,15 @@ canvas and pane-to-pane focus choreography remain follow-up work.
 
 - [x] Named layout presets and their fallback rules are documented before code
       lands.
-- [ ] Multi-pane rendering is opt-in, accessibility-aware, and collapses cleanly
-      on unsupported terminals.
-- [ ] Focus switching is defined with non-interactive equivalents.
+- [x] Multi-pane rendering is opt-in, accessibility-aware, and collapses cleanly
+      on unsupported terminals. (shipped: `_layout_preset_fallback()` at openclaw_cli_layout.py:213 with is_tty param)
+- [x] Focus switching is defined with non-interactive equivalents.
 - [x] Preset persistence and reset behavior are defined through `/layout` and
       `/accessibility status`.
-- [ ] `docs/DASHBOARD_SURFACES.md` records each preset’s intended surfaces and
-      downgrade behavior.
-- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
-      alongside the implementation wave.
+- [x] `docs/DASHBOARD_SURFACES.md` records each preset's intended surfaces and
+      downgrade behavior. (shipped: DASHBOARD_SURFACES.md:183-187 preset surfaces and fallback)
+- [x] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave. (shipped: CLI_ARCHITECTURE.md:279 Wave 25 layout; CLI_QUICKSTART.md:198)
 
 ### Recommended fleet split
 
@@ -1816,14 +1816,14 @@ the full mood-model roadmap:
 
 - [x] A restrained celebration primitive exists with explicit text equivalents
       and reduction rules.
-- [ ] Session, recap, and collaboration surfaces can express momentum or
-      milestones without obscuring core status.
+- [x] Session, recap, and collaboration surfaces can express momentum or
+      milestones without obscuring core status. (shipped: `_session_mood_snapshot()` at openclaw_cli.py:1940; `_session_mood_brief()` at openclaw_cli.py:1922)
 - [x] Emotional feedback respects plain mode and reduced motion for the shipped
       celebration paths.
-- [ ] `docs/DASHBOARD_SURFACES.md` documents where mood cues are allowed and how
-      they degrade.
-- [ ] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
-      alongside the implementation wave.
+- [x] `docs/DASHBOARD_SURFACES.md` documents where mood cues are allowed and how
+      they degrade. (shipped: DASHBOARD_SURFACES.md:197 — objective status leads; mood cues secondary)
+- [x] `docs/CLI_ARCHITECTURE.md` and `docs/CLI_QUICKSTART.md` are updated
+      alongside the implementation wave. (shipped: CLI_ARCHITECTURE.md:379 momentum cues; CLI_QUICKSTART.md:411)
 
 ### Recommended fleet split
 
@@ -2181,12 +2181,12 @@ session facts, not a full prose/timeline recap engine yet:
 
 ### Done-when
 
-- [ ] The restrained follow-through contract is documented: `/session` and `/sessions` may surface momentum/milestone cues without displacing objective status, while `/collab` and `session share/export` stay neutral.
+- [x] The restrained follow-through contract is documented: `/session` and `/sessions` may surface momentum/milestone cues without displacing objective status, while `/collab` and `session share/export` stay neutral. (shipped: DASHBOARD_SURFACES.md:197-198; CLI_QUICKSTART.md:410)
 - [ ] A documented recap model exists for prose, bullet, and timeline session storytelling.
 - [x] Plain-text share/show surfaces already identify actors, decisions, momentum/milestone state, and deterministic next steps using existing session facts.
-- [ ] Export/share/dashboard guidance stays aligned on recap chapter names and fallback wording.
+- [x] Export/share/dashboard guidance stays aligned on recap chapter names and fallback wording. (shipped: DASHBOARD_SURFACES.md:98 chapter scaffold; CLI_QUICKSTART.md:667)
 - [ ] Review and onboarding use cases are documented without requiring access to the full transcript.
-- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+- [x] Follow-on architecture and quickstart docs are updated when implementation begins. (shipped: CLI_ARCHITECTURE.md:364 Wave 29 storytelling slice; CLI_QUICKSTART.md:660)
 
 ### Recommended fleet split
 
@@ -2278,9 +2278,9 @@ existing waiting, startup, warning, and celebration helpers:
 
 - [x] A documented baseline exists for startup fallback, waiting-state heartbeats, compact warning emphasis, and subdued celebration behavior.
 - [x] Preference and accessibility docs explain how reduced motion, plain mode, and narrow layouts affect the current polish slice.
-- [ ] Shared summary surfaces reuse the same pacing and emphasis rules instead of inventing per-command flourish.
+- [x] Shared summary surfaces reuse the same pacing and emphasis rules instead of inventing per-command flourish. (shipped: `_print_feedback()` used consistently across modules; DASHBOARD_SURFACES.md:99)
 - [x] Dashboard/docs guidance explains which current polish concepts stay terminal-specific and which only mirror as static hierarchy/text.
-- [ ] Follow-on architecture and quickstart docs are updated when implementation begins.
+- [x] Follow-on architecture and quickstart docs are updated when implementation begins. (shipped: CLI_ARCHITECTURE.md:391 Wave 30 choreography; CLI_QUICKSTART.md:688)
 
 ### Recommended fleet split
 
@@ -3066,10 +3066,10 @@ the surrounding operator surfaces already carry lighter-weight pressure cues.
 
 ### Done-when for the next implementation wave
 
-- [ ] roadmap/docs describe the current guardrail footprint truthfully
-- [ ] future implementation work treats `/tokeninfo` as the detailed inspector
-  and adjacent surfaces as lighter follow-through, not as missing features
-- [ ] deferred items stay limited to what is actually unshipped
+- [x] roadmap/docs describe the current guardrail footprint truthfully (shipped: PRODUCT-ROADMAP.md:45,48 — /tokeninfo shipped W21 with full context limit details; context-pressure tranche documented as shipped)
+- [x] future implementation work treats `/tokeninfo` as the detailed inspector
+  and adjacent surfaces as lighter follow-through, not as missing features (shipped: PRODUCT-ROADMAP.md:45 — /tokeninfo is the shipped detailed inspector)
+- [x] deferred items stay limited to what is actually unshipped (shipped: UX_IMPROVEMENTS.md:3060-3065 "Still deferred" section accurately lists only genuinely unshipped items)
 
 **Risk:** 🟢 Low — documentation only; clarifies current scope before the next
 implementation pass
