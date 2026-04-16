@@ -1,15 +1,12 @@
 """Unit tests for model_aliases.py — additional edge cases beyond test_model_aliases_constants.py."""
 from __future__ import annotations
 
-import pytest
-
 from model_aliases import (
     MODEL_INPUT_ALIASES,
     VALID_MODEL_PREFERENCES,
     model_input_suggestion,
     normalize_model_input,
 )
-
 
 # ---------------------------------------------------------------------------
 # normalize_model_input — additional edge cases

@@ -12,7 +12,6 @@ from openclaw_cli_types import (
     SlashCommand,
 )
 
-
 # ---------------------------------------------------------------------------
 # AskResponse
 # ---------------------------------------------------------------------------
@@ -136,13 +135,15 @@ class TestChatCommandContext:
 
 class TestSlashCommand:
     def test_basic_command(self):
-        handler = lambda ctx: "ok"
+        def handler(ctx):
+            return "ok"
         cmd = SlashCommand(name="help", description="Show help", handler=handler)
         assert cmd.name == "help"
         assert cmd.aliases == ()
 
     def test_command_with_aliases(self):
-        handler = lambda ctx: "ok"
+        def handler(ctx):
+            return "ok"
         cmd = SlashCommand(name="quit", description="Exit", handler=handler, aliases=("q", "exit"))
         assert "q" in cmd.aliases
         assert "exit" in cmd.aliases
@@ -167,7 +168,8 @@ class TestChatCommandRegistry:
         return ChatCommandRegistry()
 
     def _make_cmd(self, name, result="ok", aliases=()):
-        handler = lambda ctx: result
+        def handler(ctx):
+            return result
         return SlashCommand(name=name, description=f"{name} cmd", handler=handler, aliases=aliases)
 
     def test_empty_registry_dispatch_returns_none(self):

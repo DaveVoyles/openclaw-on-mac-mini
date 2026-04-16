@@ -39,6 +39,5 @@ class TestOpenclawCliSettingsModule:
 
     def test_future_annotations_imported(self):
         """Module should use from __future__ import annotations."""
-        import openclaw_cli_settings
         spec = importlib.util.find_spec("openclaw_cli_settings")
         assert spec is not None

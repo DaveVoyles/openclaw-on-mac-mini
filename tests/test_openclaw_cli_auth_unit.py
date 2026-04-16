@@ -1,8 +1,6 @@
 """Unit tests for openclaw_cli_auth.py — token resolution helpers."""
 from __future__ import annotations
 
-import subprocess
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -19,7 +17,6 @@ from openclaw_cli_auth import (
     read_keychain_token,
     write_keychain_token,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constants
