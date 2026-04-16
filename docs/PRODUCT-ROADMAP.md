@@ -132,11 +132,20 @@ relevant section of `docs/UX_IMPROVEMENTS.md`.
 
 ### Initiative: Wave 27 — Grounding Block Inspection + Remaining Stale Audit
 
-- **Status:** in progress
+- **Status:** shipped
 - **Owner area:** docs, cli
 - **Supporting doc:** `docs/UX_IMPROVEMENTS.md`
 - **Why now:** Grounding block inspection (`/context last`) remains the highest-signal open UX item, and a residual stale-checkbox audit (4 confirmed this wave) keeps the doc accurate.
-- **Next step:** Wire `/context last` to surface the exact grounding block used by the last analyze/research/write action; continue stale-checkbox reconciliation.
+- **What shipped:** `/context last` grounding block inspection (26 tests, Han); 4 stale checkboxes cleared in `docs/UX_IMPROVEMENTS.md` (Leia); `/rate` usage error fix (solo).
+- **Next step:** Complete. W28 continues watch liveness, completion recaps, and the final stale-checkbox audit.
+
+### Initiative: Wave 28 — Watch Liveness + Completion Recaps + Final Stale Audit
+
+- **Status:** in progress
+- **Owner area:** cli, docs
+- **Supporting doc:** `docs/UX_IMPROVEMENTS.md`
+- **Why now:** Watch-loop liveness cues (iteration counter, optional bell) and per-command completion recaps (analyze/research/write) are the next highest-signal open UX items; a shared Rich preview helper reduces duplication; a final stale audit keeps the doc accurate.
+- **Next step:** Han lands watch liveness cues and bell; Rey lands completion recaps for analyze/research/write and the shared Rich preview helper; Leia completes the final stale-checkbox audit.
 
 ### 3. CLI technical-debt follow-up
 
