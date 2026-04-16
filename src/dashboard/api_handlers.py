@@ -54,7 +54,7 @@ def _get_perplexity_cache_stats() -> dict:
     try:
         from skills.search_skills import get_perplexity_cache_stats
         return get_perplexity_cache_stats()
-    except Exception:
+    except (ImportError, AttributeError):
         return {"size": 0, "live_entries": 0, "hits": 0, "ttl_seconds": 300}
 
 
@@ -63,7 +63,7 @@ def _get_quality_retry_count() -> int:
     try:
         from answer_policy import get_quality_retry_count
         return get_quality_retry_count()
-    except Exception:
+    except (ImportError, AttributeError):
         return 0
 
 
@@ -320,7 +320,7 @@ def _audit_scope_action(
             **(detail or {}),
         }
         audit_log(actor or "dashboard", action, detail=json.dumps(payload, separators=(",", ":")))
-    except Exception as exc:
+    except (ImportError, OSError, TypeError, ValueError) as exc:
         log.debug("Audit log write failed for %s: %s", action, exc)
 
 
@@ -531,7 +531,7 @@ def _load_plan_object(plan_id: str):
         return None
     try:
         from agent_loop import load_plan as load_agent_plan
-    except Exception as exc:
+    except ImportError as exc:
         log.debug("Plan loader unavailable for %s: %s", normalized, exc)
         return None
     try:
@@ -545,7 +545,7 @@ def _list_plan_objects(status_filter: str = "in-progress") -> list[object]:
     normalized = str(status_filter or "in-progress").strip() or "in-progress"
     try:
         from agent_loop import list_plans as list_agent_plans
-    except Exception as exc:
+    except ImportError as exc:
         log.debug("Plan listing unavailable: %s", exc)
         return []
     try:
@@ -1476,11 +1476,11 @@ async def api_runs_handler(request: web.Request) -> web.Response:
     from error_tracker import get_recent_outcomes
     try:
         hours = float(request.query.get("hours", 24))
-    except Exception:
+    except (TypeError, ValueError):
         hours = 24
     try:
         limit = int(request.query.get("limit", 100))
-    except Exception:
+    except (TypeError, ValueError):
         limit = 100
     entries = get_recent_outcomes(hours=hours, limit=limit)
     runs = []
@@ -1959,7 +1959,7 @@ async def api_memories_handler(request: web.Request) -> web.Response:
         from qmd import qmd_store
         data["facts"] = list(qmd_store._memory[-50:])
         data["facts"].reverse()
-    except Exception as exc:
+    except (ImportError, AttributeError) as exc:
         log.debug("QMD facts load failed: %s", exc)
 
     # Learned rules (last 20, newest first)
@@ -1968,7 +1968,7 @@ async def api_memories_handler(request: web.Request) -> web.Response:
         rules = await _load_rules()
         data["rules"] = rules[-20:]
         data["rules"].reverse()
-    except Exception as exc:
+    except (ImportError, OSError) as exc:
         log.debug("Rules load failed: %s", exc)
 
     # Vector store collection stats
@@ -2864,7 +2864,7 @@ async def api_agent_ask_handler(request: web.Request) -> web.Response:
     """
     try:
         body = await request.json()
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return web.json_response({"error": "Invalid JSON body"}, status=400)
 
     prompt = (body.get("prompt") or "").strip()
@@ -2979,7 +2979,7 @@ async def api_recap_generate_handler(request: web.Request) -> web.Response:
     """
     try:
         body = await request.json()
-    except Exception:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         body = {}
 
     days: int = int(body.get("days", 7))
