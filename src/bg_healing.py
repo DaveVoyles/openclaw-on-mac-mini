@@ -97,7 +97,7 @@ async def background_cleanup_loop():
             try:
                 conversation_store.cleanup_expired()
                 approval_store.cleanup_expired()
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.warning("Background cleanup error: %s", e)
                 success = False
                 error_type = type(e).__name__
@@ -127,7 +127,7 @@ async def proactive_insight_loop(bot):
                 await _check_quality_drift_alert(bot)
                 await _run_proactive_scan(bot)
                 log.info("Proactive scan complete")
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.warning("Proactive scan error: %s", e)
         await asyncio.sleep(PROACTIVE_SCAN_INTERVAL)
 
@@ -138,7 +138,7 @@ async def _check_quality_drift_alert(bot) -> bool:
         return False
     try:
         from dashboard.api_handlers import _build_offline_quality_calibration_payload
-    except Exception as exc:
+    except (ImportError, AttributeError) as exc:
         log.debug("Quality drift calibration import failed: %s", exc)
         return False
 
@@ -199,7 +199,7 @@ async def _check_quality_drift_alert(bot) -> bool:
         hint = get_remediation_hint(drift_category)
         if hint:
             embed.add_field(name="Remediation", value=hint, inline=False)
-    except Exception:
+    except (ImportError, AttributeError):
         pass
     embed.set_footer(text="Quality drift monitor • bounded alert routing")
     await channel.send(embed=embed)
@@ -223,7 +223,7 @@ async def _gather_system_signals():
     try:
         from maintenance_skills import check_nas_health
         nas_disk = await asyncio.wait_for(check_nas_health(), timeout=20)
-    except Exception as exc:
+    except (ImportError, OSError, asyncio.TimeoutError) as exc:
         log.debug("NAS health check failed: %s", exc)
 
     # gluetun VPN container (qBittorrent + SABnzbd depend on it)
@@ -231,7 +231,7 @@ async def _gather_system_signals():
     try:
         from maintenance_skills import check_gluetun_vpn
         vpn_status = await asyncio.wait_for(check_gluetun_vpn(), timeout=15)
-    except Exception as exc:
+    except (ImportError, OSError, asyncio.TimeoutError) as exc:
         log.debug("gluetun VPN check failed: %s", exc)
 
     # Record service-level health for trend tracking
@@ -244,17 +244,15 @@ async def _gather_system_signals():
                 _hh_record(svc_name, "degraded", result[:200])
             elif isinstance(result, str):
                 _hh_record(svc_name, "ok", result[:200])
-    except Exception as e:
+    except (ImportError, OSError, AttributeError, ValueError, RuntimeError) as e:
         log.debug("Failed to record health check to history: %s", e)
-
-    # Record disk usage for trend prediction
     try:
         import shutil
 
         from health_history import record_disk as _hh_record_disk
         usage = shutil.disk_usage("/")
         _hh_record_disk("/", usage.total / 1e9, usage.used / 1e9, usage.free / 1e9, usage.used / usage.total * 100)
-    except Exception as e:
+    except (ImportError, OSError, AttributeError, ValueError) as e:
         log.debug("Failed to record disk usage to history: %s", e)
 
     key_containers = ["sonarr", "radarr", "sabnzbd", "plex"]
@@ -264,7 +262,7 @@ async def _gather_system_signals():
             logs = await asyncio.wait_for(get_container_logs(svc, lines=PROACTIVE_LOG_LINES), timeout=6)
             if logs and _error_re.search(logs):
                 log_snippets[svc] = logs[:LOG_SNIPPET_MAX_CHARS]
-        except Exception as exc:
+        except (OSError, asyncio.TimeoutError, ValueError) as exc:
             log.debug("Container log fetch for %s failed: %s", svc, exc)
 
     # Check for disk space alerts (>90% used)
@@ -372,9 +370,9 @@ async def _execute_self_healing(analysis: str) -> tuple[str, list[str]]:
                     f"Click **Approve Fix** below to run (uses API tokens)."
                 )
                 audit_log(None, "self_heal", detail=f"copilot_fix proposed: {target[:200]}")
-        except Exception as exc:
-            heal_results.append(f"❌ `{action_type} {target}`: {exc}")
-            log.warning("Self-heal %s failed for %s: %s", action_type, target, exc)
+        except Exception as e:  # broad: intentional
+            heal_results.append(f"❌ `{action_type} {target}`: {e}")
+            log.warning("Self-heal %s failed for %s: %s", action_type, target, e)
 
     return display_analysis, heal_results
 
@@ -396,7 +394,7 @@ class _CopilotFixView(discord.ui.View):
                 await self.message.edit(content="⏱️ Copilot fix approval expired.", view=self)
         except discord.HTTPException as e:
             log.debug("Failed to edit expired approval message: %s", e)
-        except Exception as e:
+        except (discord.HTTPException, AttributeError) as e:
             log.warning("Unexpected error disabling expired approval buttons: %s", e)
         log.debug("_CopilotFixView timed out after 1 hour")
 
@@ -423,14 +421,14 @@ class _CopilotFixView(discord.ui.View):
             await interaction.response.edit_message(view=self)
         except discord.InteractionResponded:
             pass  # Already acknowledged (shouldn't happen, but safe)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.warning("_CopilotFixView ack via edit_message failed: %s", exc)
             # Last-resort acknowledgment — sends an ephemeral so Discord doesn't mark as failed
             try:
                 await interaction.response.defer_update()
             except discord.HTTPException as e:
                 log.debug("Failed to defer interaction update: %s", e)
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.warning("Unexpected error in last-resort interaction acknowledgment: %s", e)
 
     @discord.ui.button(label="✅ Approve Fix", style=discord.ButtonStyle.green, custom_id="copilot_approve")
@@ -456,9 +454,9 @@ class _CopilotFixView(discord.ui.View):
                     audit_log(interaction.user, "copilot_fix_approved", detail=cp[:200])
                 except asyncio.TimeoutError:
                     results.append("⏱️ Timed out after 3 minutes.")
-                except Exception as exc:
+                except (OSError, ValueError, RuntimeError) as exc:
                     results.append(f"❌ Failed: {exc}")
-        except Exception as exc:
+        except (ImportError, AttributeError) as exc:
             log.exception("approve_button fix execution failed")
             results.append(f"❌ Execution error: {exc}")
 
@@ -473,7 +471,7 @@ class _CopilotFixView(discord.ui.View):
         except discord.HTTPException as e:
             log.warning("Failed to edit status message, sending new message: %s", e)
             await interaction.channel.send(final)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("Unexpected error sending approval result")
             await interaction.channel.send(final)
 
@@ -487,7 +485,7 @@ class _CopilotFixView(discord.ui.View):
         try:
             await interaction.channel.send("❌ Copilot CLI fix skipped.")
             audit_log(interaction.user, "copilot_fix_rejected", detail=self.prompts[0][:200])
-        except Exception as exc:
+        except discord.HTTPException as exc:
             log.warning("deny_button cleanup failed: %s", exc)
         self.stop()
 
@@ -575,5 +573,5 @@ async def _run_proactive_scan(bot):
         log.info("Proactive scan posted an insight (healed: %d)", len(heal_results))
     except asyncio.TimeoutError:
         log.warning("Proactive scan LLM call timed out")
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Proactive scan failed: %s", e)

@@ -193,7 +193,7 @@ async def _gemini_chat(
 
         return text, updated_history, model_name
 
-    except Exception:
+    except Exception:  # broad: intentional
         _gemini_circuit.record_failure(_GEMINI_CIRCUIT_KEY)
         raise
 
@@ -380,7 +380,7 @@ async def _try_copilot_proxy_reply(
                 context,
             )
             continue
-        except Exception as exc:
+        except (OSError, ConnectionError, ValueError, RuntimeError) as exc:
             log.warning(
                 "Copilot proxy model %s failed during %s (%s): %s",
                 candidate,
@@ -462,7 +462,7 @@ async def _stream_copilot_chunks(
                 if len(accumulated) - last_yield_len >= _PROVIDER_STREAM_PARTIAL_INTERVAL:
                     yield accumulated, False, {}
                     last_yield_len = len(accumulated)
-        except Exception as exc:
+        except (OSError, ConnectionError, ValueError, RuntimeError) as exc:
             log.warning(
                 "Copilot stream candidate %s failed (%s): %s",
                 candidate, context, exc,
@@ -552,7 +552,7 @@ async def _recover_stream_provider_failure(
             return reply, updated, model_label, False
     except (ImportError, KeyError) as exc:
         log.debug("Copilot proxy recovery unavailable: %s", exc)
-    except Exception as exc:
+    except (OSError, ConnectionError, ValueError, RuntimeError) as exc:
         log.warning("Copilot proxy recovery failed (%s): %s", type(exc).__name__, exc)
 
     try:
@@ -625,7 +625,7 @@ async def _recover_stream_provider_failure(
             _RECOVERY_DIRECT_SKILL_TIMEOUT_SECONDS,
             reason,
         )
-    except Exception as exc:
+    except (ImportError, OSError, ValueError, RuntimeError) as exc:
         log.debug("Direct sports recovery unavailable (%s): %s", type(exc).__name__, exc)
 
     routing_notes.append(f"{provider_display} unavailable ({reason})")
@@ -770,7 +770,7 @@ async def chat_stream(
                     ]
                     yield web_reply, True, {"model_used": "perplexity-direct", "updated_history": updated, "needs_tools": False, **metadata}
                     return
-        except Exception as _web_exc:
+        except (ImportError, OSError, ValueError, AttributeError) as _web_exc:
             log.warning("Stream web-search fast-path failed, falling through: %s", _web_exc)
 
     # Copilot fast-path for coding/programming queries — separate from web-search path.
@@ -811,7 +811,7 @@ async def chat_stream(
                             reply = _apply_trace_footer(reply, trace)
                             yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                             return
-        except Exception as _fp_exc:
+        except (ImportError, OSError, ValueError, AttributeError) as _fp_exc:
             log.warning("Stream coding fast-path failed, falling through to standard routing: %s", _fp_exc)
 
     # Multi-model routing (Phase 8)
@@ -912,7 +912,7 @@ async def chat_stream(
                     return
                 if reply:
                     log.info("Anthropic route returned placeholder reply, falling through to Gemini")
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError) as e:
             log.debug("Multi-model routing failed (non-fatal, stream): %s", e)
 
     # Forced OpenAI / Anthropic mode
@@ -970,7 +970,7 @@ async def chat_stream(
                 yield reply, True, {"model_used": model_label, "updated_history": updated, "needs_tools": False, **metadata}
                 return
             log.info("%s call failed, falling back to Gemini", model_preference)
-        except Exception as e:
+        except (ImportError, OSError, ConnectionError, ValueError, RuntimeError) as e:
             log.info("%s call failed, falling back to Gemini: %s", model_preference, e)
 
     # Forced local mode
@@ -1016,7 +1016,7 @@ async def chat_stream(
                 return
         except (ImportError, KeyError) as exc:
             log.debug("Copilot proxy fallback unavailable: %s", exc)
-        except Exception as exc:
+        except (OSError, ConnectionError, ValueError, RuntimeError) as exc:
             log.warning("Copilot proxy fallback failed (rate-limit recovery): %s", exc)
         msg = (
             "⚠️ Rate limit reached. Please wait a moment before asking again. "
@@ -1055,7 +1055,7 @@ async def chat_stream(
             parallel_tools=True,
             label="LLM",
         )
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.warning("Gemini failed in stream mode (%s), trying local fallback: %s", type(exc).__name__, exc)
         text, updated_history, model_name, needs_tools = await _recover_stream_provider_failure(
             failed_provider="gemini",
@@ -1098,7 +1098,7 @@ async def chat_stream(
                 label="LLM-retry",
             )
             updated_history = _strip_recalled_prefix(updated_history, cleaned_user_message, retry_msg)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.warning("Gemini retry failed (%s): %s", type(exc).__name__, exc)
             text, updated_history, model_name, needs_tools = await _recover_stream_provider_failure(
                 failed_provider="gemini",
@@ -1153,7 +1153,7 @@ async def chat_stream(
                                 updated_history, cleaned_user_message, enhanced_msg,
                             )
                             response_invalid = not _gemma_response_seems_valid(text)
-                        except Exception as exc:
+                        except Exception as exc:  # broad: intentional
                             log.warning("Gemini web escalation failed (%s): %s", type(exc).__name__, exc)
                             text, updated_history, model_name, _ = await _recover_stream_provider_failure(
                                 failed_provider="gemini",
@@ -1164,7 +1164,7 @@ async def chat_stream(
                                 reason="web-escalation",
                             )
                             response_invalid = model_name == "unavailable"
-                except Exception as exc:
+                except (OSError, ConnectionError, ValueError, RuntimeError) as exc:
                     log.warning("Auto-escalation web search failed: %s", exc)
 
     if response_invalid:
@@ -1253,7 +1253,7 @@ async def chat(
                         {"role": "model", "parts": [web_reply]},
                     ]
                     return web_reply, updated, "perplexity-direct"
-        except Exception as _web_exc:
+        except (ImportError, OSError, ValueError, AttributeError) as _web_exc:
             log.warning("chat web-search fast-path failed, falling through: %s", _web_exc)
 
     # Copilot fast-path for coding/programming queries — separate from web-search path.
@@ -1275,7 +1275,7 @@ async def chat(
                         reply, updated, model_label = result
                         log.debug("Coding fast-path → Copilot (%s)", coding_route.reason)
                         return _apply_trace_footer(reply, trace), updated, model_label
-        except Exception as _rt_exc:
+        except (ImportError, OSError, ValueError, AttributeError) as _rt_exc:
             log.warning("Realtime fast-path failed, falling through to standard routing: %s", _rt_exc)
 
     # Multi-model routing (Phase 8)
@@ -1351,7 +1351,7 @@ async def chat(
                     updated, model_label = finalized
                     return reply, updated, model_label
                 log.info("Anthropic call failed, falling through to default routing")
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError) as e:
             log.debug("Multi-model routing failed (non-fatal): %s", e)
 
     # Forced OpenAI / Anthropic mode
@@ -1389,7 +1389,7 @@ async def chat(
                 updated, model_label = finalized
                 return reply, updated, model_label
             log.info("%s call failed, falling back to Gemini", model_preference)
-        except Exception as e:
+        except (ImportError, OSError, ConnectionError, ValueError, RuntimeError) as e:
             log.info("%s call failed, falling back to Gemini: %s", model_preference, e)
 
     # Forced local mode
@@ -1429,7 +1429,7 @@ async def chat(
                 model_message, history, model,
                 on_tool_call=on_tool_call, parallel_tools=True, label="LLM",
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.warning("Gemini failed in forced mode (%s), trying local fallback: %s", type(exc).__name__, exc)
             text, updated_history, model_name, _ = await _recover_stream_provider_failure(
                 failed_provider="gemini",
@@ -1467,7 +1467,7 @@ async def chat(
             parallel_tools=True,
             label="LLM",
         )
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.warning("Gemini failed in auto mode (%s), trying local fallback: %s", type(exc).__name__, exc)
         text, updated_history, model_name, _ = await _recover_stream_provider_failure(
             failed_provider="gemini",
@@ -1500,7 +1500,7 @@ async def chat(
                 if not is_low_quality(cp_reply):
                     return _apply_trace_footer(cp_reply, trace), cp_updated, cp_label
                 log.info("Quality retry Copilot reply also low quality — keeping Gemini answer")
-    except Exception as _qr_exc:
+    except (ImportError, AttributeError, ValueError) as _qr_exc:
         log.debug("Quality retry gate skipped: %s", _qr_exc)
 
     return _apply_trace_footer(text, trace), updated_history, model_name
@@ -1554,7 +1554,7 @@ async def chat_deep(
 
     try:
         model = _get_thinking_model()
-    except Exception as exc:
+    except (AttributeError, ValueError, RuntimeError, ImportError) as exc:
         log.warning("Thinking model unavailable, falling back to standard model: %s", exc)
         model = await _get_model()
 
@@ -1569,7 +1569,7 @@ async def chat_deep(
             label="Deep research",
         )
         return text, updated_history
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.warning("Gemini failed in deep research (%s): %s", type(exc).__name__, exc)
         text, updated_history, _, _ = await _recover_stream_provider_failure(
             failed_provider="gemini",
@@ -1628,6 +1628,6 @@ async def summarize_conversation(history: list[dict]) -> str:
             ),
         )
         return response.text.strip()
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError, AttributeError) as e:
         log.warning("Failed to summarize conversation: %s", e)
         return ""

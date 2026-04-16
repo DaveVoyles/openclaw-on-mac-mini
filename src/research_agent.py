@@ -181,7 +181,7 @@ class ResearchAgent:
             if on_progress:
                 try:
                     await on_progress(msg)
-                except Exception as e:
+                except (OSError, AttributeError, ValueError, RuntimeError) as e:
                     log.warning("on_progress callback error: %s", e)
 
         try:
@@ -193,7 +193,7 @@ class ResearchAgent:
             elapsed = round(time.monotonic() - start)
             await post("error", f"Research timed out after {elapsed}s — partial results may be available.")
             return f"⏱️ Research timed out after {elapsed} seconds. Try a more specific query."
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error("Research agent error: %s", e, exc_info=True)
             await post("error", f"Unexpected error: {e}")
             return f"❌ Research failed: {e}"
@@ -245,7 +245,7 @@ class ResearchAgent:
                     snippets.append(f"[Prior: {old_query}] {r['text'][:500]}")
                 prior_context = "\n\n".join(snippets)
                 await post("plan", f"Found {len(prior)} related prior research reports — will build on them")
-        except Exception as e:
+        except Exception as e:  # broad: intentional — chromadb/pydantic may raise unpredictable errors
             log.debug("Prior research lookup failed (non-critical): %s", e)
 
         # ── Step 1: Decompose query into sub-searches ─────────────────────────
@@ -309,7 +309,7 @@ class ResearchAgent:
                 "location": f"{vector_store.RESEARCH_COLLECTION}/{report_id}",
                 "detail": "Indexed for /research-search and follow-up context",
             }
-        except Exception as e:
+        except (ImportError, OSError, AttributeError, ValueError, RuntimeError, KeyError) as e:
             receipts["vector"] = {
                 "saved": False,
                 "location": "research",
@@ -338,7 +338,7 @@ class ResearchAgent:
                     results_text = await search_web(sq, num_results=5)
                     await post("search", f"Worker {i}/{total} done: *{sq[:50]}*")
                     return {"query": sq, "results": results_text, "urls": _extract_urls(results_text)}
-                except Exception as e:
+                except (OSError, ConnectionError, ValueError, AttributeError, RuntimeError) as e:
                     return {"query": sq, "results": f"Search failed: {e}", "urls": []}
 
         results = await asyncio.gather(*(_one_search(i + 1, sq) for i, sq in enumerate(queries)))
@@ -405,11 +405,11 @@ class ResearchAgent:
                                     "domain": domain,
                                 },
                             )
-                        except Exception:
+                        except Exception:  # broad: intentional — chromadb/pydantic may raise unpredictable errors
                             pass  # non-critical
                 except asyncio.TimeoutError:
                     log.warning("Browse timed out: %s", url)
-                except Exception as e:
+                except (OSError, ConnectionError, ValueError, AttributeError, RuntimeError) as e:
                     log.warning("Browse error %s: %s", url, e)
         return browsed_pages
 
@@ -455,7 +455,7 @@ class ResearchAgent:
                     "location": "data/vault/Research",
                     "detail": vault_result,
                 }
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError) as e:
             receipts["vault"] = {
                 "saved": False,
                 "location": "data/vault/Research",
@@ -502,14 +502,14 @@ class ResearchAgent:
                             "location": "google-docs",
                             "detail": "Skipped (MATON_API_KEY not set)",
                         }
-                except Exception as exc:
+                except (ImportError, OSError, ValueError, AttributeError) as exc:
                     receipts["gdoc"] = {
                         "saved": False,
                         "location": "google-docs",
                         "detail": f"Google Docs save failed: {exc}",
                     }
                     log.debug("Research auto-save to Google Docs failed: %s", exc)
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError) as e:
             receipts["gdoc"] = {
                 "saved": False,
                 "location": "google-docs",
@@ -613,7 +613,7 @@ class ResearchAgent:
             queries = json.loads(text.strip())
             if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
                 return queries[:3]
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError, RuntimeError) as e:
             log.warning("Gap analysis failed: %s", e)
         return []
 
@@ -628,7 +628,7 @@ class ResearchAgent:
             )
             text, _ = await chat_deep(prompt)
             return text
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError, RuntimeError) as e:
             log.error("Merge synthesis failed: %s", e)
             return existing_report + f"\n\n---\n## Additional Findings\n\n{new_data[:2000]}"
 
@@ -648,7 +648,7 @@ class ResearchAgent:
             queries = json.loads(text.strip())
             if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
                 return queries[:10]
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError, RuntimeError) as e:
             log.warning("Query planning failed: %s", e)
         return []
 
@@ -678,7 +678,7 @@ class ResearchAgent:
             from llm import chat_deep
             text, _ = await chat_deep(prompt)
             return text
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError, RuntimeError) as e:
             log.error("Synthesis failed: %s", e)
             return f"❌ Synthesis failed: {e}\n\nRaw data preview:\n{data[:500]}"
 
@@ -706,7 +706,7 @@ class ResearchAgent:
                 if ln.strip()
             ]
             return lines[:3]
-        except Exception as e:
+        except (ImportError, OSError, ValueError, AttributeError, RuntimeError) as e:
             log.warning("Failed to generate follow-ups: %s", e)
             return []
 
@@ -738,7 +738,7 @@ async def run_scheduled_research(query: str, channel_id: str = "", deep: bool = 
                 f"\n\n---\n📊 *This is a recurring research update. "
                 f"Previous report was {added_at}.*"
             )
-    except Exception as exc:
+    except (ImportError, OSError, AttributeError, ValueError) as exc:
         log.debug("Prior-research annotation skipped: %s", exc)
 
     return result

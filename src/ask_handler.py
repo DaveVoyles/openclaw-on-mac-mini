@@ -137,7 +137,7 @@ async def handle_ask(
                 icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             )
             await interaction.edit_original_response(content=None, embed=embed)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — discord may be mocked in tests
             log.debug("Progress edit failed: %s", exc)
 
     async def _on_tool_call(tool_name: str, round_num: int, *, args: dict | None = None, result_preview: str | None = None) -> None:
@@ -160,7 +160,7 @@ async def handle_ask(
                 icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
             )
             await interaction.edit_original_response(content=None, embed=embed)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — discord may be mocked in tests
             log.debug("Failed to update tool progress: %s", exc)
 
     # If an attachment was provided, route through the appropriate analyzer
@@ -201,7 +201,7 @@ async def handle_ask(
                     })
                     log.info("Injected research context (%d chars) for thread: %s",
                              len(report_text), thread_name)
-            except Exception as e:
+            except (discord.HTTPException, AttributeError) as e:
                 log.debug("Research context injection failed: %s", e)
 
     # Thread continuation suggestion
@@ -227,7 +227,7 @@ async def handle_ask(
                         f"\n\n> 💡 *This looks related to your thread "
                         f"**{thread_name}**. Use `/resume {thread_name}` to continue it.*"
                     )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.debug("Thread hint search failed: %s", exc)
 
     # Channel role injection
@@ -287,7 +287,7 @@ async def handle_ask(
                     "role": "model",
                     "parts": [f"[Relevant context from memory]\n{context_hits}"],
                 })
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.debug("Contextual recall skipped: %s", e)
 
         # Inject learned rules (Phase 14A)
@@ -301,7 +301,7 @@ async def handle_ask(
                     "role": "model",
                     "parts": [f"[Learned rules — follow these]\n{rules_block}"],
                 })
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, RuntimeError) as e:
             log.debug("Rules injection skipped: %s", e)
 
         # Inject user profile context (Phase 14C)
@@ -313,7 +313,7 @@ async def handle_ask(
                     "role": "model",
                     "parts": [profile_ctx],
                 })
-        except Exception as e:
+        except (ImportError, AttributeError, ValueError, RuntimeError) as e:
             log.debug("Profile injection skipped: %s", e)
 
         # Streaming response with progressive Discord edits
@@ -346,7 +346,7 @@ async def handle_ask(
                     )
                     await interaction.edit_original_response(content=None, embed=embed)
                     last_edit = now
-                except Exception as exc:
+                except Exception as exc:  # broad: intentional — discord may be mocked in tests
                     log.debug("Stream edit failed: %s", exc)
 
             result = await run_ask_stream(
@@ -452,7 +452,7 @@ async def handle_ask(
             )
             model_used = "timeout"
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("LLM error: %s", e)
         response_text = _build_ask_failure_message(
             question=question,
@@ -503,7 +503,7 @@ async def handle_ask(
             query_type=_routing_notes[0] if _routing_notes else "unknown",
             retry_count=getattr(result, "retry_count", 0),
         )
-    except Exception as _telem_exc:
+    except Exception as _telem_exc:  # broad: intentional
         log.debug("Telemetry record failed: %s", _telem_exc)
 
     # Strip table rows that are pure placeholders like [Opponent], [Time]
@@ -522,7 +522,7 @@ async def handle_ask(
             img_bytes = render_table_image(table_text)
             if img_bytes:
                 table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
-    except Exception as e:
+    except (ImportError, OSError, ValueError, AttributeError) as e:
         log.debug("Table image rendering failed: %s", e)
 
     response_text = _format_markdown_for_discord(response_text)
@@ -578,7 +578,7 @@ async def handle_ask(
             )
             log.info("Auto-created thread '%s' for %s",
                      _auto_thread.name, interaction.user)
-        except Exception as e:
+        except discord.HTTPException as e:
             log.debug("Auto-thread creation failed: %s", e)
 
     def _build_footer(chunk_idx: int = 0, total_chunks: int = 1) -> str:
@@ -713,7 +713,7 @@ async def handle_ask(
     if table_image_file:
         try:
             await interaction.followup.send(file=table_image_file)
-        except Exception as e:
+        except discord.HTTPException as e:
             log.debug("Failed to send table image: %s", e)
 
     audit_log(interaction.user, "ask", detail=question[:200])
@@ -744,7 +744,7 @@ async def handle_ask(
             profile_values=profile_values if isinstance(profile_values, dict) else {},
             explainability=explainability if isinstance(explainability, dict) else {},
         )
-    except Exception as exc:
+    except (ImportError, AttributeError, ValueError) as exc:
         log.debug("Error tracking record failed: %s", exc)
 
     # Response-time tracking
@@ -752,7 +752,7 @@ async def handle_ask(
         from spending import record_response_time
         elapsed_ms = (time.monotonic() - _ask_start) * 1000
         record_response_time(elapsed_ms, model=model_used)
-    except Exception as exc:
+    except (ImportError, AttributeError, ValueError) as exc:
         log.debug("Response time tracking failed: %s", exc)
 
     conversation_store.cleanup_expired()
@@ -778,22 +778,22 @@ async def handle_ask(
                                 await interaction.followup.send(
                                     f"📝 Got it — I'll remember: *{rule}*", ephemeral=True
                                 )
-                            except Exception as exc:
+                            except discord.HTTPException as exc:
                                 log.debug("Correction followup send failed: %s", exc)
-            except Exception as e:
+            except (ImportError, AttributeError, ValueError) as e:
                 log.debug("Correction detection failed (non-critical): %s", e)
 
             try:
                 from user_profile import learn_from_message
                 await learn_from_message(question, response_text)
-            except Exception as e:
+            except (ImportError, AttributeError, ValueError) as e:
                 log.debug("Profile learning failed (non-critical): %s", e)
 
             try:
                 from fact_extractor import extract_and_store_facts, should_extract
                 if should_extract(interaction.user.id, question):
                     await extract_and_store_facts(question, response_text, interaction.user.id)
-            except Exception as e:
+            except (ImportError, AttributeError, ValueError) as e:
                 log.debug("Fact extraction failed (non-critical): %s", e)
 
             try:
@@ -805,9 +805,9 @@ async def handle_ask(
                             await interaction.followup.send(
                                 f"🎯 Tracking goal: *{goal}*", ephemeral=True
                             )
-                        except Exception as exc:
+                        except discord.HTTPException as exc:
                             log.debug("Goal followup send failed: %s", exc)
-            except Exception as e:
+            except (ImportError, AttributeError, ValueError) as e:
                 log.debug("Goal tracking failed (non-critical): %s", e)
 
     asyncio.get_running_loop().create_task(_post_response_learning())
