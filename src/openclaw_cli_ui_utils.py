@@ -431,6 +431,123 @@ def _print_status_bar(
             print(f"  {style}{line}{reset}")
 
 
+def _print_shell_top_bar(
+    *,
+    session_id: str = "",
+    model_name: str = "",
+    autoroute_on: bool = True,
+    watch_active: bool = False,
+    _override_is_tty: bool | None = None,
+    _override_rich_available: bool | None = None,
+    _override_cols: int | None = None,
+) -> None:
+    """Print the always-on top context bar (session · model · autoroute · watch).
+
+    Shown once after the startup banner and again after each AI response so the
+    user always knows which session, model, and routing state they are in.
+
+    Degradation:
+    - Rich + TTY  → dim unicode bar with ``╸`` accent
+    - ANSI TTY    → dim ANSI bar
+    - Plain mode / non-TTY → ``---`` text separator
+    - Narrow (<60 cols)    → compact single-line form
+
+    The ``_override_*`` parameters are internal hooks so that monkeypatched
+    module attributes in tests are forwarded correctly from the openclaw_cli shim.
+    """
+    is_tty = _override_is_tty if _override_is_tty is not None else _get_is_tty()
+    cols = _override_cols if _override_cols is not None else _terminal_width()
+    rich_available = _override_rich_available if _override_rich_available is not None else _RICH_AVAILABLE
+    narrow = cols < 60
+
+    # Build badge parts -------------------------------------------------------
+    parts: list[str] = []
+    if session_id:
+        short = session_id[:6] if narrow else session_id[:12]
+        parts.append(f"session: {short}…")
+    if model_name and not narrow:
+        parts.append(f"model: {model_name}")
+    autoroute_state = "on" if autoroute_on else "off"
+    if narrow:
+        parts.append(f"ar:{autoroute_state}")
+    else:
+        parts.append(f"autoroute: {autoroute_state}")
+    if watch_active:
+        parts.append("watch: active")
+
+    separator = " · "
+    text = separator.join(parts)
+
+    # Plain mode / non-TTY ----------------------------------------------------
+    if _a11y_plain_mode() or not is_tty:
+        if is_tty:
+            print("--- " + " | ".join(parts) + " ---")
+        return
+
+    # Rich path ---------------------------------------------------------------
+    if rich_available:
+        _RICH_CONSOLE.print(f"[dim]╸ {text}[/]")
+        return
+
+    # ANSI fallback -----------------------------------------------------------
+    print(f"  {_DM}╸ {text}{_R}")
+
+
+def _print_shell_bottom_bar(
+    *,
+    mode: str = "chat",
+    hints: list[str] | None = None,
+    _override_is_tty: bool | None = None,
+    _override_rich_available: bool | None = None,
+    _override_cols: int | None = None,
+) -> None:
+    """Print the always-on bottom control bar before the REPL prompt.
+
+    Shows the current mode and 1–2 inline hint commands so the user always
+    has a quick reference for how to navigate.
+
+    Degradation:
+    - Rich + TTY  → dim unicode bar with ``╸`` accent
+    - ANSI TTY    → dim ANSI bar
+    - Plain mode / non-TTY → simple text separator
+    - Narrow (<60 cols)    → collapse to minimal hints only
+
+    The ``_override_*`` parameters are internal hooks so that monkeypatched
+    module attributes in tests are forwarded correctly from the openclaw_cli shim.
+    """
+    is_tty = _override_is_tty if _override_is_tty is not None else _get_is_tty()
+    cols = _override_cols if _override_cols is not None else _terminal_width()
+    rich_available = _override_rich_available if _override_rich_available is not None else _RICH_AVAILABLE
+    narrow = cols < 60
+
+    # Build hint parts --------------------------------------------------------
+    effective_hints: list[str] = list(hints or [])
+    if not effective_hints:
+        if narrow:
+            effective_hints = ["/help", "/quit"]
+        else:
+            effective_hints = ["/help for commands", "/quit to exit", "Tab completes"]
+
+    mode_label = f"mode: {mode}" if mode else ""
+    separator = " · "
+    hint_text = separator.join(effective_hints)
+    full_text = (mode_label + separator + hint_text) if mode_label else hint_text
+
+    # Plain mode / non-TTY ----------------------------------------------------
+    if _a11y_plain_mode() or not is_tty:
+        if is_tty:
+            print("--- " + " | ".join(([mode_label] if mode_label else []) + effective_hints) + " ---")
+        return
+
+    # Rich path ---------------------------------------------------------------
+    if rich_available:
+        _RICH_CONSOLE.print(f"[dim]╸ {full_text}[/]")
+        return
+
+    # ANSI fallback -----------------------------------------------------------
+    print(f"  {_DM}╸ {full_text}{_R}")
+
+
 def _celebration_burst(message: str = "") -> None:
     """Print a short animated celebration burst (confetti + message)."""
     import random  # noqa: PLC0415
