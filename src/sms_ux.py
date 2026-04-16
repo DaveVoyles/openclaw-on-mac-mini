@@ -62,7 +62,7 @@ class SMSPrefsStore:
             data = json.loads(self._path.read_text())
             for uid_str, prefs_dict in data.items():
                 self._prefs[int(uid_str)] = UserSMSPrefs(**prefs_dict)
-        except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError) as e:
+        except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError):
             self._prefs = {}
 
     async def _save(self) -> None:

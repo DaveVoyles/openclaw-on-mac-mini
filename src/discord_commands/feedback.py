@@ -107,5 +107,5 @@ def _register_feedback_commands(bot: commands.Bot) -> None:
 
             await interaction.followup.send(embed=embed)
 
-        except Exception as exc:  # broad: intentional
+        except Exception:  # broad: intentional
             await interaction.followup.send(embed=embed)

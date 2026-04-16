@@ -371,7 +371,7 @@ class MetricsCollector:
                 active_users.set(len(recent_users))
 
                 await asyncio.sleep(10)  # Update every 10 seconds
-            except Exception as e:  # broad: intentional
+            except Exception:  # broad: intentional
                 await asyncio.sleep(60)
 
     def record_command(

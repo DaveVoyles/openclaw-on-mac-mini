@@ -252,5 +252,5 @@ async def _reflect_on_response(
                  len(text), len(reflection))
         return reflection
 
-    except Exception as e:  # broad: intentional
+    except Exception:  # broad: intentional
         return text

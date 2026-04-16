@@ -34,7 +34,7 @@ async def is_available() -> bool:
             timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST),
         ) as resp:
             return resp.status == 200
-    except Exception as exc:  # broad: intentional
+    except Exception:  # broad: intentional
         return False
 
 

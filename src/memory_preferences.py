@@ -35,7 +35,7 @@ def _load_prefs(user_id: int) -> dict:
         return {}
     try:
         return json.loads(path.read_text())
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, OSError):
         return {}
 
 

@@ -52,7 +52,8 @@ async def analyze_logs(service: str, lines: int = 50) -> str:
         )
         return response_text
 
-    except Exception as e:  # broad: intentional        log.warning("LLM analysis failed, falling back to basic: %s", e)
+    except Exception as e:  # broad: intentional
+        log.warning("LLM analysis failed, falling back to basic: %s", e)
         return _basic_analysis(service, log_text)
 
 

@@ -34,7 +34,7 @@ def _register_monitoring_commands(bot: commands.Bot) -> None:
         try:
             from health_history import get_trend
             trend = get_trend(service, days)
-        except Exception as exc:  # broad: intentional
+        except Exception:  # broad: intentional
             return
 
         color = 0x2ecc71 if trend["uptime_pct"] > 95 else (0xf39c12 if trend["uptime_pct"] > 80 else 0xe74c3c)

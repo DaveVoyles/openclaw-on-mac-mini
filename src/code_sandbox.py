@@ -98,7 +98,7 @@ async def run_code(
             )
             await kill_proc.wait()
         except OSError as e:
-            log.debug("Failed to kill sandbox container: %s", exc)
+            log.debug("Failed to kill sandbox container: %s", e)
         return "", f"Execution timed out after {SANDBOX_TIMEOUT}s.", 1
 
     except Exception as e:  # broad: intentional

@@ -127,7 +127,7 @@ def repair_json(text: str) -> Optional[dict | list]:
         if result is not None:
             log.debug("Repaired JSON (quoted keys)")
             return result
-    except (re.error, json.JSONDecodeError, ValueError) as e:
+    except (re.error, json.JSONDecodeError, ValueError):
         pass
 
     log.debug("JSON repair failed for: %.100s…", text)

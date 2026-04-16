@@ -118,7 +118,7 @@ async def extract_and_store_goal(
         log.info("New goal detected for user %s: %s", user_id, goal_text)
         return goal_text
 
-    except Exception as e:  # broad: intentional
+    except Exception:  # broad: intentional
         return None
 
 

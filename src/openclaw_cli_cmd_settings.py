@@ -14,7 +14,6 @@ All openclaw_cli.py globals accessed via _m() to respect test monkeypatching.
 """
 from __future__ import annotations
 
-import sys
 from typing import TYPE_CHECKING, Any
 
 from openclaw_cli_prefs import (

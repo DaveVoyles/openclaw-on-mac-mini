@@ -45,5 +45,5 @@ def _register_providers_commands(bot: commands.Bot) -> None:
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed)
-        except Exception as exc:  # broad: intentional
+        except Exception:  # broad: intentional
             await interaction.followup.send(embed=embed)

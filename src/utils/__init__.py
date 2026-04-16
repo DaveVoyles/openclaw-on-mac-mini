@@ -51,7 +51,7 @@ async def safe_call(
     except asyncio.TimeoutError:
         log.warning(f"{label} timed out after {timeout}s")
         return fallback
-    except Exception as e:  # broad: intentional
+    except Exception:  # broad: intentional
         return fallback
 
 
