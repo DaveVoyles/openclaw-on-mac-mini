@@ -22,6 +22,8 @@ jobs:
   build:
     name: Build Documentation
     runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/docs/Gemfile
 
     steps:
       - name: Checkout
@@ -45,7 +47,6 @@ jobs:
         with:
           ruby-version: '3.2'
           bundler-cache: true
-          working-directory: docs
 
       - name: Install dependencies
         run: |
