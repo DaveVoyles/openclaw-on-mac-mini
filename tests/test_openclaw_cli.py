@@ -251,7 +251,33 @@ def test_invoke_openclaw_stream_prints_chunks_and_returns_final(capsys):
     assert "Hello world" in capsys.readouterr().out
 
 
-def test_fetch_health_reads_health_endpoint():
+def test_invoke_openclaw_stream_no_chunks_sets_streamed_cli_false(capsys):
+    """When server skips chunk events (sends only final), _streamed_cli is False.
+
+    This ensures print_response will render the body itself rather than
+    leaving the screen blank because it assumed the stream already printed it.
+    """
+    def _fake_urlopen(req, timeout):
+        return _FakeStreamingResponse(
+            [
+                'event: final\n',
+                'data: {"response":"Only final, no chunks","model":"perplexity-direct","tokens":0}\n',
+                '\n',
+            ]
+        )
+
+    response = mod.invoke_openclaw_stream(
+        "hello",
+        config=_config(),
+        opener=_fake_urlopen,
+    )
+
+    assert response.response == "Only final, no chunks"
+    assert response.raw["_streamed_cli"] is False
+    assert capsys.readouterr().out == ""  # nothing printed mid-stream
+
+
+
     captured = {}
 
     def _fake_urlopen(req, timeout):

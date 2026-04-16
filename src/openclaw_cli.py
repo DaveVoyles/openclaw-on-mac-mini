@@ -2594,6 +2594,7 @@ def invoke_openclaw_stream(
     try:
         with opener(req, timeout=config.timeout_seconds) as resp:
             event_lines: list[str] = []
+            _chunks_printed = False
             while True:
                 raw_line = resp.readline()
                 if not raw_line:
@@ -2609,17 +2610,18 @@ def invoke_openclaw_stream(
                         delta = str(data.get("delta") or "")
                         if delta:
                             print(delta, end="", flush=True)
+                            _chunks_printed = True
                         continue
                     if event_name == "error":
                         raise OpenClawCliError(str(data.get("error") or "Streaming request failed."))
                     if event_name == "final":
-                        if sys.stdout and delta_needs_newline():
+                        if _chunks_printed and sys.stdout and delta_needs_newline():
                             print()
                         return AskResponse(
                             response=str(data.get("response") or "").strip(),
                             model=str(data.get("model") or config.model),
                             tokens=int(data.get("tokens") or 0),
-                            raw={**data, "_streamed_cli": True},
+                            raw={**data, "_streamed_cli": _chunks_printed},
                         )
                 else:
                     event_lines.append(line)
@@ -4772,10 +4774,6 @@ def run_chat(
             if _sys_prompt:
                 effective_input = f"[System context]\n{_sys_prompt}\n\n{effective_input}"
             if ask_func is invoke_openclaw and should_use_streaming(config):
-                _is_tty = _get_is_tty()
-                _compact = _PREFS.get("layout") == "compact"
-                if _is_tty and not config.output_json and not _compact:
-                    _print_response_separator(label="Response", detail="live stream", status="active")
                 response = invoke_openclaw_stream(
                     effective_input,
                     config=config,
