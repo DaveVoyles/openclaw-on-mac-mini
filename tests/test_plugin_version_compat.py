@@ -74,14 +74,14 @@ def test_check_compat_satisfied_min():
 
 def test_check_compat_unsatisfied_min():
     """Plugin requires version far in future → warning."""
-    warnings = _check_plugin_version_compat("test-plugin", {"min_openclaw_version": "99.0.0"})
+    warnings = _check_plugin_version_compat("test-plugin", {"min_openclaw_version": "9999.0.0"})
     assert len(warnings) == 1
     assert "requires OpenClaw" in warnings[0]
 
 
 def test_check_compat_unsatisfied_min_host_version_alias():
     """Plugin using min_host_version alias → warning when unsatisfied."""
-    warnings = _check_plugin_version_compat("test-plugin", {"min_host_version": "99.0.0"})
+    warnings = _check_plugin_version_compat("test-plugin", {"min_host_version": "9999.0.0"})
     assert len(warnings) == 1
     assert "requires OpenClaw" in warnings[0]
 
@@ -95,7 +95,7 @@ def test_check_compat_max_version_exceeded():
 
 def test_check_compat_max_version_ok():
     """Plugin max version at or above host → no warning."""
-    warnings = _check_plugin_version_compat("test-plugin", {"max_openclaw_version": "99.0.0"})
+    warnings = _check_plugin_version_compat("test-plugin", {"max_openclaw_version": "9999.0.0"})
     assert warnings == []
 
 

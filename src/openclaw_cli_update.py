@@ -53,9 +53,11 @@ def cli_version() -> str:
 
 
 def _version_tuple(v: str) -> tuple[int, ...]:
-    """Convert a version string like '2026.3.20' or '0.6.0' to a comparable tuple."""
+    """Convert a version string like '2026.3.20' or '0.6.0+wave45' to a comparable tuple."""
     try:
-        return tuple(int(x) for x in v.split("."))
+        # Strip any build metadata suffix (e.g. '+wave45') before splitting.
+        base = v.split("+")[0]
+        return tuple(int(x) for x in base.split("."))
     except (ValueError, TypeError):
         return (0,)
 
