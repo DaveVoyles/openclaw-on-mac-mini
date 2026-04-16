@@ -32,7 +32,7 @@ from openclaw_cli_ui_core import (
     _R,
     _get_is_tty,
 )
-from openclaw_cli_watch import _print_watch_history, _print_watch_status
+from openclaw_cli_watch import _print_watch_history, _print_watch_status, cmd_watch_bell
 
 # Sentinel strings — mirror openclaw_cli._CMD_CONTINUE / _CMD_QUIT.
 _CMD_CONTINUE: str = "continue"
@@ -128,8 +128,11 @@ def _cmd_watch(ctx: ChatCommandContext) -> str:
         else:
             print(f"operator note recorded: {note_text[:60]}")
 
+    elif sub == "bell":
+        cmd_watch_bell(rest)
+
     else:
-        m._print_error("Usage: /watch [status|history|retry-limit N|intervene TEXT]")
+        m._print_error("Usage: /watch [status|history|retry-limit N|intervene TEXT|bell [on|off]]")
 
     return _CMD_CONTINUE
 

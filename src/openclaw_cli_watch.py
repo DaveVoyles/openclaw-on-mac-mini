@@ -741,6 +741,7 @@ def render_watch_iteration(
     summary: str,
     output_path: str,
     output_json: bool,
+    max_polls: int = 0,
 ) -> None:
     """Print a compact watch checkpoint result."""
     payload = {
@@ -752,13 +753,14 @@ def render_watch_iteration(
     if output_json:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return
+    iter_label = f"{iteration}/{max_polls}" if max_polls > 0 else f"iter {iteration}"
     if _RICH_AVAILABLE and _IS_TTY:
         _MODE_COLORS = {"analyze": "cyan", "research": "blue", "write": "yellow"}
         mode_color = _MODE_COLORS.get(str(mode).lower(), "white")
-        _RICH_CONSOLE.print(f"\U0001f504 [bold]watch [{iteration}][/]  [{mode_color}]{mode}[/]  [dim]·[/]  {summary}")
+        _RICH_CONSOLE.print(f"\U0001f504 [bold]watch [{iter_label}][/]  [{mode_color}]{mode}[/]  [dim]·[/]  {summary}")
         _print_meta_footer(("saved", output_path))
     else:
-        print(f"[watch {iteration}] {mode}: {summary}")
+        print(f"[watch {iter_label}] {mode}: {summary}")
         print(f"saved: {output_path}")
 
 
@@ -1174,6 +1176,45 @@ def execute_watch_iteration(
 
 
 # ---------------------------------------------------------------------------
+# cmd_watch_bell — /watch bell subcommand handler
+# ---------------------------------------------------------------------------
+
+
+def cmd_watch_bell(rest: str) -> None:
+    """Handle the /watch bell [on|off] subcommand.
+
+    Called from _cmd_watch in openclaw_cli_cmd_workflow when ``sub == "bell"``.
+    Modifies _PREFS["watch_bell"] in-place and prints a confirmation.
+    With no argument (or empty rest) it prints the current state.
+    """
+    arg = rest.strip().lower()
+    if arg == "on":
+        _PREFS["watch_bell"] = True
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[green]✓[/] watch bell [green]on[/]")
+        else:
+            print("watch bell on")
+    elif arg == "off":
+        _PREFS["watch_bell"] = False
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[green]✓[/] watch bell [red]off[/]")
+        else:
+            print("watch bell off")
+    elif arg == "":
+        current = bool(_PREFS.get("watch_bell", False))
+        state_str = "on" if current else "off"
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print(f"watch bell is [cyan]{state_str}[/]")
+        else:
+            print(f"watch bell is {state_str}")
+    else:
+        if _RICH_AVAILABLE and _IS_TTY:
+            _RICH_CONSOLE.print("[red]Usage: /watch bell [on|off][/]")
+        else:
+            print("Usage: /watch bell [on|off]")
+
+
+# ---------------------------------------------------------------------------
 # handle_watch_command — main watch orchestrator
 # ---------------------------------------------------------------------------
 
@@ -1299,7 +1340,8 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                 save_watch_state(session.session_id, state)
                 update_session(session.session_id, automation_status="waiting", automation_mode=mode)
                 if not config.output_json:
-                    print(f"[watch {state['poll_count']}] unchanged; waiting for workspace updates.")
+                    _iter_label = f"{state['poll_count']}/{max_polls}" if max_polls > 0 else f"iter {state['poll_count']}"
+                    print(f"[watch {_iter_label}] unchanged; waiting for workspace updates.")
             else:
                 if force_run_once:
                     state["force_run_once"] = False
@@ -1458,6 +1500,8 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                             print(
                                 f"  ⚠ Watch stopped — exhausted retries after {attempt} attempt(s)"
                             )
+                            if _PREFS.get("watch_bell", False):
+                                print("\a", end="", flush=True)
                         raise OpenClawCliError(
                             f"Watch poll {state['poll_count']} failed after {attempt} attempt(s): {error_message}"
                         ) from exc
@@ -1514,6 +1558,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                     summary=checkpoint_summary,
                     output_path=output_path,
                     output_json=config.output_json,
+                    max_polls=max_polls,
                 )
 
             if max_polls and int(state.get("poll_count", 0) or 0) >= max_polls:
@@ -1557,5 +1602,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
         last_summary = str(state.get("last_summary") or "").strip()
         excerpt = last_summary[:60] if last_summary else "no output"
         print(f"  ✓ Watch session complete — {poll_count} iteration(s), last: {excerpt}")
+        if _PREFS.get("watch_bell", False):
+            print("\a", end="", flush=True)
         _print_meta_footer(("session", session.session_id))
     return 0

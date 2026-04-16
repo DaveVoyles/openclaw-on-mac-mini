@@ -867,6 +867,11 @@ def _cmd_analyze(ctx: ChatCommandContext) -> str:
         ok=True,
         summary=m._summarize_terminal_result(response.response, fallback=f"analysis complete for {goal}"),
     )
+    if response.response:
+        _DIM = "\033[2m" if sys.stdout.isatty() else ""
+        _RESET = "\033[0m" if sys.stdout.isatty() else ""
+        word_count = len(response.response.split())
+        print(f"  {_DIM}✓ Analysis complete — {word_count} words{_RESET}")
     return _CMD_CONTINUE
 
 
@@ -931,6 +936,13 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
     print(report)
     m._print_meta_footer(("saved", output_target))
     m._set_command_result(ctx, ok=True, summary=f"saved research to {output_target}")
+    if report:
+        _DIM = "\033[2m" if sys.stdout.isatty() else ""
+        _RESET = "\033[0m" if sys.stdout.isatty() else ""
+        word_count = len(report.split())
+        import re as _re  # noqa: PLC0415
+        source_count = len(set(_re.findall(r'\[\d+\]', report))) or report.count("http")
+        print(f"  {_DIM}✓ Research complete — {word_count} words, {source_count} sources{_RESET}")
     return _CMD_CONTINUE
 
 
@@ -980,6 +992,11 @@ def _cmd_write(ctx: ChatCommandContext) -> str:
     m._print_meta_footer(("saved", output_target))
     ctx.history[:] = load_conversation_history(session.session_id)
     m._set_command_result(ctx, ok=True, summary=f"saved draft to {output_target}")
+    if response.response:
+        _DIM = "\033[2m" if sys.stdout.isatty() else ""
+        _RESET = "\033[0m" if sys.stdout.isatty() else ""
+        word_count = len(response.response.split())
+        print(f"  {_DIM}✓ Draft complete — {word_count} words{_RESET}")
     return _CMD_CONTINUE
 
 

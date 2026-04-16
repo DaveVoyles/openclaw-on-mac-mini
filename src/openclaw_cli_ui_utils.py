@@ -663,3 +663,29 @@ def _print_workspace_capsule(capsule: dict[str, Any], *, title: str = "Workspace
         print("-" * len(title))
         for line in plain_lines:
             print(line)
+
+
+# ---------------------------------------------------------------------------
+# _preview_panel — shared Rich panel preview helper
+# ---------------------------------------------------------------------------
+
+def _preview_panel(
+    title: str,
+    content: str,
+    *,
+    max_lines: int = 8,
+    width: int | None = None,
+) -> None:
+    """Print a compact Rich panel preview, falling back to plain text when Rich unavailable."""
+    lines = content.splitlines() if content else []
+    truncated = lines[:max_lines]
+    body = "\n".join(truncated)
+    if _RICH_AVAILABLE and _IS_TTY:
+        kwargs: dict[str, Any] = {"title": f"[bold cyan]{title}[/]", "border_style": "cyan", "padding": (0, 1)}
+        if width is not None:
+            kwargs["width"] = width
+        _RICH_CONSOLE.print(_RichPanel(body, **kwargs))
+    else:
+        print(f"  [{title}]")
+        for line in truncated:
+            print(f"  {line}")
