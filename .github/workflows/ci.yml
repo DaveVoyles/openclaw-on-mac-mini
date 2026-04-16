@@ -123,7 +123,7 @@ jobs:
         run: bash scripts/install_openclaw_cli_remote.sh macbook
 
       - name: Restart server container (picks up src/ bind mount)
-        run: cd /Users/davevoyles/openclaw && docker compose up -d openclaw
+        run: cd /Users/davevoyles/openclaw && docker-compose up -d openclaw
 
       - name: Verify deployed version
         run: |
