@@ -4040,7 +4040,6 @@ def _emit_context_overflow_warning(
         return  # already warned at this level or higher
 
     _context_overflow_warned[warned_key] = threshold
-    limit_label = pressure["limit_label"]
     model_label = pressure["limit_model_label"] or model_hint or "current model"
     hist_tokens = int(pressure["history_tokens"])
     limit_tokens = int(pressure["limit_tokens"])

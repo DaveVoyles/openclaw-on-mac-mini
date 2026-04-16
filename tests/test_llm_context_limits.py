@@ -8,20 +8,13 @@ Covers:
 """
 from __future__ import annotations
 
-import sys
-import types
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Fixtures — import target modules
 # ---------------------------------------------------------------------------
-
 import llm.context_limits as cl_mod
 import openclaw_cli_session_display as sd
-
 
 # ===========================================================================
 # 1. MODEL_CONTEXT_WINDOWS — structure and prefix matching

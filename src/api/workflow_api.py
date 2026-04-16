@@ -3,6 +3,7 @@ OpenClaw Workflow API — Phase 3
 REST API endpoints for workflow management and automation.
 """
 
+import json
 import logging
 
 from aiohttp import web
@@ -170,7 +171,7 @@ async def execute_workflow_handler(request: web.Request) -> web.Response:
         try:
             data = await request.json()
             context = data.get("context", {})
-        except Exception:
+        except (json.JSONDecodeError, ValueError):
             context = {}
 
         # Execute workflow

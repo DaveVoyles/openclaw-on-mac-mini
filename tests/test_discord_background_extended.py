@@ -660,7 +660,7 @@ class TestExecuteSelfHealingActions:
 
     @pytest.mark.asyncio
     async def test_action_exception_produces_error_entry(self):
-        with patch.object(mod, "_parse_heal_actions",
+        with patch.object(bg_healing, "_parse_heal_actions",
                           return_value=[("restart_container", "sonarr")]), \
              patch("bg_healing.restart_container", AsyncMock(side_effect=Exception("fail!"))), \
              patch("bg_healing.audit_log"):
@@ -806,7 +806,7 @@ class TestRunProactiveScan:
     @pytest.mark.asyncio
     async def test_returns_early_all_clear(self, monkeypatch):
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
-        with patch.object(mod, "_gather_system_signals", AsyncMock(return_value=None)):
+        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=None)):
             await bg_healing._run_proactive_scan(MagicMock())
 
     @pytest.mark.asyncio
@@ -815,7 +815,7 @@ class TestRunProactiveScan:
         channel = MagicMock(send=AsyncMock())
         bot = _make_bot(channel)
 
-        with patch.object(mod, "_gather_system_signals", AsyncMock(return_value=("summary text", {}))), \
+        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("summary text", {}))), \
              patch("bg_healing.llm_chat", AsyncMock(return_value=("NO_ALERT", None, None))):
             await bg_healing._run_proactive_scan(bot)
 
@@ -827,9 +827,9 @@ class TestRunProactiveScan:
         channel = MagicMock(send=AsyncMock(return_value=MagicMock(edit=AsyncMock())))
         bot = _make_bot(channel)
 
-        with patch.object(mod, "_gather_system_signals", AsyncMock(return_value=("errors found", {}))), \
+        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors found", {}))), \
              patch("bg_healing.llm_chat", AsyncMock(return_value=("Container sonarr is down!", None, None))), \
-             patch.object(mod, "_execute_self_healing", AsyncMock(return_value=("insight text", []))), \
+             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("insight text", []))), \
              patch("bg_healing.audit_log"):
             await bg_healing._run_proactive_scan(bot)
 
@@ -841,9 +841,9 @@ class TestRunProactiveScan:
         channel = MagicMock(send=AsyncMock(return_value=MagicMock(edit=AsyncMock())))
         bot = _make_bot(channel)
 
-        with patch.object(mod, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
+        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
              patch("bg_healing.llm_chat", AsyncMock(return_value=("Found issues\nSELF_HEAL: restart_container sonarr", None, None))), \
-             patch.object(mod, "_execute_self_healing", AsyncMock(return_value=("Found issues", ["🔧 sonarr: restarted"]))), \
+             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Found issues", ["🔧 sonarr: restarted"]))), \
              patch("bg_healing.audit_log"):
             await bg_healing._run_proactive_scan(bot)
 
@@ -854,7 +854,7 @@ class TestRunProactiveScan:
         monkeypatch.setattr(bg_healing, "ALERT_CHANNEL_ID", 123)
         bot = _make_bot()
 
-        with patch.object(mod, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
+        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
              patch("bg_healing.llm_chat", AsyncMock(side_effect=asyncio.TimeoutError)):
             await bg_healing._run_proactive_scan(bot)  # Should not raise
 
@@ -864,9 +864,9 @@ class TestRunProactiveScan:
         bot = MagicMock()
         bot.get_channel = MagicMock(return_value=None)
 
-        with patch.object(mod, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
+        with patch.object(bg_healing, "_gather_system_signals", AsyncMock(return_value=("errors", {}))), \
              patch("bg_healing.llm_chat", AsyncMock(return_value=("Issue found!", None, None))), \
-             patch.object(mod, "_execute_self_healing", AsyncMock(return_value=("Issue found!", []))):
+             patch.object(bg_healing, "_execute_self_healing", AsyncMock(return_value=("Issue found!", []))):
             await bg_healing._run_proactive_scan(bot)
 
     @pytest.mark.asyncio
