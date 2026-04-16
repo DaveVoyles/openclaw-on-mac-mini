@@ -134,13 +134,14 @@ def test_cmd_histsearch_case_insensitive(capsys):
 # _cmd_rate
 # ---------------------------------------------------------------------------
 
-def test_cmd_rate_no_args(capsys):
+def test_cmd_rate_no_args():
     cli = _mock_cli()
     with patch.object(mod, "_get_cli_mod", return_value=cli):
-        result = mod._cmd_rate(_ctx(""))
+        with patch.object(mod, "_print_error") as mock_err:
+            result = mod._cmd_rate(_ctx(""))
     assert result == _CMD_CONTINUE
-    captured = capsys.readouterr()
-    assert "Usage" in captured.out
+    mock_err.assert_called_once()
+    assert "Usage" in mock_err.call_args[0][0]
 
 
 def test_cmd_rate_unknown_rating(capsys):

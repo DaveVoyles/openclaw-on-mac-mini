@@ -236,7 +236,7 @@ def _cmd_rate(ctx: ChatCommandContext) -> str:
     _cli = _get_cli_mod()
     raw = (ctx.args or "").strip().lower()
     if not raw:
-        print("Usage: /rate [good|ok|bad|meh|1-5]")
+        _print_error("Usage: /rate [good|ok|bad|meh|1-5]")
         return _CMD_CONTINUE
 
     _RATING_MAP = {
