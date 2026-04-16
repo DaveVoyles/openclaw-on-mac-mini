@@ -45,7 +45,7 @@ def _owner_local_now() -> datetime.datetime:
     tz_str = get_user_timezone(_OWNER_USER_ID) if _OWNER_USER_ID else "UTC"
     try:
         tz = zoneinfo.ZoneInfo(tz_str)
-    except Exception:
+    except (zoneinfo.ZoneInfoNotFoundError, KeyError):
         tz = zoneinfo.ZoneInfo("UTC")
     return datetime.datetime.now(tz)
 
@@ -71,7 +71,7 @@ async def morning_briefing_loop(bot):
                         error_type = None
                         try:
                             asyncio.create_task(send_morning_briefing(bot))
-                        except Exception as e:
+                        except RuntimeError as e:
                             log.warning("Morning briefing task error: %s", e)
                             success = False
                             error_type = type(e).__name__
@@ -85,7 +85,7 @@ async def morning_briefing_loop(bot):
                                 success=success,
                                 error_type=error_type,
                             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional — outer loop guard for scheduler health
             log.warning("Morning briefing scheduler error: %s", e)
         await asyncio.sleep(BRIEFING_CHECK_INTERVAL)
 
@@ -118,7 +118,7 @@ async def send_morning_briefing(bot, channel_override=None):
         try:
             from calendar_skills import get_upcoming_events
             calendar = await asyncio.wait_for(get_upcoming_events(days=1), timeout=8)
-        except Exception as exc:
+        except (ImportError, asyncio.TimeoutError, OSError, ValueError) as exc:
             log.debug("Calendar fetch failed for briefing: %s", exc)
             calendar = "Calendar not available."
 
@@ -126,7 +126,7 @@ async def send_morning_briefing(bot, channel_override=None):
         try:
             from goal_tracker import format_goals_for_briefing
             goals_section = format_goals_for_briefing()
-        except Exception as exc:
+        except (ImportError, AttributeError, ValueError, TypeError) as exc:
             log.debug("Goal tracker unavailable for briefing: %s", exc)
 
         error_stats_section = ""
@@ -145,14 +145,14 @@ async def send_morning_briefing(bot, channel_override=None):
                             e["error"][:50] for e in stats["recent_errors"][:3]
                         )
                     )
-        except Exception as exc:
+        except (ImportError, KeyError, AttributeError, TypeError, ValueError) as exc:
             log.debug("Error stats unavailable for briefing: %s", exc)
 
         overseerr_section = ""
         try:
             from overseerr import get_request_stats
             overseerr_section = await asyncio.wait_for(get_request_stats(), timeout=10)
-        except Exception as exc:
+        except (ImportError, asyncio.TimeoutError, OSError, ConnectionError, ValueError) as exc:
             log.debug("Briefing: overseerr stats failed: %s", exc)
 
         today = datetime.date.today().strftime("%A, %B %d, %Y")
@@ -190,13 +190,13 @@ async def send_morning_briefing(bot, channel_override=None):
                     value=f"Root: {prediction['percent_used']}% used — estimated full in **{prediction['days_until_full']} days**",
                     inline=False,
                 )
-        except Exception as exc:
+        except (ImportError, KeyError, AttributeError, TypeError, ValueError, OSError) as exc:
             log.debug("Briefing disk prediction failed: %s", exc)
         if overseerr_section:
             embed.add_field(name="🎬 Media Requests", value=overseerr_section[:200], inline=False)
         await channel.send(embed=embed)
         audit_log(None, "morning_briefing", detail=f"channel={ALERT_CHANNEL_ID}")
-    except Exception as e:
+    except Exception as e:  # broad: intentional — outer guard for entire briefing pipeline
         log.error("Morning briefing failed: %s", e)
 
 
@@ -215,7 +215,7 @@ async def evening_digest_loop(bot):
                 if today_str != last_digest_date:
                     last_digest_date = today_str
                     asyncio.create_task(send_evening_digest(bot))
-        except Exception as e:
+        except Exception as e:  # broad: intentional — outer loop guard for scheduler health
             log.warning("Evening digest scheduler error: %s", e)
         await asyncio.sleep(BRIEFING_CHECK_INTERVAL)
 
@@ -267,7 +267,7 @@ async def send_evening_digest(bot, channel_override=None):
                 value=actions_text or "No activity",
                 inline=False,
             )
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, KeyError, ValueError) as e:
         log.debug("Digest: audit summary failed: %s", e)
 
     # 2. Reminders fired today
@@ -289,7 +289,7 @@ async def send_evening_digest(bot, channel_override=None):
                 value=reminder_text,
                 inline=False,
             )
-    except Exception as e:
+    except (ImportError, AttributeError, TypeError) as e:
         log.debug("Digest: reminders failed: %s", e)
 
     # 3. System health summary
@@ -300,7 +300,7 @@ async def send_evening_digest(bot, channel_override=None):
             value=stats[:300] if stats else "N/A",
             inline=False,
         )
-    except Exception as e:
+    except Exception as e:  # broad: intentional — get_system_stats wraps external command output
         log.debug("Digest: system stats failed: %s", e)
 
     # 4. Download activity
@@ -312,7 +312,7 @@ async def send_evening_digest(bot, channel_override=None):
                 value=queue[:300],
                 inline=False,
             )
-    except Exception as e:
+    except Exception as e:  # broad: intentional — get_download_queue can raise any error
         log.debug("Digest: downloads failed: %s", e)
 
     embed.set_footer(text="Evening digest • daily at 9 PM")

@@ -1,0 +1,135 @@
+# OpenClaw Product Roadmap
+
+> **Canonical source for future improvements.**
+> Start here for any new roadmap, wave, follow-up, or future-state planning work.
+
+This document is the single cross-cutting roadmap for OpenClaw. Future agents and contributors
+should add new improvement work here first, then link out to domain-specific deep dives only when
+the extra detail is useful.
+
+For documentation ownership, lifecycle rules, and artifact handling, see
+[`docs/DOCS-GOVERNANCE.md`](DOCS-GOVERNANCE.md).
+
+---
+
+## How to use this roadmap
+
+1. Add all new future work here first.
+2. Treat this file as the source of truth for what is active, deferred, or complete across the repo.
+3. Use domain-specific docs such as `docs/UX_IMPROVEMENTS.md` only for detailed implementation
+   history or scoped wave requirements.
+4. When work ships, update this file and the supporting scoped doc together.
+5. Do not create a new standalone roadmap doc unless this file links to it and explains why it exists.
+
+---
+
+## Roadmap map
+
+| Doc | Role | Status | How to use it now |
+| --- | --- | --- | --- |
+| `docs/PRODUCT-ROADMAP.md` | Canonical cross-cutting roadmap | Active | Start here for all future work |
+| `docs/DOCS-GOVERNANCE.md` | Docs taxonomy and lifecycle rules | Active support doc | Use when deciding where documentation belongs |
+| `docs/UX_IMPROVEMENTS.md` | Detailed CLI UX wave history and deferred UX follow-ups | Active, scoped | Use for CLI-specific wave detail after checking this roadmap |
+| `docs/tech_debt.md` | Detailed CLI tech-debt audit history | Active, scoped | Use for tech-debt detail and shipped evidence |
+| `docs/Discord_Improvements.md` | Discord improvement history | Historical/scoped | Reference only; all listed waves are shipped |
+| `docs/DASHBOARD_SURFACES.md` | Docs/dashboard synchronization checklist | Active support doc | Use when CLI/dashboard surfaces change |
+| `docs/archive/IMPLEMENTATION-PLAN.md` | Historical implementation plan | Archived | Context only; do not treat as a live roadmap |
+
+---
+
+## Current priorities
+
+| Initiative | Status | Source detail | Next step |
+| --- | --- | --- | --- |
+| Docs governance and roadmap consolidation | Shipped foundation | This doc, `docs/index.md`, contributor/agent guidance | Keep future doc cleanup and stale-reference fixes flowing through this roadmap |
+| CLI UX follow-up wave: context-pressure shipped; restrained narrative follow-through next | Active follow-up | `docs/UX_IMPROVEMENTS.md` | Treat the context-pressure tranche as shipped: `/tokeninfo` now carries actor breakdown + bookmark-before-clear guidance, while `/context`, `/session`, and `/watch status` already surface lighter next-send or next-retry pressure cues. The next active docs/implementation wave is the restrained narrative follow-through: let `/session` and `/sessions` express momentum or milestones without obscuring core status, keep `/collab` and `session share/export` neutral and pasteable, and continue deferring richer recap/export/dashboard storytelling until it actually lands. |
+| Dashboard/docs consistency for future CLI waves | Ongoing | `docs/DASHBOARD_SURFACES.md`, `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md` | Keep docs/dashboard sync as a required lane for future CLI wave work |
+| CLI tech-debt follow-up planning | Audit-driven | `docs/tech_debt.md` | Use the shipped April 2026 audit as current context; start a new TD wave here only when new debt is confirmed or a new audit is warranted |
+| Discord follow-up work | Dormant | `docs/Discord_Improvements.md` | Add any future Discord improvements here first instead of reviving the old roadmap as the primary entrypoint |
+
+---
+
+## Consolidated backlog
+
+### 1. Cross-repo documentation governance
+
+**Goal:** keep one discoverable roadmap that future agents can continue to build on.
+
+**Open work:**
+- keep contributor docs, landing pages, and agent instructions pointing to this roadmap
+- keep old roadmap docs clearly labeled as scoped or historical
+- remove stale references to superseded planning files when they surface
+
+### 2. CLI UX deferred work
+
+These are the highest-signal deferred items repeatedly called out in `docs/UX_IMPROVEMENTS.md`:
+
+- broader proactive context-pressure surfacing beyond the already-shipped `/tokeninfo`, `/context`, `/session`, and `/watch status` cues
+- prompt-toolkit-backed shell input follow-up only when the richer interactive-TTY editing/completion experience is worth the added dependency cost, while keeping `readline` and plain `input()` fallbacks for plain-mode, non-TTY, scripted, and missing-dependency paths
+- any future shell-chrome expansion beyond the now-shipped top context bar, approval review overlay, richer TTY pickers, pane-focus cues, and review/trust/recovery approval cues
+- restrained narrative/morale/dashboard storytelling follow-through that lets `/session` and `/sessions` acknowledge momentum or milestones without turning neutral handoff/export surfaces into prose-heavy recaps
+
+When one of these becomes active, create a new entry here with owner, status, and links to the
+relevant section of `docs/UX_IMPROVEMENTS.md`.
+
+### Initiative: CLI UX follow-up wave — interactive shell surfaces landed
+
+- **Status:** in progress
+- **Owner area:** cli
+- **Supporting doc:** `docs/UX_IMPROVEMENTS.md`
+- **Why now:** The terminal-first CLI interaction tranche is now materially shipped: interactive REPL sessions render an always-on top context bar, high-risk approvals can open a compact review overlay, TTY overlays support arrow-key filtering plus preview panes, and layout presets report explicit pane-focus transitions. Keeping that recorded here prevents future waves from reopening already shipped interaction work.
+- **Next step:** Focus the next CLI UX wave on the restrained narrative follow-through: preserve objective status-first summaries, let `/session` and `/sessions` surface momentum/milestone cues only as secondary context, keep `/collab` plus `session share/export` neutral and pasteable, and leave recap-mode exports, richer browser/dashboard storytelling, and broader mood-language experiments deferred until they actually ship.
+
+### 3. CLI technical-debt follow-up
+
+`docs/tech_debt.md` shows the major TD waves through TD-34a and TD-34b as shipped. Treat that
+document as the audit log and shipped evidence, not the place to start new cross-cutting planning.
+Any new TD work should begin here and link back to the current April 2026 audit, or to a newer
+audit section if one is created later.
+
+### 4. Discord future work
+
+`docs/Discord_Improvements.md` is useful historical evidence, but all listed waves are shipped.
+Future Discord improvements should be proposed here first and only get a dedicated scoped roadmap if
+the work grows large enough to justify it.
+
+---
+
+## Agent rules
+
+When an agent is working on future improvements, roadmap cleanup, or wave planning:
+
+1. Read this file first.
+2. Check the scoped support doc only for the area being changed.
+3. Update this roadmap whenever a new initiative starts, ships, or is deferred.
+4. Prefer updating an existing scoped roadmap over creating a new planning file.
+5. If a scoped roadmap becomes fully shipped or purely historical, mark it clearly and keep this
+   roadmap as the active entrypoint.
+6. If a new roadmap file is unavoidable, add it to the roadmap map above in the same change.
+
+---
+
+## Entry template for new work
+
+Use this shape when adding a new initiative:
+
+```md
+### Initiative: <name>
+
+- **Status:** proposed | in progress | deferred | shipped
+- **Owner area:** cli | discord | docs | infra | cross-cutting
+- **Supporting doc:** `docs/...`
+- **Why now:** <one or two lines>
+- **Next step:** <concrete next action>
+```
+
+---
+
+## Historical references
+
+These remain useful for context, but they are not the active roadmap:
+
+- `docs/archive/IMPLEMENTATION-PLAN.md`
+- `docs/Discord_Improvements.md`
+- shipped sections inside `docs/UX_IMPROVEMENTS.md`
+- shipped sections inside `docs/tech_debt.md`

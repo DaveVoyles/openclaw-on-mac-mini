@@ -1,6 +1,21 @@
 # Contributing to OpenClaw
 
-Guidelines for adding features, skills, and commands to the OpenClaw Discord bot.
+Guidelines for adding features, skills, and commands to OpenClaw.
+
+> **New here?** Start with [`docs/START-HERE.md`](START-HERE.md) for the contributor roadmap, first-contribution walkthrough, architecture orientation, and workflow recipes.
+>
+> **Planning a future wave or CLI UX follow-up?** Start from the canonical roadmap in [`docs/PRODUCT-ROADMAP.md`](PRODUCT-ROADMAP.md) before opening a new scoped planning thread.
+
+---
+
+## Choose Your Path
+
+- **Start here / first contribution:** [`docs/START-HERE.md`](START-HERE.md)
+- **Local setup + CI gate + daily commands:** [`docs/DEVELOPMENT.md`](DEVELOPMENT.md)
+- **Architecture + key files + gotchas:** [`docs/AGENT-GUIDE.md`](AGENT-GUIDE.md)
+- **Testing and validation:** [`docs/TESTING.md`](TESTING.md)
+- **Skill work:** [`docs/SKILL_DEVELOPMENT.md`](SKILL_DEVELOPMENT.md)
+- **Plugin work:** [`docs/PLUGIN_DEVELOPMENT.md`](PLUGIN_DEVELOPMENT.md)
 
 ---
 

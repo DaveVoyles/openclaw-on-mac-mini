@@ -78,6 +78,13 @@ sequenceDiagram
 | Worker agents | Delegated sub-task execution for complex asks via tool calls | `src/worker_agent.py` |
 | Memory stores | Conversation history, semantic recall, structured memory/thread persistence | `src/memory.py`, `src/vector_store.py`, `src/thread_store.py`, `src/qmd.py` |
 
+## Architecture deep dives
+
+- [LLM routing and orchestration](LLM-ROUTING.md) — end-to-end provider selection, tool routing, retries, and fallback-to-Gemini behavior.
+- [Resilience and fallback behavior](RESILIENCE.md) — error handling, circuit breakers, supervisor restarts, health-state classification, and CLI recovery paths.
+- [Persistence and versioning boundaries](PERSISTENCE.md) — SQLite, JSON, JSONL, and in-memory storage responsibilities.
+- [Background tasks and scheduler architecture](BACKGROUND_TASKS.md) — supervised loops, periodic jobs, and operational observability.
+
 ---
 
 ```mermaid

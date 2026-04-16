@@ -10,6 +10,7 @@ Do NOT import from openclaw_cli — circular import.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -26,6 +27,7 @@ from openclaw_cli_sessions import (
     build_session_storyline,
     export_session,
     list_session_bookmarks,
+    load_conversation_history,
     load_watch_state,
     require_session,
 )
@@ -54,6 +56,10 @@ WATCH_RETRY_LIMIT = 3
 WATCH_PROGRESS_LOG_LIMIT = 25
 WATCH_RETRY_MAX_DELAY_SECONDS = 8
 WATCH_FOCUS_NOTE_CHARS = 120
+
+_GENERIC_CONTEXT_LIMIT_TOKENS = 128_000
+_CONTEXT_LIMIT_SUFFIX_RE = re.compile(r"(?<!\d)(\d{2,4})k(?![a-z0-9])", re.IGNORECASE)
+_CONTEXT_LIMIT_M_RE = re.compile(r"(?<!\d)(\d+)m(?![a-z0-9])", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # Emoji fallbacks (status-display subset; no status emojis in this dict)
@@ -123,6 +129,193 @@ def _format_elapsed_compact(seconds: Any) -> str:
         return f"{minutes}m {rem}s" if rem else f"{minutes}m"
     hours, minutes = divmod(minutes, 60)
     return f"{hours}h {minutes}m" if minutes else f"{hours}h"
+
+
+def _estimate_token_count(value: object) -> int:
+    """Estimate token count using the CLI's shared rough character heuristic."""
+    return max(0, len(str(value or "")) // 4)
+
+
+def _history_token_breakdown(history: list[dict[str, object]]) -> dict[str, object]:
+    """Summarize estimated token usage for session history."""
+    roles: dict[str, dict[str, int]] = {}
+    total_chars = 0
+    total_tokens = 0
+    total_messages = len(history)
+    for message in history:
+        role = str(message.get("role") or "unknown").strip().lower() or "unknown"
+        content = str(message.get("content") or "")
+        chars = len(content)
+        tokens = _estimate_token_count(content)
+        total_chars += chars
+        total_tokens += tokens
+        bucket = roles.setdefault(role, {"messages": 0, "chars": 0, "tokens": 0})
+        bucket["messages"] += 1
+        bucket["chars"] += chars
+        bucket["tokens"] += tokens
+    return {
+        "total_chars": total_chars,
+        "total_tokens": total_tokens,
+        "total_messages": total_messages,
+        "roles": sorted(roles.items(), key=lambda item: (-item[1]["tokens"], item[0])),
+    }
+
+
+def _format_context_limit_label(limit_tokens: int, *, approximate: bool = False) -> str:
+    """Return a compact human label for a token window."""
+    limit = max(0, int(limit_tokens or 0))
+    if limit >= 1_000_000 and limit % 1_000_000 == 0:
+        label = f"{limit // 1_000_000}m"
+    elif limit >= 1_000 and limit % 1_000 == 0:
+        label = f"{limit // 1_000}k"
+    else:
+        label = f"{limit:,}"
+    return f"~{label}" if approximate and label else label
+
+
+def _extract_context_limit_from_hint(model_hint: object) -> int | None:
+    """Pull an explicit context window from a model name like `128k` or `1m`."""
+    text = str(model_hint or "").strip().lower()
+    if not text:
+        return None
+    million_match = _CONTEXT_LIMIT_M_RE.search(text)
+    if million_match:
+        return int(million_match.group(1)) * 1_000_000
+    thousand_match = _CONTEXT_LIMIT_SUFFIX_RE.search(text)
+    if thousand_match:
+        return int(thousand_match.group(1)) * 1_000
+    return None
+
+
+def _resolve_context_limit_profile(
+    *,
+    model_hint: object = "",
+    route_hint: object = "",
+) -> dict[str, object]:
+    """Resolve the best available context-window guidance for the active model."""
+    raw_model = str(model_hint or _PREFS.get("last_model", "") or "").strip()
+    raw_route = str(route_hint or _PREFS.get("route_mode", "") or "").strip()
+    candidates = [value for value in (raw_model, raw_route) if value]
+    normalized = " ".join(candidates).lower()
+
+    explicit_limit = None
+    explicit_source = ""
+    for candidate in candidates:
+        explicit_limit = _extract_context_limit_from_hint(candidate)
+        if explicit_limit:
+            explicit_source = str(candidate)
+            break
+
+    display_model = raw_model or raw_route or "current route"
+    if explicit_limit:
+        limit_label = _format_context_limit_label(explicit_limit)
+        return {
+            "limit_tokens": explicit_limit,
+            "limit_label": limit_label,
+            "limit_display": f"{limit_label} window",
+            "limit_note": f"Resolved from model name `{explicit_source}`.",
+            "source": "model-name",
+            "model_label": display_model,
+            "model_aware": True,
+            "approximate": False,
+        }
+
+    if "gemini" in normalized:
+        limit_tokens = 125_000
+        limit_label = _format_context_limit_label(limit_tokens, approximate=True)
+        return {
+            "limit_tokens": limit_tokens,
+            "limit_label": limit_label,
+            "limit_display": f"{limit_label} Gemini-class window",
+            "limit_note": "Gemini-family route detected; shown as an approximate family window.",
+            "source": "family-gemini",
+            "model_label": display_model,
+            "model_aware": True,
+            "approximate": True,
+        }
+
+    if "gemma" in normalized:
+        limit_tokens = 100_000
+        limit_label = _format_context_limit_label(limit_tokens, approximate=True)
+        return {
+            "limit_tokens": limit_tokens,
+            "limit_label": limit_label,
+            "limit_display": f"{limit_label} Gemma-class window",
+            "limit_note": "Gemma-family route detected; shown as an approximate family window.",
+            "source": "family-gemma",
+            "model_label": display_model,
+            "model_aware": True,
+            "approximate": True,
+        }
+
+    limit_label = _format_context_limit_label(_GENERIC_CONTEXT_LIMIT_TOKENS)
+    return {
+        "limit_tokens": _GENERIC_CONTEXT_LIMIT_TOKENS,
+        "limit_label": limit_label,
+        "limit_display": f"{limit_label} heuristic window",
+        "limit_note": "Current route does not expose a trustworthy model window; using the shared fallback heuristic.",
+        "source": "fallback",
+        "model_label": display_model,
+        "model_aware": False,
+        "approximate": True,
+    }
+
+
+def _context_pressure_snapshot(
+    history: list[dict[str, object]] | None,
+    *,
+    system_prompt: str = "",
+    pending_inject: str = "",
+    limit_tokens: int = 0,
+    model_hint: object = "",
+    route_hint: object = "",
+) -> dict[str, object]:
+    """Estimate context pressure and recovery cues for the next send."""
+    profile = _resolve_context_limit_profile(model_hint=model_hint, route_hint=route_hint)
+    resolved_limit = int(limit_tokens or profile["limit_tokens"] or _GENERIC_CONTEXT_LIMIT_TOKENS)
+    breakdown = _history_token_breakdown(list(history or []))
+    history_tokens = int(breakdown["total_tokens"])
+    system_tokens = _estimate_token_count(system_prompt) if system_prompt else 0
+    inject_tokens = _estimate_token_count(pending_inject) if pending_inject else 0
+    next_tokens = history_tokens + system_tokens + inject_tokens
+    pct_history_raw = round(history_tokens / resolved_limit * 100) if resolved_limit else 0
+    pct_next_raw = round(next_tokens / resolved_limit * 100) if resolved_limit else 0
+    pct_history = min(100, pct_history_raw)
+    pct_next = min(100, pct_next_raw)
+    if pct_next_raw >= 100:
+        band = "overflow"
+    elif pct_next_raw >= 90:
+        band = "critical"
+    elif pct_next_raw >= 80:
+        band = "high"
+    elif pct_next_raw >= 50:
+        band = "medium"
+    else:
+        band = "low"
+    hidden_pressure = bool((system_tokens or inject_tokens) and pct_next_raw > pct_history_raw)
+    return {
+        "history_tokens": history_tokens,
+        "system_tokens": system_tokens,
+        "inject_tokens": inject_tokens,
+        "next_tokens": next_tokens,
+        "pct_history": pct_history,
+        "pct_history_raw": pct_history_raw,
+        "pct_next": pct_next,
+        "pct_next_raw": pct_next_raw,
+        "band": band,
+        "hidden_pressure": hidden_pressure,
+        "has_pending_inject": bool(inject_tokens),
+        "has_system_prompt": bool(system_tokens),
+        "overflow": pct_next_raw > 100,
+        "limit_tokens": resolved_limit,
+        "limit_label": str(profile["limit_label"]),
+        "limit_display": str(profile["limit_display"]),
+        "limit_note": str(profile["limit_note"]),
+        "limit_source": str(profile["source"]),
+        "limit_model_label": str(profile["model_label"]),
+        "limit_model_aware": bool(profile["model_aware"]),
+        "limit_is_approximate": bool(profile["approximate"]),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -411,11 +604,25 @@ def _session_mood_cell(snapshot: dict[str, str], *, rich: bool = False) -> str:
     return _progress_cell("mood", value, status=str(snapshot.get("status") or "info"), rich=rich)
 
 
+def _session_mood_brief(snapshot: dict[str, str], *, max_chars: int = 38) -> str:
+    """Return a restrained one-cell mood summary for dense list views."""
+    label = str(snapshot.get("label") or "").strip()
+    detail = str(snapshot.get("detail") or "").strip()
+    if not label:
+        return "—"
+    if not detail:
+        return label
+    return _single_line_excerpt(f"{label} · {detail}", max_chars=max_chars)
+
+
 def _operator_snapshot_lines(snapshot: dict[str, Any]) -> list[str]:
     """Render human-readable lines for the operator snapshot."""
     lines = [
         _progress_cell("visibility", str(snapshot.get("access") or "read-only local snapshot"), status="info"),
     ]
+    control = str(snapshot.get("control") or "").strip()
+    if control:
+        lines.append(f"control: {control}")
     readiness_label = str(snapshot.get("readiness_label") or "").strip()
     readiness_detail = str(snapshot.get("readiness_detail") or "").strip()
     if readiness_label:
@@ -736,8 +943,16 @@ def _session_operator_snapshot(
     }
 
 
-def _print_session_summary(session: SessionSummary) -> None:
+def _print_session_summary(session: SessionSummary, *, pending_inject: str = "") -> None:
     """Print a compact session summary, with rich formatting when available."""
+    history = load_conversation_history(session.session_id, limit_turns=0)
+    pressure = _context_pressure_snapshot(
+        history,
+        system_prompt=str(_PREFS.get("system_prompt", "") or ""),
+        pending_inject=str(pending_inject or ""),
+        model_hint=_PREFS.get("last_model", ""),
+        route_hint=_PREFS.get("route_mode", ""),
+    )
     watch_state = None
     try:
         watch_state = load_watch_state(session.session_id)
@@ -782,6 +997,37 @@ def _print_session_summary(session: SessionSummary) -> None:
         else "files: none tracked",
         f"last: {session.last_summary[:100]}" if session.last_summary else "",
     ]
+    if int(pressure["pct_next"]) >= 50:
+        detail_lines.append(
+            _progress_cell(
+                "context pressure",
+                f"~{int(pressure['next_tokens']):,} tok next send ({int(pressure['pct_next_raw'])}% of {pressure['limit_label']})",
+                status="warn" if int(pressure["pct_next"]) < 80 else "retry",
+            )
+        )
+        if bool(pressure["overflow"]):
+            detail_lines.append("overflow cue: next send likely exceeds the resolved window")
+        elif int(pressure["pct_next"]) >= 80:
+            detail_lines.append("recovery guardrail: save /bookmark before /clear if you need a lighter restart")
+        else:
+            detail_lines.append("staleness cue: /tokeninfo can confirm whether context pressure is causing drift")
+    elif pressure["has_system_prompt"] or pressure["has_pending_inject"]:
+        hidden_bits = []
+        if pressure["has_system_prompt"]:
+            hidden_bits.append(f"system prompt ~{int(pressure['system_tokens']):,} tok")
+        if pressure["has_pending_inject"]:
+            hidden_bits.append(f"pending inject ~{int(pressure['inject_tokens']):,} tok")
+        detail_lines.append(
+            _progress_cell(
+                "hidden context",
+                " · ".join(hidden_bits),
+                status="warn" if pressure["has_pending_inject"] else "info",
+            )
+        )
+    if pressure["hidden_pressure"] and int(pressure["pct_next"]) >= 80:
+        detail_lines.append("hidden context cue: system or queued inject content pushes the next send closer to capacity")
+    if pressure["has_pending_inject"]:
+        detail_lines.append("recovery cue: /inject clear drops the queued one-shot context before a retry")
     detail_lines.extend(_operator_snapshot_lines(operator_snapshot)[:5])
     for milestone in list(story.get("milestones") or [])[:2]:
         detail_lines.append(f"milestone: {milestone}")
@@ -811,11 +1057,11 @@ def _print_session_summary(session: SessionSummary) -> None:
             if last_error:
                 detail_lines.append(f"last error: {last_error[:80]}")
         action_lines.append("/watch status to inspect the live control tower")
-        action_lines.append("/watch history to review retries and checkpoints")
+        action_lines.append("/watch history to review retries and checkpoints before rerunning")
         if watch_state and (watch_state.get("last_error") or int(watch_state.get("failure_count") or 0) > 0):
             action_lines.append('/watch intervene "recovery note" to steer the next retry')
         if watch_state and list(watch_state.get("interventions") or []):
-            action_lines.append("/collab share to copy the latest operator-visible snapshot")
+            action_lines.append("/collab share to copy the latest read-only operator snapshot")
     elif session.output_count:
         action_lines.append("/outputs 1 to inspect the newest saved output")
         if session.output_count > 1:
@@ -826,7 +1072,16 @@ def _print_session_summary(session: SessionSummary) -> None:
         action_lines.append("/files add <path> to attach workspace context")
     if session.plan_id or session.task_id:
         action_lines.append("/context to verify linked plan/task grounding")
-    action_lines.append("/collab to copy the read-only operator snapshot")
+    if int(pressure["pct_next"]) >= 50 or pressure["hidden_pressure"]:
+        action_lines.append("/tokeninfo to inspect live context pressure before the next send")
+    if int(pressure["pct_next"]) >= 80:
+        action_lines.append("/bookmark before /clear if you need a clean recovery loop")
+    if bool(pressure["overflow"]) or pressure["hidden_pressure"] or pressure["has_pending_inject"]:
+        action_lines.append("/promptdebug to inspect the next payload before sending")
+        action_lines.append("/inject status or /system view to inspect hidden context before sending")
+    if pressure["has_pending_inject"]:
+        action_lines.append("/inject clear to drop the queued one-shot context before your next send")
+    action_lines.append("/collab share to copy the read-only local snapshot before handoff")
     action_lines = _dedupe_preserve_order(action_lines)
     if session.last_checkpoint_at:
         detail_lines.append(f"last checkpoint: {session.last_checkpoint_at}")
@@ -993,6 +1248,10 @@ def _build_session_share_text(session_id: str) -> str:
             stamp = str(item.get("timestamp") or "").strip()
             prefix = f"{stamp} · " if stamp else ""
             lines.append(f"  - {prefix}{item.get('label', 'Update')}: {item.get('summary', '')}")
+    lines.append("")
+    lines.append("TRUST & RECOVERY")
+    lines.append("  scope  : local session log + read-only snapshot only")
+    lines.append("  recover: inspect with /session or /watch history before resuming control")
     lines.append("")
     lines.append("COMMANDS")
     lines.append(f"  resume : {share.get('resume_command', f'openclaw --session {session_id}')}")

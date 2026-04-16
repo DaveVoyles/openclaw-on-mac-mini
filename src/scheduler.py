@@ -81,7 +81,7 @@ class ScheduledTask:
                 cron = croniter(self.cron_expression, now)
                 next_dt = cron.get_next(datetime.datetime).astimezone(datetime.timezone.utc).astimezone(datetime.timezone.utc)
                 return next_dt.strftime("%a %H:%M")
-            except Exception:
+            except (ImportError, ValueError, TypeError):
                 return self.cron_expression
 
         if self.interval_minutes > 0:
@@ -144,7 +144,7 @@ class TaskScheduler:
                     except ValueError:
                         log.warning("Non-standard task_id: %s", task.task_id)
                 log.info("Loaded %d scheduled tasks", len(self._tasks))
-            except Exception as e:
+            except (OSError, json.JSONDecodeError, TypeError, KeyError, ValueError) as e:
                 log.error(
                     "Failed to load schedules (file may be corrupted — manual recovery needed): %s",
                     e,
@@ -277,13 +277,13 @@ class TaskScheduler:
         while True:
             try:
                 await self._check_and_run()
-            except Exception as e:
+            except Exception as e:  # broad: intentional — outer scheduler loop guard
                 log.error("Scheduler loop error: %s", e)
             now_mono = time.monotonic()
             if now_mono - self._last_retry_check >= 300:  # every 5 minutes
                 try:
                     await self._process_retry_queue()
-                except Exception as e:
+                except Exception as e:  # broad: intentional — outer retry-queue guard
                     log.error("Retry queue processing error: %s", e)
                 self._last_retry_check = now_mono
             await asyncio.sleep(60)
@@ -301,7 +301,7 @@ class TaskScheduler:
             try:
                 await retry_task.fn()
                 log.info("Retry succeeded for %s", retry_task.label)
-            except Exception as exc:
+            except Exception as exc:  # broad: intentional — retry fn wraps arbitrary tasks
                 retry_task.attempts_left -= 1
                 if retry_task.attempts_left > 0:
                     delay_idx = 3 - retry_task.attempts_left
@@ -336,7 +336,7 @@ class TaskScheduler:
                 cron = croniter(task.cron_expression, now - datetime.timedelta(minutes=2))
                 next_run = cron.get_next(datetime.datetime)
                 return abs((next_run - now).total_seconds()) < 120
-            except Exception as e:
+            except (ImportError, ValueError, TypeError) as e:
                 log.warning("Invalid cron expression '%s': %s", task.cron_expression, e)
                 return False
 
@@ -389,7 +389,7 @@ class TaskScheduler:
                     log.error("Prompt job %s timed out", task.task_id)
                     success = False
                     error_type = "timeout"
-                except Exception as e:
+                except Exception as e:  # broad: intentional — LLM providers raise many exception types
                     task.last_result = f"❌ Prompt job failed: {e}"
                     log.error("Prompt job %s failed: %s", task.task_id, e)
                     success = False
@@ -438,7 +438,7 @@ class TaskScheduler:
                     if should_notify:
                         try:
                             await self.notify_callback(task.task_id, task.action or "prompt-job", result_text, is_alert)
-                        except Exception as e:
+                        except Exception as e:  # broad: intentional — notify_callback wraps arbitrary Discord code
                             log.error("Scheduler notify callback failed for %s: %s", task.task_id, e)
                 return
 
@@ -479,7 +479,7 @@ class TaskScheduler:
                 log.error("Scheduled task %s timed out", task.task_id)
                 success = False
                 error_type = "timeout"
-            except Exception as e:
+            except Exception as e:  # broad: intentional — skill_fn wraps arbitrary registered functions
                 task.last_result = f"Error: {e}"
                 log.error("Scheduled task %s failed: %s", task.task_id, e)
                 success = False
@@ -528,10 +528,8 @@ class TaskScheduler:
             if should_notify:
                 try:
                     await self.notify_callback(task.task_id, task.action, result_text, is_alert)
-                except Exception as e:
+                except Exception as e:  # broad: intentional — notify_callback wraps arbitrary Discord code
                     log.error("Scheduler notify callback failed for %s: %s", task.task_id, e)
-
-
 # Global instance
 scheduler = TaskScheduler()
 
@@ -579,7 +577,7 @@ async def create_scheduled_task(
             from croniter import croniter
             if not croniter.is_valid(cron_expression):
                 return f"❌ Invalid cron expression `{cron_expression}`. Expected format: minute hour day month weekday (e.g. `0 9 * * 1` for Mondays at 9am)."
-        except Exception as e:
+        except (ImportError, ValueError, TypeError) as e:
             return f"❌ Could not validate cron expression: {e}"
 
     if prompt:
@@ -672,7 +670,7 @@ async def schedule_research_report(topic: str, cron_expression: str = "0 8 * * 0
     try:
         from croniter import croniter
         croniter(cron_expression)
-    except Exception as exc:
+    except (ImportError, ValueError, TypeError) as exc:
         return f"❌ Invalid cron expression `{cron_expression}`: {exc}"
 
     task = scheduler.create(
@@ -691,7 +689,7 @@ async def schedule_research_report(topic: str, cron_expression: str = "0 8 * * 0
         from croniter import croniter as _cron
         next_dt = _cron(cron_expression, _dt.datetime.now()).get_next(_dt.datetime)
         next_str = next_dt.strftime("%A %H:%M")
-    except Exception:
+    except (ImportError, ValueError, TypeError, AttributeError):
         next_str = cron_expression
 
     return (

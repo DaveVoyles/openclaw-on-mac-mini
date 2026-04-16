@@ -73,6 +73,28 @@ src/llm/chat.py  ──  _resolve_non_gemini_reply()
 
 ## Routing Flow
 
+### End-to-end orchestration
+
+The runtime split is:
+
+1. `src/llm/chat.py` normalizes the request, applies context controls, and decides whether to attempt non-Gemini fast paths.
+2. `src/model_routing_policy.py` classifies the query and returns a provider decision for either plain-text or tool-heavy work.
+3. `src/llm/providers.py` performs the non-Gemini HTTP call, applies retry/circuit-breaker/failover behavior, and returns a typed `ProviderResponse`.
+4. `src/llm/telemetry.py` records routing telemetry when enabled.
+5. If the selected non-Gemini path produces no usable answer, `chat.py` falls through to Gemini rather than surfacing a hard routing failure.
+
+This separation keeps policy decisions, transport concerns, and final orchestration independent. It also means provider-specific failures degrade into fallback behavior instead of forcing every caller to implement its own retry chain.
+
+### Request path summary
+
+| Stage | Owner | Output |
+| --- | --- | --- |
+| Prompt preparation | `src/llm/chat.py` | Cleaned prompt, context metadata, routing notes |
+| Query classification | `src/model_routing_policy.py` / `model_router.py` | `AutoRouteDecision` or tool-route decision |
+| Provider execution | `src/llm/providers.py` | `ProviderResponse` or streaming chunks |
+| Telemetry/audit | `src/llm/telemetry.py` | JSONL routing records when enabled |
+| Final fallback | `src/llm/chat.py` | Gemini response when non-Gemini path is unavailable or unsuitable |
+
 ### 1. Fast-path selection (before Gemini)
 
 `_resolve_non_gemini_reply()` in `chat.py` tries routes in priority order:

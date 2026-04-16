@@ -241,6 +241,24 @@ def test_layout_focus_name_invalid_defaults_to_primary():
 
 
 # ---------------------------------------------------------------------------
+# _layout_focus_transition_line
+# ---------------------------------------------------------------------------
+
+def test_layout_focus_transition_line_from_primary():
+    assert (
+        mod._layout_focus_transition_line("primary", "Session summary", "Artifact preview")
+        == "Focus transition: /layout focus supporting -> Artifact preview"
+    )
+
+
+def test_layout_focus_transition_line_from_supporting():
+    assert (
+        mod._layout_focus_transition_line("supporting", "Watch monitor", "Recent artifacts")
+        == "Focus transition: /layout focus primary -> Watch monitor"
+    )
+
+
+# ---------------------------------------------------------------------------
 # _layout_preset_config
 # ---------------------------------------------------------------------------
 

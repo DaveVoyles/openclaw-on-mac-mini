@@ -68,7 +68,7 @@ def _cmd_watch(ctx: ChatCommandContext) -> str:
             if m._RICH_AVAILABLE and m._IS_TTY:
                 m._RICH_CONSOLE.print("[dim]No active watch session.[/]  Start one with [cyan]openclaw watch --goal …[/]")
             else:
-                print("No active watch session. Start one with: openclaw watch --goal …")
+                print("No active watch session. State stays local-only until a watch starts. Use /session to confirm the current recovery snapshot. Start one with: openclaw watch --goal …")
             return _CMD_CONTINUE
         _print_watch_status(state)
 
@@ -77,7 +77,7 @@ def _cmd_watch(ctx: ChatCommandContext) -> str:
             if m._RICH_AVAILABLE and m._IS_TTY:
                 m._RICH_CONSOLE.print("[dim]No watch history found.[/]")
             else:
-                print("No watch history found.")
+                print("No watch history found. Use /session to confirm the current read-only recovery snapshot.")
             return _CMD_CONTINUE
         _print_watch_history(state)
 

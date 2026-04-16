@@ -24,6 +24,8 @@ Step-by-step instructions for configuring all external APIs used in OpenClaw.
 
 **Before you begin:**
 
+For the full first-time deployment path, including local vs production compose guidance, verification, and rollback basics, see the [Deployment & Environment Guide](DEPLOYMENT.md).
+
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/davevoyles/openclaw.git

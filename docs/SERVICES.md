@@ -1,7 +1,7 @@
 # OpenClaw — Services & Integrations Reference
 
 This document is the authoritative reference for every external service, API, and tool used in this project.
-Agents working on this codebase should read this file to understand what is available, why it exists, and how to configure it.
+Agents working on this codebase should read this file to understand what is available, why it exists, and how to configure it. For operator-facing traffic flow and recovery procedures, see [NETWORK-TOPOLOGY.md](NETWORK-TOPOLOGY.md) and [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md).
 
 ---
 

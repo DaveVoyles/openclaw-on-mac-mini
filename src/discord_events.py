@@ -167,7 +167,7 @@ def _pick_most_recent_thread(candidates: list[discord.Thread]) -> discord.Thread
         last_msg = getattr(thread, "last_message_id", None)
         try:
             return int(last_msg or thread.id)
-        except Exception:
+        except (ValueError, TypeError):
             return int(thread.id)
 
     return sorted(candidates, key=_thread_sort_key, reverse=True)[0]
@@ -237,9 +237,9 @@ async def _get_or_create_default_ask_thread(
                         log.debug("Unarchived thread %d for user %d", archived_thread.id, user_id)
                         _remember_default_ask_thread(channel, user_id, int(archived_thread.id))
                         return archived_thread, False
-                    except Exception as unarchive_exc:
+                    except discord.HTTPException as unarchive_exc:
                         log.debug("Failed to unarchive thread %d: %s", archived_thread.id, unarchive_exc)
-        except Exception as archived_exc:
+        except (discord.HTTPException, asyncio.TimeoutError) as archived_exc:
             log.debug("Archived thread search failed: %s", archived_exc)
 
     try:
@@ -251,7 +251,7 @@ async def _get_or_create_default_ask_thread(
         )
         _remember_default_ask_thread(channel, user_id, int(created.id))
         return created, True
-    except Exception as exc:
+    except discord.HTTPException as exc:
         log.debug("Default ask auto-thread creation failed: %s", exc)
         return None, False
 
@@ -278,7 +278,7 @@ async def _maybe_send_archive_warning(thread: discord.Thread) -> None:
                 "Keep chatting to extend it, or start a new `/ask`."
             )
             _mark_archive_warning_sent(thread_id)
-        except Exception as exc:
+        except discord.HTTPException as exc:
             log.debug("Failed to send archive warning for thread %d: %s", thread_id, exc)
 
 
@@ -352,7 +352,7 @@ async def handle_message(
             _remember_default_ask_thread(message.channel, message.author.id, int(routed_thread.id))
             try:
                 await message.channel.send(f"💬 Continuing in {routed_thread.mention}")
-            except Exception as exc:
+            except Exception as exc:  # broad: intentional — redirect send can raise any Discord error
                 log.debug("Failed to send default-ask thread redirect: %s", exc)
 
     # Max message guard (threads only)
@@ -382,7 +382,7 @@ async def handle_message(
                     "for this bot in the Discord Developer Portal, then restart OpenClaw. "
                     "You can still use `/ask` immediately."
                 )
-            except Exception as exc:
+            except discord.HTTPException as exc:
                 log.debug("Failed to send message-content hint: %s", exc)
         return
 
@@ -447,7 +447,7 @@ async def handle_message(
             if _placeholder_msg is not None:
                 try:
                     await _placeholder_msg.delete()
-                except Exception:
+                except discord.HTTPException:
                     pass
             response_text = result.response_text
             model_used = result.model_used
@@ -503,7 +503,7 @@ async def handle_message(
                 final_meta.get("answer_quality", {}).get("status", "unknown"),
                 final_meta.get("answer_quality_retry", {}).get("status_path"),
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional — outer catch for entire LLM ask-flow pipeline
             log.error("Message ask-flow LLM error: %s", e)
             response_text = f"❌ **Error:** {e}"
             model_used = "error"
@@ -524,7 +524,7 @@ async def handle_message(
                 img_bytes = render_table_image(table_text)
                 if img_bytes:
                     table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
-        except Exception as e:
+        except (ImportError, ValueError, RuntimeError, OSError) as e:
             log.debug("Thread table image rendering failed: %s", e)
 
         response_text = _format_markdown_for_discord(response_text)
@@ -552,7 +552,7 @@ async def handle_message(
                 _last_sent_msg = await flow_channel.send(embed=embed)
             if table_image_file:
                 _last_sent_msg = await flow_channel.send(file=table_image_file)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — send can raise many Discord or runtime errors
             log.warning("Failed to send default ask response in flow channel: %s", exc)
             if flow_channel is not message.channel:
                 for i, chunk in enumerate(chunks):
@@ -578,9 +578,8 @@ async def handle_message(
                     provider=_provider,
                     skills=_skills,
                 ))
-            except Exception:
+            except (AttributeError, KeyError, RuntimeError, TypeError):
                 pass
-
     audit_action = "thread_followup" if original_bot_owned_thread else "ask_default"
     audit_log(message.author, audit_action, detail=user_question[:200])
     conversation_store.cleanup_expired()

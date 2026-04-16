@@ -12,14 +12,26 @@ github:
 navigation:
   - title: Home
     url: /
+  - title: Start Here
+    url: /START-HERE
   - title: Commands
     url: /COMMANDS
   - title: Architecture
     url: /ARCHITECTURE
   - title: API Reference
     url: /API_REFERENCE
+  - title: API Setup
+    url: /API_SETUP
+  - title: Services
+    url: /SERVICES
+  - title: Deployment
+    url: /DEPLOYMENT
   - title: Contributing
     url: /CONTRIBUTING
+  - title: Product Roadmap
+    url: /PRODUCT-ROADMAP
+  - title: Docs Governance
+    url: /DOCS-GOVERNANCE
 
 # Features
 features:

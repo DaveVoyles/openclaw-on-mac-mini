@@ -211,6 +211,7 @@ def _cmd_collab(ctx: ChatCommandContext) -> str:
                 existing_tags.append(session_tag)
         update_session(session.session_id, tags=existing_tags)
     print(f"Recorded {sub} by {actor_label}.")
+    print("Local session log only; workspace unchanged.")
     if tags:
         print(f"Tags: {', '.join('#' + tag for tag in tags)}")
     print(text)
@@ -411,6 +412,18 @@ def _cmd_outputs(ctx: ChatCommandContext) -> str:
                 f"{str(item.get('modified_at') or '').strip()}  "
                 f"{_cli._single_line_excerpt(str((output_previews.get(str(item.get('name') or '').strip()) or {}).get('preview') or ''), max_chars=70)}".strip()
             ),
+            detail_fn=lambda item: [
+                f"name: {str(item.get('name') or '').strip()}",
+                f"size: {_cli._format_byte_count(int(item.get('size_bytes') or 0))}",
+                f"modified: {str(item.get('modified_at') or '').strip() or '—'}",
+                *[
+                    line
+                    for line in str(
+                        (output_previews.get(str(item.get('name') or '').strip()) or {}).get('preview') or ""
+                    ).splitlines()
+                    if line.strip()
+                ],
+            ],
             on_select=_preview_output,
             initial_query=overlay_query,
             empty_message="No saved outputs yet.",

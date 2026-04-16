@@ -39,7 +39,7 @@ docker-compose -f docker-compose.prod.yml up -d
 - **Discord Integration** - Rich UI with buttons, dropdowns, and interactive modals
 - **Production-Ready** - Multi-stage Docker, security scanning, automated releases
 
-## 📚 Documentation
+## 📚 Core Documentation
 
 <div class="docs-grid">
   <div class="doc-card">
@@ -53,13 +53,38 @@ docker-compose -f docker-compose.prod.yml up -d
   </div>
 
   <div class="doc-card">
+    <h3>🧭 <a href="LLM-ROUTING.html">LLM Routing</a></h3>
+    <p>Provider orchestration, routing policy, and fallback flow</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🛡️ <a href="RESILIENCE.html">Resilience</a></h3>
+    <p>Error handling, health signals, and runtime fallback behavior</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>💾 <a href="PERSISTENCE.html">Persistence</a></h3>
+    <p>Storage boundaries, durability model, and versioning implications</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>⏱️ <a href="BACKGROUND_TASKS.html">Background Tasks</a></h3>
+    <p>Supervisor loops, scheduled work, and recovery mechanics</p>
+  </div>
+
+  <div class="doc-card">
     <h3>🔧 <a href="API_REFERENCE.html">API Reference</a></h3>
     <p>Developer API documentation and integration guides</p>
   </div>
 
   <div class="doc-card">
+    <h3>🧭 <a href="START-HERE.html">Contributor Start Here</a></h3>
+    <p>Best first stop for onboarding, architecture orientation, and first contributions</p>
+  </div>
+
+  <div class="doc-card">
     <h3>🤝 <a href="CONTRIBUTING.html">Contributing</a></h3>
-    <p>Guidelines for contributing to OpenClaw</p>
+    <p>Detailed contribution guidelines and implementation checklists</p>
   </div>
 
   <div class="doc-card">
@@ -70,6 +95,35 @@ docker-compose -f docker-compose.prod.yml up -d
   <div class="doc-card">
     <h3>📊 <a href="SERVICES.html">Services</a></h3>
     <p>Backend services and infrastructure</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🛰️ <a href="NETWORK-TOPOLOGY.html">Network Topology</a></h3>
+    <p>Traffic paths, ports, and remote-access expectations</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🚨 <a href="OPERATIONS-RUNBOOK.html">Operations Runbook</a></h3>
+    <p>Incident response, monitoring thresholds, and recovery basics</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🚢 <a href="DEPLOYMENT.html">Deployment</a></h3>
+    <p>Environment setup, local vs production, verification, and rollback basics</p>
+  </div>
+</div>
+
+## 🧭 Planning & Docs Governance
+
+<div class="docs-grid docs-grid-compact">
+  <div class="doc-card">
+    <h3>🗺️ <a href="PRODUCT-ROADMAP.html">Product Roadmap</a></h3>
+    <p>Canonical entrypoint for future improvements and cross-cutting planning</p>
+  </div>
+
+  <div class="doc-card">
+    <h3>🧱 <a href="DOCS-GOVERNANCE.html">Docs Governance</a></h3>
+    <p>Documentation taxonomy, lifecycle rules, and maintenance guidance</p>
   </div>
 </div>
 
@@ -141,7 +195,7 @@ Track movies/TV shows with Trakt.tv, manage audiobooks, and monitor downloads.
 
 ## 📝 License
 
-MIT License - see [LICENSE](LICENSE) for details
+MIT License - see the [repository license](https://github.com/DaveVoyles/openclaw-on-mac-mini/blob/main/LICENSE).
 
 ---
 
@@ -156,6 +210,11 @@ MIT License - see [LICENSE](LICENSE) for details
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 1.5rem;
   margin: 2rem 0;
+}
+
+.docs-grid-compact {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-top: 1rem;
 }
 
 .doc-card {

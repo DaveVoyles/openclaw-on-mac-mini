@@ -1065,7 +1065,8 @@ Generates a comprehensive snapshot: container counts, download queue, \*arr heal
 - [ ] **Phase 8**: Production Hardening — Comprehensive testing, backup/restore, Grafana dashboards
 - [x] **Phase 15**: Frontier Intelligence — Auto-RAG, code interpreter, multi-model routing, Copilot proxy, persistent memory
 
-See [docs/IMPLEMENTATION-PLAN.md](docs/IMPLEMENTATION-PLAN.md) for the detailed plan.
+See [docs/PRODUCT-ROADMAP.md](docs/PRODUCT-ROADMAP.md) for the active roadmap and
+[docs/archive/IMPLEMENTATION-PLAN.md](docs/archive/IMPLEMENTATION-PLAN.md) for historical context.
 
 ## Maintenance
 
@@ -1180,8 +1181,15 @@ print(f\"Calls: {d['calls']}\")
 ## Related Documentation
 
 ### Architecture & Planning
-- [Implementation Plan](docs/IMPLEMENTATION-PLAN.md) — Full 7-phase roadmap
+- [Product Roadmap](docs/PRODUCT-ROADMAP.md) — Canonical roadmap for future improvements
+- [Historical Implementation Plan](docs/archive/IMPLEMENTATION-PLAN.md) — Archived platform plan
 - [Docker Stack](https://github.com/DaveVoyles/docker-on-mac-mini) — The infrastructure OpenClaw manages
+
+### Contributing
+- [Contributor Start Here](docs/START-HERE.md) — Best first stop for onboarding, architecture orientation, and first PR workflows
+- [Development Guide](docs/DEVELOPMENT.md) — Local setup, CI gate policy, and day-to-day commands
+- [Contributing Guide](docs/CONTRIBUTING.md) — Detailed contribution checklists for code, skills, and commands
+- [Testing Guide](docs/TESTING.md) — Focused validation and test-running reference
 
 ### API Documentation
 - [API Reference](docs/API_REFERENCE.md) — Complete reference for all external APIs

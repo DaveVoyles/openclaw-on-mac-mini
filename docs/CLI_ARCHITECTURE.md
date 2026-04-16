@@ -10,7 +10,7 @@ update mechanism, standalone install, and key code locations.
 | `src/openclaw_cli.py` | Primary CLI (~4,654 lines). Main REPL loop, `run_chat`, `main`; all `_cmd_*` handlers now live in extracted modules (see below) |
 | `src/openclaw_cli_cli_parser.py` | Extracted argument parser — exports `build_parser()`. TD-34 extraction. |
 | `src/openclaw_cli_help.py` | Extracted chat-help renderer — exports `print_chat_help()`. TD-34 extraction. |
-| `src/openclaw_cli_actions.py` | Approval prompts (`request_cli_approval`) with colored risk levels |
+| `src/openclaw_cli_actions.py` | Approval prompts (`request_cli_approval`) with colored risk levels plus review/trust/recovery cues |
 | `src/openclaw_cli_cli_parser.py` | Extracted `build_parser()` — pure argparse module, no side effects (TD-34) |
 | `src/openclaw_cli_help.py` | Extracted `print_chat_help()` — generates help table from command registry (TD-34) |
 | `src/openclaw_cli_sessions.py` | Session persistence (load/save conversation history, watch state) |
@@ -75,6 +75,9 @@ Wave 16 layers feedback density on top of that baseline:
   helper for predictable confirmations.
 - High/critical `/exec` and `/edit` actions print an extra warning + recovery
   hint before the existing approval prompt.
+- The approval UX is still terminal-first: `request_cli_approval()` keeps the
+  text review loop and cue block, and high-risk approvals can now open a compact
+  review overlay without changing the non-TTY fallback contract.
 
 ### Theme engine + personalization
 
@@ -115,9 +118,41 @@ Implementation notes:
 - The persisted preference key is `_PREFS["interactive_overlays"]`.
 - `_overlay_available()` guards overlay prompts behind TTY checks so non-TTY and
   scripted usage falls back to ordinary list output.
-- `_run_interactive_overlay()` is intentionally lightweight: it uses plain
-  `input()`, fuzzy-ish text filtering, numeric selection, and cancellation via
-  empty input / `q`, avoiding hard Rich dependencies.
+- `_run_interactive_overlay()` now has two safe modes: a richer TTY path with
+  raw-key `↑/↓` movement, live filtering, and an inline preview block, plus the
+  original plain `input()` path for plain-mode, scripted, and other fallback
+  environments.
+- That lightweight contract is deliberate: the richer TTY picker now supports
+  arrow-key movement, live filtering, and inline previews without committing to
+  a heavier curses/Textual full-screen shell, and the layout system still stops
+  short of a true pane compositor even though it now reports explicit
+  `/layout focus ...` transitions.
+
+### REPL input stack
+
+The interactive prompt path should stay explicitly tiered rather than assuming a
+single backend:
+
+- **Optional `prompt_toolkit` layer** — the deferred shell-input follow-up may
+  use `prompt_toolkit` for richer interactive-TTY line editing, completion, and
+  multiline compose ergonomics when the dependency is installed and the session
+  is actually interactive.
+- **`readline` baseline** — the shipped Wave 4 contract still relies on
+  `readline` where available for slash-command completion, persisted history,
+  reverse search, and the binding vocabulary surfaced by `/keys` and
+  `/bindlist`.
+- **Plain-input fallback** — startup and input must still succeed without
+  optional dependencies, and plain-mode, non-TTY, or scripted environments
+  should be able to fall back to the simpler `input()` path.
+
+Important guardrails:
+
+- Treat `prompt_toolkit` as a prompt-entry enhancement, not a commitment to a
+  full-screen TUI shell.
+- Keep the slash-command vocabulary and `/draft multiline` surface stable across
+  all three layers.
+- Stateful shell completion and broader hint derivation remain future work even
+  if the richer prompt backend lands.
 
 ### Collaboration handoff UX
 
@@ -251,7 +286,9 @@ terminal TUI shell:
 - `/accessibility status` mirrors the current preset + fallback state so the
   width/accessibility downgrade story stays visible in deterministic plain text.
 
-The actual pane compositor and active-pane focus management remain deferred.
+The actual pane compositor remains deferred, but the current pane shells now
+surface explicit `/layout focus …` transition cues so active-pane switching is
+visible even in stacked and single-pane fallbacks.
 
 ### Wave 26 celebration slice (current truth)
 
@@ -318,8 +355,9 @@ Wave 28 follow-up work.
 
 ### Wave 29 storytelling slice (current truth)
 
-Wave 29 is currently a **deterministic narrative scaffold**, not a generated
-prose/timeline recap engine:
+Wave 29 is currently a **deterministic narrative scaffold**, and the next
+follow-through slice should stay narrower than a generated prose/timeline recap
+engine:
 
 - `_build_session_share_text()` is the canonical plain-text storyteller today.
   It reuses persisted collaboration and watch metadata to emit stable recap
@@ -330,13 +368,17 @@ prose/timeline recap engine:
   command are all visible without scanning the raw event log first.
 - `_session_preview_lines()` is the compact version of the same story contract:
   latest activity, watch focus, latest output, actor names, top decision, and a
-  mood/momentum cell.
+  lightweight momentum/milestone cue.
+- The next truthful extension point is still narrow: `/session` and `/sessions`
+  may surface those momentum cues as secondary context, but status/count/watch
+  signals remain the primary scan path.
 - The current “next step” model is command-based rather than prose-based:
   resume / inspect / share are the shipped deterministic endings for these
-  recap surfaces.
+  recap surfaces, and `_build_session_share_text()` should stay neutral/pasteable
+  until a broader recap/export contract actually lands.
 
-Bullet/timeline recap transforms and recap-specific export payloads remain
-future Wave 29 follow-up work.
+Bullet/timeline recap transforms, recap-specific export payloads, and richer
+browser/dashboard storytelling remain future Wave 29 follow-up work.
 
 ### Wave 30 choreography slice (current truth)
 
@@ -380,17 +422,17 @@ Implementation guidance:
   active
 - omit low-priority hints first on narrow terminals or non-TTY paths
 
-**Current shipped Wave 31 slice:** the shell contract is only partially landed.
-Today the runtime uses:
+**Current shipped Wave 31 slice:** the shell contract now includes the always-on
+top context bar in addition to the earlier footer/status cues. Today the runtime uses:
 
 - `_print_predictive_affordances(...)` for the post-response **Suggested
   follow-ups** block
 - `_print_followup_suggestions(...)` for the compact **bottom bar** footer with
   `mode: ...` plus contextual actions
-- `_print_status_bar(...)` as the lightweight context/status shell cue after the
-  response
-
-The richer always-present top context bar remains deferred.
+- `_print_status_bar(...)` as the lightweight post-response status cue
+- `_top_context_bar_lines(...)` + `_print_top_context_bar(...)` for the
+  always-on pre-prompt shell chrome that surfaces session/cwd/plan/task/hidden
+  context/recovery cues in deterministic plain text too
 
 ### Wave 31+ phase/step feedback contract
 
@@ -742,12 +784,37 @@ Current shipped slice:
 - pressure guidance is now staged: the existing mid-range stale-context tip
   remains, high pressure suggests bookmarking before clearing, and near-capacity
   pressure escalates to a stronger recovery hint.
+- the surrounding operator surfaces now carry lighter follow-through: `/context`
+  and the Session Dashboard surface next-send pressure, while `/watch status`
+  surfaces next-retry pressure and recovery commands when automation inherits a
+  heavy prompt or hidden context
 
 Deferred follow-up work:
 
 - per-model context limits instead of the shared 128k heuristic
 - token usage breakdowns by turn or command family
-- proactive overflow warnings outside `/tokeninfo`
+- broader ambient overflow warnings beyond `/tokeninfo`, `/context`, `/session`,
+  and `/watch status`
+
+### Deferred interaction affordance follow-ups (current truth)
+
+These items are still intentionally deferred even after the shipped Wave 31–45
+slices:
+
+- backend-backed SSE/token streaming is now wired into the interactive TTY chat
+  runtime through `/api/agent/ask/stream`; non-TTY, JSON, and compact flows
+  still fall back to the buffered request/response path
+- `/edit` and `/exec` now pair their previews/prompts with compact approval-time
+  review lines plus trust/recovery cues, so future follow-up work should target
+  only larger review-shell expansions rather than reopening the shipped review
+  baseline
+- Wave 43–45 token heuristics are local and 128k-based; `/tokeninfo`,
+  `/context`, `/session`, and `/watch status` now surface the shipped guardrail
+  cues, while per-model limits and broader ambient overflow guidance remain
+  deferred
+- the full multi-region shell vision is still intentionally narrower than a true
+  pane compositor, but the truthful current shell cues are now the top context
+  bar, post-response status bar, and bottom footer together
 
 ### stderr vs stdout
 

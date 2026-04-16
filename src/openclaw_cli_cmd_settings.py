@@ -339,8 +339,13 @@ def _cmd_layout(ctx: "ChatCommandContext") -> str:
         if not m._layout_preset_name():
             m._print_error("Choose a preset first: /layout preset focus|watch-monitor|handoff")
             return _CMD_CONTINUE
+        previous_focus = m._layout_focus_name()
         m._prefs_set("layout_focus", requested_focus)
-        m._print_feedback(f"Active pane set to {requested_focus}.", level="success")
+        if requested_focus == previous_focus:
+            detail = f"No transition needed; {requested_focus} is already active."
+        else:
+            detail = f"Focus transition: {previous_focus} -> {requested_focus}"
+        m._print_feedback(f"Active pane set to {requested_focus}.", level="success", detail=detail)
         m._print_layout_preset_workspace(ctx)
         return _CMD_CONTINUE
     preset_token = token.split(None, 1)[1].strip() if token.startswith("preset ") else token

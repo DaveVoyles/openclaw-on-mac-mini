@@ -2,6 +2,8 @@
 
 **Read this first.** 30-second orientation before touching anything.
 
+> **Planning rule:** for future improvements or the next CLI UX wave, read [`docs/PRODUCT-ROADMAP.md`](PRODUCT-ROADMAP.md) first and use scoped docs only for implementation detail.
+
 ---
 
 ## Architecture in 30 Seconds

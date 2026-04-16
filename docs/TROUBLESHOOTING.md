@@ -1,6 +1,8 @@
 # OpenClaw Troubleshooting Guide
 
-Quick-reference for diagnosing and fixing common issues.
+Quick-reference for diagnosing and fixing common issues. For incident sequencing, monitoring thresholds, and escalation flow, pair this with [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md) and [NETWORK-TOPOLOGY.md](NETWORK-TOPOLOGY.md).
+
+If you are still setting up the stack, read the [Deployment & Environment Guide](DEPLOYMENT.md) first for the expected startup flow and verification steps.
 
 ---
 

@@ -69,3 +69,9 @@ openclaw_export_*.md
 
 # Local notes
 notes.txt
+
+# Root-level local SQLite artifacts
+/t.db
+/test.db
+/test_t.db
+/threads.db

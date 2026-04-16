@@ -142,6 +142,39 @@ def test_cmd_clear_without_session_id_skips_event():
     cli.append_event.assert_not_called()
 
 
+def test_cmd_exec_passes_review_and_recovery_cues_to_approval():
+    session = _mock_session(cwd="/project")
+    cli = _mock_cli(_session=session)
+    cli._build_exec_approval_review = MagicMock(return_value=["Review: exact shell text `rm -rf build`"])
+    cli.request_cli_approval = MagicMock(return_value=False)
+    cli._format_elapsed_compact = MagicMock(return_value="0.4s")
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_exec(_ctx("rm -rf build"))
+    assert result == _CMD_CONTINUE
+    approval_kwargs = cli.request_cli_approval.call_args.kwargs
+    assert approval_kwargs["review_lines"] == ["Review: exact shell text `rm -rf build`"]
+    assert "workspace unchanged" in approval_kwargs["trust_note"]
+    assert "inspect /cwd" in approval_kwargs["recovery_hint"]
+
+
+def test_cmd_edit_passes_preview_review_and_recovery_cues_to_approval():
+    session = _mock_session(cwd="/project")
+    preview = MagicMock(changed=True, summary="Previewed file write.", diff="--- a\n+++ b\n+hello", path="/project/file.txt")
+    cli = _mock_cli(_session=session)
+    cli._preview_file_edit = MagicMock(return_value=preview)
+    cli._print_file_edit_preview = MagicMock()
+    cli._build_edit_approval_review = MagicMock(return_value=["Review: Previewed file write. · +1/-0 lines"])
+    cli.request_cli_approval = MagicMock(return_value=False)
+    cli._format_elapsed_compact = MagicMock(return_value="0.4s")
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_edit(_ctx("file.txt --content hello"))
+    assert result == _CMD_CONTINUE
+    approval_kwargs = cli.request_cli_approval.call_args.kwargs
+    assert approval_kwargs["review_lines"] == ["Review: Previewed file write. · +1/-0 lines"]
+    assert "file untouched" in approval_kwargs["trust_note"]
+    assert "/rollback last" in approval_kwargs["recovery_hint"]
+
+
 # ---------------------------------------------------------------------------
 # _cmd_context
 # ---------------------------------------------------------------------------
@@ -166,6 +199,53 @@ def test_cmd_context_calls_dashboard(capsys):
         result = mod._cmd_context(_ctx())
     assert result == _CMD_CONTINUE
     cli._print_dashboard_surface.assert_called_once()
+
+
+def test_cmd_context_surfaces_hidden_context_guardrails():
+    session = _mock_session(cwd="/myproject", files=["/myproject/README.md"], plan_id=None, task_id=None)
+    cli = _mock_cli(
+        _session=session,
+        _PREFS={"system_prompt": "Always be concise."},
+    )
+    cli._next_inject = "workspace summary"
+    cli._progress_cell = MagicMock(side_effect=lambda label, value, status="": f"{label}:{value}:{status}")
+    cli._render_effective_grounding_preview = MagicMock(return_value="")
+    cli._validate_plan_id_local = MagicMock(return_value=MagicMock(available=True))
+    cli._validate_task_id_local = MagicMock(return_value=MagicMock(available=True))
+    cli._link_validation_suffix = MagicMock(return_value="")
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_context(_ctx())
+    assert result == _CMD_CONTINUE
+    _, kwargs = cli._print_dashboard_surface.call_args
+    assert any("system:" in line for line in kwargs["summary_lines"])
+    assert any("inject:" in line for line in kwargs["summary_lines"])
+    assert any("next send guardrail" in line for line in kwargs["detail_lines"])
+    assert any("/promptdebug" in line for line in kwargs["action_lines"])
+
+
+def test_cmd_context_adds_pressure_and_recovery_cues():
+    session = _mock_session(cwd="/myproject", files=["/myproject/README.md"], plan_id="plan-1", task_id="task-1")
+    cli = _mock_cli(
+        _session=session,
+        _PREFS={"system_prompt": "Always explain the diff briefly."},
+    )
+    cli._next_inject = "Queued workspace recap"
+    cli._progress_cell = MagicMock(side_effect=lambda label, value, status="": f"{label}:{value}:{status}")
+    cli._render_effective_grounding_preview = MagicMock(return_value="")
+    cli._validate_plan_id_local = MagicMock(return_value=MagicMock(available=True))
+    cli._validate_task_id_local = MagicMock(return_value=MagicMock(available=True))
+    cli._link_validation_suffix = MagicMock(return_value="")
+    history = [{"role": "user", "content": "x" * 410_000}]
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_context(_ctx(history=history))
+    assert result == _CMD_CONTINUE
+    _, kwargs = cli._print_dashboard_surface.call_args
+    assert any("context pressure:" in line for line in kwargs["detail_lines"])
+    assert any("recovery guardrail:" in line for line in kwargs["detail_lines"])
+    assert any("recovery cue: /inject clear" in line for line in kwargs["detail_lines"])
+    assert any("/tokeninfo to inspect the current context budget" in line for line in kwargs["action_lines"])
+    assert any("/bookmark before /clear" in line for line in kwargs["action_lines"])
+    assert any("/inject clear to remove the queued one-shot context" in line for line in kwargs["action_lines"])
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +312,52 @@ def test_cmd_autoroute_no_args_shows_status(capsys):
     assert result == _CMD_CONTINUE
     captured = capsys.readouterr()
     assert "ON" in captured.out or "OFF" in captured.out
+
+
+# ---------------------------------------------------------------------------
+# _cmd_tokeninfo
+# ---------------------------------------------------------------------------
+
+def test_cmd_tokeninfo_includes_hidden_context_extras(capsys):
+    cli = _mock_cli(_PREFS={"system_prompt": "Always explain the diff briefly."})
+    cli._next_inject = "Pending file context"
+    cli._history_token_breakdown = MagicMock(
+        return_value={
+            "total_tokens": 300,
+            "total_messages": 2,
+            "roles": [("user", {"messages": 1, "tokens": 200}), ("assistant", {"messages": 1, "tokens": 100})],
+        }
+    )
+    cli._estimate_token_count = MagicMock(side_effect=lambda value: max(0, len(str(value)) // 4))
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_tokeninfo(_ctx(history=[{"role": "user", "content": "hi"}]))
+    assert result == _CMD_CONTINUE
+    out = capsys.readouterr().out
+    assert "Window:" in out
+    assert "Next send extras" in out
+    assert "system prompt:" in out
+    assert "pending inject:" in out
+    assert "Trust cue: use /promptdebug" in out
+    assert "Recovery cue: /inject clear" in out
+
+
+def test_cmd_tokeninfo_uses_model_aware_overflow_guidance(capsys):
+    cli = _mock_cli(_PREFS={"last_model": "gemma3:4b"})
+    cli._history_token_breakdown = MagicMock(
+        return_value={
+            "total_tokens": 98_000,
+            "total_messages": 1,
+            "roles": [("user", {"messages": 1, "tokens": 98_000})],
+        }
+    )
+    cli._estimate_token_count = MagicMock(side_effect=lambda value: max(0, len(str(value)) // 4))
+    cli._next_inject = "z" * 12_000
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_tokeninfo(_ctx(history=[{"role": "user", "content": "x" * 392_000}]))
+    assert result == _CMD_CONTINUE
+    out = capsys.readouterr().out
+    assert "~100k Gemma-class window" in out
+    assert "Next request likely exceeds the resolved window" in out
 
 
 def test_cmd_autoroute_off_disables(capsys):

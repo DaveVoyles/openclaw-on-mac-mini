@@ -33,6 +33,25 @@ class _FakeResponse:
         return False
 
 
+class _FakeStreamingResponse:
+    def __init__(self, lines: list[str]):
+        self._lines = [line.encode("utf-8") for line in lines]
+        self._index = 0
+
+    def readline(self) -> bytes:
+        if self._index >= len(self._lines):
+            return b""
+        line = self._lines[self._index]
+        self._index += 1
+        return line
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
 def _config(**overrides):
     base = mod.CliConfig(
         base_url="http://localhost:8765",
@@ -192,6 +211,44 @@ def test_invoke_openclaw_posts_expected_payload():
     assert captured["payload"]["history"] == [{"role": "user", "content": "Earlier turn"}]
     assert captured["payload"]["user_name"] == "dave@mini"
     assert captured["headers"]["Authorization"] == "Bearer secret-token"
+
+
+def test_invoke_openclaw_stream_prints_chunks_and_returns_final(capsys):
+    captured = {}
+
+    def _fake_urlopen(req, timeout):
+        captured["url"] = req.full_url
+        captured["timeout"] = timeout
+        captured["headers"] = dict(req.header_items())
+        captured["payload"] = json.loads(req.data.decode("utf-8"))
+        return _FakeStreamingResponse(
+            [
+                'event: chunk\n',
+                'data: {"delta":"Hello"}\n',
+                '\n',
+                'event: chunk\n',
+                'data: {"delta":" world"}\n',
+                '\n',
+                'event: final\n',
+                'data: {"response":"Hello world","model":"gemini","tokens":7}\n',
+                '\n',
+            ]
+        )
+
+    response = mod.invoke_openclaw_stream(
+        "status report",
+        config=_config(),
+        history=[{"role": "user", "content": "Earlier turn"}],
+        opener=_fake_urlopen,
+    )
+
+    assert captured["url"] == "http://localhost:8765/api/agent/ask/stream"
+    assert captured["timeout"] == 30
+    assert captured["payload"]["prompt"] == "status report"
+    assert captured["headers"]["Accept"] == "text/event-stream"
+    assert response.response == "Hello world"
+    assert response.raw["_streamed_cli"] is True
+    assert "Hello world" in capsys.readouterr().out
 
 
 def test_fetch_health_reads_health_endpoint():
@@ -450,6 +507,117 @@ def test_print_status_bar_wraps_on_narrow_terminal(monkeypatch, capsys):
     assert "Status:" in stdout
     assert "autoroute" in stdout
     assert stdout.count("\n") >= 2
+
+
+def test_top_context_bar_lines_include_trust_phase_and_recovery(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    monkeypatch.chdir(tmp_path)
+    _write_local_plan(tmp_path, "plan-shell-1", goal="Ship shell chrome")
+    _write_local_tasks(
+        tmp_path,
+        [{"id": "task-shell-1", "title": "Add top context bar", "status": "done"}],
+    )
+    session = sessions_mod.create_session(
+        title="shell-chrome",
+        cwd=str(tmp_path),
+        files=[str(tmp_path / "README.md")],
+        plan_id="plan-shell-1",
+        task_id="task-shell-1",
+    )
+    monkeypatch.setitem(mod._PREFS, "system_prompt", "Stay concise.")
+    monkeypatch.setattr(mod, "_next_inject", "queued workspace context")
+    monkeypatch.setattr(
+        mod,
+        "_load_route_plan",
+        lambda plan_id: SimpleNamespace(
+            steps=[
+                SimpleNamespace(num=1, description="Inspect shell chrome", status="done"),
+                SimpleNamespace(num=2, description="Patch top bar", status="in-progress"),
+                SimpleNamespace(num=3, description="Run focused tests", status="pending"),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "list_routed_action_checkpoints",
+        lambda session_id, limit=1: [
+            {
+                "step_index": 2,
+                "step_total": 3,
+                "rollback_status": "available",
+                "action_kind": "edit",
+                "target": "src/openclaw_cli.py",
+            }
+        ],
+    )
+
+    lines = mod._top_context_bar_lines(
+        session_id=session.session_id,
+        history_len=4,
+        autoroute_on=True,
+    )
+
+    joined = "\n".join(lines)
+    assert "Context:" in joined
+    assert "plan confirmed" in joined
+    assert "task confirmed" in joined
+    assert "phase done" in joined
+    assert "phase: step 2/3 Patch top bar" in joined
+    assert "done step 2/3 done" not in joined
+    assert "hidden" in joined
+    assert "step 2/3 complete" in joined
+    assert "next step 2/3 Patch top bar" in joined
+    assert "/rollback last ready" in joined
+    assert "trust /promptdebug" in joined
+
+
+def test_top_context_bar_lines_acknowledge_completed_step_before_next_step(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    monkeypatch.chdir(tmp_path)
+    _write_local_plan(tmp_path, "plan-shell-2", goal="Ship shell chrome")
+    session = sessions_mod.create_session(
+        title="shell-phase",
+        cwd=str(tmp_path),
+        plan_id="plan-shell-2",
+    )
+    monkeypatch.setitem(mod._PREFS, "system_prompt", "")
+    monkeypatch.setattr(mod, "_next_inject", "")
+    monkeypatch.setattr(
+        mod,
+        "_load_route_plan",
+        lambda plan_id: SimpleNamespace(
+            steps=[
+                SimpleNamespace(num=1, description="Inspect shell chrome", status="done"),
+                SimpleNamespace(num=2, description="Patch top bar", status="done"),
+                SimpleNamespace(num=3, description="Run focused tests", status="in-progress"),
+            ]
+        ),
+    )
+    monkeypatch.setattr(
+        mod,
+        "list_routed_action_checkpoints",
+        lambda session_id, limit=1: [
+            {
+                "step_index": 2,
+                "step_total": 3,
+                "step_kind": "edit",
+                "rollback_status": "available",
+                "action_kind": "edit",
+                "target": "src/openclaw_cli.py",
+            }
+        ],
+    )
+
+    lines = mod._top_context_bar_lines(
+        session_id=session.session_id,
+        history_len=2,
+        autoroute_on=True,
+    )
+
+    joined = "\n".join(lines)
+    assert "done step 2/3 done · edit" in joined
+    assert "phase: step 3/3 Run focused tests" in joined
+    assert "next step 3/3 Run focused tests" in joined
 
 
 def test_invoke_openclaw_formats_unauthorized_errors():
@@ -825,6 +993,30 @@ def test_run_chat_supports_autoroute_status_and_toggle(capsys, tmp_path, monkeyp
     assert "Auto-route enabled for this session." in stdout
 
 
+def test_run_chat_prints_top_context_bar_before_prompt(capsys, tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = sessions_mod.create_session(title="top-bar", cwd=str(tmp_path))
+    prompts = iter(["/quit"])
+
+    def _fake_input(_label):
+        return next(prompts)
+
+    monkeypatch.setitem(mod._PREFS, "layout", "compact")
+
+    exit_code = mod.run_chat(
+        _config(session_id=session.session_id),
+        input_func=_fake_input,
+        session_id=session.session_id,
+        no_banner=True,
+    )
+
+    assert exit_code == 0
+    stdout = capsys.readouterr().out
+    assert "Context:" in stdout
+    assert "session:" in stdout
+    assert "autoroute: on" in stdout
+
+
 def test_run_chat_uses_router_before_generic_chat_fallback(capsys, tmp_path, monkeypatch):
     monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
     session = sessions_mod.create_session(title="router", cwd=str(tmp_path))
@@ -888,18 +1080,22 @@ def test_run_chat_uses_router_before_generic_chat_fallback(capsys, tmp_path, mon
 
     assert exit_code == 0
     assert ask_calls == [("what changed overnight?", [])]
-    assert approval_calls == [
-        {
-            "action": "shell.exec",
-            "target": "git status",
-            "risk_level": approval_calls[0]["risk_level"],
-            "detail": f"cwd={tmp_path}",
-            "auto_approve": False,
-            "session_id": session.session_id,
-            "plan_id": "",
-            "task_id": "",
-        }
+    assert len(approval_calls) == 1
+    assert approval_calls[0]["action"] == "shell.exec"
+    assert approval_calls[0]["target"] == "git status"
+    assert approval_calls[0]["detail"] == f"cwd={tmp_path}"
+    assert approval_calls[0]["auto_approve"] is False
+    assert approval_calls[0]["session_id"] == session.session_id
+    assert approval_calls[0]["plan_id"] == ""
+    assert approval_calls[0]["task_id"] == ""
+    assert approval_calls[0]["review_lines"] == [
+        f"Review: command `git` from cwd `{tmp_path}`",
+        "Review: exact shell text `git status`",
+        "Review: side effects reads local state without writing files",
+        "Review: args `status`",
     ]
+    assert "workspace unchanged" in approval_calls[0]["trust_note"]
+    assert "inspect /cwd" in approval_calls[0]["recovery_hint"]
     stdout = capsys.readouterr().out
     assert "auto-route" in stdout and "/exec git status" in stdout
     assert "$ git status" in stdout
@@ -1076,18 +1272,21 @@ def test_run_chat_routed_edit_still_requests_approval(capsys, tmp_path, monkeypa
         )
 
     assert exit_code == 0
-    assert approval_calls == [
-        {
-            "action": "file.edit",
-            "target": "notes.txt",
-            "risk_level": approval_calls[0]["risk_level"],
-            "detail": "append=True;replace=False",
-            "auto_approve": False,
-            "session_id": session.session_id,
-            "plan_id": "",
-            "task_id": "",
-        }
-    ]
+    assert len(approval_calls) == 1
+    assert approval_calls[0]["action"] == "file.edit"
+    assert approval_calls[0]["target"] == "notes.txt"
+    assert approval_calls[0]["auto_approve"] is False
+    assert approval_calls[0]["session_id"] == session.session_id
+    assert approval_calls[0]["plan_id"] == ""
+    assert approval_calls[0]["task_id"] == ""
+    assert approval_calls[0]["detail"].startswith("append=True;replace=False;changed=True;summary=")
+    assert approval_calls[0]["review_lines"][0].startswith("Review: append")
+    assert "side effects appends new content" in approval_calls[0]["review_lines"][2]
+    assert approval_calls[0]["review_lines"][3].startswith("Review: preview ")
+    assert "+hello" in approval_calls[0]["review_lines"][3]
+    assert "workspace unchanged" not in approval_calls[0]["trust_note"]
+    assert "file untouched" in approval_calls[0]["trust_note"]
+    assert "/rollback last" in approval_calls[0]["recovery_hint"]
     stdout = capsys.readouterr().out
     assert "auto-route" in stdout and "/edit notes.txt --append hello" in stdout
     assert "Appended content to file." in stdout
@@ -1496,7 +1695,51 @@ class TestSessionSlashCommands:
         assert "Test Session" in out
         assert sess.session_id in out
         assert "visibility: read-only local snapshot" in out
+        assert "control: visibility only; no remote control" in out
         assert "readiness:" in out
+        assert "/collab share to copy the read-only local snapshot before handoff" in out
+
+    def test_session_surfaces_context_pressure_recovery_actions(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setitem(mod._PREFS, "system_prompt", "Always summarize the next step." * 200)
+        sess = sessions_mod.create_session(title="Pressure Session", cwd=str(tmp_path))
+        sessions_mod.append_event(sess.session_id, kind="prompt", content="x" * 420_000)
+
+        result = mod._cmd_session(self._ctx(session_id=sess.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "context pressure:" in out
+        assert "hidden context cue: system or queued inject content pushes the next send closer to capacity" in out
+        assert "/tokeninfo to inspect live context pressure before the next send" in out
+        assert "/bookmark before /clear if you need a clean recovery loop" in out
+        assert "/inject status or /system view to inspect hidden context before sending" in out
+
+    def test_session_uses_model_aware_limit_actions(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        monkeypatch.setitem(mod._PREFS, "last_model", "gemma3:4b")
+        sess = sessions_mod.create_session(title="Gemma Pressure", cwd=str(tmp_path))
+        sessions_mod.append_event(sess.session_id, kind="prompt", content="x" * 390_000)
+
+        result = mod._cmd_session(self._ctx(session_id=sess.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "of ~100k" in out
+        assert "/bookmark before /clear if you need a clean recovery loop" in out
+
+    def test_session_surfaces_pending_inject_recovery_actions(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        sess = sessions_mod.create_session(title="Queued Inject Session", cwd=str(tmp_path))
+        sessions_mod.append_event(sess.session_id, kind="prompt", content="x" * 410_000)
+        monkeypatch.setattr(mod, "_next_inject", "Queued workspace recap")
+
+        result = mod._cmd_session(self._ctx(session_id=sess.session_id))
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "recovery cue: /inject clear drops the queued one-shot context before a retry" in out
+        assert "/inject clear to drop the queued one-shot context before your next send" in out
 
     # ------------------------------------------------------------------
     # /context
@@ -1854,6 +2097,36 @@ class TestSessionSlashCommands:
         assert "saved output preview: beta-notes.md" in out
         assert "beta body" in out
 
+    def test_outputs_overlay_supports_arrow_key_selection_with_preview_panel(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+        sess = sessions_mod.create_session(title="outputs", cwd=str(tmp_path))
+        sessions_mod.save_output(sess.session_id, "alpha.md", "alpha body")
+        sessions_mod.save_output(sess.session_id, "beta-notes.md", "beta body")
+
+        class _NoopRawMode:
+            def __enter__(self):
+                return None
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        keys = iter(["down", "enter"])
+        monkeypatch.setattr(mod, "_overlay_keypress_supported", lambda: True)
+        monkeypatch.setattr(mod, "_overlay_raw_mode", lambda: _NoopRawMode())
+        monkeypatch.setattr(mod, "_read_overlay_keypress", lambda: next(keys))
+
+        self._registry().dispatch("/outputs overlay", self._ctx(session_id=sess.session_id))
+
+        out = capsys.readouterr().out
+        assert "↑/↓ move" in out
+        assert "Preview" in out
+        assert "alpha.md" in out
+        assert "saved output preview: alpha.md" in out
+        assert "alpha body" in out
+
     def test_outputs_overlay_falls_back_to_listing_without_tty(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
         monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
@@ -1909,6 +2182,25 @@ class TestSessionSlashCommands:
         assert "Beta session" in out
         assert second.session_id in out
 
+    def test_overlay_keypress_mode_stays_disabled_in_plain_mode(self, capsys, monkeypatch):
+        monkeypatch.setattr(mod, "_RICH_AVAILABLE", False)
+        monkeypatch.setattr(mod, "_IS_TTY", True)
+        monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+        monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
+        monkeypatch.setattr("builtins.input", lambda _label: "")
+        monkeypatch.setattr(mod, "_read_overlay_keypress", lambda: (_ for _ in ()).throw(AssertionError("keypress mode should be skipped")))
+
+        result = mod._run_interactive_overlay(
+            title="Plain overlay",
+            items=["alpha", "beta"],
+            label_fn=str,
+            on_select=lambda _item: None,
+        )
+
+        out = capsys.readouterr().out
+        assert result == "closed"
+        assert "Type a search term, a number to select" in out
+
     def test_sessions_list_prints_dashboard_header(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
         sessions_mod.create_session(title="Alpha session", cwd=str(tmp_path))
@@ -1955,6 +2247,7 @@ class TestSessionSlashCommands:
         assert result == mod._CMD_CONTINUE
         note_out = capsys.readouterr().out
         assert "Recorded note by alice" in note_out
+        assert "Local session log only; workspace unchanged." in note_out
 
         self._registry().dispatch("/collab", self._ctx(session_id=sess.session_id))
         out = capsys.readouterr().out
@@ -1975,6 +2268,7 @@ class TestSessionSlashCommands:
 
         out = capsys.readouterr().out
         assert "Recorded decision by bob" in out
+        assert "Local session log only; workspace unchanged." in out
         exported = mod.export_session(sess.session_id)
         collaboration = exported["collaboration"]
         assert collaboration["recent_decisions"][0]["actor"] == "bob"
@@ -1994,6 +2288,7 @@ class TestSessionSlashCommands:
         assert result == mod._CMD_CONTINUE
         assign_out = capsys.readouterr().out
         assert "Recorded assign by alice" in assign_out
+        assert "Local session log only; workspace unchanged." in assign_out
 
         self._registry().dispatch("/collab status", self._ctx(session_id=sess.session_id))
         out = capsys.readouterr().out
@@ -2826,6 +3121,25 @@ class TestActionSlashCommands:
             )
         assert target.read_text(encoding="utf-8") == "gamma delta\n"
 
+    def test_edit_preview_skips_approval_for_noop_change(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
+        target = tmp_path / "notes.txt"
+        target.write_text("same text", encoding="utf-8")
+        sess = sessions_mod.create_session(title="edit-noop", cwd=str(tmp_path))
+
+        with patch.object(mod, "request_cli_approval") as request_cli_approval:
+            result = self._registry().dispatch(
+                f"/edit {target} --content 'same text'",
+                self._ctx(session_id=sess.session_id),
+            )
+
+        assert result == mod._CMD_CONTINUE
+        request_cli_approval.assert_not_called()
+        assert target.read_text(encoding="utf-8") == "same text"
+        out = capsys.readouterr().out
+        assert "Edit preview." in out
+        assert "No changes applied." in out
+
     def test_edit_accepts_quoted_path_and_append_content(self, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
         target = tmp_path / "release notes.txt"
@@ -2891,7 +3205,24 @@ class TestActionSlashCommands:
 
         with (
             patch.object(mod, "request_cli_approval", side_effect=_deny_approval),
-            patch.object(mod, "write_text_file") as write_text_file,
+            patch.object(
+                mod,
+                "write_text_file",
+                return_value=SimpleNamespace(
+                    path=str(target),
+                    changed=True,
+                    diff=(
+                        f"--- {target}\n"
+                        f"+++ {target}\n"
+                        "@@ -1,2 +1,2 @@\n"
+                        "-[tool.demo]\n"
+                        "-name = 'demo'\n"
+                        "+[tool.demo]\n"
+                        "+name = 'blocked'\n"
+                    ),
+                    summary="Previewed file write.",
+                ),
+            ) as write_text_file,
         ):
             result = self._registry().dispatch(
                 f"/edit {target} --content [tool.demo]\nname = 'blocked'\n",
@@ -2901,9 +3232,18 @@ class TestActionSlashCommands:
         assert result == mod._CMD_CONTINUE
         assert approval_calls
         assert approval_calls[0]["target"] == str(target)
-        write_text_file.assert_not_called()
+        write_text_file.assert_called_once_with(
+            str(target),
+            content="[tool.demo] name = blocked",
+            append=False,
+            dry_run=True,
+        )
         assert sessions_mod.list_routed_action_checkpoints(sess.session_id, limit=0) == []
-        assert "not approved" in capsys.readouterr().out.lower()
+        out = capsys.readouterr().out.lower()
+        assert "edit preview." in out
+        assert "-name = 'demo'" in out
+        assert "+name = 'blocked'" in out
+        assert "not approved" in out
 
     def test_edit_records_approval_timing_and_feedback(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -3270,6 +3610,7 @@ def test_print_watch_status_wave27_surfaces_operator_queue(capsys):
     assert "1 pending" in out
     assert "stop requested" in out
     assert "read-only local snapshot" in out
+    assert "/collab share to capture the read-only local snapshot" in out
 
 
 def test_print_watch_status_wave29_shows_predictive_actions_for_retrying_watch(capsys):
@@ -3305,6 +3646,37 @@ def test_print_watch_status_wave29_shows_session_review_after_completion(capsys)
     out = capsys.readouterr().out
     assert "/session to review the resulting session snapshot" in out
     assert "/watch history to inspect checkpoint history" in out
+
+
+def test_print_watch_status_shows_context_pressure_recovery_cues(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    monkeypatch.setitem(mod._PREFS, "system_prompt", "Guardrail." * 300)
+    monkeypatch.setattr(mod, "_next_inject", "Queued workspace context")
+    session = sessions_mod.create_session(title="watch pressure", cwd=str(tmp_path))
+    sessions_mod.append_event(session.session_id, kind="prompt", content="x" * 420_000)
+
+    mod._print_watch_status(
+        {
+            "session_id": session.session_id,
+            "goal": "watch repo",
+            "mode": "analyze",
+            "status": "retrying",
+            "poll_count": 2,
+            "max_polls": 5,
+            "failure_count": 1,
+            "retry_limit": 3,
+        }
+    )
+
+    out = capsys.readouterr().out
+    assert "context pressure:" in out
+    assert "hidden context cue: system or queued inject content pushes the next retry closer to capacity" in out
+    assert "recovery cue: /inject clear drops the queued one-shot context before a retry" in out
+    assert "/tokeninfo to check whether context pressure is affecting the next retry" in out
+    assert "/bookmark before /clear if manual recovery needs a clean restart" in out
+    assert "/context to preview what the next retry will inherit" in out
+    assert "/inject status or /system view to inspect hidden context before the next retry" in out
+    assert "/inject clear to remove the queued one-shot context before the next retry" in out
 
 
 def test_print_watch_history_uses_dashboard_sections(capsys):
@@ -3730,15 +4102,61 @@ def test_main_edit_dry_run_prints_diff(monkeypatch, tmp_path, capsys):
     target = tmp_path / "notes.md"
     target.write_text("hello world\n", encoding="utf-8")
 
-    with patch.object(mod, "request_cli_approval", return_value=True):
+    with patch.object(mod, "request_cli_approval") as request_cli_approval:
         exit_code = mod.main(["edit", str(target), "--replace", "world", "there", "--dry-run"])
 
     assert exit_code == 0
+    request_cli_approval.assert_not_called()
     assert target.read_text(encoding="utf-8") == "hello world\n"
     stdout = capsys.readouterr().out
+    assert "Edit preview." in stdout
     assert "-hello world" in stdout
     assert "+hello there" in stdout
-    assert "Edit complete." in stdout
+    assert "Dry run only." in stdout
+
+
+def test_main_edit_approval_review_callback_reprints_preview(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    target = tmp_path / "notes.md"
+    target.write_text("hello world\n", encoding="utf-8")
+
+    def _approve_with_review(**kwargs):
+        kwargs["review_callback"]()
+        return True
+
+    with patch.object(mod, "request_cli_approval", side_effect=_approve_with_review):
+        exit_code = mod.main(["edit", str(target), "--replace", "world", "there"])
+
+    assert exit_code == 0
+    stdout = capsys.readouterr().out
+    assert stdout.count("Edit preview.") == 2
+    assert target.read_text(encoding="utf-8") == "hello there\n"
+
+
+def test_main_edit_approval_overlay_replays_preview(monkeypatch, tmp_path, capsys):
+    import openclaw_cli_actions as actions
+
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(mod.sys.stdout, "isatty", lambda: True)
+    target = tmp_path / "notes.md"
+    target.write_text("hello world\n", encoding="utf-8")
+    prompts = iter(["overlay", "queued", "1", "", "y"])
+    with patch.object(
+        mod,
+        "request_cli_approval",
+        side_effect=lambda **kwargs: actions.request_cli_approval(
+            **kwargs,
+            input_func=lambda _label: next(prompts),
+        ),
+    ):
+        exit_code = mod.main(["edit", str(target), "--replace", "world", "there", "--risk", "high"])
+
+    assert exit_code == 0
+    stdout = capsys.readouterr().out
+    assert "Approval review overlay" in stdout
+    assert stdout.count("Edit preview.") == 2
+    assert target.read_text(encoding="utf-8") == "hello there\n"
 
 
 # ── New: session show (rich inspection) ─────────────────────────────────────
@@ -3885,6 +4303,9 @@ def test_build_session_share_text_wave27_adds_operator_snapshot(monkeypatch, tmp
     assert "OPERATOR SNAPSHOT" in out
     assert "access    : read-only local snapshot" in out
     assert "control   : visibility only; no remote control" in out
+    assert "TRUST & RECOVERY" in out
+    assert "scope  : local session log + read-only snapshot only" in out
+    assert "recover: inspect with /session or /watch history before resuming control" in out
     assert "watch     : running · persist · 2/4 polls" in out
     assert "queue     : 1 pending" in out
     assert "output    : status.txt" in out
@@ -4089,6 +4510,17 @@ def test_build_session_share_text_wave29_preserves_recap_chapter_flow(monkeypatc
     assert "resume : openclaw --session" in out
     assert "inspect: openclaw session show" in out
     assert "share  : openclaw session share" in out
+
+
+def test_format_session_list_wave30_surfaces_mood_detail(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path / "cli-home"))
+    session = sessions_mod.create_session(title="Momentum List", cwd=str(tmp_path))
+    sessions_mod.update_session(session.session_id, command_count=3)
+
+    out = mod.format_session_list([sessions_mod.require_session(session.session_id)])
+
+    assert "steady · 3 commands into the flow" in out
+    assert "Momentum List" in out
 
 
 def test_inspect_session_includes_watch_state(monkeypatch, tmp_path, capsys):
@@ -5143,8 +5575,10 @@ class TestAccessibilityPrefs:
         assert "Workspace preset: focus" in out
         assert "Render mode: single-pane" in out
         assert "Active pane: supporting" in out
+        assert "Focus transition: /layout focus primary -> Session summary" in out
         assert "ACTIVE · Artifact preview" in out
         assert "Supporting pane collapsed" in out
+        assert "Run /layout focus primary to switch panes" in out
 
     def test_layout_focus_command_updates_active_pane_and_renders_workspace(self, capsys, monkeypatch, tmp_path):
         monkeypatch.setenv("OPENCLAW_CLI_HOME", str(tmp_path))
@@ -5175,8 +5609,10 @@ class TestAccessibilityPrefs:
         assert mod._PREFS["layout_focus"] == "supporting"
         out = capsys.readouterr().out
         assert "Active pane set to supporting." in out
+        assert "Focus transition: primary -> supporting" in out
         assert "Workspace preset: watch-monitor" in out
         assert "Active pane: supporting" in out
+        assert "Focus transition: /layout focus primary -> Watch monitor" in out
         assert "READY · Watch monitor" in out
         assert "ACTIVE · Recent artifacts" in out
 
@@ -6342,6 +6778,105 @@ class TestSlashCompleter:
         assert matches == []
 
 
+class TestPromptToolkitIntegration:
+    def test_build_prompt_toolkit_session_returns_none_when_unavailable(self, monkeypatch):
+        monkeypatch.setattr(mod, "PromptSession", None)
+
+        assert mod._build_prompt_toolkit_session() is None
+
+    def test_build_prompt_toolkit_session_loads_history(self, monkeypatch, tmp_path):
+        history_file = tmp_path / "history.txt"
+        history_file.write_text("/help\n/quit\n", encoding="utf-8")
+
+        appended: list[str] = []
+
+        class FakeHistory:
+            def append_string(self, value: str) -> None:
+                appended.append(value)
+
+        captured: dict[str, object] = {}
+
+        class FakePromptSession:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        monkeypatch.setattr(mod, "_overlay_available", lambda: True)
+        monkeypatch.setattr(mod, "HISTORY_FILE", history_file)
+        monkeypatch.setattr(mod, "InMemoryHistory", FakeHistory)
+        monkeypatch.setattr(mod, "PromptSession", FakePromptSession)
+
+        session = mod._build_prompt_toolkit_session()
+
+        assert isinstance(session, FakePromptSession)
+        assert appended == ["/help", "/quit"]
+        assert isinstance(captured["completer"], mod._PromptToolkitSlashCompleter)
+
+    def test_prompt_toolkit_completer_yields_slash_matches(self, monkeypatch):
+        outputs: list[tuple[str, int, str]] = []
+
+        class FakeCompletion:
+            def __init__(self, text: str, *, start_position: int, display: str):
+                outputs.append((text, start_position, display))
+
+        class FakeDocument:
+            text_before_cursor = "/he"
+
+            @staticmethod
+            def get_word_before_cursor(**kwargs):
+                assert kwargs == {"WORD": True}
+                return "/he"
+
+        monkeypatch.setattr(mod, "Completion", FakeCompletion)
+        monkeypatch.setattr(mod, "_PREFS", {})
+
+        completer = mod._PromptToolkitSlashCompleter()
+
+        list(completer.get_completions(FakeDocument(), None))
+
+        assert ("/help", -3, "/help") in outputs
+
+    def test_run_chat_uses_prompt_toolkit_session_when_available(self, monkeypatch, capsys):
+        prompts = iter(["hello from prompt toolkit", "/quit"])
+        seen_prompts: list[str] = []
+
+        class FakePromptSession:
+            def __init__(self) -> None:
+                self.default_buffer = SimpleNamespace(text="")
+
+            def prompt(self, prompt_str: str) -> str:
+                seen_prompts.append(prompt_str)
+                value = next(prompts)
+                self.default_buffer.text = value
+                return value
+
+        def _fake_ask(prompt, *, config, history):
+            return mod.AskResponse(
+                response=f"reply to {prompt}",
+                model="gemini",
+                tokens=10,
+                raw={"response": f"reply to {prompt}", "model": "gemini", "tokens": 10},
+            )
+
+        recorded_history: list[str] = []
+        monkeypatch.setattr(mod, "_PREFS", {})
+        monkeypatch.setattr(mod, "_load_prefs", lambda: None)
+        monkeypatch.setattr(mod, "_save_prefs", lambda: None)
+        monkeypatch.setattr(mod, "load_shell_history", lambda: None)
+        monkeypatch.setattr(mod, "save_shell_history", lambda: None)
+        monkeypatch.setattr(mod, "_setup_readline", lambda: None)
+        monkeypatch.setattr(mod, "_maybe_show_startup_tip", lambda *args, **kwargs: None)
+        monkeypatch.setattr(mod, "_print_top_context_bar", lambda **kwargs: None)
+        monkeypatch.setattr(mod, "_build_prompt_toolkit_session", lambda: FakePromptSession())
+        monkeypatch.setattr(mod, "_record_shell_history_entry", recorded_history.append)
+
+        exit_code = mod.run_chat(_config(), input_func=input, ask_func=_fake_ask, no_banner=True)
+
+        assert exit_code == 0
+        assert seen_prompts
+        assert recorded_history == ["hello from prompt toolkit", "/quit"]
+        assert "reply to hello from prompt toolkit" in capsys.readouterr().out
+
+
 class TestProgressBar:
     """Tests for the _progress_bar helper."""
 
@@ -6589,6 +7124,58 @@ def test_print_risky_action_warning_wave29_includes_recovery_hint(capsys):
     out = capsys.readouterr().out
     assert "Review carefully: rm -rf build/" in out
     assert "Recovery: use git restore if the target was removed accidentally." in out
+
+
+def test_build_edit_approval_review_summarizes_preview_diff():
+    preview = SimpleNamespace(
+        path="/repo/demo.txt",
+        summary="Previewed file write.",
+        diff="--- /repo/demo.txt\n+++ /repo/demo.txt\n-old\n+new\n+line\n",
+    )
+
+    review_lines = mod._build_edit_approval_review(
+        path="/repo/demo.txt",
+        preview_result=preview,
+        append_mode=False,
+        replace_values=[],
+    )
+
+    assert review_lines[0] == "Review: write `/repo/demo.txt`"
+    assert "+2/-1 lines" in review_lines[1]
+    assert "overwrites the current file contents" in review_lines[2]
+    assert review_lines[3] == "Review: preview -old | +new | +line"
+
+
+def test_build_exec_approval_review_includes_side_effect_summary_and_args():
+    review_lines = mod._build_exec_approval_review(command_text="rm -rf build/cache", cwd="/repo")
+
+    assert review_lines == [
+        "Review: command `rm` from cwd `/repo`",
+        "Review: exact shell text `rm -rf build/cache`",
+        "Review: side effects deletes or irreversibly resets data",
+        "Review: args `-rf build/cache`",
+    ]
+
+
+def test_request_cli_approval_prints_review_trust_and_recovery_cues(monkeypatch, capsys):
+    monkeypatch.setattr(mod.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(mod.sys.stdout, "isatty", lambda: False)
+
+    approved = mod.request_cli_approval(
+        action="shell.exec",
+        target="rm -rf build",
+        risk_level="HIGH",
+        review_lines=["Review: exact shell text `rm -rf build`", "Review: command `rm` from cwd `/repo`"],
+        trust_note="approving runs exactly the shell text shown above.",
+        recovery_hint="deny it, verify the cwd, then rerun the command.",
+        input_func=lambda _prompt: "n",
+    )
+
+    assert approved is False
+    out = capsys.readouterr().out
+    assert "Review: exact shell text `rm -rf build`" in out
+    assert "Trust cue: approving runs exactly the shell text shown above." in out
+    assert "Recovery cue: deny it, verify the cwd, then rerun the command." in out
 
 
 class TestCmdTop:
@@ -6847,7 +7434,7 @@ class TestCmdTokeninfo:
         out = capsys.readouterr().out
         assert "Context usage" in out
         assert "Est. tokens:" in out
-        assert "128k limit:" in out
+        assert "Window:" in out
         assert "Breakdown by actor" in out
         assert "Largest share: user" in out
 
@@ -6861,8 +7448,21 @@ class TestCmdTokeninfo:
 
         assert result == mod._CMD_CONTINUE
         out = capsys.readouterr().out
+        assert "resolved window" in out
+        assert "/bookmark and /clear" in out
+
+    def test_tokeninfo_uses_model_aware_limit_for_gemma_route(self, capsys, monkeypatch):
+        monkeypatch.setitem(mod._PREFS, "last_model", "gemma3:4b")
+        result = mod._cmd_tokeninfo(
+            self._ctx([
+                {"role": "user", "content": "x" * 390_000},
+            ])
+        )
+
+        assert result == mod._CMD_CONTINUE
+        out = capsys.readouterr().out
+        assert "~100k Gemma-class window" in out
         assert "Context is near capacity" in out
-        assert "/bookmark before /clear" in out
 
 
 class TestCmdKeys:

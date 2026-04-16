@@ -32,6 +32,7 @@ from openclaw_cli_auth import OpenClawCliError
 from openclaw_cli_exec import (
     _exec_progress_animate as _exec_animate_fn,
 )
+from openclaw_cli_session_display import _context_pressure_snapshot
 from openclaw_cli_sessions import (
     load_conversation_history,
     restore_last_routed_action_checkpoint,
@@ -212,12 +213,25 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
     session = m._require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
+    sys_prompt = m._PREFS.get("system_prompt", "").strip()
+    pending_inject = str(getattr(m, "_next_inject", "") or "")
+    pressure = _context_pressure_snapshot(
+        ctx.history,
+        system_prompt=sys_prompt,
+        pending_inject=pending_inject,
+        model_hint=m._PREFS.get("last_model", ""),
+        route_hint=m._PREFS.get("route_mode", ""),
+    )
     summary_lines = [
         f"cwd: {session.cwd or '(none)'}",
         m._progress_cell("files", str(len(session.files or [])), status="active" if session.files else "idle"),
         m._progress_cell("plan", session.plan_id or "none", status="active" if session.plan_id else "idle"),
         m._progress_cell("task", session.task_id or "none", status="active" if session.task_id else "idle"),
     ]
+    if sys_prompt:
+        summary_lines.append(m._progress_cell("system", f"{len(sys_prompt)} chars", status="info"))
+    if pending_inject:
+        summary_lines.append(m._progress_cell("inject", f"{len(pending_inject)} chars queued", status="warn"))
     detail_lines = []
     if session.files:
         detail_lines.extend(f"file: {path}" for path in session.files)
@@ -233,13 +247,29 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
     if grounding_preview:
         detail_lines.append("effective grounding preview:")
         detail_lines.extend(str(grounding_preview).splitlines())
-    sys_prompt = m._PREFS.get("system_prompt", "").strip()
     if sys_prompt:
         preview = sys_prompt[:80] + ("…" if len(sys_prompt) > 80 else "")
         detail_lines.append(f"system: {preview}")
-    _inj = getattr(m, "_next_inject", "")
-    if _inj:
-        detail_lines.append(f"inject: ({len(_inj)} chars pending)")
+    if pending_inject:
+        detail_lines.append(f"inject: ({len(pending_inject)} chars pending)")
+        detail_lines.append("next send guardrail: injected context is queued for one message only")
+    if sys_prompt or pending_inject:
+        extra_chars = len(sys_prompt) + len(pending_inject)
+        detail_lines.append(f"next send extras: ~{max(1, extra_chars // 4) if extra_chars else 0} est. tokens before your next typed message")
+    if int(pressure["pct_next"]) >= 50:
+        detail_lines.append(
+            f"context pressure: ~{int(pressure['next_tokens']):,} est. tokens on the next send ({int(pressure['pct_next_raw'])}% of {pressure['limit_label']})"
+        )
+        if bool(pressure["overflow"]):
+            detail_lines.append("overflow cue: next send likely exceeds the resolved window — trim hidden context before retrying")
+        elif int(pressure["pct_next"]) >= 80:
+            detail_lines.append("recovery guardrail: save /bookmark before /clear if you need a lighter restart")
+        else:
+            detail_lines.append("staleness cue: /tokeninfo can confirm whether context pressure is causing drift")
+    if pressure["hidden_pressure"] and int(pressure["pct_next"]) >= 80:
+        detail_lines.append("hidden context cue: system or queued inject content pushes the next send closer to capacity")
+    if pressure["has_pending_inject"]:
+        detail_lines.append("recovery cue: /inject clear drops the queued one-shot context before a retry")
     action_lines = []
     if not session.files:
         action_lines.append("/files add <path> to add grounding files")
@@ -249,6 +279,18 @@ def _cmd_context(ctx: ChatCommandContext) -> str:
         action_lines.append("/session to compare grounding against session health")
     else:
         action_lines.append("/plan <id> or /task <id> to strengthen work context")
+    if sys_prompt or pending_inject:
+        action_lines.append("/promptdebug to preview the exact next payload before sending")
+    else:
+        action_lines.append("/inject status or /system view to inspect hidden context before sending")
+    if int(pressure["pct_next"]) >= 50 or pressure["hidden_pressure"]:
+        action_lines.append("/tokeninfo to inspect the current context budget")
+    if int(pressure["pct_next"]) >= 80:
+        action_lines.append("/bookmark before /clear if you need a clean recovery reset")
+    if bool(pressure["overflow"]) or pressure["hidden_pressure"]:
+        action_lines.append("/promptdebug to verify the next payload before sending")
+    if pressure["has_pending_inject"]:
+        action_lines.append("/inject clear to remove the queued one-shot context")
     m._print_dashboard_surface(
         "Context Dashboard",
         summary_lines=summary_lines,
@@ -955,6 +997,9 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
         target=raw,
         risk_level=risk_level,
         detail=f"cwd={session.cwd}",
+        review_lines=m._build_exec_approval_review(command_text=raw, cwd=session.cwd or ""),
+        trust_note="approving runs exactly the shell text shown above; denying keeps the workspace unchanged.",
+        recovery_hint="if this looks wrong, deny it, inspect /cwd, then rerun /exec with a safer command.",
         auto_approve=False,
         session_id=session.session_id,
         plan_id=session.plan_id,
@@ -976,7 +1021,14 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
     )
     if not approved:
         m._print_error("shell command not approved")
-        m._print_feedback("Approval denied.", level="warn", detail=f"after {m._format_elapsed_compact(approval_seconds)}")
+        m._print_feedback(
+            "Approval denied.",
+            level="warn",
+            detail=(
+                f"nothing ran · after {m._format_elapsed_compact(approval_seconds)}"
+                " · verify /cwd and rerun /exec when ready"
+            ),
+        )
         m._set_command_result(ctx, ok=False, summary="shell command not approved")
         return _CMD_CONTINUE
     if not m._capture_routed_action_checkpoint(
@@ -1129,6 +1181,23 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             m._set_command_result(ctx, ok=False, summary=str(exc))
         return _CMD_CONTINUE
     risk_level = infer_file_edit_risk(path)
+    try:
+        preview_result = m._preview_file_edit(
+            path,
+            content=content,
+            append=append_mode,
+            replace_values=replace_values,
+        )
+    except Exception as exc:  # noqa: BLE001
+        m._LOG.error("file preview failed for %s", path, exc_info=True)
+        m._print_error(str(exc))
+        m._set_command_result(ctx, ok=False, summary=str(exc))
+        return _CMD_CONTINUE
+    m._print_file_edit_preview(preview_result)
+    if not preview_result.changed:
+        m._print_feedback("No changes applied.", level="info", detail="approval skipped")
+        m._set_command_result(ctx, ok=True, summary=preview_result.summary)
+        return _CMD_CONTINUE
     m._print_risky_action_warning(
         action="/edit",
         target=path,
@@ -1140,7 +1209,18 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
         action="file.edit",
         target=path,
         risk_level=risk_level,
-        detail=f"append={append_mode};replace={bool(replace_values)}",
+        detail=(
+            f"append={append_mode};replace={bool(replace_values)};"
+            f"changed={preview_result.changed};summary={preview_result.summary[:120]}"
+        ),
+        review_lines=m._build_edit_approval_review(
+            path=path,
+            preview_result=preview_result,
+            append_mode=append_mode,
+            replace_values=replace_values,
+        ),
+        trust_note="the diff preview above is the exact change queued for approval; denying leaves the file untouched.",
+        recovery_hint="deny to adjust the preview, or use /rollback last after routed edits if you approve the wrong change.",
         auto_approve=False,
         session_id=session.session_id,
         plan_id=session.plan_id,
@@ -1161,7 +1241,14 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
     )
     if not approved:
         m._print_error("file edit not approved")
-        m._print_feedback("Approval denied.", level="warn", detail=f"after {m._format_elapsed_compact(approval_seconds)}")
+        m._print_feedback(
+            "Approval denied.",
+            level="warn",
+            detail=(
+                f"preview not applied · after {m._format_elapsed_compact(approval_seconds)}"
+                " · rerun /edit to adjust the diff"
+            ),
+        )
         m._set_command_result(ctx, ok=False, summary="file edit not approved")
         return _CMD_CONTINUE
     resolved_path = str(Path(path).expanduser().resolve())
@@ -1258,25 +1345,41 @@ def _cmd_tokeninfo(ctx: ChatCommandContext) -> str:
     breakdown = m._history_token_breakdown(ctx.history)
     est_tokens = int(breakdown["total_tokens"])
     msg_count = int(breakdown["total_messages"])
+    sys_prompt = str(m._PREFS.get("system_prompt", "") or "")
+    pending_inject = str(getattr(m, "_next_inject", "") or "")
+    pressure = _context_pressure_snapshot(
+        ctx.history,
+        system_prompt=sys_prompt,
+        pending_inject=pending_inject,
+        model_hint=m._PREFS.get("last_model", ""),
+        route_hint=m._PREFS.get("route_mode", ""),
+    )
+    sys_tokens = int(pressure["system_tokens"])
+    inject_tokens = int(pressure["inject_tokens"])
+    next_turn_tokens = int(pressure["next_tokens"])
+    pct_history = int(pressure["pct_history"])
+    pct_history_raw = int(pressure["pct_history_raw"])
+    pct_next_turn = int(pressure["pct_next"])
+    pct_next_turn_raw = int(pressure["pct_next_raw"])
 
-    limit_128k = 128_000
-    pct_128k = min(100, round(est_tokens / limit_128k * 100))
-
-    if pct_128k < 50:
+    if pct_history < 50:
         fill_color = _GR
-    elif pct_128k < 80:
+    elif pct_history < 80:
         fill_color = _YE
     else:
         fill_color = _RE
 
     bar_width = 20
-    filled = round(bar_width * pct_128k / 100)
+    filled = round(bar_width * pct_history / 100)
     bar = f"{fill_color}{'█' * filled}{_DM}{'░' * (bar_width - filled)}{_R}"
 
     print(f"\n  {_B}Context usage{_R} {_DM}(estimated){_R}")
     print(f"  Messages:   {_B}{msg_count}{_R}")
     print(f"  Est. tokens:{_B}{est_tokens:,}{_R}")
-    print(f"  128k limit: {bar} {fill_color}{pct_128k}%{_R}")
+    print(f"  Window:     {bar} {fill_color}{pct_history_raw}%{_R} of {pressure['limit_display']}")
+    if pressure["limit_model_label"] and pressure["limit_model_label"] != "current route":
+        print(f"  Model hint: {_B}{pressure['limit_model_label']}{_R}")
+    print(f"  {_DM}{pressure['limit_note']}{_R}")
     role_rows = list(breakdown["roles"])
     if role_rows:
         print(f"\n  {_B}Breakdown by actor{_R}")
@@ -1293,12 +1396,26 @@ def _cmd_tokeninfo(ctx: ChatCommandContext) -> str:
         top_role, top_details = role_rows[0]
         top_share = round((int(top_details["tokens"]) / est_tokens) * 100) if est_tokens else 0
         print(f"\n  {_DM}Largest share: {top_role} ({top_share}% of estimated tokens).{_R}")
-    if pct_128k >= 90:
+    if sys_tokens or inject_tokens:
+        print(f"\n  {_B}Next send extras{_R}")
+        if sys_tokens:
+            print(f"  system prompt: ~{sys_tokens:,} tok ({len(sys_prompt):,} chars)")
+        if inject_tokens:
+            print(f"  pending inject: ~{inject_tokens:,} tok ({len(pending_inject):,} chars)")
+        print(f"  next request est.: ~{next_turn_tokens:,} tok total ({pct_next_turn_raw}% of {pressure['limit_label']})")
+        print(f"  {_DM}Trust cue: use /promptdebug to preview exactly what will be sent next.{_R}")
+    if bool(pressure["overflow"]):
+        print(f"\n  {_RE}⚠  Next request likely exceeds the resolved window — trim /inject or /system content, then /bookmark and /clear if needed.{_R}")
+    elif pct_history >= 90:
         print(f"\n  {_RE}⚠  Context is near capacity — use /bookmark before /clear so you can resume cleanly.{_R}")
-    elif pct_128k >= 80:
+    elif pct_history >= 80:
         print(f"\n  {_YE}⚠  Context is getting full — consider /bookmark, then /clear to reset.{_R}")
-    elif pct_128k >= 50:
+    elif pct_history >= 50:
         print(f"\n  {_DM}Tip: If responses feel stale, save a /bookmark and use /clear to refresh context.{_R}")
+    if pct_next_turn >= 90 and pct_history < 90 and not bool(pressure["overflow"]):
+        print(f"  {_RE}⚠  Hidden context will push the next request near capacity — verify /context or /promptdebug before sending.{_R}")
+    elif inject_tokens:
+        print(f"  {_DM}Recovery cue: /inject clear removes the queued one-shot context if it is no longer needed.{_R}")
     print()
     return _CMD_CONTINUE
 

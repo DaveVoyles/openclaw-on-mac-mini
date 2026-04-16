@@ -75,12 +75,12 @@ async def store_memory(
             )
         result["stored"] = True
         result["id"] = f"mem_{fact_id}"
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — vector_store backend raises chromadb-specific exceptions
         _mem_log.warning("Vector store failed: %s", exc)
 
     try:
         await remember_fact(content, tags=",".join(tags or []), source=source)
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — QMD backend raises provider-specific exceptions
         _mem_log.debug("QMD store failed: %s", exc)
 
     return result
@@ -115,7 +115,7 @@ async def recall_memories(
                 "type": r.get("collection", "memory"),
                 "id": r.get("id", ""),
             })
-    except Exception as exc:
+    except (ImportError, RuntimeError, ValueError, OSError, AttributeError) as exc:
         _mem_log.debug("Vector recall failed: %s", exc)
 
     if include_rules:
@@ -127,7 +127,7 @@ async def recall_memories(
                         "text": rule, "source": "rule",
                         "similarity": 0.8, "type": "rule", "id": "",
                     })
-        except Exception as exc:
+        except (ImportError, RuntimeError, ValueError, OSError, AttributeError) as exc:
             _mem_log.debug("Rules recall failed: %s", exc)
 
     results.sort(key=lambda r: r.get("similarity", 0), reverse=True)
@@ -147,11 +147,11 @@ async def forget_memory(memory_id: str) -> bool:
             try:
                 await vector_store.delete_document(collection, memory_id)
                 removed = True
-            except Exception as exc:
+            except (RuntimeError, ValueError, OSError, KeyError) as exc:
                 _mem_log.debug(
                     "Vector delete from %s failed for %s: %s", collection, memory_id, exc
                 )
-    except Exception as exc:
+    except (ImportError, RuntimeError, OSError) as exc:
         _mem_log.debug("Vector forget failed: %s", exc)
     return removed
 
@@ -167,7 +167,7 @@ async def memory_stats() -> dict:
     try:
         import vector_store
         result["vector_store"] = await vector_store.get_stats()
-    except Exception as exc:
+    except (ImportError, RuntimeError, ValueError, OSError, TypeError) as exc:
         _mem_log.debug("Vector store stats failed: %s", exc)
 
     try:
@@ -175,19 +175,19 @@ async def memory_stats() -> dict:
         memories = await list_memories()
         if memories and memories != "Memory is empty.":
             result["qmd"]["count"] = memories.count("\n") + 1
-    except Exception as exc:
+    except (ImportError, RuntimeError, ValueError, OSError, AttributeError, TypeError) as exc:
         _mem_log.debug("QMD stats failed: %s", exc)
 
     try:
         from rules_engine import get_all_rules
         result["rules"]["count"] = len(await get_all_rules())
-    except Exception as exc:
+    except (ImportError, RuntimeError, ValueError, OSError, TypeError) as exc:
         _mem_log.debug("Rules stats failed: %s", exc)
 
     try:
         from user_profile import load_profile
         result["profile"]["exists"] = bool(load_profile())
-    except Exception as exc:
+    except (ImportError, OSError, ValueError, AttributeError, KeyError) as exc:
         _mem_log.debug("Profile stats failed: %s", exc)
 
     return result

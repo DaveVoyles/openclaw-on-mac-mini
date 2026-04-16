@@ -6,6 +6,7 @@ from aiohttp import web
 
 from .api_handlers import (
     api_agent_ask_handler,
+    api_agent_ask_stream_handler,
     api_agent_session_detail_handler,
     api_agent_session_intervention_handler,
     api_agent_sessions_handler,
@@ -117,6 +118,7 @@ def setup_dashboard(
     app.router.add_post("/api/schedules/{task_id}/toggle", action(api_schedule_toggle_handler))
     app.router.add_delete("/api/schedules/{task_id}", action(api_schedule_delete_handler))
     app.router.add_get("/api/status", api_status_handler)
+    app.router.add_post("/api/agent/ask/stream", api_agent_ask_stream_handler)
     app.router.add_get("/api/errors", api_errors_handler)
     app.router.add_get("/api/response-stats", api_response_stats_handler)
     app.router.add_get("/api/dream-health", api_dream_health_handler)

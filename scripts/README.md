@@ -1,6 +1,6 @@
 # OpenClaw — Scripts Directory Index
 
-All scripts in `scripts/`. Run from the repository root unless noted otherwise.
+All scripts in `scripts/`. Run from the repository root unless noted otherwise. For operator workflows that use these scripts, see [docs/OPERATIONS-RUNBOOK.md](../docs/OPERATIONS-RUNBOOK.md) and [docs/NETWORK-TOPOLOGY.md](../docs/NETWORK-TOPOLOGY.md).
 
 ---
 

@@ -18,6 +18,7 @@ from openclaw_cli_actions import write_text_file
 from openclaw_cli_auth import OpenClawCliError
 from openclaw_cli_path_utils import missing_feature_hint, output_name_from_title
 from openclaw_cli_prefs import _A11Y_PLAIN_MODE, _PREFS
+from openclaw_cli_session_display import _context_pressure_snapshot
 from openclaw_cli_sessions import (
     SessionSummary,
     append_event,
@@ -842,6 +843,14 @@ def _print_watch_status(state: dict[str, Any]) -> None:
     interval_seconds = int(state.get("interval_seconds") or 0)
     last_error = str(state.get("last_error") or "").strip()
     last_summary = str(state.get("last_summary") or "").strip()
+    history = load_conversation_history(str(state.get("session_id") or ""), limit_turns=0) if state.get("session_id") else []
+    pressure = _context_pressure_snapshot(
+        history,
+        system_prompt=str(_PREFS.get("system_prompt", "") or ""),
+        pending_inject=str(getattr(_cli, "_next_inject", "") or ""),
+        model_hint=_PREFS.get("last_model", ""),
+        route_hint=_PREFS.get("route_mode", ""),
+    )
     timing = _watch_timing_summary(state)
     operator_snapshot = _session_operator_snapshot(
         SessionSummary(
@@ -897,6 +906,20 @@ def _print_watch_status(state: dict[str, Any]) -> None:
         detail_lines.append(f"last output: {last_summary[:80]}")
     if last_error:
         detail_lines.append(f"last error: {last_error[:80]}")
+    if int(pressure["pct_next"]) >= 50:
+        detail_lines.append(
+            _progress_cell(
+                "context pressure",
+                f"~{int(pressure['next_tokens']):,} tok next retry ({int(pressure['pct_next_raw'])}% of {pressure['limit_label']})",
+                status="warn" if int(pressure["pct_next"]) < 80 else "retry",
+            )
+        )
+        if bool(pressure["overflow"]):
+            detail_lines.append("overflow cue: next retry likely exceeds the resolved window")
+    if pressure["hidden_pressure"]:
+        detail_lines.append("hidden context cue: system or queued inject content pushes the next retry closer to capacity")
+    if pressure["has_pending_inject"]:
+        detail_lines.append("recovery cue: /inject clear drops the queued one-shot context before a retry")
     detail_lines.extend(_watch_focus_lines(state))
     detail_lines.extend(_operator_snapshot_lines(operator_snapshot)[:5])
     action_lines = [
@@ -909,6 +932,16 @@ def _print_watch_status(state: dict[str, Any]) -> None:
         action_lines.insert(0, "/watch retry-limit N to tune retry budget")
     if last_error or failure_count:
         action_lines.append('/watch intervene "recovery note" to guide the next loop')
+    if int(pressure["pct_next"]) >= 50:
+        action_lines.append("/tokeninfo to check whether context pressure is affecting the next retry")
+    if int(pressure["pct_next"]) >= 80:
+        action_lines.append("/bookmark before /clear if manual recovery needs a clean restart")
+        action_lines.append("/context to preview what the next retry will inherit")
+    if bool(pressure["overflow"]) or pressure["hidden_pressure"]:
+        action_lines.append("/promptdebug to verify hidden context before the next retry")
+        action_lines.append("/inject status or /system view to inspect hidden context before the next retry")
+    if pressure["has_pending_inject"]:
+        action_lines.append("/inject clear to remove the queued one-shot context before the next retry")
     if list(state.get("interventions") or []):
         action_lines.append("/collab share to capture the operator-facing snapshot")
     action_lines = _dedupe_preserve_order(action_lines)

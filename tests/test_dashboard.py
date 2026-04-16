@@ -1128,6 +1128,54 @@ class TestScheduleDashboardApis:
 
 
 class TestApiAgentAsk:
+    async def test_execute_agent_ask_emits_delta_chunks(self):
+        fake_stream = MagicMock()
+        fake_run_stream = AsyncMock(
+            return_value=SimpleNamespace(
+                response_text="Hello world",
+                model_used="gemini",
+                final_meta={"total_tokens": 7},
+            )
+        )
+        observed: list[str] = []
+
+        async def _on_partial(chunk: str) -> None:
+            observed.append(chunk)
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "llm": MagicMock(chat_stream=fake_stream),
+                "ask_orchestrator": MagicMock(run_ask_stream=fake_run_stream),
+                "quality_helpers": MagicMock(
+                    _with_requested_item_target=MagicMock(side_effect=lambda meta, question: dict(meta)),
+                    _safe_score_answer_quality=MagicMock(return_value={"status": "high"}),
+                    _run_quality_auto_repair=AsyncMock(
+                        return_value={
+                            "response_text": "Hello world",
+                            "model_used": "gemini",
+                            "final_meta": {"total_tokens": 7},
+                        }
+                    ),
+                    _build_ask_recovery_block=MagicMock(return_value=None),
+                ),
+            },
+        ):
+            payload = await api_mod._execute_agent_ask(
+                prompt="hello",
+                model_pref="auto",
+                history=[],
+                user_name="CLI user",
+                on_partial_chunk=_on_partial,
+            )
+
+        partial_cb = fake_run_stream.await_args.kwargs["on_partial_chunk"]
+        await partial_cb("Hello")
+        await partial_cb("Hello world")
+        assert observed == ["Hello", " world"]
+        assert payload["response"] == "Hello world"
+        assert payload["tokens"] == 7
+
     async def test_uses_supplied_user_name(self):
         fake_stream = MagicMock()
         fake_run_stream = AsyncMock(

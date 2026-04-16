@@ -43,6 +43,9 @@ openpyxl>=3.1
 # Async file I/O for non-blocking disk operations
 aiofiles>=24.1
 
+# Interactive REPL input with richer completion/history
+prompt_toolkit>=3.0
+
 # SMS provider integration (Discord one-tap SMS)
 twilio>=9.3.0
 

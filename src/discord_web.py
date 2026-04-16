@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import platform
+import sqlite3
 import time
 from pathlib import Path
 
@@ -87,7 +88,7 @@ async def _metrics_handler(request: web.Request) -> web.Response:
         collector = get_collector()
         collector_metrics = collector.export_prometheus().decode("utf-8")
         content_type = collector.get_prometheus_content_type()
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — collector may raise any internal error
         log.warning("Failed to export collector metrics: %s", exc)
 
     metrics_payload = collector_metrics
@@ -123,7 +124,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
         else:
             checks["gemini_api"] = {"status": "fail", "error": "empty response"}
             overall = "fail"
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — Gemini API throws provider-specific exceptions
         checks["gemini_api"] = {"status": "fail", "error": str(exc)[:200]}
         overall = "fail"
 
@@ -141,7 +142,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
             else:
                 checks["ollama"] = {"status": "fail", "error": "ollama not reachable"}
                 overall = "fail"
-    except Exception as exc:
+    except (ImportError, asyncio.TimeoutError, aiohttp.ClientError, ConnectionError) as exc:
         checks["ollama"] = {"status": "fail", "error": str(exc)[:200]}
         overall = "fail"
 
@@ -153,7 +154,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
         client.heartbeat()
         latency = round((time.monotonic() - t0) * 1000)
         checks["chromadb"] = {"status": "pass", "latency_ms": latency}
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — smoke test catches any connectivity failure
         checks["chromadb"] = {"status": "fail", "error": str(exc)[:200]}
         overall = "fail"
 
@@ -171,7 +172,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
             conn.close()
         latency = round((time.monotonic() - t0) * 1000)
         checks["memory_sqlite"] = {"status": "pass", "threads": thread_count}
-    except Exception as exc:
+    except (ImportError, sqlite3.Error, OSError, ValueError) as exc:
         checks["memory_sqlite"] = {"status": "fail", "error": str(exc)[:200]}
         overall = "fail"
 
@@ -188,7 +189,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
                 missing.append("google_api_key")
             checks["config"] = {"status": "fail", "error": f"missing: {', '.join(missing)}"}
             overall = "fail"
-    except Exception as exc:
+    except (ImportError, AttributeError, KeyError) as exc:
         checks["config"] = {"status": "fail", "error": str(exc)[:200]}
         overall = "fail"
 
@@ -205,7 +206,7 @@ async def _smoke_handler(request: web.Request) -> web.Response:
                 "error": f"count={count}, search_web={'found' if has_search else 'missing'}",
             }
             overall = "fail"
-    except Exception as exc:
+    except (ImportError, AttributeError, KeyError) as exc:
         checks["skill_registry"] = {"status": "fail", "error": str(exc)[:200]}
         overall = "fail"
 
@@ -273,7 +274,7 @@ async def _webhook_handler(request: web.Request) -> web.Response:
             embed.set_footer(text=f"Incoming webhook → {source}")
             try:
                 await channel.send(embed=embed)
-            except Exception as e:
+            except Exception as e:  # broad: intentional — tests inject generic exceptions
                 log.error("Failed to send webhook notification: %s", e)
 
             _error_keywords = {"error", "fail", "critical", "down", "unhealthy", "exception", "warning"}
@@ -305,7 +306,7 @@ async def _analyze_webhook_event(source: str, payload: dict, channel):
                 color=discord.Color.orange(),
             )
             await channel.send(embed=embed)
-    except Exception as e:
+    except Exception as e:  # broad: intentional — LLM and Discord can each raise many types
         log.warning("Webhook auto-analysis failed: %s", e)
 
 
@@ -367,10 +368,8 @@ async def _health_llm_handler(request: web.Request) -> web.Response:
                 timeout=aiohttp.ClientTimeout(total=2),
             ) as r:
                 checks["ollama"] = "ok" if r.status == 200 else "down"
-    except Exception:
+    except Exception:  # broad: intentional — health probe catches any connectivity failure
         checks["ollama"] = "down"
-
-    # Gemini (verify key exists)
     checks["gemini"] = "ok" if os.getenv("GOOGLE_API_KEY") else "unconfigured"
 
     # Copilot proxy
@@ -453,10 +452,8 @@ async def _health_memory_handler(request: web.Request) -> web.Response:
         client = _get_client()
         client.heartbeat()
         checks["chromadb"] = "ok"
-    except Exception:
+    except Exception:  # broad: intentional — health probe catches any connectivity failure
         checks["chromadb"] = "down"
-
-    # QMD file
     qmd_path = Path(os.getenv("QMD_PATH", "/app/data/qmd.json"))
     checks["qmd"] = "ok" if qmd_path.exists() else "missing"
 
@@ -471,7 +468,7 @@ async def _health_memory_handler(request: web.Request) -> web.Response:
             checks["threads_db"] = "ok"
         finally:
             conn.close()
-    except Exception:
+    except Exception:  # broad: intentional — health probe catches any connectivity failure
         checks["threads_db"] = "down"
 
     chroma_ok = checks.get("chromadb") == "ok"
@@ -504,7 +501,7 @@ async def _health_services_handler(request: web.Request) -> web.Response:
                     checks["nas"] = "ok" if r.status < 500 else "down"
         else:
             checks["nas"] = "unconfigured"
-    except Exception:
+    except Exception:  # broad: intentional — health probe catches any connectivity failure
         checks["nas"] = "down"
 
     # Scheduler
@@ -512,7 +509,7 @@ async def _health_services_handler(request: web.Request) -> web.Response:
         from scheduler import scheduler
         task_count = len(scheduler.list_tasks())
         checks["scheduler"] = f"ok ({task_count} tasks)"
-    except Exception:
+    except Exception:  # broad: intentional — health probe catches any connectivity failure
         checks["scheduler"] = "down"
 
     any_down = any(v == "down" for v in checks.values())

@@ -2878,91 +2878,167 @@ async def api_agent_ask_handler(request: web.Request) -> web.Response:
     user_name = str(body.get("user_name") or "Dashboard").strip() or "Dashboard"
 
     try:
-        from ask_orchestrator import run_ask_stream
-        from llm import chat_stream as llm_chat_stream
-        from quality_helpers import (
-            _build_ask_recovery_block,
-            _run_quality_auto_repair,
-            _safe_score_answer_quality,
-            _with_requested_item_target,
-        )
-        latest_history = list(history)
-
-        def _update_history(updated_history: list[dict]) -> None:
-            nonlocal latest_history
-            latest_history = updated_history
-
-        result = await run_ask_stream(
-            llm_stream=llm_chat_stream,
-            user_message=prompt,
+        payload = await _execute_agent_ask(
+            prompt=prompt,
+            model_pref=model_pref,
             history=history,
             user_name=user_name,
-            model_preference=model_pref,
+        )
+        return web.json_response(payload)
+    except Exception as exc:
+        log.error("api_agent_ask_handler error: %s", exc)
+        return web.json_response({"error": str(exc)}, status=500)
+
+
+async def _execute_agent_ask(
+    *,
+    prompt: str,
+    model_pref: str,
+    history: list[dict],
+    user_name: str,
+    on_partial_chunk: callable | None = None,
+) -> dict[str, object]:
+    from ask_orchestrator import run_ask_stream
+    from llm import chat_stream as llm_chat_stream
+    from quality_helpers import (
+        _build_ask_recovery_block,
+        _run_quality_auto_repair,
+        _safe_score_answer_quality,
+        _with_requested_item_target,
+    )
+
+    latest_history = list(history)
+    last_partial = ""
+
+    def _update_history(updated_history: list[dict]) -> None:
+        nonlocal latest_history
+        latest_history = updated_history
+
+    async def _handle_partial(chunk_text: str) -> None:
+        nonlocal last_partial
+        if on_partial_chunk is None:
+            return
+        text = str(chunk_text or "")
+        delta = text[len(last_partial):] if last_partial and text.startswith(last_partial) else text
+        last_partial = text
+        if delta:
+            await on_partial_chunk(delta)
+
+    result = await run_ask_stream(
+        llm_stream=llm_chat_stream,
+        user_message=prompt,
+        history=history,
+        user_name=user_name,
+        model_preference=model_pref,
+        channel_id=None,
+        thread_id=None,
+        user_id=user_name,
+        update_history=_update_history,
+        context_controls=None,
+        on_partial_chunk=_handle_partial if on_partial_chunk is not None else None,
+    )
+    response_text = str(result.response_text or "").strip()
+    model_used = str(result.model_used or model_pref)
+    final_meta = _with_requested_item_target(result.final_meta, question=prompt)
+    quality_meta = _safe_score_answer_quality(
+        response_text,
+        final_meta=final_meta,
+        context="ask",
+    )
+
+    async def _run_retry_stream(retry_prompt: str):
+        _retry_pref = "copilot" if (model_used or "").startswith("gemini") else model_pref
+        return await run_ask_stream(
+            llm_stream=llm_chat_stream,
+            user_message=retry_prompt,
+            history=latest_history,
+            user_name=user_name,
+            model_preference=_retry_pref,
             channel_id=None,
             thread_id=None,
             user_id=user_name,
             update_history=_update_history,
             context_controls=None,
         )
-        response_text = str(result.response_text or "").strip()
-        model_used = str(result.model_used or model_pref)
-        final_meta = _with_requested_item_target(result.final_meta, question=prompt)
-        quality_meta = _safe_score_answer_quality(
-            response_text,
-            final_meta=final_meta,
-            context="ask",
+
+    repair_result = await _run_quality_auto_repair(
+        question=prompt,
+        response_text=response_text,
+        model_used=model_used,
+        final_meta=final_meta,
+        quality_meta=quality_meta,
+        context="ask",
+        run_retry_stream=_run_retry_stream,
+        think_hook=None,
+    )
+    response_text = str(repair_result["response_text"])
+    model_used = str(repair_result["model_used"])
+    final_meta = dict(repair_result["final_meta"])
+
+    recovery_block = _build_ask_recovery_block(final_meta)
+    if recovery_block and "Recovery note" not in response_text:
+        response_text = f"{response_text.rstrip()}{recovery_block}"
+
+    tokens_raw = final_meta.get("total_tokens", 0) if isinstance(final_meta, dict) else 0
+    try:
+        tokens = int(tokens_raw or 0)
+    except (TypeError, ValueError):
+        tokens = 0
+
+    return {
+        "response": response_text,
+        "model": model_used,
+        "tokens": tokens,
+    }
+
+
+async def api_agent_ask_stream_handler(request: web.Request) -> web.StreamResponse:
+    """POST /api/agent/ask/stream — stream ask output as SSE."""
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    prompt = (body.get("prompt") or "").strip()
+    if not prompt:
+        return web.json_response({"error": "prompt is required"}, status=400)
+
+    model_pref = body.get("model", "auto")
+    history: list[dict] = body.get("history") or []
+    if not isinstance(history, list):
+        return web.json_response({"error": "history must be a list"}, status=400)
+    user_name = str(body.get("user_name") or "Dashboard").strip() or "Dashboard"
+
+    resp = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+    await resp.prepare(request)
+
+    async def _write_event(event: str, data: dict[str, object]) -> None:
+        payload = json.dumps(data, ensure_ascii=False)
+        await resp.write(f"event: {event}\ndata: {payload}\n\n".encode("utf-8"))
+
+    try:
+        payload = await _execute_agent_ask(
+            prompt=prompt,
+            model_pref=model_pref,
+            history=history,
+            user_name=user_name,
+            on_partial_chunk=lambda chunk: _write_event("chunk", {"delta": chunk}),
         )
-
-        async def _run_retry_stream(retry_prompt: str):
-            # Phase 21: Cross-provider quality retry — switch to Copilot when Gemini gave low quality.
-            _retry_pref = (
-                "copilot" if (model_used or "").startswith("gemini") else model_pref
-            )
-            return await run_ask_stream(
-                llm_stream=llm_chat_stream,
-                user_message=retry_prompt,
-                history=latest_history,
-                user_name=user_name,
-                model_preference=_retry_pref,
-                channel_id=None,
-                thread_id=None,
-                user_id=user_name,
-                update_history=_update_history,
-                context_controls=None,
-            )
-
-        repair_result = await _run_quality_auto_repair(
-            question=prompt,
-            response_text=response_text,
-            model_used=model_used,
-            final_meta=final_meta,
-            quality_meta=quality_meta,
-            context="ask",
-            run_retry_stream=_run_retry_stream,
-            think_hook=None,
-        )
-        response_text = str(repair_result["response_text"])
-        model_used = str(repair_result["model_used"])
-        final_meta = dict(repair_result["final_meta"])
-
-        recovery_block = _build_ask_recovery_block(final_meta)
-        if recovery_block and "Recovery note" not in response_text:
-            response_text = f"{response_text.rstrip()}{recovery_block}"
-
-        tokens_raw = final_meta.get("total_tokens", 0) if isinstance(final_meta, dict) else 0
-        try:
-            tokens = int(tokens_raw or 0)
-        except (TypeError, ValueError):
-            tokens = 0
-
-        return web.json_response({
-            "response": response_text,
-            "model": model_used,
-            "tokens": tokens,
-        })
+        await _write_event("final", payload)
     except Exception as exc:
-        log.error("api_agent_ask_handler error: %s", exc)
-        return web.json_response({"error": str(exc)}, status=500)
+        log.error("api_agent_ask_stream_handler error: %s", exc)
+        await _write_event("error", {"error": str(exc)})
+    finally:
+        await resp.write_eof()
+
+    return resp
 
 
 async def api_recap_generate_handler(request: web.Request) -> web.Response:

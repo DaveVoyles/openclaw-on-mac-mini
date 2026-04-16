@@ -259,6 +259,73 @@ def test_progress_cell_with_status():
     assert "ACTIVE" in result
 
 
+def test_context_pressure_snapshot_accounts_for_hidden_extras():
+    snapshot = sd._context_pressure_snapshot(
+        [{"role": "user", "content": "x" * 410_000}],
+        system_prompt="y" * 20_000,
+        pending_inject="z" * 12_000,
+    )
+    assert snapshot["band"] == "high"
+    assert snapshot["hidden_pressure"] is True
+    assert snapshot["has_pending_inject"] is True
+    assert int(snapshot["pct_next"]) > int(snapshot["pct_history"])
+
+
+def test_context_pressure_snapshot_reports_low_pressure_without_history():
+    snapshot = sd._context_pressure_snapshot([], system_prompt="")
+    assert snapshot["band"] == "low"
+    assert int(snapshot["next_tokens"]) == 0
+    assert int(snapshot["pct_next"]) == 0
+
+
+def test_context_pressure_snapshot_uses_model_name_suffix_limit():
+    snapshot = sd._context_pressure_snapshot(
+        [{"role": "user", "content": "x" * 300_000}],
+        model_hint="llama-3.1-sonar-small-128k-online",
+    )
+    assert int(snapshot["limit_tokens"]) == 128_000
+    assert snapshot["limit_label"] == "128k"
+    assert snapshot["limit_model_aware"] is True
+
+
+def test_context_pressure_snapshot_uses_gemma_family_window():
+    snapshot = sd._context_pressure_snapshot(
+        [{"role": "user", "content": "x" * 395_000}],
+        model_hint="gemma3:4b",
+    )
+    assert snapshot["limit_label"] == "~100k"
+    assert snapshot["overflow"] is False
+    assert int(snapshot["pct_next_raw"]) >= 95
+
+
+def test_print_session_summary_surfaces_pending_inject_recovery_cues(monkeypatch):
+    session = _make_session(
+        session_id="sess-pressure",
+        title="Pressure Session",
+        cwd="/workspace",
+        files=["/workspace/README.md"],
+        command_count=2,
+    )
+    captured = {}
+
+    monkeypatch.setattr(sd, "load_conversation_history", lambda session_id, limit_turns=0: [{"role": "user", "content": "x" * 410_000}])
+    monkeypatch.setattr(sd, "load_watch_state", lambda session_id: None)
+    monkeypatch.setattr(sd, "build_collaboration_snapshot", lambda session_id, limit=3: {})
+    monkeypatch.setattr(sd, "build_session_storyline", lambda session_id, limit=4: {})
+    monkeypatch.setattr(sd, "_session_mood_snapshot", lambda *args, **kwargs: {})
+    monkeypatch.setattr(sd, "_session_operator_snapshot", lambda *args, **kwargs: {})
+    monkeypatch.setattr(sd, "_operator_snapshot_lines", lambda snapshot: [])
+    monkeypatch.setattr(sd, "_session_age_label", lambda session: "just now")
+    monkeypatch.setattr(sd, "_print_dashboard_surface", lambda title, **kwargs: captured.update({"title": title, **kwargs}))
+
+    sd._print_session_summary(session, pending_inject="Queued workspace recap")
+
+    assert captured["title"] == "Session Dashboard"
+    assert any("context pressure" in line for line in captured["detail_lines"])
+    assert any("recovery cue: /inject clear" in line for line in captured["detail_lines"])
+    assert any("/inject clear to drop the queued one-shot context before your next send" in line for line in captured["action_lines"])
+
+
 def test_progress_cell_empty_status():
     result = sd._progress_cell("mood", "ok", status="")
     assert result == "mood: ok"
@@ -510,6 +577,24 @@ def test_session_mood_cell_no_detail():
     assert "milestone" in result
 
 
+def test_session_mood_brief_returns_dash_without_label():
+    assert sd._session_mood_brief({}) == "—"
+
+
+def test_session_mood_brief_includes_detail_when_available():
+    snapshot = {"label": "steady", "detail": "3 commands into the flow"}
+    result = sd._session_mood_brief(snapshot, max_chars=80)
+    assert result == "steady · 3 commands into the flow"
+
+
+def test_session_mood_brief_truncates_dense_list_copy():
+    snapshot = {"label": "shared", "detail": "2 collaborators aligned with a long follow-through detail"}
+    result = sd._session_mood_brief(snapshot, max_chars=24)
+    assert result.startswith("shared ·")
+    assert result.endswith("…")
+    assert len(result) <= 24
+
+
 # ---------------------------------------------------------------------------
 # _operator_snapshot_lines
 # ---------------------------------------------------------------------------
@@ -517,13 +602,15 @@ def test_session_mood_cell_no_detail():
 def test_operator_snapshot_lines_basic():
     snapshot = {
         "access": "read-only local snapshot",
+        "control": "visibility only; no remote control",
         "readiness_label": "live",
         "readiness_detail": "watch loop is active",
         "readiness_status": "active",
     }
     lines = sd._operator_snapshot_lines(snapshot)
-    assert len(lines) >= 2
+    assert len(lines) >= 3
     assert any("visibility" in l for l in lines)
+    assert any("control: visibility only; no remote control" in l for l in lines)
     assert any("readiness" in l for l in lines)
 
 

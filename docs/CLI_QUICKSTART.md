@@ -167,6 +167,11 @@ openclaw session list --interactive
   terminal usage outside the REPL.
 - If stdin/stdout is not interactive, OpenClaw prints a short notice and falls
   back to the normal non-interactive list output.
+- In an interactive TTY, overlays now support `↑/↓` navigation, live filtering,
+  and an inline preview pane before you press enter to select.
+- High-risk approvals can now open a compact review overlay with `o`.
+- The shipped picker path stays terminal-first and dependency-light; a true
+  curses/Textual full-screen shell remains intentionally deferred.
 
 ## Wave 24 preview & focused inspection (current slice)
 
@@ -178,6 +183,9 @@ existing overlays rather than as a brand-new TUI:
   truncated.
 - **`/outputs overlay`** still uses the searchable picker, but selecting an item
   immediately prints that same bounded preview in-place.
+- **`/layout focus` / `/layout watch-monitor` / `/layout handoff`** keep the
+  preset contract visible and now report explicit pane-focus transitions, even
+  though the CLI still stops short of a true multi-pane renderer.
 - **`/sessions overlay`** and **`openclaw session list --interactive`** let you
   search, select, and land directly in the compact Session Dashboard plus the
   exact resume command for that session.
@@ -237,6 +245,12 @@ vocabulary, persistence, and fallback reporting first.
 
 > **New:** Ctrl-R reverse search, Ctrl-L clear, Ctrl-W word-delete are now active. Bind any `Ctrl+X` to a slash command with `/keybind Ctrl+H /histsearch`.
 
+The guaranteed baseline here stays `readline`-first: `/keys`, `/bindlist`,
+history search, and the documented control bindings describe the behavior that
+works without any extra prompt dependency. A future `prompt_toolkit`-backed
+prompt session may add richer interactive-TTY editing and multiline ergonomics,
+but it should remain additive rather than replacing the fallback contract.
+
 ### Wave 29 — Diff & Edit Viewer Polish
 
 | Command | Description |
@@ -271,11 +285,17 @@ roadmap:
 - After a normal response, OpenClaw can show a **Suggested follow-ups** block and
   a compact **bottom bar** footer with `mode: chat` plus up to three contextual
   hints like `/rate`, `/view`, `/context`, or `/links`.
+- Before the next prompt, interactive REPL sessions now also print a compact
+  **top context bar** with session/cwd/autoroute state plus any live
+  plan/task/hidden-context/recovery cues.
 - Plain mode and reduced-motion mode keep the same information, but render it as
   explicit text lists instead of Rich inline chrome.
-- Existing **status-bar context** remains the lightweight session/autoroute shell
-  cue for this slice; the broader split-bar/top-context shell contract is still
-  follow-up work.
+- Existing **status-bar context** still prints after responses, but it now sits
+  between the shipped top context bar and bottom footer instead of standing in
+  for the whole shell pattern by itself.
+- Interactive TTY chat can now pair those wait-state cues with a live streamed
+  answer from the backend SSE endpoint; compact, JSON, and non-TTY paths remain
+  buffered for deterministic output.
 
 ## Wave 20 collaboration handoffs
 
@@ -579,8 +599,40 @@ Wave 45 is the **token breakdown + recovery guidance** slice:
   faster triage during long sessions
 - medium pressure still nudges you toward refreshing context, while high and
   near-capacity pressure now recommend saving a `/bookmark` before using `/clear`
+- adjacent inspection surfaces now carry lighter follow-through too: `/context`
+  and `/session` surface next-send pressure plus hidden-context cues, while
+  `/watch status` surfaces next-retry pressure for active automation loops
 
 `docs/COMMANDS.md` does not need regeneration because Wave 45 deepens `/tokeninfo` behavior without changing command metadata.
+
+## Deferred interaction affordance follow-ups (not shipped yet)
+
+The current CLI already ships the lighter-weight slices from this area:
+
+- `/edit` shows a unified diff before applying changes
+- Wave 31 adds the top-context bar, bottom footer, and phase/step trust cues during waits
+- Waves 43–45 add `/tokeninfo`, session-age visibility, actor breakdowns, and
+  bookmark-before-clear guidance
+
+What is still deferred:
+
+- broader ambient overflow warnings beyond the already-shipped `/tokeninfo`,
+  `/context`, `/session`, and `/watch status` cues
+- any shell expansion beyond the shipped top-context + status + bottom-bar
+  baseline
+
+What shipped in this follow-up slice:
+
+- interactive TTY chat now streams backend response chunks live from the
+  service; use `--no-stream` when you want the older buffered path
+- `openclaw edit` and `/edit` now show the edit preview before approval and
+  before dry-run exit, including compact review/trust/recovery cues plus
+  explicit `Dry run only.` and no-op feedback
+- `/tokeninfo` now follows through with stronger recovery guidance by pointing
+  high-pressure sessions toward saving a `/bookmark` before using `/clear`
+- the interactive REPL now prints a top context bar ahead of the next prompt so
+  session state, linked plan/task, hidden-context hints, and `/rollback last`
+  recovery cues stay visible without reopening older shell-chrome planning
 
 ## Wave 28 predictive affordances slice (current slice)
 
@@ -608,7 +660,8 @@ unchanged.
 ## Wave 29 session storytelling slice (current slice)
 
 Wave 29 is currently the **plain-text recap scaffold** for session review and
-handoff:
+handoff, and the next slice stays intentionally restrained rather than turning
+every surface into a narrative export suite:
 
 - **`openclaw session share <session-id>`** is the clearest storytelling view
   today. It groups the recap into stable chapters: **ACTORS**, **RECENT
@@ -617,11 +670,15 @@ handoff:
 - **`openclaw session show <session-id>`** keeps the same facts visible during
   inspection: actor-aware collaboration details, momentum/milestone wording,
   saved outputs, and the exact resume command.
-- **`/session`** and **`/sessions`** already surface the compact version of that
-  story through latest activity, recent decision, actor names, and a
-  mood/momentum cell.
+- **`/session`** and **`/sessions`** are the only surfaces that should stretch
+  a bit further in the next slice: they can acknowledge momentum or milestone
+  cues, but status/count/watch context still needs to be the first thing you
+  scan.
 - The current ending is intentionally deterministic: the “next steps” are the
   explicit `resume`, `inspect`, and `share` commands rather than generated prose.
+- **`/collab`**, **`openclaw session share`**, and **`openclaw session export`**
+  stay neutral and pasteable in this slice; they should keep facts and commands
+  ahead of mood wording.
 - **Not shipped yet:** bullet-mode recaps, timeline-mode recaps, recap-specific
   export variants, or richer browser/dashboard storytelling.
 
@@ -716,6 +773,13 @@ These mirror the top-level `openclaw` subcommands but run inside the current ses
 | `/draft multiline [on\|off]` | Toggle multiline compose mode (`\end` on its own line to submit) |
 | `/template [list\|save\|use\|delete]` | Manage reusable prompt templates persisted across sessions |
 | `/pasteguard [on\|off]` | Guard large pastes that would route to risky commands — shows preview and requires confirmation |
+
+`/draft multiline` is the stable user-facing composer surface regardless of the
+line-editing backend underneath it. If the optional `prompt_toolkit` prompt path
+lands, it should improve interactive-TTY editing and completion without changing
+the command vocabulary; plain mode, non-TTY/scripted runs, and environments
+without that dependency should still fall back to the existing `readline` or
+plain `input()` flow.
 
 ### Search, aliases & pins (Wave 16)
 

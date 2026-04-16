@@ -128,6 +128,7 @@ def test_cmd_events_shows_events(capsys):
     assert result == _CMD_CONTINUE
     out = capsys.readouterr().out
     assert "chat" in out or "analyze" in out
+    cli._print_dashboard_surface.assert_called_once()
 
 
 def test_cmd_events_invalid_count(capsys):
@@ -152,6 +153,9 @@ def test_cmd_events_decisions_filter(capsys):
     out = capsys.readouterr().out
     assert "route" in out
     assert "chat" not in out
+    _, kwargs = cli._print_dashboard_surface.call_args
+    assert any("decision-only" in line for line in kwargs["summary_lines"])
+    assert any("/session" in line for line in kwargs["action_lines"])
 
 
 def test_cmd_events_numeric_limit(capsys):
@@ -163,6 +167,39 @@ def test_cmd_events_numeric_limit(capsys):
         result = mod._cmd_events(_ctx("2"))
     assert result == _CMD_CONTINUE
     mock_load.assert_called_once_with("sess-1", limit=2)
+
+
+def test_cmd_events_preview_strip_adds_recovery_actions(capsys):
+    cli = _mock_cli()
+    events = [
+        {
+            "kind": "error",
+            "content": "network timeout while retrying write",
+            "timestamp": "2024-01-01T11:00:00",
+            "metadata": {"summary": "Retry loop hit a network timeout"},
+        },
+        {
+            "kind": "watch",
+            "content": "polling workspace",
+            "timestamp": "2024-01-01T10:59:00",
+        },
+        {
+            "kind": "checkpoint",
+            "content": "saved rollback point",
+            "timestamp": "2024-01-01T10:58:00",
+        },
+    ]
+    with patch.object(mod, "_get_cli_mod", return_value=cli), \
+         patch("openclaw_cli_cmd_session.load_events", return_value=events):
+        result = mod._cmd_events(_ctx(""))
+    assert result == _CMD_CONTINUE
+    args, kwargs = cli._print_dashboard_surface.call_args
+    assert args[0] == "Event Preview Strip"
+    assert any("latest kind: error" in line for line in kwargs["summary_lines"])
+    assert any("error" in line and "Retry loop hit a network timeout" in line for line in kwargs["detail_lines"])
+    assert any("/watch status" in line for line in kwargs["action_lines"])
+    assert any("/watch history" in line for line in kwargs["action_lines"])
+    assert any("/bookmark" in line for line in kwargs["action_lines"])
 
 
 # ---------------------------------------------------------------------------

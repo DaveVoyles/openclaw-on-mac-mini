@@ -434,6 +434,20 @@ def test_cmd_layout_reset(capsys):
     cli._print_feedback.assert_called()
 
 
+def test_cmd_layout_focus_reports_explicit_transition():
+    cli = _mock_cli(_PREFS={"layout_preset": "focus"}, _layout_preset_name=MagicMock(return_value="focus"))
+    with patch.object(mod, "_m", return_value=cli):
+        result = mod._cmd_layout(_ctx("focus supporting"))
+    assert result == _CMD_CONTINUE
+    cli._prefs_set.assert_called_once_with("layout_focus", "supporting")
+    cli._print_feedback.assert_called_once_with(
+        "Active pane set to supporting.",
+        level="success",
+        detail="Focus transition: primary -> supporting",
+    )
+    cli._print_layout_preset_workspace.assert_called_once()
+
+
 # ---------------------------------------------------------------------------
 # _cycle_theme helper
 # ---------------------------------------------------------------------------

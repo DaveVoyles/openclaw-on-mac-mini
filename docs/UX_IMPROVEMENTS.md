@@ -100,6 +100,53 @@ For the canonical inventory and reusable checklist, see
 
 ---
 
+## Deferred interaction affordances backlog (current truth)
+
+Use this section when planning the next CLI UX follow-up wave. It keeps the
+remaining deferred interaction affordances explicit without undoing the shipped
+evidence recorded in later waves.
+
+- **Now shipped in the current slice:** backend-backed token streaming / SSE
+  output for interactive TTY chat. Wave 3 no longer stops at the footer and
+  `--no-stream`; the CLI now streams backend response chunks incrementally from
+  `/api/agent/ask/stream` when streaming is enabled.
+- **Now shipped as a fuller review flow:** `/edit` already showed the unified diff,
+  and the shell-polish slice now layers compact approval review lines plus trust
+  and recovery cues around that preview instead of treating richer review polish
+  as still-open work.
+- **Already shipped in narrower form:** Waves 43–45 added local token/context
+  visibility via `/tokeninfo`, session-age surfacing, actor breakdowns, and
+  bookmark-before-clear guidance. The follow-through is already starting to
+  extend onto adjacent operator surfaces too: `/context`, `/session`, and
+  `/watch status` now surface next-send or next-retry context pressure cues and
+  point back to `/tokeninfo`, `/bookmark`, or `/promptdebug` when pressure is
+  high. What remains deferred is broader ambient warning coverage plus per-model
+  limits rather than those explicit inspection surfaces themselves.
+- **Also shipped in this follow-through slice:** `/edit` now keeps that preview in
+  front of approval and dry-run exits, while recovery guidance has become more
+  explicit instead of reopening the old preview/recovery work as deferred.
+- **Also shipped in this follow-through slice:** high-risk approvals now support a
+  text-only `[r]eview` loop so `/edit` can replay the exact diff preview before
+  approval without requiring a full overlay UI.
+- **Now shipped in the current shell-polish slice:** the REPL now prints an
+  always-on top context bar ahead of the existing response/status/bottom-bar
+  cues, so the broader split-bar shell is no longer limited to the footer-only
+  slice from the earlier Wave 31 follow-up.
+- **Now shipped in the current interactive follow-through slice:** high-risk
+  approvals can open a compact review overlay with `o`, keeping the text review
+  loop as the plain/non-TTY fallback instead of leaving approval overlays
+  entirely deferred.
+- **Now shipped in the current interactive follow-through slice:** TTY overlays
+  now support `↑/↓` navigation, live filtering, and inline preview panes. The
+  terminal-first picker has become richer without committing to a heavier
+  curses/Textual full-screen shell.
+- **Now shipped in the current interactive follow-through slice:** layout
+  presets now print explicit `/layout focus ...` transition cues. What remains
+  deferred is a true compositor-level pane router rather than the visibility of
+  pane focus itself.
+
+---
+
 ## Shared Terminal Shell Pattern (Wave 31+)
 
 Starting with the next future-wave tranche, the standard terminal layout target is
@@ -275,8 +322,8 @@ and token count after the response completes.
 | Elapsed timer | After the response ends, print `⏱ 2.3s  •  312 tokens  •  model` in dim below the separator | ✅ |
 | Token + model footer | Unified `⏱ Xs  •  N tokens  •  model-name` footer replaces the old separate model/token lines | ✅ |
 | Ctrl-C cleanup | Ctrl-C during the spinner prints `⌨ [interrupted]` and returns to the prompt cleanly | ✅ |
-| `--no-stream` flag | `CliConfig.no_stream` field + `--no-stream` CLI flag added (stub for future SSE streaming) | ✅ |
-| Streaming output | Token-by-token SSE streaming — deferred; backend exposes streaming internally but no client SSE endpoint yet | ⚠️ Deferred |
+| `--no-stream` flag | `CliConfig.no_stream` field + `--no-stream` CLI flag remains the explicit opt-out for interactive streaming | ✅ |
+| Streaming output | Interactive TTY chat now uses the backend SSE endpoint and prints response chunks as they arrive; non-TTY, compact, and JSON flows still fall back to the buffered path | ✅ |
 
 ### Done-When
 
@@ -285,7 +332,7 @@ and token count after the response completes.
 - [x] `--no-stream` flag wired into `CliConfig` and argparse
 - [x] 180 tests pass
 - [x] Deployed to macbook
-- [ ] ⚠️ Streaming response tokens appear incrementally (deferred — needs backend SSE endpoint)
+- [x] Streaming response chunks now appear incrementally through the backend SSE endpoint when interactive streaming is enabled
 
 ---
 
@@ -306,13 +353,21 @@ navigation, inline help, and fuzzy command search.
 | Inline slash help | `/cmd ?` prints that command's description and aliases, returns to prompt | ✅ |
 | Command fuzzy match | Mistyped `/commnad` → `Did you mean /command?` via `difflib.get_close_matches` | ✅ |
 | `_make_completer(registry)` | Helper function that builds a readline completer from the command registry | ✅ |
-| `prompt_toolkit` integration | Full prompt_toolkit session (richer completion, multiline) | ⚠️ Deferred — not installed on macbook; readline sufficient |
+| `prompt_toolkit` integration | Optional interactive-TTY prompt session for richer editing, completion, and multiline compose | ⚠️ Deferred follow-up — keep `readline` / plain-input fallback contract |
+
+Wave 4's shipped baseline is still the existing `readline`-first REPL. The
+`prompt_toolkit` item remains a follow-up shell-input upgrade rather than a
+retcon of the already-shipped tab completion, history, inline help, or fuzzy
+match work.
 
 ### Implementation notes
 
 - Tab completion uses `readline.set_completer` + `readline.parse_and_bind("tab: complete")` — no new dependencies
 - Fuzzy suggestions use stdlib `difflib.get_close_matches(cutoff=0.6)`
 - All features gracefully no-op when `readline is None` (non-POSIX platforms)
+- If the `prompt_toolkit` follow-up ships, keep it scoped to the interactive TTY
+  prompt path only; plain mode, non-TTY, scripted use, and missing-dependency
+  environments must still preserve the simpler fallback path
 
 ### Done-When
 
@@ -323,7 +378,8 @@ navigation, inline help, and fuzzy command search.
 - [x] Mistyped command shows `Did you mean /X?` suggestion
 - [x] 180 tests pass
 - [x] Deployed to macbook
-- [ ] ⚠️ Full `prompt_toolkit` session (deferred — readline sufficient for now)
+- [ ] ⚠️ Optional `prompt_toolkit` prompt session follow-up (deferred — current
+      readline-first baseline remains sufficient)
 
 ### Key Code Locations
 
@@ -336,8 +392,11 @@ navigation, inline help, and fuzzy command search.
 
 ### Dependencies
 
-- `prompt_toolkit` — already a common Python package; add to `requirements.txt` if not present
-- Graceful fallback to `input()` if `prompt_toolkit` is unavailable (guard with try/except at import)
+- `prompt_toolkit` — optional dependency for the richer interactive-TTY prompt
+  path; declare it explicitly only when that follow-up lands
+- Guard imports so startup still succeeds without `prompt_toolkit`, and preserve
+  the fallback stack: `prompt_toolkit` (when available and appropriate) →
+  `readline` → plain `input()`
 
 ### Agent Lanes
 
@@ -357,7 +416,8 @@ navigation, inline help, and fuzzy command search.
 - [ ] Ctrl-R launches reverse history search
 - [ ] `/cmd ?` prints usage and returns to prompt
 - [ ] Mistyped command shows "Did you mean /X?" suggestion
-- [ ] Falls back to plain `input()` if `prompt_toolkit` is missing
+- [ ] Falls back to `readline` or plain `input()` when `prompt_toolkit` is
+      missing, bypassed, or unavailable in the current environment
 - [ ] 180 tests pass
 - [ ] Deployed to macbook
 
@@ -380,8 +440,8 @@ show a diff preview before committing.
 | Session badge in prompt | Cyan `[abc123de…]` in prompt when session is active; yellow `[autoroute:off]` when autoroute disabled | ✅ |
 | `_print_status_bar()` helper | New function — prints status bar, respects TTY/Rich guard | ✅ |
 | Routing decision display | Already shipped in Wave 1 via `_format_route_announcement` | ✅ |
-| File edit preview / diff confirm | ⚠️ Deferred — requires deep hook into `/edit` handler |
-| Token budget warning | ⚠️ Deferred — context window sizes vary by model; no reliable cap available |
+| File edit preview / diff confirm | Preview now prints before approval/dry-run decisions, including the unified diff, compact review lines, and explicit trust/recovery cues at approval time |
+| Token budget warning | Lightweight token heuristics shipped later in Waves 43–45; stronger model-aware/proactive guardrails remain deferred |
 
 ### Done-When
 
@@ -390,8 +450,10 @@ show a diff preview before committing.
 - [x] Session badge in prompt is cyan; `autoroute:off` badge is yellow (distinct, warning-like)
 - [x] 180 tests pass
 - [x] Deployed to macbook
-- [ ] ⚠️ `/edit` diff preview (deferred)
-- [ ] ⚠️ Token budget warning (deferred)
+- [x] `/edit` now shows a unified diff before applying changes (shipped later)
+- [x] richer `/edit` approval + diff review polish now surfaces compact review, trust, and recovery cues
+- [x] lightweight token/context guidance now exists via `/tokeninfo` and later guardrail slices
+- [ ] ⚠️ per-model token limits and proactive overflow warnings remain deferred
 
 ---
 
@@ -1149,13 +1211,19 @@ without destabilizing the default REPL or non-TTY automation flows.
 | Saved-output picker | `/outputs overlay` opens a searchable picker and reuses the normal inline preview on selection |
 | Recent-session picker | `/sessions overlay` opens a searchable picker and prints the selected session summary + resume command |
 | One-shot session picker | `openclaw session list --interactive` brings the same picker to non-REPL usage |
+| Arrow-key picker shell | TTY overlays now support `↑/↓` focus changes, live inline previews, and enter-to-select while keeping the non-TTY/plain fallback path |
 | Guarded fallback behavior | `_overlay_available()` blocks prompts on non-TTY stdin/stdout and falls back to the regular list output |
 
 ### Future expansion notes
 
-- Approval-preview overlays are still future work, not a blocker for Wave 21.
-- Arrow-key/full-screen selection remains intentionally deferred until a later UX wave proves it is worth the extra complexity.
-- Additional pickers can be added in later waves without reopening the initial shipped overlay slice.
+- Compact approval-review overlays now augment the shipped text-first
+  review/trust/recovery loop; full-screen approval-preview shells remain future
+  work.
+- A lightweight arrow-key/full-screen-ish picker shell is now shipped for TTY
+  overlays; a true curses/Textual-style full-screen app remains intentionally
+  deferred until a later UX wave proves it is worth the extra complexity.
+- Additional pickers can be added in later waves without reopening the initial
+  shipped overlay slice.
 
 ### Validation
 
@@ -1518,7 +1586,11 @@ switching or command hopping.
 - There is **not yet** a shared preview-block helper used by every surface.
 - Session pickers do **not yet** expose inline share/handoff controls; share
   remains a follow-up command.
-- `/events` does **not yet** have a dedicated preview strip or expanded-row mode.
+- `/events` now adds a bounded preview strip with recovery/inspection follow-through,
+  but deeper expanded-row browsing remains follow-up work.
+- Approval overlays and picker-local full-screen expansion are still intentionally
+  deferred; the shipped interaction remains bounded inline preview + follow-up
+  commands.
 - Browser/dashboard preview panes are still a planning target rather than a
   shipped implementation.
 
@@ -1529,7 +1601,7 @@ switching or command hopping.
 | `/outputs`, `/outputs overlay` | The shipped preview path is bounded inline output with metadata + truncation messaging; richer preview blocks remain follow-up work |
 | `/sessions`, `openclaw session list --interactive` | Selection now opens the compact Session Dashboard plus the resume command; share/collaboration actions are still separate |
 | `/watch status`, `/watch history` | These are the live focused-inspection windows today, surfacing phase/retry/note context before longer history |
-| `/context`, `/events`, `openclaw session show` | `/context` keeps the bounded grounding preview, while `session show` is the current deep inspection path; `/events` preview strips are deferred |
+| `/context`, `/events`, `openclaw session show` | `/context` keeps the bounded grounding preview, `/events` now adds a compact preview/recovery strip before the detailed log rows, and `session show` remains the deep inspection path |
 | Browser/dashboard mirrors | Future mirrors should copy the current CLI field ordering and truncation rules rather than invent a new preview vocabulary |
 
 ### Done-when
@@ -1602,7 +1674,7 @@ the full pane renderer. `/layout focus`, `/layout watch-monitor`, and
 `/layout handoff` now persist the named preset, `/layout` reports the current
 primary/supporting surface pairing plus the width/accessibility fallback, and
 `/layout reset` returns to the default single-pane mode. The actual multi-pane
-canvas remains follow-up work.
+canvas and pane-to-pane focus choreography remain follow-up work.
 
 ### Design targets
 
@@ -1619,7 +1691,7 @@ canvas remains follow-up work.
 | Area | Planned work |
 |---|---|
 | Layout preset model | `focus`, `watch-monitor`, and `handoff` are now persisted as named presets with documented primary/supporting surface pairings |
-| Pane state management | Current state tracks the remembered preset and fallback mode; explicit active-pane focus transitions are still deferred |
+| Pane state management | Current state tracks the remembered preset and fallback mode, and the pane shells now print explicit `/layout focus …` transition cues; richer compositor-level routing still remains deferred |
 | Pane rendering shells | Reuse dashboard and preview primitives to draw side-by-side or stacked pane groups when the terminal width and mode allow it |
 | Persistence + commands | `/layout <preset>`, `/layout`, and `/layout reset` now expose the first preset-management contract through the existing layout command |
 | Fallback + width rules | The current slice reports `multi-pane`, `stacked`, or `single-pane` fallback based on terminal width, TTY state, and plain mode |
@@ -2077,28 +2149,29 @@ session facts, not a full prose/timeline recap engine yet:
 
 | Area | Remaining work |
 |---|---|
-| Recap composition model | Promote the existing share/show chapter headings into a reusable recap contract that also covers blockers, outputs, and next actions |
-| Session history transforms | Add deterministic bullet, timeline, and prose recap modes derived from existing session/export metadata |
-| Collaboration narration | Expand actor-tagged notes, decisions, and handoff snapshots into richer narrative summaries without duplicating raw logs |
-| Export and share surfaces | Extend `openclaw session export` and future recap-style commands with the same chapter names used by `session show/share` |
+| Session/status follow-through | Let `/session` and `/sessions` acknowledge momentum or milestone cues as secondary context without obscuring objective status, blockers, or next actions |
+| Neutral handoff/export contract | Keep `/collab`, `openclaw session share`, and `openclaw session export` facts-first and pasteable while the storytelling slice stays narrow |
+| Session history transforms | Deterministic bullet, timeline, and prose recap modes derived from existing session/export metadata remain deferred future work |
+| Dashboard/browser storytelling | Future mirrors can reuse shipped chapter names and fallback wording, but richer dashboard storytelling stays deferred |
 | Review/onboarding guidance | Document which recap mode fits review, handoff, audit, or onboarding use cases once multiple recap modes exist |
 
 ### Dashboard surface alignment
 
 | Surface group | Wave 29 expectation |
 |---|---|
-| `/session`, `/collab` | Current slice reuses actor/decision/mood facts as compact recap cues; full chapter rendering is still follow-up work |
-| `openclaw session show`, `openclaw session share` | Current shipped slice standardizes actor labels, milestone/momentum wording, and command-oriented endings across plain-text inspection/handoff views |
-| `openclaw session export` | Still exports facts first; recap-specific bullet/timeline/prose variants remain deferred |
+| `/session`, `/sessions` | The next restrained slice can add secondary momentum/milestone cues, but objective status/count/watch context must stay first-scan information |
+| `/collab`, `openclaw session share` | Keep the shipped handoff snapshot neutral, actor-aware, and command-oriented; richer mood wording is still deferred |
+| `openclaw session export` | Keep exports facts-first; recap-specific bullet/timeline/prose variants remain deferred |
 | `/events`, `/outputs`, `/context` | Dense evidence remains linkable/referenceable from recaps instead of being duplicated verbatim |
-| Browser/dashboard mirrors | Mirror the shipped chapter names and next-step wording from terminal share/show output only; richer dashboard storytelling is still deferred |
+| Browser/dashboard mirrors | Mirror only shipped chapter names and fallback wording from terminal surfaces; richer dashboard storytelling is still deferred |
 
 ### Implementation notes
 
 - Treat narrative recaps as **derived views over existing facts**, not a separate
   source of truth that can drift from the underlying session data.
-- Reuse collaboration metadata from Wave 20, sentiment/momentum cues from nearby
-  UX work, and predictive next-step language from Wave 28 where helpful.
+- Reuse collaboration metadata from Wave 20, predictive next-step language
+  from Wave 28, and only the light momentum/milestone cues that can sit behind
+  objective status in `/session` and `/sessions`.
 - Keep dense evidence discoverable: narrative views should link back to commands,
   outputs, and decisions instead of flattening all detail into prose.
 - Preserve pasteable plain-text output first; richer formatting can layer on top
@@ -2108,6 +2181,7 @@ session facts, not a full prose/timeline recap engine yet:
 
 ### Done-when
 
+- [ ] The restrained follow-through contract is documented: `/session` and `/sessions` may surface momentum/milestone cues without displacing objective status, while `/collab` and `session share/export` stay neutral.
 - [ ] A documented recap model exists for prose, bullet, and timeline session storytelling.
 - [x] Plain-text share/show surfaces already identify actors, decisions, momentum/milestone state, and deterministic next steps using existing session facts.
 - [ ] Export/share/dashboard guidance stays aligned on recap chapter names and fallback wording.
@@ -2222,7 +2296,7 @@ existing waiting, startup, warning, and celebration helpers:
 
 ## Wave 31 — Intelligent Command Suggestions & Inline Assist
 
-**Status: ✅ Shipped (current response-assist slice)**
+**Status: ✅ Shipped (current shell-polish slice)**
 
 **Goal:** reduce prompt friction by surfacing the next best command at the moment
 users need it and by making long-running agent work more transparent while it is
@@ -2274,8 +2348,8 @@ language.
 
 ### Shipped evidence (current slice)
 
-Wave 31 is currently shipping as a **narrow response-assist slice**, not the
-entire late-wave shell vision:
+Wave 31 is currently shipping as a **shell-polish slice**, not the entire
+late-wave pane-compositor vision:
 
 - `_spinner_progress_snapshot(...)` and `_with_spinner(...)` now provide the
   live wait-state copy: `warming up` / `working` / `wrapping up`, deterministic
@@ -2286,15 +2360,21 @@ entire late-wave shell vision:
   enabled.
 - `_print_followup_suggestions(...)` is the shipped bottom-hint surface for
   `mode: chat` plus contextual next actions.
+- `_top_context_bar_lines(...)` and `_print_top_context_bar(...)` now provide
+  the always-on pre-prompt shell chrome: session/cwd/autoroute state, linked
+  plan/task cues, hidden-context visibility, and the latest recovery hint all
+  stay visible ahead of the next prompt.
+- `/exec` and `/edit` approval flows now reuse compact review lines plus trust
+  and recovery cues so higher-friction interactions share the same shell-polish
+  vocabulary instead of stopping at the bare preview/prompt boundary.
 - `/followup [on|off]` controls the auto-suggestion footer, while existing
   `/ratehint` and `/pathhints` preferences participate in the same post-response
   trust/assist layer.
 
 ### Deferred scope
 
-- the always-present top context bar from the shared split-bar shell pattern
-- broader Wave 31 coverage for `/exec`, approvals, `/watch`, `/session`, and
-  `/collab`
+- broader Wave 31 coverage for `/watch`, `/session`, and `/collab` shell
+  adoption beyond the currently shipped top-context/status/footer baseline
 - per-step completed-step acknowledgements beyond the shared completion cue
 
 ### Docs/dashboard notes
@@ -2953,6 +3033,46 @@ best recovery step is as pressure rises.
 - [x] pressure guidance escalates at 50%, 80%, and 90% thresholds
 
 **Risk:** 🟢 Low — read-only command refinement, no persistence or routing changes
+
+---
+
+## Context-pressure follow-through (next wave setup)
+
+Status: 🟡 Active follow-up
+
+**Current truth:** The detailed guardrail view still lives in `/tokeninfo`, but
+the surrounding operator surfaces already carry lighter-weight pressure cues.
+
+### Already shipped around Wave 45
+
+- **`/context` pressure snapshot**: when the next send is estimated at 50%+ of
+  the resolved window, `/context` now prints a context-pressure line for the
+  next send plus recovery cues for overflow, hidden injected/system context, and
+  bookmark-before-clear recovery
+- **`/session` dashboard follow-through**: the Session Dashboard now echoes live
+  next-send pressure, hidden-context load, and action links back to
+  `/tokeninfo`, `/bookmark`, and `/promptdebug`
+- **`/watch status` retry guidance**: active watch loops now show context
+  pressure for the next retry and point operators toward `/tokeninfo`,
+  `/bookmark`, `/context`, or `/promptdebug` when retries may be failing under
+  a heavy inherited prompt
+
+### Still deferred
+
+- broader ambient overflow warnings outside those explicit inspection/status
+  surfaces
+- per-model context limits replacing the current resolved heuristic path
+- deeper breakdowns by turn, command family, or other richer attribution slices
+
+### Done-when for the next implementation wave
+
+- [ ] roadmap/docs describe the current guardrail footprint truthfully
+- [ ] future implementation work treats `/tokeninfo` as the detailed inspector
+  and adjacent surfaces as lighter follow-through, not as missing features
+- [ ] deferred items stay limited to what is actually unshipped
+
+**Risk:** 🟢 Low — documentation only; clarifies current scope before the next
+implementation pass
 
 ---
 

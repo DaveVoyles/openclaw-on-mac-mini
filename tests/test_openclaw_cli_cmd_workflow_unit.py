@@ -351,3 +351,24 @@ def test_cmd_watch_unknown_sub_shows_error():
         result = mod._cmd_watch(_ctx("bogus"))
     assert result == _CMD_CONTINUE
     cli._print_error.assert_called()
+
+
+def test_cmd_watch_status_without_state_shows_trust_recovery_hint(capsys):
+    cli = _mock_cli()
+    with patch.object(mod, "_get_cli_mod", return_value=cli), \
+         patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None):
+        result = mod._cmd_watch(_ctx("status"))
+    assert result == _CMD_CONTINUE
+    out = capsys.readouterr().out
+    assert "local-only" in out
+    assert "/session" in out
+
+
+def test_cmd_watch_history_without_state_shows_recovery_hint(capsys):
+    cli = _mock_cli()
+    with patch.object(mod, "_get_cli_mod", return_value=cli), \
+         patch("openclaw_cli_cmd_workflow.load_watch_state", return_value=None):
+        result = mod._cmd_watch(_ctx("history"))
+    assert result == _CMD_CONTINUE
+    out = capsys.readouterr().out
+    assert "read-only recovery snapshot" in out

@@ -180,6 +180,14 @@ def _layout_focus_name(prefs: dict) -> str:
     return focus if focus in {"primary", "supporting"} else "primary"
 
 
+def _layout_focus_transition_line(active_focus: str, primary_title: str, supporting_title: str) -> str:
+    """Return the explicit focus-switch hint for the current pane shell."""
+    focus = active_focus if active_focus in {"primary", "supporting"} else "primary"
+    if focus == "primary":
+        return f"Focus transition: /layout focus supporting -> {supporting_title}"
+    return f"Focus transition: /layout focus primary -> {primary_title}"
+
+
 def _layout_preset_config(prefs: dict, name: str = "") -> dict[str, str]:
     """Return the documented surface pairing for a layout preset."""
     preset = name or _layout_preset_name(prefs)
@@ -459,6 +467,7 @@ def _print_layout_preset_workspace(
         f"Workspace preset: {_layout_preset_config(prefs, preset).get('label', preset)}",
         f"Render mode: {render_mode}",
         f"Active pane: {focus}",
+        _layout_focus_transition_line(focus, primary_title, supporting_title),
         "",
     ]
     primary_block = _layout_pane_block(prefs, primary_title, primary_lines, active=focus == "primary")
@@ -473,6 +482,8 @@ def _print_layout_preset_workspace(
         body = [
             *active_block,
             "",
-            f"Supporting pane collapsed. Open {collapsed.lower()} via its source command or widen the terminal.",
+            "Supporting pane collapsed. "
+            f"Run /layout focus {'supporting' if focus == 'primary' else 'primary'} "
+            f"to switch panes, open {collapsed.lower()} via its source command, or widen the terminal.",
         ]
     print("\n".join(header + body))

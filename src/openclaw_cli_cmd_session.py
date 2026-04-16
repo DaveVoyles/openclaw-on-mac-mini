@@ -12,6 +12,8 @@ import shutil
 from openclaw_cli_prefs import _PREFS
 from openclaw_cli_session_cmds import (
     _build_event_label,
+    _event_preview_lines,
+    _event_recovery_actions,
     _build_handoff_check_lines,
 )
 from openclaw_cli_sessions import (
@@ -114,6 +116,44 @@ def _cmd_events(ctx: ChatCommandContext) -> str:
         else:
             print("No events recorded yet. Events appear after /analyze, /write, /exec, /edit, or chat turns.")
         return _CMD_CONTINUE
+
+    latest_event = events[0]
+    latest_kind = str(latest_event.get("kind") or "event").strip() or "event"
+    latest_ts = str(
+        latest_event.get("timestamp") or latest_event.get("at") or latest_event.get("created_at") or "—"
+    ).strip() or "—"
+    summary_lines = [
+        f"showing {len(events)} recent event{'s' if len(events) != 1 else ''}",
+        f"latest kind: {latest_kind}",
+        f"latest timestamp: {latest_ts}",
+    ]
+    if decisions_only:
+        summary_lines.append("scope: decision-only routing / approval / checkpoint lane")
+    detail_lines = _event_preview_lines(events)
+    action_lines = _event_recovery_actions(events, decisions_only=decisions_only)
+    if hasattr(m, "_print_dashboard_surface"):
+        m._print_dashboard_surface(
+            "Event Preview Strip",
+            summary_lines=summary_lines,
+            detail_lines=detail_lines,
+            action_lines=action_lines,
+            border_style="dim",
+        )
+    else:
+        print("Event Preview Strip")
+        print("Summary:")
+        for line in summary_lines:
+            print(f"  - {line}")
+        if detail_lines:
+            print("")
+            print("Details:")
+            for line in detail_lines:
+                print(f"  - {line}")
+        if action_lines:
+            print("")
+            print("Actions:")
+            for line in action_lines:
+                print(f"  - {line}")
 
     _KIND_COLORS = {
         "chat": "dim", "prompt": "white", "analyze": "cyan", "research": "blue",
@@ -250,6 +290,7 @@ def _cmd_sessions(ctx: ChatCommandContext) -> str:
                 f"{s.session_id[:8]}…  {s.title or '—'}  "
                 f"{(s.updated_at or '—')[:19]}  {m._session_badges(s)}".strip()
             ),
+            detail_fn=lambda s: m._session_preview_lines(s),
             on_select=lambda s: (
                 m._print_session_summary(s),
                 m._print_dashboard_surface(

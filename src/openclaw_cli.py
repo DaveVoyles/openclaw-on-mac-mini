@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from contextlib import contextmanager
 import difflib
 import getpass
 import json
@@ -65,6 +66,7 @@ from openclaw_cli_sessions import (
     find_session_bookmark,
     get_last_decision_event,
     list_handoffs,
+    list_routed_action_checkpoints,
     list_saved_outputs,
     list_session_bookmarks,
     list_sessions,
@@ -87,6 +89,17 @@ try:
     import readline
 except ImportError:  # pragma: no cover - platform-dependent
     readline = None
+
+try:
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import Completer as _PromptToolkitCompleterBase
+    from prompt_toolkit.completion import Completion
+    from prompt_toolkit.history import InMemoryHistory
+except ImportError:  # pragma: no cover - optional dependency
+    PromptSession = None
+    _PromptToolkitCompleterBase = object
+    Completion = None
+    InMemoryHistory = None
 
 import openclaw_cli_update as _update_mod
 from openclaw_cli_update import (
@@ -575,6 +588,137 @@ def _overlay_available() -> bool:
     return bool(_get_is_tty() and stdin_tty)
 
 
+def _overlay_keypress_supported() -> bool:
+    """Return True when the richer keypress overlay path is safe to use."""
+    if not _overlay_available() or _a11y_plain_mode():
+        return False
+    if os.name == "nt":
+        return False
+    try:
+        import termios  # noqa: PLC0415
+        import tty as _tty  # noqa: PLC0415
+    except ImportError:
+        return False
+    return hasattr(termios, "tcgetattr") and hasattr(_tty, "setraw")
+
+
+def _terminal_height(*, fallback: int = 24) -> int:
+    """Return current terminal height, with a sensible fallback."""
+    try:
+        return os.get_terminal_size().lines
+    except OSError:
+        return fallback
+
+
+def _overlay_visible_limit() -> int:
+    """Return the number of picker rows to show in rich keypress mode."""
+    return min(9, max(4, _terminal_height() - 16))
+
+
+def _overlay_detail_lines(
+    item: Any,
+    *,
+    detail_fn: Callable[[Any], list[str]] | None,
+    width: int,
+    limit: int = 6,
+) -> list[str]:
+    """Render bounded detail lines for the currently focused picker row."""
+    if detail_fn is None:
+        return []
+    raw_lines = [str(line).strip() for line in (detail_fn(item) or []) if str(line).strip()]
+    if not raw_lines:
+        return []
+    wrapped: list[str] = []
+    wrap_width = max(20, width - 6)
+    for line in raw_lines:
+        wrapped.extend(textwrap.wrap(line, width=wrap_width) or [""])
+        if len(wrapped) >= limit:
+            break
+    bounded = wrapped[:limit]
+    if len(raw_lines) > len(bounded) or len(wrapped) > limit:
+        bounded[-1] = _single_line_excerpt(bounded[-1], max_chars=max(12, wrap_width - 2)) + "…"
+    return bounded
+
+
+def _overlay_render_keypress_frame(
+    *,
+    title: str,
+    query: str,
+    matches: list[Any],
+    label_fn: Callable[[Any], str],
+    active_index: int,
+    detail_lines: list[str],
+    page_start: int,
+    total_count: int,
+) -> str:
+    """Return the full-screen-ish frame used by keypress-driven overlays."""
+    lines = ["\033[2J\033[H", f"{_B}{title}{_R}"]
+    summary_bits = [f"{len(matches)}/{total_count} matches"]
+    if query:
+        summary_bits.append(f"filter: {query}")
+    lines.append(f"  {_DM}{'  ·  '.join(summary_bits)}{_R}")
+    lines.append(f"  {_DM}↑/↓ move  enter select  type to filter  backspace edit  q/esc close{_R}")
+    if not matches:
+        lines.append(f"\n  {_DM}No matches for '{query}'. Keep typing or press q to close.{_R}")
+        return "\n".join(lines) + "\n"
+
+    lines.append("")
+    for offset, item in enumerate(matches, start=page_start + 1):
+        prefix = "›" if (offset - page_start - 1) == active_index else " "
+        color = _BCY if prefix == "›" else _CY
+        lines.append(f"  {color}{prefix} {offset}.{_R} {label_fn(item)}")
+    if detail_lines:
+        lines.append("")
+        lines.append(f"  {_DM}Preview{_R}")
+        for line in detail_lines:
+            lines.append(f"    {line}")
+    return "\n".join(lines) + "\n"
+
+
+@contextmanager
+def _overlay_raw_mode() -> Any:
+    """Temporarily switch stdin into raw mode for keypress overlays."""
+    import termios  # noqa: PLC0415
+    import tty as _tty  # noqa: PLC0415
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        _tty.setraw(fd)
+        yield
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def _read_overlay_keypress() -> str:
+    """Read and normalize a single overlay keypress."""
+    first = sys.stdin.read(1)
+    if first in {"\r", "\n"}:
+        return "enter"
+    if first in {"\x7f", "\b"}:
+        return "backspace"
+    if first == "\x1b":
+        second = sys.stdin.read(1)
+        if second == "[":
+            third = sys.stdin.read(1)
+            if third == "A":
+                return "up"
+            if third == "B":
+                return "down"
+            if third == "C":
+                return "right"
+            if third == "D":
+                return "left"
+        return "escape"
+    if first == "\x03":
+        return "quit"
+    if first == "\x10":
+        return "up"
+    if first == "\x0e":
+        return "down"
+    return first
+
+
 def _overlay_query_score(text: str, query: str) -> int:
     """Return a simple fuzzy score; 0 means no match."""
     haystack = " ".join(str(text or "").lower().split())
@@ -622,6 +766,7 @@ def _run_interactive_overlay(
     on_select: Callable[[Any], None],
     initial_query: str = "",
     empty_message: str = "No matches.",
+    detail_fn: Callable[[Any], list[str]] | None = None,
 ) -> str:
     """Run a lightweight interactive picker for supported REPL overlays."""
     if not items:
@@ -632,6 +777,77 @@ def _run_interactive_overlay(
         return "fallback"
 
     query = initial_query.strip()
+    if _overlay_keypress_supported():
+        try:
+            with _overlay_raw_mode():
+                active_index = 0
+                while True:
+                    all_matches = _overlay_filter_items(items, query=query, label_fn=label_fn, limit=max(len(items), 1))
+                    if active_index >= len(all_matches):
+                        active_index = max(0, len(all_matches) - 1)
+                    visible_limit = _overlay_visible_limit()
+                    page_start = 0
+                    if len(all_matches) > visible_limit:
+                        page_start = min(
+                            max(0, active_index - (visible_limit // 2)),
+                            max(0, len(all_matches) - visible_limit),
+                        )
+                    visible_matches = all_matches[page_start:page_start + visible_limit]
+                    visible_active = 0 if not visible_matches else min(active_index - page_start, len(visible_matches) - 1)
+                    detail_lines = []
+                    if visible_matches:
+                        detail_lines = _overlay_detail_lines(
+                            visible_matches[visible_active],
+                            detail_fn=detail_fn,
+                            width=_terminal_width(),
+                        )
+                    sys.stdout.write(
+                        _overlay_render_keypress_frame(
+                            title=title,
+                            query=query,
+                            matches=visible_matches,
+                            label_fn=label_fn,
+                            active_index=visible_active,
+                            detail_lines=detail_lines,
+                            page_start=page_start,
+                            total_count=len(items),
+                        )
+                    )
+                    sys.stdout.flush()
+                    key = _read_overlay_keypress()
+                    if key in {"q", "Q", "escape", "quit"}:
+                        sys.stdout.write(f"\n  {_DM}Overlay closed.{_R}\n")
+                        sys.stdout.flush()
+                        return "closed"
+                    if key == "up":
+                        if all_matches:
+                            active_index = (active_index - 1) % len(all_matches)
+                        continue
+                    if key == "down":
+                        if all_matches:
+                            active_index = (active_index + 1) % len(all_matches)
+                        continue
+                    if key == "backspace":
+                        query = query[:-1]
+                        active_index = 0
+                        continue
+                    if key == "enter":
+                        if all_matches:
+                            on_select(all_matches[active_index])
+                            return "selected"
+                        continue
+                    if len(key) == 1 and key.isdigit():
+                        selected_index = int(key) - 1
+                        if 0 <= selected_index < len(visible_matches):
+                            on_select(visible_matches[selected_index])
+                            return "selected"
+                        continue
+                    if len(key) == 1 and key.isprintable():
+                        query += key
+                        active_index = 0
+                        continue
+        except (OSError, AttributeError, ValueError):
+            pass
     while True:
         matches = _overlay_filter_items(items, query=query, label_fn=label_fn)
         print(f"\n{_B}{title}{_R}")
@@ -981,6 +1197,175 @@ def _print_dashboard_surface(
     print("\n".join(lines))
 
 
+def _local_link_status(result: LocalLinkValidation) -> tuple[str, str]:
+    """Map local validation results into compact shell-chrome vocabulary."""
+    if not result.item_id:
+        return "idle", "none"
+    if not result.available:
+        return "info", "unverified"
+    if result.exists:
+        return "complete", "confirmed"
+    return "warn", "missing"
+
+
+def _latest_shell_recovery_snapshot(session_id: str) -> dict[str, str]:
+    """Return the latest routed-step and recovery metadata for shell chrome."""
+    if not session_id:
+        return {}
+    try:
+        latest = next(iter(list_routed_action_checkpoints(session_id, limit=1)), None)
+    except Exception:
+        latest = None
+    if not isinstance(latest, dict):
+        return {}
+    snapshot: dict[str, str] = {}
+    step_index = int(latest.get("step_index") or 0)
+    step_total = int(latest.get("step_total") or 0)
+    if step_index > 0 and step_total > 0:
+        snapshot["phase"] = f"step {step_index}/{step_total} complete"
+        snapshot["completed_step"] = f"step {step_index}/{step_total} done"
+    step_kind = str(latest.get("step_kind") or latest.get("action_kind") or "").strip()
+    if step_kind:
+        snapshot["completed_kind"] = step_kind
+    rollback_status = str(latest.get("rollback_status") or "").strip().lower()
+    if rollback_status == "available":
+        snapshot["recovery"] = "/rollback last ready"
+    elif rollback_status == "manual-only":
+        snapshot["recovery"] = "manual recovery only"
+    action_kind = str(latest.get("action_kind") or "").strip()
+    target = str(latest.get("target") or "").strip()
+    if action_kind or target:
+        snapshot["last_action"] = " ".join(part for part in (action_kind, target) if part).strip()
+    return snapshot
+
+
+def _shell_phase_snapshot(*, session: SessionSummary | None, session_id: str) -> dict[str, str]:
+    """Return compact phase/step status for the split-bar shell chrome."""
+    snapshot = _latest_shell_recovery_snapshot(session_id)
+    if session is None or not session.plan_id:
+        return snapshot
+    plan = _load_route_plan(session.plan_id)
+    current_step = _active_plan_step(plan)
+    if current_step is None:
+        return snapshot
+    total_steps = 0
+    try:
+        total_steps = len(list(getattr(plan, "steps", []) or []))
+    except Exception:
+        total_steps = 0
+    step_suffix = f"/{total_steps}" if total_steps > 0 else ""
+    current_label = f"step {current_step.num}{step_suffix}"
+    current_desc = current_step.description.strip()
+    if current_desc:
+        snapshot["current_phase"] = f"{current_label} {current_desc}"
+    else:
+        snapshot["current_phase"] = current_label
+    status_text = str(current_step.status or "").strip().lower()
+    if status_text:
+        snapshot["current_phase_status"] = status_text
+    completed_step = str(snapshot.get("completed_step") or "").strip()
+    if completed_step and current_label and completed_step.startswith(current_label):
+        snapshot.pop("completed_step", None)
+    if current_desc:
+        snapshot["next_step"] = f"next {current_label} {current_desc}"
+    else:
+        snapshot["next_step"] = f"next {current_label}"
+    return snapshot
+
+
+def _top_context_bar_lines(
+    *,
+    session_id: str,
+    history_len: int,
+    autoroute_on: bool,
+) -> list[str]:
+    """Build the always-on top context bar lines for the REPL shell."""
+    session = load_session(session_id) if session_id else None
+    cwd = str((session.cwd if session else "") or os.getcwd()).strip()
+    cwd_label = Path(cwd).name or cwd or "(none)"
+    turns = history_len // 2
+    summary_parts = [
+        _progress_cell("cwd", cwd_label, status="active"),
+        _progress_cell("turns", str(turns), status="complete" if turns else "idle"),
+        _progress_cell("autoroute", "on" if autoroute_on else "off", status="active" if autoroute_on else "warn"),
+    ]
+    if session_id:
+        summary_parts.insert(0, _progress_cell("session", f"{session_id[:8]}…", status=str((session.status if session else "active") or "active")))
+    if session and session.files:
+        summary_parts.append(_progress_cell("files", str(len(session.files)), status="active"))
+
+    detail_parts: list[str] = []
+    cue_parts: list[str] = []
+    if session:
+        if session.plan_id:
+            plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
+            plan_status, plan_label = _local_link_status(plan_validation)
+            detail_parts.append(_progress_cell("plan", session.plan_id, status=plan_status))
+            cue_parts.append(f"plan {plan_label}")
+            if plan_validation.summary:
+                detail_parts.append(f"goal {plan_validation.summary}")
+        if session.task_id:
+            task_validation = _validate_task_id_local(session.task_id, cwd=session.cwd)
+            task_status, task_label = _local_link_status(task_validation)
+            detail_parts.append(_progress_cell("task", session.task_id, status=task_status))
+            cue_parts.append(f"task {task_label}")
+            task_record = _load_task_record(session.task_id, cwd=session.cwd)
+            if isinstance(task_record, dict):
+                task_phase = str(task_record.get("status") or "").strip()
+                task_title = str(task_record.get("title") or "").strip()
+                if task_phase:
+                    detail_parts.append(f"phase {task_phase}")
+                if task_title:
+                    detail_parts.append(f"task {task_title}")
+
+    hidden_chars = len(str(_PREFS.get("system_prompt", "") or "").strip()) + len(str(_next_inject or "").strip())
+    if hidden_chars:
+        detail_parts.append(_progress_cell("hidden", f"~{max(1, hidden_chars // 4)} tok", status="warn"))
+        cue_parts.append("trust /promptdebug")
+
+    recovery = _shell_phase_snapshot(session=session, session_id=session_id)
+    if recovery.get("phase"):
+        detail_parts.append(recovery["phase"])
+    if recovery.get("current_phase"):
+        detail_parts.append(
+            _progress_cell(
+                "phase",
+                recovery["current_phase"],
+                status=recovery.get("current_phase_status", "active"),
+            )
+        )
+    if recovery.get("completed_step"):
+        completed_step = recovery["completed_step"]
+        completed_kind = str(recovery.get("completed_kind") or "").strip()
+        detail_parts.append(f"done {completed_step}" + (f" · {completed_kind}" if completed_kind else ""))
+    if recovery.get("last_action"):
+        detail_parts.append(f"last {recovery['last_action']}")
+    if recovery.get("next_step"):
+        cue_parts.append(recovery["next_step"])
+    if recovery.get("recovery"):
+        cue_parts.append(recovery["recovery"])
+    if _last_interrupted_prompt:
+        cue_parts.append("/draft restore")
+    if not cue_parts:
+        cue_parts.append("trust stable")
+
+    lines = ["Context: " + "  ·  ".join(_dedupe_preserve_order(summary_parts))]
+    detail_line = "  ·  ".join(_dedupe_preserve_order(detail_parts))
+    if detail_line:
+        lines.append("Status:  " + detail_line)
+    cue_line = "  ·  ".join(_dedupe_preserve_order(cue_parts))
+    if cue_line:
+        lines.append("Cues:    " + cue_line)
+    return lines
+
+
+def _print_top_context_bar(*, session_id: str, history_len: int, autoroute_on: bool, output_json: bool = False) -> None:
+    """Print the compact top context/status bar before each REPL prompt."""
+    if output_json:
+        return
+    print("\n".join(_top_context_bar_lines(session_id=session_id, history_len=history_len, autoroute_on=autoroute_on)))
+
+
 def _dedupe_preserve_order(lines: "list[str]") -> list[str]:
     """Return non-empty lines without duplicates, preserving first-seen order."""
     seen: set[str] = set()
@@ -1168,6 +1553,151 @@ def _print_file_edit_result(result: Any) -> None:
     else:
         from openclaw_cli_actions import preview_file_result
         print(preview_file_result(result))
+
+
+def _preview_file_edit(
+    path: str,
+    *,
+    content: str = "",
+    append: bool = False,
+    replace_values: list[str] | None = None,
+) -> Any:
+    """Build a dry-run file edit result for review before approval."""
+    replace_values = list(replace_values or [])
+    if replace_values:
+        return replace_text_in_file(
+            path,
+            old=replace_values[0],
+            new=replace_values[1],
+            dry_run=True,
+        )
+    return write_text_file(
+        path,
+        content=content,
+        append=append,
+        dry_run=True,
+    )
+
+
+def _print_file_edit_preview(result: Any) -> None:
+    """Render a proposed file edit preview in both TTY and captured output."""
+    _print_feedback(
+        "Edit preview.",
+        level="info" if result.changed else "warn",
+        detail=result.summary if result.summary else ("changes pending review" if result.changed else "no file changes"),
+    )
+    _print_file_edit_result(result)
+
+
+def _diffstat_summary(diff_text: str) -> str:
+    """Return a compact added/removed summary for a unified diff preview."""
+    added = 0
+    removed = 0
+    for line in str(diff_text or "").splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        if line.startswith("+"):
+            added += 1
+        elif line.startswith("-"):
+            removed += 1
+    if not added and not removed:
+        return "no line-level diff"
+    return f"+{added}/-{removed} lines"
+
+
+def _truncate_review_text(value: Any, *, limit: int = 88) -> str:
+    """Collapse noisy review text into a single bounded line."""
+    text = " ".join(str(value or "").strip().split())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _preview_focus_lines(diff_text: str, *, limit: int = 3) -> list[str]:
+    """Return a bounded set of interesting diff lines for approval review."""
+    focus: list[str] = []
+    for raw_line in str(diff_text or "").splitlines():
+        if raw_line.startswith(("+++", "---")):
+            continue
+        if raw_line.startswith("@@"):
+            focus.append(raw_line)
+        elif raw_line.startswith(("+", "-")):
+            focus.append(raw_line)
+        if len(focus) >= limit:
+            break
+    return [_truncate_review_text(line, limit=96) for line in focus]
+
+
+def _summarize_exec_side_effects(command_parts: list[str]) -> str:
+    """Describe likely shell side effects in a compact review line."""
+    normalized = " ".join(command_parts).lower().strip()
+    first = str(command_parts[0] or "").lower() if command_parts else ""
+    if first == "rm" or any(token in normalized for token in ("mkfs", "shutdown", "reboot", "git reset --hard")):
+        return "deletes or irreversibly resets data"
+    if any(token in normalized for token in ("npm install", "pip install", "brew install", "brew upgrade")):
+        return "installs or updates dependencies"
+    if any(token in normalized for token in ("git checkout", "git clean", "git restore", "mv ", "cp ", "chmod", "chown", "kill")):
+        return "changes workspace or system state"
+    if any(token in normalized for token in ("git status", "git diff", "ls", "cat", "rg", "grep")):
+        return "reads local state without writing files"
+    if first in {"python", "python3", "pytest", "make"}:
+        return "runs local code that may read or write project files"
+    return "may change local or system state; verify the exact target"
+
+
+def _summarize_edit_side_effects(path: str, preview_result: Any, *, append_mode: bool, replace_values: list[str] | None = None) -> str:
+    """Describe the file edit effect without repeating the full diff."""
+    replace_values = list(replace_values or [])
+    target_path = Path(str(getattr(preview_result, "path", "") or path)).expanduser()
+    diff_text = str(getattr(preview_result, "diff", "") or "")
+    existed = target_path.exists() or any(
+        line.startswith("-") and not line.startswith("---")
+        for line in diff_text.splitlines()
+    )
+    if replace_values:
+        return "replaces matching text in the existing file"
+    if append_mode:
+        return "appends new content to the end of the existing file"
+    if existed:
+        return "overwrites the current file contents with the preview above"
+    return "creates a new file with the preview above"
+
+
+def _build_exec_approval_review(*, command_text: str, cwd: str) -> list[str]:
+    """Build compact review lines for /exec approval prompts."""
+    command_parts = shlex.split(command_text) if command_text.strip() else []
+    command_name = command_parts[0] if command_parts else command_text.strip() or "(empty)"
+    review_lines = [
+        f"Review: command `{command_name}` from cwd `{cwd or '(default cwd)'}`",
+        f"Review: exact shell text `{command_text}`",
+        f"Review: side effects {_summarize_exec_side_effects(command_parts)}",
+    ]
+    if len(command_parts) > 1:
+        review_lines.append(
+            f"Review: args `{_truncate_review_text(' '.join(command_parts[1:]), limit=96)}`"
+        )
+    return review_lines
+
+
+def _build_edit_approval_review(
+    *,
+    path: str,
+    preview_result: Any,
+    append_mode: bool,
+    replace_values: list[str] | None = None,
+) -> list[str]:
+    """Build compact review lines for /edit approval prompts."""
+    replace_values = list(replace_values or [])
+    operation = "replace" if replace_values else ("append" if append_mode else "write")
+    review_lines = [
+        f"Review: {operation} `{preview_result.path or path}`",
+        f"Review: {preview_result.summary} · {_diffstat_summary(getattr(preview_result, 'diff', ''))}",
+        f"Review: side effects {_summarize_edit_side_effects(path, preview_result, append_mode=append_mode, replace_values=replace_values)}",
+    ]
+    focus_lines = _preview_focus_lines(getattr(preview_result, "diff", ""))
+    if focus_lines:
+        review_lines.append(f"Review: preview {' | '.join(focus_lines)}")
+    return review_lines
 
 
 def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **kwargs: Any) -> Any:
@@ -1358,7 +1888,7 @@ def summarize_session(session: SessionSummary) -> str:
 
 def _print_session_summary(session: SessionSummary) -> None:
     """Print a compact session summary, with rich formatting when available."""
-    return _session_display_mod._print_session_summary(session)
+    return _session_display_mod._print_session_summary(session, pending_inject=str(_next_inject or ""))
 
 
 def _print_session_list(items: list[SessionSummary]) -> None:
@@ -1386,7 +1916,7 @@ def _print_session_list(items: list[SessionSummary]) -> None:
                 s.updated_at or "—",
                 str(s.command_count),
                 str(s.output_count),
-                str(mood.get("label") or "—"),
+                _session_display_mod._session_mood_brief(mood),
                 s.automation_mode or "—",
             )
         _RICH_CONSOLE.print(table)
@@ -1566,7 +2096,7 @@ def format_session_list(items: list[SessionSummary]) -> str:
         mood = _session_mood_snapshot(session)
         rows.append(
             f"{session.session_id} | {session.updated_at} | {session.automation_mode or '-'} | {session.command_count} | "
-            f"{session.output_count} | {str(mood.get('label') or '-')} | {session.title}"
+            f"{session.output_count} | {_session_display_mod._session_mood_brief(mood)} | {session.title}"
         )
     return "\n".join(rows)
 
@@ -2002,6 +2532,106 @@ def invoke_openclaw(
     )
 
 
+def _parse_sse_event(raw_event: str) -> tuple[str, dict[str, Any]] | None:
+    event_name = "message"
+    data_lines: list[str] = []
+    for raw_line in raw_event.splitlines():
+        line = raw_line.strip("\r")
+        if not line:
+            continue
+        if line.startswith(":"):
+            continue
+        if line.startswith("event:"):
+            event_name = line.split(":", 1)[1].strip() or "message"
+            continue
+        if line.startswith("data:"):
+            data_lines.append(line.split(":", 1)[1].lstrip())
+    if not data_lines:
+        return None
+    try:
+        payload = json.loads("\n".join(data_lines))
+    except json.JSONDecodeError as exc:
+        raise OpenClawCliError("OpenClaw returned invalid SSE JSON.") from exc
+    if not isinstance(payload, dict):
+        raise OpenClawCliError("OpenClaw returned an unexpected SSE payload.")
+    return event_name, payload
+
+
+def invoke_openclaw_stream(
+    prompt: str,
+    *,
+    config: CliConfig,
+    history: list[dict[str, str]] | None = None,
+    opener: Any = request.urlopen,
+) -> AskResponse:
+    """Submit a prompt to the SSE ask API and print chunks as they arrive."""
+    payload = {
+        "prompt": prompt,
+        "model": config.model,
+        "history": history or [],
+        "user_name": config.user_name,
+    }
+    req = request.Request(
+        f"{config.base_url}/api/agent/ask/stream",
+        data=json.dumps(payload).encode("utf-8"),
+        headers=attach_session_header(
+            {
+                **build_headers(token=config.token, client_name=config.client_name),
+                "Accept": "text/event-stream",
+            },
+            session_id=config.session_id,
+        ),
+        method="POST",
+    )
+    try:
+        with opener(req, timeout=config.timeout_seconds) as resp:
+            event_lines: list[str] = []
+            while True:
+                raw_line = resp.readline()
+                if not raw_line:
+                    break
+                line = raw_line.decode("utf-8")
+                if line in ("\n", "\r\n"):
+                    parsed = _parse_sse_event("".join(event_lines))
+                    event_lines = []
+                    if parsed is None:
+                        continue
+                    event_name, data = parsed
+                    if event_name == "chunk":
+                        delta = str(data.get("delta") or "")
+                        if delta:
+                            print(delta, end="", flush=True)
+                        continue
+                    if event_name == "error":
+                        raise OpenClawCliError(str(data.get("error") or "Streaming request failed."))
+                    if event_name == "final":
+                        if sys.stdout and delta_needs_newline():
+                            print()
+                        return AskResponse(
+                            response=str(data.get("response") or "").strip(),
+                            model=str(data.get("model") or config.model),
+                            tokens=int(data.get("tokens") or 0),
+                            raw={**data, "_streamed_cli": True},
+                        )
+                else:
+                    event_lines.append(line)
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise OpenClawCliError(format_http_error(config.base_url, exc.code, detail)) from exc
+    except error.URLError as exc:
+        raise OpenClawCliError(format_url_error(config.base_url, exc)) from exc
+
+    raise OpenClawCliError("OpenClaw stream ended before returning a final response.")
+
+
+def delta_needs_newline() -> bool:
+    return _get_is_tty()
+
+
+def should_use_streaming(config: CliConfig) -> bool:
+    return not config.no_stream and not config.output_json and _get_is_tty()
+
+
 def fetch_health(
     *,
     config: CliConfig,
@@ -2355,7 +2985,7 @@ def print_response(response: AskResponse, *, output_json: bool, elapsed: float =
         is_tty = False  # force plain-text path; skip Rich rendering
     high_contrast = _a11y_high_contrast()
 
-    if response.response:
+    if response.response and not response.raw.get("_streamed_cli"):
         body, sources = _preprocess_response_text(response.response)
         body = _auto_bold_response(body)
         body = _detect_and_format_json(body)
@@ -3326,6 +3956,25 @@ class _SlashCompleter:
         return matches
 
 
+class _PromptToolkitSlashCompleter(_PromptToolkitCompleterBase):
+    """prompt_toolkit completer mirroring readline slash-command suggestions."""
+
+    def __init__(self) -> None:
+        self._slash_completer = _SlashCompleter()
+
+    def get_completions(self, document: Any, complete_event: Any) -> Any:
+        del complete_event
+        if Completion is None:
+            return
+        text = getattr(document, "text_before_cursor", "")
+        word = getattr(document, "get_word_before_cursor", lambda **_: "")(WORD=True)
+        if not text.startswith("/"):
+            return
+        fragment = word if word.startswith("/") else text
+        for match in self._slash_completer._compute_matches(fragment):
+            yield Completion(match, start_position=-len(fragment), display=match)
+
+
 def build_config(args: argparse.Namespace) -> CliConfig:
     """Build resolved CLI config from parsed args and environment."""
     timeout_seconds = max(1, int(args.timeout))
@@ -3775,6 +4424,35 @@ def _setup_readline() -> None:
     _apply_all_custom_keybinds()
 
 
+def _record_shell_history_entry(entry: str) -> None:
+    """Record a prompt into readline history when available."""
+    if readline is None:
+        return
+    normalized = str(entry).strip()
+    if not normalized:
+        return
+    try:
+        readline.add_history(normalized)
+    except OSError:
+        return
+
+
+def _build_prompt_toolkit_session() -> Any | None:
+    """Return a configured prompt_toolkit session for interactive REPL input."""
+    if PromptSession is None or InMemoryHistory is None or not _overlay_available():
+        return None
+    history = InMemoryHistory()
+    try:
+        if HISTORY_FILE.exists():
+            for line in HISTORY_FILE.read_text(encoding="utf-8").splitlines():
+                item = line.strip()
+                if item:
+                    history.append_string(item)
+    except OSError:
+        pass
+    return PromptSession(history=history, completer=_PromptToolkitSlashCompleter())
+
+
 def _maybe_show_startup_tip(config: "CliConfig", session_id: str, history: list) -> None:
     """Optionally display a random startup tip and first-run checklist."""
     import random as _random
@@ -3816,15 +4494,24 @@ def run_chat(
     registry = build_chat_command_registry()
     load_shell_history()
     _setup_readline()
+    prompt_session = _build_prompt_toolkit_session() if input_func is input and not _a11y_plain_mode() else None
     if not no_banner:
         _print_startup_banner(config, session_id)
     _maybe_show_startup_tip(config, session_id, history)
     while True:
         try:
             autoroute_on = _session_auto_route_enabled(session_id)
+            _print_top_context_bar(
+                session_id=session_id,
+                history_len=len(history),
+                autoroute_on=autoroute_on,
+                output_json=config.output_json,
+            )
             prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode)
             if _multiline_mode:
                 prompt = _read_multiline_input(input_func, prompt_str)
+            elif prompt_session is not None:
+                prompt = str(prompt_session.prompt(prompt_str)).strip()
             else:
                 prompt = str(input_func(prompt_str)).strip()
         except EOFError:
@@ -3844,7 +4531,12 @@ def run_chat(
         except KeyboardInterrupt:
             print()
             global _last_interrupted_prompt
-            if readline is not None:
+            if prompt_session is not None:
+                _partial = str(getattr(prompt_session.default_buffer, "text", "")).strip()
+                if _partial:
+                    _last_interrupted_prompt = _partial
+                    print(f"  {_DM}↳ prompt interrupted — type /draft restore to recover it{_R}")
+            elif readline is not None:
                 _partial = readline.get_line_buffer().strip()
                 if _partial:
                     _last_interrupted_prompt = _partial
@@ -3854,6 +4546,9 @@ def run_chat(
 
         if not prompt:
             continue
+
+        if prompt_session is not None:
+            _record_shell_history_entry(prompt)
 
         # Record command history (skip empty lines)
         if prompt.strip():
@@ -3965,14 +4660,25 @@ def run_chat(
             _sys_prompt = _PREFS.get("system_prompt", "").strip()
             if _sys_prompt:
                 effective_input = f"[System context]\n{_sys_prompt}\n\n{effective_input}"
-            response = _with_spinner(
-                f"{_e('💬', '>>')} Thinking…",
-                ask_func,
-                effective_input,
-                config=config,
-                history=list(history),
-                output_json=config.output_json,
-            )
+            if ask_func is invoke_openclaw and should_use_streaming(config):
+                _is_tty = _get_is_tty()
+                _compact = _PREFS.get("layout") == "compact"
+                if _is_tty and not config.output_json and not _compact:
+                    _print_response_separator(label="Response", detail="live stream", status="active")
+                response = invoke_openclaw_stream(
+                    effective_input,
+                    config=config,
+                    history=list(history),
+                )
+            else:
+                response = _with_spinner(
+                    f"{_e('💬', '>>')} Thinking…",
+                    ask_func,
+                    effective_input,
+                    config=config,
+                    history=list(history),
+                    output_json=config.output_json,
+                )
             _elapsed = time.monotonic() - _t0
         except KeyboardInterrupt:
             print(f"\n{_DM}{_e('⌨', '[ctrl-c]')} [interrupted]{_R}")
@@ -3989,7 +4695,7 @@ def run_chat(
         # Visual separator + status bar (skipped in compact layout)
         _is_tty = _get_is_tty()
         _compact = _PREFS.get("layout") == "compact"
-        if _is_tty and not config.output_json and not _compact:
+        if _is_tty and not config.output_json and not _compact and not response.raw.get("_streamed_cli"):
             _print_response_separator(label="Response", detail="answer reveal", status="active")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
@@ -4095,6 +4801,7 @@ def handle_session_command(args: argparse.Namespace) -> int:
                     f"{s.session_id[:8]}…  {s.title or '—'}  "
                     f"{(s.updated_at or '—')[:19]}  {_session_badges(s)}".strip()
                 ),
+                detail_fn=lambda s: _session_preview_lines(s),
                 on_select=lambda s: (
                     _print_session_summary(s),
                     _print_meta_footer(("resume", f"openclaw --session {s.session_id}")),
@@ -4390,6 +5097,12 @@ def handle_exec_command(args: argparse.Namespace) -> int:
         target=" ".join(command_parts),
         risk_level=risk_level,
         detail=f"cwd={getattr(args, 'cwd', '') or os.getcwd()}",
+        review_lines=_build_exec_approval_review(
+            command_text=" ".join(command_parts),
+            cwd=str(getattr(args, "cwd", "") or os.getcwd()),
+        ),
+        trust_note="approving runs exactly the shell text shown above; denying keeps the workspace unchanged.",
+        recovery_hint="if this looks wrong, deny it, verify the cwd, then rerun `openclaw exec` with a safer command.",
         auto_approve=bool(getattr(args, "yes", False)),
         session_id=session.session_id,
         plan_id=session.plan_id,
@@ -4445,6 +5158,21 @@ def handle_edit_command(args: argparse.Namespace) -> int:
         plan_id=str(getattr(args, "plan_id", "") or "").strip(),
         task_id=str(getattr(args, "task_id", "") or "").strip(),
     )
+    preview_result = _preview_file_edit(
+        path,
+        content=content,
+        append=bool(getattr(args, "append", False)),
+        replace_values=replace_values,
+    )
+    _print_file_edit_preview(preview_result)
+    if bool(getattr(args, "dry_run", False)):
+        _print_feedback("Dry run only.", level="info", detail="preview not applied")
+        _print_meta_footer(("session", session.session_id))
+        return 0
+    if not preview_result.changed:
+        _print_feedback("No changes applied.", level="info", detail="approval skipped")
+        _print_meta_footer(("session", session.session_id))
+        return 0
     _print_risky_action_warning(
         action="edit",
         target=path,
@@ -4455,27 +5183,29 @@ def handle_edit_command(args: argparse.Namespace) -> int:
         action="file.edit",
         target=path,
         risk_level=risk_level,
-        detail=f"append={bool(getattr(args, 'append', False))} dry_run={bool(getattr(args, 'dry_run', False))}",
+        detail=(
+            f"append={bool(getattr(args, 'append', False))} dry_run={bool(getattr(args, 'dry_run', False))} "
+            f"changed={preview_result.changed} summary={preview_result.summary[:120]}"
+        ),
+        review_lines=_build_edit_approval_review(
+            path=path,
+            preview_result=preview_result,
+            append_mode=bool(getattr(args, "append", False)),
+            replace_values=replace_values,
+        ),
+        trust_note="the diff preview above is the exact change queued for approval; denying leaves the file untouched.",
+        recovery_hint="deny to adjust the preview, or recover with your editor/VCS if you approve the wrong change.",
         auto_approve=bool(getattr(args, "yes", False)),
+        review_callback=lambda: _print_file_edit_preview(preview_result),
         session_id=session.session_id,
         plan_id=session.plan_id,
         task_id=session.task_id,
     ):
         raise OpenClawCliError("File edit was not approved.")
     if replace_values:
-        result = replace_text_in_file(
-            path,
-            old=replace_values[0],
-            new=replace_values[1],
-            dry_run=bool(getattr(args, "dry_run", False)),
-        )
+        result = replace_text_in_file(path, old=replace_values[0], new=replace_values[1], dry_run=False)
     else:
-        result = write_text_file(
-            path,
-            content=content,
-            append=bool(getattr(args, "append", False)),
-            dry_run=bool(getattr(args, "dry_run", False)),
-        )
+        result = write_text_file(path, content=content, append=bool(getattr(args, "append", False)), dry_run=False)
     append_event(
         session.session_id,
         kind="edit",
@@ -4629,7 +5359,9 @@ def main(argv: list[str] | None = None) -> int:
         if not prompt:
             parser.error("prompt is required unless you pipe text on stdin")
         history = load_conversation_history(config.session_id) if config.session_id else None
-        if history is None:
+        if should_use_streaming(config):
+            response = invoke_openclaw_stream(prompt, config=config, history=history)
+        elif history is None:
             response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, output_json=config.output_json)
         else:
             response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, history=history, output_json=config.output_json)

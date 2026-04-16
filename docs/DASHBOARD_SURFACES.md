@@ -93,7 +93,7 @@ The current docs/dashboard tranche should keep this order:
 | --- | --- | --- |
 | Wave 27 — Live Dashboard Shares & Operator Visibility | `/session`, `/sessions`, `/watch*`, `/collab`, browser session cards | Current shipped slice is the terminal/read-only snapshot: keep intervention, resume, and handoff labels aligned, and document that visibility does not imply remote control |
 | Wave 28 — Gesture Language & Predictive Affordances | `/watch*`, `/session*`, `/outputs`, `/context`, error/approval flows | Current shipped slice is the lightweight hint layer: reuse `/watch history`, `/watch intervene`, `/watch retry-limit`, `/session`, `/files`, `/plan`, `/retry`, and `/reset` labels consistently, with plain-text examples for hints and recovery menus |
-| Wave 29 — Narrative Recaps & Session Storytelling | `openclaw session show/share`, `/collab`, future browser session detail views | Current shipped slice is the plain-text chapter scaffold: reuse ACTORS / RECENT DECISIONS / RECENT NOTES / LATEST HANDOFF / OPERATOR SNAPSHOT / COMMANDS plus the same actor labels and resume/inspect/share wording; bullet/timeline exports and richer dashboard mirrors remain deferred |
+| Wave 29 — Narrative Recaps & Session Storytelling | `openclaw session show/share`, `/collab`, `/session`, `/sessions`, future browser session detail views | Current shipped slice is the plain-text chapter scaffold: reuse ACTORS / RECENT DECISIONS / RECENT NOTES / LATEST HANDOFF / OPERATOR SNAPSHOT / COMMANDS plus the same actor labels and resume/inspect/share wording. The next restrained follow-through may let `/session` and `/sessions` surface momentum/milestone cues secondarily, while bullet/timeline exports, neutral handoff changes, and richer dashboard mirrors remain deferred |
 | Wave 30 — Premium Motion & Choreography Layer | startup banner, completion/wait cues, approval emphasis, accessibility surfaces | Current shipped slice is the accessibility-first pacing layer: startup stays static in plain/narrow layouts, reduced-motion waits use heartbeat + completion text, risky approvals reuse the same compact warning voice, and decorative celebration still downgrades to one-line output; broader dashboard-wide reveal choreography remains deferred |
 
 #### Shared checklist for Waves 27–30
@@ -162,8 +162,8 @@ preview/focused-inspection baseline today:
 
 | Surface group | Alignment requirement |
 | --- | --- |
-| `/outputs`, `/outputs overlay` | The shipped preview is a bounded inline excerpt with filename, size, modified time, and an explicit truncation note when the preview is clipped. Follow-up actions still happen as normal commands rather than inside a side panel. |
-| `/sessions`, `openclaw session list --interactive` | The searchable picker is live; selecting a row opens the compact Session Dashboard plus the resume command. Share/handoff actions remain separate follow-up commands instead of picker-local buttons. |
+| `/outputs`, `/outputs overlay` | The shipped preview is a bounded inline excerpt with filename, size, modified time, and an explicit truncation note when the preview is clipped. Follow-up actions still happen as normal commands rather than inside a side panel or approval overlay. |
+| `/sessions`, `openclaw session list --interactive` | The searchable picker is live; selecting a row opens the compact Session Dashboard plus the resume command. Share/handoff actions remain separate follow-up commands instead of picker-local buttons, and fuller-screen picker chrome is still deferred. |
 | `/watch status`, `/watch history` | These are the current focused inspection windows: status leads with mode/status/polls/phase, while history keeps recent progress, retries, and operator notes grouped above raw chronology. |
 | `/context`, `/events`, `openclaw session show` | Focused inspection is currently delivered through bounded grounding previews in `/context` and through the richer `session show` inspection view; dedicated preview strips for `/events` are still deferred. |
 | Browser/dashboard mirrors | Keep future mirrors aligned to the current CLI field order and truncation rules, but treat browser-side preview panes as future work until a shared implementation exists. |
@@ -180,7 +180,7 @@ truth-source for what is live today:
 | Watch-monitor preset | Persisted through `/layout watch-monitor`; today it documents `/watch status` as primary with `/watch history + /outputs` as the supporting lane |
 | Collaboration / handoff preset | Persisted through `/layout handoff`; today it documents `/collab` as primary with session summary + recent outputs as supporting context |
 | `/layout`, `/accessibility`, preset commands | `/layout` reports the current preset plus `multi-pane`/`stacked`/`single-pane` fallback, `/layout reset` returns to default mode, and `/accessibility status` mirrors the same fallback state |
-| Browser/dashboard mirrors | Keep the preset names and “primary vs supporting pane” vocabulary aligned now, even though the actual browser-side split-pane implementation is still future work |
+| Browser/dashboard mirrors | Keep the preset names and “primary vs supporting pane” vocabulary aligned now, and mirror the shipped pane-focus transition wording, even though the actual browser-side split-pane implementation is still future work |
 
 ### Wave 26 mood & celebration targets
 
@@ -190,8 +190,8 @@ truth-source for what is live today:
 
 | Surface group | Alignment requirement |
 | --- | --- |
-| `/session`, `/sessions` | No dedicated mood row is shipped yet; objective health, blocker, and next-step state still lead summaries |
-| `/collab`, `openclaw session share`, exports | The live handoff summary remains neutral and pasteable; morale/momentum wording is deferred |
+| `/session`, `/sessions` | The next slice may add lightweight momentum/milestone cues, but objective health, blocker, and next-step state still lead summaries |
+| `/collab`, `openclaw session share`, exports | The live handoff summary remains neutral and pasteable; morale/momentum wording is still deferred here |
 | Completion / recap surfaces | Milestone recognition is currently the short `_celebration_burst()` path used by `/celebrate` and `/rate 5` |
 | `/watch status`, `/watch history`, `/events` | No new emotional overlay is shipped here yet; timing/risk details remain authoritative |
 | Browser/dashboard mirrors | Future mirrors should reuse the same restrained celebration vocabulary and reduced-motion/plain-text fallback rules |
@@ -235,7 +235,7 @@ Fallback rules:
 
 | Wave | Surface focus | Docs/dashboard expectation |
 | --- | --- | --- |
-| Wave 31 — Intelligent Command Suggestions & Inline Assist | response wait-state helpers, post-response suggestion chrome, `/followup`, `/ratehint`, `/pathhints` | Current shipped slice is the response-assist lane: reuse the next-action verb set, document live phase/step/trust cues during waits, keep the bottom-bar hint footer truthful, and note that the full always-on split-bar shell is still deferred |
+| Wave 31 — Intelligent Command Suggestions & Inline Assist | response wait-state helpers, top-context shell chrome, post-response suggestion chrome, `/followup`, `/ratehint`, `/pathhints`, `/api/agent/ask/stream` | Current shipped slice is the shell-polish lane: reuse the next-action verb set, document live phase/step/trust cues during waits, note that interactive TTY chat now streams answer chunks through the SSE ask endpoint, keep the top-context/status/bottom-bar shell truthful, and avoid implying a heavier pane compositor or dashboard-side remote control surface |
 | Wave 32 — Instant Replay & Session Bookmarks | `/bookmark*`, `/replay --from`, session share/show/export | Current shipped slice is the plain-text bookmark lane: bookmark ids and labels stay visible in session inspection/handoff surfaces and replay can jump directly from a saved marker; timeline/watch markers remain deferred |
 | Wave 33 — Command Chaining & Workflow Macros 2.0 | `/workflow*`, `/macro*`, workflow preview/run surfaces | Current shipped slice is the previewable workflow lane: `/workflow` reuses the macro store, preview shows step-by-step dry runs, and workflow execution resolves current-session placeholders before dispatch; export/share embedding remains deferred |
 | Wave 34 — AI Quality & Experimentation Loops | response footer, `/trace`, `/quality`, `/experiment*` | Current shipped slice is the traceability lane: `/quality` keeps the histogram but adds the latest route/confidence summary, `/trace` expands the last decision into a human-readable trust snapshot, and experiment controls remain deferred |
@@ -249,4 +249,19 @@ Fallback rules:
 | Wave 42 — Source Rendering Reliability | `print_response()` render flow, sources extraction, ANSI sources panel | Current shipped slice is the render-reliability lane: source sections never render twice in the body, loose `Sources:` blocks still extract into the panel, ANSI escape codes are stripped from source labels, and the plain ANSI sources box tracks live terminal width |
 | Wave 43 — Context & Token Intelligence | `/tokeninfo`, `/session`, response footer, startup tips | Current shipped slice is the context-transparency lane: `/tokeninfo` estimates session token usage with a progress bar, response completion surfaces token count more prominently, `/session` includes session age, and the startup tips pool points users toward the token-awareness workflow |
 | Wave 44 — Startup & First-Run Polish | startup banner, session milestones, tips pool, `--no-banner` | Current shipped slice is the startup-polish lane: the banner greeting adapts to time of day, session milestones celebrate repeated use, the refreshed tips pool points at recent commands, and `--no-banner` keeps scripted runs deterministic |
-| Wave 45 — Context Pressure Guardrails | `/tokeninfo` | Current shipped slice is the context-pressure lane: `/tokeninfo` now breaks estimated usage down by actor, highlights the dominant contributor, and escalates recovery hints from light refresh guidance to bookmark-before-clear warnings as the shared 128k estimate fills |
+| Wave 45 — Context Pressure Guardrails | `/tokeninfo`, `/context`, `/session`, `/watch status` | Current shipped slice is the context-pressure lane: `/tokeninfo` now breaks estimated usage down by actor, highlights the dominant contributor, and escalates recovery hints from light refresh guidance to bookmark-before-clear warnings as the shared 128k estimate fills; adjacent operator surfaces now echo lighter next-send or next-retry pressure cues plus recovery links back to `/tokeninfo`, `/bookmark`, or `/promptdebug` |
+
+Deferred interaction-affordance note:
+
+- the browser/dashboard lane should not imply a heavier pane compositor or a
+  remote-control dashboard shell beyond the shipped terminal-first top-context /
+  status / bottom-bar pattern
+- current truthful mirrors are still the terminal-first top-context/footer/status cues,
+  pre-approval `/edit` diff preview + review/trust feedback, `/tokeninfo`-based context
+  guidance, and the shared SSE ask plumbing
+- the browser/dashboard lane should mirror the shipped terminal-first
+  interaction work truthfully: compact approval review overlay, richer TTY
+  pickers with inline previews, and explicit pane-focus transition wording
+- true browser-side pane compositors, remote-control shells, or heavier
+  full-screen picker environments should stay documented as deferred until a
+  later wave actually ships them

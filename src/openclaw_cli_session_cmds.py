@@ -44,7 +44,7 @@ def _build_event_label(ev: dict, excerpt_len: int = 80) -> str:
     """
     meta = ev.get("metadata") or {}
     content = str(ev.get("content") or "").strip()
-    summary = str(meta.get("summary") if isinstance(meta, dict) else "").strip()
+    summary = str((meta.get("summary") if isinstance(meta, dict) else "") or "").strip()
     label = (summary or content[:excerpt_len]).replace("\n", " ")
 
     if isinstance(meta, dict):
@@ -66,6 +66,62 @@ def _build_event_label(ev: dict, excerpt_len: int = 80) -> str:
     elif kind == "error":
         label = f"{label} · recovery needed"
     return label
+
+
+def _event_preview_lines(
+    events: list[dict],
+    *,
+    max_items: int = 3,
+    excerpt_len: int = 72,
+) -> list[str]:
+    """Build bounded preview rows for the latest events."""
+    preview_lines: list[str] = []
+    for ev in list(events or [])[: max(1, max_items)]:
+        ts = str(ev.get("timestamp") or ev.get("at") or ev.get("created_at") or "").strip()
+        ts_short = ts[11:19] if len(ts) > 10 else ts or "—"
+        kind = str(ev.get("kind") or "event").strip() or "event"
+        label = _build_event_label(ev, excerpt_len=excerpt_len)
+        preview_lines.append(f"{ts_short} · {kind} · {label}")
+    return preview_lines
+
+
+def _event_recovery_actions(
+    events: list[dict],
+    *,
+    decisions_only: bool = False,
+) -> list[str]:
+    """Suggest bounded inspection or recovery follow-through for recent events."""
+    actions: list[str] = []
+    kinds = [str(ev.get("kind") or "").strip().lower() for ev in list(events or [])]
+    latest = list(events or [])[:1]
+    latest_event = latest[0] if latest else {}
+    latest_kind = str(latest_event.get("kind") or "").strip().lower()
+    latest_meta = latest_event.get("metadata") if isinstance(latest_event.get("metadata"), dict) else {}
+    latest_summary = str((latest_meta or {}).get("summary") or latest_event.get("content") or "").strip().lower()
+    if decisions_only:
+        actions.append("/session to compare the latest decisions with session health")
+    else:
+        actions.append("/events decisions to isolate routing and approval decisions")
+    if "watch" in kinds:
+        actions.append("/watch status to inspect the live retry/control snapshot")
+    if "error" in kinds or "recovery needed" in latest_summary:
+        actions.append("/watch history to inspect retries, checkpoints, and operator notes")
+        actions.append("/context to preview what the next recovery attempt will inherit")
+    if latest_kind in {"exec", "edit"} or "exec" in kinds or "edit" in kinds:
+        actions.append("/outputs 1 to inspect the newest artifact or diff context")
+    if "checkpoint" in kinds:
+        actions.append("/bookmark to capture this recovery point before clearing context")
+    if "approval" in kinds:
+        actions.append("/session to confirm approval state and follow-up actions")
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for action in actions:
+        text = str(action or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        deduped.append(text)
+    return deduped
 
 
 # ---------------------------------------------------------------------------

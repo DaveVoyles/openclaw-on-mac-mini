@@ -34,6 +34,12 @@ def _make_bot(channel=None):
     return bot
 
 
+def _close_coro_task(coro):
+    """Test helper for mocked create_task calls that should not leak coroutines."""
+    coro.close()
+    return MagicMock()
+
+
 # ===========================================================================
 # audit_writer_loop
 # ===========================================================================
@@ -200,7 +206,7 @@ class TestMorningBriefingLoop:
         with patch("bg_briefing.asyncio.sleep", fake_sleep), \
              patch("bg_briefing.datetime") as mock_dt, \
              patch("bg_briefing.send_morning_briefing", mock_briefing), \
-             patch("bg_briefing.asyncio.create_task") as mock_create_task:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task:
             mock_dt.datetime.now.return_value = fake_now
             mock_dt.date = datetime.date
             with pytest.raises(asyncio.CancelledError):
@@ -226,7 +232,7 @@ class TestMorningBriefingLoop:
 
         with patch("bg_briefing.asyncio.sleep", fake_sleep), \
              patch("bg_briefing.datetime") as mock_dt, \
-             patch("bg_briefing.asyncio.create_task") as mock_create_task:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task:
             mock_dt.datetime.now.return_value = fake_now
             mock_dt.date = datetime.date
             with pytest.raises(asyncio.CancelledError):
@@ -358,7 +364,7 @@ class TestEveningDigestLoop:
 
         with patch("bg_briefing.asyncio.sleep", fake_sleep), \
              patch("bg_briefing.datetime") as mock_dt, \
-             patch("bg_briefing.asyncio.create_task") as mock_create_task:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create_task:
             mock_dt.datetime.now.return_value = fake_now
             mock_dt.date = datetime.date
             with pytest.raises(asyncio.CancelledError):

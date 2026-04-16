@@ -1,6 +1,6 @@
 # Patreon/MonsterVision Monitoring Guide
 
-**User-facing guide for automated Patreon cookie monitoring and management.**
+**User-facing guide for automated Patreon cookie monitoring and management.** Operators should also use [OPERATIONS-RUNBOOK.md](OPERATIONS-RUNBOOK.md) for incident flow and [NETWORK-TOPOLOGY.md](NETWORK-TOPOLOGY.md) for service reachability.
 
 ---
 
@@ -345,9 +345,9 @@ For issues not covered in this guide:
 1. Check container logs: `docker logs monstervision --tail 100`
 2. View dashboard for real-time status: http://192.168.1.93:8765/dashboard
 3. Run `/patreon status` for diagnostics
-4. Review [PATREON_MONITORING_SUMMARY.md](../PATREON_MONITORING_SUMMARY.md) (implementation details)
+4. Review `src/patreon_scheduled.py` for the scheduled implementation details
 
 ---
 
 **Last Updated:** January 2025  
-**Related Docs:** [PATREON_MONITORING_SUMMARY.md](../PATREON_MONITORING_SUMMARY.md) (implementation guide)
+**Related Docs:** `src/patreon_scheduled.py` (scheduled implementation guide)

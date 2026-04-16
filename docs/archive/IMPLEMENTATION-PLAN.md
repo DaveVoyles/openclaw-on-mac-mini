@@ -90,7 +90,7 @@ ssh davevoyles@100.116.47.67
 To ensure system resilience after unexpected reboots:
 
 - **Docker Container Restart**: All services in `docker-compose.yml` are configured with `restart: always` to ensure they resume operations automatically.
-- **Delayed Proton VPN Startup**: A custom `LaunchAgent` and script ([`scripts/delay_proton_launch.sh`](../scripts/delay_proton_launch.sh)) ensure Proton VPN only starts after a verified internet connection is established. This prevents "no network" errors on boot.
+- **Delayed Proton VPN Startup**: A custom `LaunchAgent` and script ([`scripts/delay_proton_launch.sh`](../../scripts/delay_proton_launch.sh)) ensure Proton VPN only starts after a verified internet connection is established. This prevents "no network" errors on boot.
 
 **Configuration:**
 

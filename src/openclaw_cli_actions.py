@@ -151,17 +151,167 @@ def risk_level_from_name(raw_value: str | None, *, default: RiskLevel) -> RiskLe
         raise ValueError(f"Unknown risk level: {raw_value}") from exc
 
 
+def _print_cli_approval_review_block(
+    *,
+    dim: str,
+    reset: str,
+    review_lines: list[str],
+    trust_note: str,
+    recovery_hint: str,
+) -> None:
+    for line in review_lines:
+        print(f"  {dim}{line}{reset}")
+    if trust_note:
+        print(f"  {dim}Trust cue: {trust_note}{reset}")
+    if recovery_hint:
+        print(f"  {dim}Recovery cue: {recovery_hint}{reset}")
+
+
+def _approval_overlay_available() -> bool:
+    """Return True when the approval review overlay can safely prompt."""
+    try:
+        return bool(sys.stdin.isatty() and sys.stdout.isatty())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _approval_overlay_query_score(text: str, query: str) -> int:
+    """Return a small fuzzy score for approval overlay filtering."""
+    haystack = " ".join(str(text or "").lower().split())
+    needle = " ".join(str(query or "").lower().split())
+    if not needle:
+        return 1
+    if needle in haystack:
+        return 1000 - max(0, haystack.find(needle))
+    tokens = [token for token in needle.split(" ") if token]
+    if tokens and all(token in haystack for token in tokens):
+        return 700 - sum(max(0, haystack.find(token)) for token in tokens)
+    pos = -1
+    score = 0
+    for ch in needle:
+        next_pos = haystack.find(ch, pos + 1)
+        if next_pos == -1:
+            return 0
+        score += max(1, 20 - min(19, next_pos - pos))
+        pos = next_pos
+    return score
+
+
+def _filter_approval_overlay_items(
+    items: list[dict[str, Any]],
+    *,
+    query: str,
+    limit: int = 9,
+) -> list[dict[str, Any]]:
+    """Return the best approval overlay matches for a query."""
+    scored: list[tuple[int, int, dict[str, Any]]] = []
+    for index, item in enumerate(items):
+        score = _approval_overlay_query_score(
+            f"{item.get('label', '')} {item.get('detail', '')}",
+            query,
+        )
+        if score > 0:
+            scored.append((score, index, item))
+    scored.sort(key=lambda row: (-row[0], row[1]))
+    return [item for _, _, item in scored[:limit]]
+
+
+def _build_cli_approval_overlay_items(
+    *,
+    review_lines: list[str],
+    trust_note: str,
+    recovery_hint: str,
+    review_callback: Any,
+) -> list[dict[str, Any]]:
+    """Build approval review overlay entries from the current review context."""
+    items: list[dict[str, Any]] = []
+    if callable(review_callback):
+        items.append(
+            {
+                "label": "Replay exact queued preview",
+                "detail": "Reprint the full queued preview/diff before deciding.",
+                "action": review_callback,
+            }
+        )
+    if review_lines:
+        items.append({"label": "Review summary", "detail": "\n".join(review_lines)})
+        for index, line in enumerate(review_lines, start=1):
+            items.append({"label": f"Review line {index}", "detail": line})
+    if trust_note:
+        items.append({"label": "Trust cue", "detail": trust_note})
+    if recovery_hint:
+        items.append({"label": "Recovery cue", "detail": recovery_hint})
+    return items
+
+
+def _run_cli_approval_review_overlay(
+    *,
+    review_lines: list[str],
+    trust_note: str,
+    recovery_hint: str,
+    input_func: Any = input,
+    review_callback: Any = None,
+) -> None:
+    """Run a lightweight searchable approval-review surface."""
+    items = _build_cli_approval_overlay_items(
+        review_lines=review_lines,
+        trust_note=trust_note,
+        recovery_hint=recovery_hint,
+        review_callback=review_callback,
+    )
+    if not items:
+        return
+    is_tty = sys.stdout.isatty()
+    dim = "\033[2m" if is_tty else ""
+    cyan = "\033[36m" if is_tty else ""
+    reset = "\033[0m" if is_tty else ""
+    query = ""
+    while True:
+        matches = _filter_approval_overlay_items(items, query=query)
+        print("\nApproval review overlay")
+        if query:
+            print(f"  {dim}filter:{reset} {query}")
+        if matches:
+            for index, item in enumerate(matches, start=1):
+                print(f"  {cyan}{index}.{reset} {item.get('label', '')}")
+        else:
+            print(f"  {dim}No matches for '{query}'.{reset}")
+        print(f"  {dim}Type a search term, a number to inspect, or Enter to return to approval.{reset}")
+        choice = str(input_func("overlay> ")).strip()
+        if not choice or choice.lower() in {"q", "quit", "exit"}:
+            print(f"  {dim}Overlay closed.{reset}")
+            return
+        if choice.isdigit():
+            selected_index = int(choice) - 1
+            if 0 <= selected_index < len(matches):
+                selected = matches[selected_index]
+                detail = str(selected.get("detail") or "").strip()
+                if detail:
+                    print(detail)
+                action = selected.get("action")
+                if callable(action):
+                    action()
+                continue
+            print(f"  {dim}Selection out of range.{reset}")
+            continue
+        query = choice
+
+
 def request_cli_approval(
     *,
     action: str,
     target: str,
     risk_level: RiskLevel,
     detail: str = "",
+    review_lines: list[str] | None = None,
+    trust_note: str = "",
+    recovery_hint: str = "",
     auto_approve: bool = False,
     session_id: str = "",
     plan_id: str = "",
     task_id: str = "",
     input_func: Any = input,
+    review_callback: Any = None,
 ) -> bool:
     """Apply the CLI approval policy and record decisions for dashboard visibility."""
     if risk_level in {RiskLevel.LOW, RiskLevel.MEDIUM}:
@@ -198,10 +348,10 @@ def request_cli_approval(
         return False
 
     _is_tty = sys.stdout.isatty()
-    _bold_red   = "\033[1;31m" if _is_tty else ""
-    _bold_yellow = "\033[1;33m" if _is_tty else ""
-    _dim        = "\033[2m"    if _is_tty else ""
-    _reset      = "\033[0m"    if _is_tty else ""
+    _bold_red = "[1;31m" if _is_tty else ""
+    _bold_yellow = "[1;33m" if _is_tty else ""
+    _dim = "[2m" if _is_tty else ""
+    _reset = "[0m" if _is_tty else ""
     risk_val = risk_level.value.upper() if hasattr(risk_level, "value") else str(risk_level).upper()
     if "CRITICAL" in risk_val:
         risk_colored = f"{_bold_red}{risk_val}{_reset}"
@@ -216,13 +366,67 @@ def request_cli_approval(
     else:
         _rationale_line = "✅  Low risk — limited scope, safe to approve"
     print(f"  {_dim}{_rationale_line}{_reset}")
+    normalized_review = [str(line).strip() for line in (review_lines or []) if str(line).strip()]
+    review_supported = bool(normalized_review or trust_note or recovery_hint or callable(review_callback))
+    review_overlay_supported = review_supported and _approval_overlay_available()
+    if review_supported:
+        _print_cli_approval_review_block(
+            dim=_dim,
+            reset=_reset,
+            review_lines=normalized_review,
+            trust_note=trust_note,
+            recovery_hint=recovery_hint,
+        )
+    if review_overlay_supported:
+        prompt_suffix = ' [y]es/[n]o/[r]eview/[o]verlay: '
+    elif review_supported:
+        prompt_suffix = ' [y]es/[n]o/[r]eview: '
+    else:
+        prompt_suffix = ' [y/N]: '
     prompt = (
         f"\n{prefix}{risk_colored} risk  {_dim}`{action}`{_reset}"
         f"  on  {_dim}`{target}`{_reset}"
-        f"\n   Proceed? [y/N]: "
+        f"\n   Proceed?{prompt_suffix}"
     )
-    response = str(input_func(prompt)).strip().lower()
-    approved = response in {"y", "yes"}
+    while True:
+        response = str(input_func(prompt)).strip().lower()
+        if response in {"y", "yes"}:
+            approved = True
+            break
+        if response in {"", "n", "no"}:
+            approved = False
+            break
+        if review_supported and response in {"r", "review", "p", "preview"}:
+            if callable(review_callback):
+                review_callback()
+            else:
+                _print_cli_approval_review_block(
+                    dim=_dim,
+                    reset=_reset,
+                    review_lines=normalized_review,
+                    trust_note=trust_note,
+                    recovery_hint=recovery_hint,
+                )
+            continue
+        if review_overlay_supported and response in {"o", "overlay"}:
+            _run_cli_approval_review_overlay(
+                review_lines=normalized_review,
+                trust_note=trust_note,
+                recovery_hint=recovery_hint,
+                input_func=input_func,
+                review_callback=review_callback,
+            )
+            continue
+        retry_hint = (
+            'Enter y to approve, n to deny, r to review again, or o for the overlay.'
+            if review_overlay_supported
+            else (
+                'Enter y to approve, n to deny, or r to review again.'
+                if review_supported
+                else 'Enter y to approve or n to deny.'
+            )
+        )
+        print(f"  {_dim}{retry_hint}{_reset}")
     approval_store.resolve(
         request_id=request.request_id,
         approved=approved,

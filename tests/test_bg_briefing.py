@@ -96,6 +96,12 @@ def _make_channel():
     return ch
 
 
+def _close_coro_task(coro):
+    """Test helper for mocked create_task calls that should not leak coroutines."""
+    coro.close()
+    return MagicMock()
+
+
 def _patch_briefing_deps(monkeypatch, channel_id=123, channel=None):
     """Patch common dependencies for briefing tests."""
     if channel is None:
@@ -151,7 +157,7 @@ class TestMorningBriefingLoop:
                 raise asyncio.CancelledError()
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task") as mock_create:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create:
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.morning_briefing_loop(_make_bot())
 
@@ -177,7 +183,7 @@ class TestMorningBriefingLoop:
         monkeypatch.setattr(bg_briefing, "get_collector", lambda: mock_collector)
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task", return_value=mock_task) as mock_create:
+             patch("bg_briefing.asyncio.create_task", side_effect=lambda coro: (coro.close(), mock_task)[1]) as mock_create:
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.morning_briefing_loop(_make_bot())
 
@@ -201,7 +207,7 @@ class TestMorningBriefingLoop:
                 raise asyncio.CancelledError()
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task") as mock_create:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create:
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.morning_briefing_loop(_make_bot())
 
@@ -227,7 +233,7 @@ class TestMorningBriefingLoop:
         monkeypatch.setattr(bg_briefing, "get_collector", lambda: mock_collector)
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task", side_effect=RuntimeError("task error")):
+             patch("bg_briefing.asyncio.create_task", side_effect=lambda coro: (coro.close(), (_ for _ in ()).throw(RuntimeError("task error")))[1]):
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.morning_briefing_loop(_make_bot())
 
@@ -366,7 +372,7 @@ class TestEveningDigestLoop:
                 raise asyncio.CancelledError()
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task") as mock_create:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create:
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.evening_digest_loop(_make_bot())
 
@@ -387,7 +393,7 @@ class TestEveningDigestLoop:
                 raise asyncio.CancelledError()
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task") as mock_create:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create:
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.evening_digest_loop(_make_bot())
 
@@ -408,7 +414,7 @@ class TestEveningDigestLoop:
                 raise asyncio.CancelledError()
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task") as mock_create:
+             patch("bg_briefing.asyncio.create_task", side_effect=_close_coro_task) as mock_create:
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.evening_digest_loop(_make_bot())
 
@@ -429,7 +435,7 @@ class TestEveningDigestLoop:
                 raise asyncio.CancelledError()
 
         with patch("bg_briefing.asyncio.sleep", side_effect=mock_sleep), \
-             patch("bg_briefing.asyncio.create_task", side_effect=RuntimeError("task error")):
+             patch("bg_briefing.asyncio.create_task", side_effect=lambda coro: (coro.close(), (_ for _ in ()).throw(RuntimeError("task error")))[1]):
             with pytest.raises(asyncio.CancelledError):
                 await bg_briefing.evening_digest_loop(_make_bot())
 
