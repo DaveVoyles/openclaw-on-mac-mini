@@ -41,7 +41,7 @@ def load_profile() -> dict:
     except FileNotFoundError:
         log.info("No profile on disk — returning defaults")
         return {**DEFAULT_PROFILE}
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
         log.warning("Profile unreadable, returning defaults: %s", exc)
         return {**DEFAULT_PROFILE}
 
@@ -179,10 +179,10 @@ async def learn_from_message(
             save_profile(profile)
             try:
                 await sync_profile_to_vectors()
-            except Exception as exc:
+            except (OSError, ValueError, AttributeError) as exc:
                 log.debug("Vector sync failed (non-critical): %s", exc)
 
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.debug("learn_from_message failed (non-critical): %s", exc)
 
     return learned
@@ -246,5 +246,5 @@ async def sync_profile_to_vectors() -> None:
             metadata={"type": "user_profile"},
         )
         log.debug("Profile synced to ChromaDB")
-    except Exception as exc:
+    except (OSError, ValueError, AttributeError) as exc:
         log.warning("Profile vector sync failed: %s", exc)

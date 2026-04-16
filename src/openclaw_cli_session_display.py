@@ -600,7 +600,7 @@ def _session_is_stale(s: SessionSummary, days: int = 7) -> bool:
         updated = datetime.fromisoformat(s.updated_at.replace("Z", "+00:00"))
         age = datetime.now(timezone.utc) - updated
         return age.days >= days
-    except Exception:  # noqa: BLE001
+    except (ValueError, TypeError, AttributeError):  # noqa: BLE001
         return False
 
 
@@ -802,7 +802,7 @@ def _session_mood_snapshot(
     """Derive a restrained mood/momentum cue from objective session state."""
     try:
         normalized_watch = normalize_watch_state(watch_state or {}) if watch_state else {}
-    except Exception:
+    except (ValueError, TypeError, KeyError, AttributeError):
         _LOG.debug("normalize_watch_state failed", exc_info=True)
         normalized_watch = {}
     snapshot = collaboration_snapshot or {}
@@ -886,7 +886,7 @@ def _session_operator_snapshot(
     """Return a read-only operator snapshot for monitoring and handoff surfaces."""
     try:
         normalized_watch = normalize_watch_state(watch_state or {}) if watch_state else {}
-    except Exception:
+    except (ValueError, TypeError, KeyError, AttributeError):
         _LOG.debug("normalize_watch_state failed", exc_info=True)
         normalized_watch = {}
     snapshot = collaboration_snapshot or {}
@@ -978,7 +978,7 @@ def _print_session_summary(session: SessionSummary, *, pending_inject: str = "")
     watch_state = None
     try:
         watch_state = load_watch_state(session.session_id)
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError, AttributeError):
         _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
         watch_state = None
     snapshot = build_collaboration_snapshot(session.session_id, limit=3)

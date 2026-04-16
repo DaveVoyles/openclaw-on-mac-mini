@@ -178,7 +178,7 @@ class PatreonRecoveryManager:
                 message="Container start timed out after 30s",
                 timestamp=timestamp,
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Error starting container: {e}")
             return RecoveryResult(
                 action=RecoveryAction.START_CONTAINER,
@@ -225,7 +225,7 @@ class PatreonRecoveryManager:
                 message="Container restart timed out after 60s",
                 timestamp=timestamp,
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Error restarting container: {e}")
             return RecoveryResult(
                 action=RecoveryAction.RESTART_CONTAINER,
@@ -256,7 +256,7 @@ class PatreonRecoveryManager:
                 details="MonsterVision will retry failed downloads on next cron cycle",
             )
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Error retrying downloads: {e}")
             return RecoveryResult(
                 action=RecoveryAction.RETRY_DOWNLOADS,
@@ -306,7 +306,7 @@ class PatreonRecoveryManager:
                 message="Cleanup timed out after 30s",
                 timestamp=timestamp,
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Error cleaning up: {e}")
             return RecoveryResult(
                 action=RecoveryAction.CLEANUP_TEMP,

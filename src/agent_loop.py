@@ -260,7 +260,7 @@ def save_plan(plan: Plan, _retries: int = 3, _backoff: float = 0.5) -> None:
                 fcntl.flock(f, fcntl.LOCK_UN)
             tmp.rename(path)
             return
-        except Exception as exc:
+        except (OSError, ValueError, TypeError) as exc:
             last_exc = exc
             tmp.unlink(missing_ok=True)
             if attempt < _retries - 1:
@@ -292,7 +292,7 @@ def list_plans(status_filter: str = "all") -> list[Plan]:
             p = load_plan(path.stem)
             if p and (status_filter == "all" or p.status == status_filter):
                 plans.append(p)
-        except Exception as e:
+        except (OSError, ValueError, KeyError) as e:
             log.warning("Failed to load plan %s: %s", path.name, e)
     return plans
 
@@ -547,7 +547,7 @@ async def execute_plan(
         if on_progress:
             try:
                 await on_progress(step_num, status, text)
-            except Exception as e:
+            except (TypeError, AttributeError, OSError) as e:
                 log.debug("execute_plan on_progress error: %s", e)
 
     executed = 0
@@ -609,7 +609,7 @@ async def execute_plan(
             await _post(step.num, "failed", f"❌ Step {step.num} timed out")
             break
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             step.status = "failed"
             step.output = str(e)[:1000]
             save_plan(plan)

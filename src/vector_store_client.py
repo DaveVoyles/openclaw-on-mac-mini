@@ -214,7 +214,7 @@ async def search(
                 asyncio.get_running_loop().create_task(
                     bump_access(collection_name, [r["id"] for r in output])
                 )
-            except Exception as exc:
+            except (AttributeError, OSError, RuntimeError) as exc:
                 log.debug("Access tracking dispatch failed: %s", exc)
         return output
 
@@ -266,7 +266,7 @@ async def search(
                     "query": query[:200],
                 },
             )
-        except Exception:
+        except (AttributeError, OSError, RuntimeError):
             pass
 
     if output:
@@ -285,7 +285,7 @@ async def search(
             asyncio.get_running_loop().create_task(
                 bump_access(collection_name, [r["id"] for r in output])
             )
-        except Exception as exc:
+        except (AttributeError, OSError, RuntimeError) as exc:
             log.debug("Access tracking dispatch failed: %s", exc)
 
     return output
@@ -300,7 +300,7 @@ async def search_safe(
     """Search with fallback — returns empty list if vector store is down."""
     try:
         return await search(collection_name, query, top_k, **kwargs)
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Vector search failed (collection=%s): %s — returning empty", collection_name, e)
         return []
 

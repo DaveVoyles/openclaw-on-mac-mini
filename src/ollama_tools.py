@@ -142,7 +142,7 @@ async def chat_ollama_with_tools(
                     log.warning("Ollama tools returned HTTP %d", resp.status)
                     return None, tool_calls_made
                 data = await resp.json()
-        except Exception as e:
+        except (aiohttp.ClientError, OSError, ValueError) as e:
             log.warning("Ollama tool call failed: %s", e)
             return None, tool_calls_made
 
@@ -168,7 +168,7 @@ async def chat_ollama_with_tools(
                 log.info("Ollama invoking tool: %s(%s) [round %d]", fn_name, fn_args, round_num + 1)
                 try:
                     result = await execute_fn(fn_name, fn_args)
-                except Exception as e:
+                except Exception as e:  # broad: intentional
                     result = f"Error: {e}"
 
             tool_calls_made.append((fn_name, fn_args, result))
@@ -198,7 +198,7 @@ async def chat_ollama_with_tools(
                 return data.get("message", {}).get("content", ""), tool_calls_made
     except aiohttp.ClientError as e:
         log.warning("Ollama HTTP error in chat_with_tools: %s", e)
-    except Exception:
+    except Exception:  # broad: intentional
         log.exception("Unexpected error in Ollama chat_with_tools")
 
     return None, tool_calls_made

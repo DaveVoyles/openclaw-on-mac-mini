@@ -62,7 +62,7 @@ def _find_tailscale() -> Optional[str]:
             import os as _os
             if _os.path.isfile(path) and _os.access(path, _os.X_OK):
                 return path
-        except Exception as exc:
+        except OSError as exc:
             log.debug("Tailscale path check failed for %s: %s", path, exc)
     return None
 
@@ -124,7 +124,7 @@ async def get_network_status() -> str:
                 timeout=3,
             )
             return "✅ DNS Resolution"
-        except Exception as exc:
+        except (OSError, asyncio.TimeoutError) as exc:
             log.debug("DNS resolution check failed: %s", exc)
             return "❌ DNS Resolution failed"
 
@@ -133,7 +133,7 @@ async def get_network_status() -> str:
             session = await _get_session()
             async with session.get(f"http://{HOST}:{_cfg.health_port}/health") as resp:
                 return f"{'✅' if resp.status == 200 else '❌'} OpenClaw health endpoint (:{_cfg.health_port})"
-        except Exception as exc:
+        except (aiohttp.ClientError, OSError, asyncio.TimeoutError) as exc:
             log.debug("Health endpoint check failed: %s", exc)
             return f"❌ OpenClaw health endpoint (:{_cfg.health_port})"
 
@@ -201,7 +201,7 @@ async def run_speed_test() -> str:
         )
         dns_ms = (time.monotonic() - start) * 1000
         results.append(f"**DNS Latency**: {dns_ms:.0f} ms")
-    except Exception as exc:
+    except (OSError, asyncio.TimeoutError) as exc:
         log.debug("DNS lookup failed: %s", exc)
         results.append("❌ DNS lookup failed")
 

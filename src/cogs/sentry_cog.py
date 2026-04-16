@@ -49,7 +49,7 @@ def _fmt_dt(iso: str) -> str:
     try:
         dt = datetime.fromisoformat(iso.rstrip("Z")).replace(tzinfo=timezone.utc)
         return discord.utils.format_dt(dt, style="R")
-    except Exception:
+    except (ValueError, TypeError):
         return iso
 
 
@@ -112,7 +112,7 @@ class SentryCog(commands.Cog):
             embed.description = truncate_for_embed("\n\n".join(lines))
             embed.set_footer(text=f"Sentry · {cfg.sentry_org}")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("sentry issues failed")
             await interaction.followup.send(
                 "❌ Failed to fetch Sentry issues.", ephemeral=True
@@ -151,7 +151,7 @@ class SentryCog(commands.Cog):
             embed.description = truncate_for_embed("\n".join(lines))
             embed.set_footer(text=f"{len(data)} project(s) · Sentry")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("sentry projects failed")
             await interaction.followup.send(
                 "❌ Failed to fetch Sentry projects.", ephemeral=True
@@ -178,7 +178,7 @@ class SentryCog(commands.Cog):
             await interaction.followup.send(
                 f"✅ Issue `#{issue_id}` marked as resolved.", ephemeral=True
             )
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("sentry resolve failed")
             await interaction.followup.send(
                 f"❌ Failed to resolve issue `#{issue_id}`.", ephemeral=True
@@ -246,7 +246,7 @@ class SentryCog(commands.Cog):
             embed.add_field(name="Total received", value=str(total))
             embed.set_footer(text=f"Sentry · {cfg.sentry_org}")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("sentry stats failed")
             await interaction.followup.send(
                 "❌ Failed to fetch Sentry stats.", ephemeral=True

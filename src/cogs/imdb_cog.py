@@ -60,7 +60,7 @@ class ImdbCog(commands.Cog):
 
             embed = _build_media_embed(data, discord.Color.gold())
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("movie lookup failed")
             await interaction.followup.send("❌ Failed to fetch movie info.", ephemeral=True)
 
@@ -97,7 +97,7 @@ class ImdbCog(commands.Cog):
                 )
 
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("tv lookup failed")
             await interaction.followup.send("❌ Failed to fetch TV info.", ephemeral=True)
 
@@ -149,7 +149,7 @@ class ImdbCog(commands.Cog):
             )
             embed.set_footer(text="Use /media movie or /media tv for full details")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("imdb search failed")
             await interaction.followup.send("❌ Failed to search IMDb.", ephemeral=True)
 

@@ -260,7 +260,7 @@ class WorkflowEngine:
                     self._counter = max(self._counter, num)
                 except ValueError:
                     pass
-            except Exception as e:
+            except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
                 log.error("Failed to load workflow from %s: %s", workflow_file, e)
 
         log.info("Loaded %d workflows from disk", len(self._workflows))
@@ -429,7 +429,7 @@ class WorkflowEngine:
             task.error = "Task timed out after 5 minutes"
             return task.error, False
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             task.end_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
             task.status = TaskStatus.FAILED
             task.error = str(e)
@@ -534,7 +534,7 @@ class WorkflowEngine:
                 execution.status = WorkflowStatus.SUCCESS
                 workflow.status = WorkflowStatus.SUCCESS
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error("Workflow %s execution failed: %s", workflow_id, e)
             execution.status = WorkflowStatus.FAILED
             workflow.status = WorkflowStatus.FAILED
@@ -593,7 +593,7 @@ async def run_workflow(workflow_id: str) -> str:
         else:
             return f"❌ Workflow `{workflow_id}` failed: {', '.join(execution.errors)}"
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Failed to execute workflow: {e}"
 
 

@@ -249,7 +249,7 @@ async def chat_openai(  # compat — also in llm.providers
                 from spending import tracker as spending_tracker
                 await spending_tracker.record_copilot(model=model)
             return content
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("OpenAI call failed: %s", e)
         return None
 
@@ -320,7 +320,7 @@ async def chat_openai_vision(  # compat — also in llm.providers
                 return None
             data = await resp.json()
             return data["choices"][0]["message"]["content"]
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("OpenAI vision call failed: %s", e)
         return None
 
@@ -387,6 +387,6 @@ async def chat_anthropic(  # compat — also in llm.providers
             return " ".join(
                 b["text"] for b in content_blocks if b.get("type") == "text"
             )
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Anthropic call failed: %s", e)
         return None

@@ -133,7 +133,7 @@ async def _run_supervised_background_task(
     except asyncio.CancelledError:
         cancelled = True
         raise
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         success = False
         error_type = type(exc).__name__
         raise
@@ -229,9 +229,9 @@ async def reminder_loop(bot):
                     recur = f" (🔁 {r.recurring})" if r.recurring else ""
                     embed.set_footer(text=f"ID: {r.id}{recur}")
                     await user.send(embed=embed)
-                except Exception as e:
+                except Exception as e:  # broad: intentional — mark_fired must run even if send fails
                     log.debug("Failed to send reminder %s: %s", r.id, e)
                 reminder_manager.mark_fired(r.id)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.debug("Reminder loop error: %s", e)
         await asyncio.sleep(15)

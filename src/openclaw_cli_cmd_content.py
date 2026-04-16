@@ -104,7 +104,7 @@ def _relative_time(ts_str: str) -> str:
             return f"{secs // 3600}h ago"
         else:
             return f"{secs // 86400}d ago"
-    except Exception:  # noqa: BLE001
+    except (ValueError, TypeError, OSError):  # noqa: BLE001
         return ""
 
 
@@ -255,7 +255,7 @@ def _cmd_search(ctx: ChatCommandContext) -> str:
                 break
             try:
                 events = load_events(sess.session_id, limit=200)
-            except Exception:
+            except (OSError, ValueError, AttributeError):
                 import logging as _logging
                 _logging.getLogger("openclaw_cli").debug("load_events failed for %s", sess.session_id, exc_info=True)
                 continue
@@ -1084,7 +1084,7 @@ def _cmd_stats(ctx: "ChatCommandContext") -> str:  # type: ignore[no-redef]
                 date = ts[:10] if ts else "unknown"
                 date_counts[date] = date_counts.get(date, 0) + 1
             _ascii_bar_chart("📅 Sessions by Date", date_counts, color=_GR)
-        except Exception:  # noqa: BLE001
+        except (OSError, AttributeError, ValueError, TypeError):  # noqa: BLE001
             pass
 
     if not cmd_counts and not rating_counts:
@@ -1159,7 +1159,7 @@ def _cmd_timeline(ctx: ChatCommandContext) -> str:  # noqa: ARG001
                     day_label = f"Today ({day_label})"
                 elif diff == 1:
                     day_label = f"Yesterday ({day_label})"
-            except Exception:  # noqa: BLE001
+            except (ValueError, TypeError):  # noqa: BLE001
                 day_label = date_str
 
             _RICH_CONSOLE.print(f"  [bold]{day_label}[/]  [cyan]{bar}[/] [dim]{count} events[/]")

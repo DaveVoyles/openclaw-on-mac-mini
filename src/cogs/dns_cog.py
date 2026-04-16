@@ -73,7 +73,7 @@ class DnsCog(commands.Cog):
             embed.add_field(name="DNS Addresses", value=addrs_str, inline=False)
 
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("dns status failed")
             await interaction.followup.send("❌ Failed to fetch AdGuard status.", ephemeral=True)
 
@@ -118,7 +118,7 @@ class DnsCog(commands.Cog):
             )
 
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("dns stats failed")
             await interaction.followup.send("❌ Failed to fetch AdGuard stats.", ephemeral=True)
 
@@ -138,7 +138,7 @@ class DnsCog(commands.Cog):
             await interaction.followup.send(
                 f"🚫 `{domain}` is now blocked (rewrites to 0.0.0.0)", ephemeral=True
             )
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("dns block failed for %s", domain)
             await interaction.followup.send(f"❌ Failed to block `{domain}`.", ephemeral=True)
 
@@ -156,7 +156,7 @@ class DnsCog(commands.Cog):
                 json={"domain": domain, "answer": "0.0.0.0"},
             )
             await interaction.followup.send(f"✅ `{domain}` unblocked", ephemeral=True)
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("dns allow failed for %s", domain)
             await interaction.followup.send(f"❌ Failed to unblock `{domain}`.", ephemeral=True)
 
@@ -196,7 +196,7 @@ class DnsCog(commands.Cog):
             for extra in embeds[1:]:
                 await interaction.followup.send(embed=extra, ephemeral=True)
 
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("dns blocked failed")
             await interaction.followup.send(
                 "❌ Failed to fetch rewrite rules.", ephemeral=True

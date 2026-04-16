@@ -93,7 +93,7 @@ async def analyze_image(
         )
         await _record_usage(response)
         return response.text or "No response from model."
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Image analysis failed: %s", e)
         return f"❌ Image analysis failed: {e}"
 
@@ -144,7 +144,7 @@ async def analyze_image_with_tools(
             None, lambda: chat_session.send_message(multimodal_parts)
         )
         await _record_usage(response)
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Image analysis with tools failed: %s", e)
         return f"❌ Image analysis failed: {e}", history
 
@@ -185,6 +185,6 @@ async def analyze_document(text: str, prompt: str) -> str:
         )
         await _record_usage(response)
         return response.text or "No response from model."
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Document analysis failed: %s", e)
         return f"❌ Document analysis failed: {e}"

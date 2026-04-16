@@ -58,7 +58,7 @@ def _load_snapshots() -> dict[str, dict]:
     if _SNAPSHOTS_FILE.exists():
         try:
             return json.loads(_SNAPSHOTS_FILE.read_text())
-        except Exception as exc:
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
             log.debug("Failed to load snapshots: %s", exc)
     return {}
 
@@ -124,7 +124,7 @@ async def snapshot_url(url: str, label: str = "") -> str:
     """
     try:
         text = await _fetch_text(url)
-    except Exception as e:
+    except Exception as e:  # broad: intentional — aiohttp or connection errors can be various types
         return f"❌ Could not fetch `{url}`: {e}"
 
     content_hash = _content_hash(text)
@@ -164,7 +164,7 @@ async def check_url_for_changes(url: str) -> str:
 
     try:
         text = await _fetch_text(url)
-    except Exception as e:
+    except Exception as e:  # broad: intentional — aiohttp or connection errors can be various types
         return f"❌ Could not fetch `{url}`: {e}"
 
     new_hash = _content_hash(text)

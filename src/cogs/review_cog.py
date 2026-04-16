@@ -113,7 +113,7 @@ class _ReviewView(discord.ui.View):
                 source_url="",
             )
             await interaction.followup.send(f"✅ Saved to vault: {result}", ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("review vault save failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/review save"), ephemeral=True)
 
@@ -168,7 +168,7 @@ class ReviewTextModal(discord.ui.Modal, title="Paste Text for Review"):
                 mode=self.mode,
                 filename="pasted-text",
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("review text modal submit failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/review"), ephemeral=True)
 
@@ -242,7 +242,7 @@ class ReviewCog(commands.Cog):
                 mode=mode,
                 filename=file.filename,
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("review file failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/review"), ephemeral=True)
 

@@ -175,7 +175,7 @@ async def gateway_request(
     except (aiohttp.ClientError, json.JSONDecodeError) as e:
         log.warning("Gateway request network/parse error: %s", e)
         return f"❌ Gateway error: {e}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Unexpected gateway_request error: %s", e)
         return f"❌ Unexpected error: {e}"
 
@@ -203,7 +203,7 @@ async def gateway_list_connections(app: str = "") -> str:
     except (aiohttp.ClientError, json.JSONDecodeError) as e:
         log.warning("Gateway list_connections network/parse error: %s", e)
         return f"❌ Connection list error: {e}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Unexpected gateway_list_connections error: %s", e)
         return f"❌ Unexpected error: {e}"
 
@@ -248,7 +248,7 @@ async def gateway_create_connection(app: str) -> str:
     except (aiohttp.ClientError, json.JSONDecodeError) as e:
         log.warning("Gateway create_connection network/parse error: %s", e)
         return f"❌ Connection creation error: {e}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Unexpected gateway_create_connection error: %s", e)
         return f"❌ Unexpected error: {e}"
 

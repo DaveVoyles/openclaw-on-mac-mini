@@ -132,7 +132,7 @@ class PluginLoader:
         except yaml.YAMLError as e:
             log.error(f"Failed to parse manifest in {plugin_dir.name}: {e}")
             return None
-        except Exception as e:
+        except (OSError, ValueError, KeyError, AttributeError) as e:
             log.error(f"Error loading manifest from {plugin_dir.name}: {e}")
             return None
 
@@ -362,7 +362,7 @@ class PluginLoader:
             log.info(f"✓ Loaded plugin: {metadata.name} v{metadata.version}")
             return plugin
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Failed to load plugin {metadata.name}: {e}", exc_info=True)
             return None
 
@@ -397,7 +397,7 @@ class PluginLoader:
             log.info(f"✓ Unloaded plugin: {plugin.metadata.name}")
             return True
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Failed to unload plugin {plugin.metadata.name}: {e}", exc_info=True)
             return False
 

@@ -29,7 +29,7 @@ async def handle_image_attachment(
                 mime = (attachment.content_type or "").split(";")[0].strip()
                 image_answer = await llm_analyze_image(img_bytes, mime, question)
                 return f"{question}\n\n[Attachment analysis: {image_answer}]"
-    except Exception as e:
+    except Exception as e:  # broad: intentional — aiohttp, discord, and mock-related errors
         log.warning("Failed to analyze image attachment: %s", e)
     return question
 
@@ -55,8 +55,8 @@ async def handle_doc_attachment(
                         f"--- End Document ---"
                     )
                     return combined_query
-                except Exception as decode_err:
+                except (UnicodeDecodeError, ValueError) as decode_err:
                     log.warning("Failed to decode doc attachment: %s", decode_err)
-    except Exception as e:
+    except Exception as e:  # broad: intentional — aiohttp, discord, and mock-related errors
         log.warning("Failed to download doc attachment: %s", e)
     return question

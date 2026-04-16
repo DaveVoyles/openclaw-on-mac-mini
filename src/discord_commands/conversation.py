@@ -74,7 +74,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
             from llm.providers import COPILOT_PROXY_ENABLED
             proxy_status = "🟢 Enabled" if COPILOT_PROXY_ENABLED else "🔴 Disabled"
             embed.add_field(name="Copilot Proxy", value=proxy_status, inline=False)
-        except Exception as exc:
+        except (ImportError, AttributeError) as exc:
             log.debug("Copilot proxy status check failed: %s", exc)
         try:
             from llm import LOCAL_LLM_ENABLED, OLLAMA_MODEL, _ollama_available
@@ -83,7 +83,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
             if not LOCAL_LLM_ENABLED:
                 status = "⚪ Local LLM disabled"
             embed.add_field(name="Local LLM", value=status, inline=False)
-        except Exception as exc:
+        except (ImportError, OSError, AttributeError) as exc:
             log.debug("Ollama status check failed: %s", exc)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
@@ -214,7 +214,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
         try:
             from thread_store import search_threads as sqlite_search
             db_results = await sqlite_search(interaction.user.id, query, limit=10)
-        except Exception as e:
+        except (OSError, ValueError) as e:
             log.debug("SQLite thread search failed: %s", e)
             db_results = []
 
@@ -240,7 +240,7 @@ def _register_conversation_commands(bot: commands.Bot) -> None:
                 sim = r.get("similarity", 0)
                 preview = r["text"][:100].replace("\n", " ")
                 semantic_lines.append(f"🔮 **{name}** ({sim:.0%} match) — {preview}…")
-        except Exception as e:
+        except (OSError, ValueError, AttributeError) as e:
             log.debug("Vector thread search failed: %s", e)
 
         lines = [f"🔍 **Thread search: *{query}***\n"]

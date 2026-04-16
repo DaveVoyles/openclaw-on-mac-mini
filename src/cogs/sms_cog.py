@@ -47,7 +47,7 @@ class SMSSendConfirmView(discord.ui.View):
                 color=discord.Color.green(),
             )
             await interaction.response.edit_message(embed=embed, view=None)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             await interaction.response.edit_message(content=format_sms_error(exc), embed=None, view=None)
 
     @discord.ui.button(label="Cancel", emoji="✖️", style=discord.ButtonStyle.secondary)
@@ -107,7 +107,7 @@ class SMSCog(commands.GroupCog, group_name="sms"):
                     "✅ Phone saved and marked verified (Twilio Verify is not configured).",
                     ephemeral=True,
                 )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             await interaction.response.send_message(format_sms_error(exc), ephemeral=True)
 
     @app_commands.command(name="status", description="Show your SMS configuration and verification state")
@@ -142,7 +142,7 @@ class SMSCog(commands.GroupCog, group_name="sms"):
                 view=SMSSendConfirmView(interaction.user.id, cleaned),
                 ephemeral=True,
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             await interaction.response.send_message(format_sms_error(exc), ephemeral=True)
 
     @app_commands.command(name="test", description="Start or complete SMS verification, or send a test SMS")
@@ -182,7 +182,7 @@ class SMSCog(commands.GroupCog, group_name="sms"):
                     f"✅ Test SMS sent via {result.provider} (`{result.sid}`).",
                     ephemeral=True,
                 )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             await interaction.response.send_message(format_sms_error(exc), ephemeral=True)
 
 

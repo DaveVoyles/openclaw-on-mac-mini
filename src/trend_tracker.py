@@ -176,7 +176,7 @@ class TrendTracker:
                 "Tracked: %s/%s vol=%d sent=%.2f", category, topic, volume, sentiment
             )
             return True
-        except Exception as e:
+        except Exception as e:  # broad: intentional — DB ops can raise sqlite3.Error or RuntimeError from mocks
             log.error("Failed to track entity %s: %s", topic, e)
             return False
 
@@ -531,7 +531,7 @@ class TrendTracker:
             db.commit()
             log.info("Enabled tracking: %s/%s by %s", category, topic, user_id)
             return True
-        except Exception as e:
+        except Exception as e:  # broad: intentional — DB ops can raise sqlite3.Error or RuntimeError from mocks
             log.error("Failed to enable tracking for %s: %s", topic, e)
             return False
 
@@ -551,7 +551,7 @@ class TrendTracker:
             db.commit()
             log.info("Disabled tracking: %s", topic)
             return True
-        except Exception as e:
+        except Exception as e:  # broad: intentional — DB ops can raise sqlite3.Error or RuntimeError from mocks
             log.error("Failed to disable tracking for %s: %s", topic, e)
             return False
 
@@ -620,7 +620,7 @@ class TrendTracker:
             )
             db.commit()
             return True
-        except Exception as e:
+        except Exception as e:  # broad: intentional — DB ops can raise sqlite3.Error or RuntimeError from mocks
             log.error("Failed to record alert for %s: %s", topic, e)
             return False
 

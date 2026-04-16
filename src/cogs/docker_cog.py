@@ -118,7 +118,7 @@ async def _container_autocomplete(
                 if name and (not current or current.lower() in name.lower()):
                     names.append(name)
         return [app_commands.Choice(name=n, value=n) for n in sorted(names)[:25]]
-    except Exception:
+    except Exception:  # broad: intentional
         return []
 
 
@@ -168,7 +168,7 @@ class ContainerActionView(discord.ui.View):
                 )
                 await interaction.followup.send(embed=embed)
             audit_log(interaction.user, "containers_logs", detail=self.container_name)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="/containers logs"), ephemeral=True)
         finally:
             await interaction.message.edit(view=self)
@@ -186,7 +186,7 @@ class ContainerActionView(discord.ui.View):
             )
             await interaction.followup.send(embed=embed)
             audit_log(interaction.user, "containers_stats", detail=self.container_name)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="/containers stats"), ephemeral=True)
         finally:
             await interaction.message.edit(view=self)
@@ -290,7 +290,7 @@ class ContainerActionView(discord.ui.View):
         if hasattr(self, "message") and self.message:
             try:
                 await self.message.edit(view=self)
-            except Exception:
+            except Exception:  # broad: intentional
                 pass
 
 
@@ -361,7 +361,7 @@ class ContainerSelectView(discord.ui.View):
         if hasattr(self, "message") and self.message:
             try:
                 await self.message.edit(view=self)
-            except Exception:
+            except Exception:  # broad: intentional
                 pass
 
 

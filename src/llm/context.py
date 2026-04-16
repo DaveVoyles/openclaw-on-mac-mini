@@ -542,7 +542,7 @@ async def _auto_recall_context(
         guard_notes = []
         try:
             guard_notes = vector_store.consume_recall_guard_notes()
-        except Exception:
+        except (ValueError, AttributeError, TypeError):
             guard_notes = []
         if routing_notes is not None and guard_notes:
             routing_notes.extend(f"Context guard: {note}" for note in guard_notes)
@@ -560,7 +560,7 @@ async def _auto_recall_context(
                 "Auto-RAG: recalled context injected for query %.60s…",
                 user_message,
             )
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.debug("Auto-RAG vector recall failed (non-fatal): %s", e)
 
     try:
@@ -568,7 +568,7 @@ async def _auto_recall_context(
         profile = get_profile_prompt()
         if profile and profile.strip():
             parts.append(profile)
-    except Exception as e:
+    except (ImportError, OSError, ValueError, AttributeError) as e:
         log.debug("Auto-RAG profile injection failed (non-fatal): %s", e)
 
     try:
@@ -577,7 +577,7 @@ async def _auto_recall_context(
         if rules:
             rules_block = "[Active Rules]\n" + "\n".join(f"- {r}" for r in rules)
             parts.append(rules_block)
-    except Exception as e:
+    except (ImportError, OSError, ValueError, AttributeError) as e:
         log.debug("Auto-RAG rules injection failed (non-fatal): %s", e)
 
     if parts:

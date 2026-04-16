@@ -207,7 +207,7 @@ async def read_inbox(provider: str = "gmail", count: int = 10) -> str:
         return f"❌ IMAP error (check App Password): {e}"
     except (OSError, ConnectionError) as e:
         return f"❌ Network error reading inbox: {e}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Email error: {e}"
 
     if not messages:
@@ -240,7 +240,7 @@ async def search_emails(query: str, provider: str = "gmail") -> str:
         return f"❌ IMAP search error: {e}"
     except (OSError, ConnectionError) as e:
         return f"❌ Network error searching inbox: {e}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Search error: {e}"
 
     if not messages:
@@ -281,7 +281,7 @@ async def send_email(
         return f"❌ Recipient refused by mail server: {to}"
     except (OSError, ConnectionError) as e:
         return f"❌ Network error sending email: {e}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Failed to send email: {e}"
 
     return f"✅ Email sent to **{to}** via {provider.title()}."
@@ -346,7 +346,7 @@ def _imap_fetch_one(provider: str, msg_id: str) -> str:
         return f"❌ IMAP error: {e}"
     except (OSError, ConnectionError) as e:
         return f"❌ Network error: {e}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Error fetching email: {e}"
 
 

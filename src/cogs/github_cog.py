@@ -160,7 +160,7 @@ class GitHubCog(commands.Cog):
         except httpx.HTTPStatusError as e:
             log.exception("github prs HTTP error")
             await interaction.followup.send(embed=build_error_embed(e, context="/github prs"), ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("github prs failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/github prs"), ephemeral=True)
 
@@ -233,7 +233,7 @@ class GitHubCog(commands.Cog):
         except httpx.HTTPStatusError as e:
             log.exception("github issues HTTP error")
             await interaction.followup.send(embed=build_error_embed(e, context="/github issues"), ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("github issues failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/github issues"), ephemeral=True)
 
@@ -334,13 +334,13 @@ class GitHubCog(commands.Cog):
                         changes = await self._check_repo_changes(client, repo, watches, user_ids, now)
                         if changes:
                             dirty = True
-                    except Exception:
+                    except Exception:  # broad: intentional
                         log.exception("Monitor error for repo %s", repo)
 
             if dirty:
                 await _save_watches(watches)
 
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("GitHub monitor task failed")
 
     async def _check_repo_changes(

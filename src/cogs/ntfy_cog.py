@@ -50,7 +50,7 @@ async def push_notification(title: str, message: str, priority: str = "default")
             ) as resp:
                 resp.raise_for_status()
                 return True
-    except Exception:
+    except Exception:  # broad: intentional
         log.exception("push_notification failed")
         return False
 
@@ -82,7 +82,7 @@ async def _push(title: str, message: str, priority: str = "default", tags: str =
             ) as resp:
                 resp.raise_for_status()
                 return True
-    except Exception:
+    except Exception:  # broad: intentional
         log.exception("_push failed")
         return False
 
@@ -141,7 +141,7 @@ class NtfyCog(commands.Cog):
                 await interaction.followup.send(
                     "❌ Failed to send notification. Check ntfy logs.", ephemeral=True
                 )
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("ntfy send failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/ntfy send"), ephemeral=True)
 
@@ -175,7 +175,7 @@ class NtfyCog(commands.Cog):
                 await interaction.followup.send(
                     "❌ Test failed. Check ntfy server and logs.", ephemeral=True
                 )
-        except Exception:
+        except Exception:  # broad: intentional
             log.exception("ntfy test failed")
             await interaction.followup.send("❌ Failed to send test notification.", ephemeral=True)
 

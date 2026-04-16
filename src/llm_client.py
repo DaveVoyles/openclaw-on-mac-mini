@@ -296,7 +296,7 @@ async def _record_usage(response) -> None:
             out = getattr(meta, "candidates_token_count", 0) or 0
             if inp or out:
                 await spending_tracker.record(inp, out)
-    except Exception as e:
+    except (AttributeError, TypeError, OSError) as e:
         log.warning("Failed to record token usage: %s", e)
 
 
@@ -331,7 +331,7 @@ async def quick_generate(
                 temperature=temperature,
             )
             return (reply or "").strip()
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.debug("quick_generate Copilot path failed, falling back to Gemini: %s", exc)
 
     # -- Gemini fallback --------------------------------------------------
@@ -352,6 +352,6 @@ async def quick_generate(
         )
         await _record_usage(response)
         return (response.text or "").strip()
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.warning("quick_generate failed: %s", exc)
         return ""

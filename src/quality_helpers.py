@@ -260,7 +260,7 @@ def _record_quality_metric(event: str, context: str = "ask") -> None:
         from metrics_collector import get_collector
 
         get_collector().record_quality_event(event=event, context=context)
-    except Exception:
+    except Exception:  # broad: intentional — best-effort metric; collector may not be initialized
         pass
 
 
@@ -281,7 +281,7 @@ def _record_budget_policy_metric(
             load_tier=load_tier,
             decision=decision,
         )
-    except Exception:
+    except Exception:  # broad: intentional — best-effort metric; collector may not be initialized
         pass
 
 
@@ -518,7 +518,7 @@ def _safe_score_answer_quality(
         if isinstance(evidence, (int, float)) and float(evidence) < 0.5 and not source_fields_missing:
             _b("_record_quality_metric", _record_quality_metric)("ask_low_evidence_completeness", context=context)
         return result
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — scoring can fail in many ways; return neutral fallback
         _b("_record_quality_metric", _record_quality_metric)("ask_quality_scoring_error", context=context)
         log.debug("Answer quality scoring failed: %s", exc)
         requested_item_count = None
@@ -861,7 +861,7 @@ async def _run_quality_auto_repair(
             "repair_skipped": False,
             "repair_improved": False,
         }
-    except Exception as retry_exc:
+    except Exception as retry_exc:  # broad: intentional
         retry_summary["outcome"] = "failed"
         retry_summary["error"] = str(retry_exc)
         _b("_record_quality_metric", _record_quality_metric)("ask_quality_retry_failed", context=context)
@@ -932,7 +932,7 @@ async def _run_quality_auto_repair(
                     "repair_skipped": False,
                     "repair_improved": True,
                 }
-        except Exception as second_exc:
+        except Exception as second_exc:  # broad: intentional
             log.debug("Copilot second repair attempt failed (%s): %s", context, second_exc)
 
     retry_summary["outcome"] = "no_improvement"

@@ -48,7 +48,7 @@ async def _compact_scope_if_needed(
             channel_id=int(channel_id),
             thread_id=int(thread_id) if thread_id is not None else None,
         )
-    except Exception:
+    except Exception:  # broad: intentional — policy fetch can fail in many ways
         return None
 
     retention_class = str(policy.get("retention_class", "standard"))
@@ -160,7 +160,7 @@ async def get_decayed_documents(
                 ]},
                 include=["metadatas", "documents"],
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — ChromaDB can raise various errors (RuntimeError, etc.)
             log.debug("ChromaDB where-filter fallback triggered: %s", exc)
             # Fallback: get all and filter in Python (older ChromaDB versions)
             results = col.get(include=["metadatas", "documents"])
@@ -199,7 +199,7 @@ async def mark_decayed(collection_name: str, doc_ids: list[str]) -> int:
                 meta["decayed"] = True
                 col.update(ids=[doc_id], metadatas=[meta])
                 count += 1
-            except Exception as exc:
+            except Exception as exc:  # broad: intentional — ChromaDB can raise various errors
                 log.debug("Mark decayed failed for %s: %s", doc_id, exc)
         return count
 
@@ -228,7 +228,7 @@ async def bump_access(collection_name: str, doc_ids: list[str]) -> None:
                 meta["access_count"] = meta.get("access_count", 0) + 1
                 meta["last_accessed"] = time.time()
                 col.update(ids=[doc_id], metadatas=[meta])
-            except Exception as exc:
+            except (ValueError, KeyError, AttributeError) as exc:
                 log.debug("Access bump failed for %s: %s", doc_id, exc)
 
     try:

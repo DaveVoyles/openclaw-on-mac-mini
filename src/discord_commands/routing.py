@@ -27,7 +27,7 @@ def _register_routing_commands(bot: commands.Bot) -> None:
         # Lazy imports to avoid circular deps at module load time
         try:
             from llm.providers import PROVIDER_FALLBACK_CHAIN
-        except Exception:
+        except (ImportError, AttributeError):
             PROVIDER_FALLBACK_CHAIN = ["(unavailable)"]
 
         try:
@@ -40,7 +40,7 @@ def _register_routing_commands(bot: commands.Bot) -> None:
             mini_max: int = getattr(
                 _mrp, "MINI_MODEL_MAX_TOKENS", int(os.getenv("MINI_MODEL_MAX_TOKENS", "50"))
             )
-        except Exception:
+        except (ImportError, AttributeError):
             mini_model = os.getenv("OPENAI_MINI_MODEL", "gpt-4o-mini")
             mini_threshold = int(os.getenv("MINI_TOKEN_THRESHOLD", "25"))
             mini_max = int(os.getenv("MINI_MODEL_MAX_TOKENS", "50"))
@@ -49,7 +49,7 @@ def _register_routing_commands(bot: commands.Bot) -> None:
             from config import cfg
 
             routing_profile: str = cfg.routing_profile or os.getenv("ROUTING_PROFILE", "copilot-first")
-        except Exception:
+        except (ImportError, AttributeError, OSError):
             routing_profile = os.getenv("ROUTING_PROFILE", "copilot-first")
 
         embed = discord.Embed(

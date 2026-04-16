@@ -496,7 +496,7 @@ class AdvancedScheduler:
         try:
             eval_context = {**context, **(task.condition.variables or {})}
             return _safe_condition_eval(task.condition.condition_script, eval_context)
-        except Exception as e:
+        except (ValueError, TypeError, KeyError) as e:
             log.warning("Condition evaluation failed for %s: %s", task.task_id, e)
             return False
 
@@ -525,7 +525,7 @@ class AdvancedScheduler:
         except asyncio.TimeoutError:
             duration_ms = int((datetime.datetime.now(datetime.timezone.utc) - start_time).total_seconds() * 1000)
             return "Error: Task timed out", duration_ms
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             duration_ms = int((datetime.datetime.now(datetime.timezone.utc) - start_time).total_seconds() * 1000)
             return f"Error: {e}", duration_ms
 
@@ -586,7 +586,7 @@ class AdvancedScheduler:
                         log.info("Event %s triggered task %s", event_name, task.task_id)
                         await self._execute_with_retry(task, event_data)
 
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.error("Event processor error: %s", e)
 
     async def _check_cron_tasks(self):
@@ -612,7 +612,7 @@ class AdvancedScheduler:
                             await self._execute_with_retry(task)
 
                 await asyncio.sleep(60)
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.error("Cron checker error: %s", e)
 
     async def _is_cron_due(self, task: AdvancedTask, now: datetime.datetime) -> bool:
@@ -623,7 +623,7 @@ class AdvancedScheduler:
             cron = croniter(cron_expr, now - datetime.timedelta(minutes=2))
             next_run = cron.get_next(datetime.datetime)
             return abs((next_run - now).total_seconds()) < 120
-        except Exception as e:
+        except (ImportError, ValueError, TypeError) as e:
             log.warning("Invalid cron expression for %s: %s", task.task_id, e)
             return False
 

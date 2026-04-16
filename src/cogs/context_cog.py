@@ -65,7 +65,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             embed.set_footer(text=f"Analyzed via {model}")
             await interaction.followup.send(embed=embed, ephemeral=True)
             audit_log(interaction.user, "context_analyze", detail=content[:100])
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="Analyze with AI"), ephemeral=True)
 
     async def _save_to_memory(self, interaction: discord.Interaction, message: discord.Message):
@@ -84,7 +84,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
                 ephemeral=True,
             )
             audit_log(interaction.user, "context_save", detail=content[:100])
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.response.send_message(embed=build_error_embed(e, context="Save to Memory"), ephemeral=True)
 
     async def _research_message(self, interaction: discord.Interaction, message: discord.Message):
@@ -112,7 +112,7 @@ class ContextMenuCog(commands.Cog, name="ContextMenus"):
             embed.set_footer(text=f"Researched via {model}")
             await interaction.followup.send(embed=embed)
             audit_log(interaction.user, "context_research", detail=content[:100])
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="Research This"), ephemeral=True)
 
 

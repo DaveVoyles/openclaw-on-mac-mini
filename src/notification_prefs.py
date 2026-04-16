@@ -46,7 +46,7 @@ class NotificationPrefsStore:
                 data = json.loads(self._path.read_text())
                 for uid_str, prefs_dict in data.items():
                     self._prefs[int(uid_str)] = UserNotifPrefs(**prefs_dict)
-            except Exception as e:
+            except (OSError, json.JSONDecodeError, ValueError, TypeError, KeyError) as e:
                 log.warning("Failed to load notification prefs: %s", e)
 
     async def _save(self):
@@ -97,7 +97,7 @@ def _load_user_prefs() -> dict:
     if _USER_PREFS_FILE.exists():
         try:
             return json.loads(_USER_PREFS_FILE.read_text())
-        except Exception as exc:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
             log.warning("Failed to load user_prefs.json: %s", exc)
     return {}
 
@@ -106,7 +106,7 @@ def _save_user_prefs(data: dict) -> None:
     try:
         _USER_PREFS_FILE.parent.mkdir(parents=True, exist_ok=True)
         _USER_PREFS_FILE.write_text(json.dumps(data, indent=2))
-    except Exception as exc:
+    except (OSError, ValueError, TypeError) as exc:
         log.warning("Failed to save user_prefs.json: %s", exc)
 
 

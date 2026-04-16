@@ -88,7 +88,7 @@ async def _get_access_token() -> str | None:
             body = await resp.text()
             log.error("Token refresh failed %s: %s", resp.status, body[:200])
             return None
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Token refresh error: %s", e)
         return None
 
@@ -144,7 +144,7 @@ async def get_upcoming_events(days: int = 7) -> str:
                 body = await resp.text()
                 return f"❌ Calendar API error {resp.status}: {body[:200]}"
             data = await resp.json()
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Calendar request failed: {e}"
 
     items = data.get("items", [])
@@ -225,7 +225,7 @@ async def create_calendar_event(
                 return result
             body = await resp.text()
             return f"❌ Failed to create event ({resp.status}): {body[:200]}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Calendar create error: {e}"
 
 
@@ -265,7 +265,7 @@ async def get_todays_events() -> str:
                 body = await resp.text()
                 return f"❌ Calendar API error {resp.status}: {body[:200]}"
             data = await resp.json()
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Calendar request failed: {e}"
 
     items = data.get("items", [])
@@ -317,7 +317,7 @@ async def delete_calendar_event(event_id: str) -> str:
                 return f"✅ Event `{event_id}` deleted successfully."
             body = await resp.text()
             return f"❌ Failed to delete event ({resp.status}): {body[:200]}"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return f"❌ Calendar delete error: {e}"
 
 

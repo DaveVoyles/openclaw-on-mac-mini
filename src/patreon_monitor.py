@@ -184,7 +184,7 @@ class PatreonHealthChecker:
         except asyncio.TimeoutError:
             log.warning("docker inspect timed out")
             return "unknown"
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             log.error(f"Error checking container status: {e}")
             return "unknown"
 
@@ -207,7 +207,7 @@ class PatreonHealthChecker:
         except aiohttp.ClientError as e:
             log.warning(f"MonsterVision API client error: {e}")
             return False, None
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Error checking MonsterVision API: {e}")
             return False, None
 
@@ -266,7 +266,7 @@ class PatreonHealthChecker:
                     return age_seconds / 3600
         except asyncio.TimeoutError:
             log.warning("Cookie age check timed out")
-        except Exception as e:
+        except (OSError, ValueError, UnicodeDecodeError) as e:
             log.debug(f"Could not determine cookie age: {e}")
 
         return None

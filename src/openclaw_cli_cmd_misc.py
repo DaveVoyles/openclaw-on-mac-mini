@@ -168,7 +168,7 @@ def _cmd_histsearch(ctx: ChatCommandContext) -> str:
                     dt = datetime.datetime.fromisoformat(ts)
                     diff = int((datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None) - dt).total_seconds())
                     rel = f"[dim] ({diff//3600}h ago)[/]" if diff >= 3600 else f"[dim] ({diff//60}m ago)[/]"
-                except Exception:  # noqa: BLE001
+                except (ValueError, TypeError, AttributeError):  # noqa: BLE001
                     pass
             _RICH_CONSOLE.print(f"  [dim]#{idx:<4}[/] {highlighted}{rel}")
         _RICH_CONSOLE.print()
@@ -285,7 +285,7 @@ def _cmd_rate(ctx: ChatCommandContext) -> str:
                 content=f"rated: {label} ({score}/5)",
                 metadata={"score": score, "label": label},
             )
-        except Exception:
+        except (AttributeError, OSError, TypeError):
             _cli._LOG.debug("append_event for rating failed", exc_info=True)
             pass
 
@@ -852,7 +852,7 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
                 capture_output=True, text=True, timeout=10
             )
             diff_text = result.stdout or result.stderr
-        except Exception as e:  # noqa: BLE001
+        except (OSError, subprocess.SubprocessError) as e:  # noqa: BLE001
             diff_text = f"Error: {e}"
     else:
         parts = arg.split(None, 1)
@@ -869,7 +869,7 @@ def _cmd_diff(ctx: ChatCommandContext) -> str:
                 capture_output=True, text=True, timeout=10
             )
             diff_text = result.stdout or "(no differences)"
-        except Exception as e:  # noqa: BLE001
+        except (OSError, subprocess.SubprocessError) as e:  # noqa: BLE001
             diff_text = f"Error: {e}"
 
     if not diff_text or not diff_text.strip():
@@ -903,7 +903,7 @@ def _cmd_changes(ctx: ChatCommandContext) -> str:
             capture_output=True, text=True, timeout=5
         )
         git_changes = result.stdout.strip()
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError):  # noqa: BLE001
         git_changes = ""
 
     if _RICH_AVAILABLE and is_tty:

@@ -56,7 +56,7 @@ def _version_tuple(v: str) -> tuple[int, ...]:
     """Convert a version string like '2026.3.20' or '0.6.0' to a comparable tuple."""
     try:
         return tuple(int(x) for x in v.split("."))
-    except Exception:
+    except (ValueError, TypeError):
         return (0,)
 
 
@@ -70,7 +70,7 @@ def _fetch_latest_pypi_version(timeout: float = 3.0) -> str | None:
         with request.urlopen(req, timeout=timeout) as resp:
             data = json.loads(resp.read())
             return str(data["info"]["version"])
-    except Exception:
+    except Exception:  # broad: intentional — urlopen can raise many exception types (OSError, timeout, etc.)
         return None
 
 
@@ -147,7 +147,7 @@ def _standalone_install_dir() -> str | None:
         marker = script.parent / "openclaw_cli_sessions.py"
         if marker.exists() and "site-packages" not in str(script):
             return str(script.parent)
-    except Exception:
+    except (OSError, AttributeError):
         pass
     return None
 
@@ -191,7 +191,7 @@ def _update_standalone_install(install_dir: str, *, current: str, base_url: str)
                 _RICH_CONSOLE.print("  [green]✓[/]")
             else:
                 print("  ✓")
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             failed.append((fname, str(exc)))
             if _RICH_AVAILABLE and _IS_TTY:
                 _RICH_CONSOLE.print("  [red]✗[/]")

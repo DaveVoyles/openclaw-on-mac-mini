@@ -57,7 +57,7 @@ def _load_feeds() -> list[dict]:
     if _FEEDS_FILE.exists():
         try:
             return json.loads(_FEEDS_FILE.read_text())
-        except Exception as exc:
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
             log.debug("Failed to load feeds: %s", exc)
     return []
 
@@ -119,7 +119,7 @@ def _parse_feed(xml_text: str, limit: int = 10) -> tuple[str, list[dict]]:
                 try:
                     dt = parsedate_to_datetime(date_raw)
                     date_fmt = dt.strftime("%Y-%m-%d")
-                except Exception as exc:
+                except (ValueError, TypeError) as exc:
                     log.debug("RSS date parse failed for %r: %s", date_raw, exc)
                     date_fmt = date_raw[:10]
             items.append({"title": title, "url": url, "date": date_fmt, "summary": summary.strip()})
@@ -179,7 +179,7 @@ async def fetch_rss_feed(url: str, limit: int = 10) -> str:
             xml_text = await resp.text(errors="replace")
     except asyncio.TimeoutError:
         return f"❌ Feed timed out: `{url}`"
-    except Exception as e:
+    except aiohttp.ClientError as e:
         return f"❌ Could not fetch feed `{url}`: {e}"
 
     feed_title, items = _parse_feed(xml_text, limit)
@@ -229,7 +229,7 @@ async def search_rss(url: str, query: str) -> str:
             allow_redirects=True,
         ) as resp:
             xml_text = await resp.text(errors="replace")
-    except Exception as e:
+    except aiohttp.ClientError as e:
         return f"❌ {e}"
 
     feed_title, items = _parse_feed(xml_text, _MAX_ITEMS)
@@ -307,7 +307,7 @@ async def get_rss_digest(urls_json: str, topic: str = "") -> str:
         from llm import chat as _llm_chat
         digest, _, _ = await asyncio.wait_for(_llm_chat(prompt), timeout=30)
         return digest[:1900]
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("RSS digest LLM call failed: %s", e)
         # Fallback: return raw truncated feed text
         return f"📰 **RSS Digest** (raw — LLM unavailable)\n\n{combined[:1800]}"

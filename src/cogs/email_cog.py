@@ -57,7 +57,7 @@ class EmailCog(commands.Cog):
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("email inbox failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/email inbox"), ephemeral=True)
 
@@ -86,7 +86,7 @@ class EmailCog(commands.Cog):
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("email search failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/email search"), ephemeral=True)
 
@@ -123,7 +123,7 @@ class EmailCog(commands.Cog):
                     color=discord.Color.blue(),
                 )
                 await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("email read failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/email read"), ephemeral=True)
 
@@ -159,7 +159,7 @@ class EmailCog(commands.Cog):
             embed.add_field(name="Subject", value=subject, inline=True)
             embed.add_field(name="Provider", value=provider.title(), inline=True)
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("email send failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/email send"), ephemeral=True)
 

@@ -63,7 +63,7 @@ class NoteCog(commands.Cog):
             if tag_list:
                 embed.add_field(name="Tags", value=", ".join(f"`{t}`" for t in tag_list))
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("note create failed")
             await interaction.followup.send(f"❌ Failed to save note: {e}", ephemeral=True)
 
@@ -87,7 +87,7 @@ class NoteCog(commands.Cog):
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("note list failed")
             await interaction.followup.send(f"❌ Failed to list notes: {e}", ephemeral=True)
 
@@ -120,7 +120,7 @@ class NoteCog(commands.Cog):
                     color=discord.Color.blue(),
                 )
                 await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("note view failed")
             await interaction.followup.send(f"❌ Failed to view note: {e}", ephemeral=True)
 
@@ -136,7 +136,7 @@ class NoteCog(commands.Cog):
             for f in VAULT_DIR.rglob("*.md"):
                 try:
                     content = f.read_text()
-                except Exception:
+                except (OSError, UnicodeDecodeError):
                     continue
                 if query_lower in content.lower() or query_lower in f.name.lower():
                     preview = ""
@@ -161,7 +161,7 @@ class NoteCog(commands.Cog):
                     color=discord.Color.orange(),
                 )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("note search failed")
             await interaction.followup.send(f"❌ Search failed: {e}", ephemeral=True)
 

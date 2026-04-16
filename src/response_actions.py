@@ -173,7 +173,7 @@ class ResponseActions(discord.ui.View):
                 f"Saved from /ask: {self._question[:100]}", fact
             )
             await interaction.followup.send(f"📌 Saved to memory.\n{result}", ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
 
     @discord.ui.button(label="🔄 Regenerate", style=discord.ButtonStyle.secondary, row=0)
@@ -202,7 +202,7 @@ class ResponseActions(discord.ui.View):
             embed = discord.Embed(description=response_text[:_EMBED_LIMIT], color=discord.Color.purple())
             embed.set_footer(text=f"🔄 Regenerated | via {model_used}")
             await interaction.followup.send(embed=embed)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"❌ Regeneration failed: {e}")
 
     @discord.ui.button(label="📧 Email", style=discord.ButtonStyle.secondary, row=0)
@@ -214,7 +214,7 @@ class ResponseActions(discord.ui.View):
                 body=self._response_text,
             )
             await interaction.followup.send(f"📧 Emailed!\n{result}", ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"❌ Email failed: {e}", ephemeral=True)
 
     @discord.ui.button(label="🔒 Lock to Channel", style=discord.ButtonStyle.secondary, row=2)
@@ -320,7 +320,7 @@ class ResponseActions(discord.ui.View):
                     bot=self._bot,
                 )
                 await interaction.followup.send(embed=embed, view=view)
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 await interaction.followup.send(f"❌ Follow-up failed: {e}")
         return callback
 
@@ -351,7 +351,7 @@ class ResponseActions(discord.ui.View):
             )
             embed.set_footer(text=f"🔁 Deep dive | via {model_used}")
             await interaction.followup.send(embed=embed)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"❌ Failed: {e}")
 
     async def _download_callback(self, interaction: discord.Interaction) -> None:

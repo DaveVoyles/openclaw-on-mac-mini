@@ -131,7 +131,7 @@ class ToolHealthTracker:
             if _HEALTH_FILE.exists():
                 self._stats = json.loads(_HEALTH_FILE.read_text())
                 log.info("Loaded tool health stats for %d tools", len(self._stats))
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
             log.warning("Failed to load tool health file: %s", e)
             self._stats = {}
 
@@ -139,7 +139,7 @@ class ToolHealthTracker:
         try:
             _HEALTH_FILE.parent.mkdir(parents=True, exist_ok=True)
             _HEALTH_FILE.write_text(json.dumps(self._stats, indent=2))
-        except Exception as e:
+        except (OSError, ValueError, TypeError) as e:
             log.warning("Failed to save tool health: %s", e)
 
     def record(self, tool_name: str, success: bool) -> None:

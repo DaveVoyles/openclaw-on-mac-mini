@@ -80,7 +80,7 @@ class ThreadPersistence:
             _atomic_write(path, json.dumps(payload, indent=2))
             log.info("Saved thread '%s' for user %d (%d msgs)", name, user_id, len(conv.history))
             return f"✅ Saved thread **{name}** ({len(conv.history)} messages)."
-        except Exception as e:
+        except (OSError, TypeError, ValueError) as e:
             log.error("Failed to save thread: %s", e)
             return f"❌ Could not save thread: {e}"
 
@@ -133,7 +133,7 @@ class ThreadPersistence:
                 f"(saved {saved_str}). Continue with `/ask`."
             )
             return conv, status
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, ValueError, KeyError) as e:
             log.error("Failed to load thread: %s", e)
             return None, f"❌ Could not load thread: {e}"
 
@@ -152,7 +152,7 @@ class ThreadPersistence:
         }
         try:
             _atomic_write(path, json.dumps(payload, indent=2))
-        except Exception as e:
+        except (OSError, TypeError, ValueError) as e:
             log.warning("Auto-save failed for user %d: %s", user_id, e)
 
     def list_threads(self, user_id: int) -> str:
@@ -194,7 +194,7 @@ class ThreadPersistence:
                     f"{icon} **{name}**{tag} — {msgs} msgs · {size_kb:.1f} KB"
                     f" (~{est_tokens:,} tokens) · saved {age_text}"
                 )
-            except Exception as exc:
+            except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
                 lines.append(f"• `{f.stem}` (unreadable)")
                 log.debug("Thread file unreadable %s: %s", f.name, exc)
 
@@ -215,5 +215,5 @@ class ThreadPersistence:
             path.unlink()
             log.info("Deleted thread '%s' for user %d", name, user_id)
             return f"🗑️ Deleted thread **{name}**."
-        except Exception as e:
+        except OSError as e:
             return f"❌ Could not delete thread: {e}"

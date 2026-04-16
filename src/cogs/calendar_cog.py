@@ -41,7 +41,7 @@ class CalendarCog(commands.Cog):
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("calendar today failed")
             await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
@@ -65,7 +65,7 @@ class CalendarCog(commands.Cog):
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("calendar upcoming failed")
             await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
@@ -108,7 +108,7 @@ class CalendarCog(commands.Cog):
                 try:
                     start_dt = dateutil_parser.parse(start_part, fuzzy=True)
                     end_dt = dateutil_parser.parse(end_part, fuzzy=True)
-                except Exception:
+                except (ValueError, TypeError):
                     start_dt = None
 
             if start_dt is None:
@@ -137,7 +137,7 @@ class CalendarCog(commands.Cog):
                 color=discord.Color.green(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("calendar add failed")
             await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 
@@ -158,7 +158,7 @@ class CalendarCog(commands.Cog):
                 color=discord.Color.red(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("calendar delete failed")
             await interaction.followup.send(f"❌ Error: {e}", ephemeral=True)
 

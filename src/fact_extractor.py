@@ -101,7 +101,7 @@ async def extract_and_store_facts(
 
         return stored
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.debug("Fact extraction failed (non-fatal): %s", e)
         return []
 
@@ -129,7 +129,7 @@ async def _store_fact(fact: str, user_id: int) -> None:
                 [existing[0]["id"]],
             )
             return
-    except Exception as exc:
+    except (OSError, ValueError, AttributeError) as exc:
         log.debug("Dedup check failed, storing anyway: %s", exc)
 
     # Generate unique ID
@@ -155,5 +155,5 @@ async def _store_fact(fact: str, user_id: int) -> None:
     try:
         from qmd import remember_fact
         await remember_fact(fact, tags="auto-extracted", source="auto-extracted")
-    except Exception as exc:
+    except (ImportError, OSError, ValueError, AttributeError) as exc:
         log.debug("QMD store for auto-extracted fact failed: %s", exc)

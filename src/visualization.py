@@ -194,7 +194,7 @@ def create_stock_chart(
             "cached": False,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Error creating stock chart: {e}")
         return {
             "status": "error",
@@ -317,7 +317,7 @@ def create_trend_chart(
             "cached": False,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Error creating trend chart: {e}")
         return {
             "status": "error",
@@ -444,7 +444,7 @@ def create_comparison_chart(
             "cached": False,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Error creating comparison chart: {e}")
         return {
             "status": "error",
@@ -475,7 +475,7 @@ def clear_chart_cache() -> dict[str, Any]:
             "status": "ok",
             "cleared": count,
         }
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Error clearing chart cache: {e}")
         return {
             "status": "error",

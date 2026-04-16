@@ -62,7 +62,7 @@ class NasCog(commands.Cog, name="NAS"):
         await interaction.response.defer()
         try:
             result = await get_nas_storage_health()
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.exception("NAS status failed")
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -89,7 +89,7 @@ class NasCog(commands.Cog, name="NAS"):
         await interaction.response.defer()
         try:
             result = await get_disk_smart_status()
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.exception("NAS health failed")
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -116,7 +116,7 @@ class NasCog(commands.Cog, name="NAS"):
         await interaction.response.defer()
         try:
             result = await get_nas_alerts()
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.exception("NAS alerts failed")
             await interaction.followup.send(
                 embed=discord.Embed(
@@ -144,7 +144,7 @@ class NasCog(commands.Cog, name="NAS"):
         await interaction.response.defer()
         try:
             result = await nas_list_folder(path)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.exception("NAS browse failed")
             await interaction.followup.send(
                 embed=discord.Embed(

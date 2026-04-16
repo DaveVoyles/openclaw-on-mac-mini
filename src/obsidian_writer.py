@@ -140,7 +140,7 @@ async def save_to_vault(
             log.info("Vault: saved %s (%d chars)", filepath.name, len(full_doc))
             return f"✅ Saved to vault: `{subfolder}/{filename}`"
 
-        except Exception as e:
+        except OSError as e:
             log.error("Vault write failed: %s", e)
             return f"❌ Vault write failed: {e}"
 
@@ -173,7 +173,7 @@ async def list_vault(content_type: str = "") -> str:
         if len(files) > 20:
             lines.append(f"  … and {len(files) - 20} more")
         return "\n".join(lines)
-    except Exception as e:
+    except OSError as e:
         return f"❌ Vault list error: {e}"
 
 
@@ -202,7 +202,7 @@ async def index_vault_to_qmd() -> str:
         prev_state: dict[str, str] = (
             json.loads(index_state_file.read_text()) if index_state_file.exists() else {}
         )
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError):
         prev_state = {}
 
     new_state: dict[str, str] = {}
@@ -245,7 +245,7 @@ async def index_vault_to_qmd() -> str:
             await qmd_store.add(summary, tags=tags_list[:10])
             indexed += 1
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.warning("Vault index error for %s: %s", md_file, e)
 
     # Persist updated index state atomically
@@ -253,7 +253,7 @@ async def index_vault_to_qmd() -> str:
         tmp = index_state_file.with_suffix(".tmp")
         tmp.write_text(json.dumps(new_state, indent=2))
         tmp.replace(index_state_file)
-    except Exception as e:
+    except OSError as e:
         log.warning("Could not save vault index state: %s", e)
 
     result = (

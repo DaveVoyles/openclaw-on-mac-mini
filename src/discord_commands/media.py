@@ -143,14 +143,14 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
                     "❌ pypdf not installed. Add `pypdf>=4.0` to requirements.txt."
                 )
                 return
-            except Exception as e:
+            except (OSError, ValueError, TypeError) as e:
                 await interaction.followup.send(f"❌ Failed to parse PDF: {e}")
                 return
         else:
             file_type_label = filename.rsplit(".", 1)[-1].upper() if "." in filename else "text"
             try:
                 extracted_text = file_bytes.decode("utf-8", errors="replace")
-            except Exception as e:
+            except (UnicodeDecodeError, ValueError) as e:
                 await interaction.followup.send(f"❌ Could not decode file as text: {e}")
                 return
 
@@ -191,7 +191,7 @@ def _register_media_commands(bot: commands.Bot, send_morning_briefing: Callable[
         await send_morning_briefing(bot, channel_override=interaction.channel)
         try:
             await interaction.edit_original_response(content="✅ Briefing posted above.")
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — edit_original_response can fail in many ways
             log.debug("Briefing edit_original_response failed: %s", exc)
         audit_log(interaction.user, "briefing")
 

@@ -237,7 +237,7 @@ class IncidentCog(commands.Cog, name="Incident"):
             model_used = "timeout"
             report_error = "timeout"
             log.warning("Incident Copilot timed out for incident #%s", incident["id"])
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             summary = "Incident Copilot was unavailable. Manual incident workflow is still active."
             causes = []
             actions = []
@@ -552,7 +552,7 @@ class IncidentCog(commands.Cog, name="Incident"):
             )
             await thread.send(f"🚨 Incident #{incident['id']} room created for **{incident['title']}**")
             return thread
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.debug("Incident thread create failed: %s", exc)
             return None
 
@@ -564,7 +564,7 @@ class IncidentCog(commands.Cog, name="Incident"):
             return
         try:
             await channel.edit(archived=True, reason="Incident resolved")
-        except Exception as exc:
+        except discord.HTTPException as exc:
             log.debug("Failed to archive incident thread %s: %s", thread_id, exc)
 
     @staticmethod

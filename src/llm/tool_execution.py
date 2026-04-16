@@ -50,7 +50,7 @@ async def _ollama_available() -> bool:
             data = await resp.json()
             models = [m["name"] for m in data.get("models", [])]
             return any(OLLAMA_MODEL.split(":")[0] in m for m in models)
-    except Exception as exc:
+    except (aiohttp.ClientError, OSError, AttributeError) as exc:
         log.debug("Ollama availability check failed: %s", exc)
         return False
 
@@ -93,7 +93,7 @@ async def _chat_ollama(
     except asyncio.TimeoutError:
         log.warning("Ollama request timed out")
         return None
-    except Exception as e:
+    except (aiohttp.ClientError, OSError, ValueError) as e:
         log.warning("Ollama error: %s", e)
         return None
 
@@ -120,7 +120,7 @@ async def _try_local_model(
                     log.info("Served by Ollama with tools (%d calls): %.60s…",
                              len(tools_used), user_message)
                     return reply
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.info("Ollama tool calling failed, falling back: %s", e)
 
     if not force and _needs_tools(user_message):
