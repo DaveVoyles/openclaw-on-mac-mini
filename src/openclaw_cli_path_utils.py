@@ -93,6 +93,33 @@ def _detect_url_mentions(text: str) -> list[str]:
     return urls[:3]
 
 
+# Matches @file:/path/to/file and @url:https://... explicit injection markers.
+_EXPLICIT_REF_PATTERN = re.compile(
+    r'@(file|url):([^\s\)\]\>\"\']+)',
+    re.IGNORECASE,
+)
+
+
+def _detect_explicit_refs(text: str) -> list[tuple[str, str]]:
+    """Extract explicit @file: and @url: injection markers from text.
+
+    Returns a list of (kind, target) tuples where kind is 'file' or 'url'.
+    These are always injected, regardless of action verbs.
+    """
+    refs: list[tuple[str, str]] = []
+    for m in _EXPLICIT_REF_PATTERN.finditer(text):
+        kind = m.group(1).lower()
+        target = m.group(2).rstrip(".,;:!?")
+        if (kind, target) not in refs:
+            refs.append((kind, target))
+    return refs[:5]
+
+
+def _strip_explicit_refs(text: str) -> str:
+    """Remove @file: and @url: markers from text (for clean display/send)."""
+    return _EXPLICIT_REF_PATTERN.sub("", text).strip()
+
+
 def output_name_from_title(title: str, *, default_stem: str, suffix: str) -> str:
     """Build a safe output filename from free-form user input."""
     stem = re.sub(r"[^a-zA-Z0-9]+", "-", str(title or "").strip().lower()).strip("-")

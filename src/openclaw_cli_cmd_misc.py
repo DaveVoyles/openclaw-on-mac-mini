@@ -734,6 +734,30 @@ def _cmd_tip(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_copy(ctx: ChatCommandContext) -> str:
+    """/copy — copy the last AI response to the macOS clipboard."""
+    import subprocess
+    m = _get_cli_mod()
+    text = str(getattr(m, "_last_response_text", "") or "").strip()
+    if not text:
+        print(f"  {_DM}Nothing to copy — no response yet.{_R}")
+        return _CMD_CONTINUE
+    try:
+        proc = subprocess.run(
+            ["pbcopy"],
+            input=text.encode("utf-8"),
+            check=True,
+        )
+        _ = proc  # suppress unused warning
+        chars = len(text)
+        print(f"  {_DM}✅ Copied {chars:,} chars to clipboard.{_R}")
+    except FileNotFoundError:
+        print(f"  {_RE}error:{_R} pbcopy not found — clipboard copy requires macOS.")
+    except subprocess.CalledProcessError as e:
+        print(f"  {_RE}error:{_R} pbcopy failed: {e}")
+    return _CMD_CONTINUE
+
+
 # ---------------------------------------------------------------------------
 # _print_key_bindings / _cmd_keys
 # ---------------------------------------------------------------------------

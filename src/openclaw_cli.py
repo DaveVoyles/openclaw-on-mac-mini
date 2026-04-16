@@ -315,6 +315,7 @@ from openclaw_cli_cmd_core import _cmd_write as _cmd_write  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_bindlist as _cmd_bindlist  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_celebrate as _cmd_celebrate  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_changes as _cmd_changes  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_copy as _cmd_copy  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_diff as _cmd_diff  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_followup as _cmd_followup  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_freq as _cmd_freq  # noqa: F401
@@ -420,7 +421,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "2026.4.16"
-_CLI_BUILD = "wave48"  # updated with each UX wave batch
+_CLI_BUILD = "wave49"  # updated with each UX wave batch
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
@@ -4249,7 +4250,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Accessibility
     "accessibility", "a11y",
     # Misc / fun
-    "rate", "ratehint", "celebrate", "inject", "system", "prompt",
+    "rate", "ratehint", "copy", "clip", "celebrate", "inject", "system", "prompt",
     "pasteguard", "followup", "tokeninfo",
 })
 
@@ -4320,12 +4321,25 @@ def _detect_url_mentions(text: str) -> "list[str]":
     return _path_utils._detect_url_mentions(text)
 
 
+def _detect_explicit_refs(text: str) -> "list[tuple[str, str]]":
+    return _path_utils._detect_explicit_refs(text)
+
+
+def _strip_explicit_refs(text: str) -> str:
+    return _path_utils._strip_explicit_refs(text)
+
+
 # Prompt keywords that indicate the user wants to edit/modify a file (for write-back).
 _EDIT_INTENT_RE = _re.compile(
     r'\b(edit|update|modify|rewrite|fix|improve|change|refactor|revise|correct|'
     r'clean\s+up|reformat|replace|overwrite|save|write\s+back)\b',
     _re.IGNORECASE,
 )
+
+# Detects when the AI responded with a short clarifying question rather than a real answer.
+_CLARIFYING_Q_RE = _re.compile(r'\?\s*$')
+_CLARIFYING_NOISE = _re.compile(r'(\[1\]|https?://|```|---|\*\*\*)')
+_CLARIFYING_MAX_CHARS = 350
 
 
 def _print_path_hints(paths: "list[str]") -> None:
@@ -4492,6 +4506,7 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("workflow",     "Manage previewable workflows (/workflow [save|list|show|preview|run|rm] [name])",                       _cmd_workflow,     ()),
     ("pattern",      "Manage reusable pattern-library flows (/pattern [save|list|show|preview|run|rm] [name])",               _cmd_pattern,      ("patterns",)),
     ("rate",         "Rate the last AI response (/rate [good|ok|bad|meh|1-5])",                                               _cmd_rate,         ("feedback",)),
+    ("copy",         "Copy the last AI response to the clipboard (/copy)",                                                    _cmd_copy,         ("clip",)),
     ("celebrate",    "Trigger a celebration animation (/celebrate [message])",                                                 _cmd_celebrate,    ()),
     ("quality",      "Show response quality stats and predictions (/quality [predict])",                                       _cmd_quality,      ()),
     ("routing",      "Inspect learned route suggestions (/routing [suggest|analyze])",                                        _cmd_routing,      ()),
@@ -4816,6 +4831,47 @@ def run_chat(
                 ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
                 ".mp3", ".mp4", ".mov", ".avi", ".exe", ".bin", ".dmg",
             })
+
+            # @file: and @url: explicit injection markers — always injected.
+            _explicit_refs = _detect_explicit_refs(prompt)
+            if _explicit_refs:
+                prompt = _strip_explicit_refs(prompt)
+            import urllib.request as _urllib_req
+            for _ref_kind, _ref_target in _explicit_refs:
+                if _ref_kind == "file":
+                    _fp = Path(_ref_target).expanduser()
+                    if not _fp.is_file():
+                        print(f"  {_DM}↳ @file: {_ref_target} not found{_R}")
+                    elif _fp.suffix.lower() in _BINARY_EXTS:
+                        print(f"  {_DM}↳ skipping @file: {_ref_target} (binary){_R}")
+                    elif _fp.stat().st_size >= 500_000:
+                        print(f"  {_DM}↳ skipping @file: {_ref_target} (too large){_R}")
+                    else:
+                        try:
+                            _content = _fp.read_text(encoding="utf-8", errors="replace")
+                            _auto_file_chunks.append(f"[File: {_ref_target}]\n{_content}")
+                            _auto_injected_paths.append(_ref_target)
+                            print(f"  {_DM}↳ reading @file: {_ref_target}{_R}")
+                        except OSError:
+                            pass
+                elif _ref_kind == "url":
+                    print(f"  {_DM}↳ fetching @url: {_ref_target}{_R}", end="", flush=True)
+                    try:
+                        _req = _urllib_req.Request(
+                            _ref_target,
+                            headers={"User-Agent": "Mozilla/5.0 (OpenClaw CLI)"},
+                        )
+                        with _urllib_req.urlopen(_req, timeout=10) as _resp:
+                            _raw = _resp.read(200_000)
+                        _url_text = _raw.decode("utf-8", errors="replace")
+                        if "<html" in _url_text[:1000].lower():
+                            _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
+                            _url_text = _re.sub(r"\s{2,}", " ", _url_text)
+                        _auto_file_chunks.append(f"[URL: {_ref_target}]\n{_url_text[:100_000]}")
+                        print(f" ✓")
+                    except Exception as _ref_err:
+                        print(f" ✗ ({_ref_err})")
+
             for _fpath in _detect_file_paths(prompt):
                 _fp = Path(_fpath).expanduser()
                 if not _fp.is_file():
@@ -4838,7 +4894,6 @@ def run_chat(
             for _url in _detect_url_mentions(prompt):
                 print(f"  {_DM}↳ fetching {_url}{_R}", end="", flush=True)
                 try:
-                    import urllib.request as _urllib_req
                     _req = _urllib_req.Request(
                         _url,
                         headers={"User-Agent": "Mozilla/5.0 (OpenClaw CLI)"},
@@ -4913,28 +4968,113 @@ def run_chat(
         _last_response_text = response.response or ""
 
         # Write-back: if the prompt had edit intent and files were auto-injected,
-        # offer to save the AI response back to each source file.
+        # show a diff preview then offer to save the AI response back to each source file.
         if _auto_injected_paths and _EDIT_INTENT_RE.search(prompt) and _IS_TTY and not config.output_json:
+            import difflib as _difflib
             _response_text = response.response or ""
             for _wb_path in _auto_injected_paths:
+                _code_match = _re.search(r"```(?:\w+)?\n(.*?)```", _response_text, _re.DOTALL)
+                _content_to_save = _code_match.group(1).rstrip("\n") if _code_match else _response_text
+                # Show a compact diff preview before prompting.
+                _wb_fp = Path(_wb_path).expanduser()
+                _wb_before = _wb_fp.read_text(encoding="utf-8", errors="replace") if _wb_fp.is_file() else ""
+                if _wb_before:
+                    _diff_lines = list(_difflib.unified_diff(
+                        _wb_before.splitlines(keepends=True),
+                        _content_to_save.splitlines(keepends=True),
+                        fromfile=f"current: {_wb_path}",
+                        tofile=f"proposed: {_wb_path}",
+                        n=2,
+                    ))
+                    if _diff_lines:
+                        _shown = _diff_lines[:30]
+                        for _dl in _shown:
+                            _pfx = _DM
+                            if _dl.startswith("+") and not _dl.startswith("+++"):
+                                _pfx = "\033[32m"  # green
+                            elif _dl.startswith("-") and not _dl.startswith("---"):
+                                _pfx = "\033[31m"  # red
+                            print(f"  {_pfx}{_dl.rstrip()}{_R}")
+                        if len(_diff_lines) > 30:
+                            print(f"  {_DM}... ({len(_diff_lines) - 30} more lines){_R}")
+                    else:
+                        print(f"  {_DM}(no changes){_R}")
+                else:
+                    print(f"  {_DM}(new file){_R}")
                 try:
-                    _wb_choice = input(f"  {_DM}💾 Save response to {_wb_path}? [y/N]{_R} ").strip().lower()
+                    _wb_choice = input(f"  {_DM}💾 Save to {_wb_path}? [y/N]{_R} ").strip().lower()
                 except (EOFError, KeyboardInterrupt):
                     break
                 if _wb_choice == "y":
-                    _code_match = _re.search(r"```(?:\w+)?\n(.*?)```", _response_text, _re.DOTALL)
-                    _content_to_save = _code_match.group(1).rstrip("\n") if _code_match else _response_text
                     try:
                         write_text_file(_wb_path, content=_content_to_save)
                         print(f"  {_DM}✅ Saved to {_wb_path}{_R}")
                     except OSError as _wb_err:
                         print(f"  {_BRE}error:{_R} could not write {_wb_path}: {_wb_err}")
-        history.extend(
-            [
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": response.response},
-            ]
-        )
+
+        # Clarifying question detection: if the AI responded with a short question
+        # instead of a real answer, surface an inline follow-up prompt.
+        _resp_text_for_q = (response.response or "").strip()
+        _clarify_handled = False
+        if (
+            _IS_TTY
+            and not config.output_json
+            and len(_resp_text_for_q) <= _CLARIFYING_MAX_CHARS
+            and _CLARIFYING_Q_RE.search(_resp_text_for_q)
+            and not _CLARIFYING_NOISE.search(_resp_text_for_q)
+        ):
+            try:
+                _clarify = input(f"  {_DM}↳ {_R}").strip()
+            except (EOFError, KeyboardInterrupt):
+                _clarify = ""
+            if _clarify:
+                # Add the clarification to history and send immediately.
+                history.extend([
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": response.response},
+                ])
+                try:
+                    if ask_func is invoke_openclaw and should_use_streaming(config):
+                        _spin_stop2, _spin_thread2 = _ui_utils_mod._start_stream_spinner(
+                            f"{_e('💬', '>>')} Thinking…",
+                            is_tty=_IS_TTY,
+                            output_json=config.output_json,
+                        )
+                        response = invoke_openclaw_stream(
+                            _clarify,
+                            config=config,
+                            history=list(history),
+                            _stop_spinner=_spin_stop2,
+                        )
+                        if _spin_stop2 is not None and not _spin_stop2.is_set():
+                            _spin_stop2.set()
+                        if _spin_thread2 is not None:
+                            _spin_thread2.join(timeout=0.5)
+                    else:
+                        response = _with_spinner(
+                            f"{_e('💬', '>>')} Thinking…",
+                            ask_func,
+                            _clarify,
+                            config=config,
+                            history=list(history),
+                            output_json=config.output_json,
+                        )
+                    print_response(response, output_json=config.output_json, elapsed=None)
+                    _print_animated_separator()
+                    _last_response_text = response.response or ""
+                    history.append({"role": "user", "content": _clarify})
+                    history.append({"role": "assistant", "content": response.response})
+                    _clarify_handled = True
+                    prompt = _clarify
+                except (KeyboardInterrupt, OpenClawCliError):
+                    pass
+        if not _clarify_handled:
+            history.extend(
+                [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": response.response},
+                ]
+            )
         # Proactive context-overflow warning — fires once per threshold crossing.
         if not config.output_json and not _compact:
             _emit_context_overflow_warning(history, session_id=session_id)
