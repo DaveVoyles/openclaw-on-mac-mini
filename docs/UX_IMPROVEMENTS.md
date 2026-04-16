@@ -411,13 +411,13 @@ match work.
 
 ### Done-When
 
-- [ ] Tab completes `/` commands (names and first argument)
-- [ ] Up/Down arrow navigates history; history persists across restarts
-- [ ] Ctrl-R launches reverse history search
-- [ ] `/cmd ?` prints usage and returns to prompt
-- [ ] Mistyped command shows "Did you mean /X?" suggestion
-- [ ] Falls back to `readline` or plain `input()` when `prompt_toolkit` is
-      missing, bypassed, or unavailable in the current environment
+- [x] Tab completes `/` commands (names and first argument) (shipped: `_SlashCompleter` + `readline.set_completer` in openclaw_cli.py:4505–4553)
+- [x] Up/Down arrow navigates history; history persists across restarts (shipped: `readline.read_history_file` / `write_history_file` via `HISTORY_FILE` in openclaw_cli.py:3884–3902)
+- [x] Ctrl-R launches reverse history search (shipped: emacs mode set at openclaw_cli.py:4514; Ctrl+R documented in help table at openclaw_cli.py:4348)
+- [x] `/cmd ?` prints usage and returns to prompt (shipped: inline-help branch at openclaw_cli.py:4686–4691)
+- [x] Mistyped command shows "Did you mean /X?" suggestion (shipped: openclaw_cli.py:4715)
+- [x] Falls back to `readline` or plain `input()` when `prompt_toolkit` is
+      missing, bypassed, or unavailable in the current environment (shipped: `_overlay_available()` guard + PromptSession None-check at openclaw_cli.py:4542)
 - [ ] 180 tests pass
 - [ ] Deployed to macbook
 
@@ -668,9 +668,9 @@ sideways.
 - [x] `/help search route` returns matching commands and aliases
 - [x] Empty-state commands suggest the next likely command instead of stopping at “none found”
 - [x] `/rollback list` shows recent checkpoints and whether each one is recoverable
-- [ ] Failed routed actions print a concrete recovery hint when one exists
+- [x] Failed routed actions print a concrete recovery hint when one exists (shipped: `recovery_hint` param in `openclaw_cli_actions.py:160,242`; `_build_error_recovery_hints()` in openclaw_cli.py:1410)
 - [ ] Approval flows end with a short “what happened / how to recover” recap for risky actions
-- [ ] Usage errors follow one consistent style across REPL commands
+- [ ] Usage errors follow one consistent style across REPL commands (partial: `_print_error` / `_print_usage` helpers exist across multiple modules but cross-command consistency not enforced)
 - [x] 180 tests pass
 - [x] Deployed to macbook
 
@@ -818,8 +818,8 @@ from inside the CLI instead of buried in JSON state files.
 - [x] `/watch retry-limit N` updates persisted retry behavior for the active watch session
 - [x] `/watch intervene` records operator notes that appear in later history output
 - [x] `/plan status` and `/plan focus` make linked plan progress readable in the CLI
-- [ ] Session/status output surfaces active automation state by default
-- [ ] Retry paths explain when the CLI auto-retried and why
+- [ ] Session/status output surfaces active automation state by default (partial: `automation_status` surfaced in `openclaw_cli_session_display.py:1058–1062` but only in detail/expanded view, not top-line default)
+- [ ] Retry paths explain when the CLI auto-retried and why (partial: `retry_history` with `attempt_count` tracked in `openclaw_cli_watch.py`; no UI text yet explaining "auto-retried because X" to users)
 - [x] 180 tests pass
 - [x] Deployed to macbook
 
@@ -888,11 +888,11 @@ feel inspectable, not mysterious.
 
 ### Done-When
 
-- [ ] `/why` explains the last route/tool decision from recorded session data
-- [ ] Auto-routed actions surface a visible confidence badge
-- [ ] Users can inspect the exact grounding block used for the last analyze/research/write action
-- [ ] Saved outputs expose prompt/session lineage and provenance metadata
-- [ ] `/events` can filter down to decision-centric entries
+- [x] `/why` explains the last route/tool decision from recorded session data (shipped: `_cmd_why` in openclaw_cli_cmd_core.py:466)
+- [x] Auto-routed actions surface a visible confidence badge (shipped: `_confidence_badge()` in openclaw_cli_router.py:1361; printed inline after routing at router.py:1371–1393)
+- [ ] Users can inspect the exact grounding block used for the last analyze/research/write action (partial: `/context` shows bounded grounding preview via `_render_effective_grounding_preview` in openclaw_cli.py:2370, but not the exact block for the last specific action)
+- [x] Saved outputs expose prompt/session lineage and provenance metadata (shipped: `.provenance.json` sidecar written by `save_output` in openclaw_cli_sessions.py:854; `load_output_provenance()` at sessions.py:864)
+- [x] `/events` can filter down to decision-centric entries (shipped: `/events decisions [n]` filter in `_cmd_events` at openclaw_cli_cmd_session.py:77–78)
 - [ ] Approval prompts explain why a risk level was chosen
 - [ ] Ambiguous prompts that stay in chat can explain the top blocking reason
 - [ ] 180 tests pass
@@ -959,11 +959,11 @@ state so users can work on complex prompts without fighting the terminal.
 
 ### Done-When
 
-- [ ] Multiline compose mode works without bypassing slash-command routing
-- [ ] `/draft save`, `/draft load`, and `/draft clear` manage unsent prompts predictably
-- [ ] Large risky pastes surface a preview-oriented safeguard before execution
-- [ ] Prompt badges reflect normal vs draft vs multiline state
-- [ ] Interrupted or failed submissions can restore the last unsent prompt
+- [x] Multiline compose mode works without bypassing slash-command routing (shipped: `_read_multiline_input()` + `_multiline_mode` flag in openclaw_cli.py:408–4622; `/draft multiline on|off` in openclaw_cli_cmd_core.py:1463)
+- [x] `/draft save`, `/draft load`, and `/draft clear` manage unsent prompts predictably (shipped: `_cmd_draft()` in openclaw_cli_cmd_core.py:1427; all three subcommands implemented)
+- [x] Large risky pastes surface a preview-oriented safeguard before execution (shipped: paste-guard check at openclaw_cli.py:4671; `/pasteguard` toggle at cli.py:4437)
+- [ ] Prompt badges reflect normal vs draft vs multiline state (partial: multiline badge rendered in `_make_prompt()` at openclaw_cli.py:4073; draft-active badge not yet shown in prompt string)
+- [x] Interrupted or failed submissions can restore the last unsent prompt (shipped: `/draft restore` subcommand in openclaw_cli_cmd_core.py:1455)
 - [ ] 180 tests pass
 - [ ] Deployed to macbook
 

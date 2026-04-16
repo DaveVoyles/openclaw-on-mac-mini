@@ -107,6 +107,14 @@ relevant section of `docs/UX_IMPROVEMENTS.md`.
 - **Why now:** Large portions of `src/` had no direct unit-test coverage and many broad `except Exception` catches silently swallowed failures, making regressions hard to detect.
 - **Next step:** Shipped. W18–W22 added 1,165+ unit tests for previously untested modules and narrowed 280+ overly broad exception catches across all `src/` files. New coverage gaps and remaining broad catches should be tracked through the tech-debt audit log and surfaced here when a new wave is warranted.
 
+### Initiative: Wave 24 — Recovery UX + Exception Hardening Finale
+
+- **Status:** in progress
+- **Owner area:** cli, cross-cutting
+- **Supporting doc:** `docs/UX_IMPROVEMENTS.md`, `docs/tech_debt.md`
+- **Why now:** Remaining deferred UX items — approval recap, auto-retry notes, consistent usage error messages — and the final ~102 untagged broad exception catches are actionable and low-risk.
+- **Next step:** Three parallel lanes: Han (recovery UX), Leia (docs audit), Chewie (exception hardening).
+
 ### 3. CLI technical-debt follow-up
 
 `docs/tech_debt.md` shows the major TD waves through TD-34a and TD-34b as shipped. Treat that
