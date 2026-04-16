@@ -890,7 +890,7 @@ feel inspectable, not mysterious.
 
 - [x] `/why` explains the last route/tool decision from recorded session data (shipped: `_cmd_why` in openclaw_cli_cmd_core.py:466)
 - [x] Auto-routed actions surface a visible confidence badge (shipped: `_confidence_badge()` in openclaw_cli_router.py:1361; printed inline after routing at router.py:1371–1393)
-- [ ] Users can inspect the exact grounding block used for the last analyze/research/write action (partial: `/context` shows bounded grounding preview via `_render_effective_grounding_preview` in openclaw_cli.py:2370, but not the exact block for the last specific action)
+- [x] Users can inspect the exact grounding block used for the last analyze/research/write action (`_PREFS["_last_grounding_block"]` stored at `openclaw_cli.py:4731`; `/context last` displays it via `openclaw_cli_cmd_core.py:216`)
 - [x] Saved outputs expose prompt/session lineage and provenance metadata (shipped: `.provenance.json` sidecar written by `save_output` in openclaw_cli_sessions.py:854; `load_output_provenance()` at sessions.py:864)
 - [x] `/events` can filter down to decision-centric entries (shipped: `/events decisions [n]` filter in `_cmd_events` at openclaw_cli_cmd_session.py:77–78)
 - [x] Approval prompts explain why a risk level was chosen (shipped: `_rationale_line` set to "CRITICAL risk: this action is irreversible…" / "HIGH risk: this action modifies the filesystem…" at `openclaw_cli_actions.py:363–370`)
