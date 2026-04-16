@@ -4827,22 +4827,6 @@ def run_chat(
             _print_response_separator(label="Response", detail="answer reveal", status="active")
 
         print_response(response, output_json=config.output_json, elapsed=_elapsed)
-        if body := (response.response or ""):
-            _paths = _detect_file_paths(body)
-            if _paths:
-                _print_path_hints(_paths)
-            _print_predictive_affordances(
-                _dedupe_preserve_order(
-                    [
-                        f"/exec — run a shell command to investigate {_paths[0]}" if _paths and not _paths[0].startswith("/") else "",
-                        "/context to verify what the next request will inherit" if session_id else "",
-                        "/pin <name> to save this answer for reuse" if body.strip() else "",
-                        "/outputs to review saved artifacts for this session" if session_id else "",
-                    ]
-                ),
-                title="Suggested follow-ups",
-                border_style="cyan",
-            )
         _print_animated_separator()
         global _last_response_text
         _last_response_text = response.response or ""
