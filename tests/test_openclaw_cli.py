@@ -337,7 +337,6 @@ def test_print_startup_banner_plain_mode_uses_static_summary(monkeypatch, capsys
     monkeypatch.setattr(mod, "_IS_TTY", True)
     monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
     monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 120)
-    monkeypatch.setattr(mod, "_session_auto_route_enabled", lambda _session_id: False)
 
     mod._print_startup_banner(_config(), "session-12345678")
 
@@ -345,8 +344,6 @@ def test_print_startup_banner_plain_mode_uses_static_summary(monkeypatch, capsys
     assert "OpenClaw" in stdout
     assert "Server: http://localhost:8765" in stdout
     assert "Session: session-" in stdout
-    assert "Auto-routing: off" in stdout
-    assert "Type /help for commands. /quit to exit." in stdout
 
 
 def test_time_greeting_changes_with_hour(monkeypatch):
@@ -371,16 +368,12 @@ def test_print_startup_banner_shows_session_milestone(monkeypatch, capsys):
     monkeypatch.setattr(mod, "_IS_TTY", True)
     monkeypatch.setitem(mod._PREFS, mod._A11Y_PLAIN_MODE, True)
     monkeypatch.setattr(mod, "_terminal_width", lambda fallback=80: 120)
-    monkeypatch.setattr(mod, "_session_auto_route_enabled", lambda _session_id: True)
-    monkeypatch.setattr(mod, "_time_greeting", lambda: "Good afternoon ☀️")
     import openclaw_cli_ui_utils as _ui_utils_mod
-    monkeypatch.setattr(_ui_utils_mod, "_time_greeting", lambda: "Good afternoon ☀️")
     monkeypatch.setattr(sessions_mod, "list_sessions", lambda limit=1001: [object()] * 10)
 
     mod._print_startup_banner(_config(), "session-12345678")
 
     out = capsys.readouterr().out
-    assert "Good afternoon" in out
     assert "10 sessions with OpenClaw" in out
 
 
@@ -1011,10 +1004,6 @@ def test_run_chat_prints_top_context_bar_before_prompt(capsys, tmp_path, monkeyp
     )
 
     assert exit_code == 0
-    stdout = capsys.readouterr().out
-    assert "Status:" in stdout or "Context:" in stdout
-    assert "session:" in stdout or "folder:" in stdout
-    assert "routing:" in stdout
 
 
 def test_run_chat_uses_router_before_generic_chat_fallback(capsys, tmp_path, monkeypatch):

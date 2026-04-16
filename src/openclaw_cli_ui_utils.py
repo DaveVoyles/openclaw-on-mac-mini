@@ -35,11 +35,9 @@ from openclaw_cli_prefs import (
     _PREFS,
     _emoji_pack_name,
 )
-from openclaw_cli_router import _session_auto_route_enabled
 from openclaw_cli_session_cmds import _build_workspace_capsule_plain_lines
 from openclaw_cli_session_display import _progress_cell
 from openclaw_cli_ui_core import (
-    _B,
     _BBL,
     _BCY,
     _BGR,
@@ -280,7 +278,6 @@ def _with_spinner(
 
 def _print_startup_banner(config: "CliConfig", session_id: str) -> None:
     """Print a colored startup banner for the interactive REPL."""
-    autoroute_on = _session_auto_route_enabled(session_id)
     ver = cli_version()
     cols = _terminal_width()
 
@@ -299,15 +296,11 @@ def _print_startup_banner(config: "CliConfig", session_id: str) -> None:
 
     # Plain-mode path: no ANSI, no emoji, no decorative borders.
     if _a11y_plain_mode() or cols < 40:
-        autoroute_str = "on" if autoroute_on else "off"
         print(f"🦞 OpenClaw {ver}")
-        print(_time_greeting())
         print(f"Server: {config.base_url}")
         print(f"User: {config.user_name}")
         if session_id:
             print(f"Session: {session_id[:8]}…")
-        print("Type /help for commands. /quit to exit.")
-        print(f"Auto-routing: {autoroute_str}")
         if _milestone:
             print(f"  🎉 {_milestone} sessions with OpenClaw! That's a milestone!")
         return
@@ -318,30 +311,11 @@ def _print_startup_banner(config: "CliConfig", session_id: str) -> None:
         t.append(f"  {ver}", style="cyan dim")
         t.append("  connected to ", style="dim")
         t.append(config.base_url, style="cyan")
-        t.append(f"\n  {_time_greeting()}", style="dim")
         t.append(f"\n  {_e('👤', '[user]')} ", style="dim")
         t.append(config.user_name, style="bold green")
         if session_id:
             t.append(f"  ·  {_e('🗂', '[session]')}  session: ", style="dim")
             t.append(session_id[:8] + "…", style="yellow")
-        t.append("\n\n  ", style="")
-        t.append("Type anything to chat", style="dim")
-        t.append(" · ", style="dim")
-        t.append("/help", style="bold cyan")
-        t.append(" for commands", style="dim")
-        t.append(" · ", style="dim")
-        t.append("/quit", style="bold cyan")
-        t.append(" to exit", style="dim")
-        t.append(" · ", style="dim")
-        t.append("Tab", style="bold")
-        t.append(" completes /commands", style="dim")
-        t.append("\n  ", style="")
-        t.append("Auto-routing", style="bold")
-        if autoroute_on:
-            t.append(" is on — smart prompts route to analyze/research/exec automatically", style="dim")
-        else:
-            t.append(" is off", style="dim yellow")
-            t.append(" — use /autoroute on to enable", style="dim")
         _RICH_CONSOLE.print(
             _RichPanel(
                 t,
@@ -356,19 +330,11 @@ def _print_startup_banner(config: "CliConfig", session_id: str) -> None:
         session_line = (
             f"\n  {_DM}{_e('🗂', '[session]')}  session:{_R}  {_YE}{session_id[:8]}…{_R}" if session_id else ""
         )
-        if autoroute_on:
-            autoroute_line = f"\n  {_B}Auto-routing{_R} {_DM}is on — smart prompts route to analyze/research/exec automatically{_R}"
-        else:
-            autoroute_line = f"\n  {_B}Auto-routing{_R} {_YE}is off{_R} {_DM}— use /autoroute on to enable{_R}"
         print(
             f"\n{_BCY}{_e('🦞', '[openclaw]')} OpenClaw{_R}  {_DM}{ver}{_R}"
-            f"\n  {_DM}{_time_greeting()}{_R}"
             f"\n  {_DM}connected to{_R}  {_CY}{config.base_url}{_R}"
             f"\n  {_DM}{_e('👤', '[user]')} user:{_R}      {_BGR}{config.user_name}{_R}"
-            f"{session_line}"
-            f"\n"
-            f"\n  Type anything to chat · {_BCY}/help{_R} for commands · {_BCY}/quit{_R} to exit · {_B}Tab{_R}{_DM} completes /commands{_R}"
-            f"{autoroute_line}\n"
+            f"{session_line}\n"
         )
         if _milestone:
             print(f"  🎉 {_BCY}{_milestone} sessions with OpenClaw!{_R} {_DM}That's a milestone!{_R}")

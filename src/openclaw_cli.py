@@ -4607,23 +4607,9 @@ def run_chat(
     prompt_session = _build_prompt_toolkit_session() if input_func is input and not _a11y_plain_mode() else None
     if not no_banner:
         _print_startup_banner(config, session_id)
-        _print_shell_top_bar(
-            session_id=session_id,
-            model_name=config.model,
-            autoroute_on=_session_auto_route_enabled(session_id),
-            output_json=config.output_json,
-        )
-    _maybe_show_startup_tip(config, session_id, history)
     while True:
         try:
             autoroute_on = _session_auto_route_enabled(session_id)
-            _print_top_context_bar(
-                session_id=session_id,
-                history_len=len(history),
-                autoroute_on=autoroute_on,
-                output_json=config.output_json,
-            )
-            _print_shell_bottom_bar(mode="chat", output_json=config.output_json)
             prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode, draft_active=bool(_draft_buffer))
             if _multiline_mode:
                 prompt = _read_multiline_input(input_func, prompt_str)
@@ -4810,11 +4796,6 @@ def run_chat(
             continue
         except OpenClawCliError as exc:
             print(f"{_BRE}error:{_R} {exc}", file=sys.stderr)
-            _print_predictive_affordances(
-                _build_error_recovery_hints(str(exc), session_id=session_id) + ["/reset to clear chat history if the context feels stuck"],
-                title="Recovery menu",
-                border_style="red",
-            )
             continue
 
         # Visual separator + status bar (skipped in compact layout)
