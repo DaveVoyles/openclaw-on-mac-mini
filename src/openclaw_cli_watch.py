@@ -1454,6 +1454,10 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                                 "elapsed_seconds": active_checkpoint.get("duration_seconds"),
                             },
                         )
+                        if not config.output_json:
+                            print(
+                                f"  ⚠ Watch stopped — exhausted retries after {attempt} attempt(s)"
+                            )
                         raise OpenClawCliError(
                             f"Watch poll {state['poll_count']} failed after {attempt} attempt(s): {error_message}"
                         ) from exc
@@ -1549,5 +1553,9 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
         watch_interval_seconds=interval_seconds,
     )
     if not config.output_json:
+        poll_count = int(state.get("poll_count") or 0)
+        last_summary = str(state.get("last_summary") or "").strip()
+        excerpt = last_summary[:60] if last_summary else "no output"
+        print(f"  ✓ Watch session complete — {poll_count} iteration(s), last: {excerpt}")
         _print_meta_footer(("session", session.session_id))
     return 0

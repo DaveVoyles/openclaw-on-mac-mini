@@ -374,6 +374,36 @@ def _print_startup_banner(config: "CliConfig", session_id: str) -> None:
             print(f"  🎉 {_BCY}{_milestone} sessions with OpenClaw!{_R} {_DM}That's a milestone!{_R}")
 
 
+def _watch_status_cell(session_id: str) -> str | None:
+    """Return a compact watch-state cell for the status bar, or None if no active watch.
+
+    Loads the persisted watch state for *session_id* and maps the current
+    ``status`` field to a short indicator string:
+
+    * ``"running"`` / ``"active"`` / ``"watching"`` → ``"⟳ watching"``
+    * ``"retrying"``                                  → ``"↺ retrying"``
+    * anything else (idle, completed, …)              → ``None``
+
+    Always degrades gracefully — any I/O or parsing error returns ``None``.
+    """
+    if not session_id:
+        return None
+    try:
+        from openclaw_cli_sessions import load_watch_state  # noqa: PLC0415
+
+        state = load_watch_state(session_id)
+        if not state:
+            return None
+        status = str(state.get("status") or "").strip().lower()
+        if status in {"running", "active", "watching"}:
+            return "⟳ watching"
+        if status == "retrying":
+            return "↺ retrying"
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _print_status_bar(
     *,
     session_id: str = "",
@@ -405,8 +435,11 @@ def _print_status_bar(
     if turns and not narrow:
         parts.append(f"{_e('💬', 'msgs:')} {turns} turn{'s' if turns != 1 else ''}")
     autoroute_state = "on" if autoroute_on else "off"
+    watch_cell = _watch_status_cell(session_id)
     if _a11y_plain_mode():
         parts.append(f"autoroute {autoroute_state}")
+        if watch_cell:
+            parts.append(watch_cell)
         print("Status: " + " | ".join(parts))
         return
     if _a11y_high_contrast():
@@ -414,6 +447,8 @@ def _print_status_bar(
     else:
         color = "\033[32m" if autoroute_on else "\033[33m"
     parts.append(f"autoroute {color}{autoroute_state}{_R}")
+    if watch_cell:
+        parts.append(watch_cell)
     if narrow:
         for idx, part in enumerate(parts):
             prefix = "Status:" if idx == 0 else "       "
