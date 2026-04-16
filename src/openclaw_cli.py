@@ -316,6 +316,9 @@ from openclaw_cli_cmd_misc import _cmd_bindlist as _cmd_bindlist  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_celebrate as _cmd_celebrate  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_changes as _cmd_changes  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_copy as _cmd_copy  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_notify as _cmd_notify  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_retry as _cmd_retry  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_save as _cmd_save  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_diff as _cmd_diff  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_followup as _cmd_followup  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_freq as _cmd_freq  # noqa: F401
@@ -421,7 +424,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "2026.4.16"
-_CLI_BUILD = "wave49"  # updated with each UX wave batch
+_CLI_BUILD = "wave50"  # updated with each UX wave batch
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
@@ -4250,7 +4253,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Accessibility
     "accessibility", "a11y",
     # Misc / fun
-    "rate", "ratehint", "copy", "clip", "celebrate", "inject", "system", "prompt",
+    "rate", "ratehint", "copy", "clip", "save", "retry", "notify", "celebrate", "inject", "system", "prompt",
     "pasteguard", "followup", "tokeninfo",
 })
 
@@ -4507,6 +4510,9 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("pattern",      "Manage reusable pattern-library flows (/pattern [save|list|show|preview|run|rm] [name])",               _cmd_pattern,      ("patterns",)),
     ("rate",         "Rate the last AI response (/rate [good|ok|bad|meh|1-5])",                                               _cmd_rate,         ("feedback",)),
     ("copy",         "Copy the last AI response to the clipboard (/copy)",                                                    _cmd_copy,         ("clip",)),
+    ("save",         "Save the last AI response to a file (/save [filename])",                                                _cmd_save,         ()),
+    ("retry",        "Re-send the last prompt, optionally with a different model (/retry [--model <name>])",                  _cmd_retry,        ()),
+    ("notify",       "Toggle macOS desktop notifications for long requests (/notify [on|off])",                               _cmd_notify,       ()),
     ("celebrate",    "Trigger a celebration animation (/celebrate [message])",                                                 _cmd_celebrate,    ()),
     ("quality",      "Show response quality stats and predictions (/quality [predict])",                                       _cmd_quality,      ()),
     ("routing",      "Inspect learned route suggestions (/routing [suggest|analyze])",                                        _cmd_routing,      ()),
@@ -4756,6 +4762,15 @@ def run_chat(
             return 0
         if result == _CMD_CONTINUE:
             continue
+        if result == "_retry":
+            _retry_prompt = str(_PREFS.pop("_retry_prompt", "") or "")
+            _retry_model = str(_PREFS.pop("_retry_model", "") or "")
+            if _retry_prompt:
+                prompt = _retry_prompt
+                if _retry_model:
+                    config = _dc_replace(config, model=_retry_model)
+            else:
+                continue
 
         # Unknown slash command — don't send to the AI; suggest closest match.
         if prompt.startswith("/"):
@@ -4871,6 +4886,40 @@ def run_chat(
                         print(f" ✓")
                     except Exception as _ref_err:
                         print(f" ✗ ({_ref_err})")
+                elif _ref_kind == "clip":
+                    import subprocess as _subp
+                    try:
+                        _clip_text = _subp.run(
+                            ["pbpaste"], capture_output=True, text=True, check=True
+                        ).stdout.strip()
+                        if _clip_text:
+                            _auto_file_chunks.append(f"[Clipboard]\n{_clip_text[:100_000]}")
+                            print(f"  {_DM}↳ reading @clip: {len(_clip_text):,} chars from clipboard{_R}")
+                        else:
+                            print(f"  {_DM}↳ @clip: clipboard is empty{_R}")
+                    except (FileNotFoundError, Exception) as _clip_err:
+                        print(f"  {_DM}↳ @clip: could not read clipboard ({_clip_err}){_R}")
+                elif _ref_kind == "dir":
+                    _dp = Path(_ref_target).expanduser()
+                    if not _dp.is_dir():
+                        print(f"  {_DM}↳ @dir: {_ref_target} not found or not a directory{_R}")
+                    else:
+                        _dir_files = sorted(
+                            p for p in _dp.iterdir()
+                            if p.is_file()
+                            and p.suffix.lower() not in _BINARY_EXTS
+                            and p.stat().st_size < 200_000
+                        )[:20]
+                        if not _dir_files:
+                            print(f"  {_DM}↳ @dir: {_ref_target} — no readable text files found{_R}")
+                        else:
+                            print(f"  {_DM}↳ reading @dir: {_ref_target} ({len(_dir_files)} files){_R}")
+                            for _df in _dir_files:
+                                try:
+                                    _dc = _df.read_text(encoding="utf-8", errors="replace")
+                                    _auto_file_chunks.append(f"[File: {_df}]\n{_dc}")
+                                except OSError:
+                                    pass
 
             for _fpath in _detect_file_paths(prompt):
                 _fp = Path(_fpath).expanduser()
@@ -4966,6 +5015,23 @@ def run_chat(
         _print_animated_separator()
         global _last_response_text
         _last_response_text = response.response or ""
+
+        # Desktop notification for long requests (macOS only, best-effort).
+        if _PREFS.get("desktop_notify") and _elapsed >= 10.0 and _IS_TTY:
+            import subprocess as _notif_subp
+            _notif_summary = (_last_response_text[:80].replace('"', "'") + "…") if _last_response_text else "Done"
+            try:
+                _notif_subp.run(
+                    [
+                        "osascript", "-e",
+                        f'display notification "{_notif_summary}" with title "OpenClaw" subtitle "Response ready ({_elapsed:.0f}s)"',
+                    ],
+                    check=False,
+                    timeout=3,
+                    capture_output=True,
+                )
+            except Exception:
+                pass
 
         # Write-back: if the prompt had edit intent and files were auto-injected,
         # show a diff preview then offer to save the AI response back to each source file.

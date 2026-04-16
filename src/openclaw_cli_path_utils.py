@@ -93,30 +93,34 @@ def _detect_url_mentions(text: str) -> list[str]:
     return urls[:3]
 
 
-# Matches @file:/path/to/file and @url:https://... explicit injection markers.
+# Matches @file:/path/to/file, @url:https://..., @dir:/path, @clip injection markers.
 _EXPLICIT_REF_PATTERN = re.compile(
-    r'@(file|url):([^\s\)\]\>\"\']+)',
+    r'@(file|url|dir):([^\s\)\]\>\"\']+)|@(clip)\b',
     re.IGNORECASE,
 )
 
 
 def _detect_explicit_refs(text: str) -> list[tuple[str, str]]:
-    """Extract explicit @file: and @url: injection markers from text.
+    """Extract explicit @file:, @url:, @dir:, and @clip injection markers from text.
 
-    Returns a list of (kind, target) tuples where kind is 'file' or 'url'.
-    These are always injected, regardless of action verbs.
+    Returns a list of (kind, target) tuples where kind is 'file', 'url', 'dir',
+    or 'clip' (target is empty string for @clip). Always injected, no action verb needed.
     """
     refs: list[tuple[str, str]] = []
     for m in _EXPLICIT_REF_PATTERN.finditer(text):
-        kind = m.group(1).lower()
-        target = m.group(2).rstrip(".,;:!?")
-        if (kind, target) not in refs:
-            refs.append((kind, target))
+        if m.group(3):  # @clip
+            entry: tuple[str, str] = ("clip", "")
+        else:
+            kind = m.group(1).lower()
+            target = m.group(2).rstrip(".,;:!?")
+            entry = (kind, target)
+        if entry not in refs:
+            refs.append(entry)
     return refs[:5]
 
 
 def _strip_explicit_refs(text: str) -> str:
-    """Remove @file: and @url: markers from text (for clean display/send)."""
+    """Remove @file:, @url:, @dir:, and @clip markers from text (for clean display/send)."""
     return _EXPLICIT_REF_PATTERN.sub("", text).strip()
 
 

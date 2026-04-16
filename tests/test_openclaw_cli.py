@@ -6351,9 +6351,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave49(self):
-        """_CLI_BUILD must equal 'wave49'."""
-        assert mod._CLI_BUILD == "wave49"
+    def test_cli_build_is_wave50(self):
+        """_CLI_BUILD must equal 'wave50'."""
+        assert mod._CLI_BUILD == "wave50"
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -7428,9 +7428,9 @@ class TestCmdTip:
         ):
             assert command in tips_text
 
-    def test_cli_build_is_wave49(self):
-        """_CLI_BUILD is updated to wave49."""
-        assert mod._CLI_BUILD == "wave49"
+    def test_cli_build_is_wave50(self):
+        """_CLI_BUILD is updated to wave50."""
+        assert mod._CLI_BUILD == "wave50"
 
 
 class TestCmdTokeninfo:
@@ -7530,9 +7530,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave49(self):
-        """_CLI_BUILD == 'wave49'."""
-        assert mod._CLI_BUILD == "wave49"
+    def test_cli_build_is_wave50(self):
+        """_CLI_BUILD == 'wave50'."""
+        assert mod._CLI_BUILD == "wave50"
 
 
 class TestCmdKeybind:
@@ -7840,9 +7840,9 @@ class TestCmdTimeline:
         out = capsys.readouterr().out
         assert "Timeline" in out or "2024-06" in out
 
-    def test_cli_build_is_wave49(self):
-        """_CLI_BUILD == 'wave49'."""
-        assert mod._CLI_BUILD == "wave49"
+    def test_cli_build_is_wave50(self):
+        """_CLI_BUILD == 'wave50'."""
+        assert mod._CLI_BUILD == "wave50"
 
 
 class TestCmdBookmarks:
@@ -8094,8 +8094,8 @@ class TestCmdColorscheme:
         assert result == mod._CMD_CONTINUE
         assert prefs.get("color_scheme") == "default"
 
-    def test_cli_build_is_wave49(self):
-        assert mod._CLI_BUILD == "wave49"
+    def test_cli_build_is_wave50(self):
+        assert mod._CLI_BUILD == "wave50"
 
 
 class TestCmdFollowup:
@@ -8328,6 +8328,29 @@ class TestSourcesBugFixes:
         import openclaw_cli_path_utils as pu
         refs = pu._detect_explicit_refs("no explicit refs here")
         assert refs == []
+
+    def test_detect_explicit_refs_clip(self):
+        import openclaw_cli_path_utils as pu
+        refs = pu._detect_explicit_refs("summarize @clip for me")
+        assert ("clip", "") in refs
+
+    def test_detect_explicit_refs_dir(self):
+        import openclaw_cli_path_utils as pu
+        refs = pu._detect_explicit_refs("what files are in @dir:/tmp/myproject?")
+        assert ("dir", "/tmp/myproject") in refs
+
+    def test_strip_explicit_refs_clip(self):
+        import openclaw_cli_path_utils as pu
+        cleaned = pu._strip_explicit_refs("summarize @clip please")
+        assert "@clip" not in cleaned
+        assert "summarize" in cleaned
+
+    def test_detect_explicit_refs_all_types(self):
+        import openclaw_cli_path_utils as pu
+        text = "use @file:/a.md @url:https://x.com @dir:/src @clip"
+        refs = pu._detect_explicit_refs(text)
+        kinds = {r[0] for r in refs}
+        assert kinds == {"file", "url", "dir", "clip"}
 class TestCmdTrace:
     def _ctx(self, args: str = "", session_id: str = "session-34") -> mod.ChatCommandContext:
         return mod.ChatCommandContext(history=[], session_id=session_id, args=args)

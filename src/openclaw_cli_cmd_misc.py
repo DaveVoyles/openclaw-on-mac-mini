@@ -758,6 +758,71 @@ def _cmd_copy(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+def _cmd_save(ctx: ChatCommandContext) -> str:
+    """/save [filename] — save the last AI response to a file."""
+    import datetime
+    m = _get_cli_mod()
+    text = str(getattr(m, "_last_response_text", "") or "").strip()
+    if not text:
+        print(f"  {_DM}Nothing to save — no response yet.{_R}")
+        return _CMD_CONTINUE
+    args = ctx.args.strip()
+    if args:
+        path = args
+    else:
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        path = f"openclaw-response-{stamp}.md"
+    from openclaw_cli_actions import write_text_file
+    try:
+        result = write_text_file(path, content=text)
+        print(f"  {_DM}✅ Saved to {result.path} ({len(text):,} chars){_R}")
+    except OSError as e:
+        print(f"  {_RE}error:{_R} could not write {path}: {e}")
+    return _CMD_CONTINUE
+
+
+def _cmd_retry(ctx: ChatCommandContext) -> str:
+    """/retry [--model <name>] — re-send the last prompt, optionally with a different model."""
+    m = _get_cli_mod()
+    last_prompt = str((m._PREFS or {}).get("_last_prompt", "") or "").strip()
+    if not last_prompt:
+        print(f"  {_DM}No previous prompt to retry.{_R}")
+        return _CMD_CONTINUE
+    args = ctx.args.strip().split()
+    override_model: str | None = None
+    if "--model" in args:
+        idx = args.index("--model")
+        if idx + 1 < len(args):
+            override_model = args[idx + 1]
+    if override_model:
+        print(f"  {_DM}↳ retrying with model: {override_model}…{_R}")
+    else:
+        print(f"  {_DM}↳ retrying…{_R}")
+    # Store retry info in a special prefs key; the REPL loop reads it next tick.
+    m._PREFS["_retry_prompt"] = last_prompt
+    if override_model:
+        m._PREFS["_retry_model"] = override_model
+    return "_retry"
+
+
+def _cmd_notify(ctx: ChatCommandContext) -> str:
+    """/notify [on|off] — toggle macOS desktop notifications for long requests (>10s)."""
+    m = _get_cli_mod()
+    prefs = m._PREFS
+    arg = ctx.args.strip().lower()
+    if arg in {"on", "1", "true", "yes"}:
+        prefs["desktop_notify"] = True
+        print(f"  {_DM}🔔 Desktop notifications: on (fires after requests >10s){_R}")
+    elif arg in {"off", "0", "false", "no"}:
+        prefs["desktop_notify"] = False
+        print(f"  {_DM}🔕 Desktop notifications: off{_R}")
+    else:
+        current = prefs.get("desktop_notify", False)
+        state = "on" if current else "off"
+        print(f"  {_DM}Desktop notifications: {state}  (usage: /notify on | /notify off){_R}")
+    return _CMD_CONTINUE
+
+
 # ---------------------------------------------------------------------------
 # _print_key_bindings / _cmd_keys
 # ---------------------------------------------------------------------------
