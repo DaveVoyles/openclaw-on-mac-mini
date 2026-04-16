@@ -69,6 +69,30 @@ def _detect_file_paths(text: str) -> list[str]:
     return paths[:5]
 
 
+# Action verbs that indicate the user wants the CLI to fetch and read a URL
+_URL_ACTION_VERBS = re.compile(
+    r'\b(summarize|summarise|read|explain|describe|analyze|analyse|check|review|'
+    r'what does|what is|tell me about|show me|open|fetch|get|look at)\b',
+    re.IGNORECASE,
+)
+
+
+def _detect_url_mentions(text: str) -> list[str]:
+    """Return URLs that appear to be fetch targets based on nearby action verbs.
+
+    Only returns URLs when the prompt also contains an action verb (summarize,
+    read, explain, etc.) — this avoids auto-fetching incidental citation URLs.
+    """
+    if not _URL_ACTION_VERBS.search(text):
+        return []
+    urls: list[str] = []
+    for m in _URL_PATTERN.finditer(text):
+        url = m.group(1).rstrip(".,;:!?")
+        if url not in urls:
+            urls.append(url)
+    return urls[:3]
+
+
 def output_name_from_title(title: str, *, default_stem: str, suffix: str) -> str:
     """Build a safe output filename from free-form user input."""
     stem = re.sub(r"[^a-zA-Z0-9]+", "-", str(title or "").strip().lower()).strip("-")

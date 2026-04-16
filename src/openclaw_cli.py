@@ -420,7 +420,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "2026.4.16"
-_CLI_BUILD = "wave47"  # updated with each UX wave batch
+_CLI_BUILD = "wave48"  # updated with each UX wave batch
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
@@ -4316,6 +4316,18 @@ def _detect_file_paths(text: str) -> "list[str]":
     return _path_utils._detect_file_paths(text)
 
 
+def _detect_url_mentions(text: str) -> "list[str]":
+    return _path_utils._detect_url_mentions(text)
+
+
+# Prompt keywords that indicate the user wants to edit/modify a file (for write-back).
+_EDIT_INTENT_RE = _re.compile(
+    r'\b(edit|update|modify|rewrite|fix|improve|change|refactor|revise|correct|'
+    r'clean\s+up|reformat|replace|overwrite|save|write\s+back)\b',
+    _re.IGNORECASE,
+)
+
+
 def _print_path_hints(paths: "list[str]") -> None:
     return _path_utils._print_path_hints(paths, prefs=_PREFS, is_tty=_get_is_tty(), rich_available=_RICH_AVAILABLE)
 
@@ -4798,6 +4810,7 @@ def run_chat(
 
             # Auto-inject local files mentioned in the prompt.
             _auto_file_chunks: list[str] = []
+            _auto_injected_paths: list[str] = []
             _BINARY_EXTS = frozenset({
                 ".pdf", ".docx", ".xlsx", ".pptx", ".zip", ".tar", ".gz",
                 ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
@@ -4816,9 +4829,31 @@ def run_chat(
                 try:
                     _content = _fp.read_text(encoding="utf-8", errors="replace")
                     _auto_file_chunks.append(f"[File: {_fpath}]\n{_content}")
+                    _auto_injected_paths.append(_fpath)
                     print(f"  {_DM}↳ reading {_fpath}{_R}")
                 except OSError:
                     pass
+
+            # Auto-fetch URLs mentioned near action verbs (summarize, read, explain, etc.)
+            for _url in _detect_url_mentions(prompt):
+                print(f"  {_DM}↳ fetching {_url}{_R}", end="", flush=True)
+                try:
+                    import urllib.request as _urllib_req
+                    _req = _urllib_req.Request(
+                        _url,
+                        headers={"User-Agent": "Mozilla/5.0 (OpenClaw CLI)"},
+                    )
+                    with _urllib_req.urlopen(_req, timeout=10) as _resp:
+                        _raw = _resp.read(200_000)
+                    _url_text = _raw.decode("utf-8", errors="replace")
+                    # Strip HTML tags if the response looks like HTML
+                    if "<html" in _url_text[:1000].lower():
+                        _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
+                        _url_text = _re.sub(r"\s{2,}", " ", _url_text)
+                    _auto_file_chunks.append(f"[URL: {_url}]\n{_url_text[:100_000]}")
+                    print(f" ✓")
+                except Exception as _url_err:
+                    print(f" ✗ ({_url_err})")
 
             _had_next_inject = bool(_next_inject)
             if _had_next_inject or _auto_file_chunks:
@@ -4876,6 +4911,24 @@ def run_chat(
         _print_animated_separator()
         global _last_response_text
         _last_response_text = response.response or ""
+
+        # Write-back: if the prompt had edit intent and files were auto-injected,
+        # offer to save the AI response back to each source file.
+        if _auto_injected_paths and _EDIT_INTENT_RE.search(prompt) and _IS_TTY and not config.output_json:
+            _response_text = response.response or ""
+            for _wb_path in _auto_injected_paths:
+                try:
+                    _wb_choice = input(f"  {_DM}💾 Save response to {_wb_path}? [y/N]{_R} ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    break
+                if _wb_choice == "y":
+                    _code_match = _re.search(r"```(?:\w+)?\n(.*?)```", _response_text, _re.DOTALL)
+                    _content_to_save = _code_match.group(1).rstrip("\n") if _code_match else _response_text
+                    try:
+                        write_text_file(_wb_path, content=_content_to_save)
+                        print(f"  {_DM}✅ Saved to {_wb_path}{_R}")
+                    except OSError as _wb_err:
+                        print(f"  {_BRE}error:{_R} could not write {_wb_path}: {_wb_err}")
         history.extend(
             [
                 {"role": "user", "content": prompt},

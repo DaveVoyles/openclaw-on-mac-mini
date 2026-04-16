@@ -6351,9 +6351,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave47(self):
-        """_CLI_BUILD must equal 'wave47'."""
-        assert mod._CLI_BUILD == "wave47"
+    def test_cli_build_is_wave48(self):
+        """_CLI_BUILD must equal 'wave48'."""
+        assert mod._CLI_BUILD == "wave48"
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -7428,9 +7428,9 @@ class TestCmdTip:
         ):
             assert command in tips_text
 
-    def test_cli_build_is_wave47(self):
-        """_CLI_BUILD is updated to wave47."""
-        assert mod._CLI_BUILD == "wave47"
+    def test_cli_build_is_wave48(self):
+        """_CLI_BUILD is updated to wave48."""
+        assert mod._CLI_BUILD == "wave48"
 
 
 class TestCmdTokeninfo:
@@ -7530,9 +7530,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave47(self):
-        """_CLI_BUILD == 'wave47'."""
-        assert mod._CLI_BUILD == "wave47"
+    def test_cli_build_is_wave48(self):
+        """_CLI_BUILD == 'wave48'."""
+        assert mod._CLI_BUILD == "wave48"
 
 
 class TestCmdKeybind:
@@ -7840,9 +7840,9 @@ class TestCmdTimeline:
         out = capsys.readouterr().out
         assert "Timeline" in out or "2024-06" in out
 
-    def test_cli_build_is_wave47(self):
-        """_CLI_BUILD == 'wave47'."""
-        assert mod._CLI_BUILD == "wave47"
+    def test_cli_build_is_wave48(self):
+        """_CLI_BUILD == 'wave48'."""
+        assert mod._CLI_BUILD == "wave48"
 
 
 class TestCmdBookmarks:
@@ -8094,8 +8094,8 @@ class TestCmdColorscheme:
         assert result == mod._CMD_CONTINUE
         assert prefs.get("color_scheme") == "default"
 
-    def test_cli_build_is_wave47(self):
-        assert mod._CLI_BUILD == "wave47"
+    def test_cli_build_is_wave48(self):
+        assert mod._CLI_BUILD == "wave48"
 
 
 class TestCmdFollowup:
@@ -8280,6 +8280,28 @@ class TestSourcesBugFixes:
     def test_detect_file_paths_still_finds_local_paths(self):
         paths = mod._detect_file_paths("see src/openclaw_cli.py for details")
         assert "src/openclaw_cli.py" in paths
+
+    def test_detect_url_mentions_fires_with_action_verb(self):
+        import openclaw_cli_path_utils as pu
+        urls = pu._detect_url_mentions("summarize https://example.com/readme.md for me")
+        assert "https://example.com/readme.md" in urls
+
+    def test_detect_url_mentions_no_action_verb_returns_empty(self):
+        import openclaw_cli_path_utils as pu
+        urls = pu._detect_url_mentions("I found https://example.com mentioned in the docs")
+        assert urls == []
+
+    def test_detect_url_mentions_strips_trailing_punctuation(self):
+        import openclaw_cli_path_utils as pu
+        urls = pu._detect_url_mentions("read https://example.com/path.md.")
+        assert all(not u.endswith(".") for u in urls)
+
+    def test_detect_url_mentions_caps_at_three(self):
+        import openclaw_cli_path_utils as pu
+        text = ("summarize https://a.com https://b.com https://c.com "
+                "https://d.com")
+        urls = pu._detect_url_mentions(text)
+        assert len(urls) <= 3
 class TestCmdTrace:
     def _ctx(self, args: str = "", session_id: str = "session-34") -> mod.ChatCommandContext:
         return mod.ChatCommandContext(history=[], session_id=session_id, args=args)
