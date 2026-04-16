@@ -1361,7 +1361,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                             }
                         )
                         break
-                    except Exception as exc:  # noqa: BLE001 — broad: intentional
+                    except Exception as exc:  # broad: intentional  # noqa: BLE001
                         error_message = str(exc).strip() or exc.__class__.__name__
                         transient = is_transient_watch_error(error_message)
                         finished_at = utc_timestamp()

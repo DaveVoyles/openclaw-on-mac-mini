@@ -642,7 +642,7 @@ class OpenClawBot(commands.Bot):
                 await asyncio.sleep(_AUDIT_ROTATE_INTERVAL)
                 try:
                     await rotate_audit_log()
-                except Exception as exc:  # noqa: BLE001 — broad: intentional — audit log rotation can fail in many ways
+                except Exception as exc:  # broad: intentional  # noqa: BLE001 — audit log rotation can fail in many ways
                     log.debug("Audit log rotation failed: %s", exc)
 
         asyncio.create_task(_audit_log_rotation_loop(), name="audit-log-rotation")
@@ -809,7 +809,7 @@ class OpenClawBot(commands.Bot):
         for name, fn in _close_fns:
             try:
                 await fn()
-            except Exception as exc:  # noqa: BLE001 — broad: intentional — cleanup code; keep broad
+            except Exception as exc:  # broad: intentional  # noqa: BLE001 — cleanup code; keep broad
                 log.debug("close %s: %s", name, exc)
         try:
             from metrics_collector import stop_metrics_collector
@@ -911,7 +911,7 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
     try:
         await _send_app_command_error_message(interaction, user_message)
-    except Exception as send_exc:  # noqa: BLE001 — broad: intentional — error response must not crash the handler
+    except Exception as send_exc:  # broad: intentional  # noqa: BLE001 — error response must not crash the handler
         log.exception(
             "Failed to send app command error response command=%s user_id=%s channel_id=%s guild_id=%s",
             command_name,
@@ -1008,7 +1008,7 @@ async def on_member_join(member: discord.Member) -> None:
         log.info("Sent onboarding welcome to new member %s (%s)", member, member.id)
     except discord.Forbidden:
         log.warning("Could not DM new member %s (%s) — DMs disabled", member, member.id)
-    except Exception as exc:  # noqa: BLE001 — broad: intentional — Discord event callback; must not raise
+    except Exception as exc:  # broad: intentional  # noqa: BLE001 — Discord event callback; must not raise
         log.error("on_member_join error for %s: %s", member, exc)
 
 
@@ -1046,7 +1046,7 @@ async def on_raw_reaction_add(payload: discord.RawReactionActionEvent) -> None:
 
     try:
         await handle_alert_reaction(payload.message_id, str(payload.emoji), payload.user_id)
-    except Exception as exc:  # noqa: BLE001 — broad: intentional — reaction handler must not crash
+    except Exception as exc:  # broad: intentional  # noqa: BLE001 — reaction handler must not crash
         log.debug("on_raw_reaction_add error: %s", exc)
 
 

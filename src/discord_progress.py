@@ -32,7 +32,7 @@ class ProgressTracker:
         if self._message:
             try:
                 await self._message.edit(embed=self._build_embed())
-            except Exception as exc:  # noqa: BLE001 — broad: intentional
+            except Exception as exc:  # broad: intentional  # noqa: BLE001
                 log.debug("ProgressTracker edit failed (message may be deleted): %s", exc)
 
     async def done(self, summary=""):
@@ -43,7 +43,7 @@ class ProgressTracker:
         if self._message:
             try:
                 await self._message.edit(embed=self._build_embed())
-            except Exception as exc:  # noqa: BLE001 — broad: intentional
+            except Exception as exc:  # broad: intentional  # noqa: BLE001
                 log.debug("ProgressTracker edit failed (message may be deleted): %s", exc)
 
     def _build_embed(self):
