@@ -15,16 +15,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Run offline quality calibration (advisory-only)
         env:
           PYTHONPATH: src
         run: |
-          python -m offline_quality_eval \
+          python3 -m offline_quality_eval \
             --fixtures tests/evals/fixtures/replay_prompts.json \
             --baseline .github/quality/offline_quality_baseline.json \
             --output quality-calibration-report.json
@@ -34,7 +29,7 @@ jobs:
           MAX_TARGET_ASSERTION_FAILURES: "0"
           MAX_SEVERE_DRIFT_COUNT: "0"
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
@@ -115,7 +110,7 @@ jobs:
           MAX_TARGET_ASSERTION_FAILURES: "0"
           MAX_SEVERE_DRIFT_COUNT: "0"
         run: |
-          python - <<'PY'
+          python3 - <<'PY'
           import json
           import os
           from pathlib import Path
