@@ -4779,8 +4779,22 @@ def run_chat(
             global _next_inject
             # Store prompt for /followup and auto-suggestion footer (in-memory only, not saved to disk)
             _PREFS["_last_prompt"] = prompt.strip()
-            if _next_inject:
-                effective_input = f"[Injected context]\n{_next_inject}\n\n[User message]\n{prompt}"
+
+            # Auto-inject local files mentioned in the prompt.
+            _auto_file_chunks: list[str] = []
+            for _fpath in _detect_file_paths(prompt):
+                _fp = Path(_fpath).expanduser()
+                if _fp.is_file() and _fp.stat().st_size < 500_000:
+                    try:
+                        _content = _fp.read_text(encoding="utf-8", errors="replace")
+                        _auto_file_chunks.append(f"[File: {_fpath}]\n{_content}")
+                        print(f"  {_DM}↳ reading {_fpath}{_R}")
+                    except OSError:
+                        pass
+
+            if _next_inject or _auto_file_chunks:
+                _injected_parts = ([_next_inject] if _next_inject else []) + _auto_file_chunks
+                effective_input = f"[Injected context]\n{'---'.join(_injected_parts)}\n\n[User message]\n{prompt}"
                 _next_inject = ""
             else:
                 effective_input = prompt
