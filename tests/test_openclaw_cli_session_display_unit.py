@@ -22,9 +22,8 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -32,7 +31,6 @@ import pytest
 # Import the module under test
 # ---------------------------------------------------------------------------
 import openclaw_cli_session_display as sd
-
 
 # ---------------------------------------------------------------------------
 # _parse_utc_timestamp
@@ -609,9 +607,9 @@ def test_operator_snapshot_lines_basic():
     }
     lines = sd._operator_snapshot_lines(snapshot)
     assert len(lines) >= 3
-    assert any("visibility" in l for l in lines)
-    assert any("control: visibility only; no remote control" in l for l in lines)
-    assert any("readiness" in l for l in lines)
+    assert any("visibility" in line for line in lines)
+    assert any("control: visibility only; no remote control" in line for line in lines)
+    assert any("readiness" in line for line in lines)
 
 
 def test_operator_snapshot_lines_with_watch():
@@ -621,9 +619,9 @@ def test_operator_snapshot_lines_with_watch():
         "latest_output": "report.md",
     }
     lines = sd._operator_snapshot_lines(snapshot)
-    assert any("operator watch" in l for l in lines)
-    assert any("operator queue" in l for l in lines)
-    assert any("latest output" in l for l in lines)
+    assert any("operator watch" in line for line in lines)
+    assert any("operator queue" in line for line in lines)
+    assert any("latest output" in line for line in lines)
 
 
 def test_operator_snapshot_lines_decision_truncation():
@@ -631,7 +629,7 @@ def test_operator_snapshot_lines_decision_truncation():
         "latest_decision": "x" * 200,
     }
     lines = sd._operator_snapshot_lines(snapshot)
-    decision_lines = [l for l in lines if "latest decision" in l]
+    decision_lines = [line for line in lines if "latest decision" in line]
     assert len(decision_lines) == 1
     assert len(decision_lines[0]) < 300  # truncated
 

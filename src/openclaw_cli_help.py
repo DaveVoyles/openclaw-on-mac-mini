@@ -154,7 +154,7 @@ def print_chat_help(*, search: str = "") -> None:
         "Ambiguous prompts stay in normal chat. High/critical /exec and /edit steps still require approval.\n"
         "[autoroute:off] in the prompt means auto-routing is disabled — use /autoroute on to re-enable."
     )
-    if _RICH_AVAILABLE and _IS_TTY:
+    if _RICH_AVAILABLE and _IS_TTY and _RichTable is not None and _RichPanel is not None and _RICH_CONSOLE is not None:
         title = "[bold cyan]OpenClaw Commands[/bold cyan]" + (f"  [dim]matching '{q}'[/]" if q else "")
         t = _RichTable.grid(padding=(0, 2))
         t.add_column(style="bold cyan", no_wrap=True)
@@ -193,5 +193,4 @@ def print_chat_help(*, search: str = "") -> None:
             print('  Run a command          /exec -- git diff HEAD')
             print('  Research a topic       /research latest Python async patterns')
             print('  Link a plan            /plan my-feature-plan')
-
 

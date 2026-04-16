@@ -1,14 +1,11 @@
 """Unit tests for memory_conversation_cache.py — ConversationCache class."""
 
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from memory_conversation import Conversation
 from memory_conversation_cache import ConversationCache
 from memory_helpers import CONTEXT_TTL, MIN_MESSAGES_TO_SUMMARIZE
-
 
 # ---------------------------------------------------------------------------
 # Helpers

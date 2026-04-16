@@ -3,10 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 import openclaw_cli_help as mod
-
 
 # ---------------------------------------------------------------------------
 # print_chat_help — plain text (non-TTY, non-rich fallback)
@@ -16,7 +13,8 @@ def _run_plain(search: str = "") -> str:
     """Run print_chat_help in plain text mode and capture stdout."""
     with patch.object(mod, "_IS_TTY", False), \
          patch.object(mod, "_RICH_AVAILABLE", False):
-        import io, sys
+        import io
+        import sys
         buf = io.StringIO()
         orig = sys.stdout
         sys.stdout = buf
@@ -124,7 +122,8 @@ def _get_commands_list() -> list[tuple[str, str]]:
         pass
 
     # Run in plain mode and capture the lines
-    import io, sys
+    import io
+    import sys
     buf = io.StringIO()
     orig = sys.stdout
     sys.stdout = buf
@@ -138,15 +137,15 @@ def _get_commands_list() -> list[tuple[str, str]]:
 
 def test_all_commands_start_with_slash_or_are_labels():
     lines = _get_commands_list()
-    command_lines = [l.strip() for l in lines if l.strip().startswith("/")]
+    command_lines = [line.strip() for line in lines if line.strip().startswith("/")]
     assert len(command_lines) > 50, "Expected at least 50 slash commands in help output"
 
 
 def test_no_duplicate_command_lines():
     lines = _get_commands_list()
-    command_lines = [l.strip() for l in lines if l.strip().startswith("/")]
+    command_lines = [line.strip() for line in lines if line.strip().startswith("/")]
     # Extract just the command names (first token)
-    cmd_names = [l.split()[0] for l in command_lines if l.split()]
+    cmd_names = [line.split()[0] for line in command_lines if line.split()]
     # Some commands may appear multiple times due to aliases, but generally should be unique
     # Just verify there are no exact duplicate lines
     assert len(command_lines) == len(set(command_lines))

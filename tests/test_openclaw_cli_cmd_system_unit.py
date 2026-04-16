@@ -4,8 +4,6 @@ from __future__ import annotations
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 sys.path.insert(0, "src")
 import openclaw_cli_cmd_system as mod  # type: ignore
 from openclaw_cli_types import ChatCommandContext
@@ -234,8 +232,12 @@ def test_cmd_palette_lists_all_when_no_query(capsys):
 
 
 def test_cmd_palette_filters_by_query(capsys):
-    cmd1 = MagicMock(); cmd1.name = "histsearch"; cmd1.description = "Search history"
-    cmd2 = MagicMock(); cmd2.name = "theme"; cmd2.description = "Change theme"
+    cmd1 = MagicMock()
+    cmd1.name = "histsearch"
+    cmd1.description = "Search history"
+    cmd2 = MagicMock()
+    cmd2.name = "theme"
+    cmd2.description = "Change theme"
     registry = MagicMock()
     registry.list_commands.return_value = [cmd1, cmd2]
     cli = _mock_cli()
@@ -248,7 +250,9 @@ def test_cmd_palette_filters_by_query(capsys):
 
 
 def test_cmd_palette_no_matches(capsys):
-    cmd1 = MagicMock(); cmd1.name = "theme"; cmd1.description = "Change theme"
+    cmd1 = MagicMock()
+    cmd1.name = "theme"
+    cmd1.description = "Change theme"
     registry = MagicMock()
     registry.list_commands.return_value = [cmd1]
     cli = _mock_cli()

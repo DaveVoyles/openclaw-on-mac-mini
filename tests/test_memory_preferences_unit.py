@@ -1,10 +1,7 @@
 """Unit tests for memory_preferences.py — user model and routing preferences."""
 
 import json
-from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 import memory_preferences as mp_module
 from memory_preferences import (
@@ -17,7 +14,6 @@ from memory_preferences import (
     set_model_preference,
     set_routing_profile,
 )
-
 
 # ---------------------------------------------------------------------------
 # _prefs_path

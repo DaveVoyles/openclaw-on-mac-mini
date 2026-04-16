@@ -1,8 +1,6 @@
 """Unit tests for openclaw_cli_session_cmds helpers."""
 from __future__ import annotations
 
-import pytest
-
 from openclaw_cli_session_cmds import (
     _build_event_label,
     _build_handoff_check_lines,
@@ -12,7 +10,6 @@ from openclaw_cli_session_cmds import (
     _highlight_ansi,
     _highlight_rich,
 )
-
 
 # ---------------------------------------------------------------------------
 # _format_elapsed_compact
@@ -149,8 +146,8 @@ def test_build_plan_focus_lines_no_summary():
     lines = ["- [ ] only task"]
     unchecked = [(0, "- [ ] only task")]
     result = _build_plan_focus_lines(lines, "plan-1", 1, unchecked, summary=None)
-    assert any("Done: 1" in l for l in result)
-    assert any("Remaining: 1" in l for l in result)
+    assert any("Done: 1" in line for line in result)
+    assert any("Remaining: 1" in line for line in result)
 
 
 def test_build_plan_focus_lines_single_task():
@@ -172,9 +169,9 @@ def test_build_handoff_check_lines_basic():
         "open_incidents": [],
     }
     lines = _build_handoff_check_lines(check)
-    assert any("ready" in l for l in lines)
-    assert any("OK" in l for l in lines)
-    assert any("WARN" in l for l in lines)
+    assert any("ready" in line for line in lines)
+    assert any("OK" in line for line in lines)
+    assert any("WARN" in line for line in lines)
 
 
 def test_build_handoff_check_lines_open_risks():
@@ -185,7 +182,7 @@ def test_build_handoff_check_lines_open_risks():
         "open_incidents": [],
     }
     lines = _build_handoff_check_lines(check)
-    assert any("Something risky" in l for l in lines)
+    assert any("Something risky" in line for line in lines)
 
 
 def test_build_handoff_check_lines_open_incidents():
@@ -196,7 +193,7 @@ def test_build_handoff_check_lines_open_incidents():
         "open_incidents": [{"content": "Ongoing incident"}],
     }
     lines = _build_handoff_check_lines(check)
-    assert any("Ongoing incident" in l for l in lines)
+    assert any("Ongoing incident" in line for line in lines)
 
 
 # ---------------------------------------------------------------------------
@@ -206,8 +203,8 @@ def test_build_handoff_check_lines_open_incidents():
 def test_workspace_capsule_plain_lines_minimal():
     capsule = {"cwd": "/home/user", "tracked_files": [], "bookmarks": [], "recent_outputs": []}
     lines = _build_workspace_capsule_plain_lines(capsule)
-    assert any("cwd:" in l for l in lines)
-    assert any("files:" in l for l in lines)
+    assert any("cwd:" in line for line in lines)
+    assert any("files:" in line for line in lines)
 
 
 def test_workspace_capsule_plain_lines_watch_status():
@@ -216,7 +213,7 @@ def test_workspace_capsule_plain_lines_watch_status():
         "watch_status": "active",
     }
     lines = _build_workspace_capsule_plain_lines(capsule)
-    assert any("watch: active" in l for l in lines)
+    assert any("watch: active" in line for line in lines)
 
 
 def test_workspace_capsule_plain_lines_recent_outputs():
@@ -225,7 +222,7 @@ def test_workspace_capsule_plain_lines_recent_outputs():
         "recent_outputs": [{"name": "out1"}, {"name": "out2"}],
     }
     lines = _build_workspace_capsule_plain_lines(capsule)
-    assert any("out1" in l for l in lines)
+    assert any("out1" in line for line in lines)
 
 
 def test_workspace_capsule_plain_lines_plan_task():
@@ -234,5 +231,5 @@ def test_workspace_capsule_plain_lines_plan_task():
         "plan_id": "plan-42", "task_id": "task-7",
     }
     lines = _build_workspace_capsule_plain_lines(capsule)
-    assert any("plan-42" in l for l in lines)
-    assert any("task-7" in l for l in lines)
+    assert any("plan-42" in line for line in lines)
+    assert any("task-7" in line for line in lines)

@@ -1,8 +1,6 @@
 """Unit tests for memory_session.py — session summaries and handover."""
 
 import json
-import time
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -10,13 +8,11 @@ import pytest
 import memory_session as ms_module
 from memory_session import (
     _load_last_summary,
-    _summary_path,
     _summarize_and_store,
+    _summary_path,
     create_session_handover,
     load_last_handover,
-    HANDOVER_DIR,
 )
-
 
 # ---------------------------------------------------------------------------
 # _summary_path
