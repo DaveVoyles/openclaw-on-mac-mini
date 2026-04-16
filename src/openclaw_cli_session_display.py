@@ -33,6 +33,12 @@ from openclaw_cli_sessions import (
 )
 from openclaw_cli_ui_core import _IS_TTY, _get_is_tty
 
+try:
+    from llm.context_limits import get_model_context_window as _get_model_context_window
+except ImportError:  # pragma: no cover
+    def _get_model_context_window(model_name: str | None) -> int | None:  # type: ignore[misc]
+        return None
+
 _LOG = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -219,6 +225,22 @@ def _resolve_context_limit_profile(
             "model_aware": True,
             "approximate": False,
         }
+
+    # MODEL_CONTEXT_WINDOWS lookup — precise per-model limits with prefix matching.
+    for candidate in candidates:
+        known_limit = _get_model_context_window(candidate)
+        if known_limit:
+            limit_label = _format_context_limit_label(known_limit)
+            return {
+                "limit_tokens": known_limit,
+                "limit_label": limit_label,
+                "limit_display": f"{limit_label} window",
+                "limit_note": f"Resolved from MODEL_CONTEXT_WINDOWS for `{candidate}`.",
+                "source": "model-registry",
+                "model_label": display_model,
+                "model_aware": True,
+                "approximate": False,
+            }
 
     if "gemini" in normalized:
         limit_tokens = 125_000

@@ -411,6 +411,9 @@ _multiline_mode: bool = False
 _last_response_text: str = ""
 # Content to prepend to the next outgoing message — set by /inject
 _next_inject: str = ""
+# Tracks the last proactive context-overflow threshold band that was warned.
+# Resets per run_chat session; key = session_id or "" for no-session chat.
+_context_overflow_warned: dict[str, int] = {}
 
 
 DEFAULT_BASE_URL = "http://localhost:8765"
@@ -3998,6 +4001,64 @@ def _print_status_bar(
     history_len: int = 0,
 ) -> None:
     _ui_utils_mod._print_status_bar(session_id=session_id, autoroute_on=autoroute_on, history_len=history_len, _override_is_tty=_IS_TTY, _override_rich_available=_RICH_AVAILABLE, _override_cols=_terminal_width())
+
+
+def _emit_context_overflow_warning(
+    history: list[dict[str, object]],
+    *,
+    session_id: str = "",
+) -> None:
+    """Print a one-time proactive warning when context crosses 80/90/95% capacity.
+
+    Each threshold is only emitted once per chat session to avoid noise.
+    """
+    sys_prompt = str(_PREFS.get("system_prompt", "") or "")
+    pending_inject = str(_next_inject or "")
+    model_hint = _PREFS.get("last_model", "")
+    route_hint = _PREFS.get("route_mode", "")
+    pressure = _session_display_mod._context_pressure_snapshot(
+        history,
+        system_prompt=sys_prompt,
+        pending_inject=pending_inject,
+        model_hint=model_hint,
+        route_hint=route_hint,
+    )
+    pct = int(pressure["pct_history_raw"])
+    # Determine which threshold band has been crossed.
+    if pct >= 95:
+        threshold = 95
+    elif pct >= 90:
+        threshold = 90
+    elif pct >= 80:
+        threshold = 80
+    else:
+        return  # below warning level
+
+    warned_key = session_id or ""
+    last_warned = _context_overflow_warned.get(warned_key, 0)
+    if threshold <= last_warned:
+        return  # already warned at this level or higher
+
+    _context_overflow_warned[warned_key] = threshold
+    limit_label = pressure["limit_label"]
+    model_label = pressure["limit_model_label"] or model_hint or "current model"
+    hist_tokens = int(pressure["history_tokens"])
+    limit_tokens = int(pressure["limit_tokens"])
+
+    def _fmt_tokens(n: int) -> str:
+        if n >= 1_000_000:
+            return f"{n / 1_000_000:.1f}M"
+        if n >= 1_000:
+            return f"{n // 1_000}k"
+        return str(n)
+
+    print(
+        f"\n  {_YE}⚠️  Context at {pct}% of {model_label} limit"
+        f" ({_fmt_tokens(hist_tokens)}/{_fmt_tokens(limit_tokens)} tokens)"
+        f" — consider /rollback or /clear{_R}"
+    )
+
+
 def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False) -> str:
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
     if _a11y_plain_mode():
@@ -4489,7 +4550,10 @@ def run_chat(
     no_banner: bool = False,
 ) -> int:
     """Run an interactive chat session against OpenClaw."""
+    global _context_overflow_warned
     _load_prefs()
+    # Reset per-session overflow-warning state so thresholds fire fresh each session.
+    _context_overflow_warned.pop(session_id or "", None)
     history: list[dict[str, str]] = load_conversation_history(session_id) if session_id else []
     registry = build_chat_command_registry()
     load_shell_history()
@@ -4743,6 +4807,9 @@ def run_chat(
                 {"role": "assistant", "content": response.response},
             ]
         )
+        # Proactive context-overflow warning — fires once per threshold crossing.
+        if not config.output_json and not _compact:
+            _emit_context_overflow_warning(history, session_id=session_id)
         if session_id:
             append_event(session_id, kind="chat", content=prompt, metadata={"summary": prompt})
             persist_response(session_id, prompt, response.response)
