@@ -728,6 +728,7 @@ The interactive session (`OpenClaw` / `openclaw chat`) is a hybrid REPL: natural
 | --- | --- |
 | `/session` | Show a compact summary of the current session (ID, plan/task linkage, file count, automation state) |
 | `/context` | Show the active working directory, tracked file list, linked plan/task IDs, and a bounded preview of the grounding OpenClaw will inject into the next analyze/write/research-style action |
+| `/tokeninfo` | Show per-model context window limit, actor token breakdown, usage %, and overflow warnings at 80/90/95% thresholds (W21) |
 | `/outputs` | List saved outputs for the active session with 1-based indices |
 | `/outputs <index>` or `/outputs <filename>` | Preview a saved artifact inline without leaving the REPL |
 | `/outputs overlay` | Open a searchable picker for saved outputs |
@@ -765,7 +766,16 @@ These mirror the top-level `openclaw` subcommands but run inside the current ses
 | `/why` | Explain the last routing or tool decision — shows confidence badge (`[HIGH]`/`[MED]`/`[LOW]`), rationale, and grounding |
 | `/events [n\|decisions]` | Show last N session events; `decisions` filters to route/plan/approval/exec/edit events only |
 
-### Composer & input flow
+### Shell chrome (always-on, W22)
+
+The interactive REPL prints two persistent bars on every turn — no explicit command needed:
+
+- **Top bar** (`_print_shell_top_bar`) — shown after each AI response: `session · model · autoroute` state plus a `watch: active` indicator when a watch loop is running.
+- **Bottom bar** (`_print_shell_bottom_bar`) — shown before each prompt: current mode plus 1–2 contextual hint commands.
+
+Both bars degrade gracefully: Rich+TTY renders dim unicode bars; ANSI-only TTY falls back to a plain ANSI line; plain mode and non-TTY environments emit a simple `--- key: value | … ---` text line or suppress the bar entirely below minimum width.
+
+
 
 | Command | What it does |
 | --- | --- |

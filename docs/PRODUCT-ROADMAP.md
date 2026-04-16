@@ -109,11 +109,18 @@ relevant section of `docs/UX_IMPROVEMENTS.md`.
 
 ### Initiative: Wave 24 — Recovery UX + Exception Hardening Finale
 
-- **Status:** in progress
+- **Status:** shipped
 - **Owner area:** cli, cross-cutting
 - **Supporting doc:** `docs/UX_IMPROVEMENTS.md`, `docs/tech_debt.md`
 - **Why now:** Remaining deferred UX items — approval recap, auto-retry notes, consistent usage error messages — and the final ~102 untagged broad exception catches are actionable and low-risk.
-- **Next step:** Three parallel lanes: Han (recovery UX), Leia (docs audit), Chewie (exception hardening).
+- **Next step:** Shipped. `_print_approval_recap()` and `_print_usage()` landed in `openclaw_cli_actions.py`; module extraction (TD-28 through TD-34) complete; exception hardening across all `src/` files done.
+
+### Initiative: Wave 25 — Finish-Line Sprint + Docs Refresh + Coverage
+
+- **Status:** in progress
+- **Owner area:** cli, cross-cutting
+- **Why now:** Five partial UX items remain incomplete, docs are stale relative to W21–W24 shipped features and the TD-28–TD-34 module refactor, and test coverage has gaps in router/watch/session_display.
+- **Next step:** Three workstreams — finish the 5 partial UX items, update stale docs (CLI_ARCHITECTURE.md, CLI_QUICKSTART.md, DASHBOARD_SURFACES.md, PRODUCT-ROADMAP.md), and fill test coverage gaps in router, watch, and session_display modules.
 
 ### 3. CLI technical-debt follow-up
 

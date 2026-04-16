@@ -8,12 +8,20 @@ update mechanism, standalone install, and key code locations.
 | File | Role |
 | --- | --- |
 | `src/openclaw_cli.py` | Primary CLI (~4,654 lines). Main REPL loop, `run_chat`, `main`; all `_cmd_*` handlers now live in extracted modules (see below) |
-| `src/openclaw_cli_cli_parser.py` | Extracted argument parser — exports `build_parser()`. TD-34 extraction. |
-| `src/openclaw_cli_help.py` | Extracted chat-help renderer — exports `print_chat_help()`. TD-34 extraction. |
-| `src/openclaw_cli_actions.py` | Approval prompts (`request_cli_approval`) with colored risk levels plus review/trust/recovery cues |
-| `src/openclaw_cli_cli_parser.py` | Extracted `build_parser()` — pure argparse module, no side effects (TD-34) |
-| `src/openclaw_cli_help.py` | Extracted `print_chat_help()` — generates help table from command registry (TD-34) |
+| `src/openclaw_cli_types.py` | Shared type definitions — `ChatCommandContext`, `SlashCommand`, `ChatCommandRegistry`, `AskResponse`. Leaf module; zero internal dependencies. (TD-28) |
+| `src/openclaw_cli_cmd_settings.py` | 12 settings/appearance handlers: `/theme`, `/overlay`, `/colorscheme`, `/emojiheaders`, `/emoji`, `/layout`, `/links`, `/pasteguard`, `/accessibility`, `/keybind` and related. (TD-29) |
+| `src/openclaw_cli_cmd_session.py` | 10 session lifecycle handlers: `/session`, `/events`, `/sessions`, `/export`, `/tag`, `/bookmark`, `/bookmarks`, `/resume`, `/replay`, `/handoff`. (TD-30) |
+| `src/openclaw_cli_cmd_workflow.py` | 12 workflow/automation handlers: `/watch`, `/plan`, `/task`, `/risk`, `/incident`, `/workspace`, `/macro`, `/macrostatus`, `/workflow` and related. (TD-31) |
+| `src/openclaw_cli_cmd_content.py` | 10 content/analytics handlers extracted from the primary CLI module. (TD-32) |
+| `src/openclaw_cli_cmd_core.py` | 24 system/file/exec handlers: `/help`, `/clear`, `/context`, `/cwd`, `/files`, `/routing`, `/why`, `/trace`, `/autoroute`, `/snapshot`, `/rollback`, `/analyze`, `/research`, `/write`, `/exec`, `/edit`, `/update`, `/version`, `/tokeninfo`, `/draft`, `/template`, `/inject`, `/exporttemplates`, `/runbook`. (TD-33) |
+| `src/openclaw_cli_cmd_misc.py` | UX/history/analytics handlers: `/recall`, `/histsearch`, `/celebrate`, `/rate`, `/streak`, `/heatmap`, `/followup`, `/shortcuts`, `/top`, `/freq`, `/tip`, `/keys`, `/bindlist`, `/diff`, `/changes`. (TD-33) |
+| `src/openclaw_cli_cmd_system.py` | System/prompt handlers: `/system`, `/promptdebug`, `/autobold`, `/jsonformat`, `/separator`, `/palette`, `/prompt`, `/alias`, `/pathhints`, `/ratehint`, `/benchmark`. (TD-33) |
+| `src/openclaw_cli_cli_parser.py` | Extracted `build_parser()` — pure argparse module, no side effects. (TD-34) |
+| `src/openclaw_cli_help.py` | Extracted `print_chat_help()` — generates help table from command registry. (TD-34) |
+| `src/openclaw_cli_actions.py` | Approval prompts (`request_cli_approval`) with colored risk levels plus review/trust/recovery cues; `_print_approval_recap()` recap display; `_print_usage()` consistent usage-error helper. (TD-28, W24) |
 | `src/openclaw_cli_sessions.py` | Session persistence (load/save conversation history, watch state) |
+| `src/openclaw_cli_ui_utils.py` | UI utility functions: spinner, banner, status bar, shell chrome bars. Contains `_print_shell_top_bar()` (session · model · autoroute, shown after each response) and `_print_shell_bottom_bar()` (mode + hints, shown before each prompt). Both bars degrade gracefully in plain/non-TTY/narrow modes. (W22) |
+| `src/llm/context_limits.py` | `MODEL_CONTEXT_WINDOWS` dict (13 models) and `get_model_context_window()`. Powers `/tokeninfo` per-model context limit display and 80/90/95% overflow warnings. (W21) |
 | `src/subprocess_utils.py` | Shell execution helpers used by `/exec` |
 | `src/discord_web.py` | aiohttp server — health, dashboard, `/cli-update/*` endpoints |
 | `scripts/install_openclaw_cli_remote.sh` | Push CLI files to a remote Mac via SSH+SCP |

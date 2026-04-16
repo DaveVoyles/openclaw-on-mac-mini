@@ -269,3 +269,51 @@ Deferred interaction-affordance note:
 - true browser-side pane compositors, remote-control shells, or heavier
   full-screen picker environments should stay documented as deferred until a
   later wave actually ships them
+
+---
+
+## Badge & Status Grammar
+
+> **Source of truth:** `src/openclaw_cli_session_display.py` — `_status_family()`, `_status_emoji()`, `_status_cell()`, `_progress_cell()`.
+
+All terminal surfaces that show per-item status (session lists, watch control tower, event stream, context inspector) use a shared badge grammar. The grammar is defined once and reused everywhere to keep terminology consistent between the CLI and any future dashboard mirrors.
+
+### Status families and emoji
+
+| Status family | Trigger words | Emoji (full mode) | Plain-text label |
+| --- | --- | --- | --- |
+| `complete` | ok, healthy, done, completed, success, succeeded, complete | 🟢 | `COMPLETE` |
+| `active` | active, running, in_progress, working, processing, streaming | 🔵 | `ACTIVE` |
+| `waiting` | pending, queued, waiting, scheduled | ⏳ | `WAITING` |
+| `idle` | idle | ⚪ | `IDLE` |
+| `retry` | retry, retrying, backoff, recovering | 🔄 | `RETRY` |
+| `warn` | warn, warning, degraded, attention | 🟡 | `WARN` |
+| `error` | error, failed, failure, unhealthy | 🔴 | `ERROR` |
+| `blocked` | blocked, stuck, needs_input | ⛔ | `BLOCKED` |
+| `paused` | paused, stopped, cancelled, canceled | ⏸ | `PAUSED` |
+| `info` | info, note, fresh, new | ℹ️ | `INFO` |
+| `stale` | stale, old, expired | 🕰️ | `STALE` |
+| `unknown` | (anything else) | ● | `STATUS` |
+
+### Progress-cell shape conventions
+
+`_progress_cell(label, value, *, status)` renders a compact label+value pair with an optional status badge prefix:
+
+```
+🟢 COMPLETE · phase: 3/3
+🔄 RETRY · attempt: 2
+🔴 ERROR · last err: connection refused
+```
+
+In dense list views (e.g. `/sessions`, `/watch history`) the cell fits on a single terminal line. The badge always leads — plain text label comes first, detail after ` · `.
+
+The spinner used during long-running calls (`_with_spinner()`) uses braille-frame animation (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) while the background task runs, then replaces itself with the completion cue.
+
+### Accessibility fallback (plain / non-TTY mode)
+
+When `_a11y_plain_mode()` is `True` or `sys.stdout.isatty()` is `False`, every badge-bearing surface falls back to plain text:
+
+- Emoji are suppressed; the ASCII fallback from `_e(emoji, fallback)` is used instead (e.g. `[ok]`, `[err]`, `[wait]`).
+- `_status_cell()` returns the plain-text label only (e.g. `COMPLETE`, `ERROR`).
+- Shell chrome bars (`_print_shell_top_bar`, `_print_shell_bottom_bar`) emit a simple `--- key: value | … ---` line in TTY plain-mode, and are silently suppressed in non-TTY environments below minimum width.
+- Rich styles (color, bold) are not applied; output is safe for screen readers and log capture.
