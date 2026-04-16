@@ -42,6 +42,9 @@ For documentation ownership, lifecycle rules, and artifact handling, see
 | Initiative | Status | Source detail | Next step |
 | --- | --- | --- | --- |
 | Docs governance and roadmap consolidation | Shipped foundation | This doc, `docs/index.md`, contributor/agent guidance | Keep future doc cleanup and stale-reference fixes flowing through this roadmap |
+| Per-model context limits | Shipped (W21) | `src/llm/context_limits.py`; MODEL_CONTEXT_WINDOWS dict (13 models); `/tokeninfo` model limit + usage %; 80/90/95% overflow warnings | — shipped; no follow-up needed |
+| Always-on shell chrome | Shipped (W22) | `_print_shell_top_bar()` (session · model · autoroute after each response); `_print_shell_bottom_bar()` (mode + hints before each prompt); graceful degradation in plain/non-TTY/narrow modes | — shipped; future shell-chrome expansion should open a new initiative here |
+| Test coverage & exception hardening | Shipped (W18–W22) | 1,165+ unit tests added for previously untested modules; 280+ broad `except Exception` catches narrowed across all `src/` files | — shipped; continue flowing new coverage gaps through this roadmap as they surface |
 | CLI UX follow-up wave: context-pressure shipped; restrained narrative follow-through next | Active follow-up | `docs/UX_IMPROVEMENTS.md` | Treat the context-pressure tranche as shipped: `/tokeninfo` now carries actor breakdown + bookmark-before-clear guidance, while `/context`, `/session`, and `/watch status` already surface lighter next-send or next-retry pressure cues. The next active docs/implementation wave is the restrained narrative follow-through: let `/session` and `/sessions` express momentum or milestones without obscuring core status, keep `/collab` and `session share/export` neutral and pasteable, and continue deferring richer recap/export/dashboard storytelling until it actually lands. |
 | Dashboard/docs consistency for future CLI waves | Ongoing | `docs/DASHBOARD_SURFACES.md`, `docs/CLI_ARCHITECTURE.md`, `docs/CLI_QUICKSTART.md` | Keep docs/dashboard sync as a required lane for future CLI wave work |
 | CLI tech-debt follow-up planning | Audit-driven | `docs/tech_debt.md` | Use the shipped April 2026 audit as current context; start a new TD wave here only when new debt is confirmed or a new audit is warranted |
@@ -66,7 +69,7 @@ These are the highest-signal deferred items repeatedly called out in `docs/UX_IM
 
 - broader proactive context-pressure surfacing beyond the already-shipped `/tokeninfo`, `/context`, `/session`, and `/watch status` cues
 - prompt-toolkit-backed shell input follow-up only when the richer interactive-TTY editing/completion experience is worth the added dependency cost, while keeping `readline` and plain `input()` fallbacks for plain-mode, non-TTY, scripted, and missing-dependency paths
-- any future shell-chrome expansion beyond the now-shipped top context bar, approval review overlay, richer TTY pickers, pane-focus cues, and review/trust/recovery approval cues
+- any future shell-chrome expansion beyond the now-shipped always-on top/bottom bar pair (`_print_shell_top_bar` / `_print_shell_bottom_bar`), approval review overlay, richer TTY pickers, pane-focus cues, and review/trust/recovery approval cues
 - restrained narrative/morale/dashboard storytelling follow-through that lets `/session` and `/sessions` acknowledge momentum or milestones without turning neutral handoff/export surfaces into prose-heavy recaps
 
 When one of these becomes active, create a new entry here with owner, status, and links to the
@@ -79,6 +82,30 @@ relevant section of `docs/UX_IMPROVEMENTS.md`.
 - **Supporting doc:** `docs/UX_IMPROVEMENTS.md`
 - **Why now:** The terminal-first CLI interaction tranche is now materially shipped: interactive REPL sessions render an always-on top context bar, high-risk approvals can open a compact review overlay, TTY overlays support arrow-key filtering plus preview panes, and layout presets report explicit pane-focus transitions. Keeping that recorded here prevents future waves from reopening already shipped interaction work.
 - **Next step:** Focus the next CLI UX wave on the restrained narrative follow-through: preserve objective status-first summaries, let `/session` and `/sessions` surface momentum/milestone cues only as secondary context, keep `/collab` plus `session share/export` neutral and pasteable, and leave recap-mode exports, richer browser/dashboard storytelling, and broader mood-language experiments deferred until they actually ship.
+
+### Initiative: Per-model context limits — shipped W21
+
+- **Status:** shipped
+- **Owner area:** cli
+- **Supporting doc:** `src/llm/context_limits.py`
+- **Why now:** Different models have different context windows; surfacing per-model limits closes the gap between raw token counts and actionable context-pressure guidance.
+- **Next step:** Shipped. `MODEL_CONTEXT_WINDOWS` covers 13 models; `/tokeninfo` shows model limit and usage %; proactive overflow warnings fire at 80/90/95% thresholds. Any follow-up (new models, threshold tuning) should open a new entry here.
+
+### Initiative: Always-on shell chrome — shipped W22
+
+- **Status:** shipped
+- **Owner area:** cli
+- **Supporting doc:** `docs/DASHBOARD_SURFACES.md`, `docs/UX_IMPROVEMENTS.md`
+- **Why now:** Operators needed persistent session context without running explicit status commands after every exchange.
+- **Next step:** Shipped. `_print_shell_top_bar()` renders session · model · autoroute state after each response; `_print_shell_bottom_bar()` renders mode + hints before each prompt. Both degrade gracefully in plain/non-TTY/narrow modes. Future shell-chrome work should open a new initiative entry here.
+
+### Initiative: Test coverage & exception hardening — shipped W18–W22
+
+- **Status:** shipped
+- **Owner area:** cross-cutting
+- **Supporting doc:** `docs/tech_debt.md`
+- **Why now:** Large portions of `src/` had no direct unit-test coverage and many broad `except Exception` catches silently swallowed failures, making regressions hard to detect.
+- **Next step:** Shipped. W18–W22 added 1,165+ unit tests for previously untested modules and narrowed 280+ overly broad exception catches across all `src/` files. New coverage gaps and remaining broad catches should be tracked through the tech-debt audit log and surfaced here when a new wave is warranted.
 
 ### 3. CLI technical-debt follow-up
 

@@ -19,6 +19,8 @@
 
 | Surface | Entry point | Purpose | Plain/reduced-motion expectation |
 | --- | --- | --- | --- |
+| Shell top bar | `_print_shell_top_bar()` (rendered after each response) | Always-on session · model · autoroute state; keeps operator aware of context without an explicit status command | Degrades to a single plain-text line in non-TTY, narrow, or plain-mode environments; omitted entirely below minimum width |
+| Shell bottom bar | `_print_shell_bottom_bar()` (rendered before each prompt) | Always-on mode + hint line before the next user input | Same graceful degradation as top bar; no Rich markup in plain/narrow mode |
 | Session summary | `/session` | Single-session health, automation state, active context | Must stay readable as compact text without Rich-only cues |
 | Session browser | `/sessions`, `openclaw session list`, `openclaw session show` | Browse, inspect, and resume session history | Non-TTY path must still expose core metadata and resume instructions |
 | Watch control tower | `/watch status`, `/watch history` | Active phase, retries, checkpoint timeline, intervention clues | Motion and badges need text equivalents |
@@ -117,6 +119,8 @@ The current docs/dashboard tranche should keep this order:
 The current Wave 22 slice is still incremental, so treat this section as both a
 checklist and a truth-source for what is already aligned today:
 
+- `_print_shell_top_bar()` renders session · model · autoroute state after each response (always-on shell chrome).
+- `_print_shell_bottom_bar()` renders mode + hints before each prompt (always-on shell chrome).
 - `_status_emoji()` owns the canonical status-family mapping.
 - `_session_badges()` is the live compact-cell baseline for dense session lists.
 - `summarize_session()`, `_print_watch_status()`, and `/accessibility status`
