@@ -40,7 +40,7 @@ async def _compact_scope_if_needed(
             get_memory_lifecycle_policy,
             record_memory_compaction_event,
         )
-    except Exception:
+    except ImportError:
         return None
 
     try:
@@ -119,7 +119,7 @@ async def _compact_scope_if_needed(
                 "pruned_ids": event.get("pruned_ids", [])[:20],
             },
         )
-    except Exception:
+    except (OSError, RuntimeError):
         pass
     try:
         from audit import audit_log
@@ -129,7 +129,7 @@ async def _compact_scope_if_needed(
             "memory_compaction",
             detail=json.dumps(event, separators=(",", ":")),
         )
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass
     return event
 
@@ -234,5 +234,5 @@ async def bump_access(collection_name: str, doc_ids: list[str]) -> None:
     try:
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _bump)
-    except Exception as e:
+    except (RuntimeError, asyncio.CancelledError) as e:
         log.debug("Access bump failed: %s", e)

@@ -115,7 +115,7 @@ class DigestManager:
         except FileNotFoundError:
             log.debug("No digest preferences found for user %s", user_id)
             return {**DEFAULT_DIGEST_PREFERENCES, "user_id": str(user_id)}
-        except Exception as exc:
+        except (json.JSONDecodeError, OSError, ValueError) as exc:
             log.warning("Failed to load digest preferences for %s: %s", user_id, exc)
             return {**DEFAULT_DIGEST_PREFERENCES, "user_id": str(user_id)}
 
@@ -188,7 +188,7 @@ class DigestManager:
                 p.stem for p in DIGEST_PREFS_DIR.glob("*.json")
                 if p.is_file()
             ]
-        except Exception as exc:
+        except OSError as exc:
             log.error("Failed to list digest users: %s", exc)
             return []
 

@@ -42,7 +42,7 @@ async def _load_watches() -> dict:
             return {}
         try:
             return json.loads(WATCHES_FILE.read_text())
-        except Exception:
+        except (json.JSONDecodeError, ValueError, OSError):
             return {}
     return await asyncio.to_thread(_read)
 
@@ -81,7 +81,7 @@ def _fmt_date(iso: str) -> str:
     try:
         dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
         return dt.strftime("%Y-%m-%d")
-    except Exception:
+    except ValueError:
         return iso[:10]
 
 
@@ -272,7 +272,7 @@ class GitHubCog(commands.Cog):
             await interaction.followup.send(
                 f"👁 Now watching **{repo}** — I'll DM you when PRs or issues are opened/closed."
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("github watch failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/github watch"), ephemeral=True)
 
@@ -305,7 +305,7 @@ class GitHubCog(commands.Cog):
             await _save_watches(watches)
             log.info("User %s unwatched %s", interaction.user, repo)
             await interaction.followup.send(f"✅ Stopped watching **{repo}**", ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("github unwatch failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/github unwatch"), ephemeral=True)
 
@@ -427,7 +427,7 @@ class GitHubCog(commands.Cog):
                 if user is None:
                     try:
                         user = await self.bot.fetch_user(int(uid))
-                    except Exception:
+                    except (discord.HTTPException, discord.NotFound):
                         log.warning("Monitor: could not fetch user %s", uid)
                         user = None
 
@@ -437,7 +437,7 @@ class GitHubCog(commands.Cog):
                         await user.send(msg[:2000])
                     except discord.Forbidden:
                         log.warning("Monitor: DMs closed for user %s", uid)
-                    except Exception:
+                    except discord.HTTPException:
                         log.exception("Monitor: failed to DM user %s", uid)
 
             # Update last_checked for this user+repo

@@ -536,7 +536,7 @@ def _load_plan_object(plan_id: str):
         return None
     try:
         return load_agent_plan(normalized)
-    except Exception as exc:
+    except (AttributeError, ValueError, RuntimeError) as exc:
         log.debug("Failed to load plan %s: %s", normalized, exc)
         return None
 
@@ -550,7 +550,7 @@ def _list_plan_objects(status_filter: str = "in-progress") -> list[object]:
         return []
     try:
         return list(list_agent_plans(normalized))
-    except Exception as exc:
+    except (AttributeError, ValueError, RuntimeError) as exc:
         log.debug("Plan listing failed for %s: %s", normalized, exc)
         return []
 
@@ -597,7 +597,7 @@ def _load_mission_control_tasks() -> list[dict[str, object]]:
         payload = load_mission_tasks()
         records = payload.get("tasks", []) if isinstance(payload, dict) else []
         return [item for item in records if isinstance(item, dict)]
-    except Exception as exc:
+    except (ImportError, AttributeError, KeyError, RuntimeError) as exc:
         log.debug("Mission Control tasks unavailable: %s", exc)
         return []
 
@@ -729,14 +729,14 @@ def _resolve_task_status(
     def _schedule_lookup() -> dict[str, object] | None:
         try:
             from scheduler import scheduler
-        except Exception as exc:
+        except ImportError as exc:
             log.debug("Scheduler task lookup unavailable for %s: %s", normalized_id, exc)
             return None
         try:
             task = scheduler.get(normalized_id)
             if task is None and hasattr(scheduler, "list_tasks"):
                 task = next((item for item in scheduler.list_tasks() if getattr(item, "task_id", "") == normalized_id), None)
-        except Exception as exc:
+        except (AttributeError, RuntimeError, TypeError) as exc:
             log.debug("Failed to resolve scheduled task %s: %s", normalized_id, exc)
             return None
         if task is None:
@@ -776,7 +776,7 @@ def _list_unified_task_statuses(
                 task_id = str(getattr(task, "task_id", "") or "").strip()
                 linked = _linked_session_payloads(task_id=task_id, sessions=sessions, limit=20) if task_id else []
                 items.append(_serialize_scheduler_control_task(task, linked_sessions=linked))
-        except Exception as exc:
+        except (ImportError, AttributeError, RuntimeError) as exc:
             log.debug("Scheduled task list unavailable: %s", exc)
 
     priority = {
@@ -1346,7 +1346,7 @@ async def api_status_handler(request):
     except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
         log.debug("Patreon health check failed: %s", exc)
         checks["patreon"] = {"status": "down", "detail": "unreachable"}
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.debug("Patreon check error: %s", exc)
         checks["patreon"] = {"status": "down"}
 
@@ -1411,7 +1411,7 @@ async def api_sms_settings_handler(request: web.Request) -> web.Response:
 
     try:
         prefs = await configure_sms_phone(user_id, phone_number)
-    except Exception as exc:
+    except (ValueError, OSError, RuntimeError) as exc:
         return web.json_response({"error": str(exc)}, status=400)
 
     snap = status_snapshot(user_id)
@@ -1641,7 +1641,7 @@ async def api_quality_eval_handler(request: web.Request) -> web.Response:
                 "calibration": calibration_payload,
             }
         )
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.debug("Quality eval API failed: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
 
@@ -1679,7 +1679,7 @@ def _build_offline_quality_calibration_payload() -> dict[str, object]:
             "drift": drift,
             "recommendations": recommendations,
         }
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.debug("Offline quality calibration unavailable: %s", exc)
         return {
             "available": False,
@@ -1794,7 +1794,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                         "total": match.group(3).replace(" total", ""),
                         "pct": int(match.group(4)),
                     })
-    except Exception as exc:
+    except (OSError, ValueError, AttributeError) as exc:
         log.debug("NAS disk stats for dashboard failed: %s", exc)
 
     # Get ontology facts (limit to recent 5)
@@ -1859,7 +1859,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                     "detail": entry.get("detail", "")[:100],
                     "result": entry.get("result", ""),
                 })
-    except Exception as exc:
+    except (OSError, ValueError) as exc:
         log.debug("Failed to load recent activity: %s", exc)
 
     # Model usage stats from error journal
@@ -1872,7 +1872,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
             if model and model not in ("unknown", "error", "timeout", "none"):
                 model = model.replace("models/", "")
                 model_usage[model] = model_usage.get(model, 0) + 1
-    except Exception as exc:
+    except (ImportError, OSError, json.JSONDecodeError) as exc:
         log.debug("Model usage stats failed: %s", exc)
 
     # D-6: 7-day token usage for sparkline
@@ -1889,7 +1889,7 @@ async def api_dashboard_handler(request: web.Request) -> web.Response:
                 "output": tokens.get("output_tokens", 0),
                 "total": tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0),
             })
-    except Exception as exc:
+    except (KeyError, AttributeError, TypeError) as exc:
         log.debug("Daily token stats failed: %s", exc)
 
     control_plane_sessions = _list_enriched_session_payloads(limit=200)
@@ -1975,7 +1975,7 @@ async def api_memories_handler(request: web.Request) -> web.Response:
     try:
         import vector_store
         data["stats"] = await vector_store.get_stats()
-    except Exception as exc:
+    except (ImportError, AttributeError, RuntimeError) as exc:
         log.debug("Vector store stats failed: %s", exc)
 
     return web.json_response(data)
@@ -2026,7 +2026,7 @@ async def api_channel_memory_inspect_handler(request: web.Request) -> web.Respon
         if warnings:
             summary["warnings"] = warnings
         return web.json_response(summary)
-    except Exception as exc:
+    except (ImportError, AttributeError, OSError, RuntimeError) as exc:
         log.debug("Channel memory inspect failed: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
 
@@ -2104,7 +2104,7 @@ async def api_channel_memory_action_handler(request: web.Request) -> web.Respons
             )
 
         return web.json_response(response)
-    except Exception as exc:
+    except (ImportError, AttributeError, OSError, RuntimeError) as exc:
         log.debug("Channel memory action failed: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
 
@@ -2153,7 +2153,7 @@ async def api_channel_profile_recommendations_handler(request: web.Request) -> w
                 "recommendations": recommendations,
             }
         )
-    except Exception as exc:
+    except (ImportError, AttributeError, ValueError, RuntimeError) as exc:
         log.debug("Channel profile recommendations API failed: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
 
@@ -2197,7 +2197,7 @@ async def api_channel_profile_recommendation_action_handler(request: web.Request
         return web.json_response({"ok": True, "recommendation": updated})
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=400)
-    except Exception as exc:
+    except (ImportError, AttributeError, RuntimeError) as exc:
         log.debug("Channel profile recommendation action failed: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
 
@@ -2208,7 +2208,7 @@ async def api_goals_handler(request):
         from goal_tracker import get_active_goals
         goals = get_active_goals()
         return web.json_response({"goals": goals})
-    except Exception as exc:
+    except (ImportError, AttributeError, RuntimeError) as exc:
         log.debug("Goals API failed: %s", exc)
         return web.json_response({"goals": []})
 
@@ -2240,7 +2240,7 @@ async def api_research_handler(request):
 
         reports.sort(key=lambda r: r.get("date", 0), reverse=True)
         return web.json_response({"reports": reports[:20]})
-    except Exception as e:
+    except (ImportError, AttributeError, RuntimeError) as e:
         log.debug("Research API failed: %s", e)
         return web.json_response({"reports": [], "error": str(e)})
 
@@ -2290,7 +2290,7 @@ async def api_schedules_handler(request):
 
         tasks = [_serialize_schedule_task(task) for task in scheduler.list_tasks()]
         return web.json_response({"tasks": tasks})
-    except Exception as exc:
+    except (ImportError, AttributeError, RuntimeError) as exc:
         log.debug("Schedules API failed: %s", exc)
         return web.json_response({"tasks": []})
 
@@ -2308,7 +2308,7 @@ async def api_schedule_toggle_handler(request):
             return web.json_response({"ok": False, "error": f"Task '{task_id}' not found"}, status=404)
         task = scheduler.get(task_id)
         return web.json_response({"ok": True, "task": _serialize_schedule_task(task)})
-    except Exception as exc:
+    except (ImportError, AttributeError, RuntimeError) as exc:
         log.debug("Schedule toggle failed: %s", exc)
         return web.json_response({"ok": False, "error": str(exc)}, status=500)
 
@@ -2344,7 +2344,7 @@ async def api_schedule_update_handler(request):
         return web.json_response({"ok": True, "task": _serialize_schedule_task(updated)})
     except (TypeError, ValueError) as exc:
         return web.json_response({"ok": False, "error": str(exc)}, status=400)
-    except Exception as exc:
+    except (ImportError, AttributeError, RuntimeError) as exc:
         log.debug("Schedule update failed: %s", exc)
         return web.json_response({"ok": False, "error": str(exc)}, status=500)
 
@@ -2363,7 +2363,7 @@ async def api_schedule_delete_handler(request):
             return web.json_response({"ok": True, "message": result})
         else:
             return web.json_response({"ok": False, "message": result}, status=404)
-    except Exception as exc:
+    except (ImportError, AttributeError, OSError, RuntimeError) as exc:
         log.debug("Schedule delete failed: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
 
@@ -2374,7 +2374,7 @@ async def api_errors_handler(request):
         from error_tracker import get_error_stats
         stats = get_error_stats(hours=24)
         return web.json_response(stats)
-    except Exception as exc:
+    except (ImportError, OSError, json.JSONDecodeError) as exc:
         log.debug("Error stats API failed: %s", exc)
         return web.json_response({"total": 0, "success_rate": 1.0, "recent_errors": []})
 
@@ -2401,7 +2401,7 @@ async def api_dream_health_handler(request):
             "last_dream": stats.get("lastDream", None),
             "health_history": stats.get("healthHistory", [])[-14:],
         })
-    except Exception as exc:
+    except (ImportError, OSError, AttributeError, ValueError) as exc:
         log.debug("Dream health API failed: %s", exc)
         return web.json_response({
             "overall": 0, "metrics": {}, "entry_count": 0,
@@ -2543,7 +2543,7 @@ async def api_quality_metrics_handler(request: web.Request) -> web.Response:
                 }
                 if calibration_drift["severe"]:
                     status = "degraded"
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.debug("Quality metrics drift status unavailable: %s", exc)
 
         recent_runs = get_recent_outcomes(hours=24, limit=120)
@@ -2702,7 +2702,7 @@ async def api_quality_metrics_handler(request: web.Request) -> web.Response:
                 },
             }
         )
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.debug("Quality metrics API failed: %s", exc)
         return web.json_response(
             {
@@ -2838,7 +2838,7 @@ async def api_topology_handler(request):
                         "x": round(x), "y": round(y),
                     })
                     edges.append({"source": "mac-mini", "target": name})
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log.debug("Topology container fetch failed: %s", e)
 
     return web.json_response({"nodes": nodes, "edges": edges})
@@ -2885,7 +2885,7 @@ async def api_agent_ask_handler(request: web.Request) -> web.Response:
             user_name=user_name,
         )
         return web.json_response(payload)
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.error("api_agent_ask_handler error: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
 
@@ -3032,7 +3032,7 @@ async def api_agent_ask_stream_handler(request: web.Request) -> web.StreamRespon
             on_partial_chunk=lambda chunk: _write_event("chunk", {"delta": chunk}),
         )
         await _write_event("final", payload)
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.error("api_agent_ask_stream_handler error: %s", exc)
         await _write_event("error", {"error": str(exc)})
     finally:
@@ -3090,6 +3090,6 @@ async def api_recap_generate_handler(request: web.Request) -> web.Response:
         model_used = meta.get("model_used", "auto") if isinstance(meta, dict) else "auto"
 
         return web.json_response({"report": response_text, "model": model_used})
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.error("api_recap_generate_handler error: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)

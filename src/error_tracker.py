@@ -65,7 +65,7 @@ def record_outcome(
         JOURNAL_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(JOURNAL_FILE, "a") as f:
             f.write(json.dumps(entry, default=str) + "\n")
-    except Exception as e:
+    except OSError as e:
         log.debug("Failed to write error journal: %s", e)
 
 
@@ -89,7 +89,7 @@ def get_recent_outcomes(hours: int = 24, limit: int = 100) -> list[dict]:
                         entries.append(entry)
                 except json.JSONDecodeError:
                     continue
-    except Exception as e:
+    except OSError as e:
         log.debug("Failed to read error journal: %s", e)
 
     return entries[-limit:]
@@ -268,7 +268,7 @@ async def diagnose_error_pattern(
             container_context = f"\nContainer status:\n{result.stdout[:500]}"
     except subprocess.TimeoutExpired:
         log.warning("Docker ps timed out while getting container context")
-    except Exception as e:
+    except OSError as e:
         log.warning("Failed to get docker container context: %s", e)
 
     prompt = (
@@ -340,7 +340,7 @@ async def execute_fix(diagnosis: dict) -> dict:
             result = await restart_container(target)
             log.info("Auto-fix: restarted %s → %s", target, result[:80])
             return {"action_taken": f"restart_service:{target}", "success": True, "detail": result}
-        except Exception as e:
+        except (ImportError, OSError, RuntimeError) as e:
             return {"action_taken": f"restart_service:{target}", "success": False, "detail": str(e)}
 
     elif fix_type == "switch_model":
@@ -362,7 +362,7 @@ async def execute_fix(diagnosis: dict) -> dict:
                         "success": True, "detail": f"Circuit breaker reset for {target}"}
             return {"action_taken": "clear_circuit_breaker", "success": False,
                     "detail": f"Tool '{target}' not found in circuit breaker"}
-        except Exception as e:
+        except (ImportError, AttributeError, KeyError) as e:
             return {"action_taken": "clear_circuit_breaker", "success": False, "detail": str(e)}
 
     elif fix_type == "increase_timeout":
@@ -412,7 +412,7 @@ async def record_incident(
         incidents = incidents[-100:]
         INCIDENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         INCIDENTS_FILE.write_text(json.dumps(incidents, indent=2, default=str))
-    except Exception as e:
+    except (OSError, ValueError) as e:
         log.debug("Failed to save incident: %s", e)
 
     if fix_result.get("success"):
@@ -429,7 +429,7 @@ async def record_incident(
                 source_message=f"auto-heal incident @ {time.strftime('%Y-%m-%d %H:%M')}",
             )
             log.info("Error learning: created rule from incident: %s", rule_text[:100])
-        except Exception as e:
+        except (ImportError, OSError) as e:
             log.debug("Failed to create rule from incident: %s", e)
 
 

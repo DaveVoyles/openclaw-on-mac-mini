@@ -34,7 +34,7 @@ except ImportError:
         try:
             from metrics_collector import get_collector
             get_collector().record_quality_event(event=event, context=context)
-        except Exception:
+        except (ImportError, AttributeError, RuntimeError):
             pass
 
 log = logging.getLogger(__name__)
@@ -364,7 +364,7 @@ class ResponseActions(discord.ui.View):
             buf = _io.BytesIO(self._response_text.encode("utf-8"))
             file = discord.File(buf, filename=f"openclaw-response-{ts}.txt")
             await interaction.followup.send("📄 Full response:", file=file, ephemeral=True)
-        except Exception as e:
+        except (OSError, discord.HTTPException, discord.Forbidden) as e:
             await interaction.followup.send(f"❌ Download failed: {e}", ephemeral=True)
 
     async def _record_feedback(self, interaction: discord.Interaction, rating: str) -> None:
@@ -428,7 +428,7 @@ class ResponseActions(discord.ui.View):
             await interaction.response.send_message(
                 f"{emoji} Feedback recorded — thanks!", ephemeral=True,
             )
-        except Exception as e:
+        except (OSError, ValueError, discord.HTTPException, discord.Forbidden) as e:
             log.debug("Feedback capture failed: %s", e)
             await interaction.response.send_message(
                 "⚠️ Couldn't save feedback this time, but thanks for sharing.",
