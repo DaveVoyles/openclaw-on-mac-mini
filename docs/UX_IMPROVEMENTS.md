@@ -1062,9 +1062,9 @@ actions.
 
 ### Deferred / not yet evidenced
 
-- [ ] Additional watch-loop-specific liveness cues beyond existing progress lines
-- [ ] Optional bell/alert cues
-- [ ] Broader completion recaps for every command surface
+- [x] Additional watch-loop-specific liveness cues beyond existing progress lines (`iter_label` `[N/max]`/`[iter N]` in `render_watch_iteration` @ `openclaw_cli_watch.py:756`)
+- [x] Optional bell/alert cues (`cmd_watch_bell()` + `_PREFS["watch_bell"]` @ `openclaw_cli_watch.py:1183`; `/watch bell on|off`)
+- [x] Broader completion recaps for every command surface (`✓ Analysis/Research/Draft complete — N words` @ `openclaw_cli_cmd_core.py:874,945,999`)
 - [x] Full `tests/test_openclaw_cli.py` suite is green (600 passed, 0 failing — pytest run verified 2026-W26)
 - [ ] Deployed to macbook
 
@@ -1606,7 +1606,7 @@ switching or command hopping.
 
 ### Done-when
 
-- [ ] Shared preview helpers exist for session/output/watch inspection in Rich
+- [x] Shared preview helpers exist for session/output/watch inspection in Rich (`_preview_panel()` @ `openclaw_cli_ui_utils.py:672`)
       and plain/ANSI-compatible forms.
 - [x] The primary list/browse surfaces now support bounded output preview and
       session-selection inspection without forcing a full manual re-browse step.
