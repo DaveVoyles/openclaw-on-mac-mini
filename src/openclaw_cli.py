@@ -4727,6 +4727,14 @@ def run_chat(
 
         if autoroute_on:
             route_decision = route_repl_prompt(prompt, session_id=session_id)
+            if route_decision.kind in {ReplRouteKind.ANALYZE, ReplRouteKind.RESEARCH, ReplRouteKind.WRITE}:
+                _PREFS["_last_grounding_block"] = {
+                    "type": route_decision.kind.value,
+                    "query": route_decision.args_text.strip() or route_decision.target_text.strip(),
+                    "confidence": round(route_decision.confidence, 2),
+                    "rationale": route_decision.rationale,
+                    "grounded": "grounded by" in route_decision.rationale.lower(),
+                }
             if route_decision.should_auto_execute_plan():
                 print(_format_route_announcement(route_decision))
                 _append_repl_route_event(session_id, prompt, route_decision)

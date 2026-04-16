@@ -209,8 +209,33 @@ def _cmd_clear(ctx: ChatCommandContext) -> str:
 # ---------------------------------------------------------------------------
 
 def _cmd_context(ctx: ChatCommandContext) -> str:
-    """/context — show the effective local grounding for the active session."""
+    """/context [last] — show the effective local grounding for the active session."""
     m = _get_cli_mod()
+    arg = (ctx.args or "").strip().lower()
+    if arg in {"last", "grounding"}:
+        last_block = m._PREFS.get("_last_grounding_block")
+        if not last_block:
+            if _RICH_AVAILABLE and _IS_TTY:
+                _RICH_CONSOLE.print("[dim]No grounding block recorded yet — run /analyze, /research, or /write first.[/]")
+            else:
+                print("  No grounding block recorded yet — run /analyze, /research, or /write first.")
+        else:
+            if _RICH_AVAILABLE and _IS_TTY:
+                grid = _RichTable.grid(padding=(0, 1))
+                grid.add_column(style="bold cyan", no_wrap=True)
+                grid.add_column()
+                grid.add_row("Type:", str(last_block.get("type") or "(unknown)"))
+                grid.add_row("Query / subject:", str(last_block.get("query") or "(none)"))
+                grid.add_row("Confidence boost:", "yes" if last_block.get("grounded") else "none")
+                grid.add_row("Rationale:", str(last_block.get("rationale") or "(none)")[:300])
+                _RICH_CONSOLE.print(_RichPanel(grid, title="[bold cyan]Last Grounding Block[/]", border_style="dim", padding=(0, 1)))
+            else:
+                print("  Last grounding block (analyze/research/write):")
+                print(f"    Type: {last_block.get('type') or '(unknown)'}")
+                print(f"    Query / subject: {last_block.get('query') or '(none)'}")
+                print(f"    Confidence boost: {'yes' if last_block.get('grounded') else 'none'}")
+                print(f"    Rationale: {str(last_block.get('rationale') or '(none)')[:300]}")
+        return _CMD_CONTINUE
     session = m._require_session_or_warn(ctx)
     if session is None:
         return _CMD_CONTINUE
