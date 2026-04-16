@@ -4567,7 +4567,13 @@ def _build_prompt_toolkit_session() -> Any | None:
                     history.append_string(item)
     except OSError:
         pass
-    return PromptSession(history=history, completer=_PromptToolkitSlashCompleter())
+    return PromptSession(
+        history=history,
+        completer=_PromptToolkitSlashCompleter(),
+        mouse_support=False,
+        enable_system_prompt=False,
+        multiline=False,
+    )
 
 
 def _maybe_show_startup_tip(config: "CliConfig", session_id: str, history: list) -> None:
@@ -4838,33 +4844,8 @@ def run_chat(
                 border_style="cyan",
             )
         _print_animated_separator()
-        if not config.output_json:
-            _footer_hints: list[str] = []
-            if _PREFS.get("show_rate_hint", True):
-                _footer_hints.append("/rate good — mark this answer helpful")
-            if _PREFS.get("show_suggestions", True):
-                _footer_hints.extend(
-                    _suggest_followups(
-                        prompt,
-                        response_text=response.response or "",
-                        session_id=session_id,
-                    )
-                )
-            _print_followup_suggestions(_footer_hints, mode="chat")
         global _last_response_text
         _last_response_text = response.response or ""
-        if not config.output_json and not _compact:
-            _print_status_bar(
-                session_id=session_id,
-                autoroute_on=autoroute_on,
-                history_len=len(history),
-            )
-        _print_shell_top_bar(
-            session_id=session_id,
-            model_name=config.model,
-            autoroute_on=autoroute_on,
-            output_json=config.output_json,
-        )
         history.extend(
             [
                 {"role": "user", "content": prompt},
