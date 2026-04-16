@@ -1713,19 +1713,22 @@ def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **
     return _ui_utils_mod._with_spinner(label, fn, *args, output_json=output_json, _override_is_tty=_IS_TTY, _override_heartbeat_secs=_SPINNER_HEARTBEAT_SECONDS, **kwargs)
 
 
-_SEARCH_ONLY_MODELS = frozenset({"", "auto", "perplexity", "perplexity-direct"})
+_SEARCH_ONLY_MODELS = frozenset({"perplexity", "perplexity-direct"})
 
 
 def _maybe_switch_to_context_model(config: "CliConfig") -> "CliConfig":
-    """Return a copy of *config* routed to copilot when the active model is search-only.
+    """Return a copy of *config* routed away from search-only models.
 
     Called whenever local file content or injected context is present in the
-    prompt — search models (perplexity) ignore injected text and only cite URLs.
-    If the user already chose a context-capable model, config is returned unchanged.
+    prompt. Perplexity models ignore injected text and only cite URLs; all other
+    models (auto, gemini, copilot, openai, anthropic) can use injected context.
+
+    The switch target is "auto" so the server picks the best currently-available
+    model — hard-coding "copilot" would fail on servers without the proxy.
     """
     if config.model in _SEARCH_ONLY_MODELS:
-        print(f"  {_DM}↳ routing to copilot for local context{_R}")
-        return _dc_replace(config, model="copilot")
+        print(f"  {_DM}↳ switching from {config.model} to auto (search models ignore local context){_R}")
+        return _dc_replace(config, model="auto")
     return config
 
 

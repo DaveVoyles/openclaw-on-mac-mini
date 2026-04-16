@@ -157,6 +157,10 @@ def classify_query(
     if model_preference == "copilot":
         if copilot_available:
             return ModelRoute("copilot", "user preference: copilot")
+        if has_openai_key:
+            return ModelRoute("openai", "user preference: copilot but proxy unavailable — fallback to OpenAI")
+        if has_anthropic_key:
+            return ModelRoute("anthropic", "user preference: copilot but proxy unavailable — fallback to Anthropic")
         return ModelRoute("gemini", "user preference: copilot but proxy unavailable — fallback to Gemini")
     if model_preference == "openai" and (has_openai_key or copilot_available):
         return ModelRoute("openai", "user preference: openai")
