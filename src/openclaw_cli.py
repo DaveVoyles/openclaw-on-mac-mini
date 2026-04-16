@@ -4796,6 +4796,11 @@ def run_chat(
                 _injected_parts = ([_next_inject] if _next_inject else []) + _auto_file_chunks
                 effective_input = f"[Injected context]\n{'---'.join(_injected_parts)}\n\n[User message]\n{prompt}"
                 _next_inject = ""
+                # Switch to a context-reading model (not web search) when local files are injected.
+                if _auto_file_chunks and config.model in ("auto", "", "perplexity", "perplexity-direct"):
+                    import dataclasses as _dc  # noqa: PLC0415
+                    config = _dc.replace(config, model="copilot")
+                    print(f"  {_DM}↳ routing to copilot for local file context{_R}")
             else:
                 effective_input = prompt
             _sys_prompt = _PREFS.get("system_prompt", "").strip()
