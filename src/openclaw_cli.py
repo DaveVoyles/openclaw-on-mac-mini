@@ -4058,7 +4058,7 @@ def _emit_context_overflow_warning(
     )
 
 
-def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False) -> str:
+def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: bool = False, draft_active: bool = False) -> str:
     """Build the REPL prompt string, optionally with session hint or autoroute badge."""
     if _a11y_plain_mode():
         return "openclaw> "
@@ -4071,14 +4071,16 @@ def _make_prompt(session_id: str = "", autoroute_on: bool = True, multiline: boo
     if is_tty:
         name = "\033[1;34moc\033[0m" if narrow else "\033[1;34mopenclaw\033[0m"
         ml_badge = " \033[2;33m[multiline]\033[0m" if multiline else ""
+        draft_badge = " \033[2;33m[draft]\033[0m" if draft_active else ""
         if not autoroute_on:
-            return f"{name} \033[33m[autoroute:off]\033[0m{ml_badge} ❯ "
+            return f"{name} \033[33m[autoroute:off]\033[0m{ml_badge}{draft_badge} ❯ "
         if session_id:
             short = session_id[:4] if narrow else session_id[:8]
-            return f"{name} \033[36m[{short}…]\033[0m{ml_badge} ❯ "
-        return f"{name}{ml_badge} ❯ "
+            return f"{name} \033[36m[{short}…]\033[0m{ml_badge}{draft_badge} ❯ "
+        return f"{name}{ml_badge}{draft_badge} ❯ "
     ml_suffix = " [multiline]" if multiline else ""
-    return f"openclaw{ml_suffix} ❯ "
+    draft_suffix = " [draft]" if draft_active else ""
+    return f"openclaw{ml_suffix}{draft_suffix} ❯ "
 
 
 def _render_prompt_format(fmt: str) -> str:
@@ -4617,7 +4619,7 @@ def run_chat(
                 output_json=config.output_json,
             )
             _print_shell_bottom_bar(mode="chat", output_json=config.output_json)
-            prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode)
+            prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode, draft_active=bool(_draft_buffer))
             if _multiline_mode:
                 prompt = _read_multiline_input(input_func, prompt_str)
             elif prompt_session is not None:

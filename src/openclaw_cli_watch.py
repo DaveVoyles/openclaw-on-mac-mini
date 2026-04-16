@@ -1414,6 +1414,7 @@ def handle_watch_command(args: argparse.Namespace, *, config: "CliConfig") -> in
                                 ),
                                 output_json=config.output_json,
                             )
+                            print(f"  ↺ Watch auto-retried (attempt {attempt}): {error_message}")
                             time.sleep(delay_seconds)
                             continue
                         failure_summary = f"{mode} failed: {error_message[:160]}"

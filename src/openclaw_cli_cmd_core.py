@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from openclaw_cli_actions import (
+    _print_usage,
     infer_command_risk,
     infer_file_edit_risk,
     replace_text_in_file,
@@ -368,7 +369,7 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
 
     if subcmd in ("add", "+"):
         if not target:
-            print("Usage: /files add <path>")
+            _print_usage("Usage: /files add <path>")
             return _CMD_CONTINUE
         resolved = str(Path(target).expanduser().resolve())
         current = list(session.files)
@@ -393,7 +394,7 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
 
     elif subcmd in ("rm", "remove", "-"):
         if not target:
-            print("Usage: /files rm <path>")
+            _print_usage("Usage: /files rm <path>")
             return _CMD_CONTINUE
         resolved = str(Path(target).expanduser().resolve())
         current = list(session.files)
@@ -419,7 +420,7 @@ def _cmd_files(ctx: ChatCommandContext) -> str:
             print(f"untracked: {', '.join(matched)}")
 
     else:
-        print("Usage: /files  |  /files add <path>  |  /files rm <path>")
+        _print_usage("Usage: /files  |  /files add <path>  |  /files rm <path>")
 
     return _CMD_CONTINUE
 

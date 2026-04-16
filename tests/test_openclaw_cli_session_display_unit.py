@@ -670,3 +670,180 @@ def test_session_mood_snapshot_retrying():
     result = sd._session_mood_snapshot(session, watch_state=watch_state)
     assert result.get("status") == "retry"
     assert result.get("label") == "resilient"
+
+
+# ---------------------------------------------------------------------------
+# _estimate_token_count
+# ---------------------------------------------------------------------------
+
+
+def test_estimate_token_count_basic():
+    text = "a" * 400
+    assert sd._estimate_token_count(text) == 100
+
+
+def test_estimate_token_count_empty():
+    assert sd._estimate_token_count("") == 0
+
+
+def test_estimate_token_count_none():
+    assert sd._estimate_token_count(None) == 0
+
+
+def test_estimate_token_count_short():
+    assert sd._estimate_token_count("hi") == 0
+
+
+# ---------------------------------------------------------------------------
+# _history_token_breakdown
+# ---------------------------------------------------------------------------
+
+
+def test_history_token_breakdown_empty():
+    result = sd._history_token_breakdown([])
+    assert result["total_chars"] == 0
+    assert result["total_tokens"] == 0
+    assert result["total_messages"] == 0
+
+
+def test_history_token_breakdown_counts_messages():
+    history = [
+        {"role": "user", "content": "hello world"},
+        {"role": "assistant", "content": "hi there, how can I help you today?"},
+    ]
+    result = sd._history_token_breakdown(history)
+    assert result["total_messages"] == 2
+    assert result["total_chars"] > 0
+
+
+def test_history_token_breakdown_groups_by_role():
+    history = [
+        {"role": "user", "content": "x" * 100},
+        {"role": "user", "content": "y" * 100},
+        {"role": "assistant", "content": "z" * 50},
+    ]
+    result = sd._history_token_breakdown(history)
+    roles_dict = dict(result["roles"])
+    assert "user" in roles_dict
+    assert roles_dict["user"]["messages"] == 2
+
+
+# ---------------------------------------------------------------------------
+# _format_context_limit_label
+# ---------------------------------------------------------------------------
+
+
+def test_format_context_limit_label_exact_k():
+    assert sd._format_context_limit_label(128_000) == "128k"
+
+
+def test_format_context_limit_label_exact_m():
+    assert sd._format_context_limit_label(1_000_000) == "1m"
+
+
+def test_format_context_limit_label_non_round():
+    result = sd._format_context_limit_label(130_000)
+    assert "130,000" in result or "k" in result
+
+
+def test_format_context_limit_label_approximate():
+    result = sd._format_context_limit_label(128_000, approximate=True)
+    assert result.startswith("~")
+
+
+def test_format_context_limit_label_zero():
+    result = sd._format_context_limit_label(0)
+    assert "0" in result
+
+
+# ---------------------------------------------------------------------------
+# _extract_context_limit_from_hint
+# ---------------------------------------------------------------------------
+
+
+def test_extract_context_limit_128k():
+    result = sd._extract_context_limit_from_hint("gemini-128k")
+    assert result == 128_000
+
+
+def test_extract_context_limit_1m():
+    result = sd._extract_context_limit_from_hint("gpt-4-1m")
+    assert result == 1_000_000
+
+
+def test_extract_context_limit_empty():
+    assert sd._extract_context_limit_from_hint("") is None
+
+
+def test_extract_context_limit_no_suffix():
+    assert sd._extract_context_limit_from_hint("gpt-4") is None
+
+
+# ---------------------------------------------------------------------------
+# _a11y_plain_mode
+# ---------------------------------------------------------------------------
+
+
+def test_a11y_plain_mode_default_false(monkeypatch):
+    monkeypatch.setitem(sd._PREFS, sd._A11Y_PLAIN_MODE, False)
+    assert sd._a11y_plain_mode() is False
+
+
+def test_a11y_plain_mode_true(monkeypatch):
+    monkeypatch.setitem(sd._PREFS, sd._A11Y_PLAIN_MODE, True)
+    assert sd._a11y_plain_mode() is True
+
+
+# ---------------------------------------------------------------------------
+# _session_age_label
+# ---------------------------------------------------------------------------
+
+
+def test_session_age_label_unknown_when_no_created_at():
+    from openclaw_cli_sessions import SessionSummary
+
+    session = SessionSummary(session_id="s1", title="T", cwd="/", created_at="")
+    result = sd._session_age_label(session)
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# _watch_retry_delay_total (display module copy)
+# ---------------------------------------------------------------------------
+
+
+def test_display_watch_retry_delay_total_empty():
+    state = {"retry_history": []}
+    assert sd._watch_retry_delay_total(state) == 0
+
+
+def test_display_watch_retry_delay_total_with_entries():
+    state = {
+        "retry_history": [
+            {"attempt": 1, "delay_seconds": 2},
+            {"attempt": 2, "delay_seconds": 4},
+        ]
+    }
+    result = sd._watch_retry_delay_total(state)
+    assert result == 6
+
+
+# ---------------------------------------------------------------------------
+# _status_emoji
+# ---------------------------------------------------------------------------
+
+
+def test_status_emoji_complete():
+    result = sd._status_emoji("complete")
+    assert result != ""
+
+
+def test_status_emoji_error():
+    result = sd._status_emoji("error")
+    assert result != ""
+
+
+def test_status_emoji_unknown():
+    result = sd._status_emoji("xyz_unknown")
+    assert result != ""

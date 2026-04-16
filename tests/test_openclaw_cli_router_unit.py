@@ -300,3 +300,190 @@ def test_truncate_repl_route_text_truncates():
     result = mod._truncate_repl_route_text(long_text, limit=20)
     assert result.endswith("…")
     assert len(result) <= 20
+
+
+# ---------------------------------------------------------------------------
+# _maybe_route_with_grounding — additional coverage
+# ---------------------------------------------------------------------------
+
+
+def test_maybe_route_with_grounding_no_grounding_returns_none():
+    result = mod._maybe_route_with_grounding("analyze the repo", grounding=None)
+    assert result is None
+
+
+def test_maybe_route_with_grounding_no_keywords_returns_none():
+    grounding = mod.ReplRouteGrounding(session_id="s1")
+    result = mod._maybe_route_with_grounding("just a general question", grounding=grounding)
+    assert result is None
+
+
+def test_maybe_route_with_grounding_current_task_no_subject():
+    # grounding has no task title/description — should return None
+    grounding = mod.ReplRouteGrounding(task_id="t1", task_title="", task_description="")
+    result = mod._maybe_route_with_grounding("analyze the current task", grounding=grounding)
+    assert result is None
+
+
+def test_maybe_route_with_grounding_step_with_no_plan_returns_none():
+    # "step 2" mentioned but grounding has no plan
+    grounding = mod.ReplRouteGrounding(session_id="s1", plan=None)
+    result = mod._maybe_route_with_grounding("do step 2", grounding=grounding)
+    assert result is None
+
+
+def test_maybe_route_with_grounding_current_step_no_step_returns_none():
+    grounding = mod.ReplRouteGrounding(session_id="s1", current_step=None)
+    result = mod._maybe_route_with_grounding("continue the current step", grounding=grounding)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _append_repl_route_event — additional coverage
+# ---------------------------------------------------------------------------
+
+
+def test_append_repl_route_event_exec_kind():
+    d = _make_decision(mod.ReplRouteKind.EXEC, args_text="pytest -v", confidence=0.95)
+    with patch("openclaw_cli_router.append_event") as mock_append:
+        mod._append_repl_route_event("sess-X", "run pytest -v", d)
+        metadata = mock_append.call_args[1]["metadata"]
+        assert "auto-routed" in metadata["summary"]
+        assert metadata["source"] == "repl.autoroute"
+        assert metadata["confidence"] == d.confidence
+
+
+def test_append_repl_route_event_stores_rationale():
+    d = _make_decision(mod.ReplRouteKind.ANALYZE, args_text="src/", confidence=0.88)
+    d = mod.ReplRouteDecision(
+        kind=mod.ReplRouteKind.ANALYZE,
+        confidence=0.88,
+        target_text="src/",
+        args_text="src/",
+        rationale="test rationale here",
+    )
+    with patch("openclaw_cli_router.append_event") as mock_append:
+        mod._append_repl_route_event("sess-Y", "analyze src/", d)
+        metadata = mock_append.call_args[1]["metadata"]
+        assert metadata["rationale"] == "test rationale here"
+
+
+# ---------------------------------------------------------------------------
+# _apply_grounding_to_route — additional coverage
+# ---------------------------------------------------------------------------
+
+
+def test_apply_grounding_preserves_kind():
+    base = _make_decision(mod.ReplRouteKind.RESEARCH, confidence=0.7, args_text="async patterns")
+    result = mod._apply_grounding_to_route(base, label="task", detail="research async", boost=0.1)
+    assert result is not None
+    assert result.kind == mod.ReplRouteKind.RESEARCH
+
+
+def test_apply_grounding_preserves_args_text():
+    base = _make_decision(mod.ReplRouteKind.EXEC, confidence=0.7, args_text="pytest -q", target_text="pytest")
+    result = mod._apply_grounding_to_route(base, label="step", detail="run tests", boost=0.05)
+    assert result is not None
+    assert result.args_text == "pytest -q"
+
+
+# ---------------------------------------------------------------------------
+# _normalize_route_field
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_route_field_backtick_unwrap():
+    result = mod._normalize_route_field("`src/main.py`")
+    assert result == "src/main.py"
+
+
+def test_normalize_route_field_no_quotes_passthrough():
+    result = mod._normalize_route_field("src/main.py")
+    assert result == "src/main.py"
+
+
+def test_normalize_route_field_mismatched_quotes_kept():
+    result = mod._normalize_route_field("`src/main.py'")
+    assert "`" in result or "src" in result
+
+
+# ---------------------------------------------------------------------------
+# _deterministic_repl_route — additional cases
+# ---------------------------------------------------------------------------
+
+
+def test_deterministic_route_edit_with_path():
+    result = mod._deterministic_repl_route("edit src/foo.py")
+    assert result is not None
+    assert result.kind == mod.ReplRouteKind.EDIT
+
+
+def test_deterministic_route_inspect_file():
+    result = mod._deterministic_repl_route("inspect src/main.py")
+    assert result is None or result.kind == mod.ReplRouteKind.ANALYZE
+
+
+def test_deterministic_route_write_docs():
+    result = mod._deterministic_repl_route("write a readme for this project")
+    assert result is not None
+    assert result.kind == mod.ReplRouteKind.WRITE
+
+
+# ---------------------------------------------------------------------------
+# ReplRouteGrounding dataclass defaults
+# ---------------------------------------------------------------------------
+
+
+def test_repl_route_grounding_defaults():
+    g = mod.ReplRouteGrounding()
+    assert g.session_id == ""
+    assert g.plan_id == ""
+    assert g.task_id == ""
+    assert g.current_step is None
+    assert g.plan is None
+
+
+def test_repl_route_step_context_fields():
+    ctx = mod.ReplRouteStepContext(num=3, description="run tests", status="pending")
+    assert ctx.num == 3
+    assert ctx.description == "run tests"
+    assert ctx.status == "pending"
+
+
+def test_repl_route_step_context_default_status():
+    ctx = mod.ReplRouteStepContext(num=1, description="analyze")
+    assert ctx.status == ""
+
+
+# ---------------------------------------------------------------------------
+# ReplRouteKind enum values
+# ---------------------------------------------------------------------------
+
+
+def test_route_kind_values():
+    assert mod.ReplRouteKind.CHAT.value == "chat"
+    assert mod.ReplRouteKind.EXEC.value == "exec"
+    assert mod.ReplRouteKind.EDIT.value == "edit"
+    assert mod.ReplRouteKind.PLAN.value == "plan"
+    assert mod.ReplRouteKind.ANALYZE.value == "analyze"
+    assert mod.ReplRouteKind.RESEARCH.value == "research"
+    assert mod.ReplRouteKind.WRITE.value == "write"
+
+
+# ---------------------------------------------------------------------------
+# REPL_ROUTE_AUTO_THRESHOLD constant
+# ---------------------------------------------------------------------------
+
+
+def test_auto_threshold_value():
+    assert mod.REPL_ROUTE_AUTO_THRESHOLD == 0.74
+
+
+def test_should_auto_route_at_exact_threshold():
+    d = _make_decision(mod.ReplRouteKind.EXEC, confidence=mod.REPL_ROUTE_AUTO_THRESHOLD)
+    assert d.should_auto_route() is True
+
+
+def test_should_auto_route_just_below_threshold():
+    d = _make_decision(mod.ReplRouteKind.EXEC, confidence=mod.REPL_ROUTE_AUTO_THRESHOLD - 0.01)
+    assert d.should_auto_route() is False

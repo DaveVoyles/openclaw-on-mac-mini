@@ -359,8 +359,10 @@ def request_cli_approval(
     else:
         risk_colored = f"{_bold_yellow}{risk_val}{_reset}"
         prefix = "⚠️  "
-    if "HIGH" in risk_val or "CRITICAL" in risk_val:
-        _rationale_line = "⚠️   High risk — this action modifies files or runs code that could have side effects"
+    if "CRITICAL" in risk_val:
+        _rationale_line = "CRITICAL risk: this action is irreversible or has broad system impact."
+    elif "HIGH" in risk_val:
+        _rationale_line = "HIGH risk: this action modifies the filesystem or runs a shell command."
     elif "MEDIUM" in risk_val:
         _rationale_line = "⚡  Medium risk — review the command before approving"
     else:
@@ -433,6 +435,13 @@ def request_cli_approval(
         resolver_id=0,
         resolver_name="openclaw-cli prompt",
     )
+    _print_approval_recap({
+        "action": action,
+        "target": target,
+        "decision": "approved" if approved else "denied",
+        "execution_outcome": None,
+        "recovery_hint": recovery_hint,
+    })
     return approved
 
 

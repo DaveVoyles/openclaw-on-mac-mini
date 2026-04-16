@@ -279,3 +279,193 @@ def test_start_watch_checkpoint_initial_state():
     assert cp["mode"] == "interval"
     assert cp["status"] == "running"
     assert "started_at" in cp
+
+
+# ---------------------------------------------------------------------------
+# _watch_retry_delay_total
+# ---------------------------------------------------------------------------
+
+
+def test_watch_retry_delay_total_empty_state():
+    state = {"retry_history": []}
+    assert mod._watch_retry_delay_total(state) == 0
+
+
+def test_watch_retry_delay_total_with_explicit_delay():
+    state = {
+        "retry_history": [
+            {"attempt": 1, "delay_seconds": 4},
+            {"attempt": 2, "delay_seconds": 8},
+        ]
+    }
+    assert mod._watch_retry_delay_total(state) == 12
+
+
+def test_watch_retry_delay_total_fallback_computes_from_attempt():
+    state = {"retry_history": [{"attempt": 1}]}
+    total = mod._watch_retry_delay_total(state)
+    assert total == mod.watch_retry_delay_seconds(1)
+
+
+def test_watch_retry_delay_total_no_retry_history_key():
+    state = {}
+    assert mod._watch_retry_delay_total(state) == 0
+
+
+# ---------------------------------------------------------------------------
+# normalize_watch_state — additional coverage
+# ---------------------------------------------------------------------------
+
+
+def test_normalize_watch_state_retry_limit_minimum_1():
+    state = {"retry_limit": 0}
+    result = mod.normalize_watch_state(state)
+    assert result["retry_limit"] >= 1
+
+
+def test_normalize_watch_state_force_run_once_coerced():
+    state = {"force_run_once": "yes"}
+    result = mod.normalize_watch_state(state)
+    assert isinstance(result["force_run_once"], bool)
+
+
+def test_normalize_watch_state_stop_requested_false_by_default():
+    state = {}
+    result = mod.normalize_watch_state(state)
+    assert result["stop_requested"] is False
+
+
+def test_normalize_watch_state_progress_log_trimmed():
+    state = {
+        "progress_log": [{"poll": i} for i in range(40)],
+    }
+    result = mod.normalize_watch_state(state)
+    assert len(result["progress_log"]) <= mod.WATCH_PROGRESS_LOG_LIMIT
+
+
+def test_normalize_watch_state_retry_history_trimmed():
+    state = {
+        "retry_history": [{"attempt": i} for i in range(40)],
+    }
+    result = mod.normalize_watch_state(state)
+    assert len(result["retry_history"]) <= mod.WATCH_PROGRESS_LOG_LIMIT
+
+
+# ---------------------------------------------------------------------------
+# build_watch_state — additional coverage
+# ---------------------------------------------------------------------------
+
+
+def test_build_watch_state_on_change_flag():
+    from openclaw_cli_sessions import SessionSummary
+
+    session = SessionSummary(session_id="s2", title="T", cwd="/home")
+    state = mod.build_watch_state(
+        session=session,
+        mode="analyze",
+        goal="monitor changes",
+        interval_seconds=30,
+        max_polls=5,
+        on_change=True,
+    )
+    assert state["on_change"] is True
+    assert state["max_polls"] == 5
+    assert state["goal"] == "monitor changes"
+
+
+def test_build_watch_state_initial_failure_counts_zero():
+    from openclaw_cli_sessions import SessionSummary
+
+    session = SessionSummary(session_id="s3", title="T", cwd="/")
+    state = mod.build_watch_state(
+        session=session,
+        mode="analyze",
+        goal="test",
+        interval_seconds=60,
+        max_polls=0,
+        on_change=False,
+    )
+    assert state["failure_count"] == 0
+    assert state["consecutive_failures"] == 0
+
+
+def test_build_watch_state_has_timestamps():
+    from openclaw_cli_sessions import SessionSummary
+
+    session = SessionSummary(session_id="s4", title="T", cwd="/")
+    state = mod.build_watch_state(
+        session=session,
+        mode="write",
+        goal="draft report",
+        interval_seconds=120,
+        max_polls=3,
+        on_change=False,
+    )
+    assert "created_at" in state
+    assert "updated_at" in state
+    assert state["created_at"].endswith("Z")
+
+
+# ---------------------------------------------------------------------------
+# is_transient_watch_error — edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_is_transient_watch_error_empty_string():
+    assert mod.is_transient_watch_error("") is False
+
+
+def test_is_transient_watch_error_none():
+    assert mod.is_transient_watch_error(None) is False  # type: ignore[arg-type]
+
+
+def test_is_transient_watch_error_case_insensitive():
+    assert mod.is_transient_watch_error("Connection Refused") is True
+
+
+def test_is_transient_watch_error_exception_object():
+    exc = ConnectionError("timed out connecting")
+    assert mod.is_transient_watch_error(exc) is True
+
+
+# ---------------------------------------------------------------------------
+# _watch_timing_summary — structure checks
+# ---------------------------------------------------------------------------
+
+
+def test_watch_timing_summary_empty_state():
+    state = {}
+    result = mod._watch_timing_summary(state)
+    assert "active_phase" in result
+    assert "latest_duration" in result
+    assert "retry_delay_total" in result
+    assert "current_elapsed" in result
+
+
+def test_watch_timing_summary_running_status():
+    state = {
+        "status": "running",
+        "last_run_at": "2024-01-01T00:00:00Z",
+    }
+    result = mod._watch_timing_summary(state)
+    assert result["current_elapsed"] is None or result["current_elapsed"] >= 0
+
+
+# ---------------------------------------------------------------------------
+# start_watch_checkpoint — additional
+# ---------------------------------------------------------------------------
+
+
+def test_start_watch_checkpoint_has_iso_timestamp():
+    from datetime import datetime
+
+    cp = mod.start_watch_checkpoint(iteration=1, mode="analyze")
+    ts = cp["started_at"]
+    dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    assert dt.year >= 2024
+
+
+def test_start_watch_checkpoint_empty_progress_and_attempts():
+    cp = mod.start_watch_checkpoint(iteration=5, mode="research")
+    assert cp["progress"] == []
+    assert cp["attempts"] == []
