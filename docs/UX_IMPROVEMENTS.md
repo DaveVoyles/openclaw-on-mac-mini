@@ -670,7 +670,7 @@ sideways.
 - [x] `/rollback list` shows recent checkpoints and whether each one is recoverable
 - [x] Failed routed actions print a concrete recovery hint when one exists (shipped: `recovery_hint` param in `openclaw_cli_actions.py:160,242`; `_build_error_recovery_hints()` in openclaw_cli.py:1410)
 - [x] Approval flows end with a short "what happened / how to recover" recap for risky actions (shipped: `_print_approval_recap()` at openclaw_cli_actions.py:545; called at openclaw_cli_actions.py:438)
-- [ ] Usage errors follow one consistent style across REPL commands (partial: `_print_error` / `_print_usage` helpers exist across multiple modules but cross-command consistency not enforced)
+- [x] Usage errors follow one consistent style across REPL commands (shipped: `_print_error` / `_print_usage` helpers enforced across modules; ≤2 bare `print("Usage` calls remain as documented exceptions — `openclaw_cli_cmd_core.py:1582`, `openclaw_cli_cmd_content.py:236`)
 - [x] 180 tests pass
 - [x] Deployed to macbook
 
@@ -818,7 +818,7 @@ from inside the CLI instead of buried in JSON state files.
 - [x] `/watch retry-limit N` updates persisted retry behavior for the active watch session
 - [x] `/watch intervene` records operator notes that appear in later history output
 - [x] `/plan status` and `/plan focus` make linked plan progress readable in the CLI
-- [ ] Session/status output surfaces active automation state by default (partial: `automation_status` surfaced in `openclaw_cli_session_display.py:1058–1062` but only in detail/expanded view, not top-line default)
+- [x] Session/status output surfaces active automation state by default (shipped: `_watch_status_cell()` at `openclaw_cli_ui_utils.py:377–401` injects `⟳ watching` / `↺ retrying` into the default status bar; called at `openclaw_cli_ui_utils.py:438`)
 - [x] Retry paths explain when the CLI auto-retried and why (shipped: print of auto-retry message at openclaw_cli_watch.py:1417)
 - [x] 180 tests pass
 - [x] Deployed to macbook
@@ -893,8 +893,8 @@ feel inspectable, not mysterious.
 - [ ] Users can inspect the exact grounding block used for the last analyze/research/write action (partial: `/context` shows bounded grounding preview via `_render_effective_grounding_preview` in openclaw_cli.py:2370, but not the exact block for the last specific action)
 - [x] Saved outputs expose prompt/session lineage and provenance metadata (shipped: `.provenance.json` sidecar written by `save_output` in openclaw_cli_sessions.py:854; `load_output_provenance()` at sessions.py:864)
 - [x] `/events` can filter down to decision-centric entries (shipped: `/events decisions [n]` filter in `_cmd_events` at openclaw_cli_cmd_session.py:77–78)
-- [ ] Approval prompts explain why a risk level was chosen
-- [ ] Ambiguous prompts that stay in chat can explain the top blocking reason
+- [x] Approval prompts explain why a risk level was chosen (shipped: `_rationale_line` set to "CRITICAL risk: this action is irreversible…" / "HIGH risk: this action modifies the filesystem…" at `openclaw_cli_actions.py:363–370`)
+- [x] Ambiguous prompts that stay in chat can explain the top blocking reason (shipped: `_hint_rationale = (route_decision.rationale or "")[:80]` printed as `↳ stayed in chat — confidence below threshold · {_hint_rationale}` at `openclaw_cli.py:4759–4760`)
 - [x] 180 tests pass (600 passed, 0 failing — pytest tests/test_openclaw_cli.py -q)
 - [ ] Deployed to macbook
 

@@ -125,9 +125,18 @@ relevant section of `docs/UX_IMPROVEMENTS.md`.
 
 ### Initiative: Wave 26 — Stale Audit + Checkbox Reconciliation
 
-- **Status:** in progress
+- **Status:** shipped
 - **Owner area:** docs, cross-cutting
 - **Why now:** 51 open checkboxes in UX_IMPROVEMENTS.md were identified at W26 start; W21–W25 shipped code but boxes were never flipped, causing false signal about open work.
+- **What shipped:** automation state cell (`_watch_status_cell`) in default status bar; watch completion recap; 54 integration tests; 30 stale checkboxes cleared in `docs/UX_IMPROVEMENTS.md`.
+
+### Initiative: Wave 27 — Grounding Block Inspection + Remaining Stale Audit
+
+- **Status:** in progress
+- **Owner area:** docs, cli
+- **Supporting doc:** `docs/UX_IMPROVEMENTS.md`
+- **Why now:** Grounding block inspection (`/context last`) remains the highest-signal open UX item, and a residual stale-checkbox audit (4 confirmed this wave) keeps the doc accurate.
+- **Next step:** Wire `/context last` to surface the exact grounding block used by the last analyze/research/write action; continue stale-checkbox reconciliation.
 
 ### 3. CLI technical-debt follow-up
 
