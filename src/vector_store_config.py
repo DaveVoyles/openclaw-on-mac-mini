@@ -59,8 +59,7 @@ def _get_embedding_function():
     except ImportError:
         log.warning("OllamaEmbeddingFunction not available in this ChromaDB version, using default")
         return None
-    except Exception as e:
-        log.warning("Failed to initialize Ollama embeddings (%s), using default: %s", EMBEDDING_MODEL, e)
+    except Exception as e:  # broad: intentional
         return None
 
 

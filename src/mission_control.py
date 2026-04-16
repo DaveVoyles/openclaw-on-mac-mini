@@ -64,7 +64,7 @@ def _load_tasks() -> dict:
                     _tasks_cache = json.load(f)
                 _tasks_mtime = current_mtime
                 return _tasks_cache
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, ValueError) as e:
                 log.debug("Skipped tasks path %s: %s", p, e)
         return {"tasks": []}
 
@@ -149,7 +149,7 @@ async def _run_mc_script(*args: str) -> str:
         return (out + ("\n" + err if err else "")).strip()
     except asyncio.TimeoutError:
         return "❌ mc-update.sh timed out"
-    except Exception as e:
+    except (OSError, asyncio.TimeoutError) as e:
         return f"❌ Error running mc-update.sh: {e}"
 
 

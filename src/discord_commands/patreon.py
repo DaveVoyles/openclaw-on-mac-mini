@@ -53,7 +53,7 @@ def _register_patreon_commands(bot: commands.Bot) -> None:
             await interaction.followup.send(embed=embed, ephemeral=True)
             audit_log(interaction.user, "patreon_status", detail=health.status.value)
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.error(f"Error checking Patreon status: {exc}", exc_info=True)
             await interaction.followup.send(
                 f"❌ Error checking Patreon status: {exc}", ephemeral=True
@@ -159,7 +159,7 @@ def _create_status_embed(health) -> discord.Embed:
                 value=f"{recovery_emoji} {last.action.value} ({time_ago:.0f}m ago)\n{last.message}",
                 inline=False,
             )
-    except Exception:
+    except Exception:  # broad: intentional
         pass
 
     embed.set_footer(text="Use /patreon refresh-cookies for cookie update guide")

@@ -45,10 +45,5 @@ def _register_providers_commands(bot: commands.Bot) -> None:
                 color=discord.Color.blue(),
             )
             await interaction.followup.send(embed=embed)
-        except Exception as exc:
-            embed = discord.Embed(
-                title="❌ Provider scan failed",
-                description=str(exc),
-                color=discord.Color.red(),
-            )
+        except Exception as exc:  # broad: intentional
             await interaction.followup.send(embed=embed)

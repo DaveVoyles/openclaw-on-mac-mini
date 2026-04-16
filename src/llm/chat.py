@@ -1488,6 +1488,7 @@ async def chat(
         if is_low_quality(text) and COPILOT_PROXY_ENABLED:
             log.info("Quality retry gate triggered — Gemini reply too short/vague, trying Copilot")
             record_quality_retry()
+            print("↺ Auto-retried: quality gate triggered — trying a higher-quality provider", flush=True)
             copilot_result = await _try_copilot_proxy_reply(
                 model_message=model_message,
                 cleaned_user_message=cleaned_user_message,

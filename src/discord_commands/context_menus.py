@@ -52,7 +52,7 @@ def _register_context_menus(bot: commands.Bot) -> None:
                 view=SMSSendConfirmView(interaction.user.id, cleaned),
                 ephemeral=True,
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             await interaction.response.send_message(format_sms_error(exc), ephemeral=True)
 
     async def _copy_workflow_context(interaction: discord.Interaction, message: discord.Message) -> None:
@@ -131,7 +131,7 @@ def _register_context_menus(bot: commands.Bot) -> None:
                 img_bytes = render_table_image(table_text)
                 if img_bytes:
                     files.append(discord.File(io.BytesIO(img_bytes), filename="report-table.png"))
-        except Exception:
+        except Exception:  # broad: intentional
             pass
 
         await interaction.response.send_message(

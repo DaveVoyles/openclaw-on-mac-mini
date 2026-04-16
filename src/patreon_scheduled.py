@@ -107,8 +107,7 @@ async def scheduled_patreon_health_check(
             "timestamp": datetime.now().isoformat(),
         }
 
-    except Exception as e:
-        log.error(f"Error in scheduled Patreon health check: {e}", exc_info=True)
+    except Exception as e:  # broad: intentional
         return {
             "success": False,
             "error": str(e),

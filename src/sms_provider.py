@@ -137,7 +137,7 @@ class TwilioSMSProvider:
 
         try:
             message = await asyncio.to_thread(self._client.messages.create, **payload)
-        except Exception as exc:  # pragma: no cover - depends on Twilio internals
+        except Exception as exc:  # pragma: no cover - depends on Twilio internals — broad: intentional
             raise SMSProviderSendError(f"Twilio SMS send failed: {exc}") from exc
 
         return SMSDeliveryResult(

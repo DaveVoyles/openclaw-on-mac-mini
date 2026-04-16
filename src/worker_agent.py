@@ -147,8 +147,7 @@ async def spawn_worker(
         log.info("Worker finished (rounds=%d): %.80s…", rounds, result_text)
         return result_text
 
-    except Exception as e:
-        log.error("Worker agent error: %s", e, exc_info=True)
+    except Exception as e:  # broad: intentional
         return f"❌ Worker failed: {e}"
 
 

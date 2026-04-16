@@ -196,7 +196,7 @@ def _record_degrade_mode_metric(
             path=path,
             reason=reason,
         )
-    except Exception:
+    except Exception:  # broad: intentional
         pass
 
 
@@ -403,7 +403,7 @@ def get_latency_load_snapshot(*, command_hint: str = "") -> dict[str, float] | N
             "provider_timeout_rate": round(timeout_errors / max(total_commands, 1), 4),
             "retrieval_sparsity_rate": round(sparsity_errors / max(total_commands, 1), 4),
         }
-    except Exception:
+    except Exception:  # broad: intentional
         return None
 
 

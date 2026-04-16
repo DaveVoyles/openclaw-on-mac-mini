@@ -332,7 +332,7 @@ class AuditLogger:
                         logs.append(log_entry)
                     except json.JSONDecodeError:
                         continue
-        except Exception as e:
+        except (OSError, ValueError, KeyError, AttributeError) as e:
             logging.error(f"Error reading audit logs: {e}")
 
         return logs

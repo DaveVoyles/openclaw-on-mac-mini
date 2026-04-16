@@ -49,7 +49,7 @@ class PerfCog(commands.Cog):
 
                 try:
                     results = await asyncio.gather(*[fetch(ep) for ep in endpoints])
-                except Exception:
+                except Exception:  # broad: intentional
                     await interaction.followup.send(
                         f"⚠️ Glances not reachable at `{base}`. Is it running?",
                         ephemeral=True,
@@ -101,7 +101,7 @@ class PerfCog(commands.Cog):
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.exception("perf command failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/perf"), ephemeral=True)
 

@@ -184,7 +184,7 @@ def _get_provider_p95_latency(provider: str) -> float | None:
         if len(latencies) < 5:
             return None
         return _statistics.quantiles(latencies, n=20)[18]  # p95
-    except Exception:
+    except Exception:  # broad: intentional
         return None
 
 
@@ -815,7 +815,7 @@ async def _classify_text_with_llm(text: str) -> str | None:
             return category
         _policy_logger.debug("classify_query: LLM returned unknown category %r", category)
         return None
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # broad: intentional
         _policy_logger.debug("classify_query: LLM intent detection failed", exc_info=True)
         return None
 

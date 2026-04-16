@@ -90,7 +90,7 @@ def log_execution_time(func: Callable) -> Callable:
             duration = time.perf_counter() - start
             log.info("%s completed in %.3fs", func.__name__, duration)
             return result
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             duration = time.perf_counter() - start
             log.error("%s failed after %.3fs: %s", func.__name__, duration, e)
             raise

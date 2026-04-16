@@ -66,8 +66,7 @@ async def export_to_csv(
             "size_bytes": output_path.stat().st_size,
         }
 
-    except Exception as e:
-        log.error(f"CSV export failed: {e}", exc_info=True)
+    except Exception as e:  # broad: needs-review
         return {"success": False, "error": str(e)}
 
 

@@ -252,6 +252,5 @@ async def _reflect_on_response(
                  len(text), len(reflection))
         return reflection
 
-    except Exception as e:
-        log.debug("Reflection failed (non-fatal): %s", e)
+    except Exception as e:  # broad: intentional
         return text

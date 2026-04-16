@@ -406,7 +406,7 @@ def _cmd_benchmark(ctx: "ChatCommandContext") -> str:
                 _RICH_CONSOLE.print(f"  [{i + 1}/{n}] [{color}]{elapsed:.3f}s[/]  {bar}")
             else:
                 print(f"  [{i + 1}/{n}] {elapsed:.3f}s  {bar}")
-        except Exception as exc:  # noqa: BLE001
+        except OSError as exc:  # noqa: BLE001
             elapsed = time.time() - start
             times.append(elapsed)
             if _RICH_AVAILABLE and is_tty:

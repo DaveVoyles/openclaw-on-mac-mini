@@ -97,11 +97,11 @@ async def run_code(
                 stderr=asyncio.subprocess.DEVNULL,
             )
             await kill_proc.wait()
-        except Exception as exc:
+        except OSError as e:
             log.debug("Failed to kill sandbox container: %s", exc)
         return "", f"Execution timed out after {SANDBOX_TIMEOUT}s.", 1
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Sandbox execution error: %s", e)
         return "", f"Sandbox error: {e}", 1
 

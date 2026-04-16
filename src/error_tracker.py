@@ -301,8 +301,7 @@ async def diagnose_error_pattern(
 
         return {**_default, "severity": "medium", "confidence": 0.3,
                 "cause": text[:200], "explanation": text[:300]}
-    except Exception as e:
-        log.warning("Error diagnosis failed: %s", e)
+    except Exception as e:  # broad: intentional
         return {**_default, "cause": str(e),
                 "explanation": f"Diagnosis failed: {e}"}
 
@@ -448,6 +447,5 @@ def get_past_incidents(pattern_type: str = "", limit: int = 5) -> list[dict]:
     except (OSError, json.JSONDecodeError) as e:
         log.warning("Failed to load error incidents: %s", e)
         return []
-    except Exception:
-        log.exception("Unexpected error loading error incidents")
+    except (AttributeError, TypeError, KeyError):
         return []

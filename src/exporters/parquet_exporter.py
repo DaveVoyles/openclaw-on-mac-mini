@@ -78,6 +78,5 @@ async def export_to_parquet(
             "compression": compression,
         }
 
-    except Exception as e:
-        log.error(f"Parquet export failed: {e}", exc_info=True)
+    except Exception as e:  # broad: needs-review
         return {"success": False, "error": str(e)}

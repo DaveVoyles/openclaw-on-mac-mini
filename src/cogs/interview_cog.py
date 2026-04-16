@@ -70,8 +70,7 @@ class _InterviewOutputView(discord.ui.View):
             button.label = "✅ Saved"
             await interaction.message.edit(view=self)
             await interaction.followup.send(f"📁 Saved to vault: {result}", ephemeral=True)
-        except Exception as e:
-            log.exception("interview vault save failed")
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="/interview save"), ephemeral=True)
 
 
@@ -140,8 +139,7 @@ class InterviewModal(discord.ui.Modal):
                     "interview_complete",
                     {"goal": session["goal"], "model": model},
                 )
-            except Exception as e:
-                log.exception("interview synthesize failed")
+            except Exception as e:  # broad: intentional
                 await interaction.followup.send(embed=build_error_embed(e, context="/interview"), ephemeral=True)
             finally:
                 _sessions.pop(self.user_id, None)

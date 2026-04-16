@@ -44,7 +44,7 @@ def record(
         _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _LOG_PATH.open("a") as f:
             f.write(json.dumps(entry) + "\n")
-    except Exception as exc:  # noqa: BLE001
+    except (OSError, TypeError) as e:  # noqa: BLE001
         log.debug("Telemetry write failed: %s", exc)
 
 
@@ -58,7 +58,7 @@ async def rotate_audit_log() -> None:
         if len(lines) > _AUDIT_MAX_LINES:
             with _LOG_PATH.open("w") as f:
                 f.writelines(lines[-_AUDIT_KEEP_LINES:])
-    except Exception:  # noqa: BLE001
+    except OSError as e:  # noqa: BLE001
         pass
 
 

@@ -110,8 +110,7 @@ class ImagineCog(commands.Cog):
             await interaction.edit_original_response(
                 content=f"❌ Stable Diffusion is offline. Make sure it's running at `{cfg.sd_url}`"
             )
-        except Exception:
-            log.exception("imagine generate failed")
+        except Exception:  # broad: intentional
             await interaction.edit_original_response(
                 content="❌ Image generation failed. Check the logs for details."
             )
@@ -149,8 +148,7 @@ class ImagineCog(commands.Cog):
                 color=discord.Color.red(),
             )
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception:
-            log.exception("imagine status failed")
+        except Exception:  # broad: intentional
             await interaction.followup.send("❌ Status check failed. Check the logs.", ephemeral=True)
 
 

@@ -39,7 +39,7 @@ class ResourceMonitor:
                 data = json.loads(MONITOR_FILE.read_text())
                 for name, t in data.items():
                     self._thresholds[name] = ResourceThreshold(**t)
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError) as e:
                 log.warning("Failed to load resource monitors: %s", e)
 
     def _save(self):
@@ -104,7 +104,7 @@ class ResourceMonitor:
 
         try:
             stats = await self._get_stats_raw()
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.debug("Resource monitor stats fetch failed: %s", e)
             return []
 

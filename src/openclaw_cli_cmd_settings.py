@@ -437,13 +437,8 @@ def _cmd_accessibility(ctx: "ChatCommandContext") -> str:
         try:
             import shutil as _shutil
             cols = _shutil.get_terminal_size(fallback=(80, 24)).columns
-        except Exception:  # noqa: BLE001
-            try:
-                cols = sys.stdout.fileno()
-                import os as _os
-                cols = _os.get_terminal_size(cols).columns
-            except Exception:  # noqa: BLE001
-                cols = 80
+        except (OSError, AttributeError, ValueError):  # noqa: BLE001
+            cols = 80
 
         rm   = "ON" if m._a11y_reduced_motion() else "off"
         pm   = "ON" if m._a11y_plain_mode()     else "off"

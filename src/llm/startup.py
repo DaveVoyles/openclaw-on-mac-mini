@@ -57,7 +57,7 @@ async def _timed_ping(coro) -> tuple[bool, float | None]:
         result = await coro
         latency_ms = round((time.perf_counter() - start) * 1000, 1)
         return bool(result), latency_ms
-    except Exception:
+    except Exception:  # broad: intentional
         return False, None
 
 

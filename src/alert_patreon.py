@@ -254,8 +254,7 @@ class PatreonAlertManager:
             log.warning("No valid destination for Patreon alert")
             return False
 
-        except Exception as e:
-            log.error(f"Error sending Patreon alert: {e}")
+        except Exception as e:  # broad: intentional            log.error(f"Error sending Patreon alert: {e}")
             return False
 
     def reset_alert_state(self, alert_key: Optional[str] = None):

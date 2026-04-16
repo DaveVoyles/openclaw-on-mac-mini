@@ -355,7 +355,7 @@ def _load_route_plan(plan_id: str) -> Any | None:
         return None
     try:
         return load_agent_plan(normalized)
-    except Exception:
+    except Exception:  # broad: intentional
         return None
 
 

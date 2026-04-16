@@ -25,7 +25,7 @@ try:
 
     _RICH_CONSOLE = _RichConsole(highlight=False)
     _RICH_AVAILABLE = True
-except Exception:
+except ImportError:
     _RICH_AVAILABLE = False
 
 # ---------------------------------------------------------------------------

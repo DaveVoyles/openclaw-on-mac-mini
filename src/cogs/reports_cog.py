@@ -129,7 +129,7 @@ class ReportsCog(commands.Cog, name="Reports"):
                 img_bytes = render_table_image(table_text)
                 if img_bytes:
                     table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.debug("Report table image fallback unavailable: %s", exc)
 
         formatted_body = format_markdown_for_discord(body)
@@ -275,7 +275,7 @@ class ReportsCog(commands.Cog, name="Reports"):
                 img_bytes = render_table_image(table_text)
                 if img_bytes:
                     files.append(discord.File(io.BytesIO(img_bytes), filename="report-table.png"))
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.debug("Artifact table image generation unavailable: %s", exc)
 
         await interaction.followup.send(

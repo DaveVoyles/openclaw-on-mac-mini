@@ -86,7 +86,7 @@ class PollCog(commands.Cog):
                 )
 
                 await interaction.channel.send(embed=result_embed)
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.debug("Poll close failed: %s", e)
 
         asyncio.create_task(close_poll())

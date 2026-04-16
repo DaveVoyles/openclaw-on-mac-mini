@@ -60,6 +60,6 @@ async def send_agent_mail(to: str, subject: str, body: str) -> str:
 
     except asyncio.TimeoutError:
         return "❌ AgentMail request timed out (15s)."
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("AgentMail error: %s", e)
         return f"❌ AgentMail error: {e}"

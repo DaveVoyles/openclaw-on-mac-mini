@@ -297,7 +297,7 @@ async def generate_incident_report(
             tool_declarations=[],
         )
         parsed = _extract_json_payload(response_text)
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional
         log.warning("Incident Copilot LLM generation failed: %s", exc)
 
     summary = ""

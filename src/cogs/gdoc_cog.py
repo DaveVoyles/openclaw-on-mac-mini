@@ -74,8 +74,7 @@ class GDocCog(commands.Cog):
                 embed.add_field(name="🔗 Link", value=doc_url, inline=False)
             embed.set_footer(text="Saved to Google Docs (not NAS vault)")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
-            log.exception("gdoc save failed")
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="/gdoc save"), ephemeral=True)
 
     # ── /gdoc list ────────────────────────────────────────────────────────
@@ -117,8 +116,7 @@ class GDocCog(commands.Cog):
             )
             embed.set_footer(text="Google Docs via Maton")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
-            log.exception("gdoc list failed")
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="/gdoc list"), ephemeral=True)
 
 

@@ -294,7 +294,7 @@ def _print_startup_banner(config: "CliConfig", session_id: str) -> None:
             if _session_count == m:
                 _milestone = m
                 break
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # broad: intentional
         pass
 
     # Plain-mode path: no ANSI, no emoji, no decorative borders.

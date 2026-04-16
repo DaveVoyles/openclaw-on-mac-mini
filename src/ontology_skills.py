@@ -122,7 +122,7 @@ async def ontology_create_entity(entity_type: str, properties_json: str, entity_
             f"[Ontology: {entity_type}] {label}",
             tags=[entity_type, "ontology"],
         )
-    except Exception:
+    except Exception:  # broad: intentional
         pass  # non-critical
 
     return f"✅ Created ontology entity:\n{_format_entity(entity)}"

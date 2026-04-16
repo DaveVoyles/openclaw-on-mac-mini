@@ -283,7 +283,7 @@ def _print_exec_error_hints(
                 _console.print(f"  [dim]→[/] {hint}")
             _console.print()
             _rich_ok = True
-        except Exception:  # noqa: BLE001
+        except (ImportError, OSError, AttributeError) as e:
             pass
 
     if not _rich_ok:

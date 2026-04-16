@@ -57,7 +57,7 @@ class SpendingTracker:
                         return json.load(f)
                     finally:
                         fcntl.flock(f, fcntl.LOCK_UN)
-            except Exception as e:
+            except (json.JSONDecodeError, OSError) as e:
                 log.error("Failed to load spending data: %s", e)
         return self._empty()
 
@@ -94,7 +94,7 @@ class SpendingTracker:
                 f.flush()
                 os.fsync(f.fileno())
             tmp.replace(SPENDING_FILE)
-        except Exception as e:
+        except (OSError, TypeError, ValueError) as e:
             log.error("Failed to save spending data: %s", e)
 
     # -----------------------------------------------------------------------

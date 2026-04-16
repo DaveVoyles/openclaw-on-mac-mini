@@ -14,7 +14,7 @@ async def _run_git(args):
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=-1, stderr=-1, cwd=os.getcwd())
         stdout, stderr = await asyncio.wait_for(proc.communicate(), 15)
         return stdout.decode().strip() or stderr.decode().strip()
-    except Exception as e:
+    except (OSError, asyncio.TimeoutError) as e:
         return f"❌ git {' '.join(args)} failed: {e}"
 
 async def git_status():
@@ -51,7 +51,7 @@ async def _run_webfetch(url: str) -> str:
         if len(markdown) > 8000:
             markdown = markdown[:8000] + "\n... (truncated)"
         return f"**Title**: {data.get('title')}\n\n{markdown}"
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, asyncio.TimeoutError) as e:
         return f"❌ webfetch-md failed: {e}"
 
 GIT_SKILLS = {

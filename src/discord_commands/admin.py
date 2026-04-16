@@ -25,7 +25,7 @@ def _register_admin_commands(bot: commands.Bot) -> None:
             await interaction.followup.send(
                 "✅ Routing policy reloaded. New settings are live.", ephemeral=True
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             await interaction.followup.send(
                 f"❌ Reload failed: {exc}", ephemeral=True
             )

@@ -205,7 +205,7 @@ async def send_severity_alert(
                     color=discord.Color.red(),
                 )
                 await owner.send(embed=dm_embed)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.warning("Failed to DM owner for critical alert: %s", exc)
 
     log.warning("[%s] Alert sent: %s", effective_severity.upper(), title)
@@ -481,7 +481,7 @@ async def send_trend_alert(
         log.info("Sent %s alert for %s to channel %d", alert_type, analysis.topic, channel_id)
         return True
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Failed to send alert for %s: %s", analysis.topic, e)
         return False
 

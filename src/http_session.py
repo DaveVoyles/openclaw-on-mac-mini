@@ -85,5 +85,5 @@ async def close_all() -> None:
     for mgr in _registry:
         try:
             await mgr.close()
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.debug("close %s: %s", mgr.name, exc)

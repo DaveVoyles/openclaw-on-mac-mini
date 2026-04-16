@@ -88,7 +88,7 @@ def _register_agent_commands(bot: commands.Bot) -> None:
                     h1 = _re.search(r"^#\s+(.+)$", page_text, _re.MULTILINE)
                     if h1:
                         title = h1.group(1)[:80]
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.debug("Bookmark URL summarize failed: %s", e)
 
         if note:

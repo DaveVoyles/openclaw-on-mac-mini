@@ -124,7 +124,7 @@ async def _raw_login(session: aiohttp.ClientSession) -> str | None:
             code = data.get("error", {}).get("code", "unknown")
             log.warning("DSM login failed, error code: %s", code)
             return None
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("DSM login error: %s", e)
         return None
 
@@ -720,7 +720,7 @@ async def nas_write_file(
             timeout=aiohttp.ClientTimeout(total=TIMEOUT_SLOW),
         ) as resp:
             result = await resp.json(content_type=None)
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         result = {"success": False, "_err": str(e)}
 
     if not result.get("success"):

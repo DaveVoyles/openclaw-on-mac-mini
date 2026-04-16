@@ -107,10 +107,5 @@ def _register_feedback_commands(bot: commands.Bot) -> None:
 
             await interaction.followup.send(embed=embed)
 
-        except Exception as exc:
-            embed = discord.Embed(
-                title="❌ Feedback summary failed",
-                description=str(exc),
-                color=discord.Color.red(),
-            )
+        except Exception as exc:  # broad: intentional
             await interaction.followup.send(embed=embed)

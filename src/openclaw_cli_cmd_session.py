@@ -429,7 +429,7 @@ def _cmd_export(ctx: ChatCommandContext) -> str:
         else:
             print(f"\n✅ Exported {count} entries → {abs_path} ({size_kb:.1f} KB, {fmt.upper()})\n")
 
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001 — broad: intentional
         msg = f"Export failed: {e}"
         if m._RICH_AVAILABLE and is_tty:
             m._RICH_CONSOLE.print(f"[red]{msg}[/]")

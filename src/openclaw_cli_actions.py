@@ -171,7 +171,7 @@ def _approval_overlay_available() -> bool:
     """Return True when the approval review overlay can safely prompt."""
     try:
         return bool(sys.stdin.isatty() and sys.stdout.isatty())
-    except Exception:  # noqa: BLE001
+    except (AttributeError, OSError) as e:
         return False
 
 

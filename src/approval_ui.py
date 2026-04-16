@@ -81,7 +81,7 @@ class ApprovalView(discord.ui.View):
             try:
                 result = await self.action_callback(req)
                 await interaction.followup.send(result)
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 await interaction.followup.send(f"❌ Execution failed: {e}")
         else:
             await interaction.response.edit_message(
@@ -106,7 +106,7 @@ class ApprovalView(discord.ui.View):
                     content="⏱️ **Approval request expired** — no action was taken.",
                     view=self,
                 )
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 log.debug("Could not update expired approval message: %s", e)
 
 

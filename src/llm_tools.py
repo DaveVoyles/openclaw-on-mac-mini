@@ -103,8 +103,7 @@ async def _execute_function_call(name: str, args: dict) -> str:
         circuit_breaker.record_success(name)
         tool_health.record(name, success=True)
         return result
-    except Exception as e:
-        log.error("Skill %s failed: %s", name, e)
+    except Exception as e:  # broad: intentional
         circuit_breaker.record_failure(name)
         tool_health.record(name, success=False)
         return f"Error executing {name}: {e}"

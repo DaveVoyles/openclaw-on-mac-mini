@@ -45,8 +45,7 @@ class TodoManager:
             try:
                 raw = json.loads(self._path.read_text(encoding="utf-8"))
                 self._items = [TodoItem(**item) for item in raw]
-            except Exception:
-                log.exception("Failed to load todos from %s", self._path)
+            except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError):
                 self._items = []
         else:
             self._items = []

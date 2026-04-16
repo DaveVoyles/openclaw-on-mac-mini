@@ -49,7 +49,7 @@ def summarize_session(session: SessionSummary, *, _age_label_fn: Any = None) -> 
     """Render a compact single-session summary for terminal output."""
     try:
         watch_state = load_watch_state(session.session_id)
-    except Exception:
+    except Exception:  # broad: intentional
         _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
         watch_state = None
     snapshot = build_collaboration_snapshot(session.session_id, limit=3)
@@ -118,7 +118,7 @@ def _session_preview_lines(session: SessionSummary) -> list[str]:
     if session.automation_mode:
         try:
             watch_state = load_watch_state(session.session_id)
-        except Exception:
+        except Exception:  # broad: intentional
             _LOG.debug("load_watch_state failed for %s", session.session_id, exc_info=True)
             watch_state = None
         if watch_state:

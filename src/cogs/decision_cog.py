@@ -99,7 +99,7 @@ class DecisionCog(commands.GroupCog, group_name="decision", group_description="D
             return
         try:
             msg = await channel.fetch_message(poll_message_id)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional
             log.debug("Decision poll fetch failed: %s", exc)
             return
 
@@ -118,7 +118,7 @@ class DecisionCog(commands.GroupCog, group_name="decision", group_description="D
                     if member is None:
                         try:
                             member = await guild.fetch_member(user.id)
-                        except Exception:
+                        except Exception:  # broad: intentional
                             member = None
                     if member:
                         role_names = [r.name for r in member.roles if r.name != "@everyone"]

@@ -69,8 +69,7 @@ def _load_permissions() -> dict:
         try:
             with open(perms_file) as f:
                 _permissions_cache = yaml.safe_load(f) or {}
-        except Exception as exc:
-            log.warning("Failed to parse permissions YAML: %s", exc)
+        except (yaml.YAMLError, OSError, TypeError) as exc:
             _permissions_cache = _permissions_cache or {}
     else:
         _permissions_cache = {}

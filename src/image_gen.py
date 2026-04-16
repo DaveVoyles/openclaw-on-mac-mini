@@ -34,8 +34,7 @@ async def is_available() -> bool:
             timeout=aiohttp.ClientTimeout(total=TIMEOUT_FAST),
         ) as resp:
             return resp.status == 200
-    except Exception as exc:
-        log.debug("SD health check failed: %s", exc)
+    except Exception as exc:  # broad: intentional
         return False
 
 
@@ -86,6 +85,5 @@ async def generate_image(
         return None, f"Image generation timed out after {SD_TIMEOUT}s."
     except aiohttp.ClientError as e:
         return None, f"Cannot reach SD service at {SD_URL}: {e}"
-    except Exception as e:
-        log.error("Image generation error: %s", e)
+    except Exception as e:  # broad: intentional
         return None, f"Image generation failed: {e}"

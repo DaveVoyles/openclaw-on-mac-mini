@@ -40,7 +40,7 @@ class ReminderManager:
             try:
                 data = json.loads(REMINDERS_FILE.read_text())
                 self._reminders = [Reminder(**r) for r in data]
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError) as e:
                 log.warning("Failed to load reminders: %s", e)
 
     def _save(self) -> None:

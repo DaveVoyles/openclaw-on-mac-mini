@@ -55,7 +55,7 @@ class ExpenseTracker:
             try:
                 raw = json.loads(self.path.read_text())
                 self._expenses = [Expense(**e) for e in raw]
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError) as e:
                 log.error("Failed to load expenses: %s", e)
                 self._expenses = []
 

@@ -45,7 +45,7 @@ class HabitTracker:
                 self._habits = {
                     k: Habit(**v) for k, v in raw.items()
                 }
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, TypeError, ValueError, KeyError) as e:
                 log.error("Failed to load habits: %s", e)
                 self._habits = {}
 

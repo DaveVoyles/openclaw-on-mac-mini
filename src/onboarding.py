@@ -73,7 +73,7 @@ class OnboardingManager:
                             if progress_data.get("completed_at")
                             else None,
                         )
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, ValueError, KeyError, TypeError) as e:
                 logger.error(f"Error loading onboarding progress: {e}")
 
     def _save_progress(self):

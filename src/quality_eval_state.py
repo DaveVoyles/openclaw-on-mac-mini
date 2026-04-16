@@ -86,7 +86,7 @@ def build_quality_eval_scorecard(
         from error_tracker import get_recent_outcomes
 
         runs = list(get_recent_outcomes(hours=window_hours, limit=limit))
-    except Exception:
+    except Exception:  # broad: intentional
         runs = []
 
     counters = {name: _init_metric_counter() for name in _QUALITY_METRICS}

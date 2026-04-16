@@ -853,7 +853,7 @@ def save_output(
         }
         sidecar = target.with_suffix(".provenance.json")
         atomic_write(sidecar, json.dumps(provenance, indent=2, sort_keys=True))
-    except Exception:  # noqa: BLE001
+    except (OSError, TypeError, ValueError) as e:
         pass
     summary.output_count += 1
     summary.last_summary = f"saved output {target.name}"
@@ -871,7 +871,7 @@ def load_output_provenance(session_id: str, output_path: Path) -> dict[str, Any]
     try:
         sidecar = Path(output_path).with_suffix(".provenance.json")
         return dict(json.loads(sidecar.read_text(encoding="utf-8")))
-    except Exception:  # noqa: BLE001
+    except (OSError, json.JSONDecodeError, ValueError, TypeError) as e:
         return {}
 
 

@@ -40,8 +40,7 @@ class TranslateCog(commands.Cog, name="Translate"):
             embed.add_field(name="Original", value=text[:1000], inline=False)
             embed.add_field(name=f"Translated ({to})", value=result[:1000], inline=False)
             await interaction.followup.send(embed=embed)
-        except Exception as e:
-            log.exception("Translation failed")
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(embed=build_error_embed(e, context="/translate"), ephemeral=True)
 
 

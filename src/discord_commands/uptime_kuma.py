@@ -41,8 +41,7 @@ def _register_uptime_kuma_commands(bot: commands.Bot) -> None:
                 summary = await get_uptime_summary()
 
                 result = f"{down_result}\n\n{summary}"
-        except Exception as exc:
-            log.exception("uptime-status failed")
+        except Exception as exc:  # broad: intentional
             await interaction.followup.send(
                 f"❌ Error querying Uptime Kuma: {exc}", ephemeral=True
             )

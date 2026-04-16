@@ -371,7 +371,7 @@ async def migrate_json_threads(threads_dir: Path) -> int:
             count += 1
             log.info("Migrated thread '%s' (%d messages)", name, len(history))
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.warning("Failed to migrate %s: %s", f.name, e)
 
     if count:
@@ -436,7 +436,7 @@ async def auto_title_thread(thread_id: int) -> Optional[str]:
             await set_thread_title(thread_id, title)
             log.info("Auto-titled thread %d: %s", thread_id, title)
             return title
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.debug("Auto-title failed for thread %d: %s", thread_id, e)
 
     return None
