@@ -6,7 +6,6 @@ from unittest.mock import patch
 import openclaw_cli_ui_core as ui_core
 from openclaw_cli_ui_core import _c, _get_is_tty
 
-
 # ---------------------------------------------------------------------------
 # _c() — ANSI code gating
 # ---------------------------------------------------------------------------

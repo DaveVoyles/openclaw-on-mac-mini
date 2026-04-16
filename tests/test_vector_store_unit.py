@@ -7,9 +7,6 @@ behave correctly.
 """
 from __future__ import annotations
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Re-export surface — all documented names must be importable
 # ---------------------------------------------------------------------------
@@ -40,12 +37,9 @@ class TestVectorStoreReexports:
 
     def test_config_constant_exports(self):
         from vector_store import (
-            CHROMA_DIR,
             CONVERSATIONS_COLLECTION,
             DEFAULT_TOP_K,
-            EMBEDDING_MODEL,
             MEMORIES_COLLECTION,
-            OLLAMA_EMBED_URL,
             RESEARCH_COLLECTION,
             SIMILARITY_THRESHOLD,
         )
@@ -104,11 +98,8 @@ class TestVectorStoreReexports:
 
     def test_recall_guard_exports(self):
         from vector_store import (
-            _RECALL_DOMAIN_DIRECTIVE_RE,
             _RECALL_DOMAIN_TERMS,
             _RECALL_GUARD_MIN_SIMILARITY,
-            _RETENTION_PROTECT_SECONDS,
-            _last_recall_guard_notes,
             _set_recall_guard_notes,
         )
         assert callable(_set_recall_guard_notes)

@@ -3,17 +3,14 @@ from __future__ import annotations
 
 import json
 import subprocess
-import sys
 from importlib import metadata
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import openclaw_cli_update as update_mod
 from openclaw_cli_update import (
+    _CLI_BUILD,
     DEFAULT_BASE_URL,
     DEFAULT_VERSION,
-    _CLI_BUILD,
     _fetch_latest_pypi_version,
     _find_pip,
     _standalone_install_dir,
@@ -21,7 +18,6 @@ from openclaw_cli_update import (
     check_for_update,
     cli_version,
 )
-
 
 # ---------------------------------------------------------------------------
 # Constants

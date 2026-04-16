@@ -3,8 +3,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import pytest
-
 from openclaw_types import (
     APIResponse,
     ConversationMessage,
@@ -18,7 +16,6 @@ from openclaw_types import (
     UserPreferences,
     WeatherData,
 )
-
 
 # ---------------------------------------------------------------------------
 # Type aliases are plain strings — smoke-check that they resolve
@@ -56,7 +53,7 @@ class TestTypeAliases:
         assert cid and gid and mid and rid
 
     def test_api_aliases(self):
-        from openclaw_types import APIKey, FilePath, URL
+        from openclaw_types import URL, APIKey, FilePath
         key: APIKey = "secret"
         url: URL = "https://example.com"
         fp: FilePath = "/tmp/file.txt"

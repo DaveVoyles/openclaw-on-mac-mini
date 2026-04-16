@@ -9,10 +9,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import openclaw_cli_ui_utils as ui
-
 
 # ---------------------------------------------------------------------------
 # Helpers
