@@ -655,3 +655,42 @@ def _preview_panel(
         print(f"  [{title}]")
         for line in truncated:
             print(f"  {line}")
+
+
+def _start_stream_spinner(
+    label: str,
+    *,
+    is_tty: bool = True,
+    output_json: bool = False,
+) -> tuple[threading.Event, threading.Thread] | tuple[None, None]:
+    """Start a braille spinner for the streaming path.
+
+    Unlike ``_with_spinner``, this does NOT run ``fn`` in a background thread.
+    The caller runs the stream in the main thread and signals ``stop_event``
+    when the first SSE event arrives so the spinner clears before chunks print.
+
+    Returns ``(stop_event, thread)`` when active, or ``(None, None)`` when
+    skipped (not a TTY, output_json, or plain-mode).
+    """
+    if not (is_tty and not output_json) or _a11y_plain_mode():
+        return None, None
+
+    stop_event = threading.Event()
+
+    def _spin() -> None:
+        spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        frame_idx = 0
+        start = time.monotonic()
+        while not stop_event.wait(timeout=0.1):
+            elapsed = time.monotonic() - start
+            frame = spinner_frames[frame_idx % len(spinner_frames)]
+            sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s")
+            sys.stdout.flush()
+            frame_idx += 1
+        # Clear the spinner line so chunks print cleanly.
+        sys.stdout.write("\r" + " " * 72 + "\r")
+        sys.stdout.flush()
+
+    thread = threading.Thread(target=_spin, daemon=True)
+    thread.start()
+    return stop_event, thread

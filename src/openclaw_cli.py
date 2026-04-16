@@ -420,8 +420,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "2026.4.16"
-_CLI_BUILD = "wave45"  # updated with each UX wave batch
-
+_CLI_BUILD = "wave46"  # updated with each UX wave batch
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
@@ -2570,6 +2569,7 @@ def invoke_openclaw_stream(
     config: CliConfig,
     history: list[dict[str, str]] | None = None,
     opener: Any = request.urlopen,
+    _stop_spinner: "threading.Event | None" = None,
 ) -> AskResponse:
     """Submit a prompt to the SSE ask API and print chunks as they arrive."""
     payload = {
@@ -2609,12 +2609,20 @@ def invoke_openclaw_stream(
                     if event_name == "chunk":
                         delta = str(data.get("delta") or "")
                         if delta:
+                            if _stop_spinner is not None and not _stop_spinner.is_set():
+                                _stop_spinner.set()
+                                time.sleep(0.05)  # let spinner thread clear its line
                             print(delta, end="", flush=True)
                             _chunks_printed = True
                         continue
                     if event_name == "error":
+                        if _stop_spinner is not None:
+                            _stop_spinner.set()
                         raise OpenClawCliError(str(data.get("error") or "Streaming request failed."))
                     if event_name == "final":
+                        if _stop_spinner is not None:
+                            _stop_spinner.set()
+                            time.sleep(0.05)  # let spinner thread clear its line
                         if _chunks_printed and sys.stdout and delta_needs_newline():
                             print()
                         return AskResponse(
@@ -2943,7 +2951,7 @@ def _make_render_ctx(is_tty: bool | None = None, high_contrast: bool | None = No
         is_rich=_RICH_AVAILABLE,
         high_contrast=_hc,
         plain_mode=_a11y_plain_mode(),
-        cols=shutil.get_terminal_size((80, 24)).columns,
+        cols=_terminal_width(),
         theme_ansi=_theme_ansi(),
         prefs=_PREFS,  # pass by reference — monkeypatches on _PREFS work transparently
         console=globals().get("_RICH_CONSOLE"),
@@ -4774,11 +4782,21 @@ def run_chat(
             if _sys_prompt:
                 effective_input = f"[System context]\n{_sys_prompt}\n\n{effective_input}"
             if ask_func is invoke_openclaw and should_use_streaming(config):
+                _spin_stop, _spin_thread = _ui_utils_mod._start_stream_spinner(
+                    f"{_e('💬', '>>')} Thinking…",
+                    is_tty=_IS_TTY,
+                    output_json=config.output_json,
+                )
                 response = invoke_openclaw_stream(
                     effective_input,
                     config=config,
                     history=list(history),
+                    _stop_spinner=_spin_stop,
                 )
+                if _spin_stop is not None and not _spin_stop.is_set():
+                    _spin_stop.set()
+                if _spin_thread is not None:
+                    _spin_thread.join(timeout=0.5)
             else:
                 response = _with_spinner(
                     f"{_e('💬', '>>')} Thinking…",
@@ -5473,7 +5491,16 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("prompt is required unless you pipe text on stdin")
         history = load_conversation_history(config.session_id) if config.session_id else None
         if should_use_streaming(config):
-            response = invoke_openclaw_stream(prompt, config=config, history=history)
+            _spin_stop, _spin_thread = _ui_utils_mod._start_stream_spinner(
+                "💬 Thinking…",
+                is_tty=_IS_TTY,
+                output_json=config.output_json,
+            )
+            response = invoke_openclaw_stream(prompt, config=config, history=history, _stop_spinner=_spin_stop)
+            if _spin_stop is not None and not _spin_stop.is_set():
+                _spin_stop.set()
+            if _spin_thread is not None:
+                _spin_thread.join(timeout=0.5)
         elif history is None:
             response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, output_json=config.output_json)
         else:

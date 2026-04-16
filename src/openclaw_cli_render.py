@@ -423,8 +423,8 @@ def _render_md_table_rich(
         header_style="bold bright_white" if ctx.high_contrast else "bold cyan",
     )
     for i, (h, w) in enumerate(zip(headers, col_widths)):
-        overflow_mode = "fold" if i == 0 else "ellipsis"
-        table.add_column(h, max_width=w, overflow=overflow_mode, no_wrap=(i > 0))
+        overflow_mode = "fold"
+        table.add_column(h, max_width=w, overflow=overflow_mode, no_wrap=False)
 
     for row in rows:
         cells = list(row) + [""] * max(0, n - len(row))
