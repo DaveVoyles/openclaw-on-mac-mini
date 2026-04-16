@@ -171,7 +171,7 @@ def _approval_overlay_available() -> bool:
     """Return True when the approval review overlay can safely prompt."""
     try:
         return bool(sys.stdin.isatty() and sys.stdout.isatty())
-    except (AttributeError, OSError) as e:
+    except (AttributeError, OSError):
         return False
 
 
@@ -523,6 +523,53 @@ def write_text_file(
     if dry_run:
         summary = "Previewed file write."
     return FileEditResult(path=str(target), changed=(before != after), diff=diff, summary=summary)
+
+
+def _print_usage(msg: str) -> None:
+    """Print a usage hint with consistent 2-space indentation, no ANSI in non-TTY."""
+    is_tty = sys.stdout.isatty()
+    dim = "\033[2m" if is_tty else ""
+    reset = "\033[0m" if is_tty else ""
+    print(f"  {dim}{msg}{reset}")
+
+
+def _print_approval_recap(recap: dict[str, Any], *, use_rich: bool = False) -> None:  # noqa: ARG001
+    """Print a compact post-approval recap block.
+
+    Fields expected in recap:
+      action (str)              — what was being attempted
+      target (str)              — file/command target
+      decision (str)            — "approved" | "denied"
+      execution_outcome (str|None) — result after execution (approved only)
+      recovery_hint (str|None)  — what to do if things go wrong
+    """
+    is_tty = sys.stdout.isatty()
+    dim = "\033[2m" if is_tty else ""
+    bold = "\033[1m" if is_tty else ""
+    green = "\033[32m" if is_tty else ""
+    red = "\033[31m" if is_tty else ""
+    reset = "\033[0m" if is_tty else ""
+
+    action = recap.get("action", "")
+    target = recap.get("target", "")
+    decision = recap.get("decision", "")
+    outcome = recap.get("execution_outcome")
+    hint = recap.get("recovery_hint")
+
+    decision_icon = f"{green}✓ approved{reset}" if decision == "approved" else (
+        f"{red}✗ denied{reset}" if decision == "denied" else decision
+    )
+
+    print(f"  {bold}Approval recap{reset}")
+    if action:
+        print(f"  {dim}action:{reset} {action}")
+    if target:
+        print(f"  {dim}target:{reset} {target}")
+    print(f"  {dim}decision:{reset} {decision_icon}")
+    if outcome and decision == "approved":
+        print(f"  {dim}outcome:{reset} {outcome}")
+    if hint:
+        print(f"  {dim}hint:{reset} {hint}")
 
 
 def format_shell_result(result: ShellCommandResult) -> str:
