@@ -6351,9 +6351,9 @@ class TestCmdHeatmap:
         out = capsys.readouterr().out
         assert "Heatmap" in out or "heatmap" in out or "Peak hour" in out
 
-    def test_cli_build_is_wave46(self):
-        """_CLI_BUILD must equal 'wave46'."""
-        assert mod._CLI_BUILD == "wave46"
+    def test_cli_build_is_wave47(self):
+        """_CLI_BUILD must equal 'wave47'."""
+        assert mod._CLI_BUILD == "wave47"
     """Tests for _cmd_ratehint."""
 
     def _ctx(self, args: str = "") -> mod.ChatCommandContext:
@@ -7428,9 +7428,9 @@ class TestCmdTip:
         ):
             assert command in tips_text
 
-    def test_cli_build_is_wave46(self):
-        """_CLI_BUILD is updated to wave46."""
-        assert mod._CLI_BUILD == "wave46"
+    def test_cli_build_is_wave47(self):
+        """_CLI_BUILD is updated to wave47."""
+        assert mod._CLI_BUILD == "wave47"
 
 
 class TestCmdTokeninfo:
@@ -7530,9 +7530,9 @@ class TestCmdBindlist:
         result = mod._cmd_bindlist(self._ctx())
         assert result == mod._CMD_CONTINUE
 
-    def test_cli_build_is_wave46(self):
-        """_CLI_BUILD == 'wave46'."""
-        assert mod._CLI_BUILD == "wave46"
+    def test_cli_build_is_wave47(self):
+        """_CLI_BUILD == 'wave47'."""
+        assert mod._CLI_BUILD == "wave47"
 
 
 class TestCmdKeybind:
@@ -7840,9 +7840,9 @@ class TestCmdTimeline:
         out = capsys.readouterr().out
         assert "Timeline" in out or "2024-06" in out
 
-    def test_cli_build_is_wave46(self):
-        """_CLI_BUILD == 'wave46'."""
-        assert mod._CLI_BUILD == "wave46"
+    def test_cli_build_is_wave47(self):
+        """_CLI_BUILD == 'wave47'."""
+        assert mod._CLI_BUILD == "wave47"
 
 
 class TestCmdBookmarks:
@@ -8094,8 +8094,8 @@ class TestCmdColorscheme:
         assert result == mod._CMD_CONTINUE
         assert prefs.get("color_scheme") == "default"
 
-    def test_cli_build_is_wave46(self):
-        assert mod._CLI_BUILD == "wave46"
+    def test_cli_build_is_wave47(self):
+        assert mod._CLI_BUILD == "wave47"
 
 
 class TestCmdFollowup:

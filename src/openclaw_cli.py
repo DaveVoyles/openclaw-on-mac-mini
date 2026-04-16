@@ -19,7 +19,7 @@ import sys
 import threading
 import time
 import textwrap
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as _dc_replace
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -420,7 +420,7 @@ DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
 DEFAULT_VERSION = "2026.4.16"
-_CLI_BUILD = "wave46"  # updated with each UX wave batch
+_CLI_BUILD = "wave47"  # updated with each UX wave batch
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "
 HISTORY_FILE = Path.home() / ".openclaw_history"
 HISTORY_LIMIT = 500
@@ -1707,6 +1707,22 @@ def _build_edit_approval_review(
 
 def _with_spinner(label: str, fn: Any, *args: Any, output_json: bool = False, **kwargs: Any) -> Any:
     return _ui_utils_mod._with_spinner(label, fn, *args, output_json=output_json, _override_is_tty=_IS_TTY, _override_heartbeat_secs=_SPINNER_HEARTBEAT_SECONDS, **kwargs)
+
+
+_SEARCH_ONLY_MODELS = frozenset({"", "auto", "perplexity", "perplexity-direct"})
+
+
+def _maybe_switch_to_context_model(config: "CliConfig") -> "CliConfig":
+    """Return a copy of *config* routed to copilot when the active model is search-only.
+
+    Called whenever local file content or injected context is present in the
+    prompt — search models (perplexity) ignore injected text and only cite URLs.
+    If the user already chose a context-capable model, config is returned unchanged.
+    """
+    if config.model in _SEARCH_ONLY_MODELS:
+        print(f"  {_DM}↳ routing to copilot for local context{_R}")
+        return _dc_replace(config, model="copilot")
+    return config
 
 
 # AskResponse, LocalLinkValidation, CliConfig — moved to openclaw_cli_types; imported at top of file.
@@ -4782,25 +4798,36 @@ def run_chat(
 
             # Auto-inject local files mentioned in the prompt.
             _auto_file_chunks: list[str] = []
+            _BINARY_EXTS = frozenset({
+                ".pdf", ".docx", ".xlsx", ".pptx", ".zip", ".tar", ".gz",
+                ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
+                ".mp3", ".mp4", ".mov", ".avi", ".exe", ".bin", ".dmg",
+            })
             for _fpath in _detect_file_paths(prompt):
                 _fp = Path(_fpath).expanduser()
-                if _fp.is_file() and _fp.stat().st_size < 500_000:
-                    try:
-                        _content = _fp.read_text(encoding="utf-8", errors="replace")
-                        _auto_file_chunks.append(f"[File: {_fpath}]\n{_content}")
-                        print(f"  {_DM}↳ reading {_fpath}{_R}")
-                    except OSError:
-                        pass
+                if not _fp.is_file():
+                    continue
+                if _fp.suffix.lower() in _BINARY_EXTS:
+                    print(f"  {_DM}↳ skipping {_fpath} (binary/unsupported format){_R}")
+                    continue
+                if _fp.stat().st_size >= 500_000:
+                    print(f"  {_DM}↳ skipping {_fpath} (file too large — paste key sections instead){_R}")
+                    continue
+                try:
+                    _content = _fp.read_text(encoding="utf-8", errors="replace")
+                    _auto_file_chunks.append(f"[File: {_fpath}]\n{_content}")
+                    print(f"  {_DM}↳ reading {_fpath}{_R}")
+                except OSError:
+                    pass
 
-            if _next_inject or _auto_file_chunks:
+            _had_next_inject = bool(_next_inject)
+            if _had_next_inject or _auto_file_chunks:
                 _injected_parts = ([_next_inject] if _next_inject else []) + _auto_file_chunks
                 effective_input = f"[Injected context]\n{'---'.join(_injected_parts)}\n\n[User message]\n{prompt}"
                 _next_inject = ""
-                # Switch to a context-reading model (not web search) when local files are injected.
-                if _auto_file_chunks and config.model in ("auto", "", "perplexity", "perplexity-direct"):
-                    import dataclasses as _dc  # noqa: PLC0415
-                    config = _dc.replace(config, model="copilot")
-                    print(f"  {_DM}↳ routing to copilot for local file context{_R}")
+                # Switch to a context-reading model whenever any content is injected —
+                # search models (perplexity) ignore injected text and only cite URLs.
+                config = _maybe_switch_to_context_model(config)
             else:
                 effective_input = prompt
             _sys_prompt = _PREFS.get("system_prompt", "").strip()
@@ -5474,6 +5501,30 @@ def main(argv: list[str] | None = None) -> int:
         if not prompt:
             parser.error("prompt is required unless you pipe text on stdin")
         history = load_conversation_history(config.session_id) if config.session_id else None
+
+        # Auto-inject local files mentioned in the prompt (same logic as the REPL path).
+        _BINARY_EXTS_OS = frozenset({
+            ".pdf", ".docx", ".xlsx", ".pptx", ".zip", ".tar", ".gz",
+            ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg",
+            ".mp3", ".mp4", ".mov", ".avi", ".exe", ".bin", ".dmg",
+        })
+        _os_file_chunks: list[str] = []
+        for _fpath in _detect_file_paths(prompt):
+            _fp = Path(_fpath).expanduser()
+            if not _fp.is_file():
+                continue
+            if _fp.suffix.lower() in _BINARY_EXTS_OS:
+                continue
+            if _fp.stat().st_size >= 500_000:
+                continue
+            try:
+                _os_file_chunks.append(f"[File: {_fpath}]\n{_fp.read_text(encoding='utf-8', errors='replace')}")
+            except OSError:
+                pass
+        if _os_file_chunks:
+            prompt = f"[Injected context]\n{'---'.join(_os_file_chunks)}\n\n[User message]\n{prompt}"
+            config = _maybe_switch_to_context_model(config)
+
         if should_use_streaming(config):
             _spin_stop, _spin_thread = _ui_utils_mod._start_stream_spinner(
                 "💬 Thinking…",

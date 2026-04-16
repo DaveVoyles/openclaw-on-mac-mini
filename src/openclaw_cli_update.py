@@ -37,7 +37,7 @@ except ImportError:  # pragma: no cover
 # Mirror constants (kept in sync with openclaw_cli.py)
 DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_VERSION = "2026.4.16"
-_CLI_BUILD = "wave46"  # updated with each UX wave batch
+_CLI_BUILD = "wave47"  # updated with each UX wave batch
 
 # Module-level state (mirrors what was in openclaw_cli.py)
 _latest_version: str | None = None
