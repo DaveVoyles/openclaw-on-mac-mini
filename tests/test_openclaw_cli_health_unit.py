@@ -2,14 +2,10 @@
 from __future__ import annotations
 
 import json
-from io import StringIO
 from unittest.mock import patch
-
-import pytest
 
 import openclaw_cli_health as mod
 from openclaw_cli_health import HealthResponse
-
 
 # ---------------------------------------------------------------------------
 # HealthResponse dataclass

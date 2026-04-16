@@ -1,10 +1,7 @@
 """Unit tests for openclaw_cli_path_utils.py — pure helper functions."""
 from __future__ import annotations
 
-import pytest
-
 import openclaw_cli_path_utils as mod
-
 
 # ---------------------------------------------------------------------------
 # _dedupe_preserve_order

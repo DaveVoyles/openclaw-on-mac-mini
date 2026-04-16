@@ -4,8 +4,6 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-import pytest
-
 from openclaw_cli_content_cmds import (
     _build_ascii_bar_rows,
     _build_export_body,
@@ -13,7 +11,6 @@ from openclaw_cli_content_cmds import (
     _compute_cmd_freq,
     _compute_rating_freq,
 )
-
 
 # ---------------------------------------------------------------------------
 # _build_export_body — md

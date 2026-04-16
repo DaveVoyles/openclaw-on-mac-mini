@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, "src")
 import openclaw_cli_cmd_core as mod  # type: ignore

@@ -12,9 +12,9 @@ import shutil
 from openclaw_cli_prefs import _PREFS
 from openclaw_cli_session_cmds import (
     _build_event_label,
+    _build_handoff_check_lines,
     _event_preview_lines,
     _event_recovery_actions,
-    _build_handoff_check_lines,
 )
 from openclaw_cli_sessions import (
     SessionSummary,

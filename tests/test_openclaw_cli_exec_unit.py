@@ -1,8 +1,6 @@
 """Unit tests for openclaw_cli_exec helpers."""
 from __future__ import annotations
 
-import pytest
-
 from openclaw_cli_exec import (
     _analyze_exec_error,
     _motion_pause,
@@ -12,7 +10,6 @@ from openclaw_cli_exec import (
     _spinner_phase_label,
     _spinner_progress_snapshot,
 )
-
 
 # ---------------------------------------------------------------------------
 # _separator_fill

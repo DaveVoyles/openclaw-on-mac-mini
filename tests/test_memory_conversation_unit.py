@@ -1,13 +1,9 @@
 """Unit tests for memory_conversation.py — Conversation and ConversationStore classes."""
 
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from memory_conversation import Conversation, ConversationStore
 from memory_helpers import CONTEXT_TTL, MAX_HISTORY_LENGTH
-
 
 # ---------------------------------------------------------------------------
 # Conversation — basic properties

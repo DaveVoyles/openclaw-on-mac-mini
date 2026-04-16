@@ -1,26 +1,21 @@
 """Unit tests for memory_helpers.py — pure functions and constants."""
 
-import re
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from memory_helpers import (
     _THREAD_NAME_RE,
     _TOPIC_STOPWORDS,
-    _TOPIC_WORD_RE,
+    CONTEXT_TTL,
+    MAX_HISTORY_LENGTH,
+    MIN_MESSAGES_TO_SUMMARIZE,
+    _atomic_write,
     _build_salience_summary,
     _extract_key_topics,
     _message_salience_score,
     _message_text,
     _normalize_text,
     _relative_age,
-    _atomic_write,
-    MIN_MESSAGES_TO_SUMMARIZE,
-    CONTEXT_TTL,
-    MAX_HISTORY_LENGTH,
 )
-
 
 # ---------------------------------------------------------------------------
 # _normalize_text

@@ -1,5 +1,4 @@
 """Unit tests for openclaw_cli_diff._render_diff_ansi."""
-import pytest
 from openclaw_cli_diff import _render_diff_ansi
 
 

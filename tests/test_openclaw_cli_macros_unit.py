@@ -1,11 +1,7 @@
 """Unit tests for openclaw_cli_macros helpers."""
 from __future__ import annotations
 
-from io import StringIO
 from types import SimpleNamespace
-from unittest.mock import patch
-
-import pytest
 
 from openclaw_cli_macros import (
     _history_command_texts,
@@ -14,7 +10,6 @@ from openclaw_cli_macros import (
     _render_workflow_step,
     _workflow_store,
 )
-
 
 # ---------------------------------------------------------------------------
 # _workflow_store

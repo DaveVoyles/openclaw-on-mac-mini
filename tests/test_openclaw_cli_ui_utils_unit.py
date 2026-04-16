@@ -13,14 +13,11 @@ Covers:
 
 from __future__ import annotations
 
-import sys
-from io import StringIO
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 import openclaw_cli_ui_utils as ui
-
 
 # ---------------------------------------------------------------------------
 # _a11y_plain_mode / _a11y_high_contrast / _a11y_reduced_motion

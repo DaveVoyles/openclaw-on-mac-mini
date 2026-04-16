@@ -1,16 +1,13 @@
 """Unit tests for openclaw_cli_actions helpers."""
 from __future__ import annotations
 
-import asyncio
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from openclaw_cli_actions import (
     FileEditResult,
     ShellCommandResult,
-    _read_text,
     atomic_write,
     format_shell_result,
     infer_command_risk,

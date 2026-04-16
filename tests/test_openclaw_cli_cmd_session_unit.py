@@ -4,8 +4,6 @@ from __future__ import annotations
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 sys.path.insert(0, "src")
 import openclaw_cli_cmd_session as mod  # type: ignore
 from openclaw_cli_types import ChatCommandContext

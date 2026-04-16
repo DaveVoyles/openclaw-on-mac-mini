@@ -1,14 +1,10 @@
 """Unit tests for openclaw_cli_session_utils.py."""
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 import openclaw_cli_session_utils as mod
 from openclaw_cli_sessions import SessionSummary
-
 
 # ---------------------------------------------------------------------------
 # Helpers

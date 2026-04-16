@@ -5,11 +5,8 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 import memory_thread_persistence as mtp_module
 from memory_thread_persistence import ThreadPersistence
-
 
 # ---------------------------------------------------------------------------
 # Helpers

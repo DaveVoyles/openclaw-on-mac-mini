@@ -2,14 +2,12 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 import openclaw_cli_prefs as mod
-
 
 # ---------------------------------------------------------------------------
 # _normalize_theme_name
