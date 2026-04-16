@@ -66,7 +66,7 @@ class DreamCycle:
             if on_progress:
                 try:
                     await on_progress(msg)
-                except Exception:
+                except Exception:  # broad: intentional — callback can raise anything
                     pass
 
         # ── Phase 1: Collect ──────────────────────────────────────────
@@ -122,7 +122,7 @@ class DreamCycle:
         for label, fn in sync_collectors:
             try:
                 items.extend(fn())
-            except Exception as e:
+            except Exception as e:  # broad: intentional — collector plugins can raise anything
                 log.warning("Collect %s failed: %s", label, e)
 
         log.info("Collected %d raw items", len(items))
@@ -278,7 +278,7 @@ class DreamCycle:
                             "category": _classify_category(f"[{action}] {detail}", {}),
                             "type": "fact",
                         })
-            except Exception as exc:
+            except OSError as exc:
                 log.debug("Failed to read audit file %s: %s", f, exc)
 
         return items
@@ -494,7 +494,7 @@ def _load_index(path: Path) -> dict:
             data["stats"].setdefault("insights", [])
             data["stats"].setdefault("healthHistory", [])
             return data
-        except Exception as exc:
+        except (json.JSONDecodeError, OSError, ValueError) as exc:
             log.warning("Index corrupt (%s), backing up", exc)
             try:
                 path.rename(path.with_suffix(".json.bak"))
@@ -687,7 +687,7 @@ async def _generate_insights(index: dict, changes: dict) -> list[str]:
                 insights.append(line)
         if insights:
             return insights[:3]
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — LLM insight generation can fail in many ways
         log.warning("LLM insight generation failed: %s", exc)
 
     return _fallback_insights(index, changes)
@@ -730,7 +730,7 @@ async def _check_semantic_duplicate(text: str) -> Optional[str]:
         )
         if results:
             return results[0]["id"]
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — vector store can fail in many ways
         log.debug("Semantic dedup check failed: %s", exc)
     return None
 

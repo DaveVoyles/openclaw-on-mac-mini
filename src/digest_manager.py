@@ -314,7 +314,7 @@ class DigestManager:
                         })
                 except asyncio.TimeoutError:
                     log.warning("News search timed out for: %s", term)
-                except Exception as exc:
+                except Exception as exc:  # broad: intentional — external skill calls can fail in many ways
                     log.warning("News search failed for %s: %s", term, exc)
 
             if not articles:
@@ -341,7 +341,7 @@ class DigestManager:
         except ImportError:
             log.warning("News skills not available")
             return ""
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — external skill calls can fail in many ways
             log.error("Failed to generate news section: %s", exc)
             return ""
 
@@ -376,7 +376,7 @@ class DigestManager:
                 except asyncio.TimeoutError:
                     log.warning("Stock quote timed out for: %s", symbol)
                     stock_data.append(f"• {symbol}: (timeout)")
-                except Exception as exc:
+                except Exception as exc:  # broad: intentional — external skill calls can fail in many ways
                     log.warning("Stock quote failed for %s: %s", symbol, exc)
 
             if not stock_data:
@@ -390,7 +390,7 @@ class DigestManager:
         except ImportError:
             log.warning("Finance skills not available")
             return ""
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — external skill calls can fail in many ways
             log.error("Failed to generate stocks section: %s", exc)
             return ""
 
@@ -424,7 +424,7 @@ class DigestManager:
                         team_updates.append(f"• {team}: {result[:200]}")
                 except asyncio.TimeoutError:
                     log.warning("Team schedule timed out for: %s", team)
-                except Exception as exc:
+                except Exception as exc:  # broad: intentional — external skill calls can fail in many ways
                     log.warning("Team schedule failed for %s: %s", team, exc)
 
             if not team_updates:
@@ -438,7 +438,7 @@ class DigestManager:
         except ImportError:
             log.warning("Sports skills not available")
             return ""
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — external skill calls can fail in many ways
             log.error("Failed to generate sports section: %s", exc)
             return ""
 

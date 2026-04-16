@@ -47,7 +47,7 @@ async def create_workflow_handler(request: web.Request) -> web.Response:
 
         return web.json_response(workflow.to_dict(), status=201)
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to create workflow: %s", e)
         return web.json_response(
             {"error": f"Failed to create workflow: {e}"},
@@ -65,7 +65,7 @@ async def list_workflows_handler(request: web.Request) -> web.Response:
             "count": len(workflows),
         })
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to list workflows: %s", e)
         return web.json_response(
             {"error": f"Failed to list workflows: {e}"},
@@ -87,7 +87,7 @@ async def get_workflow_handler(request: web.Request) -> web.Response:
 
         return web.json_response(workflow.to_dict())
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to get workflow: %s", e)
         return web.json_response(
             {"error": f"Failed to get workflow: {e}"},
@@ -124,7 +124,7 @@ async def update_workflow_handler(request: web.Request) -> web.Response:
 
         return web.json_response(workflow.to_dict())
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to update workflow: %s", e)
         return web.json_response(
             {"error": f"Failed to update workflow: {e}"},
@@ -147,7 +147,7 @@ async def delete_workflow_handler(request: web.Request) -> web.Response:
 
         return web.json_response({"message": "Workflow deleted"})
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to delete workflow: %s", e)
         return web.json_response(
             {"error": f"Failed to delete workflow: {e}"},
@@ -187,7 +187,7 @@ async def execute_workflow_handler(request: web.Request) -> web.Response:
             "errors": execution.errors,
         })
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to execute workflow: %s", e)
         return web.json_response(
             {"error": f"Failed to execute workflow: {e}"},
@@ -205,7 +205,7 @@ async def get_templates_handler(request: web.Request) -> web.Response:
             "count": len(templates),
         })
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to get templates: %s", e)
         return web.json_response(
             {"error": f"Failed to get templates: {e}"},
@@ -237,7 +237,7 @@ async def create_from_template_handler(request: web.Request) -> web.Response:
 
         return web.json_response(workflow.to_dict(), status=201)
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — HTTP handler must return error response; not raise
         log.error("Failed to create workflow from template: %s", e)
         return web.json_response(
             {"error": f"Failed to create workflow: {e}"},

@@ -135,14 +135,14 @@ async def error_monitor_loop(bot):
                                 channel = bot.get_channel(ALERT_CHANNEL_ID)
                                 if channel:
                                     await channel.send(embed=embed)
-                    except Exception as e:
+                    except Exception as e:  # broad: intentional — auto-diagnosis pipeline spans LLM + Discord + monitoring
                         log.warning("Auto-diagnosis/fix pipeline failed: %s", e)
                 else:
                     log.info(
                         "Error monitor: %d warning patterns (below critical threshold)",
                         len(patterns),
                     )
-        except Exception as e:
+        except Exception as e:  # broad: intentional — error monitor loop must not crash
             log.debug("Error monitor check failed: %s", e)
 
         await asyncio.sleep(300)
@@ -187,7 +187,7 @@ async def container_health_loop(bot):
         try:
             await _check_container_health(bot)
             await _check_monstervision_cookies(bot)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — container health loop must not crash
             log.warning("Container health check error: %s", e)
         await asyncio.sleep(CONTAINER_HEALTH_INTERVAL)
 
@@ -286,7 +286,7 @@ async def _check_container_health(bot):
                 _hh_record(name, "down" if status_lower.startswith("exited") else "degraded", status)
             else:
                 _hh_record(name, "ok", status)
-        except Exception as e:
+        except (ImportError, AttributeError, TypeError, OSError) as e:
             log.debug("Failed to record container health to history: %s", e)
 
         prev = _container_prev_state.get(name)
@@ -314,7 +314,7 @@ async def _check_container_health(bot):
                     audit_log(None, "self_heal", detail=f"auto_restart {name} after {count} unhealthy checks: {result}")
                     log.info("Auto-restart: %s after %d unhealthy checks → %s", name, count, result[:80])
                     _container_unhealthy_count[name] = 0
-                except Exception as exc:
+                except Exception as exc:  # broad: intentional — restart_container can fail in many ways
                     auto_restart_results.append(f"❌ Auto-restart `{name}` failed: {exc}")
                     log.warning("Auto-restart %s failed: %s", name, exc)
         else:
@@ -378,6 +378,6 @@ async def resource_monitor_loop(bot):
                         embed.set_footer(text=f"Cooldown: {threshold.cooldown_seconds}s before next alert")
                         await channel.send(embed=embed)
                     audit_log(None, "resource_alert", detail=f"{len(violations)} violation(s)")
-        except Exception as e:
+        except Exception as e:  # broad: intentional — resource monitor loop must not crash
             log.debug("Resource monitor loop error: %s", e)
         await asyncio.sleep(60)

@@ -63,7 +63,7 @@ async def _load_rules() -> list[dict]:
     loop = asyncio.get_running_loop()
     try:
         return await loop.run_in_executor(None, _read)
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
         log.warning("Failed to load %s: %s", RULES_FILE, exc)
         return []
 
@@ -81,7 +81,7 @@ async def _save_rules(rules: list[dict]) -> None:
     try:
         await loop.run_in_executor(None, _write)
         log.debug("Saved %d rules to %s", len(rules), RULES_FILE)
-    except Exception as exc:
+    except OSError as exc:
         log.error("Failed to save rules: %s", exc)
 
 
@@ -119,7 +119,7 @@ async def extract_rule(user_message: str, bot_response: str) -> str:
         rule = response.strip().strip('"').strip("'")
         log.info("Extracted rule: %s", rule)
         return rule
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — LLM call can fail in many ways
         log.error("Rule extraction failed: %s", exc)
         return ""
 
@@ -155,7 +155,7 @@ async def add_rule(rule_text: str, source_message: str = "") -> dict:
             metadata={"type": "rule", "source": source_message[:200]},
         )
         log.debug("Embedded rule %s into ChromaDB", rule_id)
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — vector store can raise many error types
         log.warning("ChromaDB upsert failed for rule %s: %s", rule_id, exc)
 
     log.info("Added rule %s: %s", rule_id, rule_text)
@@ -183,7 +183,7 @@ async def get_relevant_rules(
             threshold=RULE_SIMILARITY_THRESHOLD,
         )
         return [r["text"] for r in results]
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — vector store can raise many error types
         log.warning("ChromaDB rule search failed, falling back to JSON: %s", exc)
 
     # Fallback: return all rules (no ranking) when ChromaDB is unavailable
@@ -213,7 +213,7 @@ async def delete_rule(rule_id: str) -> bool:
 
         await delete_document(MEMORIES_COLLECTION, rule_id)
         log.debug("Deleted rule %s from ChromaDB", rule_id)
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — vector store can raise many error types
         log.warning("ChromaDB delete failed for rule %s: %s", rule_id, exc)
 
     log.info("Deleted rule %s", rule_id)

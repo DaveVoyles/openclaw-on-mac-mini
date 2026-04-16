@@ -40,7 +40,7 @@ def _load_last_summary(user_id: int) -> str:
     try:
         data = json.loads(path.read_text())
         return data.get("summary", "")
-    except Exception as exc:
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
         log.debug("Failed to load summary for user %d: %s", user_id, exc)
         return ""
 
@@ -72,7 +72,7 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
                 content=f"[Session summary for {user_name}] {summary}",
                 tags=f"session,{user_name.split('#')[0].lower().replace(' ', '_')}",
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional — QMD backend can fail in many ways
             log.debug("QMD session save failed (non-critical): %s", e)
 
         try:
@@ -80,9 +80,9 @@ async def _summarize_and_store(user_id: int, user_name: str, history: list[dict]
             await vector_store.add_conversation_summary(
                 user_id, f"session_{user_name}", summary
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional — vector store can fail in many ways
             log.debug("Vector embed for summary failed (non-critical): %s", e)
-    except Exception as e:
+    except Exception as e:  # broad: intentional — LLM summarization spans multiple backends
         log.warning("Session summarization failed: %s", e)
 
 
@@ -150,11 +150,11 @@ async def create_session_handover(
                     "user_name": user_name,
                 },
             )
-        except Exception as e:
+        except Exception as e:  # broad: intentional — vector store can fail in many ways
             log.debug("Vector embed for handover failed (non-critical): %s", e)
 
         return response
-    except Exception as e:
+    except Exception as e:  # broad: intentional — LLM handover generation spans multiple backends
         log.warning("Session handover generation failed: %s", e)
         return None
 
@@ -167,6 +167,6 @@ def load_last_handover(user_id: int) -> str:
     try:
         data = json.loads(path.read_text())
         return data.get("handover", "")
-    except Exception as exc:
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
         log.debug("Failed to load handover for user %d: %s", user_id, exc)
         return ""

@@ -179,7 +179,7 @@ async def get_scoped_memory_summary(
                 }
             else:
                 payload["anchor"] = {"present": False}
-        except Exception:
+        except (ImportError, AttributeError, KeyError, TypeError):
             payload["anchor"] = {"present": False}
     try:
         from runtime_state import get_scoped_recall_alerts
@@ -193,7 +193,7 @@ async def get_scoped_memory_summary(
             "count": len(alerts),
             "items": alerts,
         }
-    except Exception:
+    except Exception:  # broad: intentional — runtime_state optional; can raise any error
         payload["alerts"] = {"count": 0, "items": []}
     try:
         from runtime_state import get_memory_compaction_events, get_memory_lifecycle_policy
@@ -211,7 +211,7 @@ async def get_scoped_memory_summary(
             "count": len(compaction_events),
             "items": compaction_events,
         }
-    except Exception:
+    except Exception:  # broad: intentional — runtime_state optional; can raise any error
         payload["memory_policy"] = {"retention_class": "standard", "memory_budget_items": 200}
         payload["compaction"] = {"count": 0, "items": []}
     return payload
@@ -322,7 +322,7 @@ async def add_memory_deduped(
             from vector_store_compaction import bump_access  # lazy — allows test patching
             await bump_access(MEMORIES_COLLECTION, [existing[0]["id"]])
             return False
-    except Exception as exc:
+    except Exception as exc:  # broad: intentional — vector store can fail in many ways
         log.debug("Dedup check failed, storing anyway: %s", exc)
 
     meta = metadata or {}
@@ -399,7 +399,7 @@ async def add_research_report(
                 int(resolved_thread_id) if resolved_thread_id is not None else None,
                 report_id,
             )
-    except Exception:
+    except Exception:  # broad: intentional — runtime_state optional; fallback to no anchor
         pass
     return report_id
 
@@ -545,7 +545,7 @@ async def recall_for_context(
                         "explicit_domains": sorted(explicit_domains),
                     },
                 )
-            except Exception:
+            except Exception:  # broad: intentional — runtime_state optional; pass silently
                 pass
 
     if not results:

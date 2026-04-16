@@ -67,7 +67,7 @@ class DigestCog(commands.Cog, name="Digest"):
 
             audit_log(interaction.user, "digest_now", detail="instant_digest")
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Digest generation failed: %s", exc)
             await interaction.followup.send(f"❌ Failed to generate digest: {exc}", ephemeral=True)
 
@@ -104,7 +104,7 @@ class DigestCog(commands.Cog, name="Digest"):
 
             audit_log(interaction.user, "digest_preview", detail="preview")
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Digest preview failed: %s", exc)
             await interaction.followup.send(f"❌ Failed to preview digest: {exc}", ephemeral=True)
 
@@ -189,7 +189,7 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.followup.send(embed=embed, ephemeral=True)
             audit_log(interaction.user, "digest_config", detail="view")
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Failed to get digest config: %s", exc)
             await interaction.followup.send(f"❌ Failed to get configuration: {exc}", ephemeral=True)
 
@@ -235,7 +235,7 @@ class DigestCog(commands.Cog, name="Digest"):
                     ephemeral=True,
                 )
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Failed to manage topic: %s", exc)
             await interaction.followup.send(f"❌ Failed to manage topic: {exc}", ephemeral=True)
 
@@ -282,7 +282,7 @@ class DigestCog(commands.Cog, name="Digest"):
                     ephemeral=True,
                 )
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Failed to manage stock: %s", exc)
             await interaction.followup.send(f"❌ Failed to manage stock: {exc}", ephemeral=True)
 
@@ -328,7 +328,7 @@ class DigestCog(commands.Cog, name="Digest"):
                     ephemeral=True,
                 )
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Failed to manage team: %s", exc)
             await interaction.followup.send(f"❌ Failed to manage team: {exc}", ephemeral=True)
 
@@ -383,7 +383,7 @@ class DigestCog(commands.Cog, name="Digest"):
             await interaction.followup.send(msg, ephemeral=True)
             audit_log(interaction.user, "digest_schedule", detail=f"{frequency}@{time}")
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Failed to set schedule: %s", exc)
             await interaction.followup.send(f"❌ Failed to set schedule: {exc}", ephemeral=True)
 
@@ -405,7 +405,7 @@ class DigestCog(commands.Cog, name="Digest"):
             )
             audit_log(interaction.user, "digest_enable", detail="enabled")
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Failed to enable digest: %s", exc)
             await interaction.followup.send(f"❌ Failed to enable digest: {exc}", ephemeral=True)
 
@@ -427,7 +427,7 @@ class DigestCog(commands.Cog, name="Digest"):
             )
             audit_log(interaction.user, "digest_disable", detail="disabled")
 
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.error("Failed to disable digest: %s", exc)
             await interaction.followup.send(f"❌ Failed to disable digest: {exc}", ephemeral=True)
 

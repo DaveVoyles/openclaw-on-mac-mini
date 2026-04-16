@@ -57,7 +57,7 @@ class _SaveToNASView(discord.ui.View):
                 filename=self.filename,
             )
             await interaction.followup.send(f"💾 {result}", ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — Discord command handler must not crash
             await interaction.followup.send(f"❌ Save failed: {e}", ephemeral=True)
         audit_log(interaction.user, "save_to_nas", self.filename)
         self.stop()
@@ -195,7 +195,7 @@ class DocCog(commands.Cog, name="Documents"):
                 await interaction.followup.send(embed=embed)
 
             audit_log(interaction, "doc_read", file.filename)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.exception("doc_read failed")
             await interaction.followup.send(embed=build_error_embed(exc, context="/doc read"), ephemeral=True)
 
@@ -249,7 +249,7 @@ class DocCog(commands.Cog, name="Documents"):
                 "❌ AI returned invalid edit instructions. Please try rephrasing.",
                 ephemeral=True,
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.exception("doc_edit failed")
             await interaction.followup.send(embed=build_error_embed(exc, context="/doc edit"), ephemeral=True)
 
@@ -279,7 +279,7 @@ class DocCog(commands.Cog, name="Documents"):
                 "❌ AI returned invalid content. Please try rephrasing.",
                 ephemeral=True,
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.exception("doc_create failed")
             await interaction.followup.send(embed=build_error_embed(exc, context="/doc create"), ephemeral=True)
 
@@ -322,7 +322,7 @@ class DocCog(commands.Cog, name="Documents"):
                 await interaction.followup.send(embed=embed)
 
             audit_log(interaction, "sheet_read", file.filename)
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.exception("sheet_read failed")
             await interaction.followup.send(embed=build_error_embed(exc, context="/sheet read"), ephemeral=True)
 
@@ -376,7 +376,7 @@ class DocCog(commands.Cog, name="Documents"):
                 "❌ AI returned invalid edit instructions. Please try rephrasing.",
                 ephemeral=True,
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.exception("sheet_edit failed")
             await interaction.followup.send(embed=build_error_embed(exc, context="/sheet edit"), ephemeral=True)
 
@@ -407,7 +407,7 @@ class DocCog(commands.Cog, name="Documents"):
                 "❌ AI returned invalid content. Please try rephrasing.",
                 ephemeral=True,
             )
-        except Exception as exc:
+        except Exception as exc:  # broad: intentional — Discord command handler must not crash
             log.exception("sheet_create failed")
             await interaction.followup.send(embed=build_error_embed(exc, context="/sheet create"), ephemeral=True)
 

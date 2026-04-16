@@ -77,7 +77,7 @@ class _ResearchView(discord.ui.View):
                 tags=["research"],
             )
             await interaction.followup.send(f"💾 {result}", ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — Discord button handler; vault + Discord can fail
             await interaction.followup.send(embed=build_error_embed(e, context="/research save"), ephemeral=True)
         audit_log(interaction.user, "research_save_vault", detail=self._query[:80])
 
@@ -219,7 +219,7 @@ class ResearchCog(commands.Cog, name="Research"):
             if thread:
                 try:
                     await thread.send(msg)
-                except Exception as exc:
+                except (discord.HTTPException, discord.Forbidden, discord.NotFound) as exc:
                     log.debug("Research progress send failed: %s", exc)
 
         agent = ResearchAgent(max_searches=4, browse_top_n=2, timeout_seconds=300 if deep else 180)
@@ -237,7 +237,7 @@ class ResearchCog(commands.Cog, name="Research"):
                 user_id=str(interaction.user.id),
             ):
                 report = await agent.run(query, on_progress=on_progress, deep=deep)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — research agent spans LLM + HTTP + parsing
             log.error("Research command failed: %s", e)
             report = f"❌ Research failed: {e}"
 
@@ -287,7 +287,7 @@ class ResearchCog(commands.Cog, name="Research"):
                     await thread.send(follow_up_text)
                 else:
                     await interaction.followup.send(follow_up_text)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — follow-up generation spans LLM + Discord
             log.debug("Follow-up generation skipped: %s", e)
 
         audit_log(interaction.user, "research", detail=query[:200])
@@ -316,7 +316,7 @@ class ResearchCog(commands.Cog, name="Research"):
                     lines.append(f"  _{preview}_\n")
             else:
                 lines.append("No matching research found. Use `/research <query>` to start new research.")
-        except Exception as e:
+        except Exception as e:  # broad: intentional — vector store can fail in many ways
             lines.append(f"⚠️ Search unavailable: {e}")
 
         await interaction.followup.send("\n".join(lines), ephemeral=True)
@@ -348,7 +348,7 @@ class ResearchCog(commands.Cog, name="Research"):
                     lines.append(f"  _{excerpt}_\n")
             else:
                 lines.append("No matching sources found. Sources are automatically cataloged during `/research`.")
-        except Exception as e:
+        except Exception as e:  # broad: intentional — vector store can fail in many ways
             lines.append(f"⚠️ Source search unavailable: {e}")
 
         await interaction.followup.send("\n".join(lines), ephemeral=True)

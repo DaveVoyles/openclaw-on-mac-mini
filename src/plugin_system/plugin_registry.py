@@ -72,7 +72,7 @@ class PluginRegistry:
                 state = json.load(f)
                 self._disabled_plugins = set(state.get("disabled", []))
             log.debug("Loaded plugin state")
-        except Exception as e:
+        except (json.JSONDecodeError, OSError, KeyError, ValueError) as e:
             log.error(f"Failed to load plugin state: {e}")
 
     def _save_state(self) -> None:
@@ -85,7 +85,7 @@ class PluginRegistry:
             with open(self.state_file, "w") as f:
                 json.dump(state, f, indent=2)
             log.debug("Saved plugin state")
-        except Exception as e:
+        except OSError as e:
             log.error(f"Failed to save plugin state: {e}")
 
     async def load_all_plugins(self) -> dict[str, bool]:
@@ -491,7 +491,7 @@ def _get_host_version_fallback() -> str:
         with open(pyproject, "rb") as f:
             data = tomllib.load(f)
         return data.get("project", {}).get("version", "0.0.0")
-    except Exception:
+    except (OSError, KeyError, ValueError):
         return "0.0.0"
 
 
@@ -506,7 +506,7 @@ def _version_satisfies(current: str, minimum: str) -> bool:
     """Return True if current >= minimum."""
     try:
         return _parse_version(current) >= _parse_version(minimum)
-    except Exception:
+    except (ValueError, TypeError):
         return True  # if parsing fails, don't block loading
 
 
@@ -514,7 +514,7 @@ def _version_at_most(current: str, maximum: str) -> bool:
     """Return True if current <= maximum."""
     try:
         return _parse_version(current) <= _parse_version(maximum)
-    except Exception:
+    except (ValueError, TypeError):
         return True
 
 
@@ -533,7 +533,7 @@ def _check_plugin_version_compat(plugin_name: str, plugin_meta: dict) -> list[st
     try:
         from importlib.metadata import version as pkg_version
         host_version = pkg_version("openclaw")
-    except Exception:
+    except ImportError:
         host_version = _get_host_version_fallback()
 
     # Check min version requirement (support multiple field name conventions)

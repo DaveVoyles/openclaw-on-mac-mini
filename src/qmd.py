@@ -35,7 +35,7 @@ class QMDMemory:
         if MEMORY_FILE.exists():
             try:
                 return json.loads(MEMORY_FILE.read_text())
-            except Exception as e:
+            except (json.JSONDecodeError, OSError, ValueError) as e:
                 log.error("Failed to load QMD memory: %s", e)
         return []
 
@@ -43,7 +43,7 @@ class QMDMemory:
         MEMORY_FILE.parent.mkdir(parents=True, exist_ok=True)
         try:
             atomic_write(MEMORY_FILE, json.dumps(self._memory, indent=2))
-        except Exception as e:
+        except OSError as e:
             log.error("Failed to save QMD memory: %s", e)
 
     async def add(self, content: str, tags: List[str] = None):
@@ -115,7 +115,7 @@ async def remember_fact(content: str, tags: Optional[str] = "", source: str = "u
                     update_preference(k.strip(), v.strip())
                     try:
                         await sync_profile_to_vectors()
-                    except Exception as exc:
+                    except Exception as exc:  # broad: intentional — vector sync can fail in many ways
                         log.debug("Profile vector sync failed: %s", exc)
                     routed = True
                     break
@@ -129,7 +129,7 @@ async def remember_fact(content: str, tags: Optional[str] = "", source: str = "u
             await add_rule(content)
             routed = True
             log.info("Routed to rules_engine: %s", content[:80])
-    except Exception as e:
+    except Exception as e:  # broad: intentional — knowledge routing spans imports + multiple backends
         log.debug("Knowledge routing failed (falling back to QMD): %s", e)
 
     # Always store in QMD (primary store) regardless of routing
@@ -139,7 +139,7 @@ async def remember_fact(content: str, tags: Optional[str] = "", source: str = "u
         import vector_store
         fact_id = str(int(datetime.datetime.now(datetime.timezone.utc).timestamp() * 1000))
         await vector_store.add_memory(fact_id, content, tag_list, source=source)
-    except Exception as e:
+    except Exception as e:  # broad: intentional — vector store can fail in many ways
         log.debug("Vector embed failed (non-critical): %s", e)
 
     suffix = ""
@@ -187,7 +187,7 @@ async def recall_fact(query: str) -> str:
             vector_store.MEMORIES_COLLECTION, query, top_k=10
         )
         semantic_hits = [r["text"] for r in results]
-    except Exception as e:
+    except Exception as e:  # broad: intentional — vector store can fail in many ways
         log.debug("Vector search failed (non-critical): %s", e)
 
     # Merge and deduplicate (keyword matches first, then semantic-only)

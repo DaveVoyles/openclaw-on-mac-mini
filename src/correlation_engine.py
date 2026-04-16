@@ -74,7 +74,7 @@ class CorrelationEngine:
                     )
                 """)
                 conn.commit()
-        except Exception as e:
+        except sqlite3.Error as e:
             log.warning("Could not ensure tables: %s", e)
 
     def _get_metric_data(
@@ -120,7 +120,7 @@ class CorrelationEngine:
                         df['date'] = pd.to_datetime(df['timestamp'], unit='s').dt.date
                         df = df.groupby('date')['volume'].sum()
                         return df
-            except Exception as e:
+            except (sqlite3.Error, KeyError, ValueError, TypeError) as e:
                 log.error("Error fetching metric data: %s", e)
 
         # Could extend to support other metric sources (weather, stocks, etc.)
@@ -273,7 +273,7 @@ class CorrelationEngine:
 
             return result
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional — complex statistical + LLM computation
             log.error("Error finding correlation: %s", e)
             return CorrelationInsight(
                 metric_a=metric_a,
@@ -307,7 +307,7 @@ class CorrelationEngine:
                     datetime.now().timestamp(),
                 ))
                 conn.commit()
-        except Exception as e:
+        except sqlite3.Error as e:
             log.error("Error caching correlation: %s", e)
 
     async def discover_correlations(
@@ -457,7 +457,7 @@ async def find_correlations(metrics: list[str], days: int = 30) -> dict[str, Any
             ]
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional — wraps complex engine operations
         log.error("Error in find_correlations: %s", e)
         return {"status": "error", "message": str(e)}
 
@@ -475,7 +475,7 @@ async def explain_correlation(metric_a: str, metric_b: str) -> dict[str, Any]:
     """
     try:
         return await _correlation_engine.explain_correlation(metric_a, metric_b)
-    except Exception as e:
+    except Exception as e:  # broad: intentional — wraps complex engine operations
         log.error("Error in explain_correlation: %s", e)
         return {"status": "error", "message": str(e)}
 

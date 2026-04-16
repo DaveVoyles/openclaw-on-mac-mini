@@ -44,7 +44,7 @@ def _parse_date(date_str: str) -> date:
     try:
         from dateutil import parser as dateutil_parser
         return dateutil_parser.parse(date_str).date()
-    except Exception:
+    except (ImportError, ValueError):
         raise ValueError(f"Cannot parse date: {date_str!r}")
 
 
@@ -63,7 +63,7 @@ def _find_journal_file(d: date) -> Path | None:
             text = f.read_text(encoding="utf-8", errors="replace")
             if re.search(rf'^title:\s*["\']?{re.escape(target_title)}["\']?\s*$', text, re.MULTILINE):
                 return f
-        except Exception:
+        except OSError:
             continue
     return None
 
@@ -104,7 +104,7 @@ class JournalEntryModal(discord.ui.Modal, title="📓 Journal Entry"):
             )
             embed.set_footer(text=f"Entry for {today.isoformat()}")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — Discord modal handler must not crash
             log.exception("journal modal save failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/journal write"), ephemeral=True)
 
@@ -137,7 +137,7 @@ class JournalCog(commands.Cog):
             )
             embed.set_footer(text=f"Entry for {today.isoformat()}")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — Discord command handler must not crash
             log.exception("journal write failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/journal write"), ephemeral=True)
 
@@ -178,7 +178,7 @@ class JournalCog(commands.Cog):
                     color=discord.Color.blurple(),
                 )
                 await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — Discord command handler must not crash
             log.exception("journal read failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/journal read"), ephemeral=True)
 
@@ -212,7 +212,7 @@ class JournalCog(commands.Cog):
                 embed.add_field(name="🔥 Current Streak", value=f"**{streak} day{'s' if streak != 1 else ''}**", inline=True)
                 embed.add_field(name="📅 Last Entry", value=last_entry.isoformat() if last_entry else "—", inline=True)
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — Discord command handler must not crash
             log.exception("journal streak failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/journal streak"), ephemeral=True)
 
@@ -237,7 +237,7 @@ class JournalCog(commands.Cog):
             )
             embed.set_footer(text="Use /journal write to respond to this prompt")
             await interaction.followup.send(embed=embed, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional — Discord command handler must not crash
             log.exception("journal prompt failed")
             await interaction.followup.send(embed=build_error_embed(e, context="/journal prompt"), ephemeral=True)
 
