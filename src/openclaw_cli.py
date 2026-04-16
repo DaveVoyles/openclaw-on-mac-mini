@@ -419,7 +419,7 @@ _context_overflow_warned: dict[str, int] = {}
 DEFAULT_BASE_URL = "http://localhost:8765"
 DEFAULT_MODEL = "auto"
 DEFAULT_TIMEOUT_SECONDS = 120
-DEFAULT_VERSION = "0.6.0"
+DEFAULT_VERSION = "2026.4.16"
 _CLI_BUILD = "wave45"  # updated with each UX wave batch
 
 _DEFAULT_PROMPT_FORMAT = "{route} openclaw{session}> "

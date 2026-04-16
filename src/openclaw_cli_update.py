@@ -36,8 +36,8 @@ except ImportError:  # pragma: no cover
 
 # Mirror constants (kept in sync with openclaw_cli.py)
 DEFAULT_BASE_URL = "http://localhost:8765"
-DEFAULT_VERSION = "0.6.0"
-_CLI_BUILD = "wave34"  # updated with each UX wave batch
+DEFAULT_VERSION = "2026.4.16"
+_CLI_BUILD = "wave45"  # updated with each UX wave batch
 
 # Module-level state (mirrors what was in openclaw_cli.py)
 _latest_version: str | None = None
@@ -141,11 +141,19 @@ def _standalone_install_dir() -> str | None:
     A standalone install places openclaw_cli.py directly in a directory like
     ~/.local/share/openclaw-cli/ and runs it via a bash shim — not from a
     pip-managed site-packages location.
+
+    Returns None for editable pip installs (``pip install -e .``) even though
+    the source files live outside site-packages, so that /update never
+    overwrites the developer's working source tree with files from the server.
     """
     try:
         script = Path(__file__).resolve()
         marker = script.parent / "openclaw_cli_sessions.py"
         if marker.exists() and "site-packages" not in str(script):
+            # Editable installs: pyproject.toml lives one level up (repo root).
+            # Don't treat a dev checkout as a standalone install.
+            if (script.parent.parent / "pyproject.toml").exists():
+                return None
             return str(script.parent)
     except (OSError, AttributeError):
         pass
