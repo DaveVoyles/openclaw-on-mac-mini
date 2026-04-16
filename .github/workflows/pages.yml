@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     name: Build Documentation
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/docs/Gemfile
 
@@ -70,7 +70,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, macOS, ARM64, openclaw]
     needs: build
 
     steps:
