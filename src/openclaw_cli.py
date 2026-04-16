@@ -2500,6 +2500,7 @@ def invoke_openclaw(
         "model": config.model,
         "history": history or [],
         "user_name": config.user_name,
+        "routing_profile": _PREFS.get("routing_profile", ""),
     }
     req = request.Request(
         f"{config.base_url}/api/agent/ask",
@@ -2573,6 +2574,7 @@ def invoke_openclaw_stream(
         "model": config.model,
         "history": history or [],
         "user_name": config.user_name,
+        "routing_profile": _PREFS.get("routing_profile", ""),
     }
     req = request.Request(
         f"{config.base_url}/api/agent/ask/stream",

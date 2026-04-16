@@ -2876,6 +2876,7 @@ async def api_agent_ask_handler(request: web.Request) -> web.Response:
     if not isinstance(history, list):
         return web.json_response({"error": "history must be a list"}, status=400)
     user_name = str(body.get("user_name") or "Dashboard").strip() or "Dashboard"
+    routing_profile = str(body.get("routing_profile") or "").strip()
 
     try:
         payload = await _execute_agent_ask(
@@ -2883,6 +2884,7 @@ async def api_agent_ask_handler(request: web.Request) -> web.Response:
             model_pref=model_pref,
             history=history,
             user_name=user_name,
+            routing_profile=routing_profile,
         )
         return web.json_response(payload)
     except Exception as exc:  # broad: intentional
@@ -2896,6 +2898,7 @@ async def _execute_agent_ask(
     model_pref: str,
     history: list[dict],
     user_name: str,
+    routing_profile: str = "",
     on_partial_chunk: callable | None = None,
 ) -> dict[str, object]:
     from ask_orchestrator import run_ask_stream
@@ -2935,6 +2938,7 @@ async def _execute_agent_ask(
         user_id=user_name,
         update_history=_update_history,
         context_controls=None,
+        routing_profile=routing_profile,
         on_partial_chunk=_handle_partial if on_partial_chunk is not None else None,
     )
     response_text = str(result.response_text or "").strip()
@@ -3008,6 +3012,7 @@ async def api_agent_ask_stream_handler(request: web.Request) -> web.StreamRespon
     if not isinstance(history, list):
         return web.json_response({"error": "history must be a list"}, status=400)
     user_name = str(body.get("user_name") or "Dashboard").strip() or "Dashboard"
+    routing_profile = str(body.get("routing_profile") or "").strip()
 
     resp = web.StreamResponse(
         status=200,
@@ -3029,6 +3034,7 @@ async def api_agent_ask_stream_handler(request: web.Request) -> web.StreamRespon
             model_pref=model_pref,
             history=history,
             user_name=user_name,
+            routing_profile=routing_profile,
             on_partial_chunk=lambda chunk: _write_event("chunk", {"delta": chunk}),
         )
         await _write_event("final", payload)

@@ -82,6 +82,15 @@ _ANALYSIS_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+_REASONING_PATTERN = re.compile(
+    r"\b(prove|proof|deduce|infer|logical|reasoning|step[\s-]by[\s-]step|"
+    r"mathematically|theorem|equation|formula|algorithm|optimize|complexity|"
+    r"O\(n\)|solve|calculate|compute|derive)\b"
+    r"|\b(math|calculus|statistics|probability|linear\s+algebra|"
+    r"differential\s+equation)\b",
+    re.IGNORECASE,
+)
+
 
 class ModelRoute:
     """Represents a routing decision."""
@@ -97,9 +106,18 @@ class ModelRoute:
 
 
 def copilot_model_for_message(message: str) -> str:
-    """Choose the proxy model to use for a Copilot-routed message."""
-    if _CODE_PATTERN.search(message or ""):
+    """Choose the proxy model to use for a Copilot-routed message.
+
+    Selection priority:
+    1. Code queries → Claude Sonnet (best code quality via proxy)
+    2. Reasoning/math → o1-mini (step-by-step reasoning model)
+    3. Default → GPT-4o
+    """
+    msg = message or ""
+    if _CODE_PATTERN.search(msg):
         return os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4.5")
+    if _REASONING_PATTERN.search(msg):
+        return os.getenv("COPILOT_REASONING_MODEL", "o1-mini")
     return os.getenv("OPENAI_MODEL", "gpt-4o")
 
 

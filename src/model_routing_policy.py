@@ -15,6 +15,11 @@ _MINI_TOKEN_THRESHOLD = int(_os.getenv("MINI_TOKEN_THRESHOLD", "25"))
 # so the helper is slightly more generous than the internal select_auto_route gate.
 MINI_MODEL_MAX_TOKENS = int(_os.getenv("MINI_MODEL_MAX_TOKENS", "50"))
 
+# W29: opt-in flag — set COPILOT_TOOLS_ENABLED=true to route tool calls through
+# the Copilot proxy (enterprise GPT-4o at host.docker.internal:9191/v1) which
+# fully supports OpenAI function calling.
+COPILOT_TOOLS_ENABLED: bool = _os.getenv("COPILOT_TOOLS_ENABLED", "false").lower() in {"1", "true", "yes"}
+
 VALID_ROUTING_PROFILES = {
     "copilot-first",
     "balanced",
@@ -123,7 +128,7 @@ def build_provider_capability_registry(
         "copilot": ProviderCapabilities(
             name="copilot",
             available=bool(copilot_available),
-            supports_native_tools=False,
+            supports_native_tools=bool(copilot_available and COPILOT_TOOLS_ENABLED),
             supports_multimodal=bool(copilot_available),  # GPT-4o-vision via proxy
             supports_raw_output=False,
             low_cost=True,
@@ -360,7 +365,14 @@ def select_tool_route(
         ollama_alive=ollama_alive,
     )
 
-    for provider_name in ("gemini", "anthropic", "openai", "copilot", "ollama"):
+    # When Copilot tools are enabled, prefer Copilot/OpenAI-compatible providers
+    # since enterprise GPT-4o has full function-calling support.
+    if COPILOT_TOOLS_ENABLED:
+        order = ("copilot", "openai", "anthropic", "gemini", "ollama")
+    else:
+        order = ("gemini", "anthropic", "openai", "copilot", "ollama")
+
+    for provider_name in order:
         capabilities = registry.get(provider_name)
         if capabilities and capabilities.available and capabilities.supports_native_tools:
             return ToolRouteDecision(

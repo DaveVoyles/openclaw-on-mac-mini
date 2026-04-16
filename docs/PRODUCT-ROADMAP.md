@@ -137,15 +137,24 @@ relevant section of `docs/UX_IMPROVEMENTS.md`.
 - **Supporting doc:** `docs/UX_IMPROVEMENTS.md`
 - **Why now:** Grounding block inspection (`/context last`) remains the highest-signal open UX item, and a residual stale-checkbox audit (4 confirmed this wave) keeps the doc accurate.
 - **What shipped:** `/context last` grounding block inspection (26 tests, Han); 4 stale checkboxes cleared in `docs/UX_IMPROVEMENTS.md` (Leia); `/rate` usage error fix (solo).
-- **Next step:** Complete. W28 continues watch liveness, completion recaps, and the final stale-checkbox audit.
+- **Next step:** Complete. W28 shipped watch liveness, completion recaps, and the final stale-checkbox audit. W29 is now in progress.
 
 ### Initiative: Wave 28 — Watch Liveness + Completion Recaps + Final Stale Audit
 
-- **Status:** in progress
+- **Status:** shipped
 - **Owner area:** cli, docs
 - **Supporting doc:** `docs/UX_IMPROVEMENTS.md`
 - **Why now:** Watch-loop liveness cues (iteration counter, optional bell) and per-command completion recaps (analyze/research/write) are the next highest-signal open UX items; a shared Rich preview helper reduces duplication; a final stale audit keeps the doc accurate.
-- **Next step:** Han lands watch liveness cues and bell; Rey lands completion recaps for analyze/research/write and the shared Rich preview helper; Leia completes the final stale-checkbox audit.
+- **What shipped:** Watch liveness counter `[iter N]`/`[N/max]` in `render_watch_iteration`; `/watch bell on|off` toggle; completion recaps (`✓ Analysis/Research/Draft complete — N words`) for analyze/research/write; `_preview_panel()` shared Rich panel helper in `openclaw_cli_ui_utils.py`; 52 tests.
+- **Next step:** Complete. W29 continues with Copilot enterprise maximization.
+
+### Initiative: Wave 29 — Copilot Enterprise Maximization
+
+- **Status:** in progress
+- **Owner area:** cli, infra
+- **Supporting doc:** `docs/CLI_ARCHITECTURE.md` (Model Selection section)
+- **Why now:** The user has a Copilot enterprise account with proxy at `host.docker.internal:9191/v1`. Expanding model coverage (reasoning queries, tool routing) maximises enterprise value.
+- **Next step:** Land opt-in Copilot tool routing, o1-mini reasoning path, context limits for all Copilot proxy models, and CLI routing-profile passthrough fix.
 
 ### 3. CLI technical-debt follow-up
 

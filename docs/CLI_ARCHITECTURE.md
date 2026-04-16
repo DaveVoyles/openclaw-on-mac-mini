@@ -29,6 +29,45 @@ update mechanism, standalone install, and key code locations.
 
 ---
 
+## Model Selection
+
+Key files: `src/model_routing_policy.py`, `src/model_router.py`, `src/llm/providers.py`.
+
+### Routing profiles
+
+The system-wide routing profile is set via the `ROUTING_PROFILE` env var (default: `copilot-first`).
+Available values: `copilot-first | balanced | gemini-first | cost-saver`.
+
+### Non-tool queries (copilot-first, Copilot proxy available)
+
+| Condition | Model | Provider |
+| --- | --- | --- |
+| Short query (≤ 25 words) | `gpt-4o-mini` | Copilot proxy (mini fast-path) |
+| Code query | `claude-sonnet-4.5` | Copilot proxy |
+| Reasoning / math query (W29) | `o1-mini` | Copilot proxy |
+| All other queries | `gpt-4o` | Copilot proxy |
+
+### Tool-requiring queries (home automation, Docker, search, Sonarr, etc.)
+
+| `COPILOT_TOOLS_ENABLED` | Model | Provider |
+| --- | --- | --- |
+| `false` (default) | Gemini | Direct — reliable native function calling |
+| `true` (opt-in, W29) | `gpt-4o` | Copilot proxy — enterprise function calling |
+
+### Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ROUTING_PROFILE` | `copilot-first` | System-wide routing profile |
+| `COPILOT_PROXY_URL` | `http://host.docker.internal:9191/v1` | Copilot proxy endpoint |
+| `OPENAI_MODEL` | `gpt-4o` | Default Copilot non-code model |
+| `ANTHROPIC_MODEL` | `claude-sonnet-4.5` | Default Copilot code model |
+| `COPILOT_REASONING_MODEL` | `o1-mini` | Model for reasoning/math queries (W29) |
+| `COPILOT_TOOLS_ENABLED` | `false` | Allow Copilot proxy to handle tool calls (W29) |
+| `OPENAI_MINI_MODEL` | `gpt-4o-mini` | Fast-path model for short queries |
+
+---
+
 ## UX patterns
 
 ### Rich / ANSI guard
