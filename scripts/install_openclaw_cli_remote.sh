@@ -16,39 +16,10 @@ SRC_DIR="$REPO_ROOT/src"
 INSTALL_DIR="\$HOME/.local/share/openclaw-cli"
 BIN_DIR="\$HOME/.local/bin"
 
-CLI_FILES=(
-  openclaw_cli.py
-  openclaw_cli_actions.py
-  openclaw_cli_auth.py
-  openclaw_cli_cmd_session.py
-  openclaw_cli_cmd_settings.py
-  openclaw_cli_cmd_system.py
-  openclaw_cli_cmd_content.py
-  openclaw_cli_content_cmds.py
-  openclaw_cli_diff.py
-  openclaw_cli_exec.py
-  openclaw_cli_health.py
-  openclaw_cli_layout.py
-  openclaw_cli_macros.py
-  openclaw_cli_path_utils.py
-  openclaw_cli_prefs.py
-  openclaw_cli_preprocess.py
-  openclaw_cli_router.py
-  openclaw_cli_session_cmds.py
-  openclaw_cli_session_display.py
-  openclaw_cli_session_utils.py
-  openclaw_cli_sessions.py
-  openclaw_cli_settings.py
-  openclaw_cli_ui_core.py
-  openclaw_cli_ui_utils.py
-  openclaw_cli_render.py
-  openclaw_cli_types.py
-  openclaw_cli_update.py
-  openclaw_cli_cmd_workflow.py
-  openclaw_cli_cmd_core.py
-  openclaw_cli_cmd_misc.py
-  openclaw_cli_watch.py
-  subprocess_utils.py
+mapfile -t CLI_FILES < <(
+  find "$SRC_DIR" -maxdepth 1 -type f \
+    \( -name 'openclaw_cli*.py' -o -name 'subprocess_utils.py' \) \
+    -exec basename {} \; | sort
 )
 
 echo "Installing OpenClaw CLI to ${TARGET_HOST}…"
