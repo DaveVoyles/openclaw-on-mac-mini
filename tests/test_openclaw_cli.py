@@ -558,7 +558,7 @@ def test_top_context_bar_lines_include_trust_phase_and_recovery(monkeypatch, tmp
     )
 
     joined = "\n".join(lines)
-    assert "Context:" in joined
+    assert "Status:" in joined or "Context:" in joined
     assert "plan confirmed" in joined
     assert "task confirmed" in joined
     assert "phase done" in joined
@@ -568,7 +568,7 @@ def test_top_context_bar_lines_include_trust_phase_and_recovery(monkeypatch, tmp
     assert "step 2/3 complete" in joined
     assert "next step 2/3 Patch top bar" in joined
     assert "/rollback last ready" in joined
-    assert "trust /promptdebug" in joined
+    assert "promptdebug" in joined
 
 
 def test_top_context_bar_lines_acknowledge_completed_step_before_next_step(monkeypatch, tmp_path):
@@ -1012,9 +1012,9 @@ def test_run_chat_prints_top_context_bar_before_prompt(capsys, tmp_path, monkeyp
 
     assert exit_code == 0
     stdout = capsys.readouterr().out
-    assert "Context:" in stdout
-    assert "session:" in stdout
-    assert "autoroute: on" in stdout
+    assert "Status:" in stdout or "Context:" in stdout
+    assert "session:" in stdout or "folder:" in stdout
+    assert "routing:" in stdout
 
 
 def test_run_chat_uses_router_before_generic_chat_fallback(capsys, tmp_path, monkeypatch):

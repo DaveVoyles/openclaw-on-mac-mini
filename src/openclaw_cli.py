@@ -1287,18 +1287,22 @@ def _top_context_bar_lines(
     cwd = str((session.cwd if session else "") or os.getcwd()).strip()
     cwd_label = Path(cwd).name or cwd or "(none)"
     turns = history_len // 2
+    turns_label = f"{turns} message{'s' if turns != 1 else ''}" if turns else "new session"
+    routing_label = "smart" if autoroute_on else "manual"
     summary_parts = [
-        _progress_cell("cwd", cwd_label, status="active"),
-        _progress_cell("turns", str(turns), status="complete" if turns else "idle"),
-        _progress_cell("autoroute", "on" if autoroute_on else "off", status="active" if autoroute_on else "warn"),
+        _progress_cell("folder", cwd_label),
+        _progress_cell("session", turns_label),
+        _progress_cell("routing", routing_label),
     ]
     if session_id:
-        summary_parts.insert(0, _progress_cell("session", f"{session_id[:8]}…", status=str((session.status if session else "active") or "active")))
+        summary_parts.insert(0, _progress_cell("id", f"{session_id[:8]}…", status=str((session.status if session else "active") or "active")))
     if session and session.files:
-        summary_parts.append(_progress_cell("files", str(len(session.files)), status="active"))
+        summary_parts.append(_progress_cell("files", str(len(session.files))))
 
     detail_parts: list[str] = []
     cue_parts: list[str] = []
+    if not autoroute_on:
+        cue_parts.append("routing is manual — run /autoroute on to let openclaw pick the best tool automatically")
     if session:
         if session.plan_id:
             plan_validation = _validate_plan_id_local(session.plan_id, cwd=session.cwd)
@@ -1324,7 +1328,7 @@ def _top_context_bar_lines(
     hidden_chars = len(str(_PREFS.get("system_prompt", "") or "").strip()) + len(str(_next_inject or "").strip())
     if hidden_chars:
         detail_parts.append(_progress_cell("hidden", f"~{max(1, hidden_chars // 4)} tok", status="warn"))
-        cue_parts.append("trust /promptdebug")
+        cue_parts.append("hidden context active — run /promptdebug to inspect")
 
     recovery = _shell_phase_snapshot(session=session, session_id=session_id)
     if recovery.get("phase"):
@@ -1348,17 +1352,16 @@ def _top_context_bar_lines(
     if recovery.get("recovery"):
         cue_parts.append(recovery["recovery"])
     if _last_interrupted_prompt:
-        cue_parts.append("/draft restore")
-    if not cue_parts:
-        cue_parts.append("trust stable")
+        cue_parts.append("type /draft restore to recover your last message")
+    # Don't add a fallback cue — suppress the tips line when there's nothing meaningful
 
-    lines = ["Context: " + "  ·  ".join(_dedupe_preserve_order(summary_parts))]
+    lines = ["Status: " + "  ·  ".join(_dedupe_preserve_order(summary_parts))]
     detail_line = "  ·  ".join(_dedupe_preserve_order(detail_parts))
     if detail_line:
-        lines.append("Status:  " + detail_line)
+        lines.append("Detail: " + detail_line)
     cue_line = "  ·  ".join(_dedupe_preserve_order(cue_parts))
     if cue_line:
-        lines.append("Cues:    " + cue_line)
+        lines.append("Tip:    " + cue_line)
     return lines
 
 
