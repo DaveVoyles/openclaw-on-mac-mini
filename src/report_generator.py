@@ -133,7 +133,7 @@ class ReportGenerator:
                 "report_type": report_type,
             }
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Report generation failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
@@ -408,7 +408,7 @@ class ReportGenerator:
 
             if Path(SPENDING_FILE).exists():
                 return json.loads(Path(SPENDING_FILE).read_text())
-        except Exception as exc:
+        except (json.JSONDecodeError, OSError, ImportError) as exc:
             log.debug("Failed to load spending data: %s", exc)
         return {}
 
@@ -438,7 +438,7 @@ class ReportGenerator:
                 if ts is None or ts < start_ts or ts > end_ts:
                     continue
                 entries.append(entry)
-        except Exception as exc:
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
             log.debug("Failed to load error journal entries: %s", exc)
 
         return entries
@@ -473,7 +473,7 @@ class ReportGenerator:
                             _add_entry(json.loads(line))
                         except json.JSONDecodeError:
                             continue
-                except Exception as exc:
+                except OSError as exc:
                     log.debug("Failed to read audit log %s: %s", file_path, exc)
 
         try:
@@ -482,7 +482,7 @@ class ReportGenerator:
             for entry in list(_audit_buffer):
                 if isinstance(entry, dict):
                     _add_entry(entry)
-        except Exception as exc:
+        except (ImportError, AttributeError, TypeError) as exc:
             log.debug("Failed to read buffered audit entries: %s", exc)
 
         return entries
@@ -641,7 +641,7 @@ class ReportGenerator:
                     ]
                     metrics["slowest_endpoints"].sort(key=lambda item: (-item["time_ms"], item["name"]))
                     metrics["slowest_endpoints"] = metrics["slowest_endpoints"][:10]
-        except Exception as exc:
+        except (ImportError, AttributeError, TypeError) as exc:
             log.debug("Failed to load metrics collector stats: %s", exc)
 
         if metrics["slowest_endpoints"]:
@@ -659,7 +659,7 @@ class ReportGenerator:
                 ]
                 metrics["slowest_endpoints"].sort(key=lambda item: (-item["time_ms"], item["name"]))
                 metrics["slowest_endpoints"] = metrics["slowest_endpoints"][:10]
-        except Exception as exc:
+        except (ImportError, AttributeError, TypeError) as exc:
             log.debug("Failed to load performance monitor stats: %s", exc)
 
         return metrics

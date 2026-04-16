@@ -100,7 +100,7 @@ class MLTrendAnalyzer:
                     )
                 """)
                 conn.commit()
-        except Exception as e:
+        except sqlite3.Error as e:
             log.warning("Could not ensure tables: %s", e)
 
     def _get_time_series_data(
@@ -145,7 +145,7 @@ class MLTrendAnalyzer:
                     df.set_index('timestamp', inplace=True)
 
                 return df
-        except Exception as e:
+        except (sqlite3.Error, ValueError) as e:
             log.error("Error fetching time series data: %s", e)
             return pd.DataFrame()
 
@@ -224,7 +224,7 @@ class MLTrendAnalyzer:
                 forecast_date=datetime.now().isoformat(),
             )
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error("Error forecasting trend for %s/%s: %s", category, topic, e)
             return ForecastResult(
                 metric=f"{category}/{topic}",
@@ -301,7 +301,7 @@ class MLTrendAnalyzer:
                 anomaly_rate=len(anomalies) / len(df) if len(df) > 0 else 0.0,
             )
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error("Error detecting anomalies for %s/%s: %s", category, topic, e)
             return AnomalyResult(
                 metric=f"{category}/{topic}",
@@ -370,7 +370,7 @@ class MLTrendAnalyzer:
                 "period": period,
             }
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error("Error in seasonal decomposition for %s/%s: %s", category, topic, e)
             return {
                 "status": "error",
@@ -428,7 +428,7 @@ async def forecast_trend(
             "forecast_date": result.forecast_date,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Error in forecast_trend: %s", e)
         return {"status": "error", "message": str(e)}
 
@@ -479,7 +479,7 @@ async def detect_anomalies(metric: str, days: int = 30) -> dict[str, Any]:
             "anomaly_rate": result.anomaly_rate,
         }
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error("Error in detect_anomalies: %s", e)
         return {"status": "error", "message": str(e)}
 

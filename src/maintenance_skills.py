@@ -66,7 +66,7 @@ async def restart_gateway() -> str:
         _llm._reset_models()
         log.info("Maintenance: LLM sessions cleared")
         results.append("LLM sessions cleared")
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         results.append(f"LLM clear failed: {e}")
 
     try:
@@ -74,7 +74,7 @@ async def restart_gateway() -> str:
         await _hs.close()
         log.info("Maintenance: HTTP sessions closed")
         results.append("HTTP sessions closed")
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         results.append(f"HTTP close failed: {e}")
 
     return "✅ Gateway restart: " + ", ".join(results)
@@ -258,7 +258,7 @@ async def run_maintenance() -> str:
         try:
             result = await fn()
             lines.append(f"• **{label}**: {result[:100]}")
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             lines.append(f"• **{label}**: ❌ {e}")
 
     summary = "\n".join(lines)
@@ -297,7 +297,7 @@ async def run_memory_decay() -> str:
         if total_decayed > 0:
             return f"🧹 Memory decay: marked {total_decayed} old memories as decayed"
         return "🧹 Memory decay: no candidates found"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Memory decay failed: %s", e)
         return f"⚠️ Memory decay failed: {e}"
 
@@ -313,7 +313,7 @@ async def _run_dream_cycle() -> str:
         summary = report[:200].replace("\n", " ")
         log.info("Dream cycle complete: %s", summary)
         return f"🌙 Dream cycle complete ({len(report)} chars)"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Dream cycle failed: %s", e)
         return f"⚠️ Dream cycle failed: {e}"
 
@@ -361,7 +361,7 @@ async def run_memory_consolidation() -> str:
             )
             return f"Weekly digest created ({len(digest)} chars) from {len(recent)} sessions"
         return "Consolidation produced no output"
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.warning("Memory consolidation failed: %s", e)
         return f"Consolidation skipped: {e}"
 
@@ -442,7 +442,7 @@ async def fix_arr_remote_path() -> str:
                 try:
                     result = await restart_container(svc)
                     issues.append(f"🔄 Restarted `{svc}`: {result}")
-                except Exception as e:
+                except Exception as e:  # broad: intentional
                     issues.append(f"❌ Failed to restart `{svc}`: {e}")
 
             # Verify health after restart

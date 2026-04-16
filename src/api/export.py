@@ -4,6 +4,7 @@ Provides REST endpoints for exporting data and generating reports.
 """
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -118,7 +119,7 @@ async def export_conversations_handler(request: web.Request) -> web.Response:
             },
         )
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Export failed: {e}", exc_info=True)
         return web.json_response({"error": str(e)}, status=500)
 
@@ -171,7 +172,7 @@ async def export_trends_handler(request: web.Request) -> web.Response:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Export failed: {e}", exc_info=True)
         return web.json_response({"error": str(e)}, status=500)
 
@@ -187,7 +188,7 @@ async def generate_report_handler(request: web.Request) -> web.Response:
 
     try:
         data = await request.json()
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         return web.json_response({"error": "Invalid JSON"}, status=400)
 
     report_type = data.get("report_type", "weekly_summary")
@@ -217,7 +218,7 @@ async def generate_report_handler(request: web.Request) -> web.Response:
             headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Report generation failed: {e}", exc_info=True)
         return web.json_response({"error": str(e)}, status=500)
 
@@ -254,7 +255,7 @@ async def list_backups_handler(request: web.Request) -> web.Response:
             "status": status,
         })
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"List backups failed: {e}", exc_info=True)
         return web.json_response({"error": str(e)}, status=500)
 
@@ -270,7 +271,7 @@ async def create_backup_handler(request: web.Request) -> web.Response:
 
     try:
         data = await request.json()
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         data = {}
 
     upload_to_nas = data.get("upload_to_nas", True)
@@ -285,7 +286,7 @@ async def create_backup_handler(request: web.Request) -> web.Response:
         else:
             return web.json_response({"error": result.get("error", "Backup failed")}, status=500)
 
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         log.error(f"Backup creation failed: {e}", exc_info=True)
         return web.json_response({"error": str(e)}, status=500)
 
@@ -298,7 +299,7 @@ async def _cleanup_file_after_delay(file_path: Path, delay_hours: int = 24):
         if file_path.exists():
             file_path.unlink()
             log.info(f"🗑️  Cleaned up export file: {file_path.name}")
-    except Exception as e:
+    except OSError as e:
         log.warning(f"Failed to cleanup {file_path}: {e}")
 
 

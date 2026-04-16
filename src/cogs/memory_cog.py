@@ -97,7 +97,7 @@ class MemoryCog(commands.Cog, name="Memory"):
             from qmd import qmd_store
             qmd_count = len(qmd_store._memory)
             lines.append(f"**QMD Facts:** {qmd_count:,} entries")
-        except Exception:
+        except (ImportError, AttributeError):
             lines.append("**QMD Facts:** unavailable")
 
         # Vector store stats
@@ -107,7 +107,7 @@ class MemoryCog(commands.Cog, name="Memory"):
             for name, info in stats.items():
                 label = name.replace("_", " ").title()
                 lines.append(f"**{label} vectors:** {info['count']:,}")
-        except Exception:
+        except Exception:  # broad: intentional
             lines.append("**Vector store:** unavailable")
 
         # Thread store stats
@@ -116,7 +116,7 @@ class MemoryCog(commands.Cog, name="Memory"):
             ts = await thread_stats()
             lines.append(f"\n**Threads:** {ts['total_threads']} total ({ts['active_threads']} active, {ts['archived_threads']} archived)")
             lines.append(f"**Messages stored:** {ts['total_messages']:,}")
-        except Exception:
+        except Exception:  # broad: intentional
             lines.append("**Thread store:** unavailable")
 
         await interaction.followup.send("\n".join(lines), ephemeral=True)
@@ -142,7 +142,7 @@ class MemoryCog(commands.Cog, name="Memory"):
                 text = r["text"][:120].replace("\n", " ")
                 lines.append(f"• ({sim:.0%}) {text}")
             await interaction.followup.send("\n".join(lines), ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"⚠️ Refresh failed: {e}", ephemeral=True)
         audit_log(interaction.user, "memory_refresh", detail=query)
 
@@ -195,7 +195,7 @@ class MemoryCog(commands.Cog, name="Memory"):
             )
             view = PaginationView(pages) if len(pages) > 1 else None
             await interaction.followup.send(embed=pages[0], view=view, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"⚠️ Rules unavailable: {e}", ephemeral=True)
         audit_log(interaction.user, "rules", detail=f"{action} {query}")
 
@@ -229,7 +229,7 @@ class MemoryCog(commands.Cog, name="Memory"):
                 lines.append("_Empty — I'll learn about you as we chat! You can also tell me things like 'I prefer concise answers' or 'my timezone is US/Eastern'._")
 
             await interaction.followup.send("\n".join(lines), ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"⚠️ Profile unavailable: {e}", ephemeral=True)
         audit_log(interaction.user, "profile")
 
@@ -269,11 +269,11 @@ class MemoryCog(commands.Cog, name="Memory"):
 
             try:
                 await sync_profile_to_vectors()
-            except Exception:
+            except Exception:  # broad: intentional
                 pass
 
             await interaction.followup.send(msg, ephemeral=True)
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             await interaction.followup.send(f"⚠️ Update failed: {e}", ephemeral=True)
         audit_log(interaction.user, "profile_edit", detail=f"{field}={value[:100]}")
 

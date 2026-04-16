@@ -622,7 +622,7 @@ def _cmd_snapshot(ctx: ChatCommandContext) -> str:
             _RICH_CONSOLE.print(f"[green]✓[/] Snapshot [bold]{name}[/] saved at [dim]{sha}[/]")
         else:
             print(f"✓ Snapshot '{name}' saved at {sha}")
-    except Exception as e:  # noqa: BLE001
+    except (subprocess.CalledProcessError, OSError) as e:  # noqa: BLE001
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
         else:
@@ -764,7 +764,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
                     _RICH_CONSOLE.print(f"[red]Error:[/] {result.stderr}")
                 else:
                     print(f"Error: {result.stderr}")
-        except Exception as e:  # noqa: BLE001
+        except (subprocess.CalledProcessError, OSError) as e:  # noqa: BLE001
             if _RICH_AVAILABLE and is_tty:
                 _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
             else:
@@ -784,7 +784,7 @@ def _cmd_rollback(ctx: ChatCommandContext) -> str:
             else:
                 print(f"\n📸 Rollback Preview: {snap_name} → HEAD\n{diff_stat}")
                 print(f"\n⚠️  Use /rollback {snap_name} --exec to rollback (DESTRUCTIVE)\n")
-        except Exception as e:  # noqa: BLE001
+        except (subprocess.CalledProcessError, OSError) as e:  # noqa: BLE001
             if _RICH_AVAILABLE and is_tty:
                 _RICH_CONSOLE.print(f"[red]Error:[/] {e}")
             else:
@@ -883,7 +883,7 @@ def _cmd_research(ctx: ChatCommandContext) -> str:
     _get_cli_mod().append_event(session.session_id, kind="research", content=query, metadata={"summary": query})
     try:
         report = m.run_async(ResearchAgent().run(effective_query, on_progress=_progress))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001  # broad: intentional
         m._LOG.error("research agent failed", exc_info=True)
         m._print_error(str(exc))
         m._set_command_result(ctx, ok=False, summary=str(exc))
@@ -1069,7 +1069,7 @@ def _cmd_exec(ctx: ChatCommandContext) -> str:
             )
         else:
             result = m.run_async(_get_cli_mod().run_shell_command(command_parts, cwd=_exec_cwd, timeout=60))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001  # broad: intentional
         m._LOG.error("shell command execution failed", exc_info=True)
         m._print_error(str(exc))
         m._set_command_result(ctx, ok=False, summary=str(exc))
@@ -1175,7 +1175,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             else:
                 m._print_error(f"file not found: {resolved}")
                 m._set_command_result(ctx, ok=False, summary=f"file not found: {resolved}")
-        except Exception as exc:  # noqa: BLE001
+        except OSError as exc:  # noqa: BLE001
             m._LOG.error("error reading file %s", path, exc_info=True)
             m._print_error(f"error reading {path}: {exc}")
             m._set_command_result(ctx, ok=False, summary=str(exc))
@@ -1188,7 +1188,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             append=append_mode,
             replace_values=replace_values,
         )
-    except Exception as exc:  # noqa: BLE001
+    except OSError as exc:  # noqa: BLE001
         m._LOG.error("file preview failed for %s", path, exc_info=True)
         m._print_error(str(exc))
         m._set_command_result(ctx, ok=False, summary=str(exc))
@@ -1267,7 +1267,7 @@ def _cmd_edit(ctx: ChatCommandContext) -> str:
             result = replace_text_in_file(path, old=replace_values[0], new=replace_values[1])
         else:
             result = write_text_file(path, content=content, append=append_mode)
-    except Exception as exc:  # noqa: BLE001
+    except OSError as exc:  # noqa: BLE001
         m._LOG.error("file write failed for %s", path, exc_info=True)
         m._print_error(str(exc))
         m._set_command_result(ctx, ok=False, summary=str(exc))
@@ -1621,7 +1621,7 @@ def _cmd_inject(ctx: ChatCommandContext) -> str:
             return _CMD_CONTINUE
         try:
             content = _requests.get(url, timeout=10).text
-        except Exception as exc:  # noqa: BLE001
+        except (ConnectionError, TimeoutError, OSError) as exc:  # noqa: BLE001
             m._print_error(f"Failed to fetch URL: {exc}")
             return _CMD_CONTINUE
         _MAX = 8000

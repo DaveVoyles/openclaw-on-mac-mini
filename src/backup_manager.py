@@ -134,7 +134,7 @@ class BackupManager:
                 "manifest": manifest,
             }
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Backup failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
@@ -168,7 +168,7 @@ class BackupManager:
                 dest.close()
 
                 log.info(f"  ✓ Backed up {db_file.name}")
-            except Exception as e:
+            except OSError as e:
                 log.warning(f"  ⚠️ Failed to backup {db_file}: {e}")
 
         return db_dir if any(db_dir.iterdir()) else None
@@ -193,7 +193,7 @@ class BackupManager:
                 dest = config_dir / source.name
                 shutil.copy2(source, dest)
                 log.info(f"  ✓ Backed up {source.name}")
-            except Exception as e:
+            except OSError as e:
                 log.warning(f"  ⚠️ Failed to backup {source}: {e}")
 
         return config_dir if any(config_dir.iterdir()) else None
@@ -217,7 +217,7 @@ class BackupManager:
             if result["success"]:
                 log.info(f"  ✓ Backed up conversations ({result['rows']} rows)")
                 return conv_dir
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.warning(f"  ⚠️ Failed to backup conversations: {e}")
 
         return None
@@ -238,7 +238,7 @@ class BackupManager:
 
             log.info("  ✓ Backed up scheduled tasks")
             return tasks_dir
-        except Exception as e:
+        except OSError as e:
             log.warning(f"  ⚠️ Failed to backup tasks: {e}")
             return None
 
@@ -343,7 +343,7 @@ class BackupManager:
         except subprocess.CalledProcessError as e:
             log.warning(f"  ⚠️ NAS upload failed: {e}")
             return False
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.warning(f"  ⚠️ NAS upload error: {e}")
             return False
 
@@ -370,7 +370,7 @@ class BackupManager:
                                 backup.unlink()
                             deleted_count += 1
                             log.info(f"  🗑️  Deleted old backup: {backup.name}")
-                except Exception:
+                except (ValueError, OSError):
                     pass  # Skip if we can't parse the date
 
         if deleted_count > 0:
@@ -475,7 +475,7 @@ class BackupManager:
                 "manifest": manifest,
             }
 
-        except Exception as e:
+        except Exception as e:  # broad: intentional
             log.error(f"Restore failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 

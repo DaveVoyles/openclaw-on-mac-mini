@@ -183,7 +183,7 @@ async def _proxy_health_loop() -> None:
         await asyncio.sleep(_PROXY_HEALTH_INTERVAL)
         try:
             await check_proxy_health()
-        except Exception as exc:  # noqa: BLE001 — background loop must never crash
+        except Exception as exc:  # noqa: BLE001 — background loop must never crash  # broad: intentional
             log.debug("Proxy health loop error (non-fatal): %s", exc)
 
 
@@ -778,7 +778,7 @@ async def _check_response_quality(text: str) -> bool:
         from llm_client import quick_generate  # noqa: PLC0415
         verdict = await quick_generate(_QUALITY_CHECK_PROMPT + text[:500])
         return verdict is None or "NO" not in verdict.upper()
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # broad: intentional
         return True  # on error, assume quality is OK
 
 
@@ -863,7 +863,7 @@ async def call_provider(
                 input_tokens=0,
                 output_tokens=0,
             )
-        except Exception as _exc:  # noqa: BLE001
+        except Exception as _exc:  # noqa: BLE001  # broad: intentional
             log.warning("Plugin provider %s raised: %s", provider, _exc)
 
     return ProviderResponse(text=None, provider=provider, model=model, latency_ms=0.0)
@@ -988,7 +988,7 @@ async def _stream_gemini(
                     text += getattr(part, "text", "")
         if text:
             yield text
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001  # broad: intentional
         log.warning("Gemini streaming call failed, yielding nothing: %s", exc)
 
 
@@ -1057,7 +1057,7 @@ async def _stream_openai(
                 chunk = (data["choices"][0].get("delta") or {}).get("content") or ""
                 if chunk:
                     yield chunk
-            except Exception:  # noqa: BLE001
+            except (_json.JSONDecodeError, KeyError, IndexError):  # noqa: BLE001
                 continue
 
 
@@ -1127,7 +1127,7 @@ async def _stream_anthropic(
                     chunk = (data.get("delta") or {}).get("text") or ""
                     if chunk:
                         yield chunk
-            except Exception:  # noqa: BLE001
+            except (_json.JSONDecodeError, KeyError, IndexError):  # noqa: BLE001
                 continue
 
 
@@ -1210,7 +1210,7 @@ async def scan_providers() -> dict[str, dict]:
         t0 = _time.monotonic()
         try:
             ok = await coro
-        except Exception:  # noqa: BLE001 — any ping failure means unavailable
+        except Exception:  # noqa: BLE001 — any ping failure means unavailable  # broad: intentional
             ok = False
         latency_ms = round((_time.monotonic() - t0) * 1000, 1) if ok else None
         return bool(ok), latency_ms

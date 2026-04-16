@@ -101,7 +101,7 @@ class HealthChecker:
                         message=str(result),
                         duration_ms=duration,
                     )
-            except Exception as e:
+            except Exception as e:  # broad: intentional
                 logger.error(f"Health check {name} failed: {e}")
                 results[name] = HealthCheckResult(
                     name=name,
@@ -170,7 +170,7 @@ class HealthChecker:
                         actions.append("Triggered garbage collection")
                         import gc
                         gc.collect()
-                except Exception as e:
+                except Exception as e:  # broad: intentional
                     logger.error(f"Failed to heal {name}: {e}")
                     actions.append(f"Failed to heal {name}: {str(e)}")
 
@@ -206,7 +206,7 @@ async def check_disk_space(threshold_percent: float = 90.0) -> HealthCheckResult
                 message=f"Disk usage normal: {used_percent:.1f}%",
                 metadata={"used_percent": used_percent, "free_gb": disk.free / (1024**3)},
             )
-    except Exception as e:
+    except OSError as e:
         return HealthCheckResult(
             name="disk_space",
             status=HealthStatus.UNHEALTHY,
@@ -241,7 +241,7 @@ async def check_memory(threshold_percent: float = 90.0) -> HealthCheckResult:
                 message=f"Memory usage normal: {used_percent:.1f}%",
                 metadata={"used_percent": used_percent, "available_gb": memory.available / (1024**3)},
             )
-    except Exception as e:
+    except (ImportError, OSError) as e:
         return HealthCheckResult(
             name="memory",
             status=HealthStatus.UNHEALTHY,
@@ -274,7 +274,7 @@ async def check_database(db_path: Path = Path("data/conversations.db")) -> Healt
             message=f"Database accessible ({table_count} tables)",
             metadata={"table_count": table_count, "path": str(db_path)},
         )
-    except Exception as e:
+    except (sqlite3.Error, OSError) as e:
         return HealthCheckResult(
             name="database",
             status=HealthStatus.UNHEALTHY,
@@ -315,7 +315,7 @@ async def check_api_endpoint(
             message=f"{name} API timeout after {timeout}s",
             metadata={"url": url},
         )
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return HealthCheckResult(
             name=f"api_{name}",
             status=HealthStatus.UNHEALTHY,
@@ -352,7 +352,7 @@ async def check_patreon_health() -> HealthCheckResult:
             message=result.message,
             metadata=result.metadata,
         )
-    except Exception as e:
+    except Exception as e:  # broad: intentional
         return HealthCheckResult(
             name="patreon",
             status=HealthStatus.UNHEALTHY,

@@ -110,7 +110,7 @@ def _latest_user_query_from_gemini(session: Any) -> str:
     """Best-effort recovery of the last plain-English user ask from Gemini history."""
     try:
         history = list(session.get_history())
-    except Exception:
+    except (AttributeError, TypeError):
         return ""
 
     for content in reversed(history):
@@ -219,7 +219,7 @@ class GeminiToolAdapter:
                 content = getattr(first_candidate, "content", None)
                 parts = getattr(content, "parts", None) or []
                 text = "".join(part.text for part in parts if hasattr(part, "text") and part.text)
-            except Exception as exc:
+            except (AttributeError, TypeError, IndexError) as exc:
                 log.debug("Response text extraction fallback failed: %s", exc)
                 text = ""
 
@@ -234,7 +234,7 @@ class GeminiToolAdapter:
                         "Do not call any more tools."
                     )
                     text = synthesis_response.text
-                except Exception as exc:
+                except Exception as exc:  # broad: intentional
                     log.error("Forced synthesis failed: %s", exc)
 
             if not text:
@@ -365,7 +365,7 @@ class ToolOrchestrator:
                 for tool_call in tool_calls:
                     try:
                         await on_tool_call(tool_call.name, rounds + 1, args=tool_call.args)
-                    except Exception as exc:
+                    except Exception as exc:  # broad: intentional
                         log.debug("on_tool_call callback failed: %s", exc)
 
             # W12-2: emit pre-call streaming notifications
@@ -373,7 +373,7 @@ class ToolOrchestrator:
                 for tool_call in tool_calls:
                     try:
                         await notification_callback(f"🔧 Calling `{tool_call.name}`…")
-                    except Exception as exc:
+                    except Exception as exc:  # broad: intentional
                         log.debug("notification_callback pre-call failed: %s", exc)
 
             results = await asyncio.gather(*[
@@ -385,7 +385,7 @@ class ToolOrchestrator:
                 for tool_call, result in zip(tool_calls, results):
                     try:
                         await on_tool_call(tool_call.name, rounds + 1, result_preview=result[:200])
-                    except Exception as exc:
+                    except Exception as exc:  # broad: intentional
                         log.debug("on_tool_call result callback failed: %s", exc)
 
             # W12-2: emit post-call streaming notifications
@@ -393,7 +393,7 @@ class ToolOrchestrator:
                 for tool_call in tool_calls:
                     try:
                         await notification_callback(f"✅ Got results from `{tool_call.name}`")
-                    except Exception as exc:
+                    except Exception as exc:  # broad: intentional
                         log.debug("notification_callback post-call failed: %s", exc)
 
             self._rate_limiter.record()

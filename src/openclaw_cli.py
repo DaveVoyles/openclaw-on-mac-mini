@@ -586,7 +586,7 @@ def _overlay_available() -> bool:
     stdin_tty = True
     try:
         stdin_tty = bool(sys.stdin.isatty())
-    except Exception:  # noqa: BLE001  # TTY detection may fail; degrade gracefully
+    except Exception:  # noqa: BLE001  # TTY detection may fail; degrade gracefully  # broad: intentional
         stdin_tty = False
     return bool(_get_is_tty() and stdin_tty)
 
@@ -1217,7 +1217,7 @@ def _latest_shell_recovery_snapshot(session_id: str) -> dict[str, str]:
         return {}
     try:
         latest = next(iter(list_routed_action_checkpoints(session_id, limit=1)), None)
-    except Exception:
+    except Exception:  # broad: intentional
         latest = None
     if not isinstance(latest, dict):
         return {}
@@ -1254,7 +1254,7 @@ def _shell_phase_snapshot(*, session: SessionSummary | None, session_id: str) ->
     total_steps = 0
     try:
         total_steps = len(list(getattr(plan, "steps", []) or []))
-    except Exception:
+    except TypeError:
         total_steps = 0
     step_suffix = f"/{total_steps}" if total_steps > 0 else ""
     current_label = f"step {current_step.num}{step_suffix}"
@@ -3246,7 +3246,7 @@ def _capture_routed_action_checkpoint(
                 targets=workspace_targets or None,
             ),
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001  # broad: intentional
         _LOG.error("safety checkpoint capture failed", exc_info=True)
         _print_error(f"unable to capture safety checkpoint for {_routed_plan_step_label(metadata)}: {exc}")
         _set_command_result(ctx, ok=False, summary=f"checkpoint failed: {exc}")
@@ -3562,7 +3562,7 @@ def _session_is_stale(s: "SessionSummary", days: int = 7) -> bool:
         updated = datetime.fromisoformat(s.updated_at.replace("Z", "+00:00"))
         age = datetime.now(timezone.utc) - updated
         return age.days >= days
-    except Exception:  # noqa: BLE001  # optional staleness check; safe to return False
+    except ValueError:  # noqa: BLE001  # optional staleness check; safe to return False
         return False
 
 
@@ -3924,7 +3924,7 @@ def _make_completer(registry: "ChatCommandRegistry") -> "Any":
             else:
                 matches = []
             return matches[state] if state < len(matches) else None
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001  # broad: intentional
             return None
 
     return _completer
@@ -4147,6 +4147,46 @@ def _time_greeting() -> str:
 
 def _print_startup_banner(config: CliConfig, session_id: str) -> None:
     _ui_utils_mod._print_startup_banner(config, session_id)
+
+
+def _print_shell_top_bar(
+    *,
+    session_id: str = "",
+    model_name: str = "",
+    autoroute_on: bool = True,
+    watch_active: bool = False,
+    output_json: bool = False,
+) -> None:
+    """Shim: delegates to _ui_utils_mod with current TTY/Rich/cols overrides."""
+    if output_json:
+        return
+    _ui_utils_mod._print_shell_top_bar(
+        session_id=session_id,
+        model_name=model_name,
+        autoroute_on=autoroute_on,
+        watch_active=watch_active,
+        _override_is_tty=_IS_TTY,
+        _override_rich_available=_RICH_AVAILABLE,
+        _override_cols=_terminal_width(),
+    )
+
+
+def _print_shell_bottom_bar(
+    *,
+    mode: str = "chat",
+    hints: "list[str] | None" = None,
+    output_json: bool = False,
+) -> None:
+    """Shim: delegates to _ui_utils_mod with current TTY/Rich/cols overrides."""
+    if output_json:
+        return
+    _ui_utils_mod._print_shell_bottom_bar(
+        mode=mode,
+        hints=hints,
+        _override_is_tty=_IS_TTY,
+        _override_rich_available=_RICH_AVAILABLE,
+        _override_cols=_terminal_width(),
+    )
 _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     # Core
     "help", "clear", "quit", "exit", "update", "version", "v",
@@ -4199,7 +4239,7 @@ def _relative_time(ts_str: str) -> str:
             return f"{secs // 3600}h ago"
         else:
             return f"{secs // 86400}d ago"
-    except Exception:  # noqa: BLE001  # optional relative-time formatting
+    except (ValueError, TypeError):  # noqa: BLE001  # optional relative-time formatting
         return ""
 
 
@@ -4297,7 +4337,7 @@ def _paste_guard(
         # "n" or anything else
         print(f"  {_DM}Paste cancelled.{_R}")
         return None
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001  # broad: intentional
         return prompt
 
 
@@ -4560,6 +4600,12 @@ def run_chat(
     prompt_session = _build_prompt_toolkit_session() if input_func is input and not _a11y_plain_mode() else None
     if not no_banner:
         _print_startup_banner(config, session_id)
+        _print_shell_top_bar(
+            session_id=session_id,
+            model_name=config.model,
+            autoroute_on=_session_auto_route_enabled(session_id),
+            output_json=config.output_json,
+        )
     _maybe_show_startup_tip(config, session_id, history)
     while True:
         try:
@@ -4570,6 +4616,7 @@ def run_chat(
                 autoroute_on=autoroute_on,
                 output_json=config.output_json,
             )
+            _print_shell_bottom_bar(mode="chat", output_json=config.output_json)
             prompt_str = _make_prompt(session_id=session_id, autoroute_on=autoroute_on, multiline=_multiline_mode)
             if _multiline_mode:
                 prompt = _read_multiline_input(input_func, prompt_str)
@@ -4800,6 +4847,12 @@ def run_chat(
                 autoroute_on=autoroute_on,
                 history_len=len(history),
             )
+        _print_shell_top_bar(
+            session_id=session_id,
+            model_name=config.model,
+            autoroute_on=autoroute_on,
+            output_json=config.output_json,
+        )
         history.extend(
             [
                 {"role": "user", "content": prompt},
@@ -5341,7 +5394,7 @@ def main(argv: list[str] | None = None) -> int:
                         else:
                             _update_mod._standalone_needs_update = True
                             break
-                except Exception:  # noqa: BLE001  # background update check; non-critical
+                except Exception:  # noqa: BLE001  # background update check; non-critical  # broad: intentional
                     pass
                 latest = _fetch_latest_pypi_version(timeout=3.0)
                 if latest:
@@ -5440,7 +5493,7 @@ def main(argv: list[str] | None = None) -> int:
         _base = ""
         try:
             _base = config.base_url
-        except Exception:  # noqa: BLE001  # best-effort base_url access for error display
+        except (AttributeError, KeyError):  # noqa: BLE001  # best-effort base_url access for error display
             pass
         _print_connection_error_panel(str(exc), base_url=_base)
         return 1
