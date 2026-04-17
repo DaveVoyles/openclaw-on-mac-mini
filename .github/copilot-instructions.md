@@ -386,13 +386,6 @@ Do not treat "push succeeded" as equivalent to "task complete" when CI exists.
 
 ---
 
-## Deployment Rules
-
-> Read `.github/docs/DEPLOYMENT.md` for the full deploy workflow.
-> Key rule: **`git push` alone is never enough** — run `make ship` afterward.
-
----
-
 ## Stop-Condition Anti-Patterns
 
 Do **not** conclude the task merely because:
