@@ -386,63 +386,10 @@ Do not treat "push succeeded" as equivalent to "task complete" when CI exists.
 
 ---
 
-## Deployment Rules — OpenClaw (Mac Mini + MacBook)
+## Deployment Rules
 
-> **This repo has a two-target deploy model. A `git push` alone is never enough.**
-
-### Architecture at a glance
-
-| Target | Machine | What lives there |
-|---|---|---|
-| Server | Mac Mini (`192.168.1.93`) | Docker container `openclaw`, `src/` volume-mounted |
-| CLI | MacBook (`macbook` SSH alias) | `~/.local/share/openclaw-cli/` — standalone Python install |
-
-### Why `docker restart` is required for server changes
-
-The Docker container mounts `./src:/app/src:ro` for live file access.  
-Python **caches module imports at process startup** — changed `.py` files on disk are invisible to the running process until the container restarts.
-
-**Any change to a server-side file** (`src/bot.py`, `src/model_router.py`, `src/discord_web.py`, `src/llm/`, etc.) requires a container restart to take effect.
-
-### Deploy commands (always run from Mac Mini)
-
-```bash
-make ship          # full deploy: pull + restart server + update MacBook CLI
-make ship-server   # server only: git pull on Mac Mini, write git SHA, docker restart openclaw
-make ship-cli      # CLI only: SCP latest openclaw_cli*.py to MacBook
-make verify-deploy # confirm: shows CLI build label + /health with git_sha
-```
-
-### Which target to deploy
-
-| Changed file(s) | Deploy target |
-|---|---|
-| `src/openclaw_cli*.py`, `src/subprocess_utils.py` | `make ship-cli` (client-side) |
-| `src/bot.py`, `src/model_router.py`, `src/discord_web.py`, `src/llm/`, `src/config.py`, any other `src/*.py` | `make ship-server` (server-side) |
-| Both | `make ship` |
-
-When in doubt, run `make ship` — it always does the right thing.
-
-### Verification after every deploy
-
-```bash
-make verify-deploy
-# Expect: CLI build label + /health JSON with "git_sha" matching HEAD
-```
-
-Cross-check the server's `git_sha` against the repo:
-```bash
-git rev-parse --short HEAD   # must match what /health returns
-```
-
-### Stop-condition for any code change task
-
-A code change task is **not complete** until:
-
-1. `git push` succeeded
-2. `make ship` (or the appropriate sub-target) ran without error
-3. `make verify-deploy` shows the expected build label and git SHA
-4. The changed behavior is confirmed working (e.g., test the fixed route, re-run the failing scenario)
+> Read `.github/docs/DEPLOYMENT.md` for the full deploy workflow.
+> Key rule: **`git push` alone is never enough** — run `make ship` afterward.
 
 ---
 
