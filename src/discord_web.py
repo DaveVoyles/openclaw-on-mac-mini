@@ -13,6 +13,7 @@ import logging
 import os
 import platform
 import sqlite3
+import subprocess
 import time
 from pathlib import Path
 
@@ -41,6 +42,18 @@ API_ACTION_AUTH_REQUIRED = _web_cfg.dashboard_api_auth_required
 # Route handlers
 # ---------------------------------------------------------------------------
 
+def _git_sha() -> str:
+    """Return the current HEAD commit SHA (short form), or 'unknown'."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=2
+        )
+        return result.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
 async def _health_handler(request: web.Request) -> web.Response:
     bot = request.app["bot"]
     uptime_s = time.monotonic() - bot.start_time
@@ -51,6 +64,7 @@ async def _health_handler(request: web.Request) -> web.Response:
         "guilds": len(bot.guilds),
         "python": platform.python_version(),
         "discord_py": discord.__version__,
+        "git_sha": _git_sha(),
     }
     return web.json_response(payload)
 

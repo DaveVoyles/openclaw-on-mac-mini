@@ -1,4 +1,4 @@
-.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy help
+.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -39,8 +39,32 @@ deploy-cli:
 
 verify-deploy:
 	@echo "🔍 Checking deployed CLI version on macbook..."
-	@ssh macbook 'python3 -c "import sys; sys.path.insert(0,\"$$HOME/.local/share/openclaw-cli\"); from openclaw_cli import cli_version, _CLI_BUILD; print(\"version:\", cli_version()); print(\"build:\", _CLI_BUILD)"' && \
-	 ssh macbook 'wc -l < $$HOME/.local/share/openclaw-cli/openclaw_cli.py | xargs -I{} echo "lines: {}"'
+	@ssh macbook 'python3 -c "import sys; sys.path.insert(0,\"$$HOME/.local/share/openclaw-cli\"); from openclaw_cli import _CLI_BUILD; print(\"build:\", _CLI_BUILD)"' 2>&1 || true
+	@echo ""
+	@echo "🔍 Checking server health + git SHA..."
+	@curl -fsS http://192.168.1.93:8765/health | python3 -m json.tool
+
+# ── Ship: one command to push code, update server, and update MacBook CLI ──
+# Usage (from Mac Mini): make ship           -- deploy everything
+#         make ship-server  -- restart server container only
+#         make ship-cli     -- update MacBook CLI only
+ship-server:
+	@echo "🔄 Pulling latest on Mac Mini..."
+	git pull --ff-only
+	@echo "🐳 Restarting openclaw container to load new Python code..."
+	/usr/local/bin/docker restart openclaw
+	@sleep 5
+	@echo "✅ Server health:"
+	@curl -fsS http://192.168.1.93:8765/health | python3 -m json.tool
+
+ship-cli:
+	@echo "💻 Deploying CLI to MacBook..."
+	bash scripts/install_openclaw_cli_remote.sh macbook
+	@echo "✅ CLI deployed to MacBook"
+
+ship: ship-server ship-cli
+	@echo ""
+	@echo "✅ Both server and CLI updated. Run 'make verify-deploy' to confirm."
 
 clean:
 	@echo "🧹 Cleaning..."
@@ -61,6 +85,9 @@ help:
 	@echo "  build         Build Docker image"
 	@echo "  deploy        Rebuild + restart container (use after git pull/commit)"
 	@echo "  deploy-cli    Deploy CLI Python files to macbook via SSH/SCP"
-	@echo "  verify-deploy Confirm deployed CLI version on macbook"
+	@echo "  verify-deploy Confirm deployed CLI build and server health"
+	@echo "  ship          Pull + restart server + deploy CLI (full deploy in one step)"
+	@echo "  ship-server   Pull latest + restart openclaw container only"
+	@echo "  ship-cli      Deploy CLI to MacBook only"
 	@echo "  clean         Remove __pycache__, .pyc, caches"
 	@echo "  help          Show this help"
