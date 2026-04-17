@@ -1,4 +1,4 @@
-.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli help
+.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -8,6 +8,14 @@ test-cli:
 
 test-verbose:
 	.venv/bin/python3 -m pytest tests/ -v --tb=short
+
+e2e:
+	@echo "🧪 Running E2E tests locally..."
+	python3 scripts/run_e2e_tests.py
+
+e2e-macbook:
+	@echo "🧪 Running E2E tests on MacBook..."
+	python3 scripts/run_e2e_tests.py --host macbook --timeout 90
 
 lint:
 	.venv/bin/ruff check src/ tests/

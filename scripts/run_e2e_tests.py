@@ -228,24 +228,37 @@ def _validate(response: str, expect: dict[str, Any]) -> list[str]:
     return failures
 
 
-def _validate_file_created(expect: dict[str, Any]) -> list[str]:
-    """Check file_created expectation after the subprocess has finished."""
+def _validate_file_created(expect: dict[str, Any], *, host: str | None = None) -> list[str]:
+    """Check file_created expectation after the subprocess has finished.
+    When host is set, checks existence on the remote machine via SSH."""
     failures: list[str] = []
     file_path = expect.get("file_created")
     if not file_path:
         return failures
-    p = Path(file_path).expanduser()
-    if not p.exists():
-        failures.append(f"file_created: {file_path} was not created")
-    elif p.stat().st_size == 0:
-        failures.append(f"file_created: {file_path} exists but is empty")
+    if host:
+        result = subprocess.run(
+            ["ssh", host, f"test -s {_shell_quote(file_path)} && echo ok || echo missing"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.stdout.strip() != "ok":
+            failures.append(f"file_created: {file_path} was not created on {host}")
+    else:
+        p = Path(file_path).expanduser()
+        if not p.exists():
+            failures.append(f"file_created: {file_path} was not created")
+        elif p.stat().st_size == 0:
+            failures.append(f"file_created: {file_path} exists but is empty")
     return failures
 
 
-def _cleanup_files(expect: dict[str, Any]) -> None:
+def _cleanup_files(expect: dict[str, Any], *, host: str | None = None) -> None:
     """Remove any files created by the test (file_created)."""
     file_path = expect.get("file_created")
-    if file_path:
+    if not file_path:
+        return
+    if host:
+        subprocess.run(["ssh", host, f"rm -f {_shell_quote(file_path)}"], capture_output=True)
+    else:
         try:
             Path(file_path).expanduser().unlink(missing_ok=True)
         except OSError:
@@ -378,8 +391,8 @@ def main(argv: list[str] | None = None) -> int:
             openclaw_cmd=openclaw_cmd, save_to=save_to,
         )
         failures = _validate(response, expect)
-        failures += _validate_file_created(expect)
-        _cleanup_files(expect)
+        failures += _validate_file_created(expect, host=args.host)
+        _cleanup_files(expect, host=args.host)
         passed = len(failures) == 0
 
         status = f"{_GREEN}✅ PASS{_R}" if passed else f"{_RED}✗  FAIL{_R}"
