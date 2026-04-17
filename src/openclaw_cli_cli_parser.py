@@ -58,6 +58,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     ask_parser = subparsers.add_parser("ask", help="Send a single prompt")
     ask_parser.add_argument("prompt", nargs="*", help="Prompt text (or pipe via stdin)")
+    ask_parser.add_argument(
+        "--save-to",
+        dest="save_to",
+        metavar="PATH",
+        help="Write the AI response to this file path after printing it",
+    )
 
     subparsers.add_parser("chat", help="Start an interactive chat session")
     subparsers.add_parser("health", help="Check the OpenClaw /health endpoint")

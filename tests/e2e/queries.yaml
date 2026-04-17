@@ -84,3 +84,31 @@
       - Broomall
       - Havertown
       - Upper Darby
+
+- id: local-file-read
+  question: >
+    Please read and summarize this file:
+    /Users/davevoyles/openclaw/tests/e2e/fixtures/test_doc.md
+  expect:
+    non_empty: true
+    no_error: true
+    min_words: 30
+    # Keywords drawn from fixture content — stable, won't change week-to-week
+    keywords:
+      - OpenClaw
+      - Mac Mini
+      - Docker
+      - Python
+
+- id: local-file-write
+  question: >
+    Please read and summarize this file in 3 bullet points:
+    /Users/davevoyles/openclaw/tests/e2e/fixtures/test_doc.md
+  expect:
+    non_empty: true
+    no_error: true
+    min_words: 20
+    keywords:
+      - OpenClaw
+    # Runner will pass --save-to this path, then verify the file exists + is non-empty
+    file_created: /tmp/openclaw_e2e_write_test.md

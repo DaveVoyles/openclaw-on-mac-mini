@@ -222,7 +222,34 @@ def _validate(response: str, expect: dict[str, Any]) -> list[str]:
         if expected_model.lower() not in meta_text:
             failures.append(f"model mismatch: expected '{expected_model}' in metadata footer")
 
+    # file_created — checked separately in the runner after the subprocess completes
+    # (runner passes the resolved path; we just skip it here)
+
     return failures
+
+
+def _validate_file_created(expect: dict[str, Any]) -> list[str]:
+    """Check file_created expectation after the subprocess has finished."""
+    failures: list[str] = []
+    file_path = expect.get("file_created")
+    if not file_path:
+        return failures
+    p = Path(file_path).expanduser()
+    if not p.exists():
+        failures.append(f"file_created: {file_path} was not created")
+    elif p.stat().st_size == 0:
+        failures.append(f"file_created: {file_path} exists but is empty")
+    return failures
+
+
+def _cleanup_files(expect: dict[str, Any]) -> None:
+    """Remove any files created by the test (file_created)."""
+    file_path = expect.get("file_created")
+    if file_path:
+        try:
+            Path(file_path).expanduser().unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -239,13 +266,23 @@ _BOLD = "\033[1m"
 _R = "\033[0m"
 
 
-def _run_query(question: str, *, host: str | None, timeout: int, openclaw_cmd: list[str]) -> tuple[str, float]:
+def _run_query(
+    question: str,
+    *,
+    host: str | None,
+    timeout: int,
+    openclaw_cmd: list[str],
+    save_to: str | None = None,
+) -> tuple[str, float]:
     """Run `openclaw ask <question>` and return (stdout, elapsed_seconds)."""
     if host:
         remote_bin = openclaw_cmd[-1] if len(openclaw_cmd) == 1 else "~/.local/bin/openclaw"
-        cmd = ["ssh", host, f"{remote_bin} ask {_shell_quote(question)}"]
+        save_arg = f" --save-to {_shell_quote(save_to)}" if save_to else ""
+        cmd = ["ssh", host, f"{remote_bin} ask {_shell_quote(question)}{save_arg}"]
     else:
         cmd = openclaw_cmd + ["ask", question]
+        if save_to:
+            cmd += ["--save-to", save_to]
 
     t0 = time.monotonic()
     try:
@@ -335,8 +372,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {_CYAN}▶ {test_id}{_R}  {_DIM}{question[:72]}{'…' if len(question) > 72 else ''}{_R}")
         print(f"    {_DIM}running…{_R}", end="\r", flush=True)
 
-        response, elapsed = _run_query(question, host=args.host, timeout=args.timeout, openclaw_cmd=openclaw_cmd)
+        save_to = str(Path(expect["file_created"]).expanduser()) if expect.get("file_created") else None
+        response, elapsed = _run_query(
+            question, host=args.host, timeout=args.timeout,
+            openclaw_cmd=openclaw_cmd, save_to=save_to,
+        )
         failures = _validate(response, expect)
+        failures += _validate_file_created(expect)
+        _cleanup_files(expect)
         passed = len(failures) == 0
 
         status = f"{_GREEN}✅ PASS{_R}" if passed else f"{_RED}✗  FAIL{_R}"

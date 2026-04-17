@@ -5947,6 +5947,12 @@ def main(argv: list[str] | None = None) -> int:
         else:
             response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, history=history, output_json=config.output_json)
         print_response(response, output_json=config.output_json)
+        save_path = getattr(args, "save_to", None)
+        if save_path:
+            try:
+                Path(save_path).expanduser().write_text(response.response or "", encoding="utf-8")
+            except OSError as _e:
+                print(f"  ⚠️  --save-to: could not write {save_path}: {_e}", file=sys.stderr)
         if config.session_id:
             append_event(config.session_id, kind="prompt", content=prompt, metadata={"summary": prompt})
             persist_response(config.session_id, prompt, response.response)
