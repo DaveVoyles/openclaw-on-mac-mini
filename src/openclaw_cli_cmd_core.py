@@ -509,6 +509,8 @@ def _cmd_why(ctx: ChatCommandContext) -> str:
         grid.add_column()
         grid.add_row("What happened:", str(snapshot.get("what_happened") or ""))
         grid.add_row("Why:", str(snapshot.get("rationale") or "")[:300])
+        if snapshot.get("route_reason"):
+            grid.add_row("Route reason:", str(snapshot.get("route_reason") or "")[:300])
         grid.add_row("Confidence:", f"[{snapshot.get('conf_color', 'dim')}]{snapshot.get('conf_label', '(unknown)')}[/]")
         if snapshot.get("target_text"):
             grid.add_row("Target:", str(snapshot.get("target_text") or "")[:120])
@@ -519,6 +521,8 @@ def _cmd_why(ctx: ChatCommandContext) -> str:
     else:
         print(f"  What happened: {str(snapshot.get('what_happened') or '')}")
         print(f"  Why:           {str(snapshot.get('rationale') or '')[:300]}")
+        if snapshot.get("route_reason"):
+            print(f"  Route reason:  {str(snapshot.get('route_reason') or '')[:300]}")
         print(f"  Confidence:    {str(snapshot.get('conf_label') or '(unknown)')}")
         if snapshot.get("target_text"):
             print(f"  Target:        {str(snapshot.get('target_text') or '')[:120]}")
@@ -1667,7 +1671,7 @@ def _cmd_inject(ctx: ChatCommandContext) -> str:
         except (ConnectionError, TimeoutError, OSError) as exc:  # noqa: BLE001
             m._print_error(f"Failed to fetch URL: {exc}")
             return _CMD_CONTINUE
-        _MAX = 8000
+        _MAX = 200_000
         truncated = False
         if len(content) > _MAX:
             content = content[:_MAX]
@@ -1675,7 +1679,7 @@ def _cmd_inject(ctx: ChatCommandContext) -> str:
         m._next_inject = content
         preview = content[:60].replace("\n", " ")
         suffix = "…" if len(content) > 60 else ""
-        trunc_note = f" [truncated at {_MAX} chars]" if truncated else ""
+        trunc_note = f" [truncated at {_MAX:,} chars]" if truncated else ""
         if _RICH_AVAILABLE and is_tty:
             _RICH_CONSOLE.print(
                 f"[green]✓[/] Loaded [bold]{len(content)}[/] chars from URL{trunc_note}\n"
@@ -1701,7 +1705,7 @@ def _cmd_inject(ctx: ChatCommandContext) -> str:
     except OSError as exc:
         m._print_error(f"Could not read file: {exc}")
         return _CMD_CONTINUE
-    _MAX = 8000
+    _MAX = 100_000
     truncated = False
     if len(content) > _MAX:
         content = content[:_MAX]
@@ -1709,7 +1713,7 @@ def _cmd_inject(ctx: ChatCommandContext) -> str:
     m._next_inject = content
     preview = content[:60].replace("\n", " ")
     suffix = "…" if len(content) > 60 else ""
-    trunc_note = f" [truncated at {_MAX} chars]" if truncated else ""
+    trunc_note = f" [truncated at {_MAX:,} chars]" if truncated else ""
     if _RICH_AVAILABLE and is_tty:
         _RICH_CONSOLE.print(
             f"[green]✓[/] Loaded [bold]{len(content)}[/] chars from [cyan]{path.name}[/]{trunc_note}\n"

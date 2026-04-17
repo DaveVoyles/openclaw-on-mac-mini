@@ -3385,6 +3385,7 @@ def _last_trace_snapshot(session_id: str) -> dict[str, Any] | None:
         "ts": ts,
         "slash_cmd": slash_cmd,
         "rationale": rationale,
+        "route_reason": meta.get("route_reason", ""),
         "target_text": target_text,
         "args_text": args_text,
         "conf_label": conf_label,
@@ -4037,8 +4038,9 @@ def _print_status_bar(
     session_id: str = "",
     autoroute_on: bool = True,
     history_len: int = 0,
+    context_pct: int = 0,
 ) -> None:
-    _ui_utils_mod._print_status_bar(session_id=session_id, autoroute_on=autoroute_on, history_len=history_len, _override_is_tty=_IS_TTY, _override_rich_available=_RICH_AVAILABLE, _override_cols=_terminal_width())
+    _ui_utils_mod._print_status_bar(session_id=session_id, autoroute_on=autoroute_on, history_len=history_len, context_pct=context_pct, _override_is_tty=_IS_TTY, _override_rich_available=_RICH_AVAILABLE, _override_cols=_terminal_width())
 
 
 def _emit_context_overflow_warning(
@@ -4924,8 +4926,14 @@ def run_chat(
                                 except OSError:
                                     pass
 
+            _explicit_paths_set = {
+                str(Path(p).expanduser().resolve()) for p in _auto_injected_paths
+            }
             for _fpath in _detect_file_paths(prompt):
                 _fp = Path(_fpath).expanduser()
+                _resolved = str(_fp.resolve())
+                if _resolved in _explicit_paths_set:
+                    continue  # already injected via @file:
                 if not _fp.is_file():
                     continue
                 if _fp.suffix.lower() in _BINARY_EXTS:
@@ -5018,6 +5026,28 @@ def run_chat(
         _print_animated_separator()
         global _last_response_text
         _last_response_text = response.response or ""
+
+        # Compact status line: session · turns · autoroute · context%
+        if not config.output_json and not _compact:
+            _ctx_pct = 0
+            try:
+                _sys_p = str(_PREFS.get("system_prompt", "") or "")
+                _inj_p = str(_next_inject or "")
+                _mh = _PREFS.get("last_model", "")
+                _rh = _PREFS.get("route_mode", "")
+                _pressure = _session_display_mod._context_pressure_snapshot(
+                    history, system_prompt=_sys_p, pending_inject=_inj_p,
+                    model_hint=_mh, route_hint=_rh
+                )
+                _ctx_pct = int(_pressure.get("pct_history_raw", 0))
+            except Exception:
+                pass
+            _print_status_bar(
+                session_id=session_id,
+                autoroute_on=autoroute_on,
+                history_len=len(history),
+                context_pct=_ctx_pct,
+            )
 
         # Desktop notification for long requests (macOS only, best-effort).
         if _PREFS.get("desktop_notify") and _elapsed >= 10.0 and _IS_TTY:

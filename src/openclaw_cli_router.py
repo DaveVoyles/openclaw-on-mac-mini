@@ -1415,6 +1415,7 @@ def _append_repl_route_event(session_id: str, prompt: str, decision: ReplRouteDe
             "slash_command": slash_command,
             "confidence": decision.confidence,
             "rationale": decision.rationale,
+            "route_reason": decision.rationale,
             "target_text": decision.target_text,
             "args_text": decision.args_text,
             "steps": [

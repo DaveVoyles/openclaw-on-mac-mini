@@ -375,6 +375,7 @@ def _print_status_bar(
     session_id: str = "",
     autoroute_on: bool = True,
     history_len: int = 0,
+    context_pct: int = 0,
     _override_is_tty: bool | None = None,
     _override_rich_available: bool | None = None,
     _override_cols: int | None = None,
@@ -404,6 +405,8 @@ def _print_status_bar(
     watch_cell = _watch_status_cell(session_id)
     if _a11y_plain_mode():
         parts.append(f"autoroute {autoroute_state}")
+        if context_pct > 0:
+            parts.append(f"ctx: {context_pct}%")
         if watch_cell:
             parts.append(watch_cell)
         print("Status: " + " | ".join(parts))
@@ -413,6 +416,12 @@ def _print_status_bar(
     else:
         color = "\033[32m" if autoroute_on else "\033[33m"
     parts.append(f"autoroute {color}{autoroute_state}{_R}")
+    if context_pct > 0 and not narrow:
+        if _a11y_high_contrast():
+            ctx_color = "\033[1;92m" if context_pct < 60 else ("\033[1;93m" if context_pct <= 85 else "\033[1;91m")
+        else:
+            ctx_color = "\033[32m" if context_pct < 60 else ("\033[33m" if context_pct <= 85 else "\033[1;31m")
+        parts.append(f"ctx: {ctx_color}{context_pct}%{_R}")
     if watch_cell:
         parts.append(watch_cell)
     if narrow:
