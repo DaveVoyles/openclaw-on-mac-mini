@@ -47,3 +47,23 @@
     # schedule data is time-sensitive and tables only appear when structured data is available.
     keywords:
       - lacrosse
+
+- id: wwe-raw-recap
+  question: >
+    Give me a recap of the past week's WWE Monday Night RAW. Indicate which city it was in,
+    and which city is next. Highlight if there is anything we should be paying attention to
+    for the upcoming Smackdown episode. For each match: 1. Create a title and bold the
+    wrestler's names 2. Write 2 paragraphs indicating the outcome and why we should care.
+    Bold the key words.
+  expect:
+    non_empty: true
+    no_error: true
+    min_words: 200
+    paragraphs: 4
+    # NOTE: specific wrestlers, cities, and show results change weekly —
+    # only stable structural keywords checked.
+    keywords:
+      - RAW
+      - WWE
+      - SmackDown
+      - match
