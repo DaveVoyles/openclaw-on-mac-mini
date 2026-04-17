@@ -318,6 +318,7 @@ from openclaw_cli_cmd_misc import _cmd_changes as _cmd_changes  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_copy as _cmd_copy  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_notify as _cmd_notify  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_retry as _cmd_retry  # noqa: F401
+from openclaw_cli_cmd_misc import _cmd_tldr as _cmd_tldr  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_save as _cmd_save  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_diff as _cmd_diff  # noqa: F401
 from openclaw_cli_cmd_misc import _cmd_followup as _cmd_followup  # noqa: F401
@@ -4337,6 +4338,42 @@ def _strip_explicit_refs(text: str) -> str:
     return _path_utils._strip_explicit_refs(text)
 
 
+def _detect_git_refs(text: str) -> "list[tuple[str, str]]":
+    return _path_utils._detect_git_refs(text)
+
+
+def _resolve_git_ref(variant: str, cwd: str) -> "str | None":
+    return _path_utils._resolve_git_ref(variant, cwd)
+
+
+def _strip_git_refs(text: str) -> str:
+    return _path_utils._strip_git_refs(text)
+
+
+def _detect_cmd_refs(text: str) -> "list[tuple[str, str]]":
+    return _path_utils._detect_cmd_refs(text)
+
+
+def _is_cmd_allowlisted(cmd: str) -> bool:
+    return _path_utils._is_cmd_allowlisted(cmd)
+
+
+def _strip_cmd_refs(text: str) -> str:
+    return _path_utils._strip_cmd_refs(text)
+
+
+def _detect_gh_refs(text: str) -> "list[tuple[str, str]]":
+    return _path_utils._detect_gh_refs(text)
+
+
+def _resolve_gh_ref(ref: str) -> "str | None":
+    return _path_utils._resolve_gh_ref(ref)
+
+
+def _strip_gh_refs(text: str) -> str:
+    return _path_utils._strip_gh_refs(text)
+
+
 # Prompt keywords that indicate the user wants to edit/modify a file (for write-back).
 _EDIT_INTENT_RE = _re.compile(
     r'\b(edit|update|modify|rewrite|fix|improve|change|refactor|revise|correct|'
@@ -4516,7 +4553,8 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("rate",         "Rate the last AI response (/rate [good|ok|bad|meh|1-5])",                                               _cmd_rate,         ("feedback",)),
     ("copy",         "Copy the last AI response to the clipboard (/copy)",                                                    _cmd_copy,         ("clip",)),
     ("save",         "Save the last AI response to a file (/save [filename])",                                                _cmd_save,         ()),
-    ("retry",        "Re-send the last prompt, optionally with a different model (/retry [--model <name>])",                  _cmd_retry,        ()),
+    ("retry",        "Re-send the last prompt with optional qualifier (/retry [shorter|simpler|code|bullet|<text>] [--model <name>])", _cmd_retry, ()),
+    ("tldr",         "Summarize the last AI response in 3 bullet points (/tldr)",                                             _cmd_tldr,         ()),
     ("notify",       "Toggle macOS desktop notifications for long requests (/notify [on|off])",                               _cmd_notify,       ()),
     ("celebrate",    "Trigger a celebration animation (/celebrate [message])",                                                 _cmd_celebrate,    ()),
     ("quality",      "Show response quality stats and predictions (/quality [predict])",                                       _cmd_quality,      ()),
@@ -4776,6 +4814,24 @@ def run_chat(
                     config = _dc_replace(config, model=_retry_model)
             else:
                 continue
+        if result == "_tldr":
+            _tldr_prompt = str(_PREFS.pop("_tldr_prompt", "") or "")
+            if _tldr_prompt:
+                try:
+                    _tldr_response = _with_spinner(
+                        f"{_e('💬', '>>')} Summarizing…",
+                        ask_func,
+                        _tldr_prompt,
+                        config=config,
+                        history=[],
+                        output_json=config.output_json,
+                    )
+                    print(f"\n{_DM}↳ tldr summary:{_R}")
+                    print_response(_tldr_response, output_json=config.output_json, elapsed=None)
+                    _print_animated_separator()
+                except Exception as _tldr_err:
+                    print(f"  {_RE}error:{_R} /tldr failed: {_tldr_err}")
+            continue
 
         # Unknown slash command — don't send to the AI; suggest closest match.
         if prompt.startswith("/"):
@@ -4969,6 +5025,64 @@ def run_chat(
                     print(f" ✓")
                 except Exception as _url_err:
                     print(f" ✗ ({_url_err})")
+
+            # @git: injection
+            import subprocess as _w53_subp
+            _git_refs = _detect_git_refs(prompt)
+            if _git_refs:
+                prompt = _strip_git_refs(prompt)
+            for _ref_kind, _git_variant in _git_refs:
+                print(f"  {_DM}↳ injecting @git:{_git_variant}…{_R}", flush=True)
+                try:
+                    _git_out = _resolve_git_ref(_git_variant, cwd=os.getcwd())
+                    if _git_out:
+                        _auto_file_chunks.append(f"[Git {_git_variant}]\n{_git_out}")
+                        _auto_injected_paths.append(f"git:{_git_variant}")
+                    else:
+                        print(f"  {_DM}↳ @git:{_git_variant} — no output (not a repo or git error){_R}")
+                except Exception as _git_err:
+                    print(f"  {_DM}↳ @git:{_git_variant} — error: {_git_err}{_R}")
+
+            # @gh: injection
+            _gh_refs = _detect_gh_refs(prompt)
+            if _gh_refs:
+                prompt = _strip_gh_refs(prompt)
+            for _ref_kind, _gh_ref in _gh_refs:
+                print(f"  {_DM}↳ injecting @gh:{_gh_ref}…{_R}", flush=True)
+                try:
+                    _gh_out = _resolve_gh_ref(_gh_ref)
+                    if _gh_out:
+                        _auto_file_chunks.append(f"[GitHub {_gh_ref}]\n{_gh_out}")
+                        _auto_injected_paths.append(f"gh:{_gh_ref}")
+                    else:
+                        print(f"  {_DM}↳ @gh:{_gh_ref} — not found or gh not available{_R}")
+                except Exception as _gh_err:
+                    print(f"  {_DM}↳ @gh:{_gh_ref} — error: {_gh_err}{_R}")
+
+            # @cmd: injection
+            _cmd_refs = _detect_cmd_refs(prompt)
+            if _cmd_refs:
+                prompt = _strip_cmd_refs(prompt)
+            for _ref_kind, _cmd_str in _cmd_refs:
+                if _is_cmd_allowlisted(_cmd_str):
+                    print(f"  {_DM}↳ running @cmd:{_cmd_str}…{_R}", flush=True)
+                    try:
+                        _cmd_result = _w53_subp.run(
+                            _cmd_str, shell=True, capture_output=True, text=True, timeout=10
+                        )
+                        _cmd_out = (_cmd_result.stdout + _cmd_result.stderr)[:50_000]
+                        if _cmd_out.strip():
+                            _auto_file_chunks.append(f"[Command: {_cmd_str}]\n{_cmd_out}")
+                        else:
+                            print(f"  {_DM}↳ @cmd:{_cmd_str} — no output{_R}")
+                    except Exception as _cmd_err:
+                        print(f"  {_DM}↳ @cmd:{_cmd_str} — error: {_cmd_err}{_R}")
+                else:
+                    _first_tok = _cmd_str.strip().split()[0] if _cmd_str.strip() else _cmd_str
+                    print(
+                        f"  {_DM}↳ @cmd:{_cmd_str} — not in allowlist, skipping "
+                        f"(use an allowed command: git, ls, cat, grep, find, …){_R}"
+                    )
 
             _had_next_inject = bool(_next_inject)
             if _had_next_inject or _auto_file_chunks:

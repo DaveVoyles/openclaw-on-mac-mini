@@ -124,6 +124,215 @@ def _strip_explicit_refs(text: str) -> str:
     return _EXPLICIT_REF_PATTERN.sub("", text).strip()
 
 
+# ---------------------------------------------------------------------------
+# @git: injection helpers
+# ---------------------------------------------------------------------------
+
+_GIT_REF_PATTERN = re.compile(
+    r'@git:(staged|HEAD(?:~\d+)?|log|status|diff)',
+    re.IGNORECASE,
+)
+
+
+def _detect_git_refs(text: str) -> list[tuple[str, str]]:
+    """Extract @git:<variant> markers. Returns list of ('git', variant) tuples.
+
+    Supported variants: staged, HEAD, HEAD~1, HEAD~2, log, status, diff
+    """
+    refs: list[tuple[str, str]] = []
+    for m in _GIT_REF_PATTERN.finditer(text):
+        variant = m.group(1)
+        entry: tuple[str, str] = ("git", variant)
+        if entry not in refs:
+            refs.append(entry)
+    return refs
+
+
+def _resolve_git_ref(variant: str, cwd: str) -> str | None:
+    """Run the git command for the given variant and return its output, or None on error."""
+    import subprocess
+    _CAP = 100_000
+    variant_lower = variant.lower()
+    try:
+        if variant_lower == "staged":
+            cmd = ["git", "diff", "--cached"]
+        elif variant_lower.startswith("head~"):
+            cmd = ["git", "show", variant]
+        elif variant_lower == "head":
+            cmd = ["git", "show", "HEAD"]
+        elif variant_lower == "log":
+            cmd = ["git", "log", "--oneline", "-20"]
+        elif variant_lower == "status":
+            cmd = ["git", "status", "--short"]
+        elif variant_lower == "diff":
+            cmd = ["git", "diff"]
+        else:
+            return None
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=15, cwd=cwd
+        )
+        if result.returncode != 0:
+            return None
+        output = result.stdout
+        if variant_lower in ("staged", "head", "diff") or variant_lower.startswith("head~"):
+            output = output[:_CAP]
+        return output or None
+    except Exception:
+        return None
+
+
+def _strip_git_refs(text: str) -> str:
+    """Remove @git:... markers from text."""
+    return _GIT_REF_PATTERN.sub("", text).strip()
+
+
+# ---------------------------------------------------------------------------
+# @cmd: injection helpers
+# ---------------------------------------------------------------------------
+
+_CMD_ALLOWLIST = frozenset({
+    "git", "ls", "cat", "grep", "find", "head", "tail", "wc", "echo",
+    "pwd", "env", "which", "uname", "date", "python", "python3", "pip",
+    "pip3", "node", "npm", "docker", "kubectl", "curl", "jq",
+})
+
+_CMD_REF_PATTERN = re.compile(
+    r'@cmd:([^\n@]+?)(?=\s@|\s*$|[,;])',
+    re.IGNORECASE,
+)
+
+
+def _detect_cmd_refs(text: str) -> list[tuple[str, str]]:
+    """Extract @cmd:<shell command> markers. Returns list of ('cmd', command_string) tuples."""
+    refs: list[tuple[str, str]] = []
+    for m in _CMD_REF_PATTERN.finditer(text):
+        cmd_str = m.group(1).strip()
+        if not cmd_str:
+            continue
+        entry: tuple[str, str] = ("cmd", cmd_str)
+        if entry not in refs:
+            refs.append(entry)
+    return refs
+
+
+def _is_cmd_allowlisted(cmd: str) -> bool:
+    """Check if the first token of the command is in the allowlist."""
+    first_token = cmd.strip().split()[0] if cmd.strip() else ""
+    return first_token in _CMD_ALLOWLIST
+
+
+def _strip_cmd_refs(text: str) -> str:
+    """Remove @cmd:... markers from text."""
+    return _CMD_REF_PATTERN.sub("", text).strip()
+
+
+# ---------------------------------------------------------------------------
+# @gh: injection helpers
+# ---------------------------------------------------------------------------
+
+_GH_REF_PATTERN = re.compile(
+    r'@gh:([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+#\d+)',
+    re.IGNORECASE,
+)
+
+
+def _detect_gh_refs(text: str) -> list[tuple[str, str]]:
+    """Extract @gh:<owner/repo#N> markers. Returns list of ('gh', 'owner/repo#N') tuples."""
+    refs: list[tuple[str, str]] = []
+    for m in _GH_REF_PATTERN.finditer(text):
+        ref = m.group(1)
+        entry: tuple[str, str] = ("gh", ref)
+        if entry not in refs:
+            refs.append(entry)
+    return refs
+
+
+def _resolve_gh_ref(ref: str) -> str | None:
+    """Resolve owner/repo#N to formatted markdown. Tries issue first, then PR.
+
+    Returns None if gh is not available, not authed, or the ref is not found.
+    """
+    import subprocess
+    import json as _json
+    _CAP = 50_000
+
+    try:
+        repo_part, num_str = ref.rsplit("#", 1)
+        num = int(num_str)
+    except (ValueError, AttributeError):
+        return None
+
+    def _run_gh(args: list[str]) -> dict | None:
+        try:
+            result = subprocess.run(
+                args, capture_output=True, text=True, timeout=15
+            )
+            if result.returncode != 0:
+                return None
+            return _json.loads(result.stdout)
+        except Exception:
+            return None
+
+    # Try issue first
+    issue_data = _run_gh([
+        "gh", "issue", "view", str(num),
+        "--repo", repo_part,
+        "--json", "title,body,state,labels,comments",
+    ])
+    if issue_data:
+        title = issue_data.get("title", "")
+        state = issue_data.get("state", "")
+        body = issue_data.get("body", "") or ""
+        labels = ", ".join(
+            lbl.get("name", "") for lbl in (issue_data.get("labels") or [])
+        )
+        comments = issue_data.get("comments") or []
+        comment_md = ""
+        for c in comments[:5]:
+            author = (c.get("author") or {}).get("login", "unknown")
+            cbody = (c.get("body") or "")[:500]
+            comment_md += f"\n**{author}:** {cbody}\n"
+        md = (
+            f"# Issue {ref}: {title}\n"
+            f"**State:** {state}  **Labels:** {labels}\n\n"
+            f"{body}\n"
+        )
+        if comment_md:
+            md += f"\n## Comments\n{comment_md}"
+        return md[:_CAP]
+
+    # Fall back to PR
+    pr_data = _run_gh([
+        "gh", "pr", "view", str(num),
+        "--repo", repo_part,
+        "--json", "title,body,state,additions,deletions,files",
+    ])
+    if pr_data:
+        title = pr_data.get("title", "")
+        state = pr_data.get("state", "")
+        body = pr_data.get("body", "") or ""
+        additions = pr_data.get("additions", 0)
+        deletions = pr_data.get("deletions", 0)
+        files = pr_data.get("files") or []
+        file_list = "\n".join(
+            f"- {f.get('path', '')}" for f in files[:20]
+        )
+        md = (
+            f"# PR {ref}: {title}\n"
+            f"**State:** {state}  **+{additions}/-{deletions}**\n\n"
+            f"{body}\n\n"
+            f"## Files Changed\n{file_list}\n"
+        )
+        return md[:_CAP]
+
+    return None
+
+
+def _strip_gh_refs(text: str) -> str:
+    """Remove @gh:... markers from text."""
+    return _GH_REF_PATTERN.sub("", text).strip()
+
+
 def output_name_from_title(title: str, *, default_stem: str, suffix: str) -> str:
     """Build a safe output filename from free-form user input."""
     stem = re.sub(r"[^a-zA-Z0-9]+", "-", str(title or "").strip().lower()).strip("-")

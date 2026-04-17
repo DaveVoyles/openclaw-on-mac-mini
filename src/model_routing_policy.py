@@ -268,7 +268,7 @@ def select_auto_route(
         and not has_tools
         and not recalled_context
         and copilot_available
-        and profile == "copilot-first"
+        and profile in ("copilot-first", "balanced")
         and not is_code
     ):
         return AutoRouteDecision(

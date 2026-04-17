@@ -81,8 +81,11 @@ class TestClassifyQueryRouting:
         assert "copilot" in route.reason.lower()
 
     def test_balanced_profile_prefers_ollama_for_simple_chat(self):
+        # Use a prompt longer than _MINI_TOKEN_THRESHOLD (25 words) so the mini-model
+        # fast-path (added in W52-3) does not intercept; balanced should route to Ollama.
+        long_prompt = " ".join(["chat"] * 30)
         route = classify_query(
-            "hello how are you",
+            long_prompt,
             copilot_available=True,
             ollama_alive=True,
             routing_profile="balanced",

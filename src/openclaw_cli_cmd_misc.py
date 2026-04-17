@@ -781,8 +781,16 @@ def _cmd_save(ctx: ChatCommandContext) -> str:
     return _CMD_CONTINUE
 
 
+_RETRY_QUALIFIERS: dict[str, str] = {
+    "shorter": "Please give a shorter, more concise answer to: ",
+    "simpler": "Please explain this more simply, avoiding jargon: ",
+    "code":    "Please answer with code only, no explanations: ",
+    "bullet":  "Please answer in bullet points only: ",
+}
+
+
 def _cmd_retry(ctx: ChatCommandContext) -> str:
-    """/retry [--model <name>] — re-send the last prompt, optionally with a different model."""
+    """/retry [shorter|simpler|code|bullet|<text>] [--model <name>] — re-send the last prompt."""
     m = _get_cli_mod()
     last_prompt = str((m._PREFS or {}).get("_last_prompt", "") or "").strip()
     if not last_prompt:
@@ -794,15 +802,50 @@ def _cmd_retry(ctx: ChatCommandContext) -> str:
         idx = args.index("--model")
         if idx + 1 < len(args):
             override_model = args[idx + 1]
-    if override_model:
+        # Remove --model and its value from args before qualifier parsing.
+        args = [a for i, a in enumerate(args) if a != "--model" and (i == 0 or args[i - 1] != "--model")]
+
+    # Qualifier: remaining tokens after stripping --model <name>.
+    qualifier_tokens = [a for a in args if a != "--model"]
+    qualifier = " ".join(qualifier_tokens).strip()
+
+    if qualifier and qualifier in _RETRY_QUALIFIERS:
+        prefix = _RETRY_QUALIFIERS[qualifier]
+        modified_prompt = prefix + last_prompt
+        label = qualifier
+    elif qualifier:
+        modified_prompt = f"Please {qualifier}, in response to: {last_prompt}"
+        label = qualifier[:30]
+    else:
+        modified_prompt = last_prompt
+        label = None
+
+    if label and override_model:
+        print(f"  {_DM}↳ retrying ({label}) with model: {override_model}…{_R}")
+    elif label:
+        print(f"  {_DM}↳ retrying ({label})…{_R}")
+    elif override_model:
         print(f"  {_DM}↳ retrying with model: {override_model}…{_R}")
     else:
         print(f"  {_DM}↳ retrying…{_R}")
+
     # Store retry info in a special prefs key; the REPL loop reads it next tick.
-    m._PREFS["_retry_prompt"] = last_prompt
+    m._PREFS["_retry_prompt"] = modified_prompt
     if override_model:
         m._PREFS["_retry_model"] = override_model
     return "_retry"
+
+
+def _cmd_tldr(ctx: ChatCommandContext) -> str:
+    """/tldr — summarize the last AI response in 3 bullet points."""
+    m = _get_cli_mod()
+    last_response = str(getattr(m, "_last_response_text", "") or "").strip()
+    if not last_response:
+        print(f"  {_DM}↳ No previous response to summarize.{_R}")
+        return _CMD_CONTINUE
+    meta_prompt = f"Summarize the following in exactly 3 concise bullet points:\n\n{last_response}"
+    m._PREFS["_tldr_prompt"] = meta_prompt
+    return "_tldr"
 
 
 def _cmd_notify(ctx: ChatCommandContext) -> str:

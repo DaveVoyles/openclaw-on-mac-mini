@@ -301,3 +301,107 @@ def test_print_ascii_trophy_normal_mode(capsys):
         mod._print_ascii_trophy(3)
     captured = capsys.readouterr()
     assert "Streak" in captured.out or "streak" in captured.out.lower()
+
+
+# ---------------------------------------------------------------------------
+# _cmd_tldr
+# ---------------------------------------------------------------------------
+
+def test_cmd_tldr_no_last_response(capsys):
+    cli = _mock_cli(_last_response_text="")
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_tldr(_ctx(""))
+    assert result == _CMD_CONTINUE
+    assert "No previous response" in capsys.readouterr().out
+
+
+def test_cmd_tldr_sets_tldr_prompt_and_returns_special(capsys):
+    cli = _mock_cli(_last_response_text="Some AI response text here.")
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_tldr(_ctx(""))
+    assert result == "_tldr"
+    assert "Summarize" in cli._PREFS["_tldr_prompt"]
+    assert "Some AI response text here." in cli._PREFS["_tldr_prompt"]
+    assert "3 concise bullet points" in cli._PREFS["_tldr_prompt"]
+
+
+# ---------------------------------------------------------------------------
+# _cmd_retry qualifiers
+# ---------------------------------------------------------------------------
+
+def test_cmd_retry_no_last_prompt(capsys):
+    cli = _mock_cli(_PREFS={})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx(""))
+    assert result == _CMD_CONTINUE
+    assert "No previous prompt" in capsys.readouterr().out
+
+
+def test_cmd_retry_no_qualifier(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "what is python?"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx(""))
+    assert result == "_retry"
+    assert cli._PREFS["_retry_prompt"] == "what is python?"
+    assert "retrying" in capsys.readouterr().out
+
+
+def test_cmd_retry_shorter_qualifier(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "what is python?"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx("shorter"))
+    assert result == "_retry"
+    assert cli._PREFS["_retry_prompt"].startswith("Please give a shorter")
+    assert "what is python?" in cli._PREFS["_retry_prompt"]
+    assert "shorter" in capsys.readouterr().out
+
+
+def test_cmd_retry_simpler_qualifier(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "explain recursion"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx("simpler"))
+    assert result == "_retry"
+    assert "simply" in cli._PREFS["_retry_prompt"]
+
+
+def test_cmd_retry_code_qualifier(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "reverse a list"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx("code"))
+    assert result == "_retry"
+    assert "code only" in cli._PREFS["_retry_prompt"]
+
+
+def test_cmd_retry_bullet_qualifier(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "pros of python"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx("bullet"))
+    assert result == "_retry"
+    assert "bullet points" in cli._PREFS["_retry_prompt"]
+
+
+def test_cmd_retry_freetext_qualifier(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "explain async"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx("explain step by step"))
+    assert result == "_retry"
+    assert "Please explain step by step" in cli._PREFS["_retry_prompt"]
+    assert "explain async" in cli._PREFS["_retry_prompt"]
+
+
+def test_cmd_retry_model_override(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "hello"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx("--model copilot"))
+    assert result == "_retry"
+    assert cli._PREFS.get("_retry_model") == "copilot"
+    assert cli._PREFS["_retry_prompt"] == "hello"
+
+
+def test_cmd_retry_qualifier_and_model(capsys):
+    cli = _mock_cli(_PREFS={"_last_prompt": "what is a closure?"})
+    with patch.object(mod, "_get_cli_mod", return_value=cli):
+        result = mod._cmd_retry(_ctx("shorter --model copilot"))
+    assert result == "_retry"
+    assert cli._PREFS.get("_retry_model") == "copilot"
+    assert cli._PREFS["_retry_prompt"].startswith("Please give a shorter")

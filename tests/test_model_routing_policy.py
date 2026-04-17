@@ -73,9 +73,19 @@ class TestClassifyQueryMiniModelHint:
         assert route.model == ""
 
     def test_non_copilot_first_no_mini_model(self):
+        # gemini-first should never get mini-model routing (user chose Gemini explicitly).
         route = classify_query(
             "hello",
             copilot_available=True,
             routing_profile="gemini-first",
         )
         assert route.model == ""
+
+    def test_balanced_profile_gets_mini_model(self):
+        # balanced profile should get mini-model fast-path for short queries.
+        route = classify_query(
+            "hello",
+            copilot_available=True,
+            routing_profile="balanced",
+        )
+        assert route.model != "", "balanced profile should use mini-model for short queries"

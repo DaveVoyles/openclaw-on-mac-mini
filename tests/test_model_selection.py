@@ -338,6 +338,11 @@ class TestChatModelPreference:
 
         chat_module = sys.modules["llm.chat"]
 
+        # Use a prompt longer than _MINI_TOKEN_THRESHOLD (25 words) so the mini-model
+        # fast-path (added in W52-3) does not intercept it; the balanced profile should
+        # still route long simple-chat prompts to Ollama when Ollama is alive.
+        _long_prompt = " ".join(["tell"] * 30)
+
         with (
             patch("llm.providers.COPILOT_PROXY_ENABLED", True),
             patch("model_router.is_ollama_alive", new_callable=AsyncMock, return_value=True),
@@ -345,7 +350,7 @@ class TestChatModelPreference:
             patch.object(chat_module, "_try_local_model", new_callable=AsyncMock, return_value="Hello from Gemma!"),
             patch.object(chat_module, "_gemini_chat", new_callable=AsyncMock) as mock_gemini,
         ):
-            text, _hist, model = await llm.chat("hello", model_preference="auto")
+            text, _hist, model = await llm.chat(_long_prompt, model_preference="auto")
 
         assert text == "Hello from Gemma!"
         assert model == llm.OLLAMA_MODEL
