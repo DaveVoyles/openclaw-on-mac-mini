@@ -50,9 +50,9 @@ verify-deploy:
 #         make ship-cli     -- update MacBook CLI only
 ship-server:
 	@echo "🔄 Pulling latest on Mac Mini..."
-	git pull --ff-only
+	ssh macmini "cd /Users/davevoyles/openclaw && git pull --ff-only && git rev-parse --short HEAD > src/_git_sha.txt"
 	@echo "🐳 Restarting openclaw container to load new Python code..."
-	/usr/local/bin/docker restart openclaw
+	ssh macmini "/usr/local/bin/docker restart openclaw"
 	@sleep 5
 	@echo "✅ Server health:"
 	@curl -fsS http://192.168.1.93:8765/health | python3 -m json.tool

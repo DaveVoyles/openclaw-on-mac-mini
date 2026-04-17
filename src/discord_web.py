@@ -43,11 +43,22 @@ API_ACTION_AUTH_REQUIRED = _web_cfg.dashboard_api_auth_required
 # ---------------------------------------------------------------------------
 
 def _git_sha() -> str:
-    """Return the current HEAD commit SHA (short form), or 'unknown'."""
+    """Return the current HEAD commit SHA (short form), or 'unknown'.
+
+    Reads from src/_git_sha.txt if present (written at deploy time by make ship-server),
+    then falls back to subprocess git call, then returns 'unknown'.
+    """
+    sha_file = Path(__file__).parent / "_git_sha.txt"
+    if sha_file.exists():
+        try:
+            return sha_file.read_text().strip() or "unknown"
+        except OSError:
+            pass
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, timeout=2
+            capture_output=True, text=True, timeout=2,
+            cwd=Path(__file__).parent.parent,
         )
         return result.stdout.strip() or "unknown"
     except Exception:
