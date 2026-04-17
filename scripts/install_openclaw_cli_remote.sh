@@ -75,11 +75,9 @@ oc-chat() {
 }
 ALIASES
 
-# Write the openclaw wrapper
-cat > "\$BIN_DIR/openclaw" <<'WRAPPER'
-#!/usr/bin/env bash
-exec python3 "\$HOME/.local/share/openclaw-cli/openclaw_cli.py" "\$@"
-WRAPPER
+# Write the openclaw wrapper (bakes URL so it works in non-interactive SSH sessions)
+printf '#!/usr/bin/env bash\nexport OPENCLAW_URL="%s"\nexec python3 "%s/.local/share/openclaw-cli/openclaw_cli.py" "\$@"\n' \
+  "$OPENCLAW_URL" "$HOME" > "$BIN_DIR/openclaw"
 chmod +x "\$BIN_DIR/openclaw"
 
 # Create openclaw-cli symlink
