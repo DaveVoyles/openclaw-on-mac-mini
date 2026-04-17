@@ -2,7 +2,7 @@
 
 Extracted from openclaw_cli.py (TD-29).
 Handlers: _cmd_theme, _cmd_overlay, _cmd_colorscheme, _cmd_emojiheaders,
-          _cmd_emoji, _cmd_layout, _cmd_links, _cmd_pasteguard,
+          _cmd_emoji, _cmd_layout, _cmd_links, _cmd_pasteguard, _cmd_paste,
           _cmd_accessibility, _cmd_keybind
 
 Helpers also moved (only used by _cmd_theme):
@@ -404,6 +404,20 @@ def _cmd_pasteguard(ctx: "ChatCommandContext") -> str:
     else:
         state = "on" if m._PREFS.get("paste_guard", True) else "off"
         print(f"  Paste guard is currently {_B}{state}{_R}. Use /pasteguard on|off to change.")
+    return _CMD_CONTINUE
+
+
+def _cmd_paste(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
+    """Show multi-line paste options for the current session."""
+    m = _m()
+    print(f"\n  {_B}Pasting multi-line text into OpenClaw{_R}\n")
+    print(f"  {_DM}When you paste text with newlines, each newline is normally treated as Enter.{_R}")
+    print(f"  {_DM}Use one of these options to paste a multi-line query as a single message:{_R}\n")
+    print(f"  {m._e('①', '1.')} {_B}/multiline{_R}  — toggle multiline mode, then paste, then type {_B}\\end{_R} to submit")
+    print(f"  {m._e('②', '2.')} {_B}Bracketed paste{_R} — automatic on supported terminals (iTerm2, Terminal.app)")
+    print(f"              OpenClaw detects paste markers and buffers lines automatically.")
+    print(f"  {m._e('③', '3.')} {_B}iTerm2 shortcut{_R} — Edit → Paste Special → Paste Escaping Special Characters")
+    print(f"              (joins lines; may alter formatting)\n")
     return _CMD_CONTINUE
 
 

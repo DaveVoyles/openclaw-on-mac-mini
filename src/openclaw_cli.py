@@ -351,6 +351,7 @@ from openclaw_cli_cmd_settings import _cmd_layout as _cmd_layout  # noqa: F401
 from openclaw_cli_cmd_settings import _cmd_links as _cmd_links  # noqa: F401
 from openclaw_cli_cmd_settings import _cmd_overlay as _cmd_overlay  # noqa: F401
 from openclaw_cli_cmd_settings import _cmd_pasteguard as _cmd_pasteguard  # noqa: F401
+from openclaw_cli_cmd_settings import _cmd_paste as _cmd_paste  # noqa: F401
 from openclaw_cli_cmd_settings import _cmd_theme as _cmd_theme  # noqa: F401
 from openclaw_cli_cmd_system import _cmd_alias as _cmd_alias  # noqa: F401
 from openclaw_cli_cmd_system import _cmd_autobold as _cmd_autobold  # noqa: F401
@@ -4260,7 +4261,7 @@ _BUILTIN_COMMAND_NAMES: "frozenset[str]" = frozenset({
     "accessibility", "a11y",
     # Misc / fun
     "rate", "ratehint", "copy", "clip", "save", "retry", "notify", "celebrate", "inject", "system", "prompt",
-    "pasteguard", "followup", "tokeninfo",
+    "pasteguard", "followup", "tokeninfo", "paste",
 })
 
 _MAX_ALIASES = 50
@@ -4539,6 +4540,7 @@ _COMMAND_SPECS: "list[tuple]" = [
     ("draft",        "Save, load, or clear a draft prompt",                                                                    _cmd_draft,        ()),
     ("template",     "Manage reusable prompt templates",                                                                       _cmd_template,     ()),
     ("pasteguard",   "Toggle paste guard for large risky pastes",                                                              _cmd_pasteguard,   ()),
+    ("paste",        "Show multi-line paste options (bracketed paste, /multiline, iTerm2 shortcut)",                           _cmd_paste,        ()),
     ("pin",          "Pin the last response for quick recall (/pin [name] | /pin recall <name> | /pin rm <name>)",             _cmd_pin,          ()),
     ("pins",         "List all pinned responses",                                                                              _cmd_pins,         ()),
     ("accessibility","Show or set accessibility modes (reduced-motion, plain, high-contrast)",                                 _cmd_accessibility,("a11y",)),
@@ -4695,6 +4697,61 @@ def _read_multiline_input(input_func: Any, prompt_str: str) -> str:
     return "\n".join(lines).strip()
 
 
+# Bracketed paste mode escape sequences (xterm/iTerm2/modern terminals).
+_BP_START = "\x1b[200~"
+_BP_END = "\x1b[201~"
+
+
+def _enable_bracketed_paste() -> None:
+    """Enable bracketed paste mode so pasted text is wrapped in escape markers."""
+    if not _get_is_tty():
+        return
+    try:
+        sys.stdout.write("\x1b[?2004h")
+        sys.stdout.flush()
+    except OSError:
+        pass
+
+
+def _disable_bracketed_paste() -> None:
+    """Disable bracketed paste mode on REPL exit."""
+    try:
+        sys.stdout.write("\x1b[?2004l")
+        sys.stdout.flush()
+    except OSError:
+        pass
+
+
+def _read_input_with_paste(input_func: Any, prompt_str: str) -> str:
+    """Read a line of input, buffering multi-line pastes into a single string.
+
+    When the terminal sends bracketed paste markers (``\\x1b[200~`` / ``\\x1b[201~``),
+    collect all lines between the markers and return them joined as one input.
+    This prevents multi-line pastes from being submitted line-by-line.
+    """
+    line = str(input_func(prompt_str)).rstrip("\n")
+    if not line.startswith(_BP_START):
+        return line
+    # Bracketed paste: strip start marker, accumulate lines until end marker.
+    first = line[len(_BP_START):]
+    if _BP_END in first:
+        return first[: first.index(_BP_END)].strip()
+    buf = [first]
+    while True:
+        try:
+            next_line = str(input_func("")).rstrip("\n")
+        except EOFError:
+            break
+        if _BP_END in next_line:
+            buf.append(next_line[: next_line.index(_BP_END)])
+            break
+        buf.append(next_line)
+    result = "\n".join(buf).strip()
+    if result:
+        print(f"  {_DM}[pasted {len(result.splitlines())} lines — submitting as one query]{_R}")
+    return result
+
+
 def run_chat(
     config: CliConfig,
     *,
@@ -4713,6 +4770,10 @@ def run_chat(
     load_shell_history()
     _setup_readline()
     prompt_session = _build_prompt_toolkit_session() if input_func is input and not _a11y_plain_mode() else None
+    # Enable bracketed paste for the readline/input() path only; prompt_toolkit handles it natively.
+    _bp_enabled = prompt_session is None and input_func is input
+    if _bp_enabled:
+        _enable_bracketed_paste()
     if not no_banner:
         _print_startup_banner(config, session_id)
     while True:
@@ -4723,10 +4784,14 @@ def run_chat(
                 prompt = _read_multiline_input(input_func, prompt_str)
             elif prompt_session is not None:
                 prompt = str(prompt_session.prompt(prompt_str)).strip()
+            elif _bp_enabled:
+                prompt = _read_input_with_paste(input_func, prompt_str).strip()
             else:
                 prompt = str(input_func(prompt_str)).strip()
         except EOFError:
             print()
+            if _bp_enabled:
+                _disable_bracketed_paste()
             # Auto-summarize: promote the last user prompt to session title if still generic
             if session_id and history:
                 _last_prompt = next(
@@ -4741,6 +4806,8 @@ def run_chat(
             return 0
         except KeyboardInterrupt:
             print()
+            if _bp_enabled:
+                _disable_bracketed_paste()
             global _last_interrupted_prompt
             if prompt_session is not None:
                 _partial = str(getattr(prompt_session.default_buffer, "text", "")).strip()
