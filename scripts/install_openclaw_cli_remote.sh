@@ -94,6 +94,11 @@ grep -Fqx "\$ALIASES_LINE" "\$RC_FILE" 2>/dev/null || printf '%s\n' "\$ALIASES_L
 echo "  ✓ wrapper and aliases installed"
 echo "  ✓ .zshrc updated"
 echo ""
+
+# Install prompt_toolkit for better interactive input (bracketed paste, arrow keys)
+python3 -m pip install --quiet --user prompt_toolkit 2>/dev/null && echo "  ✓ prompt_toolkit installed" || echo "  ℹ️  prompt_toolkit install skipped (optional)"
+
+echo ""
 echo "OpenClaw CLI installed. Open a new terminal or run:"
 echo "  source ~/.zshrc"
 echo "  openclaw"
