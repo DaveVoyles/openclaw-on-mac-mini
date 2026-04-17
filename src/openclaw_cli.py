@@ -4632,6 +4632,10 @@ def _setup_readline() -> None:
         _rl.parse_and_bind(r'"\C-u": unix-line-discard')
     except (ImportError, AttributeError):
         pass
+    try:
+        readline.parse_and_bind("set enable-bracketed-paste on")
+    except (AttributeError, Exception):  # noqa: BLE001
+        pass
     _apply_all_custom_keybinds()
 
 
@@ -5165,7 +5169,7 @@ def run_chat(
             if _sys_prompt:
                 effective_input = f"[System context]\n{_sys_prompt}\n\n{effective_input}"
             if ask_func is invoke_openclaw and should_use_streaming(config):
-                _spin_stop, _spin_thread = _ui_utils_mod._start_stream_spinner(
+                _spin_stop, _spin_thread, _spin_cancel = _ui_utils_mod._start_stream_spinner(
                     f"{_e('💬', '>>')} Thinking…",
                     is_tty=_IS_TTY,
                     output_json=config.output_json,
@@ -5180,6 +5184,8 @@ def run_chat(
                     _spin_stop.set()
                 if _spin_thread is not None:
                     _spin_thread.join(timeout=0.5)
+                if _spin_cancel is not None and _spin_cancel.is_set():
+                    raise KeyboardInterrupt
             else:
                 response = _with_spinner(
                     f"{_e('💬', '>>')} Thinking…",
@@ -5315,7 +5321,7 @@ def run_chat(
                 ])
                 try:
                     if ask_func is invoke_openclaw and should_use_streaming(config):
-                        _spin_stop2, _spin_thread2 = _ui_utils_mod._start_stream_spinner(
+                        _spin_stop2, _spin_thread2, _spin_cancel2 = _ui_utils_mod._start_stream_spinner(
                             f"{_e('💬', '>>')} Thinking…",
                             is_tty=_IS_TTY,
                             output_json=config.output_json,
@@ -5330,6 +5336,8 @@ def run_chat(
                             _spin_stop2.set()
                         if _spin_thread2 is not None:
                             _spin_thread2.join(timeout=0.5)
+                        if _spin_cancel2 is not None and _spin_cancel2.is_set():
+                            raise KeyboardInterrupt
                     else:
                         response = _with_spinner(
                             f"{_e('💬', '>>')} Thinking…",
@@ -5999,7 +6007,7 @@ def main(argv: list[str] | None = None) -> int:
             config = _maybe_switch_to_context_model(config)
 
         if should_use_streaming(config):
-            _spin_stop, _spin_thread = _ui_utils_mod._start_stream_spinner(
+            _spin_stop, _spin_thread, _spin_cancel = _ui_utils_mod._start_stream_spinner(
                 "💬 Thinking…",
                 is_tty=_IS_TTY,
                 output_json=config.output_json,
@@ -6009,6 +6017,8 @@ def main(argv: list[str] | None = None) -> int:
                 _spin_stop.set()
             if _spin_thread is not None:
                 _spin_thread.join(timeout=0.5)
+            if _spin_cancel is not None and _spin_cancel.is_set():
+                raise KeyboardInterrupt
         elif history is None:
             response = _with_spinner("💬 Thinking…", invoke_openclaw, prompt, config=config, output_json=config.output_json)
         else:

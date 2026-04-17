@@ -26,6 +26,14 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+try:
+    import select as _select_mod
+    import termios as _termios_mod
+    import tty as _tty_mod
+    _ESCAPE_DETECTION_AVAILABLE = True
+except ImportError:
+    _ESCAPE_DETECTION_AVAILABLE = False
+
 from openclaw_cli_exec import _spinner_progress_snapshot
 from openclaw_cli_prefs import (
     _A11Y_HIGH_CONTRAST,
@@ -150,6 +158,76 @@ def _motion_pause(stage: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Escape key detection
+# ---------------------------------------------------------------------------
+
+_ESCAPE_CHAR = "\x1b"
+
+
+class _EscapeDetector:
+    """Context manager that watches for Escape key in a background thread.
+
+    Puts stdin in raw mode so individual key presses are readable without
+    waiting for Enter. Restores terminal state on exit regardless of outcome.
+
+    Attributes:
+        cancelled: True when Escape has been pressed.
+    """
+
+    def __init__(self) -> None:
+        self.cancelled = False
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._fd: int = -1
+        self._old_settings: list | None = None
+
+    def __enter__(self) -> "_EscapeDetector":
+        if not _ESCAPE_DETECTION_AVAILABLE:
+            return self
+        try:
+            fd = sys.stdin.fileno()
+            if not os.isatty(fd):
+                return self
+            self._fd = fd
+        except (AttributeError, OSError):
+            return self
+        self._thread = threading.Thread(target=self._watch, daemon=True)
+        self._thread.start()
+        return self
+
+    def _watch(self) -> None:
+        try:
+            old = _termios_mod.tcgetattr(self._fd)
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            _tty_mod.setraw(self._fd, _termios_mod.TCSANOW)
+            while not self._stop.is_set():
+                try:
+                    ready, _, _ = _select_mod.select([sys.stdin], [], [], 0.05)
+                except (OSError, ValueError):
+                    break
+                if ready:
+                    try:
+                        ch = os.read(self._fd, 1)
+                    except OSError:
+                        break
+                    if ch == b"\x1b":
+                        self.cancelled = True
+                        break
+        finally:
+            try:
+                _termios_mod.tcsetattr(self._fd, _termios_mod.TCSADRAIN, old)
+            except Exception:  # noqa: BLE001
+                pass
+
+    def __exit__(self, *_: object) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=0.3)
+
+
+# ---------------------------------------------------------------------------
 # Exported UI utility functions
 # ---------------------------------------------------------------------------
 
@@ -239,21 +317,26 @@ def _with_spinner(
     spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
     frame_idx = 0
     last_heartbeat = 0.0
-    while thread.is_alive():
-        elapsed = time.monotonic() - start
-        frame = spinner_frames[frame_idx % len(spinner_frames)]
-        snapshot = _spinner_progress_snapshot(elapsed)
-        extra = " · still working" if elapsed - last_heartbeat >= heartbeat_every else ""
-        sys.stdout.write(
-            f"\r{frame} {label} · {snapshot['phase']} · "
-            f"step {snapshot['step_index']}/{snapshot['step_total']} · "
-            f"{snapshot['trust_copy']}  {elapsed:.0f}s{extra}"
-        )
-        sys.stdout.flush()
-        frame_idx += 1
-        if extra:
-            last_heartbeat = elapsed
-        time.sleep(0.1)
+    with _EscapeDetector() as _esc:
+        while thread.is_alive():
+            if _esc.cancelled:
+                sys.stdout.write("\r" + " " * 80 + "\r")
+                sys.stdout.flush()
+                raise KeyboardInterrupt
+            elapsed = time.monotonic() - start
+            frame = spinner_frames[frame_idx % len(spinner_frames)]
+            snapshot = _spinner_progress_snapshot(elapsed)
+            extra = " · still working" if elapsed - last_heartbeat >= heartbeat_every else ""
+            sys.stdout.write(
+                f"\r{frame} {label} · {snapshot['phase']} · "
+                f"step {snapshot['step_index']}/{snapshot['step_total']} · "
+                f"{snapshot['trust_copy']}  {elapsed:.0f}s{extra}"
+            )
+            sys.stdout.flush()
+            frame_idx += 1
+            if extra:
+                last_heartbeat = elapsed
+            time.sleep(0.1)
 
     thread.join()
     # Clear the spinner line.
@@ -671,35 +754,43 @@ def _start_stream_spinner(
     *,
     is_tty: bool = True,
     output_json: bool = False,
-) -> tuple[threading.Event, threading.Thread] | tuple[None, None]:
+) -> tuple[threading.Event, threading.Thread, threading.Event] | tuple[None, None, None]:
     """Start a braille spinner for the streaming path.
 
     Unlike ``_with_spinner``, this does NOT run ``fn`` in a background thread.
     The caller runs the stream in the main thread and signals ``stop_event``
     when the first SSE event arrives so the spinner clears before chunks print.
 
-    Returns ``(stop_event, thread)`` when active, or ``(None, None)`` when
-    skipped (not a TTY, output_json, or plain-mode).
+    Returns ``(stop_event, thread, cancel_event)`` when active, or
+    ``(None, None, None)`` when skipped (not a TTY, output_json, or plain-mode).
+    ``cancel_event`` is set when the user presses Escape; callers should raise
+    KeyboardInterrupt when set.
     """
     if not (is_tty and not output_json) or _a11y_plain_mode():
-        return None, None
+        return None, None, None
 
     stop_event = threading.Event()
+    cancel_event = threading.Event()
 
     def _spin() -> None:
         spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         frame_idx = 0
         start = time.monotonic()
-        while not stop_event.wait(timeout=0.1):
-            elapsed = time.monotonic() - start
-            frame = spinner_frames[frame_idx % len(spinner_frames)]
-            sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s")
-            sys.stdout.flush()
-            frame_idx += 1
+        with _EscapeDetector() as _esc:
+            while not stop_event.wait(timeout=0.1):
+                if _esc.cancelled:
+                    cancel_event.set()
+                    stop_event.set()
+                    break
+                elapsed = time.monotonic() - start
+                frame = spinner_frames[frame_idx % len(spinner_frames)]
+                sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s")
+                sys.stdout.flush()
+                frame_idx += 1
         # Clear the spinner line so chunks print cleanly.
         sys.stdout.write("\r" + " " * 72 + "\r")
         sys.stdout.flush()
 
     thread = threading.Thread(target=_spin, daemon=True)
     thread.start()
-    return stop_event, thread
+    return stop_event, thread, cancel_event
