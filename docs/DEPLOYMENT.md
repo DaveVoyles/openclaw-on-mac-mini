@@ -6,13 +6,58 @@ Use this guide when you need to go from a fresh clone and `.env` file to a healt
 
 ## What this guide covers
 
-1. [Deployment flow](#deployment-flow)
-2. [Environment configuration](#environment-configuration)
-3. [Local vs production](#local-vs-production)
-4. [Deploying locally](#deploying-locally)
-5. [Deploying in production](#deploying-in-production)
-6. [Verification checklist](#verification-checklist)
-7. [Rollback basics](#rollback-basics)
+1. [Day-to-day code deploy workflow](#day-to-day-code-deploy-workflow)
+2. [Deployment flow](#deployment-flow)
+3. [Environment configuration](#environment-configuration)
+4. [Local vs production](#local-vs-production)
+5. [Deploying locally](#deploying-locally)
+6. [Deploying in production](#deploying-in-production)
+7. [Verification checklist](#verification-checklist)
+8. [Rollback basics](#rollback-basics)
+
+---
+
+## Day-to-day code deploy workflow
+
+> **`git push` alone is never enough. Always follow with a deploy step.**
+
+This repo has two deploy targets:
+
+| Target | Machine | What lives there |
+|---|---|---|
+| Server | Mac Mini (`192.168.1.93`) | Docker container `openclaw`, `src/` volume-mounted |
+| CLI | MacBook (`macbook` SSH alias) | `~/.local/share/openclaw-cli/` — standalone Python install |
+
+### Why the container must be restarted after server-side changes
+
+The container mounts `./src:/app/src:ro` so the files are visible, but **Python caches module imports at startup**. Changed `.py` files on disk are **invisible to the running process** until the container restarts. This is the most common cause of "I pushed a fix but it didn't work" — the container was still running old code.
+
+### Commands (run from Mac Mini)
+
+```bash
+make ship          # safe default — pull + restart server + update MacBook CLI
+make ship-server   # server only: git pull, write git SHA to src/_git_sha.txt, docker restart openclaw
+make ship-cli      # CLI only: SCP openclaw_cli*.py to MacBook via install script
+make verify-deploy # confirm: shows CLI build label + /health JSON with git_sha field
+```
+
+### Choosing the right target
+
+| Changed file(s) | Command |
+|---|---|
+| `src/openclaw_cli*.py`, `src/subprocess_utils.py` | `make ship-cli` |
+| Any other `src/` file (`model_router.py`, `discord_web.py`, `bot.py`, `llm/`, etc.) | `make ship-server` |
+| Both, or unsure | `make ship` |
+
+### Verify the deploy landed
+
+```bash
+make verify-deploy
+# Shows: CLI build label + /health JSON including "git_sha"
+# Cross-check: git rev-parse --short HEAD  (must match git_sha in /health)
+```
+
+The `/health` endpoint at `http://192.168.1.93:8765/health` includes `"git_sha"` so you can always confirm which commit the running server has loaded.
 
 ---
 
