@@ -67,3 +67,20 @@
       - WWE
       - SmackDown
       - match
+
+- id: house-listings-delco
+  question: >
+    Give me house listings in the Broomall or Upper Darby/Havertown area which meet the
+    following criteria: Price range $250k-$400k, Property taxes less than $8k annually,
+    Home size 1000-2000 sq ft. Include a link to the property listing so I can view it myself.
+  expect:
+    non_empty: true
+    no_error: true
+    min_words: 80
+    # NOTE: Real estate listings change daily — has_table omitted since inventory
+    # varies and the model may respond with narrative when no structured data is found.
+    # Stable geographical keywords used instead of specific addresses.
+    keywords:
+      - Broomall
+      - Havertown
+      - Upper Darby
