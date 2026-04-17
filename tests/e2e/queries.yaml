@@ -34,3 +34,16 @@
       - Hoppers
       - box office
       - weekend
+
+- id: lacrosse-d1-schedule
+  question: >
+    Show me the upcoming men's division 1 college lacrosse games this week.
+    Give me a table indicating: 1. Teams and ranking 2. Time 3. Where/how to watch
+  expect:
+    non_empty: true
+    no_error: true
+    min_words: 50
+    # NOTE: has_table and team keywords are intentionally omitted —
+    # schedule data is time-sensitive and tables only appear when structured data is available.
+    keywords:
+      - lacrosse
