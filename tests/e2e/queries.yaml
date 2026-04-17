@@ -1,0 +1,36 @@
+# OpenClaw E2E Test Queries
+#
+# Each entry defines one test case fired via `openclaw ask`.
+# Add new tests by appending entries — no runner changes needed.
+#
+# Fields:
+#   id        (required) — unique slug, used in output and --id filter
+#   question  (required) — the exact prompt sent to `openclaw ask`
+#   expect    (optional) — validation rules (all optional; non_empty + no_error always checked)
+#     non_empty  : true (default) — response must not be blank
+#     no_error   : true (default) — response must not contain error/unavailable/refused
+#     min_words  : N — response body must contain at least N words
+#     has_table  : true — response must contain a markdown table (lines with |)
+#     paragraphs : N — response must contain at least N paragraph breaks
+#     keywords   : [list] — at least ONE keyword must appear (case-insensitive)
+#     model      : name — "Metadata:" line in footer must contain this string
+
+- id: box-office-weekend
+  question: >
+    Show me box office results for the previous weekend. Have 1 paragraph for each of the
+    top 5 films. Then, create a table which indicates: 1. Title 2. BO results this week
+    3. Last week 4. % change WoW 5. Total
+  expect:
+    non_empty: true
+    no_error: true
+    min_words: 150
+    has_table: true
+    paragraphs: 4
+    keywords:
+      - Mario
+      - Hail Mary
+      - Tuscany
+      - Drama
+      - Hoppers
+      - box office
+      - weekend
