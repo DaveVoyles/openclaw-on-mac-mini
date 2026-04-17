@@ -95,11 +95,13 @@ try:
     from prompt_toolkit.completion import Completer as _PromptToolkitCompleterBase
     from prompt_toolkit.completion import Completion
     from prompt_toolkit.history import InMemoryHistory
+    from prompt_toolkit.key_binding import KeyBindings as _PTKKeyBindings
 except ImportError:  # pragma: no cover - optional dependency
     PromptSession = None
     _PromptToolkitCompleterBase = object
     Completion = None
     InMemoryHistory = None
+    _PTKKeyBindings = None
 
 import openclaw_cli_update as _update_mod
 from openclaw_cli_update import (
@@ -2595,6 +2597,7 @@ def invoke_openclaw_stream(
     history: list[dict[str, str]] | None = None,
     opener: Any = request.urlopen,
     _stop_spinner: "threading.Event | None" = None,
+    _cancel_event: "threading.Event | None" = None,
 ) -> AskResponse:
     """Submit a prompt to the SSE ask API and print chunks as they arrive."""
     payload = {
@@ -2629,8 +2632,22 @@ def invoke_openclaw_stream(
                     parsed = _parse_sse_event("".join(event_lines))
                     event_lines = []
                     if parsed is None:
+                        # Check for Escape cancellation between events
+                        if _cancel_event is not None and _cancel_event.is_set():
+                            if _stop_spinner is not None:
+                                _stop_spinner.set()
+                            if _chunks_printed and sys.stdout:
+                                print()
+                            raise KeyboardInterrupt
                         continue
                     event_name, data = parsed
+                    # Check for Escape cancellation after each complete SSE event
+                    if _cancel_event is not None and _cancel_event.is_set():
+                        if _stop_spinner is not None:
+                            _stop_spinner.set()
+                        if _chunks_printed and sys.stdout:
+                            print()
+                        raise KeyboardInterrupt
                     if event_name == "chunk":
                         delta = str(data.get("delta") or "")
                         if delta:
@@ -4653,7 +4670,14 @@ def _record_shell_history_entry(entry: str) -> None:
 
 
 def _build_prompt_toolkit_session() -> Any | None:
-    """Return a configured prompt_toolkit session for interactive REPL input."""
+    """Return a configured prompt_toolkit session for interactive REPL input.
+
+    Uses ``multiline=True`` so that pasted newlines accumulate in the buffer
+    instead of being stripped (PTK strips newlines from single-line buffers).
+    A custom Enter key binding submits immediately, so normal single-line use
+    is unchanged. Pasted multi-line text lands in the buffer; pressing Enter
+    submits the whole thing as one query.
+    """
     if PromptSession is None or InMemoryHistory is None or not _overlay_available():
         return None
     history = InMemoryHistory()
@@ -4665,12 +4689,21 @@ def _build_prompt_toolkit_session() -> Any | None:
                     history.append_string(item)
     except OSError:
         pass
+
+    # Custom bindings: Enter always submits; paste accumulates newlines in buffer.
+    kb = _PTKKeyBindings() if _PTKKeyBindings is not None else None
+    if kb is not None:
+        @kb.add("enter", eager=True)
+        def _submit_on_enter(event: Any) -> None:  # type: ignore[misc]
+            event.current_buffer.validate_and_handle()
+
     return PromptSession(
         history=history,
         completer=_PromptToolkitSlashCompleter(),
         mouse_support=False,
         enable_system_prompt=False,
-        multiline=False,
+        multiline=True,
+        **({"key_bindings": kb} if kb is not None else {}),
     )
 
 
@@ -5179,6 +5212,7 @@ def run_chat(
                     config=config,
                     history=list(history),
                     _stop_spinner=_spin_stop,
+                    _cancel_event=_spin_cancel,
                 )
                 if _spin_stop is not None and not _spin_stop.is_set():
                     _spin_stop.set()
@@ -5331,6 +5365,7 @@ def run_chat(
                             config=config,
                             history=list(history),
                             _stop_spinner=_spin_stop2,
+                            _cancel_event=_spin_cancel2,
                         )
                         if _spin_stop2 is not None and not _spin_stop2.is_set():
                             _spin_stop2.set()
@@ -6012,7 +6047,7 @@ def main(argv: list[str] | None = None) -> int:
                 is_tty=_IS_TTY,
                 output_json=config.output_json,
             )
-            response = invoke_openclaw_stream(prompt, config=config, history=history, _stop_spinner=_spin_stop)
+            response = invoke_openclaw_stream(prompt, config=config, history=history, _stop_spinner=_spin_stop, _cancel_event=_spin_cancel)
             if _spin_stop is not None and not _spin_stop.is_set():
                 _spin_stop.set()
             if _spin_thread is not None:

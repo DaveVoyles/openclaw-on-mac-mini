@@ -763,34 +763,53 @@ def _start_stream_spinner(
 
     Returns ``(stop_event, thread, cancel_event)`` when active, or
     ``(None, None, None)`` when skipped (not a TTY, output_json, or plain-mode).
-    ``cancel_event`` is set when the user presses Escape; callers should raise
-    KeyboardInterrupt when set.
+    ``cancel_event`` is set when the user presses Escape; callers should check
+    it after each streaming event (not just at the end) and raise KeyboardInterrupt.
+    The Escape detector stays alive for the full streaming duration — not just
+    the initial spinner phase.
     """
     if not (is_tty and not output_json) or _a11y_plain_mode():
         return None, None, None
 
     stop_event = threading.Event()
     cancel_event = threading.Event()
+    _esc = _EscapeDetector()
+    _esc.__enter__()
 
     def _spin() -> None:
         spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
         frame_idx = 0
         start = time.monotonic()
-        with _EscapeDetector() as _esc:
-            while not stop_event.wait(timeout=0.1):
-                if _esc.cancelled:
-                    cancel_event.set()
-                    stop_event.set()
-                    break
-                elapsed = time.monotonic() - start
-                frame = spinner_frames[frame_idx % len(spinner_frames)]
-                sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s")
-                sys.stdout.flush()
-                frame_idx += 1
+        while not stop_event.wait(timeout=0.1):
+            if _esc.cancelled:
+                cancel_event.set()
+                stop_event.set()
+                break
+            elapsed = time.monotonic() - start
+            frame = spinner_frames[frame_idx % len(spinner_frames)]
+            sys.stdout.write(f"\r{frame} {label}  {elapsed:.0f}s")
+            sys.stdout.flush()
+            frame_idx += 1
         # Clear the spinner line so chunks print cleanly.
         sys.stdout.write("\r" + " " * 72 + "\r")
         sys.stdout.flush()
 
+    def _escape_monitor() -> None:
+        """Keep watching for Escape even after the spinner has stopped.
+
+        Runs until cancel_event is set (Escape pressed) or the caller signals
+        done by setting cancel_event themselves (via the stop mechanism).
+        """
+        stop_event.wait()  # wait for spinner to clear
+        while not cancel_event.is_set():
+            if _esc.cancelled:
+                cancel_event.set()
+                break
+            time.sleep(0.05)
+        _esc.__exit__(None, None, None)
+
     thread = threading.Thread(target=_spin, daemon=True)
+    monitor = threading.Thread(target=_escape_monitor, daemon=True)
     thread.start()
+    monitor.start()
     return stop_event, thread, cancel_event
