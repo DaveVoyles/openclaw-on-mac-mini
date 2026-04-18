@@ -128,6 +128,8 @@ services:
     restart: unless-stopped
     depends_on:
       - openclaw
+    # Run as root so the Docker socket (root:root) is accessible for the container management panel
+    user: root
 
     # Logging
     logging:
