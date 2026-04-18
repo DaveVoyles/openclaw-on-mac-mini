@@ -8,6 +8,7 @@ from .helpers import (
     DASHBOARD_HTML,
     GUIDE_HTML,
     ONBOARDING_HTML,
+    PARENTS_GUIDE_HTML,
     TERMINAL_HTML,
     WEBUI_GUIDE_HTML,
     build_openclaw_cli_installer,
@@ -42,6 +43,11 @@ async def onboarding_handler(request: web.Request) -> web.Response:
 async def webui_guide_handler(request: web.Request) -> web.Response:
     """Serve the Open WebUI vs Gemini comparison guide page."""
     return web.Response(text=WEBUI_GUIDE_HTML, content_type="text/html")
+
+
+async def parents_guide_handler(request: web.Request) -> web.Response:
+    """Serve the family/parents detailed guide page."""
+    return web.Response(text=PARENTS_GUIDE_HTML, content_type="text/html")
 
 
 async def openclaw_cli_download_handler(request: web.Request) -> web.Response:

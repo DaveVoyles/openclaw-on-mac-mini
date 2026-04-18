@@ -363,6 +363,7 @@ GUIDE_HTML = (_TEMPLATES_DIR / "guide.html").read_text()
 TERMINAL_HTML = (_TEMPLATES_DIR / "terminal.html").read_text()
 ONBOARDING_HTML = (_TEMPLATES_DIR / "onboarding.html").read_text()
 WEBUI_GUIDE_HTML = (_TEMPLATES_DIR / "webui-guide.html").read_text()
+PARENTS_GUIDE_HTML = (_TEMPLATES_DIR / "parents-guide.html").read_text()
 
 
 def load_openclaw_cli_source() -> str:
