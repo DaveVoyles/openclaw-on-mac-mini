@@ -43,14 +43,19 @@ sys.path.insert(0, "src")
 
 import slack_bot  # noqa: E402  (imported after stubs)
 from slack_bot import (  # noqa: E402
+    _FILE_HISTORY_MAX,
     _HELP_TEXT,
     _WELCOME_MESSAGE,
+    _file_history,
     _get_user_simple,
     _is_batch_upload,
     _is_research_request,
     _log_query_metrics,
+    _match_question_to_history,
+    _onboarded_users,
     _parse_flags,
     _read_metrics_summary,
+    _record_file_history,
     _route_model_for_file,
     _set_user_simple,
     _suggest_actions_for_file,
@@ -982,6 +987,61 @@ class TestDocumentComparison(unittest.TestCase):
                 for elem in block.get("elements", []):
                     action_ids.append(elem.get("action_id"))
         self.assertIn("file_compare_start", action_ids)
+
+
+class TestSmartSuggestionsAndOnboarding(unittest.TestCase):
+
+    def setUp(self):
+        # Clean history before each test
+        _file_history.clear()
+        _onboarded_users.clear()
+
+    def test_match_returns_none_when_no_history(self):
+        """_match_question_to_history returns None when user has no history."""
+        result = _match_question_to_history("u_nobody", "check my budget please")
+        self.assertIsNone(result)
+
+    def test_match_finds_keyword_in_filename(self):
+        """Keyword from filename stem matches question text."""
+        _file_history["u1"] = [{"name": "budget_2025.xlsx", "file_id": "F001"}]
+        result = _match_question_to_history("u1", "check my budget please")
+        self.assertIsNotNone(result)
+        self.assertEqual(result["name"], "budget_2025.xlsx")  # type: ignore[index]
+
+    def test_match_skips_short_keywords(self):
+        """Keywords with ≤3 characters are skipped and produce no match."""
+        _file_history["u2"] = [{"name": "my.docx", "file_id": "F002"}]
+        result = _match_question_to_history("u2", "my doc here")
+        self.assertIsNone(result)
+
+    def test_onboarded_users_set_exists(self):
+        """_onboarded_users is importable and is a set."""
+        self.assertIsInstance(_onboarded_users, set)
+
+
+class TestFileHistory(unittest.TestCase):
+    """Tests for persistent file history helpers."""
+
+    def setUp(self) -> None:
+        _file_history.clear()
+
+    def test_record_file_history_adds_entry(self) -> None:
+        _record_file_history("u1", {"name": "test.docx", "size": 100})
+        self.assertEqual(_file_history["u1"][0]["name"], "test.docx")
+
+    def test_record_file_history_deduplicates(self) -> None:
+        _record_file_history("u1", {"name": "test.docx", "size": 100})
+        _record_file_history("u1", {"name": "test.docx", "size": 200})
+        self.assertEqual(len(_file_history["u1"]), 1)
+
+    def test_record_file_history_caps_at_max(self) -> None:
+        for i in range(_FILE_HISTORY_MAX + 5):
+            _record_file_history("u1", {"name": f"file{i}.docx", "size": i})
+        self.assertLessEqual(len(_file_history["u1"]), _FILE_HISTORY_MAX)
+
+    def test_record_file_history_sha256_when_bytes(self) -> None:
+        _record_file_history("u1", {"name": "test.docx", "size": 5}, file_bytes=b"hello")
+        self.assertTrue(_file_history["u1"][0]["sha256"])
 
 
 if __name__ == "__main__":

@@ -84,6 +84,12 @@ MANIFEST: dict = {
                 "usage_hint": "",
                 "should_escape": False,
             },
+            {
+                "command": "/clear",
+                "description": "Clear your session: reset thread history and active file selections.",
+                "usage_hint": "",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

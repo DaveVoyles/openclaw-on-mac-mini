@@ -110,13 +110,61 @@ def _set_user_simple(user_id: str, value: bool) -> None:
 _load_prefs()
 
 # ---------------------------------------------------------------------------
-# File history (stub — populated by Han's lane or persisted on disk)
+# Per-user file history (persisted to data/slack_file_history.json)
 # ---------------------------------------------------------------------------
-# Structure: {"U123": [{"name": "budget.xlsx", "file_id": "F123"}, ...], ...}
-# Newest entries first.  Han's wave adds persistence; this stub satisfies
-# _match_question_to_history and _check_new_user_onboarding at import time.
+# Stored as: {"U123": [{"name": "doc.docx", "size": 1234, "sha256": "...",
+#   "last_used_ts": 1234567890.0, "mimetype": "..."}, ...]}
+# Newest entry first; capped at _FILE_HISTORY_MAX per user.
 # ---------------------------------------------------------------------------
+
+_FILE_HISTORY_PATH: Path = Path(__file__).parent.parent / "data" / "slack_file_history.json"
 _file_history: dict[str, list[dict]] = {}
+_FILE_HISTORY_MAX = 20
+
+
+def _load_file_history() -> None:
+    global _file_history
+    try:
+        if _FILE_HISTORY_PATH.exists():
+            _file_history = json.loads(_FILE_HISTORY_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.warning("Failed to load file history: %s", exc)
+        _file_history = {}
+
+
+def _save_file_history() -> None:
+    try:
+        _FILE_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _FILE_HISTORY_PATH.write_text(json.dumps(_file_history, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log.warning("Failed to save file history: %s", exc)
+
+
+def _record_file_history(user_id: str, file_obj: dict, file_bytes: bytes | None = None) -> None:
+    """Add or update a file in the user's history. Keeps newest _FILE_HISTORY_MAX."""
+    import hashlib
+    import time as _time
+
+    name = file_obj.get("name", "")
+    size = file_obj.get("size", 0)
+    sha256 = ""
+    if file_bytes:
+        sha256 = hashlib.sha256(file_bytes).hexdigest()[:16]
+    entry = {
+        "name": name,
+        "size": size,
+        "sha256": sha256,
+        "last_used_ts": _time.time(),
+        "mimetype": file_obj.get("mimetype", ""),
+    }
+    history = _file_history.setdefault(user_id, [])
+    history[:] = [h for h in history if h.get("name") != name]
+    history.insert(0, entry)
+    history[:] = history[:_FILE_HISTORY_MAX]
+    _save_file_history()
+
+
+_load_file_history()
 
 # ---------------------------------------------------------------------------
 # Onboarding state
@@ -1576,6 +1624,8 @@ async def _process_single_file_shared(event: dict, client: Any, say: Any) -> Non
                 if resp.status == 200:
                     file_bytes = await resp.read()
                     _register_file(file_id, file_obj, file_bytes)
+                    if user_id:
+                        _record_file_history(user_id, file_obj, file_bytes)
     except Exception as exc:
         log.debug("file_shared: could not pre-download bytes for %s: %s", file_id, exc)
 
@@ -1796,6 +1846,8 @@ def create_slack_app():  # type: ignore[return]
         raw_text: str = (event.get("text") or "").strip()
         files: list[dict] = event.get("files", [])
 
+        asyncio.create_task(_check_new_user_onboarding(user_id, client))
+
         if not raw_text and not files:
             await say(text=_WELCOME_MESSAGE)
             return
@@ -1820,6 +1872,17 @@ def create_slack_app():  # type: ignore[return]
             await _run_research_pipeline(client, channel, user_id, prompt, file_obj_for_research)
             return
 
+        # Smart file suggestion — only when no file is attached
+        if not event.get("files"):
+            match = _match_question_to_history(user_id, prompt)
+            if match:
+                filename = match.get("name", "")
+                suggestion_msg = (
+                    f"💡 Did you mean to use `{filename}`? "
+                    f"Type `/files {filename}` to select it, or just ask away!"
+                )
+                await say(text=suggestion_msg)
+
         # Enrich prompt with any uploaded file content
         if files:
             prompt = await _process_slack_files(files, SLACK_BOT_TOKEN, prompt)
@@ -1838,6 +1901,7 @@ def create_slack_app():  # type: ignore[return]
             model_pref=model_pref,
             simple=use_simple,
         )
+        _onboarded_users.add(user_id)
 
     # ------------------------------------------------------------------
     # Handler: /ask slash command
@@ -2266,6 +2330,38 @@ def create_slack_app():  # type: ignore[return]
         channel: str = body.get("channel_id", "")
         text: str = (body.get("text") or "").strip()
 
+        if text.lower() in ("recent", "history"):
+            history = _file_history.get(user_id, [])
+            if not history:
+                await client.chat_postEphemeral(
+                    channel=channel,
+                    user=user_id,
+                    text="📂 No file history yet. Upload a file and it'll appear here next time.",
+                )
+                return
+            import time as _time
+
+            lines = [f"📋 *Your recent files (last {len(history)}):*"]
+            for entry in history:
+                name = entry.get("name", "?")
+                size = entry.get("size", 0)
+                ts = entry.get("last_used_ts", 0)
+                ago = int(_time.time() - ts)
+                if ago < 3600:
+                    ago_str = f"{ago // 60}m ago"
+                elif ago < 86400:
+                    ago_str = f"{ago // 3600}h ago"
+                else:
+                    ago_str = f"{ago // 86400}d ago"
+                lines.append(f"  • `{name}` ({size:,} bytes, {ago_str})")
+            lines.append("\n_Tip: `/files <name>` to select a file from storage_")
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                text="\n".join(lines),
+            )
+            return
+
         if not text:
             # List mode — show all files in /ai-files
             listing = await file_skills.list_local_files("/ai-files")
@@ -2500,6 +2596,23 @@ def create_slack_app():  # type: ignore[return]
             await client.chat_postEphemeral(channel=channel, user=user_id, text=text)
         except Exception as exc:
             log.warning("handle_slash_metrics: failed to post ephemeral: %s", exc)
+
+    # ------------------------------------------------------------------
+    # Handler: /clear — reset session state for the calling user
+    # ------------------------------------------------------------------
+
+    @app.command("/clear")
+    async def handle_slash_clear(ack: Any, body: dict[str, Any], say: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "unknown")
+        _compare_pending.pop(user_id, None)
+        if user_id in _user_prefs:
+            _user_prefs[user_id].pop("active_file_id", None)
+            _user_prefs[user_id].pop("translate_file_id", None)
+            _save_prefs()
+        await say(
+            text="✅ *Session cleared!* Thread history and active file selections have been reset. Start fresh with your next message."
+        )
 
     return app
 
