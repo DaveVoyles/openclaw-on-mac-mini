@@ -18,6 +18,9 @@ flowchart LR
     U[Discord User] --> D[Discord API/Gateway]
     D --> BOT[src/bot.py\n/ask + orchestration]
     CLI[CLI Client\nOpenClaw / openclaw\nsrc/openclaw_cli.py] --> WEB[src/discord_web.py\nhealth + dashboard API host]
+    SLACK[Slack User] --> SLACKAPI[Slack API\nSocket Mode WS]
+    SLACKAPI --> SLACKBOT[src/slack_bot.py\nBolt SDK Socket Mode]
+    SLACKBOT --> ORCH
     CLI --> CLISTATE[src/openclaw_cli_sessions.py\nlocal CLI sessions]
     CLI --> CLIACT[src/openclaw_cli_actions.py\nshell + file actions]
 
@@ -77,6 +80,20 @@ sequenceDiagram
 | Scheduler + background loops | Cron/interval jobs, proactive monitors, reminder/briefing loops | `src/scheduler.py`, `src/discord_background.py` |
 | Worker agents | Delegated sub-task execution for complex asks via tool calls | `src/worker_agent.py` |
 | Memory stores | Conversation history, semantic recall, structured memory/thread persistence | `src/memory.py`, `src/vector_store.py`, `src/thread_store.py`, `src/qmd.py` |
+| Slack bot runtime | Slack message handling, /ask via slash command, @mention handling, mrkdwn formatting | `src/slack_bot.py` |
+
+## Satellite Services
+
+These services run as separate containers on the `openclaw_default` Docker network and connect to openclaw via its HTTP API:
+
+| Service | Container | Port | Purpose | Connection |
+|---|---|---|---|---|
+| Open WebUI | `open-webui` | 3000 → 8080 | AI chat interface | `http://openclaw:8765/v1` (OpenAI-compat) |
+| Dashboard v2 | `dashboard-v2` | 7001 → 3001 | Monitoring dashboard | `http://openclaw:8765` (health/metrics/API) |
+
+External URLs (via Synology DDNS + reverse proxy):
+- Open WebUI: https://chat.davevoyles.synology.me
+- Dashboard: https://openclaw-dashboard.davevoyles.synology.me
 
 ## Architecture deep dives
 

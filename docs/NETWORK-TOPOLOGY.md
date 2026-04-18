@@ -10,6 +10,8 @@ Operator-facing reference for how traffic moves between the Mac Mini host, Docke
 | --- | --- | --- | --- | --- |
 | LAN host | Mac Mini M4 | Primary OpenClaw host | `192.168.1.93` | OpenClaw publishes the dashboard and health endpoints from here. |
 | Container | `openclaw` | Discord bot + dashboard + metrics | `:8765` | Docker publishes `8765:8765` in both compose files. |
+| Container | `open-webui` | AI chat UI | `:3000` (host) → `:8080` (container) | OpenAI-compat API → openclaw:8765/v1. External: chat.davevoyles.synology.me |
+| Container | `dashboard-v2` | OpenClaw monitoring dashboard | `:7001` (host) → `:3001` (container) | Node.js dashboard; auth required. External: openclaw-dashboard.davevoyles.synology.me |
 | LAN host | MonsterVision | Patreon downloader | `192.168.1.93:8766` | OpenClaw polls its API for cookie/download status. |
 | LAN host | Uptime Kuma | External uptime monitor | `192.168.1.93:3001` | Polls `/health` and `/metrics`. |
 | LAN host | Tautulli | Plex analytics | `192.168.1.93:8181` | Used for media/server health insights. |
@@ -20,6 +22,10 @@ Operator-facing reference for how traffic moves between the Mac Mini host, Docke
 | NAS | qBittorrent / SABnzbd | Download clients | `192.168.1.8:8080`, `192.168.1.8:8775` | qBit/SAB run behind gluetun VPN on the NAS. |
 | Remote access | Tailscale | Secure remote operations | device-specific | Preferred remote admin path; avoids opening extra inbound ports. |
 | WAN edge | Traefik on NAS | External HTTPS ingress | `80/443` | Terminates TLS for services exposed from the NAS side. |
+
+---
+
+**Slack Bot (src/slack_bot.py):** Uses Bolt SDK Socket Mode — establishes outbound WebSocket to Slack API. No inbound port required. Commands: @OpenClaw mention, DM, /ask slash command.
 
 ---
 
@@ -57,7 +63,49 @@ Synology DSM https://192.168.1.8:5001
 
 Use this path for DSM API calls from inside Docker. If DSM checks fail but the NAS is healthy, validate the proxy first.
 
-### 3. Nightly backup flow
+### 3. Open WebUI → OpenClaw
+
+Open WebUI queries openclaw's OpenAI-compat endpoint for all model inference:
+
+```text
+Browser (chat.davevoyles.synology.me)
+        |
+        v
+Synology DSM reverse proxy (HTTPS → HTTP)
+        |
+        v
+open-webui container (:3000)
+        |
+        v
+http://openclaw:8765/v1 (Docker internal DNS)
+        |
+        v
+openclaw container → LLM routing → response stream
+```
+
+Models available: openclaw-auto, openclaw-gemini, openclaw-copilot, openclaw-openai, openclaw-anthropic.
+
+### 4. Dashboard v2 → OpenClaw
+
+Dashboard monitors openclaw health and metrics:
+
+```text
+Browser (openclaw-dashboard.davevoyles.synology.me)
+        |
+        v
+Synology DSM reverse proxy (HTTPS → HTTP)
+        |
+        v
+dashboard-v2 container (:7001)
+        |
+        v
+http://openclaw:8765 (Docker internal DNS)
+        |
+        v
+/health, /metrics, /api/dashboard/* endpoints
+```
+
+### 5. Nightly backup flow
 
 ```text
 openclaw container
@@ -68,7 +116,7 @@ Synology NAS /volume1/docker/openclaw/backups/<date>/
 
 Nightly maintenance backs up config, memory, audit logs, vault contents, tasks, and `.env`.
 
-### 4. Patreon / MonsterVision monitoring flow
+### 6. Patreon / MonsterVision monitoring flow
 
 ```text
 openclaw container ---> http://192.168.1.93:8766/api/status
@@ -86,6 +134,8 @@ OpenClaw checks MonsterVision roughly every 5 minutes for cookie expiry and stal
 | Port | Surface | Owner | Protocol | Why it matters |
 | --- | --- | --- | --- | --- |
 | `8765` | `/health`, `/metrics`, `/dashboard`, `/api/dashboard` | OpenClaw | HTTP | Primary operator surface and probe target. |
+| `3000` | Open WebUI | open-webui container | HTTP | AI chat UI proxied to openclaw OpenAI API. External: chat.davevoyles.synology.me |
+| `7001` | Dashboard v2 | dashboard-v2 container | HTTP | OpenClaw monitoring dashboard. External: openclaw-dashboard.davevoyles.synology.me |
 | `19501` | NAS proxy | Mac Mini host helper | HTTP → HTTPS proxy | Required when Dockerized OpenClaw needs DSM API access. |
 | `8766` | MonsterVision API | Mac Mini host service | HTTP | Source for Patreon cookie/download monitoring. |
 | `3001` | Uptime Kuma | Mac Mini host service | HTTP | Where external uptime checks are configured. |
