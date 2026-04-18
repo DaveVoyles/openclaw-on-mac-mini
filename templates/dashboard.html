@@ -239,17 +239,6 @@
         background: rgba(241, 196, 0, 0.15);
         border-color: var(--gold);
       }
-      .btn-refresh {
-        border-color: rgba(134, 200, 188, 0.3);
-        color: var(--mint-green);
-      }
-      .btn-refresh:hover {
-        background: rgba(0, 135, 103, 0.15);
-        border-color: var(--mint-green);
-      }
-      .btn-refresh.spinning .btn-icon {
-        animation: spin 1s linear infinite;
-      }
       @keyframes spin {
         to {
           transform: rotate(360deg);
@@ -641,13 +630,6 @@
           <a id="link-github" class="btn btn-primary" href="#" target="_blank"
             ><span class="btn-icon">&#128279;</span> GitHub</a
           >
-          <a
-            class="btn btn-gold"
-            href="https://davevoyles.github.io/openclaw-dashboard/"
-            target="_blank"
-            rel="noopener"
-            ><span class="btn-icon">&#127918;</span> Mission Control</a
-          >
           <a class="btn" href="/guide" target="_blank"
             ><span class="btn-icon">&#128218;</span> Guide</a
           >
@@ -663,9 +645,6 @@
           <a class="btn" href="https://openclaw-dashboard.davevoyles.synology.me" target="_blank" rel="noopener"
             ><span class="btn-icon">&#128202;</span> Dashboard v2</a
           >
-          <button class="btn btn-refresh" onclick="refreshData(this)">
-            <span class="btn-icon">&#8635;</span> Refresh
-          </button>
         </div>
 
         <!-- New machine CLI install banner -->
