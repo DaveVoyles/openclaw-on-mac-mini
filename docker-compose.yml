@@ -113,6 +113,9 @@ services:
       # Without this mount the container uses the stale baked-in image copy.
       - ./templates:/app/templates:ro
 
+      # Scripts directory — serves install scripts (/install, /install.ps1, etc.)
+      - ./scripts:/app/scripts:ro
+
     # Health check
     healthcheck:
       test:

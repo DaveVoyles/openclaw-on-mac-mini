@@ -1,5 +1,6 @@
 """HTML page handlers for the dashboard."""
 
+from pathlib import Path
 from aiohttp import web
 
 from .helpers import (
@@ -11,6 +12,9 @@ from .helpers import (
     load_openclaw_cli_source,
     load_openclaw_cli_support_source,
 )
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_WINDOWS_INSTALLER_SCRIPT = _REPO_ROOT / "scripts" / "install_openclaw_cli_windows.ps1"
 
 
 async def dashboard_handler(request: web.Request) -> web.Response:
@@ -79,4 +83,14 @@ async def openclaw_cli_remote_installer_handler(request: web.Request) -> web.Res
         text=installer,
         content_type="text/plain",
         headers={"Content-Disposition": 'attachment; filename="openclaw-cli-remote-installer.sh"'},
+    )
+
+
+async def openclaw_cli_windows_installer_handler(request: web.Request) -> web.Response:
+    """Serve the PowerShell installer for the standalone OpenClaw CLI on Windows."""
+    script = _WINDOWS_INSTALLER_SCRIPT.read_text(encoding="utf-8")
+    return web.Response(
+        text=script,
+        content_type="text/plain",
+        headers={"Content-Disposition": 'attachment; filename="install_openclaw_cli.ps1"'},
     )

@@ -55,6 +55,7 @@ from .html_handlers import (
     openclaw_cli_installer_handler,
     openclaw_cli_remote_installer_handler,
     openclaw_cli_support_download_handler,
+    openclaw_cli_windows_installer_handler,
     terminal_handler,
 )
 
@@ -84,6 +85,7 @@ def setup_dashboard(
     app.router.add_get("/onboarding", onboarding_handler)
     app.router.add_get("/install", openclaw_cli_installer_handler)
     app.router.add_get("/install-remote", openclaw_cli_remote_installer_handler)
+    app.router.add_get("/install.ps1", openclaw_cli_windows_installer_handler)
     app.router.add_get("/downloads/openclaw_cli.py", openclaw_cli_download_handler)
     app.router.add_get("/downloads/openclaw-cli-support/{name}", openclaw_cli_support_download_handler)
     app.router.add_get("/downloads/openclaw-cli-installer.sh", openclaw_cli_installer_handler)

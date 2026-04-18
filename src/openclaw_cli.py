@@ -5617,6 +5617,129 @@ def handle_analyze_command(args: argparse.Namespace, *, config: CliConfig) -> in
     return 0
 
 
+def handle_scan_command(args: argparse.Namespace, *, config: CliConfig) -> int:
+    """Scan a local folder and send all file contents to the AI for analysis."""
+    import os
+
+    target_path = Path(getattr(args, "path", None) or os.getcwd()).expanduser().resolve()
+    if not target_path.exists():
+        print(f"❌ Path does not exist: {target_path}", file=sys.stderr)
+        return 1
+    if not target_path.is_dir():
+        print(f"❌ Not a directory: {target_path}", file=sys.stderr)
+        return 1
+
+    goal = getattr(args, "goal", None) or (
+        "Review this folder's contents and structure. "
+        "Summarize what each document is about, identify any issues or gaps, "
+        "and suggest how to better organize the files."
+    )
+
+    MAX_TOTAL_CHARS = 180_000
+    MAX_FILE_CHARS = 20_000
+    SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv", ".DS_Store"}
+    TEXT_EXTS = {
+        ".txt", ".md", ".rst", ".csv", ".json", ".yaml", ".yml", ".toml",
+        ".ini", ".cfg", ".log", ".py", ".js", ".ts", ".html", ".xml",
+        ".css", ".sql", ".sh", ".bash", ".r", ".docx", ".pdf",
+    }
+
+    tree_lines: list[str] = [f"📁 {target_path.name}/"]
+    file_chunks: list[str] = []
+    total_chars = 0
+    truncated = False
+
+    def walk(directory: Path, indent: int = 1) -> None:
+        nonlocal total_chars, truncated
+        try:
+            entries = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        except OSError:
+            return
+        for entry in entries:
+            if entry.name in SKIP_DIRS:
+                continue
+            prefix = "  " * indent
+            if entry.is_dir():
+                tree_lines.append(f"{prefix}📂 {entry.name}/")
+                walk(entry, indent + 1)
+            elif entry.is_file():
+                tree_lines.append(f"{prefix}📄 {entry.name}")
+                if total_chars >= MAX_TOTAL_CHARS:
+                    truncated = True
+                    continue
+                ext = entry.suffix.lower()
+                if ext not in TEXT_EXTS:
+                    continue
+                try:
+                    if ext == ".pdf":
+                        try:
+                            from pypdf import PdfReader
+                            reader = PdfReader(str(entry))
+                            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                        except Exception:
+                            continue
+                    elif ext == ".docx":
+                        try:
+                            import docx
+                            doc = docx.Document(str(entry))
+                            text = "\n".join(p.text for p in doc.paragraphs)
+                        except Exception:
+                            continue
+                    else:
+                        text = entry.read_text(encoding="utf-8", errors="replace")
+
+                    chunk = text[:MAX_FILE_CHARS]
+                    if len(text) > MAX_FILE_CHARS:
+                        chunk += "\n...[truncated]..."
+                    rel = entry.relative_to(target_path)
+                    file_chunks.append(f"--- {rel} ---\n{chunk}")
+                    total_chars += len(chunk)
+                except OSError:
+                    continue
+
+    walk(target_path)
+
+    tree_text = "\n".join(tree_lines)
+    files_text = "\n\n".join(file_chunks) if file_chunks else "(no readable text files found)"
+    if truncated:
+        files_text += "\n\n[Note: Some files were omitted due to size limits]"
+
+    context_text = (
+        f"Folder: {target_path}\n\n"
+        f"## Folder Structure\n{tree_text}\n\n"
+        f"## File Contents\n{files_text}"
+    )
+
+    session = ensure_cli_session(
+        getattr(args, "session", ""),
+        title=f"Scan: {target_path.name}",
+        cwd=str(target_path),
+        files=[],
+    )
+    scoped_config = bind_config_to_session(config, session.session_id)
+
+    full_prompt = f"{goal}\n\n{context_text}"
+    append_event(
+        session.session_id,
+        kind="analyze",
+        content=goal,
+        metadata={"summary": f"scan {target_path}", "cwd": str(target_path)},
+    )
+
+    response = _with_spinner(
+        f"🔍 Scanning {target_path.name}…",
+        invoke_openclaw,
+        full_prompt,
+        config=scoped_config,
+        history=None,
+        output_json=config.output_json,
+    )
+    print_response(response, output_json=config.output_json)
+    persist_response(session.session_id, goal, response.response)
+    _print_meta_footer(("session", session.session_id))
+    return 0
+
+
 def handle_research_command(args: argparse.Namespace) -> int:
     """Run the built-in research agent from the CLI."""
     from openclaw_cli_actions import write_text_file
@@ -5903,6 +6026,7 @@ def main(argv: list[str] | None = None) -> int:
         "edit",
         "update",
         "status",
+        "scan",
     }
 
     # Skip background update check when the user is explicitly running `openclaw update`.
@@ -5975,7 +6099,7 @@ def main(argv: list[str] | None = None) -> int:
         if command in {"ask", "chat"} and config.session_id:
             require_session(config.session_id)
 
-        if command in {"ask", "chat", "analyze", "write", "watch"}:
+        if command in {"ask", "chat", "analyze", "write", "watch", "scan"}:
             maybe_warn_missing_token(config)
         if command == "chat":
             session = None
@@ -6002,6 +6126,8 @@ def main(argv: list[str] | None = None) -> int:
             return handle_plan_command(args, session_id=config.session_id)
         if command == "analyze":
             return handle_analyze_command(args, config=config)
+        if command == "scan":
+            return handle_scan_command(args, config=config)
         if command == "research":
             return handle_research_command(args)
         if command == "write":

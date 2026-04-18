@@ -523,49 +523,55 @@
                 </div>
             </div>
 
-            <!-- Step 6: Shared folder -->
+            <!-- Step 6: Folder scan / CLI -->
             <div class="step" data-step="6">
-                <h2>📁 Step 5 — Review a whole folder of documents</h2>
+                <h2>📁 Step 5 — Let OpenClaw review your whole folder</h2>
                 <p>
-                    Want OpenClaw to look at multiple files at once — like a whole project folder?
-                    Dave can set up a <strong>shared folder</strong> that OpenClaw has access to.
-                    Once it's set up, you can ask things like:
+                    Want OpenClaw to look at a folder of files on <em>your own computer</em> — like a work project,
+                    a folder of contracts, or a collection of notes? You have two options:
                 </p>
 
-                <div class="example-prompt">"List all the files in the shared folder."</div>
-                <div class="example-prompt">"Read the file called 'proposal.docx' and give me a summary."</div>
-                <div class="example-prompt">"Which documents in the folder mention budget?"</div>
-                <div class="example-prompt">"Review all the files and tell me which one needs the most editing."</div>
+                <!-- Option A: CLI scan -->
+                <div style="background:#f0f4ff;border-left:4px solid #667eea;border-radius:10px;padding:20px;margin:20px 0;">
+                    <h3 style="margin-top:0;color:#667eea;">🖥️ Option A — The OpenClaw CLI (one-time install, most powerful)</h3>
+                    <p style="margin-bottom:12px;">
+                        Install a small helper app on your computer. Then just point it at any folder and it sends
+                        everything to OpenClaw automatically. Works on Mac and Windows.
+                    </p>
 
-                <p style="margin-top: 16px;">To get access to the shared folder:</p>
+                    <p><strong>Mac install</strong> — open Terminal and paste:</p>
+                    <div class="example-prompt" style="font-family:monospace;font-size:0.9em;word-break:break-all;">
+                        curl -fsSL https://openclaw.davevoyles.synology.me/install | bash
+                    </div>
 
-                <div class="instruction-step">
-                    <div class="step-badge">1</div>
-                    <div class="instruction-step-body">
-                        <strong>Ask Dave to add you</strong>
-                        <span>Dave can give you access to a shared folder (called <code style="background:#f0f4ff;padding:2px 6px;border-radius:4px">/ai-files</code>) on his system.</span>
+                    <p style="margin-top:14px;"><strong>Windows install</strong> — open PowerShell and paste:</p>
+                    <div class="example-prompt" style="font-family:monospace;font-size:0.9em;word-break:break-all;">
+                        irm https://openclaw.davevoyles.synology.me/install.ps1 | iex
+                    </div>
+
+                    <p style="margin-top:14px;"><strong>Then scan any folder:</strong></p>
+                    <div class="example-prompt" style="font-family:monospace;">cd ~/Desktop/MyDocs &amp;&amp; openclaw scan</div>
+                    <div class="example-prompt" style="font-family:monospace;">openclaw scan ~/Desktop/MyDocs "Suggest how to reorganize these files"</div>
+
+                    <div class="tip-box" style="margin-top:14px;">
+                        <strong>💡 Tip:</strong> This works like GitHub Copilot — it reads your whole folder tree
+                        and sends it to the AI. You only need to install it once.
                     </div>
                 </div>
 
-                <div class="instruction-step">
-                    <div class="step-badge">2</div>
-                    <div class="instruction-step-body">
-                        <strong>Place files in the folder</strong>
-                        <span>Copy your documents into the shared folder — Dave can help you do this the first time.</span>
-                    </div>
-                </div>
-
-                <div class="instruction-step">
-                    <div class="step-badge">3</div>
-                    <div class="instruction-step-body">
-                        <strong>Ask OpenClaw to work with them</strong>
-                        <span>In Slack, just tell OpenClaw the file name and what you need. It will read the file and respond!</span>
-                    </div>
+                <!-- Option B: Slack upload -->
+                <div style="background:#f9fafb;border-left:4px solid #a0aec0;border-radius:10px;padding:20px;margin:20px 0;">
+                    <h3 style="margin-top:0;color:#555;">📎 Option B — Slack drag-and-drop (no install)</h3>
+                    <p style="margin-bottom:10px;">
+                        No install needed — just drag files into the Slack chat and ask OpenClaw to work with them.
+                        Works for individual files. For many files, zip them first.
+                    </p>
+                    <div class="example-prompt">"Here's my report — can you tighten it up?" [drag file]</div>
+                    <div class="example-prompt">"Review all the docs in this zip and tell me which needs the most work." [drag zip]</div>
                 </div>
 
                 <div class="tip-box">
-                    <strong>💡 Tip:</strong> This is great for reviewing contracts, recipes, travel plans, or any set of documents
-                    you want AI help with all at once.
+                    <strong>📞 Need help installing?</strong> Just ask Dave — he can walk you through it in 5 minutes!
                 </div>
             </div>
 

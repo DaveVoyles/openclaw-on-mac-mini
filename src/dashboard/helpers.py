@@ -355,6 +355,7 @@ _OPENCLAW_CLI_SOURCE = _REPO_ROOT / "src" / "openclaw_cli.py"
 _OPENCLAW_CLI_SUPPORT_SOURCES = {
     "openclaw_cli_actions.py": _REPO_ROOT / "src" / "openclaw_cli_actions.py",
     "openclaw_cli_sessions.py": _REPO_ROOT / "src" / "openclaw_cli_sessions.py",
+    "openclaw_cli_cmd_core.py": _REPO_ROOT / "src" / "openclaw_cli_cmd_core.py",
     "subprocess_utils.py": _REPO_ROOT / "src" / "subprocess_utils.py",
 }
 DASHBOARD_HTML = (_TEMPLATES_DIR / "dashboard.html").read_text()

@@ -28,7 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  openclaw ask \"summarize the latest alerts\"\n"
             "  openclaw --health\n"
             "  openclaw auth login\n"
-            "  openclaw auth status"
+            "  openclaw auth status\n"
+            "  openclaw scan ~/Desktop/MyDocs"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -73,6 +74,10 @@ def build_parser() -> argparse.ArgumentParser:
     login_parser.add_argument("--token", help="Token to store; if omitted, prompt securely")
     auth_subparsers.add_parser("status", help="Show where the CLI token is currently resolved from")
     auth_subparsers.add_parser("logout", help="Remove persisted CLI token(s)")
+
+    scan_parser = subparsers.add_parser("scan", help="Scan a local folder and get AI analysis of its contents and structure")
+    scan_parser.add_argument("path", nargs="?", default=None, help="Folder to scan (defaults to current directory)")
+    scan_parser.add_argument("goal", nargs="?", default=None, help="What to ask about the folder (optional)")
 
     analyze_parser = subparsers.add_parser("analyze", help="Analyze a project, directory, or file set")
     analyze_parser.add_argument("--cwd", help="Working directory to inspect")
