@@ -149,4 +149,6 @@ gh run list --limit 3                # all green
 | — | — | — | Wave 8 plan created |
 | 17:58 | — | Orchestrator | 🔍 Pre-flight: other agent already completed /search, /schedule, audio stub, retry cache, DM thread memory, manifest. 105 tests passing. |
 | 17:58 | 1 | Han 😉🚀 | 📋 Launched: add TestErrorRecoveryAndAudio (4 tests) + fix test_dm_thread_ts_detected → target 109+ |
-| 17:58 | 2 | Yoda 👽✨ | 📋 Launched: update PARENTS-GUIDE.md + guide.html with /saved, /search, /schedule |
+| 17:58 | 2 | Yoda 👽✨ | ✅ DONE: PARENTS-GUIDE.md + guide.html updated (/saved, /search, /schedule), link check passed |
+| Done | 2 | Yoda 👽✨ | ✅ docs/PARENTS-GUIDE.md: added `/search` section after `/brief`, `/saved` section after 🔖 bookmark section, `/schedule` section after `/digest`. templates/guide.html: added 3 rows to Slack commands table (/saved, /search, /schedule), added 3 new h3 subsections in Section 72 (View Saved Notes, Search File History, Schedule Your Digest), updated quick-start flow. Version already at v0.16.0. `python3 scripts/check_markdown_links.py` → Markdown links OK. |
+| Done | 1 | Han 😉🚀 | ✅ tests/test_slack_bot.py: fixed test_dm_thread_ts_detected (async→sync), replaced async test_audio_mime_in_process_files with sync inline-logic test. TestErrorRecoveryAndAudio already present with 4 tests. **109 tests passing**, ruff 0 errors. |
