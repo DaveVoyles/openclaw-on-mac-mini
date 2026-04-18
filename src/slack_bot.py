@@ -2276,9 +2276,10 @@ def create_slack_app():  # type: ignore[return]
         )
 
     # Register one handler per action_id using closures
-    # Note: file_translate is excluded from the generic dispatch loop because
-    # it has its own language-picker flow registered separately below.
-    for _action_id in [k for k in _FILE_ACTION_PROMPTS.keys() if k != "file_translate"]:
+    # Note: file_translate and file_compare are excluded from the generic dispatch loop because
+    # they have their own flows registered separately below.
+    _excluded_from_generic = {"file_translate", "file_compare"}
+    for _action_id in [k for k in _FILE_ACTION_PROMPTS.keys() if k not in _excluded_from_generic]:
         def _make_handler(aid: str):
             async def handler(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
                 await _dispatch_file_action(aid, ack, body, client, say)
@@ -2286,6 +2287,28 @@ def create_slack_app():  # type: ignore[return]
             return handler
 
         app.action(_action_id)(_make_handler(_action_id))
+
+    # ------------------------------------------------------------------
+    # Handler: 🔀 Compare — first step, store Document A and prompt for B
+    # ------------------------------------------------------------------
+
+    @app.action("file_compare_start")
+    async def handle_compare_start(ack: Any, body: dict[str, Any], say: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "unknown")
+        actions = body.get("actions", [{}])
+        file_id = (actions[0] if actions else {}).get("value", "")
+        if not file_id:
+            await say(text="⚠️ Couldn't identify the file. Please try again.")
+            return
+        _compare_pending[user_id] = file_id
+        file_obj_entry = _file_registry.get(file_id) or {}
+        if isinstance(file_obj_entry, dict) and "file_obj" in file_obj_entry:
+            file_obj_entry = file_obj_entry["file_obj"]
+        filename = (file_obj_entry.get("name") or "the file") if file_obj_entry else "the file"
+        await say(
+            text=f"📄 Got *{filename}* as Document A. Now upload or share Document B and I'll compare them."
+        )
 
     # ------------------------------------------------------------------
     # Handler: 🌍 Translate — language picker + translation dispatch

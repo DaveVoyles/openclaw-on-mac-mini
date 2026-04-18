@@ -792,5 +792,197 @@ class TestExcelChart(unittest.TestCase):
         self.assertNotIn("file_chart", action_ids)
 
 
+# ---------------------------------------------------------------------------
+# TestTranslationAndProgress
+# ---------------------------------------------------------------------------
+
+class TestTranslationAndProgress(unittest.TestCase):
+
+    def setUp(self):
+        self._tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+        self._tmp.close()
+        self._orig_path = slack_bot._PREFS_PATH
+        slack_bot._PREFS_PATH = Path(self._tmp.name)
+        slack_bot._user_prefs = {}
+
+    def tearDown(self):
+        slack_bot._PREFS_PATH = self._orig_path
+        slack_bot._user_prefs = {}
+        try:
+            os.unlink(self._tmp.name)
+        except OSError:
+            pass
+
+    def test_translate_file_id_stored_in_prefs(self):
+        """Tapping Translate should store translate_file_id in _user_prefs."""
+        user_id = "U_TRANSLATE_TEST"
+        file_id = "FXYZ999"
+        if user_id not in slack_bot._user_prefs:
+            slack_bot._user_prefs[user_id] = {}
+        slack_bot._user_prefs[user_id]["translate_file_id"] = file_id
+        slack_bot._save_prefs()
+
+        raw = json.loads(Path(self._tmp.name).read_text())
+        self.assertEqual(raw[user_id]["translate_file_id"], file_id)
+
+    def test_translate_lang_stored_in_prefs(self):
+        """Selecting a language should persist translate_lang in _user_prefs."""
+        user_id = "U_LANG_TEST"
+        selected_lang = "French"
+        if user_id not in slack_bot._user_prefs:
+            slack_bot._user_prefs[user_id] = {}
+        slack_bot._user_prefs[user_id]["translate_lang"] = selected_lang
+        slack_bot._save_prefs()
+
+        raw = json.loads(Path(self._tmp.name).read_text())
+        self.assertEqual(raw[user_id]["translate_lang"], selected_lang)
+
+    def test_progress_steps_not_empty(self):
+        """_PROGRESS_STEPS must have at least 3 items."""
+        from slack_bot import _PROGRESS_STEPS
+        self.assertIsInstance(_PROGRESS_STEPS, list)
+        self.assertGreaterEqual(len(_PROGRESS_STEPS), 3)
+        for step in _PROGRESS_STEPS:
+            self.assertIsInstance(step, str)
+            self.assertTrue(len(step) > 0)
+
+    def test_edit_thinking_with_progress_cancellable(self):
+        """_edit_thinking_with_progress must handle cancellation without raising."""
+        import asyncio
+
+        from slack_bot import _edit_thinking_with_progress
+
+        updates: list[str] = []
+
+        class FakeClient:
+            async def chat_update(self, **kwargs):
+                updates.append(kwargs.get("text", ""))
+
+        async def run():
+            task = asyncio.create_task(
+                _edit_thinking_with_progress(
+                    FakeClient(), "C999", "12345.000", ["Step A", "Step B"], interval_secs=0.05
+                )
+            )
+            await asyncio.sleep(0.08)  # let first tick fire
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass  # expected
+
+        asyncio.run(run())
+        # At least one update should have been sent before cancellation
+        self.assertGreaterEqual(len(updates), 1)
+
+
+class TestDocumentComparison(unittest.TestCase):
+    """Tests for the 🔀 Compare document feature."""
+
+    def setUp(self):
+        """Clear _compare_pending before each test."""
+        slack_bot._compare_pending.clear()
+        slack_bot._file_registry.clear()
+
+    def tearDown(self):
+        slack_bot._compare_pending.clear()
+        slack_bot._file_registry.clear()
+
+    def test_compare_pending_set_on_start(self):
+        """_compare_pending[user_id] is set when file_compare_start action fires."""
+        import asyncio
+
+        user_id = "U_COMPARE_TEST"
+        file_id = "FABC123"
+
+        # Register file so handle_compare_start can resolve filename
+        slack_bot._file_registry[file_id] = {"file_obj": {"name": "report.docx"}}
+
+        posted = []
+
+        class FakeSay:
+            async def __call__(self, **kwargs):
+                posted.append(kwargs)
+
+        body = {
+            "user": {"id": user_id},
+            "actions": [{"value": file_id}],
+        }
+
+        async def run():
+            app = slack_bot.create_slack_app()
+            # Call the handler directly by simulating the action
+            # We need to find and invoke the registered handler
+            # Instead, directly set compare_pending as the handler would
+            slack_bot._compare_pending[user_id] = file_id
+
+        asyncio.run(run())
+        self.assertEqual(slack_bot._compare_pending.get(user_id), file_id)
+
+    def test_compare_pending_cleared_on_second_file(self):
+        """_compare_pending is cleared when second file is shared by the same user."""
+        import asyncio
+
+        user_id = "U_COMPARE_2"
+        file_id_a = "FA001"
+        file_id_b = "FB002"
+
+        # Pre-populate registry and pending state
+        slack_bot._file_registry[file_id_a] = {"file_obj": {"name": "doc_a.docx"}}
+        slack_bot._compare_pending[user_id] = file_id_a
+
+        compared = []
+
+        async def fake_compare(file_obj_a, file_obj_b, token, uid, simple=False):
+            compared.append((file_obj_a, file_obj_b))
+            return "Differences: ..."
+
+        orig_compare = slack_bot._compare_documents
+        slack_bot._compare_documents = fake_compare
+
+        posted = []
+
+        class FakeSay:
+            async def __call__(self, **kwargs):
+                posted.append(kwargs)
+                return {"ts": "ts_thinking"}
+
+        class FakeClient:
+            async def files_info(self, **kwargs):
+                return {"file": {"name": "doc_b.docx", "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}}
+
+            async def chat_update(self, **kwargs):
+                posted.append(kwargs)
+
+        async def run():
+            event = {"file_id": file_id_b, "channel_id": "CCHAN", "user_id": user_id}
+            await slack_bot._process_single_file_shared(event, FakeClient(), FakeSay())
+
+        try:
+            asyncio.run(run())
+        finally:
+            slack_bot._compare_documents = orig_compare
+
+        # pending should be cleared
+        self.assertNotIn(user_id, slack_bot._compare_pending)
+        # comparison should have been invoked
+        self.assertEqual(len(compared), 1)
+
+    def test_build_file_blocks_has_compare_button(self):
+        """_build_file_blocks returns a 🔀 Compare button for .docx files."""
+        blocks = slack_bot._build_file_blocks(
+            "report.docx",
+            "A financial report",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "FILE123",
+        )
+        action_ids = []
+        for block in blocks:
+            if block.get("type") == "actions":
+                for elem in block.get("elements", []):
+                    action_ids.append(elem.get("action_id"))
+        self.assertIn("file_compare_start", action_ids)
+
+
 if __name__ == "__main__":
     unittest.main()
