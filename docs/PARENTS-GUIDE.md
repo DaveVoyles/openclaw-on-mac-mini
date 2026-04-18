@@ -466,41 +466,36 @@ Your preferred time is saved just for you — no one else's schedule is affected
 
 ---
 
-## 💾 View Your Saved Notes — `/saved`
+## 👤 Set Your Name — `/nickname`
 
-Want to see what you've bookmarked with 🔖? Type:
+Want OpenClaw to call you by your name instead of "there"? Just tell it:
 
 ```
-/saved
+/nickname Chuck
+/nickname Lisa
 ```
 
-OpenClaw shows your last 5 saved notes privately — just to you. Each entry shows the message content and when you saved it. Great for finding that useful answer you bookmarked a few days ago.
+From that point on, OpenClaw will greet you by name — "Hi Chuck!" — in new conversations and your daily digest. It's a small thing that makes it feel much more personal.
+
+You only need to do this once. OpenClaw remembers your name even after restarts.
 
 ---
 
-## 🔍 Search Your Files — `/search`
+## 🏠 Your OpenClaw Home Tab
 
-Can't remember which file you uploaded? Type:
+Every time you open the OpenClaw app in Slack, there's a **Home** tab at the top — think of it as your personal command reference, always up to date.
 
-```
-/search budget
-/search Q4 report
-```
+To get there:
+1. In Slack's left sidebar, tap **OpenClaw** under Apps (or Direct Messages)
+2. At the top, tap the **Home** tab
 
-OpenClaw searches through all the files you've shared and shows matches by filename and upload date — privately. Handy when you've uploaded a lot of documents and need to find one quickly.
+You'll see:
+- A greeting with your name
+- All available commands in one place
+- Your 3 most recently uploaded files
+- A quick help reminder
 
----
-
-## ⏰ Schedule a Daily Reminder — `/schedule`
-
-Want OpenClaw to remind you about something every day at a set time? Type:
-
-```
-/schedule 9am
-/schedule off
-```
-
-Use `/schedule 9am` (or `8am`, `10am`, etc.) to set a daily check-in reminder. OpenClaw will DM you at that time each day. Use `/schedule off` to stop reminders.
+No need to remember commands — it's all right there whenever you need it.
 
 ---
 
