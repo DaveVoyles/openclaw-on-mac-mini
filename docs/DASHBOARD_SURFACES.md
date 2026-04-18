@@ -13,7 +13,27 @@
 | UX roadmap / wave history | `docs/UX_IMPROVEMENTS.md` | Update roadmap status, shipped evidence, and future-wave sequencing |
 | Dashboard surface inventory | `docs/DASHBOARD_SURFACES.md` | Update for every new or materially changed dashboard/status canvas |
 
-## Surface inventory
+## Interface inventory (all access points)
+
+Added April 2026. Use this as the single source of truth for which interface exists, where it runs, and when to use it.
+
+| Interface | URL / Entry | Port | Best For | Strengths |
+| --- | --- | --- | --- | --- |
+| 🎮 **Discord bot** | discord.com / `#openclaw` | — | Quick Q&A, group use, push notifications | Shared · Slash commands · Skill routing · Alerts |
+| 💬 **Open WebUI** | `chat.davevoyles.synology.me` | 3000 | Long chats, rich formatting, any device | Markdown · Tables · Code blocks · Chat history · Regenerate |
+| 💻 **CLI / Terminal** | `/terminal` (browser) or `openclaw` binary | 8765 | Power users, scripting, debugging | Low latency · Scriptable · Pipe-friendly |
+| 📨 **Slack bot** | Slack DM or `@openclaw` mention | — | Work context, async queries | Workspace-aware · Threaded replies |
+| 📊 **Dashboard v2** | `openclaw-dashboard.davevoyles.synology.me` | 7001 | Stats & monitoring at a glance | Always-on panel · Visual metrics |
+| 🛠️ **OpenClaw Dashboard** | `openclaw.davevoyles.synology.me` | 8765 | Ops, status, admin tasks | Live status · Skill list · Route map · Cookie refresh |
+
+### Technical wiring
+
+- **Open WebUI** (`ghcr.io/open-webui/open-webui:main`) → connects to `http://openclaw:8765/v1` (OpenAI-compatible). Auth disabled (`WEBUI_AUTH=False`). Data persisted in Docker named volume `open-webui-data`.
+- **Dashboard v2** (`openclaw-dashboard-v2` container) → port 7001. Lightweight stats view.
+- **Slack bot** (`src/integrations/slack_bot.py`) → Socket Mode. Requires `SLACK_APP_TOKEN` (xapp-) and `SLACK_BOT_TOKEN` (xoxb-) in `.env`.
+- **Traefik routes**: `chat.*` → port 3000, `openclaw-dashboard.*` → port 7001. Dynamic config at `config/traefik/dynamic/mac-mini.yml`.
+
+
 
 ### Terminal-first status canvases
 

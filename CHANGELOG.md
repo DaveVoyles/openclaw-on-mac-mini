@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — April 2026 Interface Expansion
+- **Open WebUI** (`chat.davevoyles.synology.me`): Browser-based ChatGPT-style interface connected to OpenClaw's `/v1` API. Supports persistent chat history, markdown/table/code rendering, and regenerate. Auth disabled for private LAN use.
+- **Slack bot** (`src/integrations/slack_bot.py`): Socket Mode Slack bot supporting DMs and `@openclaw` mentions in channels. Uses App-Level Token + Bot OAuth token. Configured via Slack app manifest (YAML).
+- **Dashboard v2** (`openclaw-dashboard.davevoyles.synology.me`, port 7001): Lightweight second dashboard for stats and monitoring, separate from the main ops dashboard.
+- **Traefik reverse proxy routes** for all three new services via Synology NAS (`config/traefik/dynamic/mac-mini.yml`): `chat.*`, `openclaw-dashboard.*`.
+- **Nav buttons** in OpenClaw dashboard header for Open WebUI and Dashboard v2 (beside Refresh button).
+- **Access Points card** in OpenClaw dashboard: visual grid linking all five interfaces (Discord, Open WebUI, Dashboard v2, CLI, Slack).
+- **Interface comparison table** in OpenClaw dashboard: "Which Interface Should I Use?" — side-by-side guide covering best-use, strengths, and links for each interface.
+
+### Fixed — April 2026
+- **Templates symlink bug**: `src/templates/` is a symlink to `../templates/`. Docker bind-mount `./src:/app/src:ro` did not follow the symlink target outside the mounted directory. Fixed by adding `./templates:/app/templates:ro` as a separate volume mount in `docker-compose.yml`.
+- **Port conflict**: Dashboard v2 remapped from port 7000 → 7001 (7000 is reserved by macOS AirPlay Receiver).
+- **Multi-line paste**: Bracketed paste mode fix for the readline REPL path.
+- **Escape cancel**: Escape key now cancels a running search mid-stream.
+
 ### Added
 - Multi-stage Docker builds for production (<500MB target)
 - Trivy security scanning in CI/CD pipeline
