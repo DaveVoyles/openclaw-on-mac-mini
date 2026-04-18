@@ -348,6 +348,21 @@ OpenClaw replies (privately, just to you) with your last 5 uploaded files and ho
 
 ---
 
+## 🔍 Search Your Files — `/search`
+
+Looking for a file you uploaded a while ago? Type a keyword from the filename or something you remember from the content:
+
+```
+/search budget
+/search quarterly report
+```
+
+OpenClaw will show you any matching files from your upload history — file name, type, and when you sent it. Only you can see the results.
+
+If nothing comes up, try `/brief` to see everything you've uploaded recently.
+
+---
+
 ## 📊 Your Personal Stats — `/mystats`
 
 Curious how much you've been using OpenClaw? Type:
@@ -373,6 +388,20 @@ Seen a great answer you want to keep? Just react to it with the 🔖 bookmark em
 OpenClaw will save the message to your personal notes list and confirm with a private message: *"🔖 Saved!"*
 
 Your saved notes are stored on the server — no need to copy/paste anything.
+
+---
+
+## 🔖 View Your Saved Notes — `/saved`
+
+Want to look back at things you've bookmarked? Type:
+
+```
+/saved
+```
+
+OpenClaw will show you your last 5 saved notes — a short preview of each one and when you saved it. Only you can see this list.
+
+If you haven't saved anything yet, it'll remind you how: just react to any bot reply with the 🔖 emoji.
 
 ---
 
@@ -415,6 +444,69 @@ To check whether it's currently on:
 ```
 /digest status
 ```
+
+---
+
+## ⏰ Set Your Digest Time — `/schedule`
+
+By default, your daily digest arrives at whatever time the server happens to check. Want it at a specific time each day? Just tell OpenClaw when:
+
+```
+/schedule 9am
+/schedule 8:30am
+/schedule 14:00
+```
+
+To go back to the default (no fixed time):
+```
+/schedule off
+```
+
+Your preferred time is saved just for you — no one else's schedule is affected.
+
+---
+
+## 💾 View Your Saved Notes — `/saved`
+
+Want to see what you've bookmarked with 🔖? Type:
+
+```
+/saved
+```
+
+OpenClaw shows your last 5 saved notes privately — just to you. Each entry shows the message content and when you saved it. Great for finding that useful answer you bookmarked a few days ago.
+
+---
+
+## 🔍 Search Your Files — `/search`
+
+Can't remember which file you uploaded? Type:
+
+```
+/search budget
+/search Q4 report
+```
+
+OpenClaw searches through all the files you've shared and shows matches by filename and upload date — privately. Handy when you've uploaded a lot of documents and need to find one quickly.
+
+---
+
+## ⏰ Schedule a Daily Reminder — `/schedule`
+
+Want OpenClaw to remind you about something every day at a set time? Type:
+
+```
+/schedule 9am
+/schedule off
+```
+
+Use `/schedule 9am` (or `8am`, `10am`, etc.) to set a daily check-in reminder. OpenClaw will DM you at that time each day. Use `/schedule off` to stop reminders.
+
+---
+
+## 🔁 Retry After an Error
+
+If OpenClaw ever replies with an error message, you'll see a **🔁 Try again** button right below it. Just click it — OpenClaw will re-run your original request without you having to retype anything.
 
 ---
 

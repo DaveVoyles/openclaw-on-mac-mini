@@ -338,6 +338,7 @@
           <li><a href="#sentry">58. Error Monitoring (/sentry)</a></li>
           <li><a href="#digest">59. Personalized Digests (/digest)</a></li>
           <li><a href="#trends">60. Trend Detection &amp; Tracking (/track, /trending, /trends, /breaking)</a></li>
+          <li><a href="#wave8">62. Wave 8 — Smart Memory &amp; Recovery</a></li>
           <li><a href="#premium-skills">61. Premium API Skills Reference</a></li>
           <li><a href="#phase3-financial">62. Financial Data (Polygon.io) - Phase 3</a></li>
           <li><a href="#phase3-workflows">63. Workflow Automation &amp; Scheduling - Phase 3</a></li>
@@ -4544,6 +4545,30 @@ Related Trends:
 
       <p><strong>💡 Pro Tip:</strong> Use <code>/track</code> with scheduled research (<code>/schedule add</code>) to automatically monitor topics and receive daily trend reports.</p>
 
+      <!-- 62. Wave 8: /saved, /search, /schedule, Retry Button -->
+      <h2 id="wave8">62. Wave 8 — Smart Memory &amp; Recovery</h2>
+      <p>Wave 8 adds four quality-of-life features: saved-note retrieval, file search, daily reminders, and one-click error recovery.</p>
+
+      <h3>💾 /saved — View Your Bookmarks</h3>
+      <p>Shows your last 5 🔖-bookmarked bot responses privately.</p>
+      <pre><code>/saved</code></pre>
+
+      <h3>🔍 /search — Find a File by Name</h3>
+      <p>Search through all files you've uploaded by filename keyword.</p>
+      <pre><code>/search budget
+/search Q4 report</code></pre>
+
+      <h3>⏰ /schedule — Daily Reminder</h3>
+      <p>Set (or cancel) a daily DM reminder from OpenClaw.</p>
+      <pre><code>/schedule 9am    ← set reminder for 9:00 AM
+/schedule off    ← cancel reminders</code></pre>
+
+      <h3>🔁 Retry Button</h3>
+      <p>If OpenClaw returns an error, a <strong>🔁 Try again</strong> button appears. Click it to re-run the exact same request without retyping anything.</p>
+
+      <h3>🧵 DM Thread Memory</h3>
+      <p>When you reply inside a DM thread, OpenClaw now reads the full thread history — giving follow-up replies the same context awareness as channel mentions.</p>
+
       <!-- 61. Premium API Skills Reference -->
       <h2 id="premium-skills">61. Premium API Skills Reference</h2>
       <p>When using <code>/chat</code>, the AI can automatically invoke these premium skills to fetch real-time data. You don't need to call them manually—just ask naturally!</p>
@@ -5186,6 +5211,9 @@ git push --tags
             <tr><td style="padding:0.35rem 0.6rem"><code>/template &lt;name&gt;</code></td><td style="padding:0.35rem 0.6rem">DM yourself a ready-to-fill template file &mdash; e.g. <code>/template budget</code></td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/brief</code></td><td style="padding:0.35rem 0.6rem">See your last 5 uploaded files with timestamps at a glance</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/mystats</code></td><td style="padding:0.35rem 0.6rem">Your personal usage stats: queries, files processed, average response time, top actions</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/saved</code></td><td style="padding:0.35rem 0.6rem">View your last 5 bookmarked bot responses (saved by reacting 🔖 to any bot message)</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/search &lt;keyword&gt;</code></td><td style="padding:0.35rem 0.6rem">Search your file upload history by filename or content keyword &mdash; results are private</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/schedule &lt;time|off&gt;</code></td><td style="padding:0.35rem 0.6rem">Set a preferred daily delivery time for your digest &mdash; e.g. <code>/schedule 9am</code>, <code>/schedule off</code></td></tr>
           </tbody>
         </table>
       </div>
@@ -5312,6 +5340,35 @@ Invoke-RestMethod `
         No copy/paste needed.
       </p>
 
+      <h3>View Saved Notes (<code>/saved</code>)</h3>
+      <p>
+        Type <code>/saved</code> to retrieve your last 5 bookmarked bot responses. Each entry shows
+        a short text preview (up to 200&nbsp;characters) and the timestamp when it was saved.
+        The list is private &mdash; only you see it. If you haven&rsquo;t saved anything yet,
+        the bot reminds you how: react 🔖 to any response.
+      </p>
+
+      <h3>Search File History (<code>/search &lt;keyword&gt;</code>)</h3>
+      <p>
+        Can&rsquo;t remember which file had that table? Type <code>/search budget</code> (or any
+        keyword) to scan your upload history by filename and content summary. Results appear as a
+        private card with the file name, type icon, and relative timestamp. No matches?
+        Try <code>/brief</code> to browse all recent uploads.
+      </p>
+
+      <h3>Schedule Your Digest (<code>/schedule &lt;time|off&gt;</code>)</h3>
+      <p>
+        Set a preferred delivery time for your daily file digest so it arrives when you&rsquo;re
+        ready to read it. Accepts 12-hour (<code>9am</code>, <code>8:30am</code>) and 24-hour
+        (<code>14:00</code>) formats. Use <code>/schedule off</code> to revert to the default
+        24-hour interval. The preference is stored per-user in <code>digest_prefs.json</code>.
+      </p>
+      <div class="card">
+        <pre><code>/schedule 9am       → digest arrives each morning at 9:00 AM
+/schedule 14:00     → digest arrives each afternoon at 2:00 PM
+/schedule off       → revert to fixed 24-hour interval</code></pre>
+      </div>
+
       <h3>Quick-Start Flow</h3>
       <div class="card">
         <pre><code>1. Open Slack DM with @OpenClaw
@@ -5347,7 +5404,7 @@ Invoke-RestMethod `
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.15.0 (Wave 7 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.16.0 (Wave 8 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"
