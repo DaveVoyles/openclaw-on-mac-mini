@@ -35,6 +35,7 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
         "app_mentions:read",
         "channels:history",
         "chat:write",
+        "commands",
         "im:history",
         "im:read",
         "im:write",
