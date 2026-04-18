@@ -27,7 +27,7 @@ from pathlib import Path
 MANIFEST: dict = {
     "display_information": {
         "name": "OpenClaw",
-        "description": "Personal AI assistant — chat with OpenClaw via @OpenClaw, DM, or /chat",
+        "description": "Personal AI assistant - chat with OpenClaw via @OpenClaw, DM, or /chat",
         "background_color": "#1a1a2e",
     },
     "features": {
@@ -38,8 +38,8 @@ MANIFEST: dict = {
         "slash_commands": [
             {
                 "command": "/chat",
-                "description": "Ask OpenClaw anything. Add --model gemini|openai|anthropic|copilot to pick a model.",
-                "usage_hint": "[--model model] [--simple] your question",
+                "description": "Ask OpenClaw anything. Use --model to pick gemini, openai, anthropic, or copilot.",
+                "usage_hint": "[--model name] [--simple] your question",
                 "should_escape": False,
             },
             {
@@ -74,7 +74,7 @@ MANIFEST: dict = {
             },
             {
                 "command": "/status",
-                "description": "Check if OpenClaw is running — shows Mac Mini health, file count, last sync time.",
+                "description": "Check if OpenClaw is running - shows Mac Mini health, file count, last sync time.",
                 "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
@@ -86,7 +86,7 @@ MANIFEST: dict = {
             },
             {
                 "command": "/template",
-                "description": "Download a starter document template. Use: /template list or /template <name>",
+                "description": "Download a starter document template. Use: /template list or /template budget|letter|meeting-notes",
                 "usage_hint": "[list|budget|letter|meeting-notes]",
                 "should_escape": False,
             },
