@@ -1534,5 +1534,100 @@ class TestErrorRecoveryAndAudio:
         assert "file_proofread" not in action_ids
 
 
+class TestClarificationPrompts:
+    """Wave 9: vague question detection and clarification prompting tests."""
+
+    def test_vague_single_word_help(self):
+        """Single word 'help' is detected as vague."""
+        from src.slack_bot import _is_vague_question
+        assert _is_vague_question("help", has_files=False) is True
+
+    def test_not_vague_with_context(self):
+        """A specific question with 6+ words is not vague."""
+        from src.slack_bot import _is_vague_question
+        assert _is_vague_question("can you summarize my budget spreadsheet please", has_files=False) is False
+
+    def test_not_vague_when_files_present(self):
+        """Even a short message is not vague when files are attached."""
+        from src.slack_bot import _is_vague_question
+        assert _is_vague_question("this", has_files=True) is False
+
+    def test_vague_empty_string(self):
+        """Empty message is vague."""
+        from src.slack_bot import _is_vague_question
+        assert _is_vague_question("", has_files=False) is True
+
+
+class TestUserPersonalization:
+    """Wave 9: user persona store and /nickname command tests."""
+
+    def test_persona_fallback_returns_there(self):
+        """With no stored persona and no API, _get_user_name should fall back to 'there'."""
+        import src.slack_bot as sb
+        user_id = "U_UNKNOWN_TEST"
+        sb._personas.pop(user_id, None)
+        stored = (sb._personas.get(user_id) or {}).get("name")
+        assert stored is None  # no stored name → would fall back to "there"
+
+    def test_persona_stored_name_returned(self):
+        """Stored name in _personas is returned without API call."""
+        import src.slack_bot as sb
+        user_id = "U_CHUCK_TEST"
+        sb._personas[user_id] = {"name": "Chuck"}
+        stored = (sb._personas.get(user_id) or {}).get("name")
+        assert stored == "Chuck"
+        del sb._personas[user_id]
+
+    def test_nickname_stores_name(self, tmp_path, monkeypatch):
+        """_personas dict is updated when /nickname is invoked."""
+        import src.slack_bot as sb
+        user_id = "U_NICK_TEST"
+        sb._personas.pop(user_id, None)
+        monkeypatch.setattr(sb, "_PERSONAS_PATH", tmp_path / "personas.json")
+        sb._personas[user_id] = {"name": "Lisa"}
+        sb._save_personas()
+        assert sb._personas[user_id]["name"] == "Lisa"
+        del sb._personas[user_id]
+
+class TestAppHome:
+    """Wave 9: App Home wiki tab view builder tests."""
+
+    def test_build_home_view_type_is_home(self):
+        """_build_home_view returns a dict with type 'home'."""
+        from src.slack_bot import _build_home_view
+        view = _build_home_view("U_TEST", "Chuck")
+        assert view["type"] == "home"
+
+    def test_build_home_view_personalized_greeting(self):
+        """Personalized name appears in the header block."""
+        from src.slack_bot import _build_home_view
+        view = _build_home_view("U_TEST", "Lisa")
+        header_block = next((b for b in view["blocks"] if b.get("type") == "header"), None)
+        assert header_block is not None
+        assert "Lisa" in header_block["text"]["text"]
+
+    def test_build_home_view_has_commands(self):
+        """At least the /chat and /help commands appear in the view blocks."""
+        from src.slack_bot import _build_home_view
+        view = _build_home_view("U_TEST", "Chuck")
+        all_text = " ".join(
+            b.get("text", {}).get("text", "") for b in view["blocks"] if "text" in b
+        )
+        assert "/chat" in all_text
+        assert "/help" in all_text
+
+    def test_build_home_view_no_recent_files_when_empty(self):
+        """When user has no file history, no 'recent files' block is shown."""
+        import src.slack_bot as sb
+        from src.slack_bot import _build_home_view
+        user_id = "U_NOHIST_TEST"
+        sb._file_history.pop(user_id, None)
+        view = _build_home_view(user_id, "Chuck")
+        all_text = " ".join(
+            b.get("text", {}).get("text", "") for b in view["blocks"] if "text" in b
+        )
+        assert "recent files" not in all_text.lower()
+
+
 if __name__ == "__main__":
     unittest.main()

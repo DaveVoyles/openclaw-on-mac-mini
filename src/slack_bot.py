@@ -75,6 +75,9 @@ _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 _PREFS_PATH: Path = Path(__file__).parent.parent / "data" / "slack_user_prefs.json"
 _user_prefs: dict[str, dict] = {}
 
+_PERSONAS_PATH: Path = Path(__file__).parent.parent / "data" / "slack_user_personas.json"
+_personas: dict[str, dict] = {}
+
 
 def _load_prefs() -> None:
     global _user_prefs
@@ -107,8 +110,48 @@ def _set_user_simple(user_id: str, value: bool) -> None:
     _save_prefs()
 
 
-# Load prefs at import time so they are ready before any handler fires.
+def _load_personas() -> None:
+    global _personas
+    try:
+        if _PERSONAS_PATH.exists():
+            _personas = json.loads(_PERSONAS_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.warning("Failed to load personas from %s: %s", _PERSONAS_PATH, exc)
+        _personas = {}
+
+
+def _save_personas() -> None:
+    try:
+        _PERSONAS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _PERSONAS_PATH.write_text(json.dumps(_personas, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log.warning("Failed to save personas to %s: %s", _PERSONAS_PATH, exc)
+
+
+async def _get_user_name(user_id: str, client: Any) -> str:
+    """Return the user's preferred display name, resolving from Slack API if needed."""
+    stored = (_personas.get(user_id) or {}).get("name")
+    if stored:
+        return stored
+    try:
+        result = await client.users_info(user=user_id)
+        profile = (result.get("user") or {}).get("profile") or {}
+        name = profile.get("display_name") or profile.get("real_name") or ""
+        name = name.strip().split()[0] if name.strip() else ""  # first name only
+        if name:
+            if user_id not in _personas:
+                _personas[user_id] = {}
+            _personas[user_id]["name"] = name
+            _save_personas()
+            return name
+    except Exception:
+        pass
+    return "there"
+
+
+# Load prefs and personas at import time so they are ready before any handler fires.
 _load_prefs()
+_load_personas()
 
 # ---------------------------------------------------------------------------
 # Per-user file history (persisted to data/slack_file_history.json)
@@ -202,10 +245,11 @@ async def _check_new_user_onboarding(user_id: str, client: Any) -> None:
     # After delay, check if they've actually used the bot (prefs exist or history exists)
     if _user_prefs.get(user_id) or _file_history.get(user_id):
         return  # they've already used it, skip
+    name = await _get_user_name(user_id, client)
     try:
         await client.chat_postMessage(
             channel=user_id,
-            text=_WELCOME_MESSAGE,
+            text=f"Hi {name}! " + _WELCOME_MESSAGE,
         )
         log.info("Sent onboarding DM to new user %s", user_id)
     except Exception as exc:
@@ -1947,6 +1991,131 @@ def _parse_schedule_time(text: str) -> int | None:
     return -1  # parse error
 
 
+_VAGUE_PATTERNS: frozenset[str] = frozenset([
+    "help", "hi", "hello", "hey", "thanks", "ok", "okay",
+    "this", "it", "stuff", "things", "something", "anything",
+    "can you", "please", "yes", "no", "sure",
+])
+
+
+def _is_vague_question(text: str, has_files: bool = False) -> bool:
+    """Return True if the message is too vague to answer well without clarification.
+
+    A message is vague when it is short (< 6 words), has no file attachment to
+    provide context, and the words used are all generic/filler terms.
+    """
+    if has_files:
+        return False
+    words = text.strip().lower().split()
+    if len(words) == 0:
+        return True
+    if len(words) >= 6:
+        return False
+    # All words must be vague patterns (or punctuation) for it to be flagged
+    clean_words = [w.strip("?!.,") for w in words if w.strip("?!.,")]
+    return bool(clean_words) and all(w in _VAGUE_PATTERNS for w in clean_words)
+
+
+# ---------------------------------------------------------------------------
+# App Home tab
+# ---------------------------------------------------------------------------
+
+
+def _build_home_view(user_id: str, name: str) -> dict:
+    """Build a Slack Block Kit Home tab view for the given user."""
+    greeting_name = name if name and name != "there" else "there"
+    greeting = f"👋 Hi {greeting_name}! Welcome to your OpenClaw hub."
+
+    commands_text = (
+        "*Your commands:*\n"
+        "• `/chat <question>` — ask me anything\n"
+        "• `/help` — full command list\n"
+        "• `/files` — browse your uploaded files\n"
+        "• `/brief` — last 5 uploads at a glance\n"
+        "• `/search <keyword>` — search your file history\n"
+        "• `/research <topic>` — web research\n"
+        "• `/batch summarize|proofread|explain` — process all your files\n"
+        "• `/template list` — starter document templates\n"
+        "• `/simple on|off` — plain-language mode\n"
+        "• `/digest on|off|status` — daily file digest\n"
+        "• `/schedule <time>` — set digest delivery time\n"
+        "• `/saved` — view your bookmarked responses\n"
+        "• `/nickname <name>` — set your display name\n"
+        "• `/clear` — reset active file context\n"
+        "• `/metrics` — usage stats (admin)\n"
+        "• `/health` — bot status"
+    )
+
+    blocks: list[dict] = [
+        {"type": "header", "text": {"type": "plain_text", "text": greeting, "emoji": True}},
+        {"type": "divider"},
+        {"type": "section", "text": {"type": "mrkdwn", "text": commands_text}},
+        {"type": "divider"},
+    ]
+
+    recent = list(reversed(_file_history.get(user_id, [])))[:3]
+    if recent:
+        file_lines = []
+        for f in recent:
+            fname = f.get("name", "unknown")
+            uploaded = f.get("uploaded_at", "")[:10] if f.get("uploaded_at") else ""
+            file_lines.append(f"• *{fname}*" + (f" ({uploaded})" if uploaded else ""))
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "*📁 Your recent files:*\n" + "\n".join(file_lines)},
+        })
+        blocks.append({"type": "divider"})
+
+    blocks.append({
+        "type": "context",
+        "elements": [{"type": "mrkdwn", "text": "📖 Full guide: `/help` · Questions? Just send me a DM!"}],
+    })
+
+    return {"type": "home", "blocks": blocks}
+
+
+async def _post_clarification_prompt(client: Any, channel: str, user_id: str) -> None:
+    """Post a friendly Block Kit clarification card to help the user get started."""
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "👋 I want to make sure I help you well! What would you like to do?",
+            },
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📄 Ask about a file", "emoji": True},
+                    "action_id": "clarify_file",
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "💬 Ask me anything", "emoji": True},
+                    "action_id": "clarify_question",
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📝 Help me write something", "emoji": True},
+                    "action_id": "clarify_write",
+                },
+            ],
+        },
+    ]
+    try:
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="What would you like to do?",
+            blocks=blocks,
+        )
+    except Exception as exc:
+        log.warning("_post_clarification_prompt failed: %s", exc)
+
+
 def create_slack_app():  # type: ignore[return]
     """Build and return a configured AsyncApp, or None if Slack is disabled."""
     if not _slack_is_configured():
@@ -1959,6 +2128,23 @@ def create_slack_app():  # type: ignore[return]
         return None
 
     app = AsyncApp(token=SLACK_BOT_TOKEN)
+
+    # ------------------------------------------------------------------
+    # Handler: App Home tab opened
+    # ------------------------------------------------------------------
+
+    @app.event("app_home_opened")
+    async def handle_app_home_opened(event: dict[str, Any], client: Any) -> None:
+        """Publish a personalized Home tab view when the user opens the App Home."""
+        user_id: str = event.get("user", "")
+        if not user_id:
+            return
+        name: str = (_personas.get(user_id) or {}).get("name", "there")
+        view = _build_home_view(user_id, name)
+        try:
+            await client.views_publish(user_id=user_id, view=view)
+        except Exception as exc:
+            log.warning("handle_app_home_opened: failed to publish view for %s: %s", user_id, exc)
 
     # ------------------------------------------------------------------
     # Handler: @mention in a channel
@@ -2050,6 +2236,12 @@ def create_slack_app():  # type: ignore[return]
 
         prompt, model_pref, use_simple = _parse_flags(raw_text)
         use_simple = use_simple or _get_user_simple(user_id)
+
+        # Clarification prompt for vague top-level DMs (not thread replies)
+        has_files = bool(event.get("files"))
+        if event.get("thread_ts") is None and _is_vague_question(raw_text, has_files=has_files):
+            await _post_clarification_prompt(client, channel, user_id)
+            return
 
         # Batch processing: multiple files in one message
         if _is_batch_upload(files):
@@ -3256,6 +3448,62 @@ def create_slack_app():  # type: ignore[return]
             user_id=user_id,
             model_pref="auto",
             simple=use_simple,
+        )
+
+    @app.action("clarify_file")
+    async def handle_clarify_file(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id", "")
+        channel = (body.get("channel") or {}).get("id", user_id)
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="📄 Go ahead and upload your file, then type your question about it!",
+        )
+
+    @app.action("clarify_question")
+    async def handle_clarify_question(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id", "")
+        channel = (body.get("channel") or {}).get("id", user_id)
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="💬 Of course! What would you like to know? Just type your question.",
+        )
+
+    @app.action("clarify_write")
+    async def handle_clarify_write(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user", {}).get("id", "")
+        channel = (body.get("channel") or {}).get("id", user_id)
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="📝 Happy to help! What are you working on — a letter, email, list, or something else?",
+        )
+
+    @app.command("/nickname")
+    async def handle_slash_nickname(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", "")
+        name: str = (body.get("text") or "").strip()
+        if not name:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="Usage: `/nickname <your name>` — e.g. `/nickname Chuck`",
+            )
+            return
+        if user_id not in _personas:
+            _personas[user_id] = {}
+        _personas[user_id]["name"] = name
+        _save_personas()
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=f"✅ Got it! I'll call you *{name}* from now on. 👋",
         )
 
     return app

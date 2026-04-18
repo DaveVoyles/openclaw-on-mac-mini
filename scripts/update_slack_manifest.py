@@ -38,6 +38,11 @@ MANIFEST: dict = {
         "background_color": "#1a1a2e",
     },
     "features": {
+        "app_home": {
+            "home_tab_enabled": True,
+            "messages_tab_enabled": True,
+            "messages_tab_read_only_enabled": False,
+        },
         "bot_user": {
             "display_name": "OpenClaw",
             "always_online": True,
@@ -139,6 +144,12 @@ MANIFEST: dict = {
                 "usage_hint": "9am | 14:00 | off",
                 "should_escape": False,
             },
+            {
+                "command": "/nickname",
+                "description": "Set your preferred display name (e.g. /nickname Chuck)",
+                "usage_hint": "<your name>",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {
@@ -161,6 +172,7 @@ MANIFEST: dict = {
     "settings": {
         "event_subscriptions": {
             "bot_events": [
+                "app_home_opened",
                 "app_mention",
                 "file_shared",
                 "message.im",
