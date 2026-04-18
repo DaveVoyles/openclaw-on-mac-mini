@@ -111,6 +111,44 @@ Concise operator playbook for incidents, monitoring interpretation, backup/recov
 
 ---
 
+## Slack Bot Reference
+
+### Environment Variables
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `SLACK_BOT_TOKEN` | Yes | `xoxb-` token — needs `chat:write`, `commands`, `files:read` scopes |
+| `SLACK_APP_TOKEN` | Yes | `xapp-` token for Socket Mode — needs `connections:write` scope |
+| `OPENCLAW_UPLOAD_KEY` | Yes | Auth key for the `/upload` endpoint (UUID). On Mac Mini: `c926fab5-c06e-453c-b8e6-3c9b0ddf3042` |
+| `SLACK_NOTIFY_USER_ID` | Yes | Slack user ID to DM when new files appear in `AI_FILES_DIR` |
+| `AI_FILES_DIR` | Yes | Directory polled by the proactive file-alert loop |
+| `OPENCLAW_FILE_POLL_INTERVAL` | No | Seconds between file-alert polls (default: `60`) |
+
+### Slack HTTP Endpoints
+
+| Method | URL | Auth | Notes |
+| --- | --- | --- | --- |
+| `GET` | `http://192.168.1.93:8080/health` | none | Polled by `/status` slash command; returns JSON liveness |
+| `POST` | `http://192.168.1.93:8080/upload` | `X-OpenClaw-Key` header | Multipart field `file`; allowed: `.docx .xlsx .pdf .txt .csv`; blocked: `.exe .sh .py .zip .bat` |
+
+### `/status` Slash Command
+
+- Pings `http://192.168.1.93:8080/health` for liveness.
+- Reads `data/last_sync.json` (written by `scripts/watch_folder.sh` after each rsync) for last-sync metadata.
+- If `last_sync.json` is missing or stale, the sync job has not run recently.
+
+### Container Restart Note
+
+A plain `docker restart` does **not** reload `.env` values. After any `.env` change, force-recreate the container:
+
+```bash
+/usr/local/bin/docker-compose up -d --no-deps --force-recreate openclaw
+# or from ~/openclaw/ on the Mac Mini:
+make ship-server
+```
+
+---
+
 ## Backup & Recovery Basics
 
 ### What is protected

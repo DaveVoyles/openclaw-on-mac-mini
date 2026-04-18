@@ -30,6 +30,7 @@ If you are still setting up the stack, read the [Deployment & Environment Guide]
 19. [Ollama Timeout Errors](#ollama-timeout-errors)
 20. [RSS Feed Not Updating](#rss-feed-not-updating)
 21. [Calendar Auth Failing](#calendar-auth-failing)
+22. [Slack Bot](#slack-bot)
 
 ---
 
@@ -651,3 +652,68 @@ curl -s http://localhost:8765/health | python -m json.tool
    ```bash
    docker compose up -d
    ```
+
+---
+
+## Slack Bot
+
+For Slack environment variable reference and endpoint inventory, see [OPERATIONS-RUNBOOK.md — Slack Bot Reference](OPERATIONS-RUNBOOK.md#slack-bot-reference).
+
+### A. Proactive file alerts not arriving
+
+1. Confirm `SLACK_NOTIFY_USER_ID` is set in `.env`.
+2. Check that the alert loop started:
+   ```bash
+   /usr/local/bin/docker logs openclaw 2>&1 | grep "file-alert"
+   # Expected: "Proactive file-alert loop started (notifying U...)"
+   ```
+3. Open `data/known_files.json`. If the file you expect an alert for is already listed, the loop won't fire again — it only alerts on **new** files.
+   - To retrigger: delete `data/known_files.json` entirely, or remove the specific entry, then recreate the container.
+4. After changing `SLACK_NOTIFY_USER_ID`, force-recreate (restart alone is not enough):
+   ```bash
+   /usr/local/bin/docker-compose up -d --no-deps --force-recreate openclaw
+   ```
+
+### B. `/status` command not responding
+
+1. Verify the command is registered — run `update_slack_manifest.py --print` and paste the output into the Slack app manifest in the Slack API dashboard.
+2. If the command responds but shows wrong data, check that `data/last_sync.json` exists (written by `scripts/watch_folder.sh`). If missing, the sync job has not run.
+3. If the Mac Mini shows as unreachable, confirm the container is healthy:
+   ```bash
+   curl -s http://192.168.1.93:8080/health
+   ```
+
+### C. `/upload` returning 401 Unauthorized
+
+- The `X-OpenClaw-Key` header is missing or does not match `OPENCLAW_UPLOAD_KEY` in `.env`.
+- Verify the env var is loaded in the running container:
+  ```bash
+  docker exec openclaw env | grep UPLOAD_KEY
+  ```
+
+### D. `/upload` returning 403 or 404
+
+- **403**: The file extension is not in the allowed list (`.docx`, `.xlsx`, `.pdf`, `.txt`, `.csv`). Extensions like `.exe`, `.sh`, `.py`, `.zip`, `.bat` are explicitly blocked.
+- **404**: The endpoint is not registered. Confirm that `discord_web.py` imports `_handle_upload` from `slack_bot`.
+
+### E. Slack bot not connecting at startup
+
+1. Check logs for the ready signal:
+   ```bash
+   /usr/local/bin/docker logs openclaw 2>&1 | grep "Bolt app is running"
+   ```
+   If missing, `SLACK_BOT_TOKEN` or `SLACK_APP_TOKEN` is wrong or expired.
+2. Socket Mode requires `SLACK_APP_TOKEN` (`xapp-` prefix) with the `connections:write` scope.
+3. `SLACK_BOT_TOKEN` (`xoxb-` prefix) must have `chat:write`, `commands`, and `files:read` scopes.
+
+### F. Changes to `.env` not taking effect
+
+A plain `docker restart` does **not** reload env vars. Force-recreate instead:
+
+```bash
+/usr/local/bin/docker-compose up -d --no-deps --force-recreate openclaw
+# or from ~/openclaw/ on the Mac Mini:
+make ship-server
+```
+
+> `make ship-server` also clears `src/__pycache__` before restarting, which prevents stale `.pyc` import errors.

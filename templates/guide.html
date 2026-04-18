@@ -348,6 +348,8 @@
           <li><a href="#phase4-plugins">68. Plugin System &amp; Extensibility - Phase 4</a></li>
           <li><a href="#phase4-observability">69. Observability &amp; Performance - Phase 4</a></li>
           <li><a href="#phase4-infrastructure">70. Production Infrastructure - Phase 4</a></li>
+          <li><a href="#patreon-monitoring">71. Patreon/MonsterVision Monitoring</a></li>
+          <li><a href="#slack-bot">72. Slack Bot for Family</a></li>
         </ul>
       </div>
 
@@ -5136,6 +5138,135 @@ git push --tags
         <li><strong>Auto-Generated:</strong> API docs, skill reference, examples updated on every release.</li>
         <li><strong>Searchable:</strong> Full-text search across all documentation.</li>
       </ul>
+
+      <!-- 72. Slack Bot for Family -->
+      <h2 id="slack-bot">72. Slack Bot for Family</h2>
+      <p>
+        OpenClaw includes a Slack bot designed for family use &mdash; Mom on Mac, Dad on Windows.
+        It runs in Socket Mode (no public URL needed) and supports slash commands, file uploads,
+        plain-language mode, and proactive file alerts.
+      </p>
+
+      <h3>Accessing the Bot</h3>
+      <p>
+        Open a Slack DM with <strong>@OpenClaw</strong> or use slash commands in any channel
+        where the bot has been invited. No browser dashboard required.
+      </p>
+
+      <h3>Slash Commands</h3>
+      <div class="card">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--gold);border-bottom:1px solid var(--border)">Command</th>
+              <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--gold);border-bottom:1px solid var(--border)">What It Does</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/ask &lt;question&gt;</code></td><td style="padding:0.35rem 0.6rem">Ask OpenClaw anything &mdash; routed to Ollama or Gemini automatically</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/help</code></td><td style="padding:0.35rem 0.6rem">Show available Slack commands and usage tips</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/simple on|off</code></td><td style="padding:0.35rem 0.6rem">Toggle plain-language mode for your account (simpler words, shorter replies)</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/files recent</code></td><td style="padding:0.35rem 0.6rem">Show the last 10 uploaded files with names and timestamps</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/research &lt;topic&gt;</code></td><td style="padding:0.35rem 0.6rem">Web research routed to Perplexity AI &mdash; returns a cited summary</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/batch summarize|proofread|explain</code></td><td style="padding:0.35rem 0.6rem">Process all uploaded files at once with the chosen action</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/status</code></td><td style="padding:0.35rem 0.6rem">Check system health: Mac Mini reachable, file count in /ai-files, last sync time, alert status</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/metrics</code></td><td style="padding:0.35rem 0.6rem">Show usage statistics and bot performance metrics</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Uploading Files</h3>
+      <p>
+        Drag any <code>.docx</code>, <code>.xlsx</code>, or <code>.pdf</code> file directly into
+        your Slack DM with @OpenClaw. The bot responds with Block Kit buttons:
+      </p>
+      <ul>
+        <li><strong>Summarize</strong> &mdash; concise bullet-point summary</li>
+        <li><strong>Proofread</strong> &mdash; grammar and clarity suggestions</li>
+        <li><strong>Explain</strong> &mdash; plain-English explanation of the content</li>
+        <li><strong>Chart</strong> &mdash; extract and visualise data (Excel/CSV)</li>
+        <li><strong>Translate</strong> &mdash; translate the document to another language</li>
+        <li><strong>Compare</strong> &mdash; compare two uploaded files side-by-side</li>
+      </ul>
+      <p>
+        Allowed upload extensions: <code>.docx .xlsx .pdf .txt .csv</code>.
+        Blocked for safety: <code>.exe .sh .py .zip .bat</code>.
+      </p>
+
+      <h3>Plain-Language Mode (<code>/simple</code>)</h3>
+      <p>
+        Run <code>/simple on</code> to switch to simpler vocabulary and shorter replies &mdash;
+        useful when sharing the bot with anyone who prefers plain English.
+        The setting is per-user and persists across sessions. Turn it off with <code>/simple off</code>.
+      </p>
+
+      <h3>System Health (<code>/status</code>)</h3>
+      <p>
+        <code>/status</code> returns a quick health snapshot:
+      </p>
+      <ul>
+        <li>Mac Mini reachable &mdash; ping / port check</li>
+        <li>File count currently in <code>/ai-files</code></li>
+        <li>Last sync timestamp from <code>watch_folder.sh</code></li>
+        <li>Any active alert flags</li>
+      </ul>
+
+      <h3>Proactive File Alerts</h3>
+      <p>
+        The bot polls for new files every 60 seconds (configurable via <code>OPENCLAW_FILE_POLL_INTERVAL</code>).
+        When a new file is detected it automatically DMs the user configured in
+        <code>SLACK_NOTIFY_USER_ID</code> with the file name and a set of action buttons.
+        No manual <code>/files</code> check needed.
+      </p>
+
+      <h3>Mac Folder Sync</h3>
+      <p>
+        On Mom&rsquo;s Mac, drop files into <code>~/Documents/OpenClaw/</code>.
+        The <code>watch_folder.sh</code> script watches that folder and automatically syncs
+        new files to the Mac Mini&rsquo;s <code>/ai-files</code> directory. The Slack bot
+        picks them up on the next poll cycle and sends the alert DM.
+      </p>
+
+      <h3>Windows HTTP Upload (Dad&rsquo;s PC)</h3>
+      <p>
+        On Windows there is no folder-sync daemon, so files are posted directly to the
+        HTTP upload endpoint:
+      </p>
+      <div class="card">
+        <pre><code># PowerShell example
+$headers = @{ "X-OpenClaw-Key" = "c926fab5-c06e-453c-b8e6-3c9b0ddf3042" }
+Invoke-RestMethod `
+  -Uri "http://192.168.1.93:8080/upload" `
+  -Method POST `
+  -Headers $headers `
+  -Form @{ file = Get-Item "C:\Users\Dad\Documents\report.pdf" }</code></pre>
+        <p style="margin-top:0.6rem">
+          <strong>Endpoint:</strong> <code>POST http://192.168.1.93:8080/upload</code><br />
+          <strong>Auth header:</strong> <code>X-OpenClaw-Key</code><br />
+          <strong>Form field:</strong> <code>file</code> (multipart)
+        </p>
+      </div>
+
+      <h3>Quick-Start Flow</h3>
+      <div class="card">
+        <pre><code>1. Open Slack DM with @OpenClaw
+2. Type: /status           → confirm Mac Mini is online
+3. Upload report.pdf       → block buttons appear
+4. Click "Summarize"       → receive bullet summary in thread
+5. Type: /simple on        → switch to plain-language mode
+6. Type: /research quantum computing
+                           → Perplexity returns a cited summary
+7. Type: /batch summarize  → process all uploaded files at once
+8. Type: /files recent     → review the last 10 uploads</code></pre>
+      </div>
+
+      <div class="tip">
+        <strong>&#128161; Environment variables:</strong>
+        <code>SLACK_BOT_TOKEN</code> (xoxb-), <code>SLACK_APP_TOKEN</code> (xapp-),
+        <code>SLACK_NOTIFY_USER_ID</code>, <code>OPENCLAW_UPLOAD_KEY</code>,
+        <code>OPENCLAW_FILE_POLL_INTERVAL</code>, <code>AI_FILES_DIR</code>.
+        The bot is started via <code>create_slack_handler()</code> integrated with the main Discord bot.
+      </div>
 
       <div
         style="
