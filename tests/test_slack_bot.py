@@ -48,7 +48,9 @@ from slack_bot import (  # noqa: E402
     _get_user_simple,
     _is_batch_upload,
     _is_research_request,
+    _log_query_metrics,
     _parse_flags,
+    _read_metrics_summary,
     _route_model_for_file,
     _set_user_simple,
     _suggest_actions_for_file,
@@ -475,6 +477,56 @@ class TestSlackBot(unittest.TestCase):
         self.assertGreater(len(posted_texts), 3)
         # Final summary contains "3"
         self.assertTrue(any("3" in t for t in posted_texts))
+
+
+# ---------------------------------------------------------------------------
+# TestMetrics
+# ---------------------------------------------------------------------------
+
+class TestMetrics(unittest.TestCase):
+
+    def _write_metrics_file(self, path: Path, records: list[dict]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as fh:
+            for rec in records:
+                fh.write(json.dumps(rec) + "\n")
+
+    def test_log_query_metrics_writes_jsonl(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            metrics_path = Path(tmpdir) / "metrics.jsonl"
+            with unittest.mock.patch.dict(os.environ, {"SLACK_METRICS_PATH": str(metrics_path)}):
+                _log_query_metrics("U12345", "message", "auto", 500, "ok")
+            self.assertTrue(metrics_path.exists())
+            with metrics_path.open() as fh:
+                rec = json.loads(fh.readline())
+            for key in ("ts", "user_hash", "action", "model", "duration_ms", "status"):
+                self.assertIn(key, rec)
+            self.assertEqual(rec["action"], "message")
+            self.assertEqual(rec["model"], "auto")
+            self.assertEqual(rec["duration_ms"], 500)
+            self.assertEqual(rec["status"], "ok")
+
+    def test_log_query_metrics_user_is_hashed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            metrics_path = Path(tmpdir) / "metrics.jsonl"
+            with unittest.mock.patch.dict(os.environ, {"SLACK_METRICS_PATH": str(metrics_path)}):
+                _log_query_metrics("U99999", "message", "gemini", 100, "ok")
+            with metrics_path.open() as fh:
+                rec = json.loads(fh.readline())
+            self.assertNotEqual(rec["user_hash"], "U99999")
+            self.assertEqual(len(rec["user_hash"]), 12)
+
+    def test_log_query_metrics_no_crash_on_bad_path(self):
+        # Should not raise even with an unwritable path
+        with unittest.mock.patch.dict(os.environ, {"SLACK_METRICS_PATH": "/nonexistent/path/metrics.jsonl"}):
+            try:
+                _log_query_metrics("U00000", "message", "auto", 0, "ok")
+            except Exception as exc:  # pragma: no cover
+                self.fail(f"_log_query_metrics raised unexpectedly: {exc}")
+
+    def test_metrics_file_missing_returns_gracefully(self):
+        result = _read_metrics_summary(Path("/nonexistent/path/slack_metrics.jsonl"))
+        self.assertTrue(result.get("no_data"))
 
 
 if __name__ == "__main__":

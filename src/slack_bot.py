@@ -858,8 +858,10 @@ async def _ask(
     model_pref: str = "auto",
     history: list[dict] | None = None,
     simple: bool = False,
+    client: Any = None,
 ) -> str:
     """Route a prompt through OpenClaw's agent ask pipeline."""
+    global _daily_query_count, _error_window, _last_alert_ts
     from dashboard.api_handlers import _execute_agent_ask
 
     try:
@@ -871,9 +873,17 @@ async def _ask(
             history=history or [],
             user_name=f"slack:{user_id}",
         )
-        return str(payload.get("response") or payload.get("text") or "(no response)").strip()
+        result = str(payload.get("response") or payload.get("text") or "(no response)").strip()
+        _model_last_success[model_pref] = time.monotonic()
+        _daily_query_count += 1
+        return result
     except Exception as exc:  # broad: intentional
         log.error("_execute_agent_ask failed for slack user %s: %s", user_id, exc)
+        now = time.monotonic()
+        _error_window.append(now)
+        _error_window[:] = [t for t in _error_window if now - t < 300]
+        if len(_error_window) >= 3 and client is not None:
+            await _alert_admin(client, f"model={model_pref} user={user_id} err={exc}")
         raise
 
 
@@ -924,6 +934,26 @@ async def _send_answer(
 
     if sent_ts:
         _register_bot_message(channel, sent_ts, user_id)
+
+
+# ---------------------------------------------------------------------------
+# Admin DM alerting
+# ---------------------------------------------------------------------------
+
+async def _alert_admin(client: Any, message: str) -> None:
+    """DM the admin when error rate spikes."""
+    global _last_alert_ts
+    admin_user = os.environ.get("SLACK_ADMIN_USER_ID", "")
+    if not admin_user:
+        return
+    now = time.monotonic()
+    if now - _last_alert_ts < 300:
+        return
+    _last_alert_ts = now
+    try:
+        await client.chat_postMessage(channel=admin_user, text=f"⚠️ OpenClaw alert:\n{message}")
+    except Exception as exc:
+        log.warning("_alert_admin: failed to DM admin: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1401,6 +1431,58 @@ def create_slack_app():  # type: ignore[return]
         await say(text=_HELP_TEXT)
 
     # ------------------------------------------------------------------
+    # Handler: /status slash command — bot health card
+    # ------------------------------------------------------------------
+
+    @app.command("/status")
+    async def handle_slash_status(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "unknown")
+        channel = body.get("channel_id", "")
+
+        now = time.monotonic()
+        uptime_secs = int(now - _BOT_START_TIME) if _BOT_START_TIME else 0
+        hours, remainder = divmod(uptime_secs, 3600)
+        minutes = remainder // 60
+        uptime_str = f"{hours}h {minutes}m" if hours else f"{minutes}m"
+
+        version = os.environ.get("OPENCLAW_VERSION", "dev")
+
+        model_lines: list[str] = []
+        for model, ts in sorted(_model_last_success.items()):
+            ago = int(now - ts)
+            if ago < 60:
+                ago_str = f"{ago}s ago"
+            else:
+                ago_str = f"{ago // 60}m ago"
+            model_lines.append(f"  • {model}: last used {ago_str}")
+        if not model_lines:
+            model_lines.append("  (no models used yet)")
+
+        model_health = "\n".join(model_lines)
+        status_text = (
+            f"🤖 *OpenClaw Bot Status*\n\n"
+            f"Uptime: {uptime_str}\n"
+            f"Queries today: {_daily_query_count}\n"
+            f"Version: {version}\n\n"
+            f"Model health:\n{model_health}"
+        )
+
+        blocks = [
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": status_text},
+            }
+        ]
+
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text=status_text,
+            blocks=blocks,
+        )
+
+    # ------------------------------------------------------------------
     # Handler: /simple — toggle persistent plain-language mode per user
     # ------------------------------------------------------------------
 
@@ -1726,6 +1808,40 @@ def create_slack_app():  # type: ignore[return]
 
         app.action(_action_id)(_make_handler(_action_id))
 
+    # ------------------------------------------------------------------
+    # Handler: /metrics — usage summary for last 7 days
+    # ------------------------------------------------------------------
+
+    @app.command("/metrics")
+    async def handle_slash_metrics(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        channel = body.get("channel_id", "")
+        user_id = body.get("user_id", "unknown")
+
+        metrics_path = Path(os.environ.get("SLACK_METRICS_PATH", "logs/slack_metrics.jsonl"))
+        summary = _read_metrics_summary(metrics_path)
+
+        if summary.get("no_data"):
+            text = "📊 *OpenClaw Usage* — No metrics recorded yet."
+        else:
+            top_actions_lines = "\n".join(
+                f"  • {action}: {count}" for action, count in summary["top_actions"]
+            )
+            top_users_str = ", ".join(summary["top_users"]) or "—"
+            text = (
+                f"📊 *OpenClaw Usage (Last 7 Days)*\n"
+                f"Total queries: {summary['total']}  |  "
+                f"Errors: {summary['errors']}  |  "
+                f"Avg response: {summary['avg_duration_ms']:,}ms\n\n"
+                f"*Top actions:*\n{top_actions_lines}\n\n"
+                f"*Top users (anonymized):* {top_users_str}"
+            )
+
+        try:
+            await client.chat_postEphemeral(channel=channel, user=user_id, text=text)
+        except Exception as exc:
+            log.warning("handle_slash_metrics: failed to post ephemeral: %s", exc)
+
     return app
 
 
@@ -1735,7 +1851,7 @@ def create_slack_app():  # type: ignore[return]
 
 async def create_slack_handler():  # type: ignore[return]
     """Return an AsyncSocketModeHandler configured for this app, or None."""
-    global _BOT_USER_ID
+    global _BOT_USER_ID, _BOT_START_TIME
 
     app = create_slack_app()
     if app is None:
@@ -1746,6 +1862,8 @@ async def create_slack_handler():  # type: ignore[return]
     except ImportError:
         log.error("AsyncSocketModeHandler not available — ensure slack_bolt[async]>=1.18.0 is installed")
         return None
+
+    _BOT_START_TIME = time.monotonic()
 
     # Resolve the bot's own user ID so thread-history can distinguish bot messages
     try:
