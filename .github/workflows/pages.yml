@@ -51,6 +51,8 @@ jobs:
         with:
           ruby-version: '3.2'
           bundler-cache: true
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ github.workspace }}/../_tool_cache
 
       - name: Install dependencies
         run: |
@@ -76,7 +78,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: [self-hosted, macOS, ARM64, openclaw]
     needs: build
-    if: needs.build.result == 'success'
+    continue-on-error: true
 
     steps:
       - name: Deploy to GitHub Pages
