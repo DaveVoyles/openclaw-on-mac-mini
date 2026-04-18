@@ -1980,9 +1980,6 @@ class TestPerUserEmailCreds:
 
     def test_load_save_user_email_creds_roundtrip(self, tmp_path):
         """Storing and reloading per-user email creds survives a round-trip."""
-        import json
-        import sys
-        import importlib
         import src.slack_bot as sb
 
         orig_path = sb._USER_EMAIL_CREDS_PATH
@@ -2035,9 +2032,9 @@ class TestPerUserEmailCreds:
 
     def test_configured_flag_true_when_token_set(self):
         """DROPBOX_CONFIGURED is True when token is present."""
+        import importlib
         import os
         import sys
-        import importlib
 
         old = os.environ.get("DROPBOX_ACCESS_TOKEN")
         os.environ["DROPBOX_ACCESS_TOKEN"] = "sl.fake"
