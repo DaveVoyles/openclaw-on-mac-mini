@@ -3226,6 +3226,38 @@ def create_slack_app():  # type: ignore[return]
             text="✅ *Session cleared!* Thread history and active file selections have been reset. Start fresh with your next message."
         )
 
+    @app.action("retry_last_prompt")
+    async def handle_retry_last_prompt(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
+        await ack()
+        prompt_hash: str = (body.get("actions") or [{}])[0].get("value", "")
+        user_id: str = (body.get("user") or {}).get("id", "")
+        channel: str = (body.get("channel") or {}).get("id", "")
+
+        prompt = _retry_cache.get(prompt_hash)
+        if not prompt:
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                text="⚠️ Retry context expired — please send your message again.",
+            )
+            return
+
+        use_simple = _get_user_simple(user_id)
+        thinking_resp = await say(text="⏳ Retrying…")
+        thinking_ts = (thinking_resp or {}).get("ts")
+
+        await _send_answer(
+            client=client,
+            say=say,
+            channel=channel,
+            thread_ts=None,
+            thinking_ts=thinking_ts,
+            prompt=prompt,
+            user_id=user_id,
+            model_pref="auto",
+            simple=use_simple,
+        )
+
     return app
 
 

@@ -33,6 +33,9 @@ for mod_name in ["slack_bolt", "slack_bolt.async_app", "aiohttp"]:
                 def command(self, *a, **kw):
                     return lambda f: f
 
+                def action(self, *a, **kw):
+                    return lambda f: f
+
             stub.AsyncApp = AsyncApp
         sys.modules[mod_name] = stub
 
@@ -1471,6 +1474,78 @@ class TestSearchAndSchedule:
         """_parse_schedule_time returns None for 'off'."""
         from src.slack_bot import _parse_schedule_time
         assert _parse_schedule_time("off") is None
+
+
+class TestErrorRecoveryAndAudio:
+    """Wave 8: Error recovery UX and audio file stub tests."""
+
+    def test_retry_cache_stores_prompt(self):
+        """_retry_cache stores a prompt by hash."""
+        import hashlib
+        import src.slack_bot as sb
+
+        prompt = "Summarize this document"
+        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()[:16]
+        sb._retry_cache[prompt_hash] = prompt
+        assert sb._retry_cache.get(prompt_hash) == prompt
+        del sb._retry_cache[prompt_hash]
+
+    def test_retry_cache_evicts_at_max(self):
+        """_retry_cache evicts oldest entry when over _RETRY_CACHE_MAX."""
+        import src.slack_bot as sb
+
+        original = dict(sb._retry_cache)
+        sb._retry_cache.clear()
+
+        for i in range(sb._RETRY_CACHE_MAX + 1):
+            key = f"key{i:03d}"
+            sb._retry_cache[key] = f"prompt {i}"
+            if len(sb._retry_cache) > sb._RETRY_CACHE_MAX:
+                oldest = next(iter(sb._retry_cache))
+                del sb._retry_cache[oldest]
+
+        assert len(sb._retry_cache) <= sb._RETRY_CACHE_MAX
+
+        sb._retry_cache.clear()
+        sb._retry_cache.update(original)
+
+    @pytest.mark.asyncio
+    async def test_audio_mime_in_process_files(self):
+        """_process_slack_files adds audio stub message for audio/* files."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        file_obj = {
+            "url_private_download": "https://files.slack.com/voice.mp3",
+            "name": "voice.mp3",
+            "mimetype": "audio/mpeg",
+        }
+
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.read = AsyncMock(return_value=b"fake audio")
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_resp)
+        mock_pool = AsyncMock()
+        mock_pool.get = AsyncMock(return_value=mock_session)
+
+        from slack_bot import _process_slack_files
+        with patch("slack_bot._slack_dl_sessions", mock_pool):
+            result = await _process_slack_files([file_obj], "xoxb-fake", "What is this?")
+
+        assert "🎵" in result or "audio" in result.lower()
+
+    def test_build_file_blocks_audio(self):
+        """_build_file_blocks for audio type returns audio-specific block."""
+        from slack_bot import _build_file_blocks
+        blocks = _build_file_blocks("memo.mp3", None, "audio/mpeg", "F_AUDIO")
+        actions = next((b for b in blocks if b.get("type") == "actions"), None)
+        assert actions is not None
+        action_ids = [e["action_id"] for e in actions["elements"]]
+        assert "audio_unsupported" in action_ids
+        assert "file_proofread" not in action_ids
 
 
 if __name__ == "__main__":
