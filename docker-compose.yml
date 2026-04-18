@@ -105,6 +105,9 @@ services:
       # This ensures /update and /cli-update/<file> always return the current version
       - ./src:/app/src:ro
 
+      # Live skills — mounted so skills/__init__.py changes take effect without rebuild
+      - ./skills:/app/skills:ro
+
       # Templates directory — mounted separately because src/templates is a symlink
       # to ../templates, which Docker bind mounts do not follow outside the src/ scope.
       # Without this mount the container uses the stale baked-in image copy.
