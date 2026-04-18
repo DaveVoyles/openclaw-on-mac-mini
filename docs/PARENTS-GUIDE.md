@@ -505,6 +505,70 @@ If OpenClaw ever replies with an error message, you'll see a **🔁 Try again** 
 
 ---
 
+## 🔗 Connecting Your Accounts
+
+OpenClaw can connect to your Gmail and Dropbox, making it even easier to get help without switching apps. Everything below is **one-time setup** — Dave handles the technical part once, and from then on it just works.
+
+---
+
+### 📧 Check Your Gmail — `/email`
+
+Once Gmail is connected, you can check your inbox right from Slack:
+
+```
+/email                    — shows your last 10 emails
+/email week               — emails from the past 7 days
+/email doctor             — search for emails about your doctor
+/email insurance          — find anything about insurance
+```
+
+**What you need (Dave sets this up once):**
+
+1. Make sure 2-Step Verification is on for your Google account
+2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+3. Create an App Password (label it "OpenClaw")
+4. Dave adds it to the server — that's it!
+
+You'll never need to log in separately — OpenClaw handles it automatically.
+
+---
+
+### 📅 Check Your Calendar — `/calendar`
+
+View your Google Calendar without opening the app:
+
+```
+/calendar                 — shows today's events
+/calendar today           — same as above
+/calendar week            — what's coming up this week
+```
+
+**What you need (Dave sets this up once):**
+
+Dave runs a one-time setup that connects your Google account. After that, your calendar events appear whenever you ask.
+
+---
+
+### 📦 Dropbox Folder Watcher — `/dropbox`
+
+If you drop a file into a special Dropbox folder, OpenClaw will **automatically notice and send you a message in Slack** — no uploading needed!
+
+```
+/dropbox                  — see recent files in your Dropbox folder
+```
+
+**How it works:**
+
+1. Dave sets up a folder called **OpenClaw** in your Dropbox
+2. Whenever you drop a PDF, photo, or document into that folder, OpenClaw will DM you within 30 seconds: *"New file detected! Want me to summarise it?"*
+3. Just say yes and OpenClaw reads it for you
+
+**What you need (Dave sets this up once):**
+
+Dave gets a Dropbox API key from [dropbox.com/developers](https://www.dropbox.com/developers/apps) and adds it to the server.
+
+---
+
 ## 💻 Windows: Sync Without Extra Software
 
 If you're on Windows and can't use the SSH sync method, OpenClaw now supports uploading files directly over the network. The Windows installer (`Install-OpenClaw.ps1`) automatically tests this connection during setup.

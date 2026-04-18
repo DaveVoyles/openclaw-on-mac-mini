@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Wave 10 External Integrations (April 2026)
+- **`/email [today|week|<keyword>]`** — Check Gmail inbox or search emails directly from Slack; powered by existing `email_skills.py` (IMAP, no OAuth needed — just App Password)
+- **`/calendar [today|week]`** — View Google Calendar events from Slack; powered by existing `calendar_skills.py` (OAuth via `scripts/google_oauth_setup.py`)
+- **`/dropbox [list]`** — Browse recent files from a Dropbox watch folder; new `src/dropbox_sync.py` module
+- **Dropbox folder watcher** — Background loop polls `DROPBOX_WATCH_PATH` every 30 s; auto-DMs when new files appear (no manual uploads needed)
+- **`dropbox>=12.0.2`** added to `requirements.txt`
+- **3 new manifest entries** — `/email`, `/calendar`, `/dropbox` registered in `scripts/update_slack_manifest.py`
+- **`.env.example`** — Added `DROPBOX_ACCESS_TOKEN` and `DROPBOX_WATCH_PATH` with setup comments
+- **PARENTS-GUIDE.md** — New "Connecting Your Accounts" section with step-by-step Gmail, Calendar, and Dropbox setup
+
+### Added — Wave 9 Slack Parent Experience (April 2026)
+- **User personalization** — `/nickname Chuck` / `/nickname Lisa`; persisted in `data/slack_user_personas.json`
+- **Clarification prompts** — Vague short questions trigger a Block Kit card with 3 quick-reply buttons (Explain this, Give me an example, Tell me more)
+- **App Home wiki tab** — `app_home_opened` event + `_build_home_view()`: personalized greeting, all commands, recent files
+
+### Added — Wave 8 Slack Improvements (April 2026)
+- **`/saved`** — saves and recalls important replies
+- **`/search`** — searches file history
+- **`/schedule`** — sets daily digest time
+- **DM thread memory** — bot replies in-thread for follow-up context
+- **Retry cache** — re-runs last prompt on error button click
+
 ### Added — Wave 5 Slack Feature Expansion (April 2026)
 - **5 new Slack slash commands:** `/digest`, `/template`, `/brief`, `/mystats`, `/clear`
   - `/digest on|off|status` — per-user daily DM digest of recently modified files (`data/digest_prefs.json`)

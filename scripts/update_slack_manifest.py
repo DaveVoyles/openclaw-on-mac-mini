@@ -150,6 +150,30 @@ MANIFEST: dict = {
                 "usage_hint": "<your name>",
                 "should_escape": False,
             },
+            {
+                "command": "/email",
+                "description": "Check your Gmail inbox or search for emails",
+                "usage_hint": "[today | week | <keyword>]",
+                "should_escape": False,
+            },
+            {
+                "command": "/today",
+                "description": "Show today's Google Calendar events",
+                "usage_hint": "",
+                "should_escape": False,
+            },
+            {
+                "command": "/calendar",
+                "description": "Check your Google Calendar events",
+                "usage_hint": "[today | week]",
+                "should_escape": False,
+            },
+            {
+                "command": "/dropbox",
+                "description": "Browse recent files in your Dropbox watch folder",
+                "usage_hint": "[list]",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

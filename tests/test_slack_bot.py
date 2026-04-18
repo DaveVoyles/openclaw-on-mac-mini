@@ -1871,3 +1871,39 @@ class TestDropboxSyncCore:
         monkeypatch.setattr(sb, "_DROPBOX_TOKEN", None)
         result = sb._dropbox_list_folder("/nonexistent")
         assert isinstance(result, list)
+
+
+class TestGoogleCalendar:
+    """Wave 10 Yoda: Google Calendar integration."""
+
+    @pytest.mark.asyncio
+    async def test_get_calendar_no_token_returns_empty(self, monkeypatch):
+        """_get_calendar_events returns [] when no Google token configured."""
+        import src.slack_bot as sb
+        monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
+        result = await sb._get_calendar_events()
+        assert result == []
+
+    def test_format_calendar_events_empty(self):
+        """_format_calendar_events returns 'Nothing on the calendar' for empty list."""
+        import src.slack_bot as sb
+        result = sb._format_calendar_events([], label="today")
+        assert "Nothing on the calendar" in result
+
+    def test_format_calendar_events_one_event(self):
+        """_format_calendar_events formats a single event correctly."""
+        import src.slack_bot as sb
+        events = [{"summary": "Dentist", "start": "2026-04-20T09:00:00", "end": "2026-04-20T10:00:00", "location": ""}]
+        result = sb._format_calendar_events(events, label="today")
+        assert "Dentist" in result
+        assert "9:00 AM" in result
+
+    @pytest.mark.asyncio
+    async def test_get_google_access_token_no_creds_returns_none(self, monkeypatch):
+        """_get_google_access_token returns None when credentials are absent."""
+        import src.slack_bot as sb
+        monkeypatch.setattr(sb, "_GOOGLE_CLIENT_ID", None)
+        monkeypatch.setattr(sb, "_GOOGLE_CLIENT_SECRET", None)
+        monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
+        result = await sb._get_google_access_token()
+        assert result is None
