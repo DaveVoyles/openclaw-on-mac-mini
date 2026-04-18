@@ -48,12 +48,25 @@ import os
 import re
 from typing import Any
 
+import aiohttp
+
+from constants import ATTACHMENT_TEXT_MAX_CHARS
+from http_session import SessionManager
+from llm import analyze_image as llm_analyze_image
+
 log = logging.getLogger(__name__)
 
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 
 # ---------------------------------------------------------------------------
-# Response cleanup for Slack
+# File attachment support
+# NOTE: The Slack app requires the `files:read` Bot Token Scope to download
+# private file URLs. Add files:read in the Slack app manifest if not present.
+# ---------------------------------------------------------------------------
+
+_slack_dl_sessions = SessionManager(timeout=30, name="slack_attachments")
+
+
 # ---------------------------------------------------------------------------
 
 _RE_RECOVERY_BLOCKQUOTE = re.compile(
@@ -130,7 +143,66 @@ SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN", "")
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _parse_model_flag(text: str) -> tuple[str, str]:
+async def _process_slack_files(files: list[dict], token: str, question: str) -> str:
+    """Download and incorporate Slack file attachments into *question*.
+
+    Supports:
+    - Images (mimetype image/*): analyzed via Gemini vision (llm_analyze_image)
+    - Text/docs (text/*, application/pdf, application/vnd.*, etc.): decoded as
+      UTF-8 and appended, capped at ATTACHMENT_TEXT_MAX_CHARS chars
+    - Other: a note about unsupported type is appended
+
+    Requires ``files:read`` scope on the Slack bot token.
+    """
+    for file in files:
+        url = file.get("url_private_download") or file.get("url_private")
+        if not url:
+            continue
+
+        filename = file.get("name", "unknown")
+        mimetype = (file.get("mimetype") or "").lower()
+
+        try:
+            session = await _slack_dl_sessions.get()
+            headers = {"Authorization": f"Bearer {token}"}
+            async with session.get(
+                url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status != 200:
+                    log.warning(
+                        "Failed to download Slack file %s: HTTP %d", filename, resp.status
+                    )
+                    question += f"\n\n[Attachment: failed to download {filename}]"
+                    continue
+
+                data = await resp.read()
+
+            if mimetype.startswith("image/"):
+                image_answer = await llm_analyze_image(data, mimetype, question)
+                question = f"{question}\n\n[Image attachment analysis: {image_answer}]"
+            elif (
+                mimetype.startswith("text/")
+                or mimetype in ("application/pdf", "application/json")
+                or mimetype.startswith("application/vnd.")
+            ):
+                doc_text = data.decode("utf-8", errors="replace")[:ATTACHMENT_TEXT_MAX_CHARS]
+                question = (
+                    f"{question}\n\n--- Attached Document: {filename} "
+                    f"(first {ATTACHMENT_TEXT_MAX_CHARS} chars) ---\n"
+                    f"{doc_text}\n"
+                    f"--- End Document ---"
+                )
+            else:
+                question += f"\n\n[Attachment: unsupported file type {filename} ({mimetype})]"
+
+        except Exception as exc:
+            log.warning("Failed to process Slack file %s: %s", filename, exc)
+            question += f"\n\n[Attachment: error processing {filename}]"
+
+    return question
+
+
+
     """Extract --model <alias> from *text*.
 
     Returns (cleaned_text, model_pref) where model_pref is a valid
@@ -298,7 +370,9 @@ def create_slack_app():  # type: ignore[return]
 
         # Strip @mention token(s) and extract optional --model flag
         prompt_raw = _MENTION_RE.sub("", raw_text).strip()
-        if not prompt_raw:
+        files: list[dict] = event.get("files", [])
+
+        if not prompt_raw and not files:
             await say(
                 text="Hey! I'm OpenClaw. Ask me anything. Tip: add `--model gemini` (or openai/anthropic/copilot) to pick a model.",
                 thread_ts=thread_ts,
@@ -306,6 +380,10 @@ def create_slack_app():  # type: ignore[return]
             return
 
         prompt, model_pref = _parse_model_flag(prompt_raw)
+
+        # Enrich prompt with any uploaded file content
+        if files:
+            prompt = await _process_slack_files(files, SLACK_BOT_TOKEN, prompt)
 
         # Build thread history when this is a reply in an existing thread
         history: list[dict] = []
@@ -342,11 +420,16 @@ def create_slack_app():  # type: ignore[return]
         user_id: str = event.get("user", "unknown")
         channel: str = event.get("channel", "")
         raw_text: str = (event.get("text") or "").strip()
+        files: list[dict] = event.get("files", [])
 
-        if not raw_text:
+        if not raw_text and not files:
             return
 
         prompt, model_pref = _parse_model_flag(raw_text)
+
+        # Enrich prompt with any uploaded file content
+        if files:
+            prompt = await _process_slack_files(files, SLACK_BOT_TOKEN, prompt)
 
         thinking_resp = await say(text="⏳ Thinking…")
         thinking_ts = (thinking_resp or {}).get("ts")
@@ -434,6 +517,45 @@ def create_slack_app():  # type: ignore[return]
             await client.reactions_add(channel=channel, timestamp=ts, name=ack_emoji)
         except Exception:
             pass  # reaction may already exist; not critical
+
+    # ------------------------------------------------------------------
+    # Handler: file_shared — file uploaded without accompanying text
+    # ------------------------------------------------------------------
+
+    @app.event("file_shared")
+    async def handle_file_shared(event: dict[str, Any], client: Any, say: Any) -> None:
+        file_id: str = event.get("file_id", "")
+        channel: str = event.get("channel_id", "")
+        user_id: str = event.get("user_id", "unknown")
+
+        if not file_id or not channel:
+            return
+
+        try:
+            file_info_resp = await client.files_info(file=file_id)
+            file_obj: dict = (file_info_resp or {}).get("file", {})
+        except Exception as exc:
+            log.warning("file_shared: failed to fetch info for file %s: %s", file_id, exc)
+            return
+
+        if not file_obj:
+            return
+
+        question = "Please analyze the attached file."
+        enriched = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, question)
+
+        thinking_resp = await client.chat_postMessage(channel=channel, text="⏳ Thinking…")
+        thinking_ts = (thinking_resp or {}).get("ts")
+
+        await _send_answer(
+            client=client,
+            say=say,
+            channel=channel,
+            thread_ts=None,
+            thinking_ts=thinking_ts,
+            prompt=enriched,
+            user_id=user_id,
+        )
 
     return app
 
