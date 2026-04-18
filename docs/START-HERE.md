@@ -4,6 +4,8 @@ Use this page as the contributor entrypoint. It tells you **what to read first**
 
 > **Planning future work?** Use [`docs/PRODUCT-ROADMAP.md`](PRODUCT-ROADMAP.md) as the canonical roadmap. The next CLI UX wave should be started there, then expanded in scoped docs only if needed.
 
+> **Not a developer?** If you just want to use OpenClaw to edit documents, ask questions, or chat — start with the **[Non-Technical User Guide](PARENTS-GUIDE.md)** instead.
+
 ---
 
 ## Recommended reading order

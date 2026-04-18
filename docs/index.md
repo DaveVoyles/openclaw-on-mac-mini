@@ -43,6 +43,11 @@ docker-compose -f docker-compose.prod.yml up -d
 
 <div class="docs-grid">
   <div class="doc-card">
+    <h3>🙋 <a href="PARENTS-GUIDE.html">Non-Technical User Guide</a></h3>
+    <p>Getting started with OpenClaw — no tech knowledge needed. Browser, Slack, files, and plain-language mode.</p>
+  </div>
+
+  <div class="doc-card">
     <h3>📖 <a href="COMMANDS.html">Commands Reference</a></h3>
     <p>Complete guide to all 101+ available commands</p>
   </div>
