@@ -194,6 +194,8 @@ Then mention it with `@OpenClaw your question here` or send it a DM or use `/ask
 | Upload Excel/CSV → tap **📊 Chart** | Generates a bar chart PNG from the data |
 | Upload a doc → tap **🌍 Translate** | Translate to Spanish, French, German, and more |
 | Upload two docs → tap **🔀 Compare** | Side-by-side diff summary of both documents |
+| `/search <keyword>` | Search your uploaded file history by keyword |
+| `/schedule 9am \| 14:00 \| off` | Set your preferred digest delivery time |
 | 👍 react to a bot response | Logs positive feedback |
 | 👎 react to a bot response | Logs negative feedback |
 

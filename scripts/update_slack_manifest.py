@@ -127,6 +127,18 @@ MANIFEST: dict = {
                 "usage_hint": "",
                 "should_escape": False,
             },
+            {
+                "command": "/search",
+                "description": "Search your uploaded file history by keyword",
+                "usage_hint": "<keyword>",
+                "should_escape": False,
+            },
+            {
+                "command": "/schedule",
+                "description": "Set your preferred digest delivery time",
+                "usage_hint": "9am | 14:00 | off",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

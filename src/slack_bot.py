@@ -44,6 +44,7 @@ Wiring into src/bot.py (add inside setup_hook or on_ready):
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -359,6 +360,10 @@ _SIMPLE_SYSTEM_PREFIX = (
 # ------------------------------------------------------------------
 _bot_message_registry: dict[tuple[str, str], str] = {}
 
+# Wave 8: retry cache for error recovery UX
+_retry_cache: dict[str, str] = {}
+_RETRY_CACHE_MAX: int = 50
+
 # Populated once after the Slack client performs auth.test
 _BOT_USER_ID: str = ""
 
@@ -666,6 +671,11 @@ async def _process_slack_files(files: list[dict], token: str, question: str) -> 
                     f"{doc_text}\n"
                     f"--- End Document ---"
                 )
+            elif mimetype.startswith("audio/"):
+                question += (
+                    f"\n\n[🎵 Audio file detected: {filename} — audio transcription is not yet supported. "
+                    "Please describe what you need help with in text!]"
+                )
             else:
                 question += f"\n\n[Attachment: unsupported file type {filename} ({mimetype})]"
 
@@ -880,6 +890,15 @@ def _build_file_blocks(
                 "type": "button",
                 "text": {"type": "plain_text", "text": "🔀 Compare", "emoji": True},
                 "action_id": "file_compare_start",
+                "value": file_id,
+            },
+        ]
+    elif (mimetype or "").lower().startswith("audio/"):
+        buttons = [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🎵 Audio — transcription coming soon", "emoji": True},
+                "action_id": "audio_unsupported",
                 "value": file_id,
             },
         ]
@@ -1537,6 +1556,33 @@ async def _send_answer(
             text = f"❌ Sorry, something went wrong: {exc}"
             _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
                                duration_ms=int((time.monotonic() - t0) * 1000), status="error")
+            # Post a Block Kit "Try again" button so the user has a recovery path
+            prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()[:16]
+            _retry_cache[prompt_hash] = prompt
+            if len(_retry_cache) > _RETRY_CACHE_MAX:
+                oldest_key = next(iter(_retry_cache))
+                del _retry_cache[oldest_key]
+            try:
+                retry_blocks = [
+                    {
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": "⚠️ Something went wrong — want me to try again?"},
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "🔁 Retry", "emoji": True},
+                                "action_id": "retry_last_prompt",
+                                "value": prompt_hash,
+                            }
+                        ],
+                    },
+                ]
+                await say(blocks=retry_blocks, text="⚠️ Something went wrong — want me to try again?")
+            except Exception as retry_exc:
+                log.warning("_send_answer: failed to post retry button: %s", retry_exc)
     finally:
         if progress_task and not progress_task.done():
             progress_task.cancel()
@@ -3060,6 +3106,112 @@ def create_slack_app():  # type: ignore[return]
             blocks=blocks,
             text="🔖 Your Saved Notes",
         )
+
+    @app.command("/search")
+    async def handle_slash_search(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", "")
+        keyword: str = (body.get("text") or "").strip().lower()
+
+        if not keyword:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="Usage: `/search <keyword>` — e.g. `/search budget`",
+            )
+            return
+
+        entries = _file_history.get(user_id, [])
+        matches = [
+            e for e in entries
+            if keyword in (e.get("name") or "").lower()
+            or keyword in (e.get("auto_brief") or "").lower()
+        ]
+
+        if not matches:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"No files matching *{keyword}* found — try `/brief` to see all your recent uploads.",
+            )
+            return
+
+        lines = []
+        for entry in list(reversed(matches))[:10]:
+            name = entry.get("name", "unknown")
+            uploaded_at = entry.get("uploaded_at", "")
+            try:
+                import datetime
+                dt = datetime.datetime.fromisoformat(uploaded_at)
+                delta = datetime.datetime.now() - dt
+                days = delta.days
+                when = "today" if days == 0 else "yesterday" if days == 1 else f"{days}d ago"
+            except Exception:
+                when = "recently"
+            brief = entry.get("auto_brief", "")
+            brief_str = f" — _{brief}_" if brief else ""
+            lines.append(f"• *{name}* ({when}){brief_str}")
+
+        text = f"🔍 Files matching *{keyword}*:\n" + "\n".join(lines)
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=text,
+        )
+
+    @app.command("/schedule")
+    async def handle_slash_schedule(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", "")
+        text: str = (body.get("text") or "").strip()
+
+        if not text:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="Usage: `/schedule <time>` — e.g. `/schedule 9am` or `/schedule 14:00` or `/schedule off`",
+            )
+            return
+
+        parsed = _parse_schedule_time(text)
+        if parsed == -1:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"❌ Couldn't parse *{text}* — try formats like `9am`, `8:30`, `14:00`, or `off`",
+            )
+            return
+
+        prefs = _load_digest_prefs()
+        if user_id not in prefs:
+            prefs[user_id] = {"enabled": False}
+
+        if parsed is None:
+            prefs[user_id].pop("preferred_hour", None)
+            _save_digest_prefs(prefs)
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="✅ Digest schedule cleared — digest will use the default 24-hour interval.",
+            )
+        else:
+            prefs[user_id]["preferred_hour"] = parsed
+            _save_digest_prefs(prefs)
+            if parsed == 0:
+                hour_str = "12:00am"
+            elif parsed < 12:
+                hour_str = f"{parsed}:00am"
+            elif parsed == 12:
+                hour_str = "12:00pm"
+            else:
+                hour_str = f"{parsed - 12}:00pm"
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"✅ Digest scheduled for *{hour_str}* daily. Make sure `/digest on` is enabled!",
+            )
 
     @app.command("/clear")
     async def handle_slash_clear(ack: Any, body: dict[str, Any], say: Any) -> None:

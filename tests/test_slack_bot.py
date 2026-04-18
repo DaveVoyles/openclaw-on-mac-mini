@@ -1433,5 +1433,45 @@ class TestDMThreadMemoryAndSaved:
         assert all(n["user_id"] == "U_ALICE" for n in alice_notes)
 
 
+class TestSearchAndSchedule:
+    """Wave 8: /search and /schedule command tests."""
+
+    def test_search_finds_by_filename(self):
+        """_file_history search by filename keyword works."""
+        import src.slack_bot as sb
+        user_id = "U_SEARCHER"
+        sb._file_history[user_id] = [
+            {"name": "budget-2025.xlsx", "uploaded_at": "2026-04-10T10:00:00", "auto_brief": "Monthly budget"},
+            {"name": "letter-draft.docx", "uploaded_at": "2026-04-11T10:00:00", "auto_brief": "Formal letter"},
+        ]
+        entries = sb._file_history.get(user_id, [])
+        matches = [e for e in entries if "budget" in (e.get("name") or "").lower()]
+        assert len(matches) == 1
+        assert matches[0]["name"] == "budget-2025.xlsx"
+        del sb._file_history[user_id]
+
+    def test_search_no_match_returns_empty(self):
+        """Keyword not in any file returns empty list."""
+        import src.slack_bot as sb
+        user_id = "U_NOSEARCH"
+        sb._file_history[user_id] = [
+            {"name": "report.docx", "uploaded_at": "2026-04-10T10:00:00", "auto_brief": "Annual report"},
+        ]
+        entries = sb._file_history.get(user_id, [])
+        matches = [e for e in entries if "budget" in (e.get("name") or "").lower()]
+        assert matches == []
+        del sb._file_history[user_id]
+
+    def test_parse_schedule_time_am(self):
+        """_parse_schedule_time correctly parses '9am' → 9."""
+        from src.slack_bot import _parse_schedule_time
+        assert _parse_schedule_time("9am") == 9
+
+    def test_parse_schedule_time_off(self):
+        """_parse_schedule_time returns None for 'off'."""
+        from src.slack_bot import _parse_schedule_time
+        assert _parse_schedule_time("off") is None
+
+
 if __name__ == "__main__":
     unittest.main()
