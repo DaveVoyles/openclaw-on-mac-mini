@@ -74,20 +74,14 @@ MANIFEST: dict = {
             },
             {
                 "command": "/status",
-                "description": "Show OpenClaw bot status: uptime, model health, query count.",
-                "usage_hint": "",
+                "description": "Check if OpenClaw is running — shows Mac Mini health, file count, last sync time.",
+                "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
             {
                 "command": "/metrics",
                 "description": "Show OpenClaw usage metrics for the last 7 days (admin).",
                 "usage_hint": "",
-                "should_escape": False,
-            },
-            {
-                "command": "/status",
-                "description": "Check if OpenClaw is running and show sync health, file count, and last sync time.",
-                "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
         ],
