@@ -27,12 +27,54 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
       {
         "command": "/ask",
         "description": "Ask OpenClaw anything. Add --model gemini|openai|anthropic|copilot to pick a model.",
-        "usage_hint": "[--model <model>] your question",
+        "usage_hint": "[--model <model>] [--simple] your question",
         "should_escape": false
       },
       {
         "command": "/help",
         "description": "Show examples and tips for using OpenClaw.",
+        "usage_hint": "(no arguments needed)",
+        "should_escape": false
+      },
+      {
+        "command": "/simple",
+        "description": "Toggle plain-language mode. OpenClaw will always give easy-to-read answers.",
+        "usage_hint": "on | off",
+        "should_escape": false
+      },
+      {
+        "command": "/files",
+        "description": "Browse and reference your synced documents",
+        "usage_hint": "[filename | recent]",
+        "should_escape": false
+      },
+      {
+        "command": "/research",
+        "description": "Research a topic and incorporate findings into a document.",
+        "usage_hint": "[topic] for [filename]",
+        "should_escape": false
+      },
+      {
+        "command": "/batch",
+        "description": "Process multiple files at once.",
+        "usage_hint": "summarize | proofread | explain",
+        "should_escape": false
+      },
+      {
+        "command": "/status",
+        "description": "Check if OpenClaw is running — shows Mac Mini health, file count, last sync time.",
+        "usage_hint": "(no arguments needed)",
+        "should_escape": false
+      },
+      {
+        "command": "/metrics",
+        "description": "Show OpenClaw usage metrics for the last 7 days (admin).",
+        "usage_hint": "(no arguments needed)",
+        "should_escape": false
+      },
+      {
+        "command": "/clear",
+        "description": "Clear your session: reset thread history and active file selections.",
         "usage_hint": "(no arguments needed)",
         "should_escape": false
       }
@@ -46,6 +88,7 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
         "chat:write",
         "commands",
         "files:read",
+        "files:write",
         "im:history",
         "im:read",
         "im:write",
@@ -127,8 +170,18 @@ Then mention it with `@OpenClaw your question here` or send it a DM or use `/ask
 | DM `what is the weather?` | Private answer |
 | `/ask --model openai your question` | Slash command answer |
 | `/help` | Show beginner-friendly examples and tips |
+| `/simple on` | Enable plain-language mode for all answers |
+| `/files recent` | Show your 10 most recently uploaded files |
+| `/research [topic] for [filename]` | Web research tailored to a document |
+| `/batch summarize` | Summarize all queued files |
+| `/status` | Check Mac Mini health, file count, last sync |
+| `/metrics` | Usage stats for the last 7 days (admin) |
+| `/clear` | Reset active file selections and thread context |
 | Upload a file and @mention the bot | Bot reads and analyzes the file |
 | Upload a file in a DM | Bot reads and analyzes the file |
+| Upload Excel/CSV → tap **📊 Chart** | Generates a bar chart PNG from the data |
+| Upload a doc → tap **🌍 Translate** | Translate to Spanish, French, German, and more |
+| Upload two docs → tap **🔀 Compare** | Side-by-side diff summary of both documents |
 | 👍 react to a bot response | Logs positive feedback |
 | 👎 react to a bot response | Logs negative feedback |
 

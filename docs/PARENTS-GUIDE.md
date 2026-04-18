@@ -250,6 +250,92 @@ If you're not getting alerts but want them, ask Dave to set `SLACK_NOTIFY_USER_I
 
 ---
 
+## 📊 Turn Excel Data into a Chart
+
+When you upload an Excel or CSV file, OpenClaw will show a **📊 Chart** button alongside the usual Summarize/Proofread options.
+
+Tap **📊 Chart** and OpenClaw will:
+1. Read the numeric data in your spreadsheet
+2. Generate a bar chart as a PNG image
+3. Post the chart image right in the conversation
+
+**Good for:** monthly budgets, expense tracking, any spreadsheet with numbers you want to visualize quickly.
+
+---
+
+## 🌍 Translate a Document
+
+After uploading a Word or Excel file, tap the **🌍 Translate** button. OpenClaw will ask which language you'd like:
+
+- Spanish 🇪🇸
+- French 🇫🇷
+- German 🇩🇪
+- Italian 🇮🇹
+- Portuguese 🇵🇹
+- Japanese 🇯🇵
+- Chinese 🇨🇳
+- Arabic 🇸🇦
+
+Pick a language and OpenClaw will translate the document and post the result in Slack.
+
+---
+
+## 🔀 Compare Two Documents
+
+Need to see what changed between two drafts, or compare two reports side by side?
+
+1. Upload **two files** in the same Slack message (or upload the first, then the second right after)
+2. Tap the **🔀 Compare** button on the second file
+3. OpenClaw will post a clear summary of what's different between them
+
+**Good for:** comparing a rough draft to a final version, or checking two budget reports from different months.
+
+> **Note:** OpenClaw will show a typing indicator and a brief progress update while it works — longer documents take a moment.
+
+---
+
+## 📁 See Your Recent Files — `/files recent`
+
+Want to see what files you've uploaded lately? Type:
+
+```
+/files recent
+```
+
+OpenClaw will show your last 10 uploads — file name, type, and how long ago you uploaded it. Only you can see this list (it's sent as an ephemeral message).
+
+This is handy when you want to reference a file you uploaded earlier without reuploading it.
+
+---
+
+## 🔄 Start Fresh — `/clear`
+
+If things feel confused (OpenClaw keeps referencing an old file, or the conversation got muddled), just type:
+
+```
+/clear
+```
+
+This resets your active file selections and clears any in-progress comparison or translation. Your file history stays intact — `/clear` just gives you a clean slate for your next question.
+
+---
+
+## 💡 Smart Suggestions
+
+If you ask a question that sounds like it's about a file you've uploaded before, OpenClaw will notice and remind you:
+
+> 💡 You uploaded **budget-2025.xlsx** recently — want to work with that?
+
+You can just reply "yes" or ask your question normally — it's a helpful nudge, not a requirement.
+
+---
+
+## 👋 Your Welcome Message
+
+The first time you send a message to @OpenClaw (in a channel or as a DM), you'll automatically get a brief welcome message a moment later explaining the most useful things you can do. You only see this once.
+
+---
+
 ## 💻 Windows: Sync Without Extra Software
 
 If you're on Windows and can't use the SSH sync method, OpenClaw now supports uploading files directly over the network. The Windows installer (`Install-OpenClaw.ps1`) automatically tests this connection during setup.
