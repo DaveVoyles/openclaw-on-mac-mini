@@ -1,4 +1,4 @@
-.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest install-watcher help
+.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest slack-manifest-push install-watcher help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -80,7 +80,13 @@ install-watcher:
 	bash scripts/install_watcher.sh
 
 slack-manifest:
-	@echo "📋 Pushing Slack manifest..."
+	@echo "🌐 Copying manifest to clipboard and opening browser..."
+	@echo "   In the browser: Cmd+A → Cmd+V → Save Changes"
+	@echo "   After saving, update SLACK_BOT_TOKEN in .env if Slack issues a new token."
+	python3 scripts/update_slack_manifest.py --browser
+
+slack-manifest-push:
+	@echo "📋 Pushing Slack manifest via API (requires SLACK_CONFIG_TOKEN in .env)..."
 	python3 scripts/update_slack_manifest.py --push
 
 
@@ -106,7 +112,8 @@ help:
 	@echo "  ship          Pull + restart server + deploy CLI (full deploy in one step)"
 	@echo "  ship-server   Pull latest + restart openclaw container only"
 	@echo "  ship-cli      Deploy CLI to MacBook only"
-	@echo "  slack-manifest Push Slack app manifest via API (requires SLACK_APP_ID + SLACK_CONFIG_TOKEN in .env)"
+	@echo "  slack-manifest        Copy manifest to clipboard + open browser (recommended)"
+	@echo "  slack-manifest-push   Push manifest via Slack API (requires SLACK_CONFIG_TOKEN in .env)"
 	@echo "  install-watcher Install Mac folder watcher (run once on parent's Mac)"
 	@echo "  clean         Remove __pycache__, .pyc, caches"
 	@echo "  help          Show this help"

@@ -2,16 +2,23 @@
 """Update the Slack app manifest.
 
 Usage:
-  python3 scripts/update_slack_manifest.py --print   # print JSON to stdout
-  python3 scripts/update_slack_manifest.py --push    # push to Slack API
+  python3 scripts/update_slack_manifest.py --print    # print JSON to stdout
+  python3 scripts/update_slack_manifest.py --browser  # copy JSON + open browser (recommended)
+  python3 scripts/update_slack_manifest.py --push     # push via API (requires xoxe.xoxp- token)
+
+--browser workflow (no special token needed):
+  1. Copies manifest JSON to clipboard
+  2. Opens https://app.slack.com/app-settings/T0ATWRAK4Q4/A0ATR6KFXNJ/app-manifest
+  3. In the browser: Cmd+A → Cmd+V → Save Changes
+  NOTE: After saving Slack may issue a new xoxb- bot token — update SLACK_BOT_TOKEN in .env
+        and run `make ship-server` to apply it.
 
 For --push, set SLACK_APP_ID and SLACK_CONFIG_TOKEN in .env:
   SLACK_APP_ID=A0123456789
   SLACK_CONFIG_TOKEN=xoxe.xoxp-...
 
-A config token is obtained from:
-  https://api.slack.com/apps → Your app → App Config Tokens → Generate Token
-It needs the `app_configurations:write` scope.
+A config token is obtained via the Slack CLI auth flow only:
+  ~/.slack/bin/slack login  →  run /slackauthticket <ticket> in Slack  →  approve
 """
 
 import argparse
@@ -203,17 +210,57 @@ def _push_manifest(app_id: str, config_token: str) -> None:
 
 # ── Entry point ──────────────────────────────────────────────────────────────
 
+SLACK_MANIFEST_URL = (
+    "https://app.slack.com/app-settings/T0ATWRAK4Q4/A0ATR6KFXNJ/app-manifest"
+)
+
+
+def _browser_workflow() -> None:
+    """Copy manifest to clipboard and open browser — the reliable no-token path."""
+    import subprocess
+
+    manifest_json = json.dumps(MANIFEST, indent=2)
+
+    # Copy to clipboard (macOS)
+    proc = subprocess.run(["pbcopy"], input=manifest_json.encode(), check=False)
+    if proc.returncode != 0:
+        print("⚠️  pbcopy failed — printing JSON instead, copy it manually:")
+        print(manifest_json)
+    else:
+        print("✅ Manifest JSON copied to clipboard.")
+
+    # Open browser
+    subprocess.run(["open", SLACK_MANIFEST_URL], check=False)
+    print(f"🌐 Opening: {SLACK_MANIFEST_URL}")
+    print()
+    print("In the browser editor:")
+    print("  1. Click inside the JSON editor")
+    print("  2. Cmd+A  →  Cmd+V  →  Save Changes")
+    print()
+    print("⚠️  After saving, Slack may issue a NEW xoxb- bot token.")
+    print("   Copy it and update SLACK_BOT_TOKEN in .env, then run: make ship-server")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Print or push the OpenClaw Slack app manifest."
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--print", action="store_true", help="Print manifest JSON to stdout.")
+    group.add_argument(
+        "--browser",
+        action="store_true",
+        help="Copy JSON to clipboard and open browser (recommended — no token needed).",
+    )
     group.add_argument("--push", action="store_true", help="Push manifest to Slack API.")
     args = parser.parse_args()
 
     if args.print:
         print(json.dumps(MANIFEST, indent=2))
+        return
+
+    if args.browser:
+        _browser_workflow()
         return
 
     # --push
