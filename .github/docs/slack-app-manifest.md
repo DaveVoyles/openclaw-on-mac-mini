@@ -26,6 +26,12 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
         "description": "Ask OpenClaw anything. Add --model gemini|openai|anthropic|copilot to pick a model.",
         "usage_hint": "[--model <model>] your question",
         "should_escape": false
+      },
+      {
+        "command": "/help",
+        "description": "Show examples and tips for using OpenClaw.",
+        "usage_hint": "",
+        "should_escape": false
       }
     ]
   },
@@ -117,6 +123,7 @@ Then mention it with `@OpenClaw your question here` or send it a DM or use `/ask
 | Reply in a thread → `@OpenClaw follow up` | Carries full thread context |
 | DM `what is the weather?` | Private answer |
 | `/ask --model openai your question` | Slash command answer |
+| `/help` | Show beginner-friendly examples and tips |
 | Upload a file and @mention the bot | Bot reads and analyzes the file |
 | Upload a file in a DM | Bot reads and analyzes the file |
 | 👍 react to a bot response | Logs positive feedback |
@@ -131,6 +138,17 @@ Then mention it with `@OpenClaw your question here` or send it a DM or use `/ask
 | `--model openai` or `--model gpt` | OpenAI GPT-4o |
 | `--model anthropic` or `--model claude` | Anthropic Claude |
 | `--model copilot` | GitHub Copilot |
+
+### Plain-language mode
+
+Add `--simple` to any message or file prompt to get a plain, jargon-free response:
+
+```
+@OpenClaw explain this contract --simple
+/ask summarize this meeting --simple
+```
+
+Useful for non-technical users or when you want a short, clear answer.
 
 ## Upgrading an existing app
 

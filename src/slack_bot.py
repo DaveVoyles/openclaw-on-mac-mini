@@ -108,6 +108,51 @@ def _clean_for_slack(text: str) -> str:
     return text.strip()
 
 
+def _suggest_actions_for_file(filename: str, mimetype: str) -> str:
+    """Return friendly action suggestions based on file type."""
+    name_lower = filename.lower()
+    mime_lower = mimetype.lower()
+
+    if name_lower.endswith((".docx", ".doc")) or "word" in mime_lower or "wordprocessingml" in mime_lower:
+        return (
+            f"📄 I see you uploaded *{filename}*. What would you like?\n"
+            "• Proofread and fix grammar\n"
+            "• Make it more professional / formal\n"
+            "• Summarize in bullet points\n"
+            "• Rewrite a specific section\n\n"
+            "_Just reply and tell me what you need!_"
+        )
+    if name_lower.endswith((".xlsx", ".xls", ".csv")) or "spreadsheet" in mime_lower or "excel" in mime_lower:
+        return (
+            f"📊 I see you uploaded *{filename}*. What would you like?\n"
+            "• Summarize what this is tracking\n"
+            "• Explain any formulas or columns\n"
+            "• Find errors or unusual values\n"
+            "• Create a summary paragraph\n\n"
+            "_Just reply and tell me what you need!_"
+        )
+    if name_lower.endswith(".pdf") or mime_lower == "application/pdf":
+        return (
+            f"📑 I see you uploaded *{filename}*. What would you like?\n"
+            "• Summarize the key points\n"
+            "• Extract action items\n"
+            "• Answer a specific question about it\n\n"
+            "_Just reply and tell me what you need!_"
+        )
+    if mime_lower.startswith("image/"):
+        return (
+            f"🖼️ I see you uploaded *{filename}*. What would you like?\n"
+            "• Describe what's in the image\n"
+            "• Read any text visible in the photo\n"
+            "• Answer a question about it\n\n"
+            "_Just reply and tell me what you need!_"
+        )
+    return (
+        f"📎 I see you uploaded *{filename}*. What would you like me to do with it?\n"
+        "_Just tell me and I'll get started!_"
+    )
+
+
 # ------------------------------------------------------------------
 # Model selector  --model <alias>
 # ------------------------------------------------------------------
@@ -121,6 +166,38 @@ _MODEL_ALIASES: dict[str, str] = {
     "claude": "anthropic",
     "copilot": "copilot",
 }
+
+_WELCOME_MESSAGE = (
+    "👋 *Hi! I'm OpenClaw — your personal AI assistant.*\n\n"
+    "Here's what I can do:\n"
+    "• 📄 *Edit or proofread a document* → drag in a Word file and say \"fix this\" or \"make it more professional\"\n"
+    "• 📊 *Understand a spreadsheet* → upload your Excel file and ask \"what does this show?\" or \"summarize this\"\n"
+    "• 💬 *Answer any question* → just ask, like you would Google or Gemini\n"
+    "• 🖼️ *Describe an image* → drop in a photo and ask what's in it\n\n"
+    "*Try it now:* upload a file, or just type a question!\n"
+    "Type `/help` anytime to see examples."
+)
+
+_HELP_TEXT = (
+    "*📚 OpenClaw Quick Help*\n\n"
+    "*Working with files:*\n"
+    "• Drag in a Word doc (.docx) → \"proofread this\" / \"make this more formal\" / \"summarize in 5 bullet points\"\n"
+    "• Drag in an Excel file (.xlsx) → \"what is this tracking?\" / \"explain column C\" / \"find any errors\"\n"
+    "• Drag in a PDF → \"summarize this\"\n"
+    "• Drop in a photo → \"what's in this image?\"\n\n"
+    "*Just chatting:*\n"
+    "• Ask anything — \"what's the weather in Boston?\" / \"explain this email to me\" / \"help me write a thank-you note\"\n\n"
+    "*Tips:*\n"
+    "• Add `--simple` to any message for plain, easy-to-read responses\n"
+    "• Reply in a thread to keep context from earlier messages\n\n"
+    "_Example: Upload Budget2025.xlsx and type: \"summarize the totals for me --simple\"_"
+)
+
+_SIMPLE_FLAG_RE = re.compile(r"\s*--simple\b", re.IGNORECASE)
+_SIMPLE_SYSTEM_PREFIX = (
+    "Please respond in plain, simple language. Avoid jargon and technical terms. "
+    "Use short sentences. Write as if explaining to someone who is not technical. "
+)
 
 # ------------------------------------------------------------------
 # Bot message registry for 👍/👎 feedback
@@ -217,6 +294,17 @@ def _parse_model_flag(text: str) -> tuple[str, str]:
     return clean, model_pref
 
 
+def _parse_flags(text: str) -> tuple[str, str, bool]:
+    """Parse --simple and --model flags from *text*.
+
+    Returns (cleaned_text, model_pref, use_simple).
+    """
+    use_simple = bool(_SIMPLE_FLAG_RE.search(text))
+    cleaned = _SIMPLE_FLAG_RE.sub("", text).strip()
+    cleaned, model_pref = _parse_model_flag(cleaned)
+    return cleaned, model_pref, use_simple
+
+
 def _register_bot_message(channel: str, ts: str, user_id: str) -> None:
     """Track a bot message so reactions can be matched back to the requester."""
     _bot_message_registry[(channel, ts)] = user_id
@@ -279,11 +367,14 @@ async def _ask(
     *,
     model_pref: str = "auto",
     history: list[dict] | None = None,
+    simple: bool = False,
 ) -> str:
     """Route a prompt through OpenClaw's agent ask pipeline."""
     from dashboard.api_handlers import _execute_agent_ask
 
     try:
+        if simple:
+            prompt = _SIMPLE_SYSTEM_PREFIX + prompt
         payload = await _execute_agent_ask(
             prompt=prompt,
             model_pref=model_pref,
@@ -311,10 +402,11 @@ async def _send_answer(
     user_id: str,
     model_pref: str = "auto",
     history: list[dict] | None = None,
+    simple: bool = False,
 ) -> None:
     """Ask OpenClaw, update the thinking placeholder, and register the reply for feedback."""
     try:
-        answer = await _ask(prompt, user_id, model_pref=model_pref, history=history)
+        answer = await _ask(prompt, user_id, model_pref=model_pref, history=history, simple=simple)
         text = _clean_for_slack(answer) if answer else "(no response)"
     except Exception as exc:
         text = f"❌ Sorry, something went wrong: {exc}"
@@ -374,12 +466,12 @@ def create_slack_app():  # type: ignore[return]
 
         if not prompt_raw and not files:
             await say(
-                text="Hey! I'm OpenClaw. Ask me anything. Tip: add `--model gemini` (or openai/anthropic/copilot) to pick a model.",
+                text=_WELCOME_MESSAGE,
                 thread_ts=thread_ts,
             )
             return
 
-        prompt, model_pref = _parse_model_flag(prompt_raw)
+        prompt, model_pref, use_simple = _parse_flags(prompt_raw)
 
         # Enrich prompt with any uploaded file content
         if files:
@@ -403,6 +495,7 @@ def create_slack_app():  # type: ignore[return]
             user_id=user_id,
             model_pref=model_pref,
             history=history,
+            simple=use_simple,
         )
 
     # ------------------------------------------------------------------
@@ -423,9 +516,10 @@ def create_slack_app():  # type: ignore[return]
         files: list[dict] = event.get("files", [])
 
         if not raw_text and not files:
+            await say(text=_WELCOME_MESSAGE)
             return
 
-        prompt, model_pref = _parse_model_flag(raw_text)
+        prompt, model_pref, use_simple = _parse_flags(raw_text)
 
         # Enrich prompt with any uploaded file content
         if files:
@@ -443,6 +537,7 @@ def create_slack_app():  # type: ignore[return]
             prompt=prompt,
             user_id=user_id,
             model_pref=model_pref,
+            simple=use_simple,
         )
 
     # ------------------------------------------------------------------
@@ -459,11 +554,11 @@ def create_slack_app():  # type: ignore[return]
 
         if not raw_text:
             await say(
-                text="Usage: `/ask your question here`\nTip: add `--model gemini` (or openai/anthropic/copilot) to pick a model."
+                text="Usage: `/ask your question here`\nNeed ideas? Type `/help` to see examples."
             )
             return
 
-        prompt, model_pref = _parse_model_flag(raw_text)
+        prompt, model_pref, use_simple = _parse_flags(raw_text)
 
         thinking_resp = await say(text="⏳ Thinking…")
         thinking_ts = (thinking_resp or {}).get("ts")
@@ -477,6 +572,7 @@ def create_slack_app():  # type: ignore[return]
             prompt=prompt,
             user_id=user_id,
             model_pref=model_pref,
+            simple=use_simple,
         )
 
     # ------------------------------------------------------------------
@@ -519,6 +615,15 @@ def create_slack_app():  # type: ignore[return]
             pass  # reaction may already exist; not critical
 
     # ------------------------------------------------------------------
+    # Handler: /help slash command — beginner-friendly guide
+    # ------------------------------------------------------------------
+
+    @app.command("/help")
+    async def handle_slash_help(ack: Any, say: Any) -> None:
+        await ack()
+        await say(text=_HELP_TEXT)
+
+    # ------------------------------------------------------------------
     # Handler: file_shared — file uploaded without accompanying text
     # ------------------------------------------------------------------
 
@@ -541,21 +646,13 @@ def create_slack_app():  # type: ignore[return]
         if not file_obj:
             return
 
-        question = "Please analyze the attached file."
-        enriched = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, question)
-
-        thinking_resp = await client.chat_postMessage(channel=channel, text="⏳ Thinking…")
-        thinking_ts = (thinking_resp or {}).get("ts")
-
-        await _send_answer(
-            client=client,
-            say=say,
-            channel=channel,
-            thread_ts=None,
-            thinking_ts=thinking_ts,
-            prompt=enriched,
-            user_id=user_id,
-        )
+        filename = file_obj.get("name", "file")
+        mimetype = (file_obj.get("mimetype") or "")
+        suggestion = _suggest_actions_for_file(filename, mimetype)
+        try:
+            await client.chat_postMessage(channel=channel, text=suggestion)
+        except Exception as exc:
+            log.warning("file_shared: failed to post suggestion for %s: %s", filename, exc)
 
     return app
 
