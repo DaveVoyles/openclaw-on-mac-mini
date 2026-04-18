@@ -753,12 +753,20 @@ async def start_health_server(bot) -> web.AppRunner:
     except Exception as exc:
         log.warning("Could not register /upload route: %s", exc)
 
+    # Wave 12: Dropbox OAuth2 callback — GET /dropbox/callback
+    try:
+        from slack_bot import _handle_dropbox_oauth_callback
+        app.router.add_get("/dropbox/callback", _handle_dropbox_oauth_callback)
+        log.info("GET /dropbox/callback route registered (Wave 12 Dropbox OAuth2)")
+    except Exception as exc:
+        log.warning("Could not register /dropbox/callback route: %s", exc)
+
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
     await site.start()
     log.info(
-        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>, /cli-update/meta, /upload)",
+        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>, /cli-update/meta, /upload, /dropbox/callback)",
         HEALTH_PORT,
     )
     return runner
