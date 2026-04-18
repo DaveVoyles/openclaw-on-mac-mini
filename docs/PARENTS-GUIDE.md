@@ -148,4 +148,72 @@ If you see a friendly message saying **"Your documents will now sync automatical
 
 ---
 
-*OpenClaw is running on the home Mac Mini. For technical questions, contact Dave.*
+## 🔍 Research for your documents
+
+OpenClaw can search the web for information and pull it right into your document — without you leaving Slack.
+
+### How to use it
+
+Just type your research request in a DM to @OpenClaw:
+
+```
+research climate change for my annual report
+```
+
+or
+
+```
+look up tips for saving money on groceries
+```
+
+OpenClaw will:
+1. Search the web using Perplexity AI and gather up-to-date facts
+2. If you have an active document (see the `/files` tip below), it will suggest new paragraphs you can paste straight in
+3. Post everything in Slack so you can copy what you need
+
+**Tip:** Use `/files report.docx` to set an active document first, then type your research request — OpenClaw will tailor the findings to your document automatically.
+
+**Keywords that trigger research:**
+- `research [topic]`
+- `look up [topic]`
+- `find info on [topic]`
+- `search for [topic]`
+
+You can also use the slash command from anywhere in Slack:
+
+```
+/research electric vehicles for my sustainability report
+```
+
+---
+
+## 📦 Process multiple files at once
+
+You can drop two or more files into a Slack message and OpenClaw will handle them all — one after another — with a live progress report in the thread.
+
+### How to use it
+
+1. In a DM with @OpenClaw, drag **two or more** Word or Excel files into the chat at the same time and drop them
+2. OpenClaw will start a thread showing progress for each file:
+   - ⏳ 1/3: report.docx...
+   - ✅ 1/3: report.docx done
+   - ⏳ 2/3: budget.xlsx...
+   - ✅ 2/3: budget.xlsx done
+   - ...
+3. When all files are done, you'll see: **✅ All 3 files processed!**
+
+### Batch with a slash command
+
+If you've already uploaded files, you can run a batch action on all of them at once:
+
+```
+/batch summarize
+```
+
+Other actions you can use with `/batch`:
+- `/batch proofread` — proofread all files
+- `/batch explain` — explain each file in plain language
+
+> **Note:** Processing multiple large files takes a little longer — OpenClaw pauses briefly between each file to stay reliable.
+
+---

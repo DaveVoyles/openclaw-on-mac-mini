@@ -60,6 +60,18 @@ MANIFEST: dict = {
                 "usage_hint": "[filename]",
                 "should_escape": False,
             },
+            {
+                "command": "/research",
+                "description": "Research a topic and incorporate findings into a document.",
+                "usage_hint": "[topic] for [filename]",
+                "should_escape": False,
+            },
+            {
+                "command": "/batch",
+                "description": "Process multiple files at once.",
+                "usage_hint": "summarize | proofread | explain",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

@@ -50,6 +50,8 @@ from slack_bot import (  # noqa: E402
     _set_user_simple,
     _suggest_actions_for_file,
     _route_model_for_file,
+    _is_research_request,
+    _is_batch_upload,
 )
 
 # ---------------------------------------------------------------------------
@@ -388,6 +390,93 @@ class TestSlackBot(unittest.TestCase):
 
     def test_route_model_default(self):
         self.assertEqual(_route_model_for_file("notes.txt", "file_summarize"), "auto")
+
+
+    # -- _is_research_request -------------------------------------------------
+
+    def test_is_research_request_true(self):
+        self.assertTrue(_is_research_request("research climate change for my doc"))
+
+    def test_is_research_request_false(self):
+        self.assertFalse(_is_research_request("proofread my document"))
+
+    def test_run_research_pipeline_no_file(self):
+        """Perplexity is called first; tip message appears when no file is active."""
+        import asyncio
+        from unittest.mock import AsyncMock, patch
+
+        posted = []
+
+        class FakeClient:
+            async def chat_postMessage(self, **kwargs):
+                posted.append(kwargs)
+
+        ask_calls: list[str] = []
+
+        async def mock_ask(prompt, user_id, model_pref="auto", **kwargs):
+            ask_calls.append(model_pref)
+            return "Research result about climate change"
+
+        async def run():
+            with patch("slack_bot._ask", side_effect=mock_ask):
+                from slack_bot import _run_research_pipeline
+                await _run_research_pipeline(
+                    FakeClient(), "C123", "U456", "research climate change"
+                )
+
+        asyncio.run(run())
+        # Perplexity must be the first model called
+        self.assertTrue(len(ask_calls) >= 1)
+        self.assertEqual(ask_calls[0], "perplexity-direct")
+        # Tip message must appear in one of the posted messages
+        self.assertTrue(any("Tip" in (m.get("text") or "") for m in posted))
+
+    # -- _is_batch_upload -----------------------------------------------------
+
+    def test_is_batch_upload_true(self):
+        self.assertTrue(_is_batch_upload([{"name": "a.docx"}, {"name": "b.xlsx"}]))
+
+    def test_is_batch_upload_false(self):
+        self.assertFalse(_is_batch_upload([{"name": "a.docx"}]))
+
+    def test_process_batch_sequential(self):
+        """dispatch_fn called in order; progress messages posted for each file."""
+        import asyncio
+        import unittest.mock
+        from unittest.mock import AsyncMock
+        from slack_bot import _process_batch
+
+        files = [
+            {"name": "report.docx"},
+            {"name": "budget.xlsx"},
+            {"name": "notes.txt"},
+        ]
+        dispatch_calls: list[str] = []
+        posted_texts: list[str] = []
+
+        async def mock_dispatch(file_obj, action_id, user_id):
+            dispatch_calls.append(file_obj.get("name"))
+            return "done"
+
+        class FakeClient:
+            async def chat_postMessage(self, **kwargs):
+                posted_texts.append(kwargs.get("text", ""))
+                return {"ts": "12345.678"}
+
+        async def run():
+            with unittest.mock.patch("slack_bot.asyncio.sleep", AsyncMock()):
+                await _process_batch(
+                    FakeClient(), "C123", "12345.000", files, "summarize",
+                    dispatch_fn=mock_dispatch,
+                )
+
+        asyncio.run(run())
+        # dispatch called for each file in original order
+        self.assertEqual(dispatch_calls, ["report.docx", "budget.xlsx", "notes.txt"])
+        # Progress messages were posted (initial + 3 progress + final summary)
+        self.assertGreater(len(posted_texts), 3)
+        # Final summary contains "3"
+        self.assertTrue(any("3" in t for t in posted_texts))
 
 
 if __name__ == "__main__":

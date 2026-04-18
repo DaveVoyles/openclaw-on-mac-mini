@@ -43,6 +43,7 @@ Wiring into src/bot.py (add inside setup_hook or on_ready):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -537,6 +538,196 @@ def _route_model_for_file(filename: str, action: str) -> str:
     return "auto"
 
 
+# ---------------------------------------------------------------------------
+# Research request detection
+# ---------------------------------------------------------------------------
+
+_RESEARCH_KEYWORDS_RE = re.compile(
+    r"\b(research|look\s+up|find\s+info|search\s+for)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_research_request(text: str) -> bool:
+    """Return True if *text* contains a research-intent keyword."""
+    return bool(_RESEARCH_KEYWORDS_RE.search(text))
+
+
+# ---------------------------------------------------------------------------
+# Batch upload detection
+# ---------------------------------------------------------------------------
+
+
+def _is_batch_upload(files: list) -> bool:
+    """Return True if two or more files are present (batch mode)."""
+    return len(files) >= 2
+
+
+# ---------------------------------------------------------------------------
+# Research pipeline (Perplexity → optional Gemini incorporation)
+# ---------------------------------------------------------------------------
+
+
+async def _run_research_pipeline(
+    client: Any,
+    channel: str,
+    user: str,
+    text: str,
+    file_obj: dict | None = None,
+) -> None:
+    """Two-phase research pipeline: Perplexity search → optional Gemini incorporation.
+
+    Phase 1: Call _ask() with perplexity-direct to get web research results.
+    Phase 2: If a file is active, call _ask() with gemini to incorporate findings.
+    Phase 3: Post combined answer.  If no file: post Perplexity results with a tip.
+    """
+    # Phase 1: Perplexity research
+    perplexity_prompt = (
+        f"Research the following topic and provide a concise, cited summary with key facts:\n\n{text}"
+    )
+    try:
+        research_results = await _ask(perplexity_prompt, user, model_pref="perplexity-direct")
+    except Exception as exc:
+        log.warning("_run_research_pipeline: Perplexity phase failed: %s", exc)
+        research_results = f"(Research unavailable: {exc})"
+
+    # No active file — return Perplexity results with tip
+    if file_obj is None:
+        answer = (
+            f"🔍 *Research Results*\n\n{research_results}\n\n"
+            "_Tip: share a Word doc to incorporate these findings_"
+        )
+        try:
+            await client.chat_postMessage(channel=channel, text=answer)
+        except Exception as exc:
+            log.warning("_run_research_pipeline: post failed: %s", exc)
+        return
+
+    # Interim acknowledgement
+    try:
+        await client.chat_postMessage(
+            channel=channel,
+            text="🔍 Found research results. Incorporating into your document...",
+        )
+    except Exception as exc:
+        log.warning("_run_research_pipeline: interim post failed: %s", exc)
+
+    # Phase 2: Gemini incorporates research into document context
+    file_content_preview = ""
+    try:
+        file_content_preview = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, "")
+    except Exception:
+        pass
+
+    gemini_prompt = (
+        f"Research findings:\n{research_results}\n\n"
+        f"Using the above research, help incorporate these findings into the document:\n"
+        f"{file_content_preview}"
+    )
+    try:
+        gemini_answer = await _ask(gemini_prompt, user, model_pref="gemini")
+    except Exception as exc:
+        log.warning("_run_research_pipeline: Gemini phase failed: %s", exc)
+        gemini_answer = "(Could not incorporate findings into document)"
+
+    # Phase 3: Post final combined answer
+    final_text = (
+        f"🔍 *Research Summary*\n{research_results}\n\n"
+        f"📄 *Suggested document update*\n{gemini_answer}"
+    )
+    try:
+        await client.chat_postMessage(channel=channel, text=_clean_for_slack(final_text))
+    except Exception as exc:
+        log.warning("_run_research_pipeline: final post failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Batch file processor
+# ---------------------------------------------------------------------------
+
+
+async def _process_batch(
+    client: Any,
+    channel: str,
+    thread_ts: str,
+    files: list,
+    action: str,
+    dispatch_fn=None,
+) -> list[dict]:
+    """Process *files* sequentially, posting progress updates in *thread_ts*.
+
+    Args:
+        dispatch_fn: Optional async callable(file_obj, action_id, user_id) -> str.
+                     When None a no-op placeholder is used (useful in tests).
+    """
+    total = len(files)
+    try:
+        await client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text=f"📦 Processing {total} files...",
+        )
+    except Exception as exc:
+        log.warning("_process_batch: initial post failed: %s", exc)
+
+    results: list[dict] = []
+
+    for i, file_obj in enumerate(files, start=1):
+        filename = file_obj.get("name", f"file_{i}")
+
+        # Build progress snapshot
+        progress_lines: list[str] = []
+        for j, f in enumerate(files, start=1):
+            fname = f.get("name", f"file_{j}")
+            if j < i:
+                progress_lines.append(f"✅ {j}/{total}: {fname} done")
+            elif j == i:
+                progress_lines.append(f"⏳ {j}/{total}: {fname}...")
+            else:
+                progress_lines.append(f"⬜ {j}/{total}: {fname}")
+
+        try:
+            await client.chat_postMessage(
+                channel=channel,
+                thread_ts=thread_ts,
+                text="\n".join(progress_lines),
+            )
+        except Exception as exc:
+            log.warning("_process_batch: progress post failed for %s: %s", filename, exc)
+
+        # Process the file
+        try:
+            if dispatch_fn is not None:
+                result = await dispatch_fn(
+                    file_obj=file_obj,
+                    action_id=f"file_{action}",
+                    user_id="batch",
+                )
+            else:
+                result = f"Processed {filename}"
+            results.append({"filename": filename, "status": "done", "result": result})
+        except Exception as exc:
+            log.error("_process_batch: error processing %s: %s", filename, exc)
+            results.append({"filename": filename, "status": "error", "error": str(exc)})
+
+        # Brief pause between files to respect rate limits
+        if i < total:
+            await asyncio.sleep(2)
+
+    done_count = sum(1 for r in results if r["status"] == "done")
+    summary = (
+        f"✅ All {done_count} files processed!"
+        if done_count == total
+        else f"✅ {done_count}/{total} files processed."
+    )
+    try:
+        await client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=summary)
+    except Exception as exc:
+        log.warning("_process_batch: summary post failed: %s", exc)
+
+    return results
+
+
 async def _auto_brief_file(file_obj: dict, token: str) -> str | None:
     """Return a one-sentence description of the file, or None if unavailable.
 
@@ -762,6 +953,23 @@ def create_slack_app():  # type: ignore[return]
         prompt, model_pref, use_simple = _parse_flags(raw_text)
         use_simple = use_simple or _get_user_simple(user_id)
 
+        # Batch processing: multiple files in one message
+        if _is_batch_upload(files):
+            msg_ts = event.get("ts", "")
+            await _process_batch(client, channel, msg_ts, files, "summarize")
+            return
+
+        # Research pipeline: Perplexity search + optional Gemini document incorporation
+        if _is_research_request(prompt):
+            active_file_id = (_user_prefs.get(user_id) or {}).get("active_file_id")
+            file_obj_for_research: dict | None = None
+            if active_file_id and active_file_id in _file_registry:
+                reg_entry = _file_registry[active_file_id]
+                if isinstance(reg_entry, dict) and "file_obj" in reg_entry:
+                    file_obj_for_research = reg_entry["file_obj"]
+            await _run_research_pipeline(client, channel, user_id, prompt, file_obj_for_research)
+            return
+
         # Enrich prompt with any uploaded file content
         if files:
             prompt = await _process_slack_files(files, SLACK_BOT_TOKEN, prompt)
@@ -903,6 +1111,69 @@ def create_slack_app():  # type: ignore[return]
                 )
             )
 
+
+    # ------------------------------------------------------------------
+    # Handler: /research — Perplexity research pipeline slash command
+    # ------------------------------------------------------------------
+
+    @app.command("/research")
+    async def handle_slash_research(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "unknown")
+        channel: str = body.get("channel_id", "")
+        raw_text: str = (body.get("text") or "").strip()
+
+        if not raw_text:
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                text="Usage: `/research climate change for my annual report`",
+            )
+            return
+
+        active_file_id = (_user_prefs.get(user_id) or {}).get("active_file_id")
+        file_obj_for_research: dict | None = None
+        if active_file_id and active_file_id in _file_registry:
+            reg_entry = _file_registry[active_file_id]
+            if isinstance(reg_entry, dict) and "file_obj" in reg_entry:
+                file_obj_for_research = reg_entry["file_obj"]
+
+        await _run_research_pipeline(client, channel, user_id, raw_text, file_obj_for_research)
+
+    # ------------------------------------------------------------------
+    # Handler: /batch — batch process all registered files
+    # ------------------------------------------------------------------
+
+    @app.command("/batch")
+    async def handle_slash_batch(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "unknown")
+        channel: str = body.get("channel_id", "")
+        raw_text: str = (body.get("text") or "summarize").strip()
+
+        # Collect all registered files (registry stores {"file_obj": ..., ...})
+        user_files: list[dict] = []
+        for fid, fobj in _file_registry.items():
+            reg_file_obj = fobj.get("file_obj") if isinstance(fobj, dict) and "file_obj" in fobj else fobj
+            if reg_file_obj:
+                user_files.append(reg_file_obj)
+
+        if not user_files:
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                text="⚠️ No files found. Upload your files first, then run `/batch`.",
+            )
+            return
+
+        action = raw_text.split()[0] if raw_text else "summarize"
+        resp = await client.chat_postMessage(
+            channel=channel,
+            text=f"📦 Starting batch {action} on {len(user_files)} file(s)...",
+        )
+        thread_ts = (resp or {}).get("ts", "")
+
+        await _process_batch(client, channel, thread_ts, user_files, action)
 
     # ------------------------------------------------------------------
     # Handler: file_shared — auto-brief + Block Kit action buttons
