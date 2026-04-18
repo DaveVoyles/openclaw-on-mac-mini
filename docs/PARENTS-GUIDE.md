@@ -217,3 +217,42 @@ Other actions you can use with `/batch`:
 > **Note:** Processing multiple large files takes a little longer — OpenClaw pauses briefly between each file to stay reliable.
 
 ---
+
+## 🔍 Check if Everything is Working — `/status`
+
+Not sure if OpenClaw is running correctly? Just type:
+
+```
+/status
+```
+
+You'll instantly see:
+- ✅ **Mac Mini reachable** — the computer is on and connected
+- 📁 **How many files** are in your OpenClaw folder
+- 🕐 **When the last file synced** (so you know it's working)
+- 🔔 **Whether file alerts are on** for you
+
+This is the fastest way to know "is everything okay?" without bothering Dave.
+
+---
+
+## 🔔 Automatic File Alerts
+
+If Dave has set up alerts for you, OpenClaw will **automatically message you** whenever a new file lands in your OpenClaw folder — no need to go to Slack and ask.
+
+You'll get a message like:
+
+> 📄 New file synced: **budget-2025.xlsx** — what would you like to do?
+
+Then just tap a button: **Summarize it**, **Proofread it**, or **Explain it**.
+
+If you're not getting alerts but want them, ask Dave to set `SLACK_NOTIFY_USER_ID` to your Slack member ID.
+
+---
+
+## 💻 Windows: Sync Without Extra Software
+
+If you're on Windows and can't use the SSH sync method, OpenClaw now supports uploading files directly over the network. The Windows installer (`Install-OpenClaw.ps1`) automatically tests this connection during setup.
+
+If you see "✅ Upload server reachable" during install, the HTTP fallback is working and your files will sync even without additional tools installed.
+

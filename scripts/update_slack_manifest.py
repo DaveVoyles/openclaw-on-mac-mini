@@ -84,6 +84,12 @@ MANIFEST: dict = {
                 "usage_hint": "",
                 "should_escape": False,
             },
+            {
+                "command": "/status",
+                "description": "Check if OpenClaw is running and show sync health, file count, and last sync time.",
+                "usage_hint": "(no arguments needed)",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

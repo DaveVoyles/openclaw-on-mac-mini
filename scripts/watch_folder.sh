@@ -16,6 +16,7 @@ WATCH_DIR="${HOME}/Documents/OpenClaw"
 REMOTE="macmini:/ai-files/"
 LOG_FILE="${HOME}/Library/Logs/openclaw-watcher.log"
 POLL_INTERVAL=30
+LAST_SYNC_JSON="${HOME}/openclaw/data/last_sync.json"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
@@ -51,9 +52,20 @@ sync_files() {
     }
 
     if [[ -n "$output" ]]; then
+        local last_file=""
         while IFS= read -r f; do
-            [[ -n "$f" ]] && log "✅ Synced: $f"
+            if [[ -n "$f" ]]; then
+                log "✅ Synced: $f"
+                last_file="$f"
+            fi
         done <<< "$output"
+        # Write last_sync.json so /status can report when sync last ran
+        if [[ -n "$last_file" ]]; then
+            mkdir -p "$(dirname "$LAST_SYNC_JSON")"
+            printf '{"timestamp":"%s","last_file":"%s"}\n' \
+                "$(date '+%Y-%m-%d %H:%M:%S')" "$last_file" \
+                > "$LAST_SYNC_JSON" 2>/dev/null || true
+        fi
     fi
 }
 

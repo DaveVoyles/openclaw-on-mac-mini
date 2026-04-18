@@ -612,5 +612,116 @@ class TestStatusAndAlerts(unittest.TestCase):
         self.assertAlmostEqual(slack_bot._error_window[0], fresh_ts, delta=1)
 
 
+class TestWave4Upload(unittest.TestCase):
+    """Tests for Wave 4: /upload HTTP endpoint and file-alert helpers."""
+
+    def setUp(self):
+        import slack_bot
+        self._orig_upload_key = slack_bot.OPENCLAW_UPLOAD_KEY
+
+    def tearDown(self):
+        import slack_bot
+        slack_bot.OPENCLAW_UPLOAD_KEY = self._orig_upload_key
+
+    def test_allowed_upload_extensions(self):
+        """_ALLOWED_UPLOAD_EXTENSIONS must include the expected document types."""
+        import slack_bot
+        for ext in (".docx", ".xlsx", ".pdf", ".txt", ".csv"):
+            self.assertIn(ext, slack_bot._ALLOWED_UPLOAD_EXTENSIONS)
+
+    def test_load_known_files_empty_when_missing(self):
+        """_load_known_files returns empty set if file does not exist."""
+        import slack_bot
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig = slack_bot._KNOWN_FILES_PATH
+            slack_bot._KNOWN_FILES_PATH = Path(tmpdir) / "nonexistent.json"
+            try:
+                result = slack_bot._load_known_files()
+                self.assertEqual(result, set())
+            finally:
+                slack_bot._KNOWN_FILES_PATH = orig
+
+    def test_save_and_load_known_files_roundtrip(self):
+        """Saved known files can be loaded back correctly."""
+        import slack_bot
+        with tempfile.TemporaryDirectory() as tmpdir:
+            orig = slack_bot._KNOWN_FILES_PATH
+            slack_bot._KNOWN_FILES_PATH = Path(tmpdir) / "known_files.json"
+            try:
+                files = {"report.docx", "budget.xlsx"}
+                slack_bot._save_known_files(files)
+                loaded = slack_bot._load_known_files()
+                self.assertEqual(loaded, files)
+            finally:
+                slack_bot._KNOWN_FILES_PATH = orig
+
+    def test_file_alert_loop_no_op_without_notify_user(self):
+        """_file_alert_loop returns immediately when SLACK_NOTIFY_USER_ID is empty."""
+        import asyncio
+        import slack_bot
+
+        orig = slack_bot.SLACK_NOTIFY_USER_ID
+        slack_bot.SLACK_NOTIFY_USER_ID = ""
+        called = []
+
+        class FakeClient:
+            async def chat_postMessage(self, **kwargs):
+                called.append(kwargs)
+
+        try:
+            asyncio.run(slack_bot._file_alert_loop(FakeClient()))
+        finally:
+            slack_bot.SLACK_NOTIFY_USER_ID = orig
+
+        self.assertEqual(called, [])
+
+    def test_send_file_alert_posts_dm(self):
+        """_send_file_alert posts a Block Kit message to the notify user."""
+        import asyncio
+        import slack_bot
+
+        orig_notify = slack_bot.SLACK_NOTIFY_USER_ID
+        slack_bot.SLACK_NOTIFY_USER_ID = "UPARENT"
+        posted = []
+
+        class FakeClient:
+            async def chat_postMessage(self, **kwargs):
+                posted.append(kwargs)
+
+        try:
+            asyncio.run(slack_bot._send_file_alert(FakeClient(), "report.docx"))
+        finally:
+            slack_bot.SLACK_NOTIFY_USER_ID = orig_notify
+
+        self.assertEqual(len(posted), 1)
+        self.assertEqual(posted[0]["channel"], "UPARENT")
+        self.assertIn("report.docx", posted[0].get("text", ""))
+
+    def test_send_file_alert_no_crash_on_bad_client(self):
+        """_send_file_alert does not raise even when client.chat_postMessage fails."""
+        import asyncio
+        import slack_bot
+
+        orig_notify = slack_bot.SLACK_NOTIFY_USER_ID
+        slack_bot.SLACK_NOTIFY_USER_ID = "UPARENT"
+
+        class BrokenClient:
+            async def chat_postMessage(self, **kwargs):
+                raise RuntimeError("Slack API down")
+
+        try:
+            asyncio.run(slack_bot._send_file_alert(BrokenClient(), "budget.xlsx"))
+        except Exception as exc:
+            self.fail(f"_send_file_alert raised unexpectedly: {exc}")
+        finally:
+            slack_bot.SLACK_NOTIFY_USER_ID = orig_notify
+
+    def test_upload_extension_set_excludes_executables(self):
+        """Upload endpoint must not allow .exe, .sh, .py, or .zip."""
+        import slack_bot
+        for bad_ext in (".exe", ".sh", ".py", ".zip", ".bat"):
+            self.assertNotIn(bad_ext, slack_bot._ALLOWED_UPLOAD_EXTENSIONS)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -160,7 +160,23 @@ if ($policy -eq "Restricted" -or $policy -eq "Undefined") {
     Write-Host ""
 }
 
-# ── Step 8: Start watcher now for an immediate test ───────────────────────────
+# ── Step 8: Test the HTTP upload endpoint ────────────────────────────────────
+Write-Host ""
+Write-Host "Step 8: Testing HTTP upload endpoint..." -ForegroundColor White
+$uploadUrl = "http://${remoteHost}:8080/upload"
+try {
+    $resp = Invoke-WebRequest -Uri "http://${remoteHost}:8080/health" -TimeoutSec 5 -ErrorAction Stop
+    if ($resp.StatusCode -eq 200) {
+        Write-Host "  ✅ Upload server reachable at $uploadUrl" -ForegroundColor Green
+    } else {
+        Write-Host "  ⚠️  Upload server responded with HTTP $($resp.StatusCode)" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "  ⚠️  Upload server not reachable at $uploadUrl" -ForegroundColor Yellow
+    Write-Host "     This is expected if OpenClaw isn't running yet, or if WSL sync is used instead." -ForegroundColor Gray
+}
+
+# ── Step 9: Start watcher now for an immediate test ───────────────────────────
 Write-Host "Starting the watcher now for a quick test..." -ForegroundColor White
 try {
     Start-Process powershell.exe `
