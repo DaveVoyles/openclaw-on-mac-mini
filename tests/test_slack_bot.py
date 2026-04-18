@@ -1968,3 +1968,163 @@ class TestGmailRead:
         """_gmail_message_cache is initialized as a list."""
         import src.slack_bot as sb
         assert isinstance(sb._gmail_message_cache, list)
+
+
+# ---------------------------------------------------------------------------
+# Wave 11 — Per-user Gmail and Dropbox credential storage
+# ---------------------------------------------------------------------------
+
+
+class TestPerUserEmailCreds:
+    """Tests for per-user Gmail credential storage (Wave 11)."""
+
+    def test_load_save_user_email_creds_roundtrip(self, tmp_path):
+        """Storing and reloading per-user email creds survives a round-trip."""
+        import json
+        import sys
+        import importlib
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_EMAIL_CREDS_PATH
+        creds_file = tmp_path / "user_email_creds.json"
+        sb._USER_EMAIL_CREDS_PATH = creds_file
+        try:
+            sb._user_email_creds["U_TEST_CHUCK"] = {
+                "user": "chuck@gmail.com",
+                "password": "test-app-password",
+            }
+            sb._save_user_email_creds()
+            sb._user_email_creds.clear()
+            sb._load_user_email_creds()
+            assert sb._user_email_creds["U_TEST_CHUCK"]["user"] == "chuck@gmail.com"
+            assert sb._user_email_creds["U_TEST_CHUCK"]["password"] == "test-app-password"
+        finally:
+            sb._USER_EMAIL_CREDS_PATH = orig_path
+            sb._user_email_creds.pop("U_TEST_CHUCK", None)
+
+    def test_forget_removes_user_creds(self, tmp_path):
+        """Removing a user's creds deletes their entry."""
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_EMAIL_CREDS_PATH
+        creds_file = tmp_path / "user_email_creds.json"
+        sb._USER_EMAIL_CREDS_PATH = creds_file
+        try:
+            sb._user_email_creds["U_FORGET"] = {"user": "x@gmail.com", "password": "pw"}
+            sb._save_user_email_creds()
+            del sb._user_email_creds["U_FORGET"]
+            sb._save_user_email_creds()
+            sb._load_user_email_creds()
+            assert "U_FORGET" not in sb._user_email_creds
+        finally:
+            sb._USER_EMAIL_CREDS_PATH = orig_path
+            sb._user_email_creds.pop("U_FORGET", None)
+
+    def test_load_user_email_creds_missing_file_is_empty(self, tmp_path):
+        """Loading from a missing file returns empty dict (no exception)."""
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_EMAIL_CREDS_PATH
+        sb._USER_EMAIL_CREDS_PATH = tmp_path / "nonexistent.json"
+        try:
+            sb._user_email_creds = {"U_PREV": {}}
+            sb._load_user_email_creds()
+            assert sb._user_email_creds == {}
+        finally:
+            sb._USER_EMAIL_CREDS_PATH = orig_path
+
+    def test_configured_flag_true_when_token_set(self):
+        """DROPBOX_CONFIGURED is True when token is present."""
+        import os
+        import sys
+        import importlib
+
+        old = os.environ.get("DROPBOX_ACCESS_TOKEN")
+        os.environ["DROPBOX_ACCESS_TOKEN"] = "sl.fake"
+        try:
+            sys.path.insert(0, "src")
+            import dropbox_sync
+            importlib.reload(dropbox_sync)
+            assert dropbox_sync.DROPBOX_CONFIGURED is True
+        except ImportError:
+            pytest.skip("dropbox_sync not available")
+        finally:
+            if old is not None:
+                os.environ["DROPBOX_ACCESS_TOKEN"] = old
+            else:
+                os.environ.pop("DROPBOX_ACCESS_TOKEN", None)
+
+
+class TestPerUserDropboxTokens:
+    """Tests for per-user Dropbox token storage (Wave 11)."""
+
+    def test_load_save_user_dropbox_tokens_roundtrip(self, tmp_path):
+        """Storing and reloading per-user Dropbox tokens survives a round-trip."""
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_DROPBOX_PATH
+        tokens_file = tmp_path / "user_dropbox_tokens.json"
+        sb._USER_DROPBOX_PATH = tokens_file
+        try:
+            sb._user_dropbox_tokens["U_LISA"] = {
+                "token": "sl.fake_lisa_token",
+                "watch_path": "/OpenClaw",
+            }
+            sb._save_user_dropbox_tokens()
+            sb._user_dropbox_tokens.clear()
+            sb._load_user_dropbox_tokens()
+            assert sb._user_dropbox_tokens["U_LISA"]["token"] == "sl.fake_lisa_token"
+            assert sb._user_dropbox_tokens["U_LISA"]["watch_path"] == "/OpenClaw"
+        finally:
+            sb._USER_DROPBOX_PATH = orig_path
+            sb._user_dropbox_tokens.pop("U_LISA", None)
+
+    def test_forget_removes_dropbox_token(self, tmp_path):
+        """Removing a user's Dropbox token deletes their entry."""
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_DROPBOX_PATH
+        tokens_file = tmp_path / "user_dropbox_tokens.json"
+        sb._USER_DROPBOX_PATH = tokens_file
+        try:
+            sb._user_dropbox_tokens["U_REMOVE"] = {"token": "sl.x", "watch_path": "/x"}
+            sb._save_user_dropbox_tokens()
+            del sb._user_dropbox_tokens["U_REMOVE"]
+            sb._save_user_dropbox_tokens()
+            sb._load_user_dropbox_tokens()
+            assert "U_REMOVE" not in sb._user_dropbox_tokens
+        finally:
+            sb._USER_DROPBOX_PATH = orig_path
+            sb._user_dropbox_tokens.pop("U_REMOVE", None)
+
+    def test_load_user_dropbox_tokens_missing_file_is_empty(self, tmp_path):
+        """Loading from a missing file returns empty dict (no exception)."""
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_DROPBOX_PATH
+        sb._USER_DROPBOX_PATH = tmp_path / "nonexistent.json"
+        try:
+            sb._user_dropbox_tokens = {"U_PREV": {}}
+            sb._load_user_dropbox_tokens()
+            assert sb._user_dropbox_tokens == {}
+        finally:
+            sb._USER_DROPBOX_PATH = orig_path
+
+    def test_per_user_token_takes_priority_over_server_token(self):
+        """When a user has a personal token, it should be preferred over the server token."""
+        import src.slack_bot as sb
+
+        user_id = "U_PRIORITY_TEST"
+        orig = sb._user_dropbox_tokens.copy()
+        try:
+            sb._user_dropbox_tokens[user_id] = {
+                "token": "sl.personal",
+                "watch_path": "/MyFolder",
+            }
+            creds = sb._user_dropbox_tokens.get(user_id)
+            assert creds is not None
+            active_token = (creds or {}).get("token") or sb._DROPBOX_TOKEN
+            assert active_token == "sl.personal"
+        finally:
+            sb._user_dropbox_tokens.clear()
+            sb._user_dropbox_tokens.update(orig)

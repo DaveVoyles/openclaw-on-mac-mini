@@ -154,6 +154,74 @@ _load_prefs()
 _load_personas()
 
 # ---------------------------------------------------------------------------
+# Per-user email credentials (IMAP / Gmail App Password)
+# ---------------------------------------------------------------------------
+# Stored as: {"U123ABC": {"user": "chuck@gmail.com", "password": "xxxx xxxx xxxx xxxx"}}
+# Allows each Slack user to connect their own Gmail. Never committed — local data/ only.
+# ---------------------------------------------------------------------------
+
+_USER_EMAIL_CREDS_PATH: Path = Path(__file__).parent.parent / "data" / "user_email_creds.json"
+_user_email_creds: dict[str, dict] = {}
+
+
+def _load_user_email_creds() -> None:
+    global _user_email_creds
+    try:
+        if _USER_EMAIL_CREDS_PATH.exists():
+            _user_email_creds = json.loads(_USER_EMAIL_CREDS_PATH.read_text(encoding="utf-8"))
+        else:
+            _user_email_creds = {}
+    except Exception as exc:
+        log.warning("Failed to load user email creds: %s", exc)
+        _user_email_creds = {}
+
+
+def _save_user_email_creds() -> None:
+    try:
+        _USER_EMAIL_CREDS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _USER_EMAIL_CREDS_PATH.write_text(
+            json.dumps(_user_email_creds, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        log.warning("Failed to save user email creds: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Per-user Dropbox tokens
+# ---------------------------------------------------------------------------
+# Stored as: {"U123ABC": {"token": "sl.xxx", "watch_path": "/OpenClaw"}}
+# ---------------------------------------------------------------------------
+
+_USER_DROPBOX_PATH: Path = Path(__file__).parent.parent / "data" / "user_dropbox_tokens.json"
+_user_dropbox_tokens: dict[str, dict] = {}
+
+
+def _load_user_dropbox_tokens() -> None:
+    global _user_dropbox_tokens
+    try:
+        if _USER_DROPBOX_PATH.exists():
+            _user_dropbox_tokens = json.loads(_USER_DROPBOX_PATH.read_text(encoding="utf-8"))
+        else:
+            _user_dropbox_tokens = {}
+    except Exception as exc:
+        log.warning("Failed to load user Dropbox tokens: %s", exc)
+        _user_dropbox_tokens = {}
+
+
+def _save_user_dropbox_tokens() -> None:
+    try:
+        _USER_DROPBOX_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _USER_DROPBOX_PATH.write_text(
+            json.dumps(_user_dropbox_tokens, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        log.warning("Failed to save user Dropbox tokens: %s", exc)
+
+
+_load_user_email_creds()
+_load_user_dropbox_tokens()
+
+# ---------------------------------------------------------------------------
 # Per-user file history (persisted to data/slack_file_history.json)
 # ---------------------------------------------------------------------------
 # Stored as: {"U123": [{"name": "doc.docx", "size": 1234, "sha256": "...",
@@ -2134,20 +2202,21 @@ async def _post_clarification_prompt(client: Any, channel: str, user_id: str) ->
 # Wave 10: Dropbox helpers
 # ---------------------------------------------------------------------------
 
-def _get_dropbox_client():
-    """Return a Dropbox client if token is configured, else None."""
-    if not _DROPBOX_TOKEN:
+def _get_dropbox_client(token: str | None = None):
+    """Return a Dropbox client using *token* or the server-level DROPBOX_APP_TOKEN."""
+    active_token = token or _DROPBOX_TOKEN
+    if not active_token:
         return None
     try:
         import dropbox  # noqa: PLC0415
-        return dropbox.Dropbox(_DROPBOX_TOKEN)
+        return dropbox.Dropbox(active_token)
     except ImportError:
         return None
 
 
-def _dropbox_list_folder(path: str) -> list[dict]:
-    """List files in a Dropbox folder. Returns [] if not configured."""
-    dbx = _get_dropbox_client()
+def _dropbox_list_folder(path: str, token: str | None = None) -> list[dict]:
+    """List files in a Dropbox folder using *token* (or server token). Returns [] if not configured."""
+    dbx = _get_dropbox_client(token=token)
     if dbx is None:
         return []
     try:
@@ -3853,7 +3922,13 @@ def create_slack_app():  # type: ignore[return]
         )
 
     # ------------------------------------------------------------------
-    # Wave 10 Leia: /email — summarize a specific email by number
+    # Wave 10 Leia / Wave 11: /email — per-user Gmail via IMAP, or server OAuth fallback
+    # ------------------------------------------------------------------
+    # Subcommands:
+    #   /email setup <address> <app_password>  — store personal Gmail creds
+    #   /email forget                          — remove stored creds
+    #   /email [today|week|<keyword>]          — read inbox or search
+    #   /email <number>                        — (legacy) summarize email # from /inbox cache
     # ------------------------------------------------------------------
 
     @app.command("/email")
@@ -3862,13 +3937,116 @@ def create_slack_app():  # type: ignore[return]
         user_id = body.get("user_id", "")
         channel_id = body.get("channel_id", user_id)
         text = (body.get("text") or "").strip()
-        if not _GOOGLE_REFRESH_TOKEN:
+        lower = text.lower()
+
+        # -- /email setup <address> <app_password> --
+        if lower.startswith("setup"):
+            parts = text.split(None, 2)  # ["setup", "chuck@gmail.com", "xxxx xxxx xxxx xxxx"]
+            if len(parts) < 3:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=(
+                        "📧 *Gmail setup:*\n"
+                        "`/email setup <your@gmail.com> <app password>`\n\n"
+                        "To get an app password:\n"
+                        "1. Go to myaccount.google.com → Security → 2-Step Verification (enable if needed)\n"
+                        "2. myaccount.google.com → Security → *App Passwords* → Create\n"
+                        "3. Copy the 16-character password and paste it here\n\n"
+                        "_This message is only visible to you and is not stored in Slack._"
+                    ),
+                )
+                return
+            _, address, app_password = parts[0], parts[1], parts[2]
+            _user_email_creds[user_id] = {"user": address, "password": app_password}
+            _save_user_email_creds()
             await client.chat_postEphemeral(
                 channel=channel_id,
                 user=user_id,
-                text="📧 Gmail is not connected.",
+                text=(
+                    f"✅ *Gmail connected!*\n"
+                    f"I'll use *{address}* when you run `/email`.\n"
+                    f"Try `/email` to see your inbox, or `/email doctor` to search."
+                ),
             )
             return
+
+        # -- /email forget --
+        if lower == "forget":
+            if user_id in _user_email_creds:
+                del _user_email_creds[user_id]
+                _save_user_email_creds()
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="✅ Your Gmail credentials have been removed.",
+                )
+            else:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="ℹ️ No Gmail credentials were stored for you.",
+                )
+            return
+
+        # -- Personal IMAP path (per-user creds stored) --
+        creds = _user_email_creds.get(user_id)
+        if creds:
+            try:
+                from email_skills import read_inbox, search_emails
+            except ImportError:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="❌ Email skills module not available.",
+                )
+                return
+
+            import os as _os
+            _orig_user = _os.environ.get("GMAIL_USER")
+            _orig_pass = _os.environ.get("GMAIL_APP_PASSWORD")
+            _os.environ["GMAIL_USER"] = creds["user"]
+            _os.environ["GMAIL_APP_PASSWORD"] = creds["password"]
+            try:
+                if not text or lower in ("today", "inbox"):
+                    result = await read_inbox(count=10)
+                elif lower == "week":
+                    result = await read_inbox(count=25)
+                else:
+                    try:
+                        idx = int(text) - 1
+                        # legacy: summarize by number — fall through to OAuth path
+                        result = None
+                    except ValueError:
+                        result = await search_emails(text)
+            finally:
+                if _orig_user is not None:
+                    _os.environ["GMAIL_USER"] = _orig_user
+                elif "GMAIL_USER" in _os.environ:
+                    del _os.environ["GMAIL_USER"]
+                if _orig_pass is not None:
+                    _os.environ["GMAIL_APP_PASSWORD"] = _orig_pass
+                elif "GMAIL_APP_PASSWORD" in _os.environ:
+                    del _os.environ["GMAIL_APP_PASSWORD"]
+
+            if result is not None:
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=result)
+                return
+            # fall through to legacy number-based summarize below
+
+        # -- Legacy number-based summarize (server OAuth path) --
+        if not _GOOGLE_REFRESH_TOKEN and not creds:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "📧 *No Gmail connected yet.*\n"
+                    "Run `/email setup your@gmail.com <app password>` to connect your own Gmail.\n\n"
+                    "Need help? Type `/email setup` for step-by-step instructions."
+                ),
+            )
+            return
+
         try:
             idx = int(text) - 1
         except ValueError:
@@ -3984,56 +4162,123 @@ def create_slack_app():  # type: ignore[return]
         )
 
     # ------------------------------------------------------------------
-    # /dropbox — Browse and sync Dropbox folder
+    # /dropbox — Browse and sync Dropbox folder (per-user or server token)
+    # ------------------------------------------------------------------
+    # Subcommands:
+    #   /dropbox setup <token>   — store personal Dropbox access token
+    #   /dropbox forget          — remove stored token
+    #   /dropbox list            — list recent files
+    #   /dropbox sync            — check for new files
+    #   /dropbox status          — connection status
     # ------------------------------------------------------------------
 
     @app.command("/dropbox")
     async def handle_slash_dropbox(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
         user_id = body.get("user_id", "")
-        text = (body.get("text") or "").strip().lower()
+        channel_id = body.get("channel_id", user_id)
+        text = (body.get("text") or "").strip()
+        lower = text.lower()
 
-        if _DROPBOX_TOKEN is None:
+        # -- /dropbox setup <token> --
+        if lower.startswith("setup"):
+            parts = text.split(None, 1)
+            if len(parts) < 2:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=(
+                        "📦 *Dropbox setup:*\n"
+                        "`/dropbox setup <your-access-token>`\n\n"
+                        "To get a token:\n"
+                        "1. Go to <https://www.dropbox.com/developers/apps|dropbox.com/developers/apps>\n"
+                        "2. Create a new app → *Full Dropbox* access\n"
+                        "3. Under *OAuth 2* → click *Generate* access token\n"
+                        "4. Paste it here: `/dropbox setup sl.your_token_here`\n\n"
+                        "_This message is only visible to you._"
+                    ),
+                )
+                return
+            token = parts[1].strip()
+            _user_dropbox_tokens[user_id] = {"token": token, "watch_path": "/OpenClaw"}
+            _save_user_dropbox_tokens()
             await client.chat_postEphemeral(
-                channel=body.get("channel_id", user_id),
+                channel=channel_id,
                 user=user_id,
-                text="☁️ Dropbox is not configured. Ask Dave to set up the DROPBOX_APP_TOKEN.",
+                text=(
+                    "✅ *Dropbox connected!*\n"
+                    "I'll watch your `/OpenClaw` folder for new files.\n"
+                    "Create that folder in Dropbox, then drop files there and I'll notify you.\n"
+                    "Try `/dropbox list` to see recent files."
+                ),
             )
             return
 
-        if text in ("sync", ""):
+        # -- /dropbox forget --
+        if lower == "forget":
+            if user_id in _user_dropbox_tokens:
+                del _user_dropbox_tokens[user_id]
+                _save_user_dropbox_tokens()
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="✅ Your Dropbox token has been removed.",
+                )
+            else:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="ℹ️ No Dropbox token was stored for you.",
+                )
+            return
+
+        # -- Resolve active token: per-user first, then server-level --
+        user_dbx_creds = _user_dropbox_tokens.get(user_id)
+        active_token = (user_dbx_creds or {}).get("token") or _DROPBOX_TOKEN
+        active_folder = (user_dbx_creds or {}).get("watch_path") or _DROPBOX_FOLDER
+
+        if active_token is None:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "📦 *Dropbox not connected yet.*\n"
+                    "Run `/dropbox setup` to see how to connect your own Dropbox account.\n"
+                    "Or ask Dave to set up the shared `DROPBOX_APP_TOKEN`."
+                ),
+            )
+            return
+
+        if lower in ("sync", ""):
             count = await _dropbox_sync_new_files(client)
             await client.chat_postEphemeral(
-                channel=body.get("channel_id", user_id),
+                channel=channel_id,
                 user=user_id,
                 text=f"☁️ Dropbox sync complete — {count} new file(s) pulled.",
             )
-        elif text == "list":
-            files = _dropbox_list_folder(_DROPBOX_FOLDER)[:10]
+        elif lower == "list":
+            files = _dropbox_list_folder(active_folder, token=active_token)[:10]
             if not files:
-                msg = f"☁️ No files found in Dropbox folder `{_DROPBOX_FOLDER}`."
+                msg = f"☁️ No files found in Dropbox folder `{active_folder}`."
             else:
-                lines = [f"☁️ *Dropbox — {_DROPBOX_FOLDER}* (last {len(files)} files)"]
+                lines = [f"☁️ *Dropbox — {active_folder}* (last {len(files)} files)"]
                 for f in files:
                     lines.append(f"• 📄 {f['name']}  ·  {f['modified']}")
                 msg = "\n".join(lines)
+            await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
+        elif lower == "status":
+            folder_files = _dropbox_list_folder(active_folder, token=active_token)
+            source = "personal" if user_dbx_creds else "shared"
             await client.chat_postEphemeral(
-                channel=body.get("channel_id", user_id),
+                channel=channel_id,
                 user=user_id,
-                text=msg,
-            )
-        elif text == "status":
-            folder_files = _dropbox_list_folder(_DROPBOX_FOLDER)
-            await client.chat_postEphemeral(
-                channel=body.get("channel_id", user_id),
-                user=user_id,
-                text=f"✅ Dropbox connected. Watching `{_DROPBOX_FOLDER}` — {len(folder_files)} file(s) found.",
+                text=f"✅ Dropbox connected ({source}). Watching `{active_folder}` — {len(folder_files)} file(s) found.",
             )
         else:
             await client.chat_postEphemeral(
-                channel=body.get("channel_id", user_id),
+                channel=channel_id,
                 user=user_id,
-                text="Usage: `/dropbox list` · `/dropbox sync` · `/dropbox status`",
+                text="Usage: `/dropbox list` · `/dropbox sync` · `/dropbox status` · `/dropbox setup <token>`",
             )
 
     # ------------------------------------------------------------------
