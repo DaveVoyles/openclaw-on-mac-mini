@@ -61,9 +61,9 @@ ship-server:
 	ssh macmini "cd /Users/davevoyles/openclaw && git pull --ff-only && git rev-parse --short HEAD > src/_git_sha.txt"
 	@echo "🧹 Clearing Python bytecode cache to prevent stale .pyc issues..."
 	ssh macmini "find /Users/davevoyles/openclaw/src -name '*.pyc' -delete 2>/dev/null; find /Users/davevoyles/openclaw/src -name '__pycache__' -type d -exec rmdir {} + 2>/dev/null; true"
-	@echo "🐳 Restarting openclaw container to load new Python code..."
-	ssh macmini "/usr/local/bin/docker restart openclaw"
-	@sleep 5
+	@echo "🐳 Recreating openclaw container (picks up any docker-compose.yml mount changes)..."
+	ssh macmini "cd /Users/davevoyles/openclaw && /usr/local/bin/docker-compose up -d --no-deps --force-recreate openclaw"
+	@sleep 8
 	@echo "✅ Server health:"
 	@curl -fsS http://192.168.1.93:8765/health | python3 -m json.tool
 
