@@ -141,6 +141,34 @@ Concise operator playbook for incidents, monitoring interpretation, backup/recov
 | `/template list\|<name>` | Lists or DMs a starter template file | `data/templates/` (committed) |
 | `/brief` | Shows user's last 5 uploaded files with timestamps | reads file metadata |
 | `/mystats` | Per-user stats from `slack_metrics.jsonl` | reads metrics log |
+| `/clear` | Clears session history and active file selections | in-memory only |
+
+### Updating the Slack App Manifest
+
+The manifest is the single source of truth for slash command registration.
+It lives in `scripts/update_slack_manifest.py`.
+
+**Option A — API push (recommended, fully automated):**
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **OpenClaw** → **Basic Information**
+2. Scroll to **App-Level Tokens** → **Generate Token and Scopes**
+3. Name it `manifest-updater`, add scope: `app_configurations:write` → **Generate**
+4. Copy the token (starts with `xoxe.xoxp-`)
+5. Add to `.env`: `SLACK_CONFIG_TOKEN=xoxe.xoxp-...`
+6. Run: `python3 scripts/update_slack_manifest.py --push`
+
+**Option B — Manual paste (fallback):**
+
+1. Run: `python3 scripts/update_slack_manifest.py --print > /tmp/slack_manifest.json`
+2. Open `/tmp/slack_manifest.json` in VS Code and copy the content
+3. Go to [api.slack.com/apps](https://api.slack.com/apps) → **OpenClaw** → **App Manifest** tab
+4. Select all existing content, paste, click **Save Changes**
+5. Click **Install to Workspace** if prompted
+
+**Option C — Manual per-command UI (last resort):**
+
+Go to **OpenClaw → Features → Slash Commands → Create New Command** and fill in each command individually.
+For Socket Mode, the Request URL field accepts any placeholder (e.g. `https://example.com`).
 
 ### Excel Formula Intelligence Button
 
