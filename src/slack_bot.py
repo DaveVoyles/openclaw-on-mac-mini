@@ -1602,40 +1602,61 @@ def create_slack_app():  # type: ignore[return]
         uptime_str = f"{hours}h {minutes}m" if hours else f"{minutes}m"
 
         version = os.environ.get("OPENCLAW_VERSION", "dev")
+        lines: list[str] = [f"🤖 *OpenClaw Bot Status* (v{version})\n"]
+        lines.append(f"⏱ Uptime: {uptime_str}  |  Queries today: {_daily_query_count}")
 
+        # Mac Mini reachability
+        mac_mini_ip = os.getenv("OPENCLAW_MAC_MINI_IP", "192.168.1.93")
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as sess:
+                async with sess.get(f"http://{mac_mini_ip}:8080/health") as resp:
+                    lines.append("✅ Mac Mini: reachable" if resp.status == 200 else f"⚠️ Mac Mini: HTTP {resp.status}")
+        except Exception:
+            lines.append("❌ Mac Mini: unreachable")
+
+        # /ai-files inventory
+        try:
+            if _AI_FILES_DIR.exists():
+                files = [f for f in _AI_FILES_DIR.iterdir() if f.is_file() and f.suffix.lower() in _ALLOWED_UPLOAD_EXTENSIONS]
+                lines.append(f"📁 Storage: {len(files)} file(s)")
+            else:
+                lines.append("📁 Storage: folder not found")
+        except Exception:
+            lines.append("📁 Storage: error reading")
+
+        # Last sync
+        try:
+            if _LAST_SYNC_PATH.exists():
+                sync_data = json.loads(_LAST_SYNC_PATH.read_text(encoding="utf-8"))
+                sync_ts = sync_data.get("timestamp", "")
+                sync_file = sync_data.get("last_file", "")
+                lines.append(f"🔄 Last sync: {sync_ts}" + (f" ({sync_file})" if sync_file else ""))
+            else:
+                lines.append("🔄 Last sync: none recorded")
+        except Exception:
+            lines.append("🔄 Last sync: unknown")
+
+        # Model health
         model_lines: list[str] = []
         for model, ts in sorted(_model_last_success.items()):
             ago = int(now - ts)
-            if ago < 60:
-                ago_str = f"{ago}s ago"
-            else:
-                ago_str = f"{ago // 60}m ago"
-            model_lines.append(f"  • {model}: last used {ago_str}")
-        if not model_lines:
-            model_lines.append("  (no models used yet)")
+            ago_str = f"{ago}s ago" if ago < 60 else f"{ago // 60}m ago"
+            model_lines.append(f"  • {model}: {ago_str}")
+        lines.append("\n*Model health:*\n" + ("\n".join(model_lines) if model_lines else "  (none used yet)"))
 
-        model_health = "\n".join(model_lines)
-        status_text = (
-            f"🤖 *OpenClaw Bot Status*\n\n"
-            f"Uptime: {uptime_str}\n"
-            f"Queries today: {_daily_query_count}\n"
-            f"Version: {version}\n\n"
-            f"Model health:\n{model_health}"
-        )
+        if SLACK_NOTIFY_USER_ID:
+            lines.append(f"🔔 File alerts: enabled (<@{SLACK_NOTIFY_USER_ID}>)")
 
-        blocks = [
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": status_text},
-            }
-        ]
-
-        await client.chat_postEphemeral(
-            channel=channel,
-            user=user_id,
-            text=status_text,
-            blocks=blocks,
-        )
+        status_text = "\n".join(lines)
+        try:
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                text=status_text,
+                blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": status_text}}],
+            )
+        except Exception as exc:
+            log.warning("handle_slash_status: failed to post ephemeral: %s", exc)
 
     # ------------------------------------------------------------------
     # Handler: /simple — toggle persistent plain-language mode per user
@@ -1964,72 +1985,6 @@ def create_slack_app():  # type: ignore[return]
         app.action(_action_id)(_make_handler(_action_id))
 
     # ------------------------------------------------------------------
-    # Handler: /status — system health snapshot
-    # ------------------------------------------------------------------
-
-    @app.command("/status")
-    async def handle_slash_status(ack: Any, body: dict[str, Any], client: Any) -> None:
-        await ack()
-        channel = body.get("channel_id", "")
-        user_id = body.get("user_id", "unknown")
-
-        lines: list[str] = ["*🤖 OpenClaw Status*\n"]
-
-        # Mac Mini reachability (ping /health on port 8080)
-        mac_mini_ip = os.getenv("OPENCLAW_MAC_MINI_IP", "192.168.1.93")
-        try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as sess:
-                async with sess.get(f"http://{mac_mini_ip}:8080/health") as resp:
-                    if resp.status == 200:
-                        lines.append("✅ Mac Mini: reachable")
-                    else:
-                        lines.append(f"⚠️ Mac Mini: responded with HTTP {resp.status}")
-        except Exception:
-            lines.append("❌ Mac Mini: unreachable")
-
-        # /ai-files inventory
-        try:
-            if _AI_FILES_DIR.exists():
-                files = [
-                    f for f in _AI_FILES_DIR.iterdir()
-                    if f.is_file() and f.suffix.lower() in _ALLOWED_UPLOAD_EXTENSIONS
-                ]
-                files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
-                lines.append(f"📁 Files in OpenClaw storage: *{len(files)}*")
-                if files:
-                    recent = files[:5]
-                    recent_list = "\n".join(f"  • {f.name}" for f in recent)
-                    lines.append(f"_Most recent:_\n{recent_list}")
-            else:
-                lines.append("📁 Files: storage folder not found")
-        except Exception as exc:
-            lines.append(f"📁 Files: error reading storage ({exc})")
-
-        # Last sync timestamp (written by watch_folder.sh)
-        try:
-            if _LAST_SYNC_PATH.exists():
-                sync_data = json.loads(_LAST_SYNC_PATH.read_text(encoding="utf-8"))
-                sync_ts = sync_data.get("timestamp", "")
-                sync_file = sync_data.get("last_file", "")
-                lines.append(f"🔄 Last sync: {sync_ts}" + (f" ({sync_file})" if sync_file else ""))
-            else:
-                lines.append("🔄 Last sync: no sync recorded yet")
-        except Exception:
-            lines.append("🔄 Last sync: unknown")
-
-        # Notify user config
-        if SLACK_NOTIFY_USER_ID:
-            lines.append(f"🔔 File alerts: enabled (notifying <@{SLACK_NOTIFY_USER_ID}>)")
-        else:
-            lines.append("🔔 File alerts: off (set SLACK_NOTIFY_USER_ID to enable)")
-
-        text = "\n".join(lines)
-        try:
-            await client.chat_postEphemeral(channel=channel, user=user_id, text=text)
-        except Exception as exc:
-            log.warning("handle_slash_status: failed to post ephemeral: %s", exc)
-
-    # ------------------------------------------------------------------
     # Handler: /metrics — usage summary for last 7 days
     # ------------------------------------------------------------------
 
@@ -2105,7 +2060,14 @@ async def start_slack_bot() -> None:
     if handler is None:
         log.warning("Slack bot not started (disabled or misconfigured)")
         return
+
     log.info("Starting Slack Socket Mode bot…")
+    asyncio.create_task(_run_upload_server())
+
+    # Start proactive file-alert loop; reuse the handler's app client
+    if SLACK_NOTIFY_USER_ID:
+        asyncio.create_task(_file_alert_loop(handler.app.client))
+
     await handler.start_async()
 
 
