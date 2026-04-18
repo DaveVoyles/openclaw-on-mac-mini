@@ -200,6 +200,26 @@ Use this shape when adding a new initiative:
 - **Next step:** <concrete next action>
 ```
 
+### Initiative: Non-Technical User UX — Slack + Parents Guide
+
+- **Status:** shipped
+- **Owner area:** Slack bot, docs
+- **Supporting doc:** `docs/PARENTS-GUIDE.md`
+- **Why now:** Target users (non-technical, primarily reviewing/editing Word docs and spreadsheets) needed a zero-friction path to OpenClaw via both Slack and the browser.
+- **What shipped:**
+  - `/help` slash command and `_WELCOME_MESSAGE` for on-boarding
+  - `--simple` flag for jargon-free responses (per-message)
+  - Persistent `/simple on|off` per-user preference backed by `data/slack_user_prefs.json`
+  - File-type-aware suggestions when any file is uploaded
+  - Auto-brief on file drop: 1-sentence description of the uploaded file
+  - Block Kit interactive buttons on file upload (✏️ Proofread / 📋 Summarize / ❓ Explain / 🔍 Find errors / 🖼️ Describe / 📄 Read text)
+  - Graceful plain-text fallback if Block Kit interactivity is not yet enabled
+  - Programmatic manifest script (`make slack-manifest`) replacing manual JSON copy-paste
+  - `docs/PARENTS-GUIDE.md` — plain English user guide linked from `docs/index.md` + `docs/START-HERE.md`
+- **Next step:** Run `make ship-server` on Mac Mini + `make slack-manifest` + reinstall Slack app to activate interactivity.
+
+---
+
 ### Initiative: New Interfaces — Open WebUI, Dashboard v2, Slack
 
 - **Status:** in progress

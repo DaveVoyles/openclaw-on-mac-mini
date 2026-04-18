@@ -48,6 +48,12 @@ MANIFEST: dict = {
                 "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
+            {
+                "command": "/simple",
+                "description": "Toggle plain-language mode. OpenClaw will always give easy-to-read answers.",
+                "usage_hint": "on | off",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {
@@ -75,7 +81,7 @@ MANIFEST: dict = {
                 "reaction_added",
             ]
         },
-        "interactivity": {"is_enabled": False},
+        "interactivity": {"is_enabled": True},
         "org_deploy_enabled": False,
         "socket_mode_enabled": True,
         "token_rotation_enabled": False,

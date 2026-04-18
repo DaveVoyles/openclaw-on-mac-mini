@@ -43,9 +43,11 @@ Wiring into src/bot.py (add inside setup_hook or on_ready):
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -57,6 +59,51 @@ from llm import analyze_image as llm_analyze_image
 log = logging.getLogger(__name__)
 
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
+
+# ---------------------------------------------------------------------------
+# Per-user preferences (persisted to data/slack_user_prefs.json)
+# ---------------------------------------------------------------------------
+# Stored as: {"U123ABC": {"simple": true}, ...}
+# Loaded once at startup; written on every change.
+# ---------------------------------------------------------------------------
+
+_PREFS_PATH: Path = Path(__file__).parent.parent / "data" / "slack_user_prefs.json"
+_user_prefs: dict[str, dict] = {}
+
+
+def _load_prefs() -> None:
+    global _user_prefs
+    try:
+        if _PREFS_PATH.exists():
+            _user_prefs = json.loads(_PREFS_PATH.read_text(encoding="utf-8"))
+    except Exception as exc:
+        log.warning("Failed to load user prefs from %s: %s", _PREFS_PATH, exc)
+        _user_prefs = {}
+
+
+def _save_prefs() -> None:
+    try:
+        _PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _PREFS_PATH.write_text(json.dumps(_user_prefs, indent=2), encoding="utf-8")
+    except Exception as exc:
+        log.warning("Failed to save user prefs to %s: %s", _PREFS_PATH, exc)
+
+
+def _get_user_simple(user_id: str) -> bool:
+    """Return True if the user has enabled persistent simple mode."""
+    return bool((_user_prefs.get(user_id) or {}).get("simple", False))
+
+
+def _set_user_simple(user_id: str, value: bool) -> None:
+    """Set (or clear) persistent simple mode for *user_id* and write to disk."""
+    if user_id not in _user_prefs:
+        _user_prefs[user_id] = {}
+    _user_prefs[user_id]["simple"] = value
+    _save_prefs()
+
+
+# Load prefs at import time so they are ready before any handler fires.
+_load_prefs()
 
 # ---------------------------------------------------------------------------
 # File attachment support
@@ -188,9 +235,10 @@ _HELP_TEXT = (
     "*Just chatting:*\n"
     "• Ask anything — \"what's the weather in Boston?\" / \"explain this email to me\" / \"help me write a thank-you note\"\n\n"
     "*Tips:*\n"
-    "• Add `--simple` to any message for plain, easy-to-read responses\n"
+    "• `/simple on` — always get plain, easy-to-read answers (no need to type `--simple` every time)\n"
+    "• Add `--simple` to any one message for a one-off plain answer\n"
     "• Reply in a thread to keep context from earlier messages\n\n"
-    "_Example: Upload Budget2025.xlsx and type: \"summarize the totals for me --simple\"_"
+    "_Example: Upload Budget2025.xlsx and type: \"summarize the totals for me\"_"
 )
 
 _SIMPLE_FLAG_RE = re.compile(r"\s*--simple\b", re.IGNORECASE)
@@ -358,8 +406,163 @@ def _slack_is_configured() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Core ask helper
+# File action registry + Block Kit helpers
 # ---------------------------------------------------------------------------
+# file_id → full file_obj dict from files_info (url_private, name, mimetype, …)
+# Kept in memory to avoid re-calling files_info on every button click.
+# Pruned to last 200 entries.
+_file_registry: dict[str, dict] = {}
+
+# Prompts sent to the LLM when a file action button is clicked
+_FILE_ACTION_PROMPTS: dict[str, str] = {
+    "file_proofread": (
+        "Please proofread this document and correct any grammar, spelling, or punctuation "
+        "errors. List each correction clearly."
+    ),
+    "file_summarize": "Please summarize the key points in a few bullet points.",
+    "file_explain": (
+        "Please explain what this document is about in plain, simple language. "
+        "Assume the reader is non-technical."
+    ),
+    "file_errors": (
+        "Please identify any errors, inconsistencies, unusual values, or potential problems "
+        "in this document. Be specific."
+    ),
+    "file_describe": "Please describe what is in this image in detail.",
+    "file_read_text": "Please read and transcribe all text visible in this image.",
+}
+
+
+def _register_file(file_id: str, file_obj: dict) -> None:
+    """Store *file_obj* in the registry, pruning to 200 entries."""
+    _file_registry[file_id] = file_obj
+    if len(_file_registry) > 200:
+        oldest = next(iter(_file_registry))
+        del _file_registry[oldest]
+
+
+def _build_file_blocks(
+    filename: str, description: str | None, mimetype: str, file_id: str
+) -> list[dict]:
+    """Build Slack Block Kit blocks for a file upload suggestion message."""
+    is_image = (mimetype or "").lower().startswith("image/")
+
+    header = f"📎 I see you uploaded *{filename}*."
+    if description:
+        header = f"{header}\n_{description}_"
+    header += "\n\nWhat would you like to do?"
+
+    if is_image:
+        buttons: list[dict] = [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🔍 Describe it", "emoji": True},
+                "action_id": "file_describe",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📝 Read text in image", "emoji": True},
+                "action_id": "file_read_text",
+                "value": file_id,
+            },
+        ]
+    else:
+        buttons = [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "✏️ Proofread", "emoji": True},
+                "action_id": "file_proofread",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📋 Summarize", "emoji": True},
+                "action_id": "file_summarize",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "❓ Explain it", "emoji": True},
+                "action_id": "file_explain",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🔍 Find errors", "emoji": True},
+                "action_id": "file_errors",
+                "value": file_id,
+            },
+        ]
+
+    return [
+        {"type": "section", "text": {"type": "mrkdwn", "text": header}},
+        {"type": "actions", "elements": buttons},
+    ]
+
+
+async def _auto_brief_file(file_obj: dict, token: str) -> str | None:
+    """Return a one-sentence description of the file, or None if unavailable.
+
+    Downloads the first 800 chars of the file content and asks the LLM for a
+    brief, plain-language description. Falls back to None on any error.
+    Images are skipped (the vision model handles them differently).
+    """
+    url = file_obj.get("url_private_download") or file_obj.get("url_private")
+    if not url:
+        return None
+
+    filename = file_obj.get("name", "file")
+    mimetype = (file_obj.get("mimetype") or "").lower()
+
+    # Images: skip (vision analysis runs separately when the user picks an action)
+    if mimetype.startswith("image/"):
+        return None
+
+    # Only try to extract text from supported types
+    if not (
+        mimetype.startswith("text/")
+        or mimetype == "application/pdf"
+        or mimetype == "application/json"
+        or mimetype.startswith("application/vnd.")
+    ):
+        return None
+
+    try:
+        session = await _slack_dl_sessions.get()
+        headers = {"Authorization": f"Bearer {token}"}
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status != 200:
+                return None
+            data = await resp.read()
+    except Exception as exc:
+        log.debug("_auto_brief_file: download failed for %s: %s", filename, exc)
+        return None
+
+    try:
+        preview = data.decode("utf-8", errors="replace")[:800].strip()
+    except Exception:
+        return None
+
+    if not preview:
+        return None
+
+    try:
+        brief = await _ask(
+            (
+                f"In one short sentence (max 20 words), describe what this file is about. "
+                f"Be specific.\n\nFile name: {filename}\n\nContent preview:\n{preview}"
+            ),
+            user_id="_auto_brief",
+            simple=True,
+        )
+        return brief.strip().rstrip(".") if brief else None
+    except Exception as exc:
+        log.debug("_auto_brief_file: LLM failed for %s: %s", filename, exc)
+        return None
+
+
+
 
 async def _ask(
     prompt: str,
@@ -472,6 +675,7 @@ def create_slack_app():  # type: ignore[return]
             return
 
         prompt, model_pref, use_simple = _parse_flags(prompt_raw)
+        use_simple = use_simple or _get_user_simple(user_id)
 
         # Enrich prompt with any uploaded file content
         if files:
@@ -520,6 +724,7 @@ def create_slack_app():  # type: ignore[return]
             return
 
         prompt, model_pref, use_simple = _parse_flags(raw_text)
+        use_simple = use_simple or _get_user_simple(user_id)
 
         # Enrich prompt with any uploaded file content
         if files:
@@ -559,6 +764,7 @@ def create_slack_app():  # type: ignore[return]
             return
 
         prompt, model_pref, use_simple = _parse_flags(raw_text)
+        use_simple = use_simple or _get_user_simple(user_id)
 
         thinking_resp = await say(text="⏳ Thinking…")
         thinking_ts = (thinking_resp or {}).get("ts")
@@ -624,7 +830,46 @@ def create_slack_app():  # type: ignore[return]
         await say(text=_HELP_TEXT)
 
     # ------------------------------------------------------------------
-    # Handler: file_shared — file uploaded without accompanying text
+    # Handler: /simple — toggle persistent plain-language mode per user
+    # ------------------------------------------------------------------
+
+    @app.command("/simple")
+    async def handle_slash_simple(ack: Any, body: dict[str, Any], say: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "unknown")
+        arg: str = (body.get("text") or "").strip().lower()
+
+        if arg in ("on", "enable", "1", "yes"):
+            _set_user_simple(user_id, True)
+            await say(
+                text=(
+                    "✅ *Simple mode on!* I'll always give you plain, easy-to-read answers — "
+                    "no jargon, short sentences. You don't need to add anything to your messages.\n"
+                    "Type `/simple off` any time to go back to normal."
+                )
+            )
+        elif arg in ("off", "disable", "0", "no"):
+            _set_user_simple(user_id, False)
+            await say(
+                text=(
+                    "🔄 *Simple mode off.* Back to normal responses.\n"
+                    "You can still add `--simple` to any individual message for a plain answer."
+                )
+            )
+        else:
+            status = "on ✅" if _get_user_simple(user_id) else "off"
+            await say(
+                text=(
+                    f"Simple mode is currently *{status}*.\n\n"
+                    "• `/simple on` — always get plain, easy-to-read answers\n"
+                    "• `/simple off` — go back to normal\n\n"
+                    "_Tip: turn it on once and forget about it!_"
+                )
+            )
+
+
+    # ------------------------------------------------------------------
+    # Handler: file_shared — auto-brief + Block Kit action buttons
     # ------------------------------------------------------------------
 
     @app.event("file_shared")
@@ -645,13 +890,109 @@ def create_slack_app():  # type: ignore[return]
         if not file_obj:
             return
 
+        _register_file(file_id, file_obj)
         filename = file_obj.get("name", "file")
         mimetype = (file_obj.get("mimetype") or "")
-        suggestion = _suggest_actions_for_file(filename, mimetype)
+
+        # Show a placeholder while we run the auto-brief
         try:
-            await client.chat_postMessage(channel=channel, text=suggestion)
+            placeholder = await client.chat_postMessage(
+                channel=channel, text=f"📎 *{filename}* — reading…"
+            )
+            placeholder_ts = (placeholder or {}).get("ts")
+        except Exception:
+            placeholder_ts = None
+
+        # Auto-brief: 1-sentence description of the file (graceful fallback on error)
+        description = await _auto_brief_file(file_obj, SLACK_BOT_TOKEN)
+
+        blocks = _build_file_blocks(filename, description, mimetype, file_id)
+        fallback_text = (
+            f"📎 *{filename}*"
+            + (f"\n_{description}_" if description else "")
+            + "\n\nWhat would you like to do?"
+        )
+
+        try:
+            if placeholder_ts:
+                await client.chat_update(
+                    channel=channel, ts=placeholder_ts, text=fallback_text, blocks=blocks
+                )
+            else:
+                await client.chat_postMessage(channel=channel, text=fallback_text, blocks=blocks)
         except Exception as exc:
-            log.warning("file_shared: failed to post suggestion for %s: %s", filename, exc)
+            # Block Kit may fail if interactivity is not yet enabled in the manifest.
+            # Fall back to plain text suggestion.
+            log.warning("file_shared: Block Kit failed for %s (%s); using plain text", filename, exc)
+            plain = _suggest_actions_for_file(filename, mimetype)
+            if description:
+                plain = f"_{description}_\n\n{plain}"
+            try:
+                if placeholder_ts:
+                    await client.chat_update(channel=channel, ts=placeholder_ts, text=plain)
+                else:
+                    await client.chat_postMessage(channel=channel, text=plain)
+            except Exception as exc2:
+                log.warning("file_shared: plain fallback also failed for %s: %s", filename, exc2)
+
+    # ------------------------------------------------------------------
+    # Handlers: Block Kit file action buttons
+    # Each button in the file suggestion message carries the file_id as
+    # its value; the handler re-downloads the file and runs the LLM.
+    # Requires interactivity enabled in the manifest: make slack-manifest
+    # ------------------------------------------------------------------
+
+    async def _dispatch_file_action(
+        action_id: str, ack: Any, body: dict[str, Any], client: Any, say: Any
+    ) -> None:
+        await ack()
+
+        user_id: str = (body.get("user") or {}).get("id", "unknown")
+        actions: list[dict] = body.get("actions", [{}])
+        file_id: str = (actions[0] if actions else {}).get("value", "")
+        channel: str = (
+            (body.get("channel") or {}).get("id", "")
+            or (body.get("container") or {}).get("channel_id", "")
+        )
+
+        if not file_id or not channel:
+            await say(text="⚠️ Couldn't identify the file. Please upload it again.")
+            return
+
+        file_obj = _file_registry.get(file_id)
+        if not file_obj:
+            await say(
+                text="⚠️ I've lost track of that file — try uploading it again and I'll be ready."
+            )
+            return
+
+        prompt_text = _FILE_ACTION_PROMPTS.get(action_id, "Please analyze this file.")
+        prompt = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, prompt_text)
+        use_simple = _get_user_simple(user_id)
+
+        thinking_resp = await say(text="⏳ Thinking…")
+        thinking_ts = (thinking_resp or {}).get("ts")
+
+        await _send_answer(
+            client=client,
+            say=say,
+            channel=channel,
+            thread_ts=None,
+            thinking_ts=thinking_ts,
+            prompt=prompt,
+            user_id=user_id,
+            simple=use_simple,
+        )
+
+    # Register one handler per action_id using closures
+    for _action_id in list(_FILE_ACTION_PROMPTS.keys()):
+        def _make_handler(aid: str):
+            async def handler(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+                await _dispatch_file_action(aid, ack, body, client, say)
+            handler.__name__ = f"handle_{aid}"
+            return handler
+
+        app.action(_action_id)(_make_handler(_action_id))
 
     return app
 

@@ -64,7 +64,7 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
       ]
     },
     "interactivity": {
-      "is_enabled": false
+      "is_enabled": true
     },
     "org_deploy_enabled": false,
     "socket_mode_enabled": true,
