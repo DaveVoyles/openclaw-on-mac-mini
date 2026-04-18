@@ -670,7 +670,10 @@ async def _v1_chat_completions_handler(request: web.Request) -> web.Response | w
     )
     await resp.prepare(request)
 
+    chunks_sent: int = 0
+
     async def _send_chunk(delta_content: str) -> None:
+        nonlocal chunks_sent
         chunk = {
             "id": completion_id,
             "object": "chat.completion.chunk",
@@ -679,9 +682,11 @@ async def _v1_chat_completions_handler(request: web.Request) -> web.Response | w
             "choices": [{"index": 0, "delta": {"content": delta_content}, "finish_reason": None}],
         }
         await resp.write(f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8"))
+        chunks_sent += 1
 
+    result: dict = {}
     try:
-        await _execute_agent_ask(
+        result = await _execute_agent_ask(
             prompt=prompt,
             model_pref=model_pref,
             history=history,
@@ -690,6 +695,14 @@ async def _v1_chat_completions_handler(request: web.Request) -> web.Response | w
         )
     except Exception as exc:
         log.error("_v1_chat_completions_handler stream error: %s", exc)
+
+    # Most LLM routes yield a single final chunk (no intermediate partials).
+    # If _send_chunk was never called, emit the complete response now so the
+    # client receives content before the stop chunk.
+    if chunks_sent == 0:
+        full_text = str(result.get("response", "")) if result else ""
+        if full_text:
+            await _send_chunk(full_text)
 
     # Final stop chunk
     stop_chunk = {
