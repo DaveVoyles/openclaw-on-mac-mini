@@ -339,6 +339,7 @@
           <li><a href="#digest">59. Personalized Digests (/digest)</a></li>
           <li><a href="#trends">60. Trend Detection &amp; Tracking (/track, /trending, /trends, /breaking)</a></li>
           <li><a href="#wave8">62. Wave 8 — Smart Memory &amp; Recovery</a></li>
+          <li><a href="#wave10">63. Wave 10 — Cloud Account Integrations</a></li>
           <li><a href="#premium-skills">61. Premium API Skills Reference</a></li>
           <li><a href="#phase3-financial">62. Financial Data (Polygon.io) - Phase 3</a></li>
           <li><a href="#phase3-workflows">63. Workflow Automation &amp; Scheduling - Phase 3</a></li>
@@ -4569,6 +4570,36 @@ Related Trends:
       <h3>🧵 DM Thread Memory</h3>
       <p>When you reply inside a DM thread, OpenClaw now reads the full thread history — giving follow-up replies the same context awareness as channel mentions.</p>
 
+      <!-- 63. Wave 10: Cloud Account Integrations -->
+      <h2 id="wave10">63. Wave 10 — Cloud Account Integrations</h2>
+      <p>Wave 10 connects OpenClaw to Dropbox, Google Calendar, and Gmail — all set up once by Dave, available to everyone automatically.</p>
+
+      <h3>☁️ /dropbox — Sync Files from Dropbox</h3>
+      <p>Drop a file into the "Family AI" Dropbox folder and OpenClaw automatically syncs it. No Slack upload needed.</p>
+      <pre><code>/dropbox list     ← browse files in the watched folder
+/dropbox sync     ← manually pull any new files now
+/dropbox status   ← confirm Dropbox is connected</code></pre>
+      <p>OpenClaw posts a Slack notification whenever a new file arrives: <em>"📦 New file from Dropbox: budget.xlsx — ready to analyze!"</em></p>
+
+      <h3>📅 /today — Today's Calendar</h3>
+      <p>See today's Google Calendar events right in Slack — no app switching required.</p>
+      <pre><code>/today</code></pre>
+
+      <h3>📅 /calendar — Upcoming Events</h3>
+      <p>View the next N days of your calendar (default: 7 days).</p>
+      <pre><code>/calendar       ← next 7 days
+/calendar 14    ← next 14 days</code></pre>
+
+      <h3>📧 /inbox — Unread Gmail Emails</h3>
+      <p>Shows your last 5 unread Gmail emails with a <strong>📖 Summarize</strong> button for each one. No need to open your email client.</p>
+      <pre><code>/inbox</code></pre>
+
+      <h3>📧 /email — Summarize a Specific Email</h3>
+      <p>After running <code>/inbox</code>, summarize email #1, #2, etc.</p>
+      <pre><code>/email 1    ← summarize the first email from /inbox</code></pre>
+
+      <p><strong>Setup (Dave does this once):</strong> Run <code>scripts/google_oauth_setup.py</code> for Google, get a Dropbox app token from <a href="https://www.dropbox.com/developers/apps" target="_blank">dropbox.com/developers</a>, and add both to the server's <code>.env</code> file.</p>
+
       <!-- 61. Premium API Skills Reference -->
       <h2 id="premium-skills">61. Premium API Skills Reference</h2>
       <p>When using <code>/chat</code>, the AI can automatically invoke these premium skills to fetch real-time data. You don't need to call them manually—just ask naturally!</p>
@@ -5436,7 +5467,7 @@ Invoke-RestMethod `
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.16.0 (Wave 8 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.17.0 (Wave 10 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"
