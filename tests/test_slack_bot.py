@@ -1044,5 +1044,35 @@ class TestFileHistory(unittest.TestCase):
         self.assertTrue(_file_history["u1"][0]["sha256"])
 
 
+class TestWave5Digest:
+    def test_load_digest_prefs_missing_file(self, tmp_path, monkeypatch):
+        """_load_digest_prefs returns empty dict when file missing."""
+        import slack_bot
+        monkeypatch.setattr(slack_bot, "_DIGEST_PREFS_PATH", tmp_path / "digest_prefs.json")
+        assert slack_bot._load_digest_prefs() == {}
+
+    def test_save_and_load_digest_prefs_roundtrip(self, tmp_path, monkeypatch):
+        """Prefs saved then loaded return identical data."""
+        import slack_bot
+        monkeypatch.setattr(slack_bot, "_DIGEST_PREFS_PATH", tmp_path / "digest_prefs.json")
+        prefs = {"U123": {"enabled": True, "last_sent": 0}}
+        slack_bot._save_digest_prefs(prefs)
+        assert slack_bot._load_digest_prefs() == prefs
+
+    def test_human_time_minutes(self):
+        """_human_time returns minutes for recent timestamps."""
+        import slack_bot, time
+        ts = time.time() - 300  # 5 minutes ago
+        result = slack_bot._human_time(ts)
+        assert "m ago" in result
+
+    def test_human_time_hours(self):
+        """_human_time returns hours for timestamps older than 1h."""
+        import slack_bot, time
+        ts = time.time() - 7200  # 2 hours ago
+        result = slack_bot._human_time(ts)
+        assert "h ago" in result
+
+
 if __name__ == "__main__":
     unittest.main()

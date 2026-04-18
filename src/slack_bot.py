@@ -388,6 +388,11 @@ _KNOWN_FILES_PATH = Path(__file__).parent.parent / "data" / "known_files.json"
 _LAST_SYNC_PATH = Path(__file__).parent.parent / "data" / "last_sync.json"
 _FILE_POLL_INTERVAL = int(os.getenv("OPENCLAW_FILE_POLL_INTERVAL", "60"))
 
+# --- Wave 5: digest ---
+_DIGEST_PREFS_PATH = Path(__file__).parent.parent / "data" / "digest_prefs.json"
+_DIGEST_CHECK_INTERVAL: int = int(os.getenv("DIGEST_CHECK_INTERVAL", "3600"))  # check every hour
+_DIGEST_LOOKBACK_HOURS: int = int(os.getenv("DIGEST_LOOKBACK_HOURS", "24"))  # show files modified in last N hours
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -476,6 +481,76 @@ def _save_known_files(known: set[str]) -> None:
         )
     except Exception as exc:
         log.warning("Could not save known_files.json: %s", exc)
+
+
+def _human_time(ts: float) -> str:
+    """Return a human-readable relative time string."""
+    delta = time.time() - ts
+    if delta < 3600:
+        return f"{int(delta // 60)}m ago"
+    if delta < 86400:
+        return f"{int(delta // 3600)}h ago"
+    return f"{int(delta // 86400)}d ago"
+
+
+def _load_digest_prefs() -> dict[str, dict]:
+    """Load per-user digest preferences from disk."""
+    try:
+        if _DIGEST_PREFS_PATH.exists():
+            return json.loads(_DIGEST_PREFS_PATH.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_digest_prefs(prefs: dict[str, dict]) -> None:
+    """Persist per-user digest preferences to disk."""
+    try:
+        _DIGEST_PREFS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _DIGEST_PREFS_PATH.write_text(json.dumps(prefs, indent=2))
+    except Exception as exc:
+        log.warning("_save_digest_prefs: %s", exc)
+
+
+async def _digest_loop(client: Any) -> None:
+    """Background task: DM enabled users with a digest of recent files."""
+    log.info("Digest loop started (check every %ds, lookback %dh)", _DIGEST_CHECK_INTERVAL, _DIGEST_LOOKBACK_HOURS)
+    while True:
+        await asyncio.sleep(_DIGEST_CHECK_INTERVAL)
+        try:
+            prefs = _load_digest_prefs()
+            now = time.time()
+            cutoff = now - (_DIGEST_LOOKBACK_HOURS * 3600)
+            recent: list[tuple[str, float]] = []
+            if _AI_FILES_DIR.exists():
+                for f in _AI_FILES_DIR.iterdir():
+                    if f.is_file() and f.stat().st_mtime >= cutoff:
+                        recent.append((f.name, f.stat().st_mtime))
+            recent.sort(key=lambda x: x[1], reverse=True)
+
+            for user_id, pref in prefs.items():
+                if not pref.get("enabled"):
+                    continue
+                last_sent = pref.get("last_sent", 0)
+                if now - last_sent < (_DIGEST_LOOKBACK_HOURS * 3600 * 0.9):
+                    continue
+                if not recent:
+                    continue
+                lines = [f"• *{name}* — {_human_time(mtime)}" for name, mtime in recent[:10]]
+                text = (
+                    f"📊 *Your {_DIGEST_LOOKBACK_HOURS}h digest* — {len(recent)} file(s) updated\n\n"
+                    + "\n".join(lines)
+                    + "\n\n_Reply with a filename to work with it, or type `/digest off` to unsubscribe._"
+                )
+                try:
+                    await client.chat_postMessage(channel=user_id, text=text)
+                    prefs[user_id]["last_sent"] = now
+                    log.info("Sent digest to %s (%d files)", user_id, len(recent))
+                except Exception as exc:
+                    log.warning("_digest_loop: failed to DM %s: %s", user_id, exc)
+            _save_digest_prefs(prefs)
+        except Exception as exc:
+            log.warning("_digest_loop: error: %s", exc)
 
 
 async def _file_alert_loop(client: Any) -> None:
@@ -2061,6 +2136,63 @@ def create_slack_app():  # type: ignore[return]
             log.warning("handle_slash_status: failed to post ephemeral: %s", exc)
 
     # ------------------------------------------------------------------
+    # Handler: /digest — per-user periodic file digest opt-in
+    # ------------------------------------------------------------------
+
+    @app.command("/digest")
+    async def handle_slash_digest(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "unknown")
+        arg: str = (body.get("text") or "").strip().lower()
+        prefs = _load_digest_prefs()
+        user_pref = prefs.setdefault(user_id, {"enabled": False, "last_sent": 0})
+
+        if arg in ("on", "enable", "1", "yes", "daily"):
+            user_pref["enabled"] = True
+            _save_digest_prefs(prefs)
+            try:
+                await client.chat_postEphemeral(
+                    channel=body["channel_id"],
+                    user=user_id,
+                    text=(
+                        f"✅ *Digest enabled!* I'll DM you every {_DIGEST_LOOKBACK_HOURS} hours "
+                        f"with a summary of recently synced files. "
+                        f"Type `/digest off` to stop anytime."
+                    ),
+                )
+            except Exception as exc:
+                log.warning("handle_slash_digest on: %s", exc)
+        elif arg in ("off", "disable", "0", "no"):
+            user_pref["enabled"] = False
+            _save_digest_prefs(prefs)
+            try:
+                await client.chat_postEphemeral(
+                    channel=body["channel_id"],
+                    user=user_id,
+                    text="🔕 *Digest disabled.* You won't receive automatic file summaries. Type `/digest on` to re-enable.",
+                )
+            except Exception as exc:
+                log.warning("handle_slash_digest off: %s", exc)
+        else:
+            enabled = user_pref.get("enabled", False)
+            last_sent = user_pref.get("last_sent", 0)
+            last_str = _human_time(last_sent) if last_sent else "never"
+            status_emoji = "✅" if enabled else "🔕"
+            try:
+                await client.chat_postEphemeral(
+                    channel=body["channel_id"],
+                    user=user_id,
+                    text=(
+                        f"{status_emoji} *Digest status:* {'enabled' if enabled else 'disabled'}\n"
+                        f"• Last sent: {last_str}\n"
+                        f"• Lookback window: {_DIGEST_LOOKBACK_HOURS} hours\n\n"
+                        f"Commands: `/digest on` · `/digest off`"
+                    ),
+                )
+            except Exception as exc:
+                log.warning("handle_slash_digest status: %s", exc)
+
+    # ------------------------------------------------------------------
     # Handler: /simple — toggle persistent plain-language mode per user
     # ------------------------------------------------------------------
 
@@ -2653,6 +2785,10 @@ async def create_slack_handler():  # type: ignore[return]
     if SLACK_NOTIFY_USER_ID:
         asyncio.create_task(_file_alert_loop(app.client))
         log.info("Proactive file-alert loop started (notifying %s)", SLACK_NOTIFY_USER_ID)
+
+    # Start digest background loop
+    asyncio.create_task(_digest_loop(app.client))
+    log.info("Digest loop started")
 
     return handler
 

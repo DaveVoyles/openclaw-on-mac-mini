@@ -79,6 +79,12 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
+                "command": "/digest",
+                "description": "Get a periodic summary of your synced files. Use: /digest on|off|status",
+                "usage_hint": "[on|off|status]",
+                "should_escape": False,
+            },
+            {
                 "command": "/metrics",
                 "description": "Show OpenClaw usage metrics for the last 7 days (admin).",
                 "usage_hint": "",
