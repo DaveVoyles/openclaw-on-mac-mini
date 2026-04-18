@@ -568,30 +568,26 @@ View your Google Calendar without opening the app:
 
 ---
 
-### 📦 Connect Your Dropbox — `/dropbox setup`
+### 📦 Connect Your Dropbox — `/dropbox connect`
 
-**Step 1 — Get your Dropbox access token:**
+Connecting your Dropbox is now **one click** — no developer accounts needed.
 
-1. Go to [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps)
-2. Click **Create app** → choose **Scoped access** → **Full Dropbox** → name it "OpenClaw"
-3. On the app settings page, scroll to **Generated access token** and click **Generate**
-4. Copy the long token that appears
-
-**Step 2 — Connect in Slack:**
+**Just type this in Slack:**
 
 ```
-/dropbox setup sl.ABCDEFGHyourTokenHere
+/dropbox connect
 ```
 
-OpenClaw will confirm your Dropbox is connected.
+OpenClaw will send you a private link. Click it, sign into your Dropbox account, click **Allow**, and you're done. OpenClaw will DM you a confirmation.
+
+> 🔒 The link is private — only you can see it, and it expires in 10 minutes.
 
 ---
 
 **Using `/dropbox` once connected:**
 
 ```
-/dropbox                  — see recent files in your Dropbox folder
-/dropbox list             — list files in your watched folder
+/dropbox list             — list files in your OpenClaw folder
 /dropbox status           — check if your Dropbox connection is working
 ```
 

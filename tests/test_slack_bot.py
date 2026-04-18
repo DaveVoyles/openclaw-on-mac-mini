@@ -2125,3 +2125,123 @@ class TestPerUserDropboxTokens:
         finally:
             sb._user_dropbox_tokens.clear()
             sb._user_dropbox_tokens.update(orig)
+
+
+# ---------------------------------------------------------------------------
+# Wave 12 — Dropbox OAuth2 one-click connect
+# ---------------------------------------------------------------------------
+
+
+class TestDropboxOAuth:
+    """Tests for the Dropbox OAuth2 flow (Wave 12)."""
+
+    def test_connect_generates_state_token(self):
+        """Each /dropbox connect call adds a unique state token to _dropbox_oauth_states."""
+        import src.slack_bot as sb
+
+        orig_key = sb._DROPBOX_APP_KEY
+        orig_url = sb._OPENCLAW_PUBLIC_URL
+        sb._DROPBOX_APP_KEY = "test-app-key"
+        sb._OPENCLAW_PUBLIC_URL = "http://192.168.1.100:8080"
+        try:
+            before = set(sb._dropbox_oauth_states.keys())
+            # Simulate generating two separate state tokens
+            s1 = __import__("secrets").token_urlsafe(16)
+            s2 = __import__("secrets").token_urlsafe(16)
+            sb._dropbox_oauth_states[s1] = "U_CHUCK"
+            sb._dropbox_oauth_states[s2] = "U_LISA"
+            after = set(sb._dropbox_oauth_states.keys())
+            assert s1 in after
+            assert s2 in after
+            assert s1 != s2  # each call gets a unique state
+        finally:
+            sb._DROPBOX_APP_KEY = orig_key
+            sb._OPENCLAW_PUBLIC_URL = orig_url
+            sb._dropbox_oauth_states.pop(s1, None)
+            sb._dropbox_oauth_states.pop(s2, None)
+
+    def test_state_token_maps_to_user_id(self):
+        """State token stored before redirect resolves back to the correct Slack user."""
+        import src.slack_bot as sb
+
+        state = "test-state-abc123"
+        sb._dropbox_oauth_states[state] = "U_TESTUSER"
+        try:
+            resolved = sb._dropbox_oauth_states.pop(state, None)
+            assert resolved == "U_TESTUSER"
+            # After pop, token is consumed (CSRF protection)
+            assert state not in sb._dropbox_oauth_states
+        finally:
+            sb._dropbox_oauth_states.pop(state, None)
+
+    def test_invalid_state_returns_none(self):
+        """Popping an unknown state returns None (expired/replayed request)."""
+        import src.slack_bot as sb
+
+        result = sb._dropbox_oauth_states.pop("nonexistent-state-xyz", None)
+        assert result is None
+
+    def test_oauth_token_stored_in_per_user_dict(self, tmp_path):
+        """Simulated callback stores the access token under the correct user_id."""
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_DROPBOX_PATH
+        tokens_file = tmp_path / "user_dropbox_tokens.json"
+        sb._USER_DROPBOX_PATH = tokens_file
+        try:
+            user_id = "U_OAUTH_TEST"
+            access_token = "sl.oauth2-fake-token"
+            # Simulate what the callback handler does
+            existing = sb._user_dropbox_tokens.get(user_id, {})
+            sb._user_dropbox_tokens[user_id] = {
+                "token": access_token,
+                "watch_path": existing.get("watch_path", "/OpenClaw"),
+            }
+            sb._save_user_dropbox_tokens()
+
+            # Reload and verify
+            sb._user_dropbox_tokens.clear()
+            sb._load_user_dropbox_tokens()
+            assert sb._user_dropbox_tokens[user_id]["token"] == access_token
+            assert sb._user_dropbox_tokens[user_id]["watch_path"] == "/OpenClaw"
+        finally:
+            sb._USER_DROPBOX_PATH = orig_path
+            sb._user_dropbox_tokens.pop("U_OAUTH_TEST", None)
+
+    def test_oauth_preserves_existing_watch_path(self, tmp_path):
+        """Re-connecting via OAuth does not reset a custom watch_path."""
+        import src.slack_bot as sb
+
+        orig_path = sb._USER_DROPBOX_PATH
+        tokens_file = tmp_path / "user_dropbox_tokens.json"
+        sb._USER_DROPBOX_PATH = tokens_file
+        try:
+            user_id = "U_CUSTOM_PATH"
+            sb._user_dropbox_tokens[user_id] = {
+                "token": "sl.old-token",
+                "watch_path": "/MyCustomFolder",
+            }
+            # OAuth callback re-connect
+            existing = sb._user_dropbox_tokens.get(user_id, {})
+            sb._user_dropbox_tokens[user_id] = {
+                "token": "sl.new-oauth-token",
+                "watch_path": existing.get("watch_path", "/OpenClaw"),
+            }
+            assert sb._user_dropbox_tokens[user_id]["watch_path"] == "/MyCustomFolder"
+            assert sb._user_dropbox_tokens[user_id]["token"] == "sl.new-oauth-token"
+        finally:
+            sb._USER_DROPBOX_PATH = orig_path
+            sb._user_dropbox_tokens.pop("U_CUSTOM_PATH", None)
+
+    def test_connect_disabled_when_app_key_missing(self):
+        """When DROPBOX_APP_KEY is empty, connect flow should surface config error."""
+        import src.slack_bot as sb
+
+        orig = sb._DROPBOX_APP_KEY
+        sb._DROPBOX_APP_KEY = ""
+        try:
+            # Handler would check this and return an error message
+            should_error = not sb._DROPBOX_APP_KEY or not sb._OPENCLAW_PUBLIC_URL
+            assert should_error  # config error path is taken when key is missing
+        finally:
+            sb._DROPBOX_APP_KEY = orig

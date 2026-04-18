@@ -49,7 +49,9 @@ import json
 import logging
 import os
 import re
+import secrets
 import time
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
@@ -522,6 +524,14 @@ _DROPBOX_CACHE_DIR: Path = _DATA_DIR / "dropbox_cache"
 _DROPBOX_CURSOR_PATH: Path = _DATA_DIR / "dropbox_cursor.json"
 _DROPBOX_VIRTUAL_USER: str = "dropbox_sync"
 
+# --- Wave 12: Dropbox OAuth2 (per-user one-click connect) ---
+_DROPBOX_APP_KEY: str = os.getenv("DROPBOX_APP_KEY", "")
+_DROPBOX_APP_SECRET: str = os.getenv("DROPBOX_APP_SECRET", "")
+# Public URL of this server (e.g. http://192.168.1.100:8080) — used as OAuth2 redirect base.
+_OPENCLAW_PUBLIC_URL: str = os.getenv("OPENCLAW_PUBLIC_URL", "").rstrip("/")
+# In-memory map of state_token → slack_user_id (ephemeral CSRF protection)
+_dropbox_oauth_states: dict[str, str] = {}
+
 # --- Wave 10 Yoda: Google Calendar OAuth ---
 _GOOGLE_CLIENT_ID: str | None = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 _GOOGLE_CLIENT_SECRET: str | None = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
@@ -574,6 +584,115 @@ async def _handle_upload(request: "aiohttp.web.Request") -> "aiohttp.web.Respons
     return web.json_response({"status": "ok", "filename": dest.name, "size": len(data)})
 
 
+async def _handle_dropbox_oauth_callback(request: "aiohttp.web.Request") -> "aiohttp.web.Response":
+    """Handle GET /dropbox/callback — complete the Dropbox OAuth2 flow."""
+    from aiohttp import web
+
+    _HTML_OK = (
+        "<html><head><title>OpenClaw</title></head><body style='font-family:sans-serif;text-align:center;padding:60px'>"
+        "<h2>✅ Dropbox connected!</h2>"
+        "<p>You can close this window and return to Slack.</p>"
+        "</body></html>"
+    )
+    _HTML_ERR = (
+        "<html><head><title>OpenClaw</title></head><body style='font-family:sans-serif;text-align:center;padding:60px'>"
+        "<h2>❌ Something went wrong</h2>"
+        "<p>{msg}</p><p>Try <code>/dropbox connect</code> in Slack again.</p>"
+        "</body></html>"
+    )
+
+    error = request.rel_url.query.get("error", "")
+    if error:
+        return web.Response(
+            text=_HTML_ERR.format(msg=f"Dropbox declined: {error}"),
+            content_type="text/html",
+            status=400,
+        )
+
+    code = request.rel_url.query.get("code", "")
+    state = request.rel_url.query.get("state", "")
+
+    if not code or not state:
+        return web.Response(
+            text=_HTML_ERR.format(msg="Missing code or state parameter."),
+            content_type="text/html",
+            status=400,
+        )
+
+    user_id = _dropbox_oauth_states.pop(state, None)
+    if not user_id:
+        return web.Response(
+            text=_HTML_ERR.format(msg="Session expired or invalid. Please try again."),
+            content_type="text/html",
+            status=400,
+        )
+
+    # Exchange authorization code for an access token
+    redirect_uri = f"{_OPENCLAW_PUBLIC_URL}/dropbox/callback"
+    try:
+        async with aiohttp.ClientSession() as session:
+            resp = await session.post(
+                "https://api.dropboxapi.com/oauth2/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                },
+                auth=aiohttp.BasicAuth(_DROPBOX_APP_KEY, _DROPBOX_APP_SECRET),
+                timeout=aiohttp.ClientTimeout(total=15),
+            )
+            token_data = await resp.json()
+    except Exception as exc:
+        log.error("Dropbox token exchange failed: %s", exc)
+        return web.Response(
+            text=_HTML_ERR.format(msg="Could not reach Dropbox to complete auth."),
+            content_type="text/html",
+            status=502,
+        )
+
+    access_token = token_data.get("access_token", "")
+    if not access_token:
+        err_desc = token_data.get("error_description", token_data.get("error", "unknown"))
+        log.error("Dropbox token exchange error: %s", err_desc)
+        return web.Response(
+            text=_HTML_ERR.format(msg=f"Dropbox auth error: {err_desc}"),
+            content_type="text/html",
+            status=400,
+        )
+
+    # Persist per-user token (preserve existing watch_path if set)
+    existing = _user_dropbox_tokens.get(user_id, {})
+    _user_dropbox_tokens[user_id] = {
+        "token": access_token,
+        "watch_path": existing.get("watch_path", "/OpenClaw"),
+    }
+    _save_user_dropbox_tokens()
+    log.info("Dropbox OAuth: stored token for Slack user %s", user_id)
+
+    # DM the user in Slack to confirm
+    if SLACK_BOT_TOKEN:
+        try:
+            async with aiohttp.ClientSession() as session:
+                await session.post(
+                    "https://slack.com/api/chat.postMessage",
+                    json={
+                        "channel": user_id,
+                        "text": (
+                            "✅ *Your Dropbox is now connected!*\n\n"
+                            "Try `/dropbox list` to see your files, or drop a file into your "
+                            "*OpenClaw* Dropbox folder and OpenClaw will notice it automatically.\n\n"
+                            "To disconnect later, type `/dropbox forget`."
+                        ),
+                    },
+                    headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                )
+        except Exception as exc:
+            log.warning("Failed to DM user after Dropbox connect: %s", exc)
+
+    return web.Response(text=_HTML_OK, content_type="text/html")
+
+
 async def _run_upload_server() -> None:
     """Start the aiohttp upload HTTP server on OPENCLAW_UPLOAD_PORT."""
     try:
@@ -585,6 +704,7 @@ async def _run_upload_server() -> None:
     upload_app = web.Application()
     upload_app.router.add_post("/upload", _handle_upload)
     upload_app.router.add_get("/health", lambda _req: web.json_response({"status": "ok"}))
+    upload_app.router.add_get("/dropbox/callback", _handle_dropbox_oauth_callback)
 
     runner = web.AppRunner(upload_app)
     await runner.setup()
@@ -4165,7 +4285,8 @@ def create_slack_app():  # type: ignore[return]
     # /dropbox — Browse and sync Dropbox folder (per-user or server token)
     # ------------------------------------------------------------------
     # Subcommands:
-    #   /dropbox setup <token>   — store personal Dropbox access token
+    #   /dropbox connect         — one-click OAuth2 link (recommended)
+    #   /dropbox setup <token>   — store personal Dropbox access token (advanced)
     #   /dropbox forget          — remove stored token
     #   /dropbox list            — list recent files
     #   /dropbox sync            — check for new files
@@ -4179,6 +4300,46 @@ def create_slack_app():  # type: ignore[return]
         channel_id = body.get("channel_id", user_id)
         text = (body.get("text") or "").strip()
         lower = text.lower()
+
+        # -- /dropbox connect — OAuth2 one-click flow --
+        if lower == "connect":
+            if not _DROPBOX_APP_KEY or not _OPENCLAW_PUBLIC_URL:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=(
+                        "⚠️ Dropbox OAuth is not configured yet.\n\n"
+                        "Ask Dave to add `DROPBOX_APP_KEY`, `DROPBOX_APP_SECRET`, and "
+                        "`OPENCLAW_PUBLIC_URL` to the server's `.env` file."
+                    ),
+                )
+                return
+
+            state = secrets.token_urlsafe(16)
+            _dropbox_oauth_states[state] = user_id
+
+            redirect_uri = f"{_OPENCLAW_PUBLIC_URL}/dropbox/callback"
+            auth_url = (
+                "https://www.dropbox.com/oauth2/authorize"
+                f"?client_id={urllib.parse.quote(_DROPBOX_APP_KEY)}"
+                f"&redirect_uri={urllib.parse.quote(redirect_uri, safe='')}"
+                f"&response_type=code"
+                f"&state={state}"
+                f"&token_access_type=offline"
+            )
+
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "📦 *Connect your Dropbox*\n\n"
+                    "Click the link below, sign into Dropbox, and click *Allow*:\n"
+                    f"<{auth_url}|👉 Connect my Dropbox to OpenClaw>\n\n"
+                    "_This link is private — only you can see it. It expires in 10 minutes._\n\n"
+                    "Once you approve, OpenClaw will DM you a confirmation."
+                ),
+            )
+            return
 
         # -- /dropbox setup <token> --
         if lower.startswith("setup"):
