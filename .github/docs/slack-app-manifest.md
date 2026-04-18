@@ -6,6 +6,9 @@ Go to: https://api.slack.com/apps?new_app=1
 
 Click **Create New App** → **From an app manifest** → pick your workspace → switch to the **JSON** tab → paste the manifest below.
 
+> **Note:** The manifest JSON is now generated from `scripts/update_slack_manifest.py` (the Python dict there is the single source of truth).
+> Run `python3 scripts/update_slack_manifest.py --print` to get the latest JSON, or `make slack-manifest` to push it directly to Slack via the API.
+
 ## Step 2: The Manifest (JSON)
 
 ```json
@@ -152,4 +155,6 @@ Useful for non-technical users or when you want a short, clear answer.
 
 ## Upgrading an existing app
 
-If you already have the app installed, go to **Your Apps → OpenClaw → App Manifest** and update the JSON above (or add the missing scopes/events individually under **OAuth & Permissions** and **Event Subscriptions**). Then **reinstall** the app to your workspace so the new scopes take effect.
+The easiest path is `make slack-manifest` (requires `SLACK_APP_ID` and `SLACK_CONFIG_TOKEN` in `.env` — see `.env.example` for setup instructions).
+
+For manual updates, run `python3 scripts/update_slack_manifest.py --print`, copy the JSON, then go to **Your Apps → OpenClaw → App Manifest** and paste it. Then **reinstall** the app to your workspace so any new scopes take effect.

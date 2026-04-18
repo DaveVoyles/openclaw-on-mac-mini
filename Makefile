@@ -1,4 +1,4 @@
-.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook help
+.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -74,7 +74,11 @@ ship: ship-server ship-cli
 	@echo ""
 	@echo "✅ Both server and CLI updated. Run 'make verify-deploy' to confirm."
 
-clean:
+slack-manifest:
+	@echo "📋 Pushing Slack manifest..."
+	python3 scripts/update_slack_manifest.py --push
+
+
 	@echo "🧹 Cleaning..."
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name '*.pyc' -delete 2>/dev/null || true
@@ -97,5 +101,6 @@ help:
 	@echo "  ship          Pull + restart server + deploy CLI (full deploy in one step)"
 	@echo "  ship-server   Pull latest + restart openclaw container only"
 	@echo "  ship-cli      Deploy CLI to MacBook only"
+	@echo "  slack-manifest Push Slack app manifest via API (requires SLACK_APP_ID + SLACK_CONFIG_TOKEN in .env)"
 	@echo "  clean         Remove __pycache__, .pyc, caches"
 	@echo "  help          Show this help"
