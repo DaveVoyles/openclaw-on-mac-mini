@@ -41,11 +41,9 @@ sys.path.insert(0, "src")
 from slack_bot import (  # noqa: E402
     _HELP_TEXT,
     _WELCOME_MESSAGE,
-    _clean_for_slack,
     _parse_flags,
     _suggest_actions_for_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # Tests

@@ -631,7 +631,6 @@ def create_slack_app():  # type: ignore[return]
     async def handle_file_shared(event: dict[str, Any], client: Any, say: Any) -> None:
         file_id: str = event.get("file_id", "")
         channel: str = event.get("channel_id", "")
-        user_id: str = event.get("user_id", "unknown")
 
         if not file_id or not channel:
             return
