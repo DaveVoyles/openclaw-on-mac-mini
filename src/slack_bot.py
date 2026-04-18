@@ -497,6 +497,8 @@ _last_alert_ts: float = 0.0
 SLACK_ENABLED = os.getenv("SLACK_ENABLED", "false").lower() == "true"
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN", "")
+# Wave 14: User token for channel management (xoxp-...) — optional
+SLACK_USER_TOKEN = os.getenv("SLACK_USER_TOKEN", "")
 
 # Wave 4: upload endpoint + proactive alerts
 OPENCLAW_UPLOAD_KEY = os.getenv("OPENCLAW_UPLOAD_KEY", "")
@@ -4458,6 +4460,116 @@ def create_slack_app():  # type: ignore[return]
                 pass
 
     asyncio.ensure_future(_dropbox_poll_loop())
+
+    # ------------------------------------------------------------------
+    # Handler: /channels — list and archive Slack channels (Wave 14)
+    # Requires SLACK_USER_TOKEN (xoxp-...) with channels:read,
+    # channels:manage, groups:read, groups:write scopes.
+    # ------------------------------------------------------------------
+
+    @app.command("/channels")
+    async def handle_slash_channels(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        text = (body.get("text") or "").strip()
+        lower = text.lower()
+
+        if not SLACK_USER_TOKEN or not SLACK_USER_TOKEN.startswith("xoxp-"):
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    "⚠️ *Channel management not configured.*\n\n"
+                    "Ask Dave to add `SLACK_USER_TOKEN` (xoxp-...) to the server's `.env` file.\n"
+                    "The token requires `channels:read`, `channels:manage`, `groups:read`, and `groups:write` scopes."
+                ),
+            )
+            return
+
+        import aiohttp as _aiohttp
+
+        # Helper: call Slack API with user token
+        async def _user_api(method: str, payload: dict) -> dict:
+            url = f"https://slack.com/api/{method}"
+            headers = {"Authorization": f"Bearer {SLACK_USER_TOKEN}", "Content-Type": "application/json"}
+            async with _aiohttp.ClientSession() as sess:
+                async with sess.post(url, json=payload, headers=headers) as resp:
+                    return await resp.json()
+
+        # -- /channels list --
+        if not text or lower == "list":
+            try:
+                result = await _user_api(
+                    "conversations.list",
+                    {"types": "public_channel,private_channel", "exclude_archived": True, "limit": 50},
+                )
+                if not result.get("ok"):
+                    raise RuntimeError(result.get("error", "unknown"))
+                channels = result.get("channels", [])
+                if not channels:
+                    msg = "📋 No active channels found."
+                else:
+                    lines = ["📋 *Active Slack channels:*\n"]
+                    for ch in sorted(channels, key=lambda c: c.get("name", "")):
+                        name = ch.get("name", "?")
+                        members = ch.get("num_members", "?")
+                        is_private = "🔒" if ch.get("is_private") else "#"
+                        lines.append(f"  {is_private} {name}  ({members} members)")
+                    lines.append(f"\n_{len(channels)} channel(s) total. Use `/channels archive <name>` to archive one._")
+                    msg = "\n".join(lines)
+                await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
+            except Exception as exc:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Failed to list channels: {exc}"
+                )
+            return
+
+        # -- /channels archive <name> --
+        if lower.startswith("archive "):
+            target_name = text.split(None, 1)[1].strip().lstrip("#")
+            try:
+                # First: look up channel ID by name
+                result = await _user_api(
+                    "conversations.list",
+                    {"types": "public_channel,private_channel", "exclude_archived": True, "limit": 200},
+                )
+                if not result.get("ok"):
+                    raise RuntimeError(result.get("error", "unknown"))
+                channels = result.get("channels", [])
+                match = next((c for c in channels if c.get("name", "").lower() == target_name.lower()), None)
+                if not match:
+                    await client.chat_postEphemeral(
+                        channel=channel_id,
+                        user=user_id,
+                        text=f"⚠️ Channel `#{target_name}` not found (or already archived).",
+                    )
+                    return
+                arch_result = await _user_api("conversations.archive", {"channel": match["id"]})
+                if not arch_result.get("ok"):
+                    raise RuntimeError(arch_result.get("error", "unknown"))
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text=f"✅ Channel `#{target_name}` has been archived.",
+                )
+            except Exception as exc:
+                await client.chat_postEphemeral(
+                    channel=channel_id, user=user_id, text=f"❌ Failed to archive `#{target_name}`: {exc}"
+                )
+            return
+
+        # -- usage fallback --
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=(
+                "📋 *Channel management commands:*\n"
+                "• `/channels list` — list all active channels\n"
+                "• `/channels archive <name>` — archive a channel\n\n"
+                "_Note: channel deletion is not supported by Slack's API — archive is the closest option._"
+            ),
+        )
 
     return app
 
