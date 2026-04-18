@@ -234,7 +234,7 @@
         <ul class="toc">
           <li><a href="#overview">1. Overview &amp; Architecture</a></li>
           <li><a href="#getting-started">2. Getting Started</a></li>
-          <li><a href="#ask">3. The /ask Command (AI Chat)</a></li>
+          <li><a href="#ask">3. The /chat Command (AI Chat)</a></li>
           <li>
             <a href="#threads">4. Conversation Threads (Save &amp; Resume)</a>
           </li>
@@ -325,7 +325,7 @@
           </li>
           <li><a href="#review">46. Document Review (/review)</a></li>
           <li><a href="#interview">47. Interview Mode (/interview)</a></li>
-          <li><a href="#ask-followups">48. Smart Follow-ups (/ask)</a></li>
+          <li><a href="#ask-followups">48. Smart Follow-ups (/chat)</a></li>
           <li><a href="#calendar-email">49. Calendar &amp; Email</a></li>
           <li><a href="#journal-github">50. Journal &amp; GitHub</a></li>
           <li><a href="#image-gen">51. Image Generation (/imagine)</a></li>
@@ -390,7 +390,7 @@
 
       <div class="card">
         <h3>How It Works &mdash; Hybrid Routing</h3>
-        <pre><code>You type /ask "hello"
+        <pre><code>You type /chat "hello"
     &darr;
 OpenClaw checks: does this need tool use? &rarr; No
     &darr;
@@ -398,7 +398,7 @@ Routed to Ollama (local, free, &lt;200ms)
     &darr;
 You get a fast conversational reply
 
-You type /ask "What's downloading right now?"
+You type /chat "What's downloading right now?"
     &darr;
 OpenClaw checks: does this need tool use? &rarr; Yes ("download" keyword)
     &darr;
@@ -420,8 +420,8 @@ You get a Discord embed with your active downloads</code></pre>
 
       <div class="tip">
         <strong>&#128161; You can override routing:</strong>
-        Use <code>/ask model:local "your question"</code> to force the local model, or
-        <code>/ask model:gemini "your question"</code> to force Gemini.
+        Use <code>/chat model:local "your question"</code> to force the local model, or
+        <code>/chat model:gemini "your question"</code> to force Gemini.
         Set a sticky default with <code>/model set</code>.
       </div>
 
@@ -435,7 +435,7 @@ You get a Discord embed with your active downloads</code></pre>
         <strong>Using Slack instead of Discord?</strong>
         Family members and non-technical users can access OpenClaw directly
         from Slack &mdash; no Discord needed. DM <code>@OpenClaw</code> or use
-        slash commands like <code>/ask</code>, <code>/status</code>, and
+        slash commands like <code>/chat</code>, <code>/status</code>, and
         <code>/files</code>. See
         <a href="#slack-bot">Section&nbsp;72: Slack Bot for Family</a>
         for the full guide, including file uploads, proactive alerts, and the
@@ -486,8 +486,8 @@ You get a Discord embed with your active downloads</code></pre>
         </table>
       </div>
 
-      <!-- 3. /ask -->
-      <h2 id="ask">3. The <code>/ask</code> Command (AI Chat)</h2>
+      <!-- 3. /chat -->
+      <h2 id="ask">3. The <code>/chat</code> Command (AI Chat)</h2>
       <p>
         The most powerful command. Uses <strong>hybrid routing</strong>:
         conversational queries go to local Ollama (free, fast), tool-requiring
@@ -500,34 +500,34 @@ You get a Discord embed with your active downloads</code></pre>
       <div class="tip">
         <strong>&#128161; Plain-English first:</strong> You usually do not need
         to remember individual skill names. Ask naturally with
-        <code>/ask</code> and OpenClaw will route to the most relevant tools,
+        <code>/chat</code> and OpenClaw will route to the most relevant tools,
         such as recaps, sports watch guides, health checks, or web research.
       </div>
 
       <h3>Example Queries</h3>
       <div class="card">
-        <pre><code>/ask What containers are running?
-/ask Is Sonarr healthy? Any errors in the last 50 lines?
-/ask Show me active downloads
-/ask What was recently added to Plex?
-/ask Run a speed test
-/ask What's my Gemini spending so far?
-/ask Check all services and give me a status report
-/ask Search for "The Bear" on Sonarr
-/ask Give me a recap of this channel from the last week
-/ask Look at this week's upcoming men's Division 1 college lacrosse games and make a watch table with where to watch
-/ask Give me the box office financials and new releases for the last week in table form with emojis
-/ask What's on my calendar tomorrow?
-/ask Search my inbox for messages from ESPN and email me a short summary
-/ask How much disk space is left?
-/ask Remember that the NAS IP is 192.168.1.8
-/ask What do you remember about the NAS?</code></pre>
+        <pre><code>/chat What containers are running?
+/chat Is Sonarr healthy? Any errors in the last 50 lines?
+/chat Show me active downloads
+/chat What was recently added to Plex?
+/chat Run a speed test
+/chat What's my Gemini spending so far?
+/chat Check all services and give me a status report
+/chat Search for "The Bear" on Sonarr
+/chat Give me a recap of this channel from the last week
+/chat Look at this week's upcoming men's Division 1 college lacrosse games and make a watch table with where to watch
+/chat Give me the box office financials and new releases for the last week in table form with emojis
+/chat What's on my calendar tomorrow?
+/chat Search my inbox for messages from ESPN and email me a short summary
+/chat How much disk space is left?
+/chat Remember that the NAS IP is 192.168.1.8
+/chat What do you remember about the NAS?</code></pre>
       </div>
 
       <div class="tip">
         <strong>&#128161; Skills are reference, not a requirement:</strong>
         <code>/skills</code> is still useful for browsing capabilities, but the
-        default workflow is to ask naturally with <code>/ask</code> and let
+        default workflow is to ask naturally with <code>/chat</code> and let
         OpenClaw choose the right tools.
       </div>
 
@@ -551,23 +551,23 @@ You get a Discord embed with your active downloads</code></pre>
         </tr>
         <tr>
           <td>Per-message</td>
-          <td><code>/ask model:local "tell me a joke"</code></td>
+          <td><code>/chat model:local "tell me a joke"</code></td>
           <td>Forces this one query to use Gemma (local)</td>
         </tr>
         <tr>
           <td>Per-message</td>
-          <td><code>/ask model:gemini "complex research query"</code></td>
+          <td><code>/chat model:gemini "complex research query"</code></td>
           <td>Forces this one query to use Gemini (cloud)</td>
         </tr>
         <tr>
           <td>Per-message</td>
-          <td><code>/ask model:anthropic "review this code"</code></td>
+          <td><code>/chat model:anthropic "review this code"</code></td>
           <td>Forces this one query to use Anthropic Claude</td>
         </tr>
         <tr>
           <td>Sticky default</td>
           <td><code>/model set</code> &rarr; choose preference</td>
-          <td>All future <code>/ask</code> calls use your choice</td>
+          <td>All future <code>/chat</code> calls use your choice</td>
         </tr>
         <tr>
           <td>View current</td>
@@ -589,7 +589,7 @@ You get a Discord embed with your active downloads</code></pre>
 
       <div class="tip">
         <strong>&#128161; Context is per-channel:</strong>
-        <code>/ask</code> history is scoped to your user + channel/thread. Work
+        <code>/chat</code> history is scoped to your user + channel/thread. Work
         in two channels (or a parent channel + thread) and each keeps separate
         context. TTL/history are configurable (defaults: 30 minutes, 50 turns).
         Use <code>/clear</code> to reset, or <code>/save</code> to persist.
@@ -601,7 +601,7 @@ You get a Discord embed with your active downloads</code></pre>
       <div class="tip">
         <strong>&#128161; Default plain-message behavior:</strong> In allowed,
         readable channels, plain messages (no leading <code>/</code>) are
-        treated like <code>/ask</code> automatically. OpenClaw creates or reuses
+        treated like <code>/chat</code> automatically. OpenClaw creates or reuses
         a bot-owned thread and keeps continuity in that thread for follow-ups.
       </div>
 
@@ -611,7 +611,7 @@ You get a Discord embed with your active downloads</code></pre>
           Keep scope strict by default, then override intentionally when needed:
         </p>
         <p>
-          <code>/ask</code> now exposes structured context options directly:
+          <code>/chat</code> now exposes structured context options directly:
           <code>scope</code>, <code>reset_context</code>, and <code>anchor</code>.
           (Set <code>anchor:none</code> to disable anchor targeting.)
         </p>
@@ -727,7 +727,7 @@ You get a Discord embed with your active downloads</code></pre>
       <!-- NEW: Conversation Threads -->
       <h2 id="threads">4. Conversation Threads (Save &amp; Resume)</h2>
       <p>
-        By default, <code>/ask</code> keeps 30 minutes of context in memory. If
+        By default, <code>/chat</code> keeps 30 minutes of context in memory. If
         you're researching something and want to pick it up later, save the
         conversation as a named thread. Threads are written to disk and survive
         container restarts.
@@ -735,10 +735,10 @@ You get a Discord embed with your active downloads</code></pre>
 
       <h3>Workflow</h3>
       <div class="card">
-        <pre><code>1. Chat with /ask as normal
-   /ask Tell me about the Sonarr upgrade options
-   /ask What version is Sonarr on?
-   /ask What would break if I upgraded?
+        <pre><code>1. Chat with /chat as normal
+   /chat Tell me about the Sonarr upgrade options
+   /chat What version is Sonarr on?
+   /chat What would break if I upgraded?
 
 2. Save when you want to stop:
    /save sonarr-upgrade
@@ -749,7 +749,7 @@ You get a Discord embed with your active downloads</code></pre>
    &rarr; ✅ Resumed thread sonarr-upgrade &mdash; 6 messages (saved 2026-03-23 14:30)
 
 4. Continue the conversation:
-   /ask OK where were we?</code></pre>
+   /chat OK where were we?</code></pre>
       </div>
 
       <h3>Commands</h3>
@@ -959,10 +959,10 @@ You get a Discord embed with your active downloads</code></pre>
 
       <div class="tip">
         <strong>&#128161; Tip:</strong> The AI can also use memory! When you
-        <code>/ask</code> a question, Gemini can call
+        <code>/chat</code> a question, Gemini can call
         <code>recall_fact</code> to check if it already knows the answer from
         stored memories. Try:
-        <code>/ask What do you remember about the NAS?</code>
+        <code>/chat What do you remember about the NAS?</code>
       </div>
 
       <h3>How It Works Under the Hood</h3>
@@ -1008,15 +1008,15 @@ You get a Discord embed with your active downloads</code></pre>
           language instruction to the LLM with full tool access (web search,
           page browsing, code execution, etc.).
         </p>
-        <pre><code>/ask Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for 
+        <pre><code>/chat Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for 
 Division 1 men's lacrosse games this week and post a table.</code></pre>
 
         <h3>Natural Language Creation (new)</h3>
         <p>
           Just tell OpenClaw what you want. It creates the cron job for you:
         </p>
-        <pre><code>/ask Schedule a health check every Monday and Friday at 7 AM
-/ask Run a status report every weekday at 9 AM</code></pre>
+        <pre><code>/chat Schedule a health check every Monday and Friday at 7 AM
+/chat Run a status report every weekday at 9 AM</code></pre>
 
         <h3>Built-in report scheduling (new)</h3>
         <p>
@@ -1076,7 +1076,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
           <tr>
             <th>Type</th>
             <th>Rate</th>
-            <th>Typical /ask Cost</th>
+            <th>Typical /chat Cost</th>
           </tr>
           <tr>
             <td>Input tokens</td>
@@ -1089,7 +1089,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
             <td>~$0.0004 per answer</td>
           </tr>
           <tr>
-            <td><strong>Typical /ask</strong></td>
+            <td><strong>Typical /chat</strong></td>
             <td colspan="2">
               <strong>~$0.0005 per round-trip</strong> (with function calling)
             </td>
@@ -1108,7 +1108,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
           <strong>80% used:</strong> Warning in <code>/spending</code> output
         </li>
         <li>
-          <strong>100% used:</strong> <code>/ask</code> is disabled to prevent
+          <strong>100% used:</strong> <code>/chat</code> is disabled to prevent
           runaway costs
         </li>
       </ul>
@@ -1155,7 +1155,7 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
           </li>
         </ol>
         <p>
-          Once configured, the AI can also send emails via <code>/ask</code>:
+          Once configured, the AI can also send emails via <code>/chat</code>:
           <em>"Email me a status report at you@example.com"</em>
         </p>
       </div>
@@ -1168,10 +1168,10 @@ Division 1 men's lacrosse games this week and post a table.</code></pre>
         full OAuth required.
       </p>
 
-      <h3>Example Commands (via <code>/ask</code>)</h3>
-      <pre><code>/ask Read my latest emails
-/ask Search my email for X
-/ask Send an email to someone@example.com about Y</code></pre>
+      <h3>Example Commands (via <code>/chat</code>)</h3>
+      <pre><code>/chat Read my latest emails
+/chat Search my email for X
+/chat Send an email to someone@example.com about Y</code></pre>
 
       <div class="card">
         <h3 style="margin-top: 0">Setup Required</h3>
@@ -1363,7 +1363,7 @@ GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx</code></pre>
         <li><strong>Website:</strong> <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a></li>
       </ul>
 
-      <h3>Inline Search (via <code>/ask</code>)</h3>
+      <h3>Inline Search (via <code>/chat</code>)</h3>
       <p>The AI can search the web and fetch content to answer questions:</p>
       <ul>
         <li>
@@ -1380,7 +1380,7 @@ GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx</code></pre>
       <div class="tip">
         <strong>🏠 Real Estate Investigator:</strong> Gemini is specifically
         configured to handle property research. Try asking: <br />
-        <code>/ask "Find homes in Narberth under $450k with low taxes"</code>
+        <code>/chat "Find homes in Narberth under $450k with low taxes"</code>
         <br />
         The agent will search current listings, analyze property taxes, and
         identify key features like fenced yards.
@@ -1419,11 +1419,11 @@ GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx</code></pre>
       </p>
 
       <div class="tip">
-        <strong>&#128161; Also via /ask:</strong> Any weather-related query
+        <strong>&#128161; Also via /chat:</strong> Any weather-related query
         containing "weather", "rain", "forecast", "temperature", etc. is
         automatically routed to Gemini, which calls the
         <code>get_weather</code> tool. Try:<br />
-        <code>/ask What&rsquo;s the weather in Narberth this weekend?</code>
+        <code>/chat What&rsquo;s the weather in Narberth this weekend?</code>
       </div>
 
       <div class="card">
@@ -1506,7 +1506,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       </p>
       <p>
         You can use the slash commands directly, or ask for the same outcome in
-        plain English via <code>/ask</code>.
+        plain English via <code>/chat</code>.
       </p>
 
       <div class="card">
@@ -1585,7 +1585,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       <div class="card">
         <h3 style="margin-top: 0">How It Works</h3>
         <ol>
-          <li>You have a conversation with <code>/ask</code> (4+ turns)</li>
+          <li>You have a conversation with <code>/chat</code> (4+ turns)</li>
           <li>After 30 minutes of inactivity the session expires</li>
           <li>Gemini auto-summarizes the session (~300 tokens)</li>
           <li>
@@ -1602,7 +1602,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       <div class="tip">
         <strong>&#128161; No action needed:</strong> This is fully automatic. To
         query it explicitly:<br />
-        <code>/ask What did we talk about last time?</code>
+        <code>/chat What did we talk about last time?</code>
       </div>
 
       <p>
@@ -1688,7 +1688,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       </h3>
       <p>
         Emergency stop. Immediately disables all write actions
-        (<code>/restart</code>, <code>/ask</code>, scheduled tasks).
+        (<code>/restart</code>, <code>/chat</code>, scheduled tasks).
       </p>
       <pre><code>/estop          &rarr; Freezes everything
 /estop resume   &rarr; Resumes normal operation</code></pre>
@@ -1709,7 +1709,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
       <div class="card">
         <h3 style="margin-top: 0">The Planning Workflow</h3>
         <p>
-          When you give a complex goal via <code>/ask</code> (e.g.,
+          When you give a complex goal via <code>/chat</code> (e.g.,
           <em
             >"Research and document a full upgrade path for our Docker
             stack"</em
@@ -1731,11 +1731,11 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
         </ol>
         <p>
           This "working memory on disk" allows the AI to maintain context over
-          long periods and across multiple <code>/ask</code> sessions.
+          long periods and across multiple <code>/chat</code> sessions.
         </p>
       </div>
 
-      <h3>Core Autonomy Tools (via <code>/ask</code>)</h3>
+      <h3>Core Autonomy Tools (via <code>/chat</code>)</h3>
       <ul>
         <li>
           <strong><code>init_planning_files</code></strong
@@ -1820,7 +1820,7 @@ Current: &#9925; Overcast, 58&deg;F | Wind: NW 12 mph | Humidity: 72%
           <td>Terminal cheat sheet for shell workflows, aliases, and OpenClaw shortcuts.</td>
         </tr>
         <tr>
-          <td><code>/api/agent/ask</code></td>
+          <td><code>/api/agent/chat</code></td>
           <td>JSON</td>
           <td>Authenticated ask endpoint used by terminal and programmatic clients.</td>
         </tr>
@@ -2022,7 +2022,7 @@ openclaw --health</code></pre>
         <strong>What lives where?</strong> <code>/terminal</code> is the shell
         cheat sheet (tmux, Docker, aliases, Ollama). This guide section is the
         service-side setup for talking to OpenClaw itself from the terminal via
-        <code>/api/agent/ask</code>.
+        <code>/api/agent/chat</code>.
       </div>
 
       <!-- 13. Tips -->
@@ -2032,7 +2032,7 @@ openclaw --health</code></pre>
         <h3 style="margin-top: 0">&#127919; Best Practices</h3>
         <ol>
           <li>
-            <strong>Use <code>/ask</code> for complex queries.</strong> Instead
+            <strong>Use <code>/chat</code> for complex queries.</strong> Instead
             of running 5 separate commands, ask:
             <em
               >"Check all services, show downloads, and tell me if anything
@@ -2083,18 +2083,18 @@ openclaw --health</code></pre>
 /queue                     &rarr; What's downloading?
 /recent 5                  &rarr; Latest Plex additions
 /spending                  &rarr; Budget check
-/ask Any errors in the last hour?  &rarr; AI-powered log scan</code></pre>
+/chat Any errors in the last hour?  &rarr; AI-powered log scan</code></pre>
       </div>
 
       <div class="card">
-        <h3 style="margin-top: 0">&#128171; Advanced /ask Queries</h3>
-        <pre><code>/ask Compare CPU usage of sonarr vs radarr
-/ask What downloaded this week? Summarize by media type
-/ask Is anything using more than 500MB of memory?
-/ask Check if ports 8989, 7878, and 8686 are open
-/ask Remember that I rotated the Sonarr API key today
-/ask Send me an email summary at you@example.com (requires AgentMail setup)
-/ask What's the NAS IP? (recalls from memory if stored)</code></pre>
+        <h3 style="margin-top: 0">&#128171; Advanced /chat Queries</h3>
+        <pre><code>/chat Compare CPU usage of sonarr vs radarr
+/chat What downloaded this week? Summarize by media type
+/chat Is anything using more than 500MB of memory?
+/chat Check if ports 8989, 7878, and 8686 are open
+/chat Remember that I rotated the Sonarr API key today
+/chat Send me an email summary at you@example.com (requires AgentMail setup)
+/chat What's the NAS IP? (recalls from memory if stored)</code></pre>
       </div>
 
       <div class="card">
@@ -2154,22 +2154,22 @@ openclaw --health</code></pre>
 
       <div class="card">
         <h3 style="margin-top: 0">&#129504; Ontology & Graph Memory Queries</h3>
-        <pre><code>/ask Create a Person entity for 'Dave' with email 'you@example.com'
-/ask Link the 'OpenClaw' project to the 'Slack Integration' task with a 'has_task' relation
-/ask What are all the tasks that 'blocks' the 'Dashboard' project?
-/ask Tell me everything you know about 'Dave'
-/ask Search graph for entities of type 'Project'
-/ask Validate the knowledge graph</code></pre>
+        <pre><code>/chat Create a Person entity for 'Dave' with email 'you@example.com'
+/chat Link the 'OpenClaw' project to the 'Slack Integration' task with a 'has_task' relation
+/chat What are all the tasks that 'blocks' the 'Dashboard' project?
+/chat Tell me everything you know about 'Dave'
+/chat Search graph for entities of type 'Project'
+/chat Validate the knowledge graph</code></pre>
       </div>
 
       <div class="card">
         <h3 style="margin-top: 0">&#127760; API Gateway Examples</h3>
-        <pre><code>/ask List my active Maton OAuth connections
-/ask Connect me to Slack via the API gateway
-/ask Use the gateway to post "Hello from OpenClaw!" to Slack channel C0123456
-/ask Get my GitHub repos via the gateway
-/ask Read cells A1:B10 from my Google Sheet with ID SHEET_ID
-/ask Create a HubSpot contact for john@example.com via the gateway</code></pre>
+        <pre><code>/chat List my active Maton OAuth connections
+/chat Connect me to Slack via the API gateway
+/chat Use the gateway to post "Hello from OpenClaw!" to Slack channel C0123456
+/chat Get my GitHub repos via the gateway
+/chat Read cells A1:B10 from my Google Sheet with ID SHEET_ID
+/chat Create a HubSpot contact for john@example.com via the gateway</code></pre>
       </div>
 
       <!-- 14. Troubleshooting -->
@@ -2190,7 +2190,7 @@ openclaw --health</code></pre>
             </td>
           </tr>
           <tr>
-            <td><code>/ask</code> returns "over budget"</td>
+            <td><code>/chat</code> returns "over budget"</td>
             <td>
               Check <code>/spending</code>. Increase budget in
               <code>.env</code>: <code>GEMINI_BUDGET_LIMIT=50</code>, then
@@ -2198,14 +2198,14 @@ openclaw --health</code></pre>
             </td>
           </tr>
           <tr>
-            <td><code>/ask</code> returns "rate limited"</td>
+            <td><code>/chat</code> returns "rate limited"</td>
             <td>
               Wait 1 minute. Default: 60 requests/min. Reduce usage or increase
               limits in <code>config.yaml</code>.
             </td>
           </tr>
           <tr>
-            <td><code>/ask</code> timeout or error includes a trace ID</td>
+            <td><code>/chat</code> timeout or error includes a trace ID</td>
             <td>
               Keep the trace ID and check Dashboard &rarr; Runs for the matching
               entry. Include that trace ID when opening an incident for faster
@@ -2263,7 +2263,7 @@ openclaw --health</code></pre>
             <td>Gateway returns HTTP 400</td>
             <td>
               No active OAuth connection for that app. Run
-              <em>/ask Connect me to slack via the gateway</em> and open the
+              <em>/chat Connect me to slack via the gateway</em> and open the
               returned URL to complete OAuth.
             </td>
           </tr>
@@ -2321,7 +2321,7 @@ docker exec openclaw cat /memory/schedules.json | python3 -m json.tool</code></p
 
       <div class="card">
         <h3 style="margin-top: 0">How It Works</h3>
-        <pre><code>You: /ask Post &ldquo;Deployment done&rdquo; to Slack channel #deployments
+        <pre><code>You: /chat Post &ldquo;Deployment done&rdquo; to Slack channel #deployments
     &darr;
 Gemini calls gateway_request(app="slack", path="api/chat.postMessage", ...)
     &darr;
@@ -2355,7 +2355,7 @@ Slack receives the message &mdash; reply appears in Discord</code></pre>
           <li>
             Connect each app you want to use (only needs to be done once per
             app):<br />
-            <code>/ask Create a Maton OAuth connection for slack</code><br />
+            <code>/chat Create a Maton OAuth connection for slack</code><br />
             &rarr; OpenClaw returns a URL &rarr; open it in your browser &rarr;
             complete OAuth &rarr; done.
           </li>
@@ -2390,17 +2390,17 @@ Slack receives the message &mdash; reply appears in Discord</code></pre>
         </tr>
       </table>
 
-      <h3>Example /ask Queries</h3>
+      <h3>Example /chat Queries</h3>
       <div class="card">
-        <pre><code>/ask List all my active Maton gateway connections
-/ask Connect me to GitHub via the API gateway
-/ask Use the gateway to post &ldquo;Hello!&rdquo; to Slack channel C0123456
-/ask Get my GitHub repositories using the gateway
-/ask Read cells A1:D20 from Google Sheet 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms
-/ask Create a HubSpot contact: email john@example.com, name John Doe
-/ask Query Notion database abc123 via the gateway
-/ask List my Stripe customers
-/ask Search Airtable base appXXXXXX for records in table &ldquo;Projects&rdquo;</code></pre>
+        <pre><code>/chat List all my active Maton gateway connections
+/chat Connect me to GitHub via the API gateway
+/chat Use the gateway to post &ldquo;Hello!&rdquo; to Slack channel C0123456
+/chat Get my GitHub repositories using the gateway
+/chat Read cells A1:D20 from Google Sheet 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms
+/chat Create a HubSpot contact: email john@example.com, name John Doe
+/chat Query Notion database abc123 via the gateway
+/chat List my Stripe customers
+/chat Search Airtable base appXXXXXX for records in table &ldquo;Projects&rdquo;</code></pre>
       </div>
 
       <h3>Supported Services (highlights)</h3>
@@ -2484,7 +2484,7 @@ Slack receives the message &mdash; reply appears in Discord</code></pre>
         API URLs by heart &mdash; just describe what you want and Gemini will
         figure out the right endpoint. E.g.
         <em
-          >&ldquo;/ask get the last 10 emails from Gmail via the
+          >&ldquo;/chat get the last 10 emails from Gmail via the
           gateway&rdquo;</em
         >.
       </div>
@@ -2520,10 +2520,10 @@ Slack receives the message &mdash; reply appears in Discord</code></pre>
       </div>
 
       <div class="tip">
-        <strong>&#128161; Also via /ask:</strong> The AI can also bookmark URLs
+        <strong>&#128161; Also via /chat:</strong> The AI can also bookmark URLs
         during a conversation. Try:
         <code
-          >/ask Save this article to my vault: https://example.com/article</code
+          >/chat Save this article to my vault: https://example.com/article</code
         >
       </div>
 
@@ -2547,12 +2547,12 @@ Slack receives the message &mdash; reply appears in Discord</code></pre>
         <tr>
           <td>Note</td>
           <td><code>data/vault/Notes/</code></td>
-          <td><code>save_to_vault</code> skill via <code>/ask</code></td>
+          <td><code>save_to_vault</code> skill via <code>/chat</code></td>
         </tr>
         <tr>
           <td>Analytics</td>
           <td><code>data/vault/Analytics/</code></td>
-          <td><code>save_to_vault</code> skill via <code>/ask</code></td>
+          <td><code>save_to_vault</code> skill via <code>/chat</code></td>
         </tr>
       </table>
 
@@ -2590,7 +2590,7 @@ This article covers ...
 </code></pre>
       </div>
 
-      <h3>Vault Skills (via <code>/ask</code>)</h3>
+      <h3>Vault Skills (via <code>/chat</code>)</h3>
       <table>
         <tr>
           <th>Skill</th>
@@ -2629,8 +2629,8 @@ This article covers ...
       </p>
       <pre><code>/recall docker
 /note search query:"Sonarr upgrade"
-/ask What have I saved about Sonarr upgrades?
-/ask Show me all bookmarks tagged "reference"</code></pre>
+/chat What have I saved about Sonarr upgrades?
+/chat Show me all bookmarks tagged "reference"</code></pre>
 
       <h3>Discord Commands (<code>/note</code>)</h3>
       <table>
@@ -2668,7 +2668,7 @@ This article covers ...
       <p>
         OpenClaw can be configured to give different Discord channels
         <strong>specialized AI personas</strong>. When a user sends an
-        <code>/ask</code> message in a role-configured channel, the bot
+        <code>/chat</code> message in a role-configured channel, the bot
         automatically injects a topic-specific system prompt that focuses Gemini
         on that domain.
       </p>
@@ -2820,11 +2820,11 @@ NAS_SSH_USER=dave
 NAS_BACKUP_PATH=/volume1/backups/openclaw</code></pre>
 
       <h3>Manual Trigger</h3>
-      <p>Run maintenance on-demand via <code>/ask</code>:</p>
-      <pre><code>/ask Run maintenance now
-/ask Update skills from git
-/ask Backup config to NAS
-/ask Restart the LLM gateway</code></pre>
+      <p>Run maintenance on-demand via <code>/chat</code>:</p>
+      <pre><code>/chat Run maintenance now
+/chat Update skills from git
+/chat Backup config to NAS
+/chat Restart the LLM gateway</code></pre>
 
       <h3>Viewing the Schedule</h3>
       <pre><code>/schedule list   &rarr; Shows maintenance tasks with last-run time and run count</code></pre>
@@ -2921,10 +2921,10 @@ NAS_BACKUP_PATH=/volume1/backups/openclaw</code></pre>
         </tbody>
       </table>
 
-      <h3>LLM-Callable Tools (via <code>/ask</code>)</h3>
+      <h3>LLM-Callable Tools (via <code>/chat</code>)</h3>
       <p>
         The AI can manage plans autonomously during any
-        <code>/ask</code> session. You don't need to call these manually &mdash;
+        <code>/chat</code> session. You don't need to call these manually &mdash;
         the system prompt instructs the AI to create plans for multi-step tasks
         automatically.
       </p>
@@ -2974,7 +2974,7 @@ NAS_BACKUP_PATH=/volume1/backups/openclaw</code></pre>
       <ol>
         <li>
           <strong>You ask something complex:</strong>
-          <pre><code>/ask Compare property taxes across Marple, Newtown, and Springfield townships</code></pre>
+          <pre><code>/chat Compare property taxes across Marple, Newtown, and Springfield townships</code></pre>
         </li>
         <li>
           <strong>The AI creates a plan:</strong> It calls
@@ -2998,10 +2998,10 @@ Use /resume-plan to continue, or /plans to review.</code></pre>
       </ol>
 
       <h3>Example Prompts That Trigger Plans</h3>
-      <pre><code>/ask Compare 3 neighborhoods in Delaware County for home buying
-/ask Research the best Docker monitoring tools and recommend one
-/ask Set up RSS feeds for 5 tech news sources and summarize daily
-/ask Analyze our media stack health and create a maintenance checklist</code></pre>
+      <pre><code>/chat Compare 3 neighborhoods in Delaware County for home buying
+/chat Research the best Docker monitoring tools and recommend one
+/chat Set up RSS feeds for 5 tech news sources and summarize daily
+/chat Analyze our media stack health and create a maintenance checklist</code></pre>
       <p>
         <strong>Simple queries do NOT create plans:</strong> The AI is
         instructed to skip planning for single-tool questions like
@@ -3120,7 +3120,7 @@ Marple Township millage rate is 25.46...
           semantic vector search &mdash; results are deduplicated and ranked.
         </li>
         <li>
-          Before each <code>/ask</code>, the bot automatically queries the
+          Before each <code>/chat</code>, the bot automatically queries the
           vector store for relevant context and injects the top 3 results. This
           is called <strong>contextual recall</strong>.
         </li>
@@ -3154,7 +3154,7 @@ Marple Township millage rate is 25.46...
       <div class="tip">
         <strong>&#128161; Contextual recall is automatic.</strong> You don't need to
         do anything &mdash; relevant memories are silently injected before every
-        <code>/ask</code>. The bot will naturally reference past conversations
+        <code>/chat</code>. The bot will naturally reference past conversations
         and research without being told.
       </div>
 
@@ -3273,7 +3273,7 @@ Marple Township millage rate is 25.46...
       <ul>
         <li>
           <strong>13 correction patterns</strong> are monitored in every
-          <code>/ask</code> response: &ldquo;no,&rdquo;, &ldquo;that&rsquo;s
+          <code>/chat</code> response: &ldquo;no,&rdquo;, &ldquo;that&rsquo;s
           wrong&rdquo;, &ldquo;actually&rdquo;, &ldquo;I prefer&rdquo;, etc.
         </li>
         <li>
@@ -3285,7 +3285,7 @@ Marple Township millage rate is 25.46...
           readable) and ChromaDB (semantic search).
         </li>
         <li>
-          Before each <code>/ask</code>, the top 3 relevant rules are
+          Before each <code>/chat</code>, the top 3 relevant rules are
           retrieved semantically and injected into the conversation context.
         </li>
         <li>
@@ -3333,7 +3333,7 @@ Marple Township millage rate is 25.46...
           <code>data/memory/user_profile.json</code> and embedded in ChromaDB.
         </li>
         <li>
-          Profile context is injected before each <code>/ask</code> so the bot
+          Profile context is injected before each <code>/chat</code> so the bot
           calibrates tone and relevance.
         </li>
         <li>
@@ -3452,13 +3452,13 @@ Marple Township millage rate is 25.46...
 
       <h3>Per-Message Override</h3>
       <p>Force a specific provider for a single message:</p>
-      <pre><code>/ask model:openai "write a bash script to rotate Docker logs"
-/ask model:claude "review this Python function for bugs"
-/ask model:gemini "search the web for Sonarr v4 migration guide"</code></pre>
+      <pre><code>/chat model:openai "write a bash script to rotate Docker logs"
+/chat model:claude "review this Python function for bugs"
+/chat model:gemini "search the web for Sonarr v4 migration guide"</code></pre>
 
       <h3>Sticky Default (<code>/model set</code>)</h3>
       <p>
-        Set a default model for all future <code>/ask</code> messages until
+        Set a default model for all future <code>/chat</code> messages until
         changed:
       </p>
       <pre><code>/model set          # opens a picker with 5 options
@@ -3488,7 +3488,7 @@ Marple Township millage rate is 25.46...
       <div class="card">
         <h3 style="margin-top: 0">Auto-RAG</h3>
         <p>
-          Before every <code>/ask</code> response the bot automatically queries
+          Before every <code>/chat</code> response the bot automatically queries
           long-term memory for relevant context and injects it into the prompt.
           No commands needed &mdash; the bot just <em>knows</em> what you told
           it before.
@@ -3598,10 +3598,10 @@ Marple Township millage rate is 25.46...
       </ul>
 
       <h3>Examples</h3>
-      <pre><code>/ask Convert 2.5 million seconds to days, hours, and minutes
-/ask Parse this CSV and show the top 5 rows sorted by revenue
-/ask What's the SHA-256 hash of "hello world"?
-/ask Generate a UUID v4</code></pre>
+      <pre><code>/chat Convert 2.5 million seconds to days, hours, and minutes
+/chat Parse this CSV and show the top 5 rows sorted by revenue
+/chat What's the SHA-256 hash of "hello world"?
+/chat Generate a UUID v4</code></pre>
 
       <div class="tip">
         <strong>&#128161; Automatic trigger:</strong> You don&rsquo;t need a
@@ -3612,7 +3612,7 @@ Marple Township millage rate is 25.46...
       <!-- 34. Vision + Tools -->
       <h2 id="vision-tools">34. Vision + Tools</h2>
       <p>
-        Upload an image alongside your <code>/ask</code> message and the bot
+        Upload an image alongside your <code>/chat</code> message and the bot
         can <strong>analyze the image AND take action</strong> based on what it
         sees.
       </p>
@@ -3622,7 +3622,7 @@ Marple Township millage rate is 25.46...
         <ol>
           <li>Attach an image to your Discord message</li>
           <li>
-            Include an <code>/ask</code> prompt describing what you want
+            Include an <code>/chat</code> prompt describing what you want
           </li>
           <li>
             The vision model analyzes the image, then the bot can invoke tools
@@ -3632,10 +3632,10 @@ Marple Township millage rate is 25.46...
       </div>
 
       <h3>Examples</h3>
-      <pre><code>/ask [attach screenshot] "What errors are in this log output?"
-/ask [attach dashboard image] "Analyze this Grafana dashboard and restart any unhealthy services"
-/ask [attach photo] "What plant is this? Search for care instructions"
-/ask [attach receipt] "Extract the total and store it in memory"</code></pre>
+      <pre><code>/chat [attach screenshot] "What errors are in this log output?"
+/chat [attach dashboard image] "Analyze this Grafana dashboard and restart any unhealthy services"
+/chat [attach photo] "What plant is this? Search for care instructions"
+/chat [attach receipt] "Extract the total and store it in memory"</code></pre>
 
       <div class="tip">
         <strong>&#128161; Vision + action:</strong> Unlike simple image
@@ -3684,11 +3684,11 @@ Marple Township millage rate is 25.46...
         <strong>Prompt jobs</strong> can also run research with full tool access
         (web search, page browsing, code execution):
       </p>
-      <pre><code>/ask Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for
+      <pre><code>/chat Schedule a prompt job with cron "0 7 * * 1,5": search ESPN for
 Division 1 men's lacrosse games this week and post a table.
 
 /schedule add skill:run_scheduled_research cron:"0 9 * * 1-5" args:{"query": "Kubernetes security advisories"}
-/ask Schedule weekly research on Philadelphia housing market trends</code></pre>
+/chat Schedule weekly research on Philadelphia housing market trends</code></pre>
 
       <h3>Research History</h3>
       <p>
@@ -3700,7 +3700,7 @@ Division 1 men's lacrosse games this week and post a table.
       <div class="tip">
         <strong>&#128161; Combine with memory:</strong> Hit
         <strong>&#128204; Save to Memory</strong> on any research report to
-        make its findings available to <code>/ask</code> via Auto-RAG. The bot
+        make its findings available to <code>/chat</code> via Auto-RAG. The bot
         will reference that research automatically in future conversations.
       </div>
 
@@ -3726,7 +3726,7 @@ Division 1 men's lacrosse games this week and post a table.
           <tr>
             <td>Ask</td>
             <td>Direct answers, summaries, and routine operator requests</td>
-            <td><code>/ask</code></td>
+            <td><code>/chat</code></td>
           </tr>
           <tr>
             <td>Research</td>
@@ -3833,7 +3833,7 @@ Division 1 men's lacrosse games this week and post a table.
             <strong>Use strict lock controls, then override explicitly.</strong>
             Default to response buttons: <em>Lock to Channel</em>,
             <em>Lock to Thread</em>, <em>Use Prior Report</em>, and
-            <em>Reset Context</em>. Prefer slash options on <code>/ask</code>
+            <em>Reset Context</em>. Prefer slash options on <code>/chat</code>
             (<code>scope</code>, <code>reset_context</code>, <code>anchor</code>),
             and use prompt markers only when needed:
             <code>--cross-channel</code>, <code>--use-prior-report</code>,
@@ -3981,7 +3981,7 @@ Division 1 men's lacrosse games this week and post a table.
 
       <div class="tip">
         <strong>&#128161; Tip:</strong> You can also trigger a dream cycle via
-        <code>/ask "run a dream cycle"</code> — the LLM will call the
+        <code>/chat "run a dream cycle"</code> — the LLM will call the
         <code>dream_now</code> tool automatically.
       </div>
 
@@ -3995,13 +3995,13 @@ Division 1 men's lacrosse games this week and post a table.
       </p>
 
       <h3>How to Use</h3>
-      <p>Ask the bot via <code>/ask</code>:</p>
-      <pre><code>/ask Schedule a weekly WWE recap every Sunday at 8am</code></pre>
+      <p>Ask the bot via <code>/chat</code>:</p>
+      <pre><code>/chat Schedule a weekly WWE recap every Sunday at 8am</code></pre>
       <p>
         The LLM calls <code>schedule_research_report(topic, cron)</code>
         which creates a cron-scheduled job. You can also be explicit:
       </p>
-      <pre><code>/ask Schedule a research report on "AI agent frameworks" with cron "0 9 * * 1"</code></pre>
+      <pre><code>/chat Schedule a research report on "AI agent frameworks" with cron "0 9 * * 1"</code></pre>
 
       <h3>Examples</h3>
       <ul>
@@ -4122,11 +4122,11 @@ Division 1 men's lacrosse games this week and post a table.
         <li><strong>Plex status</strong> &mdash; playback and library health</li>
       </ul>
 
-      <h3>Using via /ask</h3>
-      <pre><code>/ask Check NAS health and disk space
-/ask Fix the qBittorrent download path
-/ask Clean up disk space on the server
-/ask Use copilot to fix the Sonarr database corruption</code></pre>
+      <h3>Using via /chat</h3>
+      <pre><code>/chat Check NAS health and disk space
+/chat Fix the qBittorrent download path
+/chat Clean up disk space on the server
+/chat Use copilot to fix the Sonarr database corruption</code></pre>
 
       <!-- 43. Right-Click Context Menus -->
       <h2 id="context-menus">43. Right-Click Context Menus</h2>
@@ -4194,7 +4194,7 @@ Division 1 men's lacrosse games this week and post a table.
 
       <h3>Auto-Threading</h3>
       <p>
-        When a <code>/ask</code> conversation exceeds 3 exchanges in the same
+        When a <code>/chat</code> conversation exceeds 3 exchanges in the same
         channel, OpenClaw automatically creates a Discord thread to keep the
         channel clean. A link to the thread appears in the original channel.
       </p>
@@ -4279,8 +4279,8 @@ Division 1 men's lacrosse games this week and post a table.
       </ol>
 
       <!-- 48. Smart Follow-ups -->
-      <h2 id="ask-followups">48. Smart Follow-ups on <code>/ask</code></h2>
-      <p>Every <code>/ask</code> response now includes interactive follow-up buttons, making it easy to go deeper without typing a new question.</p>
+      <h2 id="ask-followups">48. Smart Follow-ups on <code>/chat</code></h2>
+      <p>Every <code>/chat</code> response now includes interactive follow-up buttons, making it easy to go deeper without typing a new question.</p>
       <h3>Buttons on Every Response</h3>
       <ul>
         <li><strong>Two follow-up question buttons</strong> — AI-generated suggestions based on the Q&amp;A. Click one to instantly ask it, with full conversation context preserved.</li>
@@ -4471,7 +4471,7 @@ Division 1 men's lacrosse games this week and post a table.
 /digest topic add "Stock Market"
 /digest now</code></pre>
 
-      <p><strong>💡 Pro Tip:</strong> Combine digest with <code>/ask</code> for follow-up questions like <em>"Tell me more about that NVDA news"</em> or <em>"What's the market sentiment on AI stocks?"</em></p>
+      <p><strong>💡 Pro Tip:</strong> Combine digest with <code>/chat</code> for follow-up questions like <em>"Tell me more about that NVDA news"</em> or <em>"What's the market sentiment on AI stocks?"</em></p>
 
       <!-- 60. Trend Detection & Tracking -->
       <h2 id="trends">60. Trend Detection &amp; Tracking (<code>/track</code>, <code>/trending</code>, <code>/trends</code>, <code>/breaking</code>)</h2>
@@ -4546,7 +4546,7 @@ Related Trends:
 
       <!-- 61. Premium API Skills Reference -->
       <h2 id="premium-skills">61. Premium API Skills Reference</h2>
-      <p>When using <code>/ask</code>, the AI can automatically invoke these premium skills to fetch real-time data. You don't need to call them manually—just ask naturally!</p>
+      <p>When using <code>/chat</code>, the AI can automatically invoke these premium skills to fetch real-time data. You don't need to call them manually—just ask naturally!</p>
 
       <h3>🗞️ News Skills</h3>
       <ul>
@@ -4664,14 +4664,14 @@ Related Trends:
 /chart NVDA 1m
 
 // Investment research
-/ask "Give me a detailed analysis of Apple stock including recent news and price trends"
+/chat "Give me a detailed analysis of Apple stock including recent news and price trends"
 → Uses get_stock_quote(), get_stock_history(), get_stock_news()
 
 // Generate investor report
 /report financial TSLA
 
 // Track portfolio
-/ask "Show me quotes for AAPL, MSFT, GOOGL, and NVDA with 1-month performance"</code></pre>
+/chat "Show me quotes for AAPL, MSFT, GOOGL, and NVDA with 1-month performance"</code></pre>
 
       <p><strong>💡 Pro Tip:</strong> Combine with digest: <code>/digest stock add NVDA</code> to include NVIDIA in your daily digest.</p>
 
@@ -5133,7 +5133,7 @@ git push --tags
       </div>
 
       <h3>LLM Skills</h3>
-      <p>Ask the bot naturally about Patreon/MonsterVision status using <code>/ask</code>:</p>
+      <p>Ask the bot naturally about Patreon/MonsterVision status using <code>/chat</code>:</p>
       <ul>
         <li>"Check Patreon health" → Full diagnostics</li>
         <li>"How old are my Patreon cookies?" → Cookie age check</li>
@@ -5173,7 +5173,7 @@ git push --tags
             </tr>
           </thead>
           <tbody>
-            <tr><td style="padding:0.35rem 0.6rem"><code>/ask &lt;question&gt;</code></td><td style="padding:0.35rem 0.6rem">Ask OpenClaw anything &mdash; routed to Ollama or Gemini automatically</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/chat &lt;question&gt;</code></td><td style="padding:0.35rem 0.6rem">Ask OpenClaw anything &mdash; routed to Ollama or Gemini automatically</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/help</code></td><td style="padding:0.35rem 0.6rem">Show available Slack commands and usage tips</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/simple on|off</code></td><td style="padding:0.35rem 0.6rem">Toggle plain-language mode for your account (simpler words, shorter replies)</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/files recent</code></td><td style="padding:0.35rem 0.6rem">Show the last 10 uploaded files with names and timestamps</td></tr>

@@ -15,7 +15,7 @@ Setup:
   3. Add Bot Token Scopes: app_mentions:read, channels:history, chat:write,
      im:history, im:read, im:write, reactions:read
   4. Subscribe to events: app_mention, message.im, reaction_added
-  5. Enable slash command: /ask (any Request URL placeholder works in Socket Mode)
+  5. Enable slash command: /chat (any Request URL placeholder works in Socket Mode)
   6. Install app to workspace
   7. Copy Bot User OAuth Token (xoxb-...) to SLACK_BOT_TOKEN
   8. Copy App-Level Token (xapp-...) to SLACK_APP_TOKEN
@@ -25,7 +25,7 @@ Features:
   - DMs → OpenClaw answer
   - Thread context: follow-up messages in a thread carry prior Q&A as history
   - Model selector: append --model gemini|openai|anthropic|copilot|auto to any prompt
-  - /ask slash command: native Slack slash command
+  - /chat slash command: native Slack slash command
   - 👍/👎 feedback: react to any bot response to log a rating
 
 Wiring into src/bot.py (add inside setup_hook or on_ready):
@@ -2029,10 +2029,10 @@ def create_slack_app():  # type: ignore[return]
         _onboarded_users.add(user_id)
 
     # ------------------------------------------------------------------
-    # Handler: /ask slash command
+    # Handler: /chat slash command
     # ------------------------------------------------------------------
 
-    @app.command("/ask")
+    @app.command("/chat")
     async def handle_slash_ask(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
         await ack()  # must acknowledge within 3 seconds
 
@@ -2042,7 +2042,7 @@ def create_slack_app():  # type: ignore[return]
 
         if not raw_text:
             await say(
-                text="Usage: `/ask your question here`\nNeed ideas? Type `/help` to see examples."
+                text="Usage: `/chat your question here`\nNeed ideas? Type `/help` to see examples."
             )
             return
 

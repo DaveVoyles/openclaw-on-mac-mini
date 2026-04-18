@@ -27,7 +27,7 @@ from pathlib import Path
 MANIFEST: dict = {
     "display_information": {
         "name": "OpenClaw",
-        "description": "Personal AI assistant — ask anything via @OpenClaw, DM, or /ask",
+        "description": "Personal AI assistant — chat with OpenClaw via @OpenClaw, DM, or /chat",
         "background_color": "#1a1a2e",
     },
     "features": {
@@ -37,9 +37,9 @@ MANIFEST: dict = {
         },
         "slash_commands": [
             {
-                "command": "/ask",
+                "command": "/chat",
                 "description": "Ask OpenClaw anything. Add --model gemini|openai|anthropic|copilot to pick a model.",
-                "usage_hint": "[--model <model>] [--simple] your question",
+                "usage_hint": "[--model model] [--simple] your question",
                 "should_escape": False,
             },
             {
