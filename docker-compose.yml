@@ -115,3 +115,96 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  dashboard-v2:
+    build:
+      context: ./data/dashboard-v2
+    container_name: dashboard-v2
+    restart: unless-stopped
+    depends_on:
+      - openclaw
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Port: host 7000 → container 3001 (set by Dockerfile ENV DASHBOARD_PORT=3001)
+    ports:
+      - "7000:3001"
+
+    environment:
+      # WORKSPACE_DIR: repo root — dashboard reads data/, skills/, scripts/ from here
+      - WORKSPACE_DIR=/workspace
+      # OPENCLAW_DIR: ~/.openclaw on host — sessions/agents dir (mounted read-only)
+      - OPENCLAW_DIR=/openclaw-data
+      # Writable dir for credentials.json, mfa-secret.txt, audit.log
+      - DASHBOARD_AUTH_DIR=/dashboard-auth
+      # Connect to openclaw service via Docker internal hostname
+      - OPENCLAW_API_URL=http://openclaw:8765
+      # Allow plain HTTP (no HTTPS redirect)
+      - DASHBOARD_ALLOW_HTTP=true
+
+    volumes:
+      # Workspace data dirs (read-only — dashboard reads sessions, costs, logs, skills)
+      - ./data:/workspace/data:ro
+      - ./skills:/workspace/skills:ro
+      - ./scripts:/workspace/scripts:ro
+      # Host ~/.openclaw (sessions stored by CLI — read-only)
+      - ~/.openclaw:/openclaw-data:ro
+      # Writable auth/credential storage for dashboard login
+      - ./data/dashboard-auth:/dashboard-auth:rw
+      # Docker socket for container management page
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:3001/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Open WebUI — browser-based chat UI (OpenAI-compatible)
+  # Connects to OpenClaw's /v1/ API at http://openclaw:8765/v1
+  # Accessible at http://192.168.1.93:3000
+  # ---------------------------------------------------------------------------
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    depends_on:
+      - openclaw
+
+    ports:
+      - "3000:8080"
+
+    environment:
+      # Point to OpenClaw's OpenAI-compatible API (Docker internal network)
+      - OPENAI_API_BASE_URL=http://openclaw:8765/v1
+      - OPENAI_API_KEY=openclaw
+      # Disable Open WebUI's own auth for local/LAN use
+      - WEBUI_AUTH=False
+      # Disable Ollama (we're using OpenAI-compat only)
+      - ENABLE_OLLAMA_API=False
+
+    volumes:
+      - open-webui-data:/app/backend/data
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  open-webui-data:

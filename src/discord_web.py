@@ -579,6 +579,133 @@ async def _cli_update_meta_handler(request: web.Request) -> web.Response:
 
 
 # ---------------------------------------------------------------------------
+# OpenAI-compatible API endpoints (/v1/)
+# ---------------------------------------------------------------------------
+
+_OAI_MODELS = [
+    {"id": "openclaw-auto",      "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-gemini",    "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-copilot",   "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-openai",    "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+    {"id": "openclaw-anthropic", "object": "model", "created": 1700000000, "owned_by": "openclaw"},
+]
+
+_OAI_MODEL_MAP: dict[str, str] = {
+    "openclaw-auto":      "auto",
+    "openclaw-gemini":    "gemini",
+    "openclaw-copilot":   "copilot",
+    "openclaw-openai":    "openai",
+    "openclaw-anthropic": "anthropic",
+}
+
+
+async def _v1_models_handler(request: web.Request) -> web.Response:
+    """GET /v1/models — return OpenAI-compatible model list."""
+    return web.json_response({"object": "list", "data": _OAI_MODELS})
+
+
+async def _v1_chat_completions_handler(request: web.Request) -> web.Response | web.StreamResponse:
+    """POST /v1/chat/completions — OpenAI-compatible chat endpoint."""
+    import time as _time
+    import uuid as _uuid
+    from dashboard.api_handlers import _execute_agent_ask
+
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    messages: list[dict] = body.get("messages") or []
+    if not messages:
+        return web.json_response({"error": "messages is required and must be non-empty"}, status=400)
+
+    prompt = (messages[-1].get("content") or "").strip()
+    if not prompt:
+        return web.json_response({"error": "Last message content is required"}, status=400)
+
+    history = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in messages[:-1]]
+    model_name = str(body.get("model") or "openclaw-auto")
+    model_pref = _OAI_MODEL_MAP.get(model_name, "auto")
+    stream = bool(body.get("stream", False))
+    completion_id = f"chatcmpl-{_uuid.uuid4().hex}"
+    created_ts = int(_time.time())
+
+    if not stream:
+        try:
+            result = await _execute_agent_ask(
+                prompt=prompt,
+                model_pref=model_pref,
+                history=history,
+                user_name="openwebui",
+            )
+        except Exception as exc:
+            log.error("_v1_chat_completions_handler error: %s", exc)
+            return web.json_response({"error": str(exc)}, status=500)
+
+        return web.json_response({
+            "id": completion_id,
+            "object": "chat.completion",
+            "created": created_ts,
+            "model": result.get("model", model_name),
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": result.get("response", "")},
+                "finish_reason": "stop",
+            }],
+            "usage": {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "total_tokens": result.get("tokens", 0),
+            },
+        })
+
+    # --- Streaming path ---
+    resp = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+    await resp.prepare(request)
+
+    async def _send_chunk(delta_content: str) -> None:
+        chunk = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created_ts,
+            "model": model_name,
+            "choices": [{"index": 0, "delta": {"content": delta_content}, "finish_reason": None}],
+        }
+        await resp.write(f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n".encode("utf-8"))
+
+    try:
+        await _execute_agent_ask(
+            prompt=prompt,
+            model_pref=model_pref,
+            history=history,
+            user_name="openwebui",
+            on_partial_chunk=_send_chunk,
+        )
+    except Exception as exc:
+        log.error("_v1_chat_completions_handler stream error: %s", exc)
+
+    # Final stop chunk
+    stop_chunk = {
+        "id": completion_id,
+        "object": "chat.completion.chunk",
+        "created": created_ts,
+        "model": model_name,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+    }
+    await resp.write(f"data: {json.dumps(stop_chunk)}\n\n".encode("utf-8"))
+    await resp.write(b"data: [DONE]\n\n")
+    await resp.write_eof()
+    return resp
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -600,6 +727,8 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_post("/api/trigger-scan", _trigger_scan_handler)
     app.router.add_get("/cli-update/{filename}", _cli_update_handler)
     app.router.add_get("/cli-update/meta", _cli_update_meta_handler)
+    app.router.add_get("/v1/models", _v1_models_handler)
+    app.router.add_post("/v1/chat/completions", _v1_chat_completions_handler)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)

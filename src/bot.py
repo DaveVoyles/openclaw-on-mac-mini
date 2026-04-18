@@ -647,6 +647,17 @@ class OpenClawBot(commands.Bot):
 
         asyncio.create_task(_audit_log_rotation_loop(), name="audit-log-rotation")
 
+        # Start Slack bot if configured
+        if os.getenv("SLACK_ENABLED", "false").lower() == "true":
+            try:
+                from slack_bot import create_slack_handler
+                _slack_handler = await create_slack_handler()
+                if _slack_handler:
+                    asyncio.create_task(_slack_handler.start_async(), name="slack-socket-mode")
+                    log.info("Slack Socket Mode handler started")
+            except Exception as exc:  # broad: intentional — Slack failure must not block Discord startup
+                log.warning("Slack bot failed to start: %s", exc)
+
     async def on_ready(self) -> None:
         """Initialize bot on connection to Discord.
 

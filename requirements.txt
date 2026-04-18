@@ -59,6 +59,7 @@ psutil>=6.1.0
 
 # Machine Learning / Data Science (Phase 3)
 scikit-learn>=1.6.1
+slack_bolt>=1.18.0          # Slack Bot (Socket Mode) — optional, see src/slack_bot.py
 pandas>=2.2.0
 statsmodels>=0.14.0  # For ARIMA time series forecasting
 scipy>=1.15.0  # Scientific computing
