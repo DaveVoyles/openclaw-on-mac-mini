@@ -36,6 +36,7 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
         "channels:history",
         "chat:write",
         "commands",
+        "files:read",
         "im:history",
         "im:read",
         "im:write",
@@ -48,6 +49,7 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
     "event_subscriptions": {
       "bot_events": [
         "app_mention",
+        "file_shared",
         "message.im",
         "reaction_added"
       ]
@@ -115,6 +117,8 @@ Then mention it with `@OpenClaw your question here` or send it a DM or use `/ask
 | Reply in a thread → `@OpenClaw follow up` | Carries full thread context |
 | DM `what is the weather?` | Private answer |
 | `/ask --model openai your question` | Slash command answer |
+| Upload a file and @mention the bot | Bot reads and analyzes the file |
+| Upload a file in a DM | Bot reads and analyzes the file |
 | 👍 react to a bot response | Logs positive feedback |
 | 👎 react to a bot response | Logs negative feedback |
 
