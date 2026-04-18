@@ -130,7 +130,7 @@ Concise operator playbook for incidents, monitoring interpretation, backup/recov
 
 | Method | URL | Auth | Notes |
 | --- | --- | --- | --- |
-| `GET` | `http://192.168.1.93:8080/health` | none | Polled by `/status` slash command; returns JSON liveness |
+| `GET` | `http://192.168.1.93:8080/health` | none | Polled by `/health` slash command; returns JSON liveness |
 | `POST` | `http://192.168.1.93:8080/upload` | `X-OpenClaw-Key` header | Multipart field `file`; allowed: `.docx .xlsx .pdf .txt .csv`; blocked: `.exe .sh .py .zip .bat` |
 
 ### Wave 5 Slash Commands (new in v0.14.0)
@@ -176,7 +176,7 @@ When an `.xlsx` file is uploaded, a **📐 Formulas** button appears alongside S
 Clicking it sends the spreadsheet to the AI with a prompt that explains every formula in plain English,
 flags errors, and suggests simpler alternatives.
 
-### `/status` Slash Command
+### `/health` Slash Command
 
 - Pings `http://192.168.1.93:8080/health` for liveness.
 - Reads `data/last_sync.json` (written by `scripts/watch_folder.sh` after each rsync) for last-sync metadata.

@@ -2113,10 +2113,10 @@ def create_slack_app():  # type: ignore[return]
         await say(text=_HELP_TEXT)
 
     # ------------------------------------------------------------------
-    # Handler: /status slash command — bot health card
+    # Handler: /health slash command — bot health card
     # ------------------------------------------------------------------
 
-    @app.command("/status")
+    @app.command("/health")
     async def handle_slash_status(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
         user_id = body.get("user_id", "unknown")

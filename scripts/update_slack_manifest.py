@@ -73,7 +73,7 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
-                "command": "/status",
+                "command": "/health",
                 "description": "Check if OpenClaw is running - shows Mac Mini health, file count, last sync time.",
                 "usage_hint": "(no arguments needed)",
                 "should_escape": False,
