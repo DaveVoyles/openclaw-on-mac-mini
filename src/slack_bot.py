@@ -2647,6 +2647,13 @@ async def create_slack_handler():  # type: ignore[return]
 
     handler = AsyncSocketModeHandler(app, SLACK_APP_TOKEN)
     log.info("Slack Socket Mode handler created")
+
+    # Start proactive file-alert loop (works whether bot is started via
+    # start_slack_bot() or the main Discord bot's create_slack_handler()).
+    if SLACK_NOTIFY_USER_ID:
+        asyncio.create_task(_file_alert_loop(app.client))
+        log.info("Proactive file-alert loop started (notifying %s)", SLACK_NOTIFY_USER_ID)
+
     return handler
 
 
@@ -2658,11 +2665,6 @@ async def start_slack_bot() -> None:
         return
 
     log.info("Starting Slack Socket Mode bot…")
-
-    # Start proactive file-alert loop; reuse the handler's app client
-    if SLACK_NOTIFY_USER_ID:
-        asyncio.create_task(_file_alert_loop(handler.app.client))
-
     await handler.start_async()
 
 
