@@ -5290,19 +5290,43 @@ Invoke-RestMethod `
       </ul>
       <p>Prefix matching works: <code>/template meet</code> returns <code>meeting-notes.docx</code>.</p>
 
+      <h3>Recent Files at a Glance (<code>/brief</code>)</h3>
+      <p>
+        Type <code>/brief</code> to instantly see your last 5 uploaded files with relative timestamps
+        (&ldquo;today&rdquo;, &ldquo;yesterday&rdquo;, &ldquo;3 days ago&rdquo;). The reply is
+        private (ephemeral) &mdash; only you see it.
+      </p>
+
+      <h3>Your Personal Stats (<code>/mystats</code>)</h3>
+      <p>
+        Type <code>/mystats</code> to get a private card showing your usage statistics:
+        total queries answered, files processed, average response time, error count, and your
+        top three most-used actions. Your identity is anonymized in the log.
+      </p>
+
+      <h3>Bookmark Any Bot Response (🔖)</h3>
+      <p>
+        React to any OpenClaw message with the <strong>🔖 bookmark emoji</strong> to save it.
+        The bot stores the message text in <code>data/slack_saved_notes.json</code> on the
+        server and sends you a private confirmation: <em>&ldquo;🔖 Saved!&rdquo;</em>
+        No copy/paste needed.
+      </p>
+
       <h3>Quick-Start Flow</h3>
       <div class="card">
         <pre><code>1. Open Slack DM with @OpenClaw
 2. Type: /status           → confirm Mac Mini is online
-3. Upload report.pdf       → block buttons appear
+3. Upload report.pdf       → block buttons appear (Summarize, Key Points, Translate…)
 4. Click "Summarize"       → receive bullet summary in thread
-5. Type: /simple on        → switch to plain-language mode
-6. Type: /research quantum computing
+5. React 🔖 to save it     → "🔖 Saved!" confirmation
+6. Type: /simple on        → switch to plain-language mode
+7. Type: /research quantum computing
                            → Perplexity returns a cited summary
-7. Type: /batch summarize  → process all uploaded files at once
-8. Type: /files recent     → review the last 10 uploads
-9. Type: /digest on        → get daily file-sync summaries by DM
-10. Type: /template list   → see available starter templates</code></pre>
+8. Type: /batch summarize  → process all uploaded files at once
+9. Type: /brief            → see last 5 uploads at a glance
+10. Type: /mystats         → see your personal usage stats
+11. Type: /digest on       → get daily file-sync summaries by DM
+12. Type: /template list   → see available starter templates</code></pre>
       </div>
 
       <div class="tip">
@@ -5323,7 +5347,7 @@ Invoke-RestMethod `
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.14.0 (Wave 5 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.15.0 (Wave 7 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"

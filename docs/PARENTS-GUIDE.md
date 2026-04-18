@@ -336,6 +336,88 @@ The first time you send a message to @OpenClaw (in a channel or as a DM), you'll
 
 ---
 
+## 📂 Your Recent Files at a Glance — `/brief`
+
+Want a quick look at what you've uploaded lately? Type:
+
+```
+/brief
+```
+
+OpenClaw replies (privately, just to you) with your last 5 uploaded files and how long ago you sent them — "today", "yesterday", or "3 days ago". Great for picking up where you left off.
+
+---
+
+## 📊 Your Personal Stats — `/mystats`
+
+Curious how much you've been using OpenClaw? Type:
+
+```
+/mystats
+```
+
+You'll see a private summary showing:
+- How many questions you've asked
+- How many files you've processed
+- Your average response time
+- Which features you use most
+
+Your identity is anonymized — only aggregate counts are tracked.
+
+---
+
+## 🔖 Save Any Bot Response
+
+Seen a great answer you want to keep? Just react to it with the 🔖 bookmark emoji.
+
+OpenClaw will save the message to your personal notes list and confirm with a private message: *"🔖 Saved!"*
+
+Your saved notes are stored on the server — no need to copy/paste anything.
+
+---
+
+## 📋 Starter Templates — `/template`
+
+Need a blank spreadsheet or letter to get started? Type:
+
+```
+/template list
+```
+
+OpenClaw will show the available starter templates. Then grab one:
+
+```
+/template budget
+/template letter
+/template meeting-notes
+```
+
+OpenClaw sends the file directly to you as a DM — ready to fill in and upload back when you're done.
+
+---
+
+## 📬 Daily File Digest — `/digest`
+
+If you want a daily summary of files that have been synced to OpenClaw, turn on the digest:
+
+```
+/digest on
+```
+
+Each day, OpenClaw will send you a private message listing any new files that arrived in the last 24 hours — file names, types, and upload times.
+
+To turn it off:
+```
+/digest off
+```
+
+To check whether it's currently on:
+```
+/digest status
+```
+
+---
+
 ## 💻 Windows: Sync Without Extra Software
 
 If you're on Windows and can't use the SSH sync method, OpenClaw now supports uploading files directly over the network. The Windows installer (`Install-OpenClaw.ps1`) automatically tests this connection during setup.
