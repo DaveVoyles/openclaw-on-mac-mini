@@ -340,6 +340,7 @@
           <li><a href="#trends">60. Trend Detection &amp; Tracking (/track, /trending, /trends, /breaking)</a></li>
           <li><a href="#wave8">62. Wave 8 — Smart Memory &amp; Recovery</a></li>
           <li><a href="#wave10">63. Wave 10 — Cloud Account Integrations</a></li>
+          <li><a href="#wave11">64. Wave 11 &amp; 12 — Per-User Dropbox &amp; Gmail Connect</a></li>
           <li><a href="#premium-skills">61. Premium API Skills Reference</a></li>
           <li><a href="#phase3-financial">62. Financial Data (Polygon.io) - Phase 3</a></li>
           <li><a href="#phase3-workflows">63. Workflow Automation &amp; Scheduling - Phase 3</a></li>
@@ -352,6 +353,7 @@
           <li><a href="#phase4-infrastructure">70. Production Infrastructure - Phase 4</a></li>
           <li><a href="#patreon-monitoring">71. Patreon/MonsterVision Monitoring</a></li>
           <li><a href="#slack-bot">72. Slack Bot for Family</a></li>
+        <li><a href="#open-webui">73. Open WebUI (Browser Chat Interface)</a></li>
         </ul>
       </div>
 
@@ -4600,6 +4602,38 @@ Related Trends:
 
       <p><strong>Setup (Dave does this once):</strong> Run <code>scripts/google_oauth_setup.py</code> for Google, get a Dropbox app token from <a href="https://www.dropbox.com/developers/apps" target="_blank">dropbox.com/developers</a>, and add both to the server's <code>.env</code> file.</p>
 
+      <!-- 64. Wave 11 & 12: Per-User Dropbox & Gmail Connect -->
+      <h2 id="wave11">64. Wave 11 &amp; 12 — Per-User Dropbox &amp; Gmail Connect</h2>
+      <p>Each family member can now connect <strong>their own</strong> Dropbox and Gmail account — no sharing Dave's credentials. Your files and emails stay private to you.</p>
+
+      <h3>☁️ Connect Your Dropbox (one click)</h3>
+      <p>Type this command in Slack and OpenClaw will send you a private link:</p>
+      <pre><code>/dropbox connect</code></pre>
+      <p>Click the link, sign in to Dropbox, click <strong>Allow</strong> — done. OpenClaw will confirm with a ✅ message. After connecting, you can:</p>
+      <pre><code>/dropbox list          ← browse your Dropbox files
+/dropbox list /Photos  ← browse a specific folder
+/dropbox status        ← confirm your Dropbox is connected
+/dropbox forget        ← disconnect your Dropbox</code></pre>
+
+      <h3>📧 Connect Your Gmail (App Password)</h3>
+      <p>Read your personal Gmail inbox directly in Slack. Requires a Google App Password (takes about 2 minutes to set up — Dave can help).</p>
+
+      <p><strong>One-time Gmail setup:</strong></p>
+      <ol style="margin-left:1.5rem;margin-bottom:1rem;">
+        <li>Go to <a href="https://myaccount.google.com/security" target="_blank">myaccount.google.com/security</a> and enable <strong>2-Step Verification</strong> if not already on.</li>
+        <li>Search for "App passwords" on that page, create one named "OpenClaw".</li>
+        <li>Copy the 16-character password shown.</li>
+        <li>In Slack, type: <code>/email setup your@gmail.com YOUR_APP_PASSWORD</code></li>
+      </ol>
+      <pre><code>/email setup chuck@gmail.com abcd efgh ijkl mnop   ← connect Gmail
+/inbox                                              ← see unread emails
+/email 1                                            ← summarize email #1
+/email forget                                       ← disconnect Gmail</code></pre>
+
+      <div style="background:rgba(104,172,229,0.1);border-left:4px solid #68ace5;border-radius:6px;padding:1rem;margin:1rem 0;">
+        <strong>🔒 Privacy:</strong> Your Dropbox token and Gmail credentials are stored only on Dave's home server, encrypted at rest, and never shared with other family members. Each person connects their own account separately.
+      </div>
+
       <!-- 61. Premium API Skills Reference -->
       <h2 id="premium-skills">61. Premium API Skills Reference</h2>
       <p>When using <code>/chat</code>, the AI can automatically invoke these premium skills to fetch real-time data. You don't need to call them manually—just ask naturally!</p>
@@ -5457,6 +5491,81 @@ Invoke-RestMethod `
         The bot is started via <code>create_slack_handler()</code> integrated with the main Discord bot.
       </div>
 
+      <!-- 73. Open WebUI -->
+      <h2 id="open-webui">73. Open WebUI (Browser Chat Interface)</h2>
+      <p>
+        Open WebUI gives every family member a full browser-based chat interface &mdash; no Discord
+        or Slack required. It connects directly to OpenClaw&rsquo;s AI models so you can have
+        conversations, manage knowledge, create prompts, and more from any device with a web browser.
+      </p>
+
+      <h3>Accessing Open WebUI</h3>
+      <div class="card">
+        <p><strong>URL:</strong> <a href="https://chat.davevoyles.synology.me" target="_blank">https://chat.davevoyles.synology.me</a></p>
+        <p>Works from any device &mdash; phone, tablet, laptop &mdash; as long as you have an internet connection.</p>
+      </div>
+
+      <h3>Creating Your Account</h3>
+      <ol>
+        <li>Go to <a href="https://chat.davevoyles.synology.me" target="_blank">https://chat.davevoyles.synology.me</a></li>
+        <li>Click <strong>Sign Up</strong></li>
+        <li>Enter your name, email address, and a password</li>
+        <li>Your account will be set to <em>pending</em> until Dave approves it</li>
+        <li>Once approved, sign in with your email and password</li>
+      </ol>
+
+      <div class="tip">
+        <strong>&#128161; Tip:</strong> After your first login, change your password in
+        <strong>Settings &rarr; Account</strong> if you were given a temporary one.
+      </div>
+
+      <h3>What You Can Do</h3>
+      <ul>
+        <li><strong>Chat</strong> &mdash; have multi-turn conversations with the AI, just like ChatGPT</li>
+        <li><strong>Knowledge</strong> &mdash; browse and search the built-in knowledge base</li>
+        <li><strong>Models</strong> &mdash; see which AI models are available</li>
+        <li><strong>Prompts</strong> &mdash; save and reuse your favourite instructions</li>
+        <li><strong>Tools</strong> &mdash; browse available AI tools and integrations</li>
+      </ul>
+
+      <h3>Tips for Family Members</h3>
+      <ul>
+        <li>Your chat history is private to your account &mdash; other users cannot see it</li>
+        <li>Use the search bar at the top to find past conversations</li>
+        <li>You can start a new chat at any time by clicking <strong>+ New Chat</strong></li>
+        <li>The interface works well on mobile &mdash; just open it in Safari or Chrome</li>
+      </ul>
+
+      <h3>Comparison: Discord vs. Slack vs. Open WebUI</h3>
+      <div class="card">
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--gold);border-bottom:1px solid var(--border)">Interface</th>
+              <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--gold);border-bottom:1px solid var(--border)">Best For</th>
+              <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--gold);border-bottom:1px solid var(--border)">Requires App?</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:0.35rem 0.6rem">Discord</td>
+              <td style="padding:0.35rem 0.6rem">Full skill set, power users, slash commands</td>
+              <td style="padding:0.35rem 0.6rem">Yes (Discord app)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.35rem 0.6rem">Slack</td>
+              <td style="padding:0.35rem 0.6rem">Family file sharing, daily digests, plain-language mode</td>
+              <td style="padding:0.35rem 0.6rem">Yes (Slack app)</td>
+            </tr>
+            <tr>
+              <td style="padding:0.35rem 0.6rem"><strong>Open WebUI</strong></td>
+              <td style="padding:0.35rem 0.6rem"><strong>Browser-based chat, no app needed, works on any device</strong></td>
+              <td style="padding:0.35rem 0.6rem"><strong>No &mdash; just a browser</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <div
         style="
           text-align: center;
@@ -5467,7 +5576,7 @@ Invoke-RestMethod `
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.17.0 (Wave 10 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.18.0 (Wave 12 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"

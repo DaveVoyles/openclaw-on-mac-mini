@@ -523,8 +523,46 @@
                 </div>
             </div>
 
-            <!-- Step 6: Folder scan / CLI -->
+            <!-- Step 6: Connect personal accounts -->
             <div class="step" data-step="6">
+                <h2>🔗 Optional — Connect your personal accounts</h2>
+                <p>
+                    You can connect <strong>your own</strong> Dropbox and Gmail so OpenClaw can read your files
+                    and emails privately. No one else can see your account — each person connects separately.
+                </p>
+
+                <div class="instruction-step">
+                    <div class="step-badge">1</div>
+                    <div class="instruction-step-body">
+                        <strong>Connect Dropbox (one click)</strong>
+                        <span>In Slack, type <code>/dropbox connect</code>. OpenClaw will send you a private link — just click it, sign in to Dropbox, and click Allow. Done!</span>
+                    </div>
+                </div>
+
+                <div class="instruction-step">
+                    <div class="step-badge">2</div>
+                    <div class="instruction-step-body">
+                        <strong>Browse your Dropbox from Slack</strong>
+                        <span>After connecting, type <code>/dropbox list</code> to see your files, or ask OpenClaw: "What's in my Dropbox?" — it can read, summarize, and analyze any file.</span>
+                    </div>
+                </div>
+
+                <div class="instruction-step">
+                    <div class="step-badge">3</div>
+                    <div class="instruction-step-body">
+                        <strong>Connect Gmail (optional — ask Dave for help)</strong>
+                        <span>Type <code>/email setup your@gmail.com YOUR_APP_PASSWORD</code> to connect your inbox. Then use <code>/inbox</code> to see unread emails and <code>/email 1</code> to summarize any of them.</span>
+                    </div>
+                </div>
+
+                <div class="tip-box">
+                    <strong>💡 This step is optional!</strong> OpenClaw works great without these connections.
+                    You can always set them up later — just type <code>/dropbox connect</code> or ask Dave to help with Gmail.
+                </div>
+            </div>
+
+            <!-- Step 7: Folder scan / CLI -->
+            <div class="step" data-step="7">
                 <h2>📁 Step 5 — Let OpenClaw review your whole folder</h2>
                 <p>
                     Want OpenClaw to look at a folder of files on <em>your own computer</em> — like a work project,
@@ -575,8 +613,8 @@
                 </div>
             </div>
 
-            <!-- Step 7: Completion -->
-            <div class="step" data-step="7">
+            <!-- Step 8: Completion -->
+            <div class="step" data-step="8">
                 <div class="completion-badge">
                     <div class="icon">🎉</div>
                     <h2>You're all set!</h2>
@@ -614,7 +652,7 @@
                     ← Previous
                 </button>
                 <div class="step-indicator" id="stepIndicator">
-                    Step 1 of 7
+                    Step 1 of 8
                 </div>
                 <button class="btn btn-primary" id="nextBtn" onclick="changeStep(1)">
                     Next →
@@ -625,7 +663,7 @@
 
     <script>
         let currentStep = 1;
-        const totalSteps = 7;
+        const totalSteps = 8;
 
         function updateStep() {
             document.querySelectorAll('.step').forEach(step => {
