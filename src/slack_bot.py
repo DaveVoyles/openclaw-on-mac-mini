@@ -53,6 +53,7 @@ from typing import Any
 import aiohttp
 
 from constants import ATTACHMENT_TEXT_MAX_CHARS
+from document_skills import create_word
 from http_session import SessionManager
 from llm import analyze_image as llm_analyze_image
 
@@ -433,9 +434,9 @@ _FILE_ACTION_PROMPTS: dict[str, str] = {
 }
 
 
-def _register_file(file_id: str, file_obj: dict) -> None:
-    """Store *file_obj* in the registry, pruning to 200 entries."""
-    _file_registry[file_id] = file_obj
+def _register_file(file_id: str, file_obj: dict, file_bytes: bytes | None = None) -> None:
+    """Store *file_obj* (and optionally raw bytes) in the registry, pruning to 200 entries."""
+    _file_registry[file_id] = {"file_obj": file_obj, "file_bytes": file_bytes}
     if len(_file_registry) > 200:
         oldest = next(iter(_file_registry))
         del _file_registry[oldest]
@@ -894,6 +895,19 @@ def create_slack_app():  # type: ignore[return]
         filename = file_obj.get("name", "file")
         mimetype = (file_obj.get("mimetype") or "")
 
+        # Download file bytes now for later use in corrected-doc upload
+        try:
+            url = file_obj.get("url_private_download") or file_obj.get("url_private")
+            if url:
+                session = await _slack_dl_sessions.get()
+                headers = {"Authorization": f"Bearer {SLACK_BOT_TOKEN}"}
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status == 200:
+                        file_bytes = await resp.read()
+                        _register_file(file_id, file_obj, file_bytes)
+        except Exception as exc:
+            log.debug("file_shared: could not pre-download bytes for %s: %s", file_id, exc)
+
         # Show a placeholder while we run the auto-brief
         try:
             placeholder = await client.chat_postMessage(
@@ -942,6 +956,37 @@ def create_slack_app():  # type: ignore[return]
     # Requires interactivity enabled in the manifest: make slack-manifest
     # ------------------------------------------------------------------
 
+    async def _return_corrected_doc(
+        file_obj: dict,
+        channel: str,
+        user_id: str,
+        corrected_text: str,
+        client: Any,
+    ) -> None:
+        """Upload a corrected .docx back to Slack. Skips non-.docx files gracefully."""
+        filename = file_obj.get("name", "document.docx")
+        if not filename.lower().endswith(".docx"):
+            try:
+                await client.chat_postMessage(
+                    channel=channel,
+                    text="ℹ️ Corrected document return is only supported for .docx files.",
+                )
+            except Exception:
+                pass
+            return
+
+        try:
+            corrected_filename = "corrected_" + filename
+            new_bytes = await create_word(title=corrected_filename, content=corrected_text)
+            await client.files_upload_v2(
+                channel=channel,
+                filename=corrected_filename,
+                content=new_bytes,
+                initial_comment="✅ Here's your corrected document!",
+            )
+        except Exception as exc:
+            log.warning("_return_corrected_doc: upload failed for %s: %s", filename, exc)
+
     async def _dispatch_file_action(
         action_id: str, ack: Any, body: dict[str, Any], client: Any, say: Any
     ) -> None:
@@ -966,6 +1011,13 @@ def create_slack_app():  # type: ignore[return]
             )
             return
 
+        # Registry now stores {"file_obj": ..., "file_bytes": ...}
+        if isinstance(file_obj, dict) and "file_obj" in file_obj:
+            file_bytes = file_obj.get("file_bytes")
+            file_obj = file_obj["file_obj"]
+        else:
+            file_bytes = None
+
         prompt_text = _FILE_ACTION_PROMPTS.get(action_id, "Please analyze this file.")
         prompt = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, prompt_text)
         use_simple = _get_user_simple(user_id)
@@ -983,6 +1035,23 @@ def create_slack_app():  # type: ignore[return]
             user_id=user_id,
             simple=use_simple,
         )
+
+        # For proofread on .docx: also return a corrected document file
+        if action_id == "file_proofread":
+            filename = (file_obj.get("name") or "").lower()
+            if filename.endswith(".docx"):
+                try:
+                    correction_prompt = await _process_slack_files(
+                        [file_obj],
+                        SLACK_BOT_TOKEN,
+                        "Return ONLY the fully corrected version of this document as plain text. "
+                        "Fix all spelling, grammar, and punctuation errors. "
+                        "Preserve the same paragraph structure.",
+                    )
+                    corrected_text = await _ask(correction_prompt, user_id=user_id, simple=False)
+                    await _return_corrected_doc(file_obj, channel, user_id, corrected_text, client)
+                except Exception as exc:
+                    log.warning("_dispatch_file_action: corrected doc failed for %s: %s", filename, exc)
 
     # Register one handler per action_id using closures
     for _action_id in list(_FILE_ACTION_PROMPTS.keys()):
