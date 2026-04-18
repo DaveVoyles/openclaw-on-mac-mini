@@ -48,6 +48,7 @@ import json
 import logging
 import os
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -258,6 +259,15 @@ _bot_message_registry: dict[tuple[str, str], str] = {}
 
 # Populated once after the Slack client performs auth.test
 _BOT_USER_ID: str = ""
+
+# ---------------------------------------------------------------------------
+# Observability — wave 4 tracking vars
+# ---------------------------------------------------------------------------
+_BOT_START_TIME: float = 0.0
+_model_last_success: dict[str, float] = {}
+_daily_query_count: int = 0
+_error_window: list[float] = []
+_last_alert_ts: float = 0.0
 
 # ---------------------------------------------------------------------------
 # Feature flag check
@@ -805,6 +815,42 @@ async def _auto_brief_file(file_obj: dict, token: str) -> str | None:
 
 
 
+async def _two_phase_research(file_obj: dict, token: str, base_prompt: str) -> str:
+    """Two-phase pipeline: Perplexity for web context + Gemini for doc integration.
+
+    Falls back to single-phase if Perplexity routing is unavailable.
+    """
+    # Phase 1: get web research via Perplexity
+    doc_content = await _process_slack_files(
+        [file_obj],
+        token,
+        "Extract the main topics, entities, and key claims from this document in a brief list.",
+    )
+    research_prompt = f"Research current information about these topics from a document: {doc_content[:500]}"
+    try:
+        research_result = await _ask(
+            research_prompt, user_id="system", simple=False, model_pref="perplexity-direct"
+        )
+    except Exception as exc:
+        log.warning("_two_phase_research: Perplexity phase failed, falling back: %s", exc)
+        research_result = ""
+
+    # Phase 2: Gemini synthesizes doc + research
+    if research_result:
+        combined_prompt = (
+            f"{base_prompt}\n\n"
+            f"--- Document ---\n{doc_content}\n--- End Document ---\n\n"
+            f"--- Current Research ---\n{research_result}\n--- End Research ---\n\n"
+            "Please provide an analysis that incorporates both the document content and the current research above."
+        )
+    else:
+        combined_prompt = await _process_slack_files([file_obj], token, base_prompt)
+
+    return combined_prompt
+
+
+
+
 async def _ask(
     prompt: str,
     user_id: str,
@@ -849,11 +895,16 @@ async def _send_answer(
     simple: bool = False,
 ) -> None:
     """Ask OpenClaw, update the thinking placeholder, and register the reply for feedback."""
+    t0 = time.monotonic()
     try:
         answer = await _ask(prompt, user_id, model_pref=model_pref, history=history, simple=simple)
         text = _clean_for_slack(answer) if answer else "(no response)"
+        _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
+                           duration_ms=int((time.monotonic() - t0) * 1000), status="ok")
     except Exception as exc:
         text = f"❌ Sorry, something went wrong: {exc}"
+        _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
+                           duration_ms=int((time.monotonic() - t0) * 1000), status="error")
 
     sent_ts: str | None = None
 
@@ -878,6 +929,268 @@ async def _send_answer(
 # ---------------------------------------------------------------------------
 # Slack app factory
 # ---------------------------------------------------------------------------
+
+async def _handle_batch_file(event: dict, client: Any, say: Any) -> None:
+    """Group simultaneous file_shared events and process as a batch when multiple arrive.
+
+    Uses a 0.5-second grouping window. If multiple files land with the same
+    channel_id + event_ts key, they are processed sequentially with progress
+    updates in thread. Single-file uploads are processed via the normal path
+    (auto-brief + Block Kit buttons) with no behaviour change.
+    """
+    global _batch_lock
+    if _batch_lock is None:
+        _batch_lock = asyncio.Lock()
+
+    channel: str = event.get("channel_id", "")
+    # Use event_ts as the grouping key; fall back to ts when absent
+    group_ts: str = event.get("event_ts") or event.get("ts", "")
+    batch_key = f"{channel}:{group_ts}"
+
+    async with _batch_lock:
+        if batch_key not in _pending_batch:
+            _pending_batch[batch_key] = []
+        _pending_batch[batch_key].append(event)
+        is_first = len(_pending_batch[batch_key]) == 1
+
+    if not is_first:
+        # Another coroutine is already managing this batch window; nothing to do.
+        return
+
+    # Wait briefly for any additional file_shared events that belong to the same message
+    await asyncio.sleep(0.5)
+
+    async with _batch_lock:
+        batch_events = _pending_batch.pop(batch_key, [])
+
+    if len(batch_events) <= 1:
+        # Single file — delegate to the normal inline handling below
+        await _process_single_file_shared(event, client, say)
+        return
+
+    # Batch path: multiple files in one message
+    n = len(batch_events)
+    try:
+        header_resp = await client.chat_postMessage(
+            channel=channel,
+            text=f"📦 Processing {n} files…",
+        )
+        thread_ts = (header_resp or {}).get("ts", "")
+    except Exception as exc:
+        log.warning("_handle_batch_file: could not post batch header: %s", exc)
+        thread_ts = ""
+
+    for i, file_event in enumerate(batch_events, start=1):
+        fid: str = file_event.get("file_id", "")
+        try:
+            file_info_resp = await client.files_info(file=fid)
+            file_obj: dict = (file_info_resp or {}).get("file", {})
+        except Exception as exc:
+            log.warning("_handle_batch_file: files_info failed for %s: %s", fid, exc)
+            continue
+
+        if not file_obj:
+            continue
+
+        _register_file(fid, file_obj)
+        filename = file_obj.get("name", f"file_{i}")
+        mimetype = file_obj.get("mimetype") or ""
+
+        # Per-file progress indicator
+        if thread_ts:
+            try:
+                await client.chat_postMessage(
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    text=f"⏳ {i}/{n}: processing *{filename}*…",
+                )
+            except Exception as exc:
+                log.warning("_handle_batch_file: progress post failed for %s: %s", filename, exc)
+
+        description = await _auto_brief_file(file_obj, SLACK_BOT_TOKEN)
+        blocks = _build_file_blocks(filename, description, mimetype, fid)
+        fallback_text = (
+            f"📎 *{filename}*"
+            + (f"\n_{description}_" if description else "")
+            + "\n\nWhat would you like to do?"
+        )
+        try:
+            await client.chat_postMessage(
+                channel=channel,
+                thread_ts=thread_ts or None,
+                text=fallback_text,
+                blocks=blocks,
+            )
+        except Exception as exc:
+            log.warning("_handle_batch_file: Block Kit post failed for %s: %s", filename, exc)
+
+    if thread_ts:
+        try:
+            await client.chat_postMessage(
+                channel=channel,
+                thread_ts=thread_ts,
+                text=f"✅ All {n} files ready!",
+            )
+        except Exception as exc:
+            log.warning("_handle_batch_file: summary post failed: %s", exc)
+
+
+async def _process_single_file_shared(event: dict, client: Any, say: Any) -> None:
+    """Handle a single file_shared event: auto-brief + Block Kit action buttons."""
+    file_id: str = event.get("file_id", "")
+    channel: str = event.get("channel_id", "")
+
+    if not file_id or not channel:
+        return
+
+    try:
+        file_info_resp = await client.files_info(file=file_id)
+        file_obj: dict = (file_info_resp or {}).get("file", {})
+    except Exception as exc:
+        log.warning("file_shared: failed to fetch info for file %s: %s", file_id, exc)
+        return
+
+    if not file_obj:
+        return
+
+    _register_file(file_id, file_obj)
+    filename = file_obj.get("name", "file")
+    mimetype = (file_obj.get("mimetype") or "")
+
+    # Download file bytes now for later use in corrected-doc upload
+    try:
+        url = file_obj.get("url_private_download") or file_obj.get("url_private")
+        if url:
+            session = await _slack_dl_sessions.get()
+            headers = {"Authorization": f"Bearer {SLACK_BOT_TOKEN}"}
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    file_bytes = await resp.read()
+                    _register_file(file_id, file_obj, file_bytes)
+    except Exception as exc:
+        log.debug("file_shared: could not pre-download bytes for %s: %s", file_id, exc)
+
+    # Show a placeholder while we run the auto-brief
+    try:
+        placeholder = await client.chat_postMessage(
+            channel=channel, text=f"📎 *{filename}* — reading…"
+        )
+        placeholder_ts = (placeholder or {}).get("ts")
+    except Exception:
+        placeholder_ts = None
+
+    # Auto-brief: 1-sentence description of the file (graceful fallback on error)
+    description = await _auto_brief_file(file_obj, SLACK_BOT_TOKEN)
+
+    blocks = _build_file_blocks(filename, description, mimetype, file_id)
+    fallback_text = (
+        f"📎 *{filename}*"
+        + (f"\n_{description}_" if description else "")
+        + "\n\nWhat would you like to do?"
+    )
+
+    try:
+        if placeholder_ts:
+            await client.chat_update(
+                channel=channel, ts=placeholder_ts, text=fallback_text, blocks=blocks
+            )
+        else:
+            await client.chat_postMessage(channel=channel, text=fallback_text, blocks=blocks)
+    except Exception as exc:
+        # Block Kit may fail if interactivity is not yet enabled in the manifest.
+        log.warning("file_shared: Block Kit failed for %s (%s); using plain text", filename, exc)
+        plain = _suggest_actions_for_file(filename, mimetype)
+        if description:
+            plain = f"_{description}_\n\n{plain}"
+        try:
+            if placeholder_ts:
+                await client.chat_update(channel=channel, ts=placeholder_ts, text=plain)
+            else:
+                await client.chat_postMessage(channel=channel, text=plain)
+        except Exception as exc2:
+            log.warning("file_shared: plain fallback also failed for %s: %s", filename, exc2)
+
+
+def _log_query_metrics(
+    user_id: str,
+    action: str,
+    model_used: str,
+    duration_ms: int,
+    status: str,  # "ok" or "error"
+) -> None:
+    """Append one JSON line to logs/slack_metrics.jsonl. No PII stored."""
+    import hashlib
+
+    metrics_path = Path(os.environ.get("SLACK_METRICS_PATH", "logs/slack_metrics.jsonl"))
+    try:
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "ts": time.time(),
+            "user_hash": hashlib.sha256(user_id.encode()).hexdigest()[:12],
+            "action": action,
+            "model": model_used,
+            "duration_ms": duration_ms,
+            "status": status,
+        }
+        with metrics_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+    except Exception as exc:
+        log.debug("_log_query_metrics: failed to write: %s", exc)
+
+
+def _read_metrics_summary(path: Path | str) -> dict:
+    """Read last 7 days from a metrics JSONL file and return a summary dict.
+
+    Returns an empty dict (with ``no_data=True``) if the file doesn't exist or
+    has no qualifying records.
+    """
+    path = Path(path)
+    if not path.exists():
+        return {"no_data": True}
+
+    cutoff = time.time() - 7 * 24 * 3600
+    total = 0
+    errors = 0
+    total_duration = 0
+    action_counts: dict[str, int] = {}
+    user_counts: dict[str, int] = {}
+
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("ts", 0) < cutoff:
+                continue
+            total += 1
+            if rec.get("status") == "error":
+                errors += 1
+            total_duration += rec.get("duration_ms", 0)
+            action = rec.get("action", "unknown")
+            action_counts[action] = action_counts.get(action, 0) + 1
+            user_hash = rec.get("user_hash", "")
+            if user_hash:
+                user_counts[user_hash] = user_counts.get(user_hash, 0) + 1
+
+    if total == 0:
+        return {"no_data": True}
+
+    top_actions = sorted(action_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_users = sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    return {
+        "no_data": False,
+        "total": total,
+        "errors": errors,
+        "avg_duration_ms": total_duration // total,
+        "top_actions": top_actions,
+        "top_users": [u for u, _ in top_users],
+    }
+
 
 def create_slack_app():  # type: ignore[return]
     """Build and return a configured AsyncApp, or None if Slack is disabled."""
@@ -1195,79 +1508,7 @@ def create_slack_app():  # type: ignore[return]
 
     @app.event("file_shared")
     async def handle_file_shared(event: dict[str, Any], client: Any, say: Any) -> None:
-        file_id: str = event.get("file_id", "")
-        channel: str = event.get("channel_id", "")
-
-        if not file_id or not channel:
-            return
-
-        try:
-            file_info_resp = await client.files_info(file=file_id)
-            file_obj: dict = (file_info_resp or {}).get("file", {})
-        except Exception as exc:
-            log.warning("file_shared: failed to fetch info for file %s: %s", file_id, exc)
-            return
-
-        if not file_obj:
-            return
-
-        _register_file(file_id, file_obj)
-        filename = file_obj.get("name", "file")
-        mimetype = (file_obj.get("mimetype") or "")
-
-        # Download file bytes now for later use in corrected-doc upload
-        try:
-            url = file_obj.get("url_private_download") or file_obj.get("url_private")
-            if url:
-                session = await _slack_dl_sessions.get()
-                headers = {"Authorization": f"Bearer {SLACK_BOT_TOKEN}"}
-                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-                    if resp.status == 200:
-                        file_bytes = await resp.read()
-                        _register_file(file_id, file_obj, file_bytes)
-        except Exception as exc:
-            log.debug("file_shared: could not pre-download bytes for %s: %s", file_id, exc)
-
-        # Show a placeholder while we run the auto-brief
-        try:
-            placeholder = await client.chat_postMessage(
-                channel=channel, text=f"📎 *{filename}* — reading…"
-            )
-            placeholder_ts = (placeholder or {}).get("ts")
-        except Exception:
-            placeholder_ts = None
-
-        # Auto-brief: 1-sentence description of the file (graceful fallback on error)
-        description = await _auto_brief_file(file_obj, SLACK_BOT_TOKEN)
-
-        blocks = _build_file_blocks(filename, description, mimetype, file_id)
-        fallback_text = (
-            f"📎 *{filename}*"
-            + (f"\n_{description}_" if description else "")
-            + "\n\nWhat would you like to do?"
-        )
-
-        try:
-            if placeholder_ts:
-                await client.chat_update(
-                    channel=channel, ts=placeholder_ts, text=fallback_text, blocks=blocks
-                )
-            else:
-                await client.chat_postMessage(channel=channel, text=fallback_text, blocks=blocks)
-        except Exception as exc:
-            # Block Kit may fail if interactivity is not yet enabled in the manifest.
-            # Fall back to plain text suggestion.
-            log.warning("file_shared: Block Kit failed for %s (%s); using plain text", filename, exc)
-            plain = _suggest_actions_for_file(filename, mimetype)
-            if description:
-                plain = f"_{description}_\n\n{plain}"
-            try:
-                if placeholder_ts:
-                    await client.chat_update(channel=channel, ts=placeholder_ts, text=plain)
-                else:
-                    await client.chat_postMessage(channel=channel, text=plain)
-            except Exception as exc2:
-                log.warning("file_shared: plain fallback also failed for %s: %s", filename, exc2)
+        await _handle_batch_file(event, client, say)
 
     # ------------------------------------------------------------------
     # Handlers: Block Kit file action buttons
@@ -1338,7 +1579,9 @@ def create_slack_app():  # type: ignore[return]
         prompt_text = _FILE_ACTION_PROMPTS.get(action_id, "Please analyze this file.")
 
         # Handle files referenced from /ai-files directly (no Slack download needed)
-        if file_obj.get("ai_files_path"):
+        if action_id == "file_research":
+            prompt = await _two_phase_research(file_obj, SLACK_BOT_TOKEN, prompt_text)
+        elif file_obj.get("ai_files_path"):
             file_content = await file_skills.read_local_file(file_obj["ai_files_path"])
             prompt = f"{prompt_text}\n\n--- File: {file_obj['name']} ---\n{file_content}\n--- End ---"
         else:
@@ -1348,7 +1591,10 @@ def create_slack_app():  # type: ignore[return]
 
         # Smart model routing based on file type + action
         filename_for_routing = file_obj.get("name", "")
-        model_pref = _route_model_for_file(filename_for_routing, action_id)
+        if action_id == "file_research":
+            model_pref = "gemini"
+        else:
+            model_pref = _route_model_for_file(filename_for_routing, action_id)
 
         thinking_resp = await say(text="⏳ Thinking…")
         thinking_ts = (thinking_resp or {}).get("ts")
