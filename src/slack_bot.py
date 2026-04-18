@@ -446,6 +446,20 @@ _DIGEST_LOOKBACK_HOURS: int = int(os.getenv("DIGEST_LOOKBACK_HOURS", "24"))  # s
 _DATA_DIR = Path(__file__).parent.parent / "data"
 _TEMPLATES_DIR = _DATA_DIR / "templates"
 
+# --- Wave 10: Dropbox sync ---
+_DROPBOX_TOKEN: str | None = os.getenv("DROPBOX_APP_TOKEN")
+_DROPBOX_FOLDER: str = os.getenv("DROPBOX_WATCH_FOLDER", "/Family AI")
+_DROPBOX_NOTIFY_CHANNEL: str | None = os.getenv("DROPBOX_NOTIFY_CHANNEL")
+_DROPBOX_CACHE_DIR: Path = _DATA_DIR / "dropbox_cache"
+_DROPBOX_CURSOR_PATH: Path = _DATA_DIR / "dropbox_cursor.json"
+_DROPBOX_VIRTUAL_USER: str = "dropbox_sync"
+
+# --- Wave 10 Yoda: Google Calendar OAuth ---
+_GOOGLE_CLIENT_ID: str | None = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+_GOOGLE_CLIENT_SECRET: str | None = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+_GOOGLE_REFRESH_TOKEN: str | None = os.getenv("GOOGLE_OAUTH_REFRESH_TOKEN")
+_google_token_cache: dict[str, Any] = {}  # {access_token, expires_at}
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -2116,6 +2130,288 @@ async def _post_clarification_prompt(client: Any, channel: str, user_id: str) ->
         log.warning("_post_clarification_prompt failed: %s", exc)
 
 
+# ---------------------------------------------------------------------------
+# Wave 10: Dropbox helpers
+# ---------------------------------------------------------------------------
+
+def _get_dropbox_client():
+    """Return a Dropbox client if token is configured, else None."""
+    if not _DROPBOX_TOKEN:
+        return None
+    try:
+        import dropbox  # noqa: PLC0415
+        return dropbox.Dropbox(_DROPBOX_TOKEN)
+    except ImportError:
+        return None
+
+
+def _dropbox_list_folder(path: str) -> list[dict]:
+    """List files in a Dropbox folder. Returns [] if not configured."""
+    dbx = _get_dropbox_client()
+    if dbx is None:
+        return []
+    try:
+        result = dbx.files_list_folder(path)
+        files = []
+        for entry in result.entries:
+            if hasattr(entry, "server_modified"):
+                files.append({
+                    "name": entry.name,
+                    "size": getattr(entry, "size", 0),
+                    "modified": entry.server_modified.strftime("%Y-%m-%d %H:%M"),
+                    "id": entry.id,
+                    "path": entry.path_lower,
+                })
+        return sorted(files, key=lambda f: f["modified"], reverse=True)
+    except Exception:  # noqa: BLE001
+        return []
+
+
+async def _dropbox_sync_new_files(slack_client: Any) -> int:
+    """Poll Dropbox for new files and sync them. Returns count of new files."""
+    from datetime import datetime
+    dbx = _get_dropbox_client()
+    if dbx is None:
+        return 0
+
+    # Load cursor
+    cursor: str | None = None
+    if _DROPBOX_CURSOR_PATH.exists():
+        try:
+            cursor = json.loads(_DROPBOX_CURSOR_PATH.read_text()).get("cursor")
+        except Exception:  # noqa: BLE001
+            cursor = None
+
+    try:
+        if cursor:
+            result = dbx.files_list_folder_continue(cursor)
+        else:
+            result = dbx.files_list_folder(_DROPBOX_FOLDER)
+    except Exception:  # noqa: BLE001
+        return 0
+
+    new_count = 0
+    _DROPBOX_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    for entry in result.entries:
+        if not hasattr(entry, "server_modified"):
+            continue  # skip folders/deletes
+        ext = Path(entry.name).suffix.lower()
+        if ext not in {".docx", ".pdf", ".xlsx", ".txt", ".doc", ".csv"}:
+            continue
+        try:
+            local_path = _DROPBOX_CACHE_DIR / entry.name
+            dbx.files_download_to_file(str(local_path), entry.path_lower)
+            if _DROPBOX_VIRTUAL_USER not in _file_history:
+                _file_history[_DROPBOX_VIRTUAL_USER] = []
+            _file_history[_DROPBOX_VIRTUAL_USER].append({
+                "name": entry.name,
+                "uploaded_at": datetime.now().isoformat(),
+                "auto_brief": None,
+                "source": "dropbox",
+            })
+            _save_file_history()
+            new_count += 1
+            if slack_client and _DROPBOX_NOTIFY_CHANNEL:
+                await slack_client.chat_postMessage(
+                    channel=_DROPBOX_NOTIFY_CHANNEL,
+                    text=f"📦 New file from Dropbox: *{entry.name}* — ready to analyze!",
+                )
+        except Exception:  # noqa: BLE001
+            continue
+
+    try:
+        _DROPBOX_CURSOR_PATH.write_text(json.dumps({"cursor": result.cursor}))
+    except Exception:  # noqa: BLE001
+        pass
+
+    return new_count
+
+
+# ---------------------------------------------------------------------------
+# Wave 10 Yoda: Google Calendar helpers
+# ---------------------------------------------------------------------------
+
+async def _get_google_access_token() -> str | None:
+    """Exchange refresh token for a short-lived access token. Cached for 55 min."""
+    import time
+    import urllib.parse
+    import urllib.request
+
+    if not (_GOOGLE_CLIENT_ID and _GOOGLE_CLIENT_SECRET and _GOOGLE_REFRESH_TOKEN):
+        return None
+    now = time.time()
+    if _google_token_cache.get("expires_at", 0) > now + 60:
+        return _google_token_cache["access_token"]
+    try:
+        data = urllib.parse.urlencode({
+            "client_id": _GOOGLE_CLIENT_ID,
+            "client_secret": _GOOGLE_CLIENT_SECRET,
+            "refresh_token": _GOOGLE_REFRESH_TOKEN,
+            "grant_type": "refresh_token",
+        }).encode()
+        req = urllib.request.Request(
+            "https://oauth2.googleapis.com/token",
+            data=data,
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read())
+        _google_token_cache["access_token"] = result["access_token"]
+        _google_token_cache["expires_at"] = now + result.get("expires_in", 3600)
+        return result["access_token"]
+    except Exception:  # noqa: BLE001
+        return None
+
+
+async def _get_calendar_events(days_ahead: int = 0) -> list[dict]:
+    """Fetch Google Calendar events for today or the next N days."""
+    import urllib.parse
+    import urllib.request
+
+    token = await _get_google_access_token()
+    if token is None:
+        return []
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        time_min = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        time_max = now.replace(hour=23, minute=59, second=59) + timedelta(days=days_ahead)
+        params = urllib.parse.urlencode({
+            "calendarId": "primary",
+            "timeMin": time_min.isoformat(),
+            "timeMax": time_max.isoformat(),
+            "singleEvents": "true",
+            "orderBy": "startTime",
+            "maxResults": 20,
+        })
+        req = urllib.request.Request(
+            f"https://www.googleapis.com/calendar/v3/calendars/primary/events?{params}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        events = []
+        for item in data.get("items", []):
+            start = item.get("start", {})
+            end = item.get("end", {})
+            events.append({
+                "summary": item.get("summary", "(no title)"),
+                "start": start.get("dateTime", start.get("date", "")),
+                "end": end.get("dateTime", end.get("date", "")),
+                "location": item.get("location", ""),
+            })
+        return events
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _format_calendar_events(events: list[dict], label: str = "today") -> str:
+    """Format calendar events as plain text."""
+    from datetime import datetime
+    if not events:
+        return f"📅 Nothing on the calendar {label}."
+    lines = [f"📅 *Your schedule for {label}:*"]
+    for ev in events:
+        start_str = ev["start"]
+        try:
+            dt = datetime.fromisoformat(start_str)
+            time_part = dt.strftime("%-I:%M %p")
+        except (ValueError, TypeError):
+            time_part = start_str
+        loc = f"  ·  📍 {ev['location']}" if ev.get("location") else ""
+        lines.append(f"• {time_part} — {ev['summary']}{loc}")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Wave 10 Leia: Gmail helpers
+# ---------------------------------------------------------------------------
+
+_gmail_message_cache: list[dict] = []  # stores last /inbox result per session
+
+
+async def _get_gmail_unread(max_results: int = 5) -> list[dict]:
+    """Fetch last N unread emails from Gmail inbox (metadata only, no body)."""
+    token = await _get_google_access_token()
+    if token is None:
+        return []
+    try:
+        import urllib.parse  # noqa: PLC0415
+        import urllib.request  # noqa: PLC0415
+
+        params = urllib.parse.urlencode({
+            "labelIds": "INBOX,UNREAD",
+            "maxResults": max_results,
+        })
+        req = urllib.request.Request(
+            f"https://gmail.googleapis.com/gmail/v1/users/me/messages?{params}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+        messages = data.get("messages", [])
+        results = []
+        for msg in messages:
+            msg_id = msg["id"]
+            meta_params = urllib.parse.urlencode({
+                "format": "metadata",
+                "metadataHeaders": ["Subject", "From", "Date"],
+            })
+            meta_req = urllib.request.Request(
+                f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{msg_id}?{meta_params}",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            with urllib.request.urlopen(meta_req, timeout=10) as resp:
+                meta = json.loads(resp.read())
+            headers = {h["name"]: h["value"] for h in meta.get("payload", {}).get("headers", [])}
+            results.append({
+                "id": msg_id,
+                "subject": headers.get("Subject", "(no subject)"),
+                "from": headers.get("From", "Unknown"),
+                "date": headers.get("Date", ""),
+            })
+        return results
+    except Exception:  # noqa: BLE001
+        return []
+
+
+async def _get_gmail_body(message_id: str) -> str:
+    """Fetch full email body text, truncated at 4000 chars."""
+    token = await _get_google_access_token()
+    if token is None:
+        return "(Gmail not configured)"
+    try:
+        import base64  # noqa: PLC0415
+        import urllib.request  # noqa: PLC0415
+
+        req = urllib.request.Request(
+            f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}?format=full",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+
+        def _extract_text(payload: dict) -> str:
+            if payload.get("mimeType") == "text/plain":
+                encoded = payload.get("body", {}).get("data", "")
+                if encoded:
+                    return base64.urlsafe_b64decode(encoded + "==").decode("utf-8", errors="replace")
+            for part in payload.get("parts", []):
+                text = _extract_text(part)
+                if text:
+                    return text
+            return ""
+
+        body = _extract_text(data.get("payload", {}))
+        if not body:
+            body = "(empty email)"
+        return body[:4000]
+    except Exception:  # noqa: BLE001
+        return "(Could not load email body)"
+
+
 def create_slack_app():  # type: ignore[return]
     """Build and return a configured AsyncApp, or None if Slack is disabled."""
     if not _slack_is_configured():
@@ -3506,6 +3802,178 @@ def create_slack_app():  # type: ignore[return]
             text=f"✅ Got it! I'll call you *{name}* from now on. 👋",
         )
 
+    # ------------------------------------------------------------------
+    # /email — Gmail inbox check and search
+    # ------------------------------------------------------------------
+
+    @app.command("/email")
+    async def handle_slash_email(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", "")
+        text: str = (body.get("text") or "").strip()
+        name: str = _get_user_name(user_id)
+
+        try:
+            from email_skills import read_inbox, search_emails
+        except ImportError:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="❌ Email skills module not found.",
+            )
+            return
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=f"📬 Checking email for {name}…",
+        )
+
+        if not text or text.lower() == "today":
+            result = await read_inbox(count=10)
+        elif text.lower() == "week":
+            result = await read_inbox(count=25)
+        else:
+            result = await search_emails(text)
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=result,
+        )
+
+    # ------------------------------------------------------------------
+    # /today — Show today's Google Calendar events (Wave 10 Yoda)
+    # ------------------------------------------------------------------
+
+    @app.command("/today")
+    async def handle_slash_today(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        if not _GOOGLE_REFRESH_TOKEN:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="📅 Google Calendar is not connected. Ask Dave to run `scripts/google_oauth_setup.py`.",
+            )
+            return
+        events = await _get_calendar_events(days_ahead=0)
+        msg = _format_calendar_events(events, label="today")
+        await client.chat_postEphemeral(channel=channel_id, user=user_id, text=msg)
+
+    # ------------------------------------------------------------------
+    # /calendar — Google Calendar events and event creation
+    # ------------------------------------------------------------------
+
+    @app.command("/calendar")
+    async def handle_slash_calendar(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", "")
+        text: str = (body.get("text") or "").strip().lower()
+        name: str = _get_user_name(user_id)
+
+        try:
+            from calendar_skills import get_todays_events, get_upcoming_events
+        except ImportError:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="❌ Calendar skills module not found.",
+            )
+            return
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=f"📅 Fetching calendar for {name}…",
+        )
+
+        if not text or text == "today":
+            result = await get_todays_events()
+        elif text == "week":
+            result = await get_upcoming_events(days=7)
+        else:
+            result = await get_upcoming_events(days=7)
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=result,
+        )
+
+    # ------------------------------------------------------------------
+    # /dropbox — Browse and sync Dropbox folder
+    # ------------------------------------------------------------------
+
+    @app.command("/dropbox")
+    async def handle_slash_dropbox(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        text = (body.get("text") or "").strip().lower()
+
+        if _DROPBOX_TOKEN is None:
+            await client.chat_postEphemeral(
+                channel=body.get("channel_id", user_id),
+                user=user_id,
+                text="☁️ Dropbox is not configured. Ask Dave to set up the DROPBOX_APP_TOKEN.",
+            )
+            return
+
+        if text in ("sync", ""):
+            count = await _dropbox_sync_new_files(client)
+            await client.chat_postEphemeral(
+                channel=body.get("channel_id", user_id),
+                user=user_id,
+                text=f"☁️ Dropbox sync complete — {count} new file(s) pulled.",
+            )
+        elif text == "list":
+            files = _dropbox_list_folder(_DROPBOX_FOLDER)[:10]
+            if not files:
+                msg = f"☁️ No files found in Dropbox folder `{_DROPBOX_FOLDER}`."
+            else:
+                lines = [f"☁️ *Dropbox — {_DROPBOX_FOLDER}* (last {len(files)} files)"]
+                for f in files:
+                    lines.append(f"• 📄 {f['name']}  ·  {f['modified']}")
+                msg = "\n".join(lines)
+            await client.chat_postEphemeral(
+                channel=body.get("channel_id", user_id),
+                user=user_id,
+                text=msg,
+            )
+        elif text == "status":
+            folder_files = _dropbox_list_folder(_DROPBOX_FOLDER)
+            await client.chat_postEphemeral(
+                channel=body.get("channel_id", user_id),
+                user=user_id,
+                text=f"✅ Dropbox connected. Watching `{_DROPBOX_FOLDER}` — {len(folder_files)} file(s) found.",
+            )
+        else:
+            await client.chat_postEphemeral(
+                channel=body.get("channel_id", user_id),
+                user=user_id,
+                text="Usage: `/dropbox list` · `/dropbox sync` · `/dropbox status`",
+            )
+
+    # ------------------------------------------------------------------
+    # Background: Dropbox poll loop (Wave 10)
+    # ------------------------------------------------------------------
+
+    async def _dropbox_poll_loop() -> None:
+        """Poll Dropbox every 30 minutes for new files."""
+        if _DROPBOX_TOKEN is None:
+            return
+        while True:
+            await asyncio.sleep(1800)  # 30 minutes
+            try:
+                await _dropbox_sync_new_files(app.client)
+            except Exception:  # noqa: BLE001
+                pass
+
+    asyncio.ensure_future(_dropbox_poll_loop())
+
     return app
 
 
@@ -3549,6 +4017,15 @@ async def create_slack_handler():  # type: ignore[return]
     # Start digest background loop
     asyncio.create_task(_digest_loop(app.client))
     log.info("Digest loop started")
+
+    # Start Dropbox watch loop (no-op when DROPBOX_ACCESS_TOKEN not set)
+    try:
+        from dropbox_sync import DROPBOX_CONFIGURED, dropbox_watch_loop
+        if DROPBOX_CONFIGURED and SLACK_NOTIFY_USER_ID:
+            asyncio.create_task(dropbox_watch_loop(app.client, SLACK_NOTIFY_USER_ID))
+            log.info("Dropbox watch loop started")
+    except ImportError:
+        pass
 
     return handler
 
