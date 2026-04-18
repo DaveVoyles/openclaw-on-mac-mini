@@ -277,9 +277,164 @@ SLACK_ENABLED = os.getenv("SLACK_ENABLED", "false").lower() == "true"
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN", "")
 SLACK_APP_TOKEN = os.getenv("SLACK_APP_TOKEN", "")
 
+# Wave 4: upload endpoint + proactive alerts
+OPENCLAW_UPLOAD_KEY = os.getenv("OPENCLAW_UPLOAD_KEY", "")
+OPENCLAW_UPLOAD_PORT = int(os.getenv("OPENCLAW_UPLOAD_PORT", "8080"))
+SLACK_NOTIFY_USER_ID = os.getenv("SLACK_NOTIFY_USER_ID", "")
+_AI_FILES_DIR = Path(os.getenv("AI_FILES_DIR", "/ai-files"))
+_KNOWN_FILES_PATH = Path(__file__).parent.parent / "data" / "known_files.json"
+_LAST_SYNC_PATH = Path(__file__).parent.parent / "data" / "last_sync.json"
+_FILE_POLL_INTERVAL = int(os.getenv("OPENCLAW_FILE_POLL_INTERVAL", "60"))
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Wave 4: /upload HTTP endpoint helpers
+# ---------------------------------------------------------------------------
+
+_ALLOWED_UPLOAD_EXTENSIONS = {".docx", ".xlsx", ".pdf", ".txt", ".csv"}
+
+
+async def _handle_upload(request: "aiohttp.web.Request") -> "aiohttp.web.Response":
+    """Handle POST /upload — accept a file and write it to /ai-files/."""
+    from aiohttp import web
+
+    # Authenticate via shared secret header
+    provided_key = request.headers.get("X-OpenClaw-Key", "")
+    if OPENCLAW_UPLOAD_KEY and provided_key != OPENCLAW_UPLOAD_KEY:
+        return web.json_response({"error": "Unauthorized"}, status=401)
+
+    try:
+        reader = await request.multipart()
+    except Exception:
+        return web.json_response({"error": "Expected multipart/form-data"}, status=400)
+
+    field = await reader.next()
+    if field is None or field.name != "file":
+        return web.json_response({"error": "Missing 'file' field"}, status=400)
+
+    filename = field.filename or "upload"
+    ext = Path(filename).suffix.lower()
+    if ext not in _ALLOWED_UPLOAD_EXTENSIONS:
+        return web.json_response(
+            {"error": f"Extension '{ext}' not allowed. Supported: {sorted(_ALLOWED_UPLOAD_EXTENSIONS)}"},
+            status=415,
+        )
+
+    _AI_FILES_DIR.mkdir(parents=True, exist_ok=True)
+    dest = _AI_FILES_DIR / Path(filename).name
+    data = await field.read(decode=True)
+    dest.write_bytes(data)
+    log.info("Upload: wrote %d bytes to %s", len(data), dest)
+
+    return web.json_response({"status": "ok", "filename": dest.name, "size": len(data)})
+
+
+async def _run_upload_server() -> None:
+    """Start the aiohttp upload HTTP server on OPENCLAW_UPLOAD_PORT."""
+    try:
+        from aiohttp import web
+    except ImportError:
+        log.warning("aiohttp not available — upload server not started")
+        return
+
+    upload_app = web.Application()
+    upload_app.router.add_post("/upload", _handle_upload)
+    upload_app.router.add_get("/health", lambda _req: web.json_response({"status": "ok"}))
+
+    runner = web.AppRunner(upload_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", OPENCLAW_UPLOAD_PORT)
+    await site.start()
+    log.info("Upload server listening on port %d", OPENCLAW_UPLOAD_PORT)
+
+
+# ---------------------------------------------------------------------------
+# Wave 4: Proactive file-alert helpers
+# ---------------------------------------------------------------------------
+
+def _load_known_files() -> set[str]:
+    """Load the set of known filenames from disk."""
+    try:
+        if _KNOWN_FILES_PATH.exists():
+            data = json.loads(_KNOWN_FILES_PATH.read_text(encoding="utf-8"))
+            return set(data.get("files", []))
+    except Exception as exc:
+        log.warning("Could not load known_files.json: %s", exc)
+    return set()
+
+
+def _save_known_files(known: set[str]) -> None:
+    try:
+        _KNOWN_FILES_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _KNOWN_FILES_PATH.write_text(
+            json.dumps({"files": sorted(known)}, indent=2), encoding="utf-8"
+        )
+    except Exception as exc:
+        log.warning("Could not save known_files.json: %s", exc)
+
+
+async def _file_alert_loop(client: Any) -> None:
+    """Background task: poll /ai-files for new files and DM the notify user."""
+    if not SLACK_NOTIFY_USER_ID:
+        log.info("SLACK_NOTIFY_USER_ID not set — proactive file alerts disabled")
+        return
+
+    known = _load_known_files()
+
+    while True:
+        await asyncio.sleep(_FILE_POLL_INTERVAL)
+        try:
+            if not _AI_FILES_DIR.exists():
+                continue
+
+            current = {
+                f.name
+                for f in _AI_FILES_DIR.iterdir()
+                if f.is_file() and f.suffix.lower() in _ALLOWED_UPLOAD_EXTENSIONS
+            }
+            new_files = current - known
+            if new_files:
+                for fname in sorted(new_files):
+                    await _send_file_alert(client, fname)
+                known = current
+                _save_known_files(known)
+        except Exception as exc:
+            log.warning("file_alert_loop: error during poll: %s", exc)
+
+
+async def _send_file_alert(client: Any, filename: str) -> None:
+    """DM the notify user about a newly detected file with Block Kit action buttons."""
+    mimetype = _mimetype_for(filename)
+    synthetic_id = f"aifiles::{filename}"
+    synthetic_obj = {
+        "id": synthetic_id,
+        "name": filename,
+        "mimetype": mimetype,
+        "size": 0,
+        "url_private": None,
+        "ai_files_path": str(_AI_FILES_DIR / filename),
+    }
+    _register_file(synthetic_id, synthetic_obj)
+
+    blocks = _build_file_blocks(
+        filename=filename,
+        description="📥 New file synced to OpenClaw — what would you like to do?",
+        mimetype=mimetype,
+        file_id=synthetic_id,
+    )
+    try:
+        await client.chat_postMessage(
+            channel=SLACK_NOTIFY_USER_ID,
+            blocks=blocks,
+            text=f"📄 New file synced: *{filename}*",
+        )
+        log.info("Sent file alert to %s for %s", SLACK_NOTIFY_USER_ID, filename)
+    except Exception as exc:
+        log.warning("_send_file_alert: failed to DM %s: %s", SLACK_NOTIFY_USER_ID, exc)
+
 
 async def _process_slack_files(files: list[dict], token: str, question: str) -> str:
     """Download and incorporate Slack file attachments into *question*.
@@ -1807,6 +1962,72 @@ def create_slack_app():  # type: ignore[return]
             return handler
 
         app.action(_action_id)(_make_handler(_action_id))
+
+    # ------------------------------------------------------------------
+    # Handler: /status — system health snapshot
+    # ------------------------------------------------------------------
+
+    @app.command("/status")
+    async def handle_slash_status(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        channel = body.get("channel_id", "")
+        user_id = body.get("user_id", "unknown")
+
+        lines: list[str] = ["*🤖 OpenClaw Status*\n"]
+
+        # Mac Mini reachability (ping /health on port 8080)
+        mac_mini_ip = os.getenv("OPENCLAW_MAC_MINI_IP", "192.168.1.93")
+        try:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as sess:
+                async with sess.get(f"http://{mac_mini_ip}:8080/health") as resp:
+                    if resp.status == 200:
+                        lines.append("✅ Mac Mini: reachable")
+                    else:
+                        lines.append(f"⚠️ Mac Mini: responded with HTTP {resp.status}")
+        except Exception:
+            lines.append("❌ Mac Mini: unreachable")
+
+        # /ai-files inventory
+        try:
+            if _AI_FILES_DIR.exists():
+                files = [
+                    f for f in _AI_FILES_DIR.iterdir()
+                    if f.is_file() and f.suffix.lower() in _ALLOWED_UPLOAD_EXTENSIONS
+                ]
+                files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+                lines.append(f"📁 Files in OpenClaw storage: *{len(files)}*")
+                if files:
+                    recent = files[:5]
+                    recent_list = "\n".join(f"  • {f.name}" for f in recent)
+                    lines.append(f"_Most recent:_\n{recent_list}")
+            else:
+                lines.append("📁 Files: storage folder not found")
+        except Exception as exc:
+            lines.append(f"📁 Files: error reading storage ({exc})")
+
+        # Last sync timestamp (written by watch_folder.sh)
+        try:
+            if _LAST_SYNC_PATH.exists():
+                sync_data = json.loads(_LAST_SYNC_PATH.read_text(encoding="utf-8"))
+                sync_ts = sync_data.get("timestamp", "")
+                sync_file = sync_data.get("last_file", "")
+                lines.append(f"🔄 Last sync: {sync_ts}" + (f" ({sync_file})" if sync_file else ""))
+            else:
+                lines.append("🔄 Last sync: no sync recorded yet")
+        except Exception:
+            lines.append("🔄 Last sync: unknown")
+
+        # Notify user config
+        if SLACK_NOTIFY_USER_ID:
+            lines.append(f"🔔 File alerts: enabled (notifying <@{SLACK_NOTIFY_USER_ID}>)")
+        else:
+            lines.append("🔔 File alerts: off (set SLACK_NOTIFY_USER_ID to enable)")
+
+        text = "\n".join(lines)
+        try:
+            await client.chat_postEphemeral(channel=channel, user=user_id, text=text)
+        except Exception as exc:
+            log.warning("handle_slash_status: failed to post ephemeral: %s", exc)
 
     # ------------------------------------------------------------------
     # Handler: /metrics — usage summary for last 7 days
