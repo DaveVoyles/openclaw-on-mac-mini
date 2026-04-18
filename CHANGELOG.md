@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Wave 5 Slack Feature Expansion (April 2026)
+- **5 new Slack slash commands:** `/digest`, `/template`, `/brief`, `/mystats`, `/clear`
+  - `/digest on|off|status` — per-user daily DM digest of recently modified files (`data/digest_prefs.json`)
+  - `/template list|<name>` — DMs a starter template file from `data/templates/`
+  - `/brief` — shows last 5 uploaded files with timestamps
+  - `/mystats` — per-user usage stats from `slack_metrics.jsonl`
+  - `/clear` — clears session history and active file selections
+- **2 Slack command renames** (Slack reserved the originals):
+  - `/ask` → `/chat` (Slack AI claimed `/ask`)
+  - `/status` → `/health` (Slack reserved `/status`)
+- **13 total Slack commands** now registered in the app manifest
+- **`make slack-manifest`** — improved workflow that copies JSON to clipboard + opens the correct browser URL (`app.slack.com/app-settings/…`)
+- **`make slack-manifest-push`** — API push target (requires `xoxe.xoxp-` Slack CLI token)
+
+### Fixed — Wave 5
+- Slack manifest portal URL updated to `app.slack.com/app-settings/T0ATWRAK4Q4/A0ATR6KFXNJ/app-manifest` (old `api.slack.com/apps` URL is 404)
+- Documented that `xapp-` tokens cannot push manifests — only `xoxe.xoxp-` (Slack CLI) or browser paste works
+
 ### Added — April 2026 Interface Expansion
 - **Open WebUI** (`chat.davevoyles.synology.me`): Browser-based ChatGPT-style interface connected to OpenClaw's `/v1` API. Supports persistent chat history, markdown/table/code rendering, and regenerate. Auth disabled for private LAN use.
 - **Slack bot** (`src/integrations/slack_bot.py`): Socket Mode Slack bot supporting DMs and `@openclaw` mentions in channels. Uses App-Level Token + Bot OAuth token. Configured via Slack app manifest (YAML).

@@ -1,6 +1,6 @@
 # OpenClaw 🤖
 
-Autonomous AI agent for home automation and system management, accessible via Discord.
+Autonomous AI agent for home automation and system management, accessible via Discord and Slack.
 
 Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alongside a Synology NAS.
 
@@ -13,13 +13,14 @@ Runs on a **Mac Mini M4 Pro** managing a 20+ container Docker infrastructure alo
 | **Metrics**      | `http://192.168.1.93:8765/metrics` (Prometheus)                        |
 | **External URL** | `openclaw.davevoyles.synology.me` (via Traefik)                        |
 | **Remote SSH**   | `ssh davevoyles@daves-mac-mini` (Tailscale)                            |
-| **Interface**    | 101 Discord slash commands across 12 cogs (55 cog commands) + modular command system |
+| **Interface**    | 101 Discord slash commands across 12 cogs + 13 Slack slash commands (Wave 5) + modular command system |
 | **LLM**          | Gemini 2.5 Flash (primary, 8192 max tokens) + Gemma 4 E4B local (Ollama) |
 | **SDK**          | `google-genai` (migrated from deprecated `google-generativeai`)        |
 | **Local LLM**    | Ollama (`gemma4:e4b`) — free, with native tool calling support         |
 | **Model Control** | `/ask model:auto\|local\|gemini\|openai\|anthropic` + `/model set`     |
 | **Natural Language** | `/ask` auto-shortlists the most relevant skills and tools per request |
-| **Status**       | **Phase 42 — Patreon/MonsterVision Monitoring** ✅                     |
+| **Slack**        | 13 commands: `/chat`, `/help`, `/simple`, `/files`, `/research`, `/batch`, `/health`, `/digest`, `/template`, `/metrics`, `/clear`, `/brief`, `/mystats` |
+| **Status**       | **Wave 5 — Slack Feature Expansion** ✅                                |
 
 ## Features
 

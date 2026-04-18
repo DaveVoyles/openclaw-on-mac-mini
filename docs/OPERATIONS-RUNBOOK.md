@@ -133,12 +133,22 @@ Concise operator playbook for incidents, monitoring interpretation, backup/recov
 | `GET` | `http://192.168.1.93:8080/health` | none | Polled by `/health` slash command; returns JSON liveness |
 | `POST` | `http://192.168.1.93:8080/upload` | `X-OpenClaw-Key` header | Multipart field `file`; allowed: `.docx .xlsx .pdf .txt .csv`; blocked: `.exe .sh .py .zip .bat` |
 
-### Wave 5 Slash Commands (new in v0.14.0)
+### Wave 5 Slash Commands (shipped v0.14.0)
+
+All 13 commands registered in Slack and live:
 
 | Command | Description | Data stored |
 | --- | --- | --- |
+| `/chat` | Ask OpenClaw anything (renamed from `/ask` — Slack AI reserved that name) | in-memory + LLM |
+| `/help` | Show usage tips and command list | — |
+| `/simple` | Concise single-paragraph answer mode | — |
+| `/files` | List recently uploaded files | file metadata |
+| `/research` | Deep multi-source research report | — |
+| `/batch` | Process multiple questions at once | — |
+| `/health` | Check server + sync liveness (renamed from `/status` — Slack reserved) | reads `last_sync.json` |
+| `/metrics` | Usage statistics summary | reads `slack_metrics.jsonl` |
 | `/digest on\|off\|status` | Per-user daily file digest via DM | `data/digest_prefs.json` |
-| `/template list\|<name>` | Lists or DMs a starter template file | `data/templates/` (committed) |
+| `/template list\|<name>` | Lists or DMs a starter template file | `data/templates/` |
 | `/brief` | Shows user's last 5 uploaded files with timestamps | reads file metadata |
 | `/mystats` | Per-user stats from `slack_metrics.jsonl` | reads metrics log |
 | `/clear` | Clears session history and active file selections | in-memory only |
@@ -148,27 +158,31 @@ Concise operator playbook for incidents, monitoring interpretation, backup/recov
 The manifest is the single source of truth for slash command registration.
 It lives in `scripts/update_slack_manifest.py`.
 
-**Option A — API push (recommended, fully automated):**
+**Recommended — browser paste (no special token needed):**
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **OpenClaw** → **Basic Information**
-2. Scroll to **App-Level Tokens** → **Generate Token and Scopes**
-3. Name it `manifest-updater`, add scope: `app_configurations:write` → **Generate**
-4. Copy the token (starts with `xoxe.xoxp-`)
-5. Add to `.env`: `SLACK_CONFIG_TOKEN=xoxe.xoxp-...`
-6. Run: `python3 scripts/update_slack_manifest.py --push`
+```bash
+make slack-manifest
+```
 
-**Option B — Manual paste (fallback):**
+This copies the manifest JSON to your clipboard and opens the browser.
+In the browser editor: **Cmd+A → Cmd+V → Save Changes**.
 
-1. Run: `python3 scripts/update_slack_manifest.py --print > /tmp/slack_manifest.json`
-2. Open `/tmp/slack_manifest.json` in VS Code and copy the content
-3. Go to [api.slack.com/apps](https://api.slack.com/apps) → **OpenClaw** → **App Manifest** tab
-4. Select all existing content, paste, click **Save Changes**
-5. Click **Install to Workspace** if prompted
+⚠️ After saving, Slack may issue a **new `xoxb-` bot token**. Copy it, update `SLACK_BOT_TOKEN` in `.env`, then run `make ship-server`.
 
-**Option C — Manual per-command UI (last resort):**
+**Portal URL:** `https://app.slack.com/app-settings/T0ATWRAK4Q4/A0ATR6KFXNJ/app-manifest`
 
-Go to **OpenClaw → Features → Slash Commands → Create New Command** and fill in each command individually.
-For Socket Mode, the Request URL field accepts any placeholder (e.g. `https://example.com`).
+> **Note:** `api.slack.com/apps` is 404 — Slack moved the app portal to `app.slack.com/app-settings`.
+
+**Alternative — API push (requires Slack CLI auth flow):**
+
+The `apps.manifest.update` API requires a `xoxe.xoxp-` token obtainable only via:
+
+```bash
+~/.slack/bin/slack login   # generates /slackauthticket ticket
+# run /slackauthticket <ticket> in Slack → approve → token stored
+```
+
+Once authenticated: `make slack-manifest-push` (requires `SLACK_CONFIG_TOKEN` in `.env`).
 
 ### Excel Formula Intelligence Button
 
