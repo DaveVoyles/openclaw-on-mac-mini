@@ -153,8 +153,8 @@ services:
       - DASHBOARD_ALLOW_HTTP=true
 
     volumes:
-      # Workspace data dirs (read-only — dashboard reads sessions, costs, logs, skills)
-      - ./data:/workspace/data:ro
+      # Workspace data dirs (read-write — dashboard reads sessions/costs/logs and writes health-history.json)
+      - ./data:/workspace/data:rw
       - ./skills:/workspace/skills:ro
       - ./scripts:/workspace/scripts:ro
       # Host ~/.openclaw (sessions stored by CLI — read-only)
