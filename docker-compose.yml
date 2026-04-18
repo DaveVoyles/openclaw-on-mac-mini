@@ -29,7 +29,8 @@ services:
 
     # Port mappings
     ports:
-      - "8765:8765" # Health check / Web UI
+      - "8765:8765" # Health check / Web UI / OpenAI-compat API
+      - "8080:8080" # Upload server + OAuth callbacks (Dropbox /dropbox/callback)
 
     # Environment variables
     env_file:
@@ -207,10 +208,15 @@ services:
       # Point to OpenClaw's OpenAI-compatible API (Docker internal network)
       - OPENAI_API_BASE_URL=http://openclaw:8765/v1
       - OPENAI_API_KEY=openclaw
-      # Disable Open WebUI's own auth for local/LAN use
-      - WEBUI_AUTH=False
+      # Enable auth (required for external access via Synology reverse proxy)
+      - WEBUI_AUTH=True
+      # Persistent secret key — keeps sessions valid across container restarts
+      - WEBUI_SECRET_KEY=***REMOVED***
       # Disable Ollama (we're using OpenAI-compat only)
       - ENABLE_OLLAMA_API=False
+      # Cookie settings for reverse proxy / cross-origin access
+      - WEBUI_SESSION_COOKIE_SAME_SITE=lax
+      - WEBUI_SESSION_COOKIE_SECURE=False
 
     volumes:
       - open-webui-data:/app/backend/data
