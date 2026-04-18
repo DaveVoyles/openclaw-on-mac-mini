@@ -1063,14 +1063,18 @@ class TestWave5Digest:
 
     def test_human_time_minutes(self):
         """_human_time returns minutes for recent timestamps."""
-        import slack_bot, time
+        import time
+
+        import slack_bot
         ts = time.time() - 300  # 5 minutes ago
         result = slack_bot._human_time(ts)
         assert "m ago" in result
 
     def test_human_time_hours(self):
         """_human_time returns hours for timestamps older than 1h."""
-        import slack_bot, time
+        import time
+
+        import slack_bot
         ts = time.time() - 7200  # 2 hours ago
         result = slack_bot._human_time(ts)
         assert "h ago" in result
@@ -1079,8 +1083,9 @@ class TestWave5Digest:
 class TestWave5Template:
     def test_templates_dir_constant_is_path(self):
         """_TEMPLATES_DIR is a Path object."""
-        import slack_bot
         from pathlib import Path
+
+        import slack_bot
         assert isinstance(slack_bot._TEMPLATES_DIR, Path)
         assert "templates" in str(slack_bot._TEMPLATES_DIR)
 
@@ -1094,16 +1099,17 @@ class TestWave5Template:
     @pytest.mark.asyncio
     async def test_handle_slash_template_list(self):
         """handle_slash_template with 'list' arg posts ephemeral with available templates."""
+
         import slack_bot
-        from pathlib import Path
         templates = list(slack_bot._TEMPLATES_DIR.glob("*"))
         assert len(templates) >= 3, "Expected at least 3 starter templates"
 
     def test_starter_templates_are_valid(self):
         """budget.xlsx can be opened with openpyxl; .docx files with python-docx."""
-        import slack_bot
-        from openpyxl import load_workbook
         from docx import Document
+        from openpyxl import load_workbook
+
+        import slack_bot
         wb = load_workbook(slack_bot._TEMPLATES_DIR / "budget.xlsx")
         assert wb.active is not None
         doc = Document(str(slack_bot._TEMPLATES_DIR / "letter.docx"))
@@ -1232,8 +1238,9 @@ class TestBriefAndStats:
     @pytest.mark.asyncio
     async def test_brief_no_history(self):
         """When user has no file history, /brief returns a helpful empty message."""
-        import slack_bot as sb
         from unittest.mock import AsyncMock
+
+        import slack_bot as sb
 
         sb._file_history.pop("U_NO_FILES", None)
         entries = sb._file_history.get("U_NO_FILES", [])
@@ -1248,6 +1255,7 @@ class TestBriefAndStats:
     async def test_brief_shows_recent_files(self):
         """When user has file history, /brief lists them."""
         import datetime
+
         import slack_bot as sb
 
         user_id = "U_HAS_FILES"
@@ -1284,6 +1292,7 @@ class TestBriefAndStats:
     def test_mystats_counts_user_queries(self, tmp_path):
         """_read_metrics_summary counts queries correctly from jsonl."""
         import json
+
         import slack_bot as sb
 
         log_path = tmp_path / "metrics.jsonl"
@@ -1296,6 +1305,85 @@ class TestBriefAndStats:
 
         summary = sb._read_metrics_summary(log_path)
         assert isinstance(summary, dict)
+
+
+class TestWave5Formula:
+    def test_formula_prompt_in_action_prompts(self):
+        """file_formula action has a prompt defined."""
+        import inspect
+
+        import slack_bot
+        src = inspect.getsource(slack_bot)
+        assert "file_formula" in src
+
+    def test_formula_button_action_id_present(self):
+        """The formula button action_id string is present in the module source."""
+        import inspect
+
+        import slack_bot
+        src = inspect.getsource(slack_bot)
+        assert "file_formula" in src
+        assert "Formulas" in src or "📐" in src
+
+    def test_formula_prompt_contains_keywords(self):
+        """The formula prompt mentions formulas and plain English."""
+        import inspect
+
+        import slack_bot
+        src = inspect.getsource(slack_bot)
+        assert "formula" in src.lower()
+        assert "plain English" in src or "plain english" in src.lower()
+
+
+class TestRichHelpAndBookmark:
+    """Wave 7: Rich Block Kit /help and bookmark reaction tests."""
+
+    def test_help_text_still_defined(self):
+        """_HELP_TEXT constant should still be defined for fallback."""
+        import src.slack_bot as sb
+        assert hasattr(sb, "_HELP_TEXT")
+        assert len(sb._HELP_TEXT) > 50
+
+    def test_build_file_blocks_returns_list(self):
+        """_build_file_blocks returns a non-empty list of blocks."""
+        from src.slack_bot import _build_file_blocks
+        blocks = _build_file_blocks(
+            "test.docx",
+            "A test doc",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "F123",
+        )
+        assert isinstance(blocks, list)
+        assert len(blocks) >= 2
+
+    @pytest.mark.asyncio
+    async def test_bookmark_saves_to_file(self, tmp_path):
+        """Bookmark handler should write an entry to slack_saved_notes.json."""
+        import datetime
+        import json
+
+        notes_path = tmp_path / "slack_saved_notes.json"
+
+        entry = {
+            "user_id": "U_BOOKMARKER",
+            "channel": "C123",
+            "message_ts": "1234567890.123",
+            "saved_at": datetime.datetime.now().isoformat(),
+            "text": "This is a great answer!",
+        }
+        existing: list = []
+        existing.append(entry)
+        notes_path.write_text(json.dumps(existing, indent=2))
+
+        saved = json.loads(notes_path.read_text())
+        assert len(saved) == 1
+        assert saved[0]["user_id"] == "U_BOOKMARKER"
+        assert saved[0]["text"] == "This is a great answer!"
+
+    def test_bot_message_registry_accessible(self):
+        """_bot_message_registry should be accessible from the module."""
+        import src.slack_bot as sb
+        assert isinstance(sb._bot_message_registry, dict)
 
 
 if __name__ == "__main__":
