@@ -252,8 +252,8 @@ def _resolve_gh_ref(ref: str) -> str | None:
 
     Returns None if gh is not available, not authed, or the ref is not found.
     """
-    import subprocess
     import json as _json
+    import subprocess
     _CAP = 50_000
 
     try:

@@ -415,9 +415,9 @@ def _cmd_paste(ctx: "ChatCommandContext") -> str:  # noqa: ARG001
     print(f"  {_DM}Use one of these options to paste a multi-line query as a single message:{_R}\n")
     print(f"  {m._e('①', '1.')} {_B}/multiline{_R}  — toggle multiline mode, then paste, then type {_B}\\end{_R} to submit")
     print(f"  {m._e('②', '2.')} {_B}Bracketed paste{_R} — automatic on supported terminals (iTerm2, Terminal.app)")
-    print(f"              OpenClaw detects paste markers and buffers lines automatically.")
+    print("              OpenClaw detects paste markers and buffers lines automatically.")
     print(f"  {m._e('③', '3.')} {_B}iTerm2 shortcut{_R} — Edit → Paste Special → Paste Escaping Special Characters")
-    print(f"              (joins lines; may alter formatting)\n")
+    print("              (joins lines; may alter formatting)\n")
     return _CMD_CONTINUE
 
 

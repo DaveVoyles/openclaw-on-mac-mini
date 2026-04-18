@@ -202,7 +202,7 @@ async def _process_slack_files(files: list[dict], token: str, question: str) -> 
     return question
 
 
-
+def _parse_model_flag(text: str) -> tuple[str, str]:
     """Extract --model <alias> from *text*.
 
     Returns (cleaned_text, model_pref) where model_pref is a valid

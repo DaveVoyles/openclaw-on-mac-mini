@@ -2,7 +2,6 @@
 Tests for OpenAI-compatible /v1/ endpoints in discord_web.py.
 """
 
-import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -18,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 def _make_app():
     """Build a minimal aiohttp app with just the /v1/ handlers."""
-    from discord_web import _v1_models_handler, _v1_chat_completions_handler
+    from discord_web import _v1_chat_completions_handler, _v1_models_handler
 
     app = web.Application()
     app.router.add_get("/v1/models", _v1_models_handler)

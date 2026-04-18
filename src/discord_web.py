@@ -608,6 +608,7 @@ async def _v1_chat_completions_handler(request: web.Request) -> web.Response | w
     """POST /v1/chat/completions — OpenAI-compatible chat endpoint."""
     import time as _time
     import uuid as _uuid
+
     from dashboard.api_handlers import _execute_agent_ask
 
     try:

@@ -5048,7 +5048,7 @@ def run_chat(
                             _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
                             _url_text = _re.sub(r"\s{2,}", " ", _url_text)
                         _auto_file_chunks.append(f"[URL: {_ref_target}]\n{_url_text[:100_000]}")
-                        print(f" ✓")
+                        print(" ✓")
                     except Exception as _ref_err:
                         print(f" ✗ ({_ref_err})")
                 elif _ref_kind == "clip":
@@ -5126,7 +5126,7 @@ def run_chat(
                         _url_text = _re.sub(r"<[^>]+>", " ", _url_text)
                         _url_text = _re.sub(r"\s{2,}", " ", _url_text)
                     _auto_file_chunks.append(f"[URL: {_url}]\n{_url_text[:100_000]}")
-                    print(f" ✓")
+                    print(" ✓")
                 except Exception as _url_err:
                     print(f" ✗ ({_url_err})")
 
