@@ -531,3 +531,86 @@ class TestMetrics(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# TestStatusAndAlerts — wave 4 observability
+# ---------------------------------------------------------------------------
+
+class TestStatusAndAlerts(unittest.TestCase):
+    def test_status_fields_exist(self):
+        """Module-level tracking vars must exist and have correct types."""
+        import slack_bot
+        self.assertIsInstance(slack_bot._BOT_START_TIME, float)
+        self.assertIsInstance(slack_bot._model_last_success, dict)
+        self.assertIsInstance(slack_bot._daily_query_count, int)
+
+    def test_alert_admin_skipped_when_no_env(self):
+        """_alert_admin does nothing when SLACK_ADMIN_USER_ID is not set."""
+        import asyncio
+        import unittest.mock
+
+        import slack_bot
+
+        class FakeClient:
+            def __init__(self):
+                self.called = False
+
+            async def chat_postMessage(self, **kwargs):
+                self.called = True
+
+        client = FakeClient()
+
+        async def run():
+            with unittest.mock.patch.dict(os.environ, {}, clear=False):
+                saved = os.environ.pop("SLACK_ADMIN_USER_ID", None)
+                try:
+                    await slack_bot._alert_admin(client, "test error")
+                finally:
+                    if saved is not None:
+                        os.environ["SLACK_ADMIN_USER_ID"] = saved
+
+        asyncio.run(run())
+        self.assertFalse(client.called)
+
+    def test_alert_admin_skipped_when_recent(self):
+        """Second _alert_admin call within 300s must be suppressed."""
+        import asyncio
+        import time
+        import unittest.mock
+
+        import slack_bot
+
+        posted: list[str] = []
+
+        class FakeClient:
+            async def chat_postMessage(self, **kwargs):
+                posted.append(kwargs.get("text", ""))
+
+        async def run():
+            with unittest.mock.patch.dict(os.environ, {"SLACK_ADMIN_USER_ID": "UADMIN"}):
+                slack_bot._last_alert_ts = time.monotonic()
+                await slack_bot._alert_admin(FakeClient(), "second alert")
+
+        asyncio.run(run())
+        self.assertEqual(len(posted), 0)
+
+    def test_error_window_pruning(self):
+        """Entries older than 300s must be pruned from _error_window."""
+        import time
+
+        import slack_bot
+
+        old_ts = time.monotonic() - 400  # older than 300s window
+        fresh_ts = time.monotonic() - 10
+
+        slack_bot._error_window[:] = [old_ts, fresh_ts]
+        now = time.monotonic()
+        slack_bot._error_window[:] = [t for t in slack_bot._error_window if now - t < 300]
+
+        self.assertEqual(len(slack_bot._error_window), 1)
+        self.assertAlmostEqual(slack_bot._error_window[0], fresh_ts, delta=1)
+
+
+if __name__ == "__main__":
+    unittest.main()
