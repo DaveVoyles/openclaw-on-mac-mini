@@ -77,6 +77,18 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
         "description": "Clear your session: reset thread history and active file selections.",
         "usage_hint": "(no arguments needed)",
         "should_escape": false
+      },
+      {
+        "command": "/brief",
+        "description": "Show your recently uploaded files",
+        "usage_hint": "(no arguments needed)",
+        "should_escape": false
+      },
+      {
+        "command": "/mystats",
+        "description": "Show your personal usage statistics",
+        "usage_hint": "(no arguments needed)",
+        "should_escape": false
       }
     ]
   },

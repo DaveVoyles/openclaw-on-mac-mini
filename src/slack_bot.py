@@ -798,6 +798,11 @@ _FILE_ACTION_PROMPTS: dict[str, str] = {
         '"title": "chart title", "description": "one-sentence description of what the chart shows"}. '
         "Return ONLY the JSON, no other text."
     ),
+    "file_formula": (
+        "Examine this spreadsheet carefully. List all the formulas you find and explain what each one does in plain English. "
+        "For any formula that seems complex or hard to understand, suggest a simpler alternative. "
+        "If any formulas appear to have errors or could cause problems, flag them clearly."
+    ),
     "file_translate": (
         "Please translate this document into {language}. "
         "Preserve the original formatting and structure as much as possible. "
@@ -922,6 +927,14 @@ def _build_file_blocks(
                     "type": "button",
                     "text": {"type": "plain_text", "text": "📊 Chart", "emoji": True},
                     "action_id": "file_chart",
+                    "value": file_id,
+                }
+            )
+            buttons.append(
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📐 Formulas", "emoji": True},
+                    "action_id": "file_formula",
                     "value": file_id,
                 }
             )

@@ -102,6 +102,18 @@ MANIFEST: dict = {
                 "usage_hint": "",
                 "should_escape": False,
             },
+            {
+                "command": "/brief",
+                "description": "Show your recently uploaded files",
+                "usage_hint": "",
+                "should_escape": False,
+            },
+            {
+                "command": "/mystats",
+                "description": "Show your personal usage statistics",
+                "usage_hint": "",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {
