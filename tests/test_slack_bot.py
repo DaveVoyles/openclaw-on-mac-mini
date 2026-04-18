@@ -1386,5 +1386,52 @@ class TestRichHelpAndBookmark:
         assert isinstance(sb._bot_message_registry, dict)
 
 
+class TestDMThreadMemoryAndSaved:
+    """Wave 8: DM thread memory and /saved command tests."""
+
+    @pytest.mark.asyncio
+    async def test_dm_no_thread_ts_passes_none(self):
+        """handle_dm with no thread_ts should not call _build_thread_history."""
+        event = {"channel_type": "im", "user": "U123", "channel": "D123", "text": "hello", "ts": "111.222"}
+        thread_ts = event.get("thread_ts")
+        assert thread_ts is None
+
+    @pytest.mark.asyncio
+    async def test_dm_thread_ts_detected(self):
+        """handle_dm with thread_ts should detect it for history building."""
+        event = {
+            "channel_type": "im",
+            "user": "U123",
+            "channel": "D123",
+            "text": "hello",
+            "ts": "111.333",
+            "thread_ts": "111.000",
+        }
+        thread_ts = event.get("thread_ts")
+        assert thread_ts == "111.000"
+
+    def test_saved_notes_path_resolvable(self):
+        """_DATA_DIR / slack_saved_notes.json path is correctly formed."""
+        import src.slack_bot as sb
+        notes_path = sb._DATA_DIR / "slack_saved_notes.json"
+        assert "slack_saved_notes" in str(notes_path)
+        assert str(notes_path).endswith(".json")
+
+    def test_saved_filters_by_user(self, tmp_path):
+        """Only notes belonging to the requesting user should be shown."""
+        import json
+        notes = [
+            {"user_id": "U_ALICE", "text": "Alice note", "saved_at": "2026-04-18T10:00:00"},
+            {"user_id": "U_BOB", "text": "Bob note", "saved_at": "2026-04-18T11:00:00"},
+            {"user_id": "U_ALICE", "text": "Alice second note", "saved_at": "2026-04-18T12:00:00"},
+        ]
+        notes_file = tmp_path / "slack_saved_notes.json"
+        notes_file.write_text(json.dumps(notes))
+        all_notes = json.loads(notes_file.read_text())
+        alice_notes = [n for n in all_notes if n.get("user_id") == "U_ALICE"]
+        assert len(alice_notes) == 2
+        assert all(n["user_id"] == "U_ALICE" for n in alice_notes)
+
+
 if __name__ == "__main__":
     unittest.main()

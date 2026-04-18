@@ -1876,6 +1876,31 @@ def _read_metrics_summary(path: Path | str) -> dict:
     }
 
 
+_VALID_TIMES_RE = re.compile(
+    r"^(?:([01]?\d|2[0-3]):([0-5]\d)|([01]?\d|2[0-3])([ap]m?)|off)$",
+    re.IGNORECASE,
+)
+
+
+def _parse_schedule_time(text: str) -> int | None:
+    """Parse a time string like '9am', '8:30', '14:00' into an hour (0-23). Returns None for 'off'."""
+    text = text.strip().lower()
+    if text == "off":
+        return None
+    m = re.match(r"^(\d{1,2}):(\d{2})$", text)
+    if m:
+        return int(m.group(1)) % 24
+    m = re.match(r"^(\d{1,2})(am?|pm?)$", text)
+    if m:
+        hour = int(m.group(1))
+        if "p" in m.group(2) and hour != 12:
+            hour += 12
+        elif "a" in m.group(2) and hour == 12:
+            hour = 0
+        return hour % 24
+    return -1  # parse error
+
+
 def create_slack_app():  # type: ignore[return]
     """Build and return a configured AsyncApp, or None if Slack is disabled."""
     if not _slack_is_configured():
@@ -2012,6 +2037,12 @@ def create_slack_app():  # type: ignore[return]
         if files:
             prompt = await _process_slack_files(files, SLACK_BOT_TOKEN, prompt)
 
+        # Carry thread history for DM thread replies (same as handle_mention)
+        thread_ts: str | None = event.get("thread_ts")
+        history: list[dict] | None = None
+        if thread_ts:
+            history = await _build_thread_history(client, channel, thread_ts)
+
         thinking_resp = await say(text="⏳ Thinking…")
         thinking_ts = (thinking_resp or {}).get("ts")
 
@@ -2019,12 +2050,13 @@ def create_slack_app():  # type: ignore[return]
             client=client,
             say=say,
             channel=channel,
-            thread_ts=None,
+            thread_ts=thread_ts,
             thinking_ts=thinking_ts,
             prompt=prompt,
             user_id=user_id,
             model_pref=model_pref,
             simple=use_simple,
+            history=history,
         )
         _onboarded_users.add(user_id)
 
@@ -2966,6 +2998,68 @@ def create_slack_app():  # type: ignore[return]
                 user=user_id,
                 text=f"⚠️ Couldn't upload {match.name}. Please try again in a moment.",
             )
+
+    @app.command("/saved")
+    async def handle_slash_saved(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "")
+        channel_id: str = body.get("channel_id", "")
+
+        notes_path = _DATA_DIR / "slack_saved_notes.json"
+        if not notes_path.exists():
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="You haven't saved any messages yet — react 🔖 to any bot response to save it!",
+            )
+            return
+
+        try:
+            all_notes: list[dict] = json.loads(notes_path.read_text())
+        except Exception:
+            all_notes = []
+
+        user_notes = [n for n in all_notes if n.get("user_id") == user_id]
+        if not user_notes:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="You haven't saved any messages yet — react 🔖 to any bot response to save it!",
+            )
+            return
+
+        recent = list(reversed(user_notes))[:5]
+        blocks: list[dict] = [
+            {"type": "header", "text": {"type": "plain_text", "text": "🔖 Your Saved Notes", "emoji": True}},
+        ]
+        for note in recent:
+            saved_at = note.get("saved_at", "")
+            try:
+                import datetime
+                dt = datetime.datetime.fromisoformat(saved_at)
+                delta = datetime.datetime.now() - dt
+                days = delta.days
+                when = "today" if days == 0 else "yesterday" if days == 1 else f"{days} days ago"
+            except Exception:
+                when = saved_at[:10] if saved_at else "recently"
+            preview = (note.get("text") or "")[:200].replace("\n", " ")
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*{when}* — {preview}…" if len(note.get("text", "")) > 200 else f"*{when}* — {preview}"},
+            })
+            blocks.append({"type": "divider"})
+
+        blocks.append({
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": f"_Showing {len(recent)} of {len(user_notes)} saved notes_"}],
+        })
+
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            blocks=blocks,
+            text="🔖 Your Saved Notes",
+        )
 
     @app.command("/clear")
     async def handle_slash_clear(ack: Any, body: dict[str, Any], say: Any) -> None:

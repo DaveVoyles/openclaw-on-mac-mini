@@ -121,6 +121,12 @@ MANIFEST: dict = {
                 "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
+            {
+                "command": "/saved",
+                "description": "View your bookmarked bot responses",
+                "usage_hint": "",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {
