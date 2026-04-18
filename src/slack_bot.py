@@ -585,6 +585,9 @@ _file_registry: dict[str, dict] = {}
 _pending_batch: dict[str, list[dict]] = {}
 _batch_lock: asyncio.Lock | None = None  # initialized lazily
 
+# Compare flow: user_id → file_id of Document A awaiting a second file
+_compare_pending: dict[str, str] = {}
+
 # Prompts sent to the LLM when a file action button is clicked
 _FILE_ACTION_PROMPTS: dict[str, str] = {
     "file_proofread": (
@@ -607,6 +610,23 @@ _FILE_ACTION_PROMPTS: dict[str, str] = {
     ),
     "file_describe": "Please describe what is in this image in detail.",
     "file_read_text": "Please read and transcribe all text visible in this image.",
+    "file_chart": (
+        "Analyze this spreadsheet data. Identify the best columns to visualize as a chart. "
+        "Return a JSON object with these fields: "
+        '{"chart_type": "bar|line|pie", "x_column": "column name", "y_columns": ["col1", "col2"], '
+        '"title": "chart title", "description": "one-sentence description of what the chart shows"}. '
+        "Return ONLY the JSON, no other text."
+    ),
+    "file_translate": (
+        "Please translate this document into {language}. "
+        "Preserve the original formatting and structure as much as possible. "
+        "Return only the translated text."
+    ),
+    "file_compare": (
+        "You are comparing two documents. Identify the key differences between them: "
+        "structural changes, added/removed sections, significant wording changes, and any "
+        "factual differences. Present as a clear summary with bullet points."
+    ),
 }
 
 
@@ -678,10 +698,176 @@ def _build_file_blocks(
             },
         ]
 
+        # Add chart button only for spreadsheet files
+        if filename.endswith((".xlsx", ".csv")) or mimetype in (
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "text/csv",
+        ):
+            buttons.append(
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📊 Chart", "emoji": True},
+                    "action_id": "file_chart",
+                    "value": file_id,
+                }
+            )
+
+        # Add translate button for all non-image document files
+        buttons.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🌍 Translate", "emoji": True},
+                "action_id": "file_translate",
+                "value": file_id,
+            }
+        )
+
+        # Compare button for all non-image document files
+        buttons.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🔀 Compare", "emoji": True},
+                "action_id": "file_compare_start",
+                "value": file_id,
+            }
+        )
+
     return [
         {"type": "section", "text": {"type": "mrkdwn", "text": header}},
         {"type": "actions", "elements": buttons},
     ]
+
+
+async def _generate_chart(
+    file_obj: dict,
+    token: str,
+    user_id: str,
+) -> bytes | None:
+    """Generate a chart PNG from an Excel/CSV file. Returns PNG bytes or None on failure."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")  # non-interactive backend
+        import matplotlib.pyplot as plt
+        import openpyxl
+    except ImportError as exc:
+        log.warning("_generate_chart: missing dependency: %s", exc)
+        return None
+
+    # Download file bytes
+    file_bytes = None
+    registry_entry = _file_registry.get(file_obj.get("id", "")) or {}
+    if isinstance(registry_entry, dict) and "file_bytes" in registry_entry:
+        file_bytes = registry_entry["file_bytes"]
+
+    if not file_bytes:
+        url = file_obj.get("url_private") or file_obj.get("ai_files_path")
+        if not url:
+            return None
+        if file_obj.get("ai_files_path"):
+            file_bytes = Path(file_obj["ai_files_path"]).read_bytes()
+        else:
+            async with aiohttp.ClientSession() as sess:
+                async with sess.get(url, headers={"Authorization": f"Bearer {token}"}) as resp:
+                    if resp.status != 200:
+                        return None
+                    file_bytes = await resp.read()
+
+    if not file_bytes:
+        return None
+
+    # Parse Excel
+    try:
+        import io as _io
+
+        wb = openpyxl.load_workbook(_io.BytesIO(file_bytes), read_only=True, data_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(values_only=True))
+        if len(rows) < 2:
+            return None
+        headers = [str(h or f"Col{i}") for i, h in enumerate(rows[0])]
+        data_rows = rows[1:51]  # cap at 50 rows
+    except Exception as exc:
+        log.warning("_generate_chart: failed to parse Excel: %s", exc)
+        return None
+
+    # Get LLM chart spec
+    try:
+        sample = "\t".join(headers) + "\n" + "\n".join(
+            "\t".join(str(v or "") for v in r) for r in data_rows[:5]
+        )
+        spec_prompt = (
+            f"Spreadsheet columns: {headers}\nSample data:\n{sample}\n\n"
+            'Return JSON: {"chart_type": "bar|line|pie", "x_column": "col", '
+            '"y_columns": ["col"], "title": "...", "description": "..."}'
+        )
+        spec_json = await _ask(spec_prompt, user_id=user_id, simple=False, model_pref="gemini")
+        import json as _json
+        import re as _re
+
+        json_match = _re.search(r"\{.*\}", spec_json, _re.DOTALL)
+        spec = _json.loads(json_match.group() if json_match else spec_json)
+    except Exception as exc:
+        log.warning("_generate_chart: LLM spec failed: %s", exc)
+        # Fallback: bar chart of first two numeric columns
+        spec = {
+            "chart_type": "bar",
+            "x_column": headers[0],
+            "y_columns": [headers[1]] if len(headers) > 1 else [headers[0]],
+            "title": "Data Chart",
+            "description": "",
+        }
+
+    # Build chart
+    try:
+        import io as _io2
+
+        x_col = spec.get("x_column", headers[0])
+        y_cols = spec.get("y_columns", [headers[1]] if len(headers) > 1 else [])
+        chart_type = spec.get("chart_type", "bar")
+        title = spec.get("title", "Chart")
+
+        x_idx = headers.index(x_col) if x_col in headers else 0
+        y_idxs = [headers.index(c) for c in y_cols if c in headers]
+        if not y_idxs:
+            y_idxs = [1] if len(headers) > 1 else [0]
+
+        x_vals = [str(r[x_idx] or "") for r in data_rows]
+
+        fig, ax = plt.subplots(figsize=(10, 6))
+        for y_idx in y_idxs[:3]:  # cap at 3 series
+            y_vals = []
+            for r in data_rows:
+                try:
+                    y_vals.append(float(r[y_idx] or 0))
+                except (TypeError, ValueError):
+                    y_vals.append(0.0)
+            label = headers[y_idx]
+            if chart_type == "line":
+                ax.plot(x_vals, y_vals, marker="o", label=label)
+            elif chart_type == "pie" and len(y_idxs) == 1:
+                ax.pie(y_vals, labels=x_vals, autopct="%1.1f%%")
+                ax.set_title(title)
+                break
+            else:
+                ax.bar(x_vals, y_vals, label=label)
+
+        if chart_type != "pie":
+            ax.set_title(title)
+            ax.set_xlabel(x_col)
+            if len(y_idxs) > 1:
+                ax.legend()
+            plt.xticks(rotation=45, ha="right")
+
+        plt.tight_layout()
+        buf = _io2.BytesIO()
+        plt.savefig(buf, format="png", dpi=120)
+        plt.close(fig)
+        buf.seek(0)
+        return buf.read()
+    except Exception as exc:
+        log.warning("_generate_chart: chart render failed: %s", exc)
+        return None
 
 
 def _mimetype_for(filename: str) -> str:
@@ -970,6 +1156,26 @@ async def _auto_brief_file(file_obj: dict, token: str) -> str | None:
 
 
 
+async def _compare_documents(
+    file_obj_a: dict,
+    file_obj_b: dict,
+    token: str,
+    user_id: str,
+    simple: bool = False,
+) -> str:
+    """Compare two documents semantically and return a diff summary."""
+    content_a = await _process_slack_files([file_obj_a], token, "Return the full text content of this document.")
+    content_b = await _process_slack_files([file_obj_b], token, "Return the full text content of this document.")
+    compare_prompt = (
+        "Compare these two documents and summarize the key differences:\n\n"
+        f"--- Document A: {file_obj_a.get('name', 'Document A')} ---\n{content_a}\n\n"
+        f"--- Document B: {file_obj_b.get('name', 'Document B')} ---\n{content_b}\n\n"
+        "Focus on: structural changes, added/removed sections, significant wording differences, "
+        "and any factual changes. Use bullet points."
+    )
+    return await _ask(compare_prompt, user_id=user_id, simple=simple, model_pref="gemini")
+
+
 async def _two_phase_research(file_obj: dict, token: str, base_prompt: str) -> str:
     """Two-phase pipeline: Perplexity for web context + Gemini for doc integration.
 
@@ -1043,6 +1249,34 @@ async def _ask(
 
 
 # ---------------------------------------------------------------------------
+# Progress streaming helpers
+# ---------------------------------------------------------------------------
+
+_PROGRESS_STEPS: list[str] = [
+    "📖 Reading your document…",
+    "🔍 Analyzing content…",
+    "✍️ Writing response…",
+    "⏳ Almost done…",
+]
+
+
+async def _edit_thinking_with_progress(
+    client: Any,
+    channel: str,
+    ts: str,
+    steps: list[str],
+    interval_secs: float = 8.0,
+) -> None:
+    """Cycle through step messages on the thinking placeholder until cancelled."""
+    for step in steps:
+        await asyncio.sleep(interval_secs)
+        try:
+            await client.chat_update(channel=channel, ts=ts, text=step)
+        except Exception:
+            break
+
+
+# ---------------------------------------------------------------------------
 # Shared send-and-track helper
 # ---------------------------------------------------------------------------
 
@@ -1061,15 +1295,28 @@ async def _send_answer(
 ) -> None:
     """Ask OpenClaw, update the thinking placeholder, and register the reply for feedback."""
     t0 = time.monotonic()
+    progress_task: asyncio.Task | None = None
+    if thinking_ts:
+        progress_task = asyncio.create_task(
+            _edit_thinking_with_progress(client, channel, thinking_ts, _PROGRESS_STEPS)
+        )
     try:
-        answer = await _ask(prompt, user_id, model_pref=model_pref, history=history, simple=simple)
-        text = _clean_for_slack(answer) if answer else "(no response)"
-        _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
-                           duration_ms=int((time.monotonic() - t0) * 1000), status="ok")
-    except Exception as exc:
-        text = f"❌ Sorry, something went wrong: {exc}"
-        _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
-                           duration_ms=int((time.monotonic() - t0) * 1000), status="error")
+        try:
+            answer = await _ask(prompt, user_id, model_pref=model_pref, history=history, simple=simple)
+            text = _clean_for_slack(answer) if answer else "(no response)"
+            _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
+                               duration_ms=int((time.monotonic() - t0) * 1000), status="ok")
+        except Exception as exc:
+            text = f"❌ Sorry, something went wrong: {exc}"
+            _log_query_metrics(user_id, action="message", model_used=model_pref or "auto",
+                               duration_ms=int((time.monotonic() - t0) * 1000), status="error")
+    finally:
+        if progress_task and not progress_task.done():
+            progress_task.cancel()
+            try:
+                await progress_task
+            except asyncio.CancelledError:
+                pass
 
     sent_ts: str | None = None
 
@@ -1224,6 +1471,7 @@ async def _process_single_file_shared(event: dict, client: Any, say: Any) -> Non
     """Handle a single file_shared event: auto-brief + Block Kit action buttons."""
     file_id: str = event.get("file_id", "")
     channel: str = event.get("channel_id", "")
+    user_id: str = event.get("user_id", "")
 
     if not file_id or not channel:
         return
@@ -1241,6 +1489,28 @@ async def _process_single_file_shared(event: dict, client: Any, say: Any) -> Non
     _register_file(file_id, file_obj)
     filename = file_obj.get("name", "file")
     mimetype = (file_obj.get("mimetype") or "")
+
+    # Compare flow: if user has already selected Document A, treat this as Document B
+    if user_id and user_id in _compare_pending:
+        file_id_a = _compare_pending.pop(user_id)
+        file_obj_a_entry = _file_registry.get(file_id_a) or {}
+        if isinstance(file_obj_a_entry, dict) and "file_obj" in file_obj_a_entry:
+            file_obj_a = file_obj_a_entry["file_obj"]
+        else:
+            file_obj_a = file_obj_a_entry or {}
+        thinking_resp = await say(text="⏳ Comparing documents…")
+        thinking_ts = (thinking_resp or {}).get("ts")
+        use_simple = _get_user_simple(user_id)
+        result = await _compare_documents(file_obj_a, file_obj, SLACK_BOT_TOKEN, user_id, simple=use_simple)
+        text = _clean_for_slack(result)
+        if thinking_ts:
+            try:
+                await client.chat_update(channel=channel, ts=thinking_ts, text=text)
+            except Exception:
+                await say(text=text)
+        else:
+            await say(text=text)
+        return  # skip normal auto-brief for this file
 
     # Download file bytes now for later use in corrected-doc upload
     try:
@@ -1834,6 +2104,37 @@ def create_slack_app():  # type: ignore[return]
         if isinstance(file_obj, dict) and "file_obj" in file_obj:
             file_obj = file_obj["file_obj"]
 
+        # file_chart: generate PNG chart from spreadsheet data
+        if action_id == "file_chart":
+            thinking_resp = await say(text="⏳ Generating chart…")
+            thinking_ts = (thinking_resp or {}).get("ts")
+            png_bytes = await _generate_chart(file_obj, SLACK_BOT_TOKEN, user_id)
+            if png_bytes:
+                try:
+                    await client.files_upload_v2(
+                        channel=channel,
+                        content=png_bytes,
+                        filename=f"chart_{file_obj.get('name', 'data')}.png",
+                        title=f"Chart: {file_obj.get('name', 'data')}",
+                    )
+                    if thinking_ts:
+                        await client.chat_delete(channel=channel, ts=thinking_ts)
+                except Exception as exc:
+                    log.warning("_dispatch_file_action: chart upload failed: %s", exc)
+                    if thinking_ts:
+                        await client.chat_update(
+                            channel=channel,
+                            ts=thinking_ts,
+                            text="⚠️ Chart generated but upload failed.",
+                        )
+            else:
+                msg = "📊 Chart generation requires `matplotlib` and `openpyxl`. Ask an admin to install them."
+                if thinking_ts:
+                    await client.chat_update(channel=channel, ts=thinking_ts, text=msg)
+                else:
+                    await say(text=msg)
+            return  # don't fall through to normal dispatch
+
         prompt_text = _FILE_ACTION_PROMPTS.get(action_id, "Please analyze this file.")
 
         # Handle files referenced from /ai-files directly (no Slack download needed)
@@ -1975,7 +2276,9 @@ def create_slack_app():  # type: ignore[return]
         )
 
     # Register one handler per action_id using closures
-    for _action_id in list(_FILE_ACTION_PROMPTS.keys()):
+    # Note: file_translate is excluded from the generic dispatch loop because
+    # it has its own language-picker flow registered separately below.
+    for _action_id in [k for k in _FILE_ACTION_PROMPTS.keys() if k != "file_translate"]:
         def _make_handler(aid: str):
             async def handler(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
                 await _dispatch_file_action(aid, ack, body, client, say)
@@ -1983,6 +2286,95 @@ def create_slack_app():  # type: ignore[return]
             return handler
 
         app.action(_action_id)(_make_handler(_action_id))
+
+    # ------------------------------------------------------------------
+    # Handler: 🌍 Translate — language picker + translation dispatch
+    # ------------------------------------------------------------------
+
+    @app.action("file_translate")
+    async def handle_translate_pick(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "unknown")
+        actions = body.get("actions", [{}])
+        file_id = (actions[0] if actions else {}).get("value", "")
+        channel = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
+
+        if user_id not in _user_prefs:
+            _user_prefs[user_id] = {}
+        _user_prefs[user_id]["translate_file_id"] = file_id
+        _save_prefs()
+
+        lang_options = [
+            {"text": {"type": "plain_text", "text": lang}, "value": lang}
+            for lang in [
+                "Spanish", "French", "German", "Italian", "Portuguese",
+                "Japanese", "Chinese (Simplified)", "Korean", "Arabic", "Russian",
+            ]
+        ]
+        await client.chat_postEphemeral(
+            channel=channel,
+            user=user_id,
+            text="Pick a language to translate to:",
+            blocks=[
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": "🌍 *Pick a language to translate to:*"},
+                    "accessory": {
+                        "type": "static_select",
+                        "placeholder": {"type": "plain_text", "text": "Select language"},
+                        "options": lang_options,
+                        "action_id": "translate_lang_selected",
+                    },
+                }
+            ],
+        )
+
+    @app.action("translate_lang_selected")
+    async def handle_translate_lang_selected(ack: Any, body: dict[str, Any], client: Any, say: Any) -> None:
+        await ack()
+        user_id = (body.get("user") or {}).get("id", "unknown")
+        actions = body.get("actions", [{}])
+        selected_lang = (actions[0] if actions else {}).get("selected_option", {}).get("value", "Spanish")
+        channel = (body.get("channel") or {}).get("id", "") or (body.get("container") or {}).get("channel_id", "")
+
+        file_id = (_user_prefs.get(user_id) or {}).get("translate_file_id", "")
+        if not file_id:
+            await say(text="⚠️ Couldn't find the file to translate. Please tap 🌍 Translate again.")
+            return
+
+        file_obj_entry = _file_registry.get(file_id) or {}
+        if isinstance(file_obj_entry, dict) and "file_obj" in file_obj_entry:
+            file_obj = file_obj_entry["file_obj"]
+        else:
+            file_obj = file_obj_entry or {}
+
+        if user_id not in _user_prefs:
+            _user_prefs[user_id] = {}
+        _user_prefs[user_id]["translate_lang"] = selected_lang
+        _save_prefs()
+
+        thinking_resp = await say(text=f"⏳ Translating to {selected_lang}…")
+        thinking_ts = (thinking_resp or {}).get("ts")
+        use_simple = _get_user_simple(user_id)
+
+        translate_prompt = (
+            f"Please translate this document into {selected_lang}. "
+            "Preserve the original formatting and structure as much as possible. "
+            "Return only the translated text."
+        )
+        prompt = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, translate_prompt)
+
+        await _send_answer(
+            client=client,
+            say=say,
+            channel=channel,
+            thread_ts=None,
+            thinking_ts=thinking_ts,
+            prompt=prompt,
+            user_id=user_id,
+            simple=use_simple,
+            model_pref="gemini",
+        )
 
     # ------------------------------------------------------------------
     # Handler: /metrics — usage summary for last 7 days

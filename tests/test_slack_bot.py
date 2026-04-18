@@ -658,6 +658,7 @@ class TestWave4Upload(unittest.TestCase):
     def test_file_alert_loop_no_op_without_notify_user(self):
         """_file_alert_loop returns immediately when SLACK_NOTIFY_USER_ID is empty."""
         import asyncio
+
         import slack_bot
 
         orig = slack_bot.SLACK_NOTIFY_USER_ID
@@ -678,6 +679,7 @@ class TestWave4Upload(unittest.TestCase):
     def test_send_file_alert_posts_dm(self):
         """_send_file_alert posts a Block Kit message to the notify user."""
         import asyncio
+
         import slack_bot
 
         orig_notify = slack_bot.SLACK_NOTIFY_USER_ID
@@ -700,6 +702,7 @@ class TestWave4Upload(unittest.TestCase):
     def test_send_file_alert_no_crash_on_bad_client(self):
         """_send_file_alert does not raise even when client.chat_postMessage fails."""
         import asyncio
+
         import slack_bot
 
         orig_notify = slack_bot.SLACK_NOTIFY_USER_ID
@@ -721,6 +724,72 @@ class TestWave4Upload(unittest.TestCase):
         import slack_bot
         for bad_ext in (".exe", ".sh", ".py", ".zip", ".bat"):
             self.assertNotIn(bad_ext, slack_bot._ALLOWED_UPLOAD_EXTENSIONS)
+
+
+class TestExcelChart(unittest.TestCase):
+    """Tests for _generate_chart and the 📊 Chart button in _build_file_blocks."""
+
+    def test_generate_chart_returns_none_on_empty_bytes(self):
+        """_generate_chart returns None when file_obj has no bytes and no URL."""
+        import asyncio
+
+        import slack_bot
+
+        result = asyncio.run(slack_bot._generate_chart({}, "", "user1"))
+        self.assertIsNone(result)
+
+    def test_generate_chart_returns_none_on_missing_dep(self):
+        """_generate_chart returns None when matplotlib is not importable."""
+        import asyncio
+        import builtins
+
+        import slack_bot
+
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "matplotlib":
+                raise ImportError("No module named 'matplotlib'")
+            return real_import(name, *args, **kwargs)
+
+        import unittest.mock as mock
+        with mock.patch("builtins.__import__", side_effect=mock_import):
+            result = asyncio.run(slack_bot._generate_chart({}, "", "user1"))
+        self.assertIsNone(result)
+
+    def test_build_file_blocks_chart_button_for_xlsx(self):
+        """Chart button appears for .xlsx files."""
+        from slack_bot import _build_file_blocks
+
+        blocks = _build_file_blocks(
+            "budget.xlsx",
+            None,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "FXLSX1",
+        )
+        action_ids = [
+            el.get("action_id")
+            for block in blocks
+            for el in block.get("elements", [])
+        ]
+        self.assertIn("file_chart", action_ids)
+
+    def test_build_file_blocks_no_chart_for_docx(self):
+        """Chart button does NOT appear for .docx files."""
+        from slack_bot import _build_file_blocks
+
+        blocks = _build_file_blocks(
+            "report.docx",
+            None,
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "FDOCX1",
+        )
+        action_ids = [
+            el.get("action_id")
+            for block in blocks
+            for el in block.get("elements", [])
+        ]
+        self.assertNotIn("file_chart", action_ids)
 
 
 if __name__ == "__main__":
