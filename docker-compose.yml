@@ -131,9 +131,9 @@ services:
         max-size: "10m"
         max-file: "3"
 
-    # Port: host 7000 → container 3001 (set by Dockerfile ENV DASHBOARD_PORT=3001)
+    # Port: host 7001 → container 3001 (7000 is reserved by macOS AirPlay/AirTunes)
     ports:
-      - "7000:3001"
+      - "7001:3001"
 
     environment:
       # WORKSPACE_DIR: repo root — dashboard reads data/, skills/, scripts/ from here
