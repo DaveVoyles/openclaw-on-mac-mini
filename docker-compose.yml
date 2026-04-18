@@ -54,6 +54,7 @@ services:
       - NAS_BACKUP_PATH=${NAS_BACKUP_PATH:-/volume1/docker/openclaw/backups}
       - QBIT_URL=${QBIT_URL:-http://192.168.1.8:8080}
       - PLANS_DIR=/plans
+      - SLACK_METRICS_PATH=/logs/slack_metrics.jsonl
 
     # Volume mounts
     volumes:
@@ -68,6 +69,11 @@ services:
       - ./data/memory:/memory:rw
       - ./data/audit:/audit:rw
       - ./data/tasks.json:/app/data/tasks.json:rw
+
+      # Slack bot state — writable files needed at runtime (read_only: true container)
+      - ./data/known_files.json:/app/data/known_files.json:rw
+      - ./data/digest_prefs.json:/app/data/digest_prefs.json:rw
+      - ./data/last_sync.json:/app/data/last_sync.json:rw
 
       # Temp directories (required for read_only: true)
       - /tmp/openclaw:/tmp:rw
