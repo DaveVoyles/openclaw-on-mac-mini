@@ -1907,3 +1907,64 @@ class TestGoogleCalendar:
         monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
         result = await sb._get_google_access_token()
         assert result is None
+
+
+class TestGmailRead:
+    """Wave 10 Leia: Gmail read integration."""
+
+    @pytest.mark.asyncio
+    async def test_get_gmail_unread_no_token_returns_empty(self, monkeypatch):
+        """_get_gmail_unread returns [] when no Google token configured."""
+        import src.slack_bot as sb
+        monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
+        monkeypatch.setattr(sb, "_google_token_cache", {})
+        monkeypatch.setattr(sb, "_GOOGLE_CLIENT_ID", None)
+        result = await sb._get_gmail_unread()
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_gmail_body_no_token_returns_message(self, monkeypatch):
+        """_get_gmail_body returns error string when token absent."""
+        import src.slack_bot as sb
+        monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", None)
+        monkeypatch.setattr(sb, "_google_token_cache", {})
+        monkeypatch.setattr(sb, "_GOOGLE_CLIENT_ID", None)
+        result = await sb._get_gmail_body("fake_id")
+        assert "not configured" in result.lower() or "could not" in result.lower()
+
+    @pytest.mark.asyncio
+    async def test_get_gmail_body_truncates_long_body(self, monkeypatch):
+        """_get_gmail_body truncates content at 4000 chars."""
+        import base64
+        import unittest.mock
+
+        import src.slack_bot as sb
+
+        monkeypatch.setattr(sb, "_GOOGLE_REFRESH_TOKEN", "fake_token")
+
+        async def _fake_token():
+            return "fake_access_token"
+
+        monkeypatch.setattr(sb, "_get_google_access_token", _fake_token)
+        long_text = "x" * 5000
+        encoded = base64.urlsafe_b64encode(long_text.encode()).decode().rstrip("=")
+        fake_payload = {
+            "payload": {
+                "mimeType": "text/plain",
+                "body": {"data": encoded},
+                "parts": [],
+            }
+        }
+        with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
+            mock_resp = unittest.mock.MagicMock()
+            mock_resp.read.return_value = json.dumps(fake_payload).encode()
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = unittest.mock.MagicMock(return_value=False)
+            mock_urlopen.return_value = mock_resp
+            result = await sb._get_gmail_body("msg_id_123")
+        assert len(result) <= 4000
+
+    def test_gmail_message_cache_is_list(self):
+        """_gmail_message_cache is initialized as a list."""
+        import src.slack_bot as sb
+        assert isinstance(sb._gmail_message_cache, list)

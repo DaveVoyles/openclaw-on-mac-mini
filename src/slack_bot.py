@@ -3803,44 +3803,123 @@ def create_slack_app():  # type: ignore[return]
         )
 
     # ------------------------------------------------------------------
-    # /email — Gmail inbox check and search
+    # Wave 10 Leia: /inbox — show unread Gmail emails
+    # ------------------------------------------------------------------
+
+    @app.command("/inbox")
+    async def handle_slash_inbox(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        if not _GOOGLE_REFRESH_TOKEN:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="📧 Gmail is not connected. Ask Dave to run `scripts/google_oauth_setup.py`.",
+            )
+            return
+        emails = await _get_gmail_unread(max_results=5)
+        global _gmail_message_cache
+        _gmail_message_cache = emails
+        if not emails:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="📭 No unread emails in your inbox.",
+            )
+            return
+        blocks: list[dict] = [
+            {"type": "section", "text": {"type": "mrkdwn", "text": "📧 *Your unread emails:*"}}
+        ]
+        for i, email in enumerate(emails, 1):
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{i}.* {email['subject']}\n_From: {email['from']}_",
+                },
+                "accessory": {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "📖 Summarize"},
+                    "action_id": "gmail_summarize",
+                    "value": email["id"],
+                },
+            })
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            blocks=blocks,
+            text="Your unread emails",
+        )
+
+    # ------------------------------------------------------------------
+    # Wave 10 Leia: /email — summarize a specific email by number
     # ------------------------------------------------------------------
 
     @app.command("/email")
     async def handle_slash_email(ack: Any, body: dict[str, Any], client: Any) -> None:
         await ack()
-        user_id: str = body.get("user_id", "")
-        channel_id: str = body.get("channel_id", "")
-        text: str = (body.get("text") or "").strip()
-        name: str = _get_user_name(user_id)
-
-        try:
-            from email_skills import read_inbox, search_emails
-        except ImportError:
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", user_id)
+        text = (body.get("text") or "").strip()
+        if not _GOOGLE_REFRESH_TOKEN:
             await client.chat_postEphemeral(
                 channel=channel_id,
                 user=user_id,
-                text="❌ Email skills module not found.",
+                text="📧 Gmail is not connected.",
             )
             return
-
+        try:
+            idx = int(text) - 1
+        except ValueError:
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text="Usage: `/email 1` — summarize email #1 from your inbox. Run `/inbox` first.",
+            )
+            return
+        emails = _gmail_message_cache or await _get_gmail_unread()
+        if idx < 0 or idx >= len(emails):
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"No email #{idx + 1}. Run `/inbox` to see your emails.",
+            )
+            return
+        msg_id = emails[idx]["id"]
+        body_text = await _get_gmail_body(msg_id)
+        summary = await _ask(
+            f"Summarize this email in 3 bullet points:\n\n{body_text}",
+            model_name=None,
+        )
         await client.chat_postEphemeral(
             channel=channel_id,
             user=user_id,
-            text=f"📬 Checking email for {name}…",
+            text=f"📧 *Email summary:*\n{summary}",
         )
 
-        if not text or text.lower() == "today":
-            result = await read_inbox(count=10)
-        elif text.lower() == "week":
-            result = await read_inbox(count=25)
-        else:
-            result = await search_emails(text)
+    # ------------------------------------------------------------------
+    # Wave 10 Leia: gmail_summarize button action
+    # ------------------------------------------------------------------
 
+    @app.action("gmail_summarize")
+    async def handle_gmail_summarize(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        action = body.get("actions", [{}])[0]
+        message_id = action.get("value", "")
+        user_id = body.get("user", {}).get("id", "")
+        channel_id = body.get("channel", {}).get("id", user_id)
+        if not message_id:
+            return
+        body_text = await _get_gmail_body(message_id)
+        summary = await _ask(
+            f"Summarize this email in 3 bullet points:\n\n{body_text}",
+            model_name=None,
+        )
         await client.chat_postEphemeral(
             channel=channel_id,
             user=user_id,
-            text=result,
+            text=f"📧 *Email summary:*\n{summary}",
         )
 
     # ------------------------------------------------------------------

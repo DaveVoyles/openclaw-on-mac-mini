@@ -151,9 +151,15 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
+                "command": "/inbox",
+                "description": "Show your unread Gmail emails",
+                "usage_hint": "",
+                "should_escape": False,
+            },
+            {
                 "command": "/email",
-                "description": "Check your Gmail inbox or search for emails",
-                "usage_hint": "[today | week | <keyword>]",
+                "description": "Summarize a specific email from your inbox",
+                "usage_hint": "<number>",
                 "should_escape": False,
             },
             {
