@@ -52,6 +52,49 @@ log = logging.getLogger(__name__)
 
 _MENTION_RE = re.compile(r"<@[A-Z0-9]+>")
 
+# ---------------------------------------------------------------------------
+# Response cleanup for Slack
+# ---------------------------------------------------------------------------
+
+_RE_RECOVERY_BLOCKQUOTE = re.compile(
+    r"\n{1,2}> ℹ️ \*\*Recovery note:\*\*\n(?:> [^\n]*\n?)*",
+    re.MULTILINE,
+)
+_RE_RECOVERY_PLAIN = re.compile(
+    r"\n{1,2}[ℹ️:information_source:]\s*\*?\*?Recovery note\*?\*?:?[^\n]*\n(?:[^\n]*\n?){0,6}",
+    re.MULTILINE,
+)
+_RE_VIA_TRAILER = re.compile(r"\n_via [^\n]+_[ \t]*(?=\n|$)")
+_RE_MD_LINK = re.compile(r"\[([^\]]+)\]\((https?://[^)]+)\)")
+_RE_BOLD = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
+_RE_H = re.compile(r"^#{1,3} (.+)$", re.MULTILINE)
+_RE_HR = re.compile(r"^[-─*]{3,}$", re.MULTILINE)
+
+
+def _clean_for_slack(text: str) -> str:
+    """Strip recovery notes / CLI footers and convert markdown to Slack mrkdwn."""
+    # Remove recovery note blocks (blockquote and plain variants)
+    text = _RE_RECOVERY_BLOCKQUOTE.sub("", text)
+    text = _RE_RECOVERY_PLAIN.sub("", text)
+
+    # Strip _via model_ attribution line
+    text = _RE_VIA_TRAILER.sub("", text)
+
+    # Convert markdown links [text](url) → <url|text>
+    text = _RE_MD_LINK.sub(lambda m: f"<{m.group(2)}|{m.group(1)}>", text)
+
+    # Convert **bold** → *bold* (Slack mrkdwn)
+    text = _RE_BOLD.sub(lambda m: f"*{m.group(1)}*", text)
+
+    # Demote ATX headers (#, ##, ###) to bold lines
+    text = _RE_H.sub(lambda m: f"*{m.group(1)}*", text)
+
+    # Remove horizontal rules
+    text = _RE_HR.sub("", text)
+
+    return text.strip()
+
+
 # ------------------------------------------------------------------
 # Model selector  --model <alias>
 # ------------------------------------------------------------------
@@ -200,7 +243,7 @@ async def _send_answer(
     """Ask OpenClaw, update the thinking placeholder, and register the reply for feedback."""
     try:
         answer = await _ask(prompt, user_id, model_pref=model_pref, history=history)
-        text = answer or "(no response)"
+        text = _clean_for_slack(answer) if answer else "(no response)"
     except Exception as exc:
         text = f"❌ Sorry, something went wrong: {exc}"
 
