@@ -22,6 +22,7 @@ jobs:
   build:
     name: Build Documentation
     runs-on: [self-hosted, macOS, ARM64, openclaw]
+    continue-on-error: true
     env:
       BUNDLE_GEMFILE: ${{ github.workspace }}/docs/Gemfile
 
@@ -33,6 +34,7 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+        continue-on-error: true
 
       - name: Create Gemfile
         run: |
@@ -74,6 +76,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: [self-hosted, macOS, ARM64, openclaw]
     needs: build
+    if: needs.build.result == 'success'
 
     steps:
       - name: Deploy to GitHub Pages
