@@ -21,6 +21,7 @@ Keep these files local to this repo:
 | Doc | When to load |
 |---|---|
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Any task that changes code, runs a deploy, or verifies a fix |
+| [COMPLETION-RULES.md](COMPLETION-RULES.md) | Every task — before declaring work done, verify CI + assess surface updates |
 
 ## Load when relevant
 
