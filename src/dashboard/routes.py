@@ -50,6 +50,7 @@ from .api_handlers import (
 from .html_handlers import (
     dashboard_handler,
     guide_handler,
+    onboarding_handler,
     openclaw_cli_download_handler,
     openclaw_cli_installer_handler,
     openclaw_cli_remote_installer_handler,
@@ -80,6 +81,7 @@ def setup_dashboard(
     app.router.add_get("/dashboard", dashboard_handler)
     app.router.add_get("/guide", guide_handler)
     app.router.add_get("/terminal", terminal_handler)
+    app.router.add_get("/onboarding", onboarding_handler)
     app.router.add_get("/install", openclaw_cli_installer_handler)
     app.router.add_get("/install-remote", openclaw_cli_remote_installer_handler)
     app.router.add_get("/downloads/openclaw_cli.py", openclaw_cli_download_handler)

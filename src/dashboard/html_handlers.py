@@ -5,6 +5,7 @@ from aiohttp import web
 from .helpers import (
     DASHBOARD_HTML,
     GUIDE_HTML,
+    ONBOARDING_HTML,
     TERMINAL_HTML,
     build_openclaw_cli_installer,
     load_openclaw_cli_source,
@@ -25,6 +26,11 @@ async def guide_handler(request: web.Request) -> web.Response:
 async def terminal_handler(request: web.Request) -> web.Response:
     """Serve the terminal CLI cheat sheet page."""
     return web.Response(text=TERMINAL_HTML, content_type="text/html")
+
+
+async def onboarding_handler(request: web.Request) -> web.Response:
+    """Serve the new-user onboarding page."""
+    return web.Response(text=ONBOARDING_HTML, content_type="text/html")
 
 
 async def openclaw_cli_download_handler(request: web.Request) -> web.Response:

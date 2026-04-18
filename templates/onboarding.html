@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenClaw Tutorial</title>
+    <title>Get Started with OpenClaw</title>
     <style>
         * {
             margin: 0;
@@ -253,13 +253,97 @@
             font-size: 0.9em;
             color: #666;
         }
+
+        .slack-invite-box {
+            background: linear-gradient(135deg, #4a154b 0%, #611f69 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin: 25px 0;
+            text-align: center;
+        }
+
+        .slack-invite-box h3 {
+            font-size: 1.3em;
+            margin-bottom: 8px;
+        }
+
+        .slack-invite-box p {
+            color: rgba(255,255,255,0.85);
+            margin-bottom: 15px;
+        }
+
+        .slack-invite-box .btn-slack {
+            background: white;
+            color: #4a154b;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 1em;
+            display: inline-block;
+            text-decoration: none;
+        }
+
+        .slack-invite-box .btn-slack:hover {
+            background: #f0e8f5;
+        }
+
+        .example-prompt {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 12px 16px;
+            border-radius: 0 8px 8px 0;
+            margin: 10px 0;
+            font-style: italic;
+            color: #444;
+            font-size: 1em;
+        }
+
+        .step-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            line-height: 32px;
+            text-align: center;
+            font-weight: 700;
+            font-size: 0.9em;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .instruction-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .instruction-step-body {
+            flex: 1;
+        }
+
+        .instruction-step-body strong {
+            display: block;
+            color: #333;
+            margin-bottom: 4px;
+            font-size: 1.05em;
+        }
+
+        .instruction-step-body span {
+            color: #555;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
     <div class="tutorial-container">
         <div class="tutorial-header">
-            <h1>🤖 Welcome to OpenClaw!</h1>
-            <p>Your AI-powered automation assistant</p>
+            <h1>👋 Welcome to OpenClaw!</h1>
+            <p>Your personal AI assistant — set up in 5 minutes</p>
         </div>
 
         <div class="progress-bar">
@@ -269,195 +353,219 @@
         <div class="tutorial-content">
             <!-- Step 1: Welcome -->
             <div class="step active" data-step="1">
-                <h2>👋 Let's Get Started!</h2>
+                <h2>What can OpenClaw do for you?</h2>
                 <p>
-                    OpenClaw is your autonomous AI assistant for home automation, 
-                    system management, and productivity. This quick tutorial will 
-                    show you the key features in just a few minutes.
+                    OpenClaw is Dave's personal AI assistant, and you've been invited to use it!
+                    It can answer questions, help you with documents, look up information, and much more —
+                    all through a simple chat interface.
                 </p>
 
                 <div class="feature-grid">
                     <div class="feature-card">
-                        <div class="icon">🤖</div>
-                        <h3>AI Conversations</h3>
-                        <p>Natural language interactions powered by Google Gemini</p>
+                        <div class="icon">💬</div>
+                        <h3>Chat Naturally</h3>
+                        <p>Ask anything in plain English — no commands needed</p>
                     </div>
                     <div class="feature-card">
-                        <div class="icon">📅</div>
-                        <h3>Automation</h3>
-                        <p>Schedule tasks and create workflows</p>
+                        <div class="icon">📄</div>
+                        <h3>Document Help</h3>
+                        <p>Share a doc and get edits, summaries, or rewrites</p>
                     </div>
                     <div class="feature-card">
                         <div class="icon">🌐</div>
-                        <h3>Web Access</h3>
-                        <p>Browse and analyze web content</p>
+                        <h3>Research & Lookups</h3>
+                        <p>Weather, news, recipes, travel — just ask!</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">📁</div>
+                        <h3>Folder Access</h3>
+                        <p>Review all files in a shared folder at once</p>
+                    </div>
+                </div>
+
+                <div class="tip-box">
+                    <strong>No technical knowledge required.</strong> If you can send a text message, you can use OpenClaw!
+                </div>
+            </div>
+
+            <!-- Step 2: Get on Slack -->
+            <div class="step" data-step="2">
+                <h2>💬 Step 1 — Join the Slack workspace</h2>
+                <p>
+                    OpenClaw lives in <strong>Slack</strong>, a free messaging app available on your phone, tablet, or computer.
+                    You don't need to know anything about Slack — just follow these steps:
+                </p>
+
+                <div class="instruction-step">
+                    <div class="step-badge">1</div>
+                    <div class="instruction-step-body">
+                        <strong>Create a free Slack account</strong>
+                        <span>Go to <a href="https://slack.com" target="_blank" rel="noopener" style="color:#667eea">slack.com</a> and sign up with your email. It's completely free.</span>
+                    </div>
+                </div>
+
+                <div class="instruction-step">
+                    <div class="step-badge">2</div>
+                    <div class="instruction-step-body">
+                        <strong>Tell Dave your Slack email</strong>
+                        <span>Once you have an account, let Dave know the email you used and he'll send you an invite link to the workspace.</span>
+                    </div>
+                </div>
+
+                <div class="instruction-step">
+                    <div class="step-badge">3</div>
+                    <div class="instruction-step-body">
+                        <strong>Accept the invite & install the app</strong>
+                        <span>Click the invite link in your email, then install Slack on your phone or computer for the best experience.</span>
+                    </div>
+                </div>
+
+                <div class="tip-box">
+                    <strong>💡 Tip:</strong> The Slack mobile app works great on iPhone and Android. You can chat with OpenClaw anywhere!
+                </div>
+            </div>
+
+            <!-- Step 3: Start chatting -->
+            <div class="step" data-step="3">
+                <h2>🤖 Step 2 — Start chatting</h2>
+                <p>
+                    Once you're in the Slack workspace, find the <strong>OpenClaw</strong> bot in the sidebar
+                    under "Apps" or "Direct Messages." Then just type naturally — like texting a friend!
+                </p>
+
+                <p>Here are some things you can ask right away:</p>
+
+                <div class="example-prompt">"What's the weather in Seattle today?"</div>
+                <div class="example-prompt">"Give me 3 easy dinner ideas for tonight."</div>
+                <div class="example-prompt">"Can you summarize this article for me?" [paste link]</div>
+                <div class="example-prompt">"Write a birthday message for my nephew."</div>
+                <div class="example-prompt">"What are the best places to visit in Portugal?"</div>
+
+                <div class="tip-box">
+                    <strong>💡 Tip:</strong> No special commands needed — just talk to it like you would a knowledgeable friend.
+                    OpenClaw remembers what you said earlier in the conversation, so you can ask follow-up questions!
+                </div>
+            </div>
+
+            <!-- Step 4: Document review -->
+            <div class="step" data-step="4">
+                <h2>📄 Step 3 — Share a document for review</h2>
+                <p>
+                    OpenClaw can read and work with your documents. You can share a file directly in Slack,
+                    or paste text into the chat. It works with:
+                </p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <div class="icon">📝</div>
+                        <h3>Word Docs</h3>
+                        <p>.docx files from Microsoft Word or Google Docs</p>
+                    </div>
+                    <div class="feature-card">
+                        <div class="icon">📑</div>
+                        <h3>PDFs</h3>
+                        <p>Contracts, reports, articles — any PDF</p>
                     </div>
                     <div class="feature-card">
                         <div class="icon">📊</div>
-                        <h3>Monitoring</h3>
-                        <p>Track systems and services</p>
-                    </div>
-                </div>
-
-                <div class="tip-box">
-                    <strong>💡 Pro Tip:</strong> OpenClaw runs in Discord, making it easy 
-                    to access from your phone, computer, or any device!
-                </div>
-            </div>
-
-            <!-- Step 2: Basic Commands -->
-            <div class="step" data-step="2">
-                <h2>🎯 Basic Commands</h2>
-                <p>Start with these essential commands:</p>
-
-                <div class="command-example">
-                    /ask question:What is the weather like today?
-                </div>
-                <p>Ask me anything! I can answer questions, help with research, or chat about any topic.</p>
-
-                <div class="command-example">
-                    /help
-                </div>
-                <p>See all available commands and what they do.</p>
-
-                <div class="command-example">
-                    /analyze-file [attach file]
-                </div>
-                <p>Upload a PDF, image, or document for AI-powered analysis.</p>
-
-                <div class="tip-box">
-                    <strong>💡 Pro Tip:</strong> I support follow-up questions! 
-                    Just continue the conversation naturally.
-                </div>
-            </div>
-
-            <!-- Step 3: Scheduled Tasks -->
-            <div class="step" data-step="3">
-                <h2>⏰ Scheduled Tasks</h2>
-                <p>Automate recurring tasks with the scheduler:</p>
-
-                <div class="command-example">
-                    /schedule-task name:Daily Weather cron:0 8 * * *
-                </div>
-                <p>Create tasks that run automatically on a schedule (using cron syntax).</p>
-
-                <div class="command-example">
-                    /list-tasks
-                </div>
-                <p>View all your scheduled tasks and their status.</p>
-
-                <div class="command-example">
-                    /set-reminder time:tomorrow at 2pm message:Call dentist
-                </div>
-                <p>Set one-time reminders for important events.</p>
-
-                <div class="tip-box">
-                    <strong>💡 Pro Tip:</strong> Use scheduled tasks for daily digests, 
-                    weekly reports, or any recurring automation!
-                </div>
-            </div>
-
-            <!-- Step 4: API Integrations -->
-            <div class="step" data-step="4">
-                <h2>🔌 API Integrations</h2>
-                <p>I integrate with many external services:</p>
-
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <div class="icon">🌤️</div>
-                        <h3>Weather</h3>
-                        <p>Get forecasts and alerts</p>
+                        <h3>Spreadsheets</h3>
+                        <p>.xlsx Excel files and CSVs</p>
                     </div>
                     <div class="feature-card">
-                        <div class="icon">📧</div>
-                        <h3>Email</h3>
-                        <p>Send emails via Gmail/SMTP</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">🐳</div>
-                        <h3>Docker</h3>
-                        <p>Manage containers</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">💾</div>
-                        <h3>NAS</h3>
-                        <p>File operations</p>
+                        <div class="icon">✏️</div>
+                        <h3>Pasted Text</h3>
+                        <p>Copy-paste any text directly into the chat</p>
                     </div>
                 </div>
 
-                <div class="tip-box">
-                    <strong>💡 Pro Tip:</strong> Check API_SETUP_COMPLETE.md for 
-                    detailed setup guides for each integration.
-                </div>
+                <p>After uploading or pasting, just tell OpenClaw what you need:</p>
+                <div class="example-prompt">"Can you make this more concise?"</div>
+                <div class="example-prompt">"Fix the grammar and make it sound more professional."</div>
+                <div class="example-prompt">"Summarize the key points in plain English."</div>
+                <div class="example-prompt">"What are the most important sections of this contract?"</div>
             </div>
 
-            <!-- Step 5: Dashboard -->
+            <!-- Step 5: Get updated documents back -->
             <div class="step" data-step="5">
-                <h2>📊 Web Dashboard</h2>
-                <p>Access advanced features through the web dashboard:</p>
+                <h2>✅ Step 4 — Get your updated document back</h2>
+                <p>
+                    After OpenClaw reviews or edits your document, it will give you the updated version right in the chat.
+                    Here's how to get the best results:
+                </p>
 
-                <div class="command-example">
-                    http://localhost:8080/dashboard
+                <div class="instruction-step">
+                    <div class="step-badge">1</div>
+                    <div class="instruction-step-body">
+                        <strong>Upload your file or paste your text</strong>
+                        <span>Drag a file into the Slack chat, or copy-paste your text directly.</span>
+                    </div>
                 </div>
 
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <div class="icon">📈</div>
-                        <h3>Metrics</h3>
-                        <p>Real-time performance data</p>
+                <div class="instruction-step">
+                    <div class="step-badge">2</div>
+                    <div class="instruction-step-body">
+                        <strong>Ask for what you want</strong>
+                        <span>Be specific: "Make this more concise," "Rewrite this for a 5-year-old," or "Fix the grammar."</span>
                     </div>
-                    <div class="feature-card">
-                        <div class="icon">💬</div>
-                        <h3>History</h3>
-                        <p>Browse conversations</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">⚙️</div>
-                        <h3>Config</h3>
-                        <p>Manage settings</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="icon">🔍</div>
-                        <h3>Search</h3>
-                        <p>Find anything quickly</p>
+                </div>
+
+                <div class="instruction-step">
+                    <div class="step-badge">3</div>
+                    <div class="instruction-step-body">
+                        <strong>Copy the result</strong>
+                        <span>OpenClaw will reply with the updated text. Just copy it and paste it wherever you need it!</span>
                     </div>
                 </div>
 
                 <div class="tip-box">
-                    <strong>💡 Pro Tip:</strong> The dashboard updates in real-time 
-                    and works great on mobile!
+                    <strong>💡 Tip:</strong> You can ask for multiple rounds of edits. Just say "make it shorter" or
+                    "add a friendlier tone" and it will keep refining until you're happy!
                 </div>
             </div>
 
-            <!-- Step 6: Advanced Features -->
+            <!-- Step 6: Shared folder -->
             <div class="step" data-step="6">
-                <h2>🚀 Advanced Features</h2>
-                <p>Power user features for serious automation:</p>
+                <h2>📁 Step 5 — Review a whole folder of documents</h2>
+                <p>
+                    Want OpenClaw to look at multiple files at once — like a whole project folder?
+                    Dave can set up a <strong>shared folder</strong> that OpenClaw has access to.
+                    Once it's set up, you can ask things like:
+                </p>
 
-                <ul style="list-style: none; padding: 0;">
-                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
-                        🧠 <strong>Long-term Memory:</strong> I remember facts and preferences
-                    </li>
-                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
-                        📊 <strong>Goal Tracking:</strong> Monitor habits and achievements
-                    </li>
-                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
-                        💰 <strong>Expense Tracking:</strong> Budget and financial monitoring
-                    </li>
-                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
-                        🎯 <strong>Decision Workflows:</strong> If-this-then-that automations
-                    </li>
-                    <li style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
-                        🚨 <strong>Incident Management:</strong> Alert handling and escalation
-                    </li>
-                    <li style="padding: 10px 0;">
-                        🔄 <strong>Agent Loops:</strong> Autonomous multi-step tasks
-                    </li>
-                </ul>
+                <div class="example-prompt">"List all the files in the shared folder."</div>
+                <div class="example-prompt">"Read the file called 'proposal.docx' and give me a summary."</div>
+                <div class="example-prompt">"Which documents in the folder mention budget?"</div>
+                <div class="example-prompt">"Review all the files and tell me which one needs the most editing."</div>
+
+                <p style="margin-top: 16px;">To get access to the shared folder:</p>
+
+                <div class="instruction-step">
+                    <div class="step-badge">1</div>
+                    <div class="instruction-step-body">
+                        <strong>Ask Dave to add you</strong>
+                        <span>Dave can give you access to a shared folder (called <code style="background:#f0f4ff;padding:2px 6px;border-radius:4px">/ai-files</code>) on his system.</span>
+                    </div>
+                </div>
+
+                <div class="instruction-step">
+                    <div class="step-badge">2</div>
+                    <div class="instruction-step-body">
+                        <strong>Place files in the folder</strong>
+                        <span>Copy your documents into the shared folder — Dave can help you do this the first time.</span>
+                    </div>
+                </div>
+
+                <div class="instruction-step">
+                    <div class="step-badge">3</div>
+                    <div class="instruction-step-body">
+                        <strong>Ask OpenClaw to work with them</strong>
+                        <span>In Slack, just tell OpenClaw the file name and what you need. It will read the file and respond!</span>
+                    </div>
+                </div>
 
                 <div class="tip-box">
-                    <strong>💡 Pro Tip:</strong> Use /fact to teach me about your 
-                    preferences and I'll remember them!
+                    <strong>💡 Tip:</strong> This is great for reviewing contracts, recipes, travel plans, or any set of documents
+                    you want AI help with all at once.
                 </div>
             </div>
 
@@ -465,27 +573,32 @@
             <div class="step" data-step="7">
                 <div class="completion-badge">
                     <div class="icon">🎉</div>
-                    <h2>Tutorial Complete!</h2>
-                    <p>You're ready to start using OpenClaw. Here are some quick links to help you continue:</p>
+                    <h2>You're all set!</h2>
+                    <p>You're ready to start using OpenClaw. Here's a quick reminder of how to get going:</p>
                 </div>
 
                 <div class="quick-links">
-                    <a href="/dashboard" class="quick-link">
+                    <a href="https://slack.com/downloads" target="_blank" rel="noopener" class="quick-link">
+                        <h4>📱 Get Slack</h4>
+                        <p>Download the app for your phone or computer</p>
+                    </a>
+                    <a href="https://openclaw.davevoyles.synology.me/dashboard" target="_blank" rel="noopener" class="quick-link">
                         <h4>📊 Dashboard</h4>
-                        <p>View metrics and analytics</p>
+                        <p>See what OpenClaw is up to</p>
                     </a>
-                    <a href="/guide" class="quick-link">
-                        <h4>📖 User Guide</h4>
-                        <p>Full documentation</p>
+                    <a href="https://chat.davevoyles.synology.me" target="_blank" rel="noopener" class="quick-link">
+                        <h4>💻 Web Chat</h4>
+                        <p>Chat from your browser without Slack</p>
                     </a>
                     <div class="quick-link" style="cursor: default;">
-                        <h4>💬 Discord</h4>
-                        <p>Type /help to see commands</p>
+                        <h4>🤖 Need help?</h4>
+                        <p>Just ask OpenClaw anything — it's here for you 24/7!</p>
                     </div>
-                    <div class="quick-link" style="cursor: default;">
-                        <h4>🤖 Ask Me</h4>
-                        <p>I'm here to help anytime!</p>
-                    </div>
+                </div>
+
+                <div class="tip-box" style="margin-top: 30px;">
+                    <strong>🔒 Privacy note:</strong> This assistant is private — only people Dave has personally
+                    invited can access it. Your conversations are not shared with anyone.
                 </div>
             </div>
 
@@ -509,27 +622,22 @@
         const totalSteps = 7;
 
         function updateStep() {
-            // Hide all steps
             document.querySelectorAll('.step').forEach(step => {
                 step.classList.remove('active');
             });
 
-            // Show current step
             document.querySelector(`.step[data-step="${currentStep}"]`).classList.add('active');
 
-            // Update progress bar
             const progress = (currentStep / totalSteps) * 100;
             document.getElementById('progressFill').style.width = `${progress}%`;
 
-            // Update step indicator
             document.getElementById('stepIndicator').textContent = `Step ${currentStep} of ${totalSteps}`;
 
-            // Update buttons
             document.getElementById('prevBtn').disabled = currentStep === 1;
-            
+
             const nextBtn = document.getElementById('nextBtn');
             if (currentStep === totalSteps) {
-                nextBtn.textContent = 'Get Started! 🚀';
+                nextBtn.textContent = 'Open Dashboard 🚀';
                 nextBtn.onclick = () => {
                     window.location.href = '/dashboard';
                 };
@@ -547,7 +655,6 @@
             }
         }
 
-        // Initialize
         updateStep();
     </script>
 </body>
