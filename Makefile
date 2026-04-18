@@ -59,6 +59,8 @@ verify-deploy:
 ship-server:
 	@echo "🔄 Pulling latest on Mac Mini..."
 	ssh macmini "cd /Users/davevoyles/openclaw && git pull --ff-only && git rev-parse --short HEAD > src/_git_sha.txt"
+	@echo "🧹 Clearing Python bytecode cache to prevent stale .pyc issues..."
+	ssh macmini "find /Users/davevoyles/openclaw/src -name '*.pyc' -delete 2>/dev/null; find /Users/davevoyles/openclaw/src -name '__pycache__' -type d -exec rmdir {} + 2>/dev/null; true"
 	@echo "🐳 Restarting openclaw container to load new Python code..."
 	ssh macmini "/usr/local/bin/docker restart openclaw"
 	@sleep 5
