@@ -123,6 +123,8 @@ Concise operator playbook for incidents, monitoring interpretation, backup/recov
 | `SLACK_NOTIFY_USER_ID` | Yes | Slack user ID to DM when new files appear in `AI_FILES_DIR` |
 | `AI_FILES_DIR` | Yes | Directory polled by the proactive file-alert loop |
 | `OPENCLAW_FILE_POLL_INTERVAL` | No | Seconds between file-alert polls (default: `60`) |
+| `DIGEST_CHECK_INTERVAL` | No | Seconds between digest-loop checks (default: `3600` / 1 hour) |
+| `DIGEST_LOOKBACK_HOURS` | No | Hours of file history shown in each digest (default: `24`) |
 
 ### Slack HTTP Endpoints
 
@@ -130,6 +132,21 @@ Concise operator playbook for incidents, monitoring interpretation, backup/recov
 | --- | --- | --- | --- |
 | `GET` | `http://192.168.1.93:8080/health` | none | Polled by `/status` slash command; returns JSON liveness |
 | `POST` | `http://192.168.1.93:8080/upload` | `X-OpenClaw-Key` header | Multipart field `file`; allowed: `.docx .xlsx .pdf .txt .csv`; blocked: `.exe .sh .py .zip .bat` |
+
+### Wave 5 Slash Commands (new in v0.14.0)
+
+| Command | Description | Data stored |
+| --- | --- | --- |
+| `/digest on\|off\|status` | Per-user daily file digest via DM | `data/digest_prefs.json` |
+| `/template list\|<name>` | Lists or DMs a starter template file | `data/templates/` (committed) |
+| `/brief` | Shows user's last 5 uploaded files with timestamps | reads file metadata |
+| `/mystats` | Per-user stats from `slack_metrics.jsonl` | reads metrics log |
+
+### Excel Formula Intelligence Button
+
+When an `.xlsx` file is uploaded, a **📐 Formulas** button appears alongside Summarize, Chart, etc.
+Clicking it sends the spreadsheet to the AI with a prompt that explains every formula in plain English,
+flags errors, and suggests simpler alternatives.
 
 ### `/status` Slash Command
 

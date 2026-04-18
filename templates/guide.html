@@ -5181,6 +5181,11 @@ git push --tags
             <tr><td style="padding:0.35rem 0.6rem"><code>/batch summarize|proofread|explain</code></td><td style="padding:0.35rem 0.6rem">Process all uploaded files at once with the chosen action</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/status</code></td><td style="padding:0.35rem 0.6rem">Check system health: Mac Mini reachable, file count in /ai-files, last sync time, alert status</td></tr>
             <tr><td style="padding:0.35rem 0.6rem"><code>/metrics</code></td><td style="padding:0.35rem 0.6rem">Show usage statistics and bot performance metrics</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/digest on|off|status</code></td><td style="padding:0.35rem 0.6rem">Opt in or out of daily DM summaries listing files synced in the last 24 hours</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/template list</code></td><td style="padding:0.35rem 0.6rem">Show available starter document templates (budget, letter, meeting notes)</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/template &lt;name&gt;</code></td><td style="padding:0.35rem 0.6rem">DM yourself a ready-to-fill template file &mdash; e.g. <code>/template budget</code></td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/brief</code></td><td style="padding:0.35rem 0.6rem">See your last 5 uploaded files with timestamps at a glance</td></tr>
+            <tr><td style="padding:0.35rem 0.6rem"><code>/mystats</code></td><td style="padding:0.35rem 0.6rem">Your personal usage stats: queries, files processed, average response time, top actions</td></tr>
           </tbody>
         </table>
       </div>
@@ -5197,6 +5202,7 @@ git push --tags
         <li><strong>Chart</strong> &mdash; extract and visualise data (Excel/CSV)</li>
         <li><strong>Translate</strong> &mdash; translate the document to another language</li>
         <li><strong>Compare</strong> &mdash; compare two uploaded files side-by-side</li>
+        <li><strong>&#128208; Formulas</strong> &mdash; explains every formula in an Excel file in plain English, flags errors, and suggests simplifications (xlsx only)</li>
       </ul>
       <p>
         Allowed upload extensions: <code>.docx .xlsx .pdf .txt .csv</code>.
@@ -5257,6 +5263,33 @@ Invoke-RestMethod `
         </p>
       </div>
 
+      <h3>Daily File Digest (<code>/digest</code>)</h3>
+      <p>
+        Opt in to a daily DM that lists every file synced to <code>/ai-files</code> in the
+        last 24 hours so you never miss a new document.
+      </p>
+      <ul>
+        <li><code>/digest on</code> &mdash; start receiving daily summaries</li>
+        <li><code>/digest off</code> &mdash; stop receiving summaries</li>
+        <li><code>/digest status</code> &mdash; check whether digests are enabled and when the last one was sent</li>
+      </ul>
+      <p>
+        The bot checks once per hour and DMs you if 24&nbsp;hours have elapsed since your last digest.
+        Up to 10 files are shown, most-recent first, with relative timestamps (<em>2h ago</em>, <em>1d ago</em>).
+      </p>
+
+      <h3>Starter Templates (<code>/template</code>)</h3>
+      <p>
+        Download a ready-to-fill document template directly to your Slack DMs &mdash; no hunting through shared drives.
+      </p>
+      <ul>
+        <li><code>/template list</code> &mdash; see all available templates</li>
+        <li><code>/template budget</code> &mdash; monthly budget spreadsheet with formula totals</li>
+        <li><code>/template letter</code> &mdash; formal letter layout</li>
+        <li><code>/template meeting-notes</code> &mdash; agenda + action-item table</li>
+      </ul>
+      <p>Prefix matching works: <code>/template meet</code> returns <code>meeting-notes.docx</code>.</p>
+
       <h3>Quick-Start Flow</h3>
       <div class="card">
         <pre><code>1. Open Slack DM with @OpenClaw
@@ -5267,7 +5300,9 @@ Invoke-RestMethod `
 6. Type: /research quantum computing
                            → Perplexity returns a cited summary
 7. Type: /batch summarize  → process all uploaded files at once
-8. Type: /files recent     → review the last 10 uploads</code></pre>
+8. Type: /files recent     → review the last 10 uploads
+9. Type: /digest on        → get daily file-sync summaries by DM
+10. Type: /template list   → see available starter templates</code></pre>
       </div>
 
       <div class="tip">
@@ -5288,7 +5323,7 @@ Invoke-RestMethod `
           padding-top: 1rem;
         "
       >
-        OpenClaw v0.13.0 (Phase 3 & 4 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
+        OpenClaw v0.14.0 (Wave 5 Complete) &mdash; <a href="/dashboard">Dashboard</a> &middot;
         <a
           href="https://github.com/DaveVoyles/openclaw-on-mac-mini"
           target="_blank"
