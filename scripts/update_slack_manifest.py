@@ -54,6 +54,12 @@ MANIFEST: dict = {
                 "usage_hint": "on | off",
                 "should_escape": False,
             },
+            {
+                "command": "/files",
+                "description": "Browse and reference your synced documents",
+                "usage_hint": "[filename]",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {

@@ -1,4 +1,4 @@
-.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest help
+.PHONY: test test-cli test-verbose lint format type-check build clean deploy deploy-cli verify-deploy ship ship-server ship-cli e2e e2e-macbook slack-manifest install-watcher help
 
 test:
 	.venv/bin/python3 -m pytest tests/ -x -q --tb=short
@@ -74,6 +74,9 @@ ship: ship-server ship-cli
 	@echo ""
 	@echo "✅ Both server and CLI updated. Run 'make verify-deploy' to confirm."
 
+install-watcher:
+	bash scripts/install_watcher.sh
+
 slack-manifest:
 	@echo "📋 Pushing Slack manifest..."
 	python3 scripts/update_slack_manifest.py --push
@@ -102,5 +105,6 @@ help:
 	@echo "  ship-server   Pull latest + restart openclaw container only"
 	@echo "  ship-cli      Deploy CLI to MacBook only"
 	@echo "  slack-manifest Push Slack app manifest via API (requires SLACK_APP_ID + SLACK_CONFIG_TOKEN in .env)"
+	@echo "  install-watcher Install Mac folder watcher (run once on parent's Mac)"
 	@echo "  clean         Remove __pycache__, .pyc, caches"
 	@echo "  help          Show this help"

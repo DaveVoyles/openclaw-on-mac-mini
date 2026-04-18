@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.openclaw.watcher.plist
+  launchd job definition for the OpenClaw Mac Folder Watcher.
+
+  The installer (install_watcher.sh) copies this to ~/Library/LaunchAgents/
+  after substituting SCRIPT_PATH and LOGS_DIR with real paths.
+
+  To manage manually:
+    launchctl load   ~/Library/LaunchAgents/com.openclaw.watcher.plist
+    launchctl unload ~/Library/LaunchAgents/com.openclaw.watcher.plist
+    launchctl list   com.openclaw.watcher
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.openclaw.watcher</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>SCRIPT_PATH</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>LOGS_DIR/openclaw-watcher.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>LOGS_DIR/openclaw-watcher-error.log</string>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>

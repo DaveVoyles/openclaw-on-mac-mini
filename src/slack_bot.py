@@ -52,6 +52,8 @@ from typing import Any
 
 import aiohttp
 
+import file_skills
+
 from constants import ATTACHMENT_TEXT_MAX_CHARS
 from document_skills import create_word
 from http_session import SessionManager
@@ -500,6 +502,39 @@ def _build_file_blocks(
         {"type": "section", "text": {"type": "mrkdwn", "text": header}},
         {"type": "actions", "elements": buttons},
     ]
+
+
+def _mimetype_for(filename: str) -> str:
+    """Return a reasonable MIME type from a filename suffix."""
+    suffix = Path(filename).suffix.lower()
+    return {
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".pdf": "application/pdf",
+        ".txt": "text/plain",
+        ".csv": "text/csv",
+    }.get(suffix, "application/octet-stream")
+
+
+def _route_model_for_file(filename: str, action: str) -> str:
+    """Return the best model_pref for this file + action combination.
+
+    Routing table (highest priority first):
+    - .docx + proofread/summarize → gemini (long context)
+    - .xlsx + analyze/chart → copilot (structured data)
+    - any + research/search → perplexity-direct (web search)
+    - default → auto
+    """
+    suffix = Path(filename).suffix.lower()
+    action_lower = action.lower()
+
+    if suffix == ".docx" and any(kw in action_lower for kw in ("proofread", "summarize")):
+        return "gemini"
+    if suffix == ".xlsx" and any(kw in action_lower for kw in ("analyze", "chart")):
+        return "copilot"
+    if any(kw in action_lower for kw in ("research", "search")):
+        return "perplexity-direct"
+    return "auto"
 
 
 async def _auto_brief_file(file_obj: dict, token: str) -> str | None:
@@ -1019,8 +1054,19 @@ def create_slack_app():  # type: ignore[return]
             file_bytes = None
 
         prompt_text = _FILE_ACTION_PROMPTS.get(action_id, "Please analyze this file.")
-        prompt = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, prompt_text)
+
+        # Handle files referenced from /ai-files directly (no Slack download needed)
+        if file_obj.get("ai_files_path"):
+            file_content = await file_skills.read_local_file(file_obj["ai_files_path"])
+            prompt = f"{prompt_text}\n\n--- File: {file_obj['name']} ---\n{file_content}\n--- End ---"
+        else:
+            prompt = await _process_slack_files([file_obj], SLACK_BOT_TOKEN, prompt_text)
+
         use_simple = _get_user_simple(user_id)
+
+        # Smart model routing based on file type + action
+        filename_for_routing = file_obj.get("name", "")
+        model_pref = _route_model_for_file(filename_for_routing, action_id)
 
         thinking_resp = await say(text="⏳ Thinking…")
         thinking_ts = (thinking_resp or {}).get("ts")
@@ -1034,6 +1080,7 @@ def create_slack_app():  # type: ignore[return]
             prompt=prompt,
             user_id=user_id,
             simple=use_simple,
+            model_pref=model_pref,
         )
 
         # For proofread on .docx: also return a corrected document file
@@ -1052,6 +1099,94 @@ def create_slack_app():  # type: ignore[return]
                     await _return_corrected_doc(file_obj, channel, user_id, corrected_text, client)
                 except Exception as exc:
                     log.warning("_dispatch_file_action: corrected doc failed for %s: %s", filename, exc)
+
+    # ------------------------------------------------------------------
+    # Handler: /files — browse and reference synced documents
+    # ------------------------------------------------------------------
+
+    @app.command("/files")
+    async def handle_slash_files(ack: Any, body: dict[str, Any], say: Any, client: Any) -> None:
+        await ack()
+        user_id: str = (body.get("user_id") or "unknown")
+        channel: str = body.get("channel_id", "")
+        text: str = (body.get("text") or "").strip()
+
+        if not text:
+            # List mode — show all files in /ai-files
+            listing = await file_skills.list_local_files("/ai-files")
+
+            if "empty" in listing.lower() or "not found" in listing.lower():
+                await client.chat_postEphemeral(
+                    channel=channel,
+                    user=user_id,
+                    text=(
+                        "📂 No files yet! Drop a Word doc into your OpenClaw folder "
+                        "and it'll appear here."
+                    ),
+                )
+                return
+
+            lines = listing.splitlines()
+            file_blocks: list[dict] = [
+                {"type": "section", "text": {"type": "mrkdwn", "text": "📁 *Files in OpenClaw:*"}},
+            ]
+            for line in lines[1:21]:  # skip header line, cap at 20
+                stripped = line.strip()
+                if stripped:
+                    file_blocks.append({
+                        "type": "section",
+                        "text": {"type": "mrkdwn", "text": f"`{stripped}`"},
+                    })
+            file_blocks.append({
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": "Tip: `/files budget.xlsx` to select a file"}],
+            })
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                blocks=file_blocks,
+                text="Files in OpenClaw",
+            )
+            return
+
+        # Reference mode — select a specific file from /ai-files
+        target = Path("/ai-files") / text
+        if not target.exists() or not target.is_file():
+            await client.chat_postEphemeral(
+                channel=channel,
+                user=user_id,
+                text=f"⚠️ File not found: `{text}`. Use `/files` to see available files.",
+            )
+            return
+
+        stat = target.stat()
+        synthetic_file_id = f"aifiles::{text}"
+        synthetic_file_obj = {
+            "id": synthetic_file_id,
+            "name": text,
+            "mimetype": _mimetype_for(text),
+            "size": stat.st_size,
+            "url_private": None,
+            "ai_files_path": str(target),
+        }
+        _register_file(synthetic_file_id, synthetic_file_obj)
+
+        if user_id not in _user_prefs:
+            _user_prefs[user_id] = {}
+        _user_prefs[user_id]["active_file_id"] = synthetic_file_id
+        _save_prefs()
+
+        blocks = _build_file_blocks(
+            filename=text,
+            description=f"From OpenClaw storage ({stat.st_size:,} bytes)",
+            mimetype=synthetic_file_obj["mimetype"],
+            file_id=synthetic_file_id,
+        )
+        await client.chat_postMessage(
+            channel=channel,
+            blocks=blocks,
+            text=f"Selected file: {text}",
+        )
 
     # Register one handler per action_id using closures
     for _action_id in list(_FILE_ACTION_PROMPTS.keys()):
