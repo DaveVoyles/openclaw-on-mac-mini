@@ -46,12 +46,12 @@ from slack_bot import (  # noqa: E402
     _HELP_TEXT,
     _WELCOME_MESSAGE,
     _get_user_simple,
+    _is_batch_upload,
+    _is_research_request,
     _parse_flags,
+    _route_model_for_file,
     _set_user_simple,
     _suggest_actions_for_file,
-    _route_model_for_file,
-    _is_research_request,
-    _is_batch_upload,
 )
 
 # ---------------------------------------------------------------------------
@@ -249,7 +249,6 @@ class TestSlackBot(unittest.TestCase):
     def test_return_corrected_doc_skips_non_docx(self):
         """xlsx files should not attempt an upload; a plain message is sent instead."""
         import asyncio
-        from unittest.mock import AsyncMock, MagicMock
 
         # Build a minimal create_slack_app so _return_corrected_doc is accessible
         # We test it indirectly by checking the client mock receives no files_upload call
@@ -266,7 +265,6 @@ class TestSlackBot(unittest.TestCase):
         # Reconstruct a minimal _return_corrected_doc from slack_bot internals
         # by calling create_slack_app (which defines it as a closure) — instead
         # we replicate the logic directly via the module-level test:
-        import slack_bot as sb
 
         # Patch create_word to avoid real docx generation (not reached for xlsx)
         file_obj = {"name": "budget.xlsx"}
@@ -284,7 +282,6 @@ class TestSlackBot(unittest.TestCase):
     @staticmethod
     async def _run_return_corrected_doc(file_obj, channel, user_id, corrected_text, client):
         """Mirror _return_corrected_doc logic for non-.docx files (test helper)."""
-        import logging
         filename = file_obj.get("name", "document.docx")
         if not filename.lower().endswith(".docx"):
             try:
@@ -300,7 +297,7 @@ class TestSlackBot(unittest.TestCase):
     def test_files_command_empty_volume(self):
         """Empty /ai-files returns a friendly 'no files yet' message."""
         import asyncio
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, patch
 
         ephemeral_calls = []
 
@@ -403,7 +400,7 @@ class TestSlackBot(unittest.TestCase):
     def test_run_research_pipeline_no_file(self):
         """Perplexity is called first; tip message appears when no file is active."""
         import asyncio
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
 
         posted = []
 
@@ -444,6 +441,7 @@ class TestSlackBot(unittest.TestCase):
         import asyncio
         import unittest.mock
         from unittest.mock import AsyncMock
+
         from slack_bot import _process_batch
 
         files = [

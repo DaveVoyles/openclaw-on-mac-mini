@@ -54,7 +54,6 @@ from typing import Any
 import aiohttp
 
 import file_skills
-
 from constants import ATTACHMENT_TEXT_MAX_CHARS
 from document_skills import create_word
 from http_session import SessionManager
@@ -417,6 +416,10 @@ def _slack_is_configured() -> bool:
 # Pruned to last 200 entries.
 _file_registry: dict[str, dict] = {}
 
+# Batch file grouping state: channel:ts → list of file events queued within grouping window
+_pending_batch: dict[str, list[dict]] = {}
+_batch_lock: asyncio.Lock | None = None  # initialized lazily
+
 # Prompts sent to the LLM when a file action button is clicked
 _FILE_ACTION_PROMPTS: dict[str, str] = {
     "file_proofread": (
@@ -431,6 +434,11 @@ _FILE_ACTION_PROMPTS: dict[str, str] = {
     "file_errors": (
         "Please identify any errors, inconsistencies, unusual values, or potential problems "
         "in this document. Be specific."
+    ),
+    "file_research": (
+        "Using web research to enhance your analysis. "
+        "First identify key entities, terms, or claims in this document that would benefit from current information. "
+        "Then provide a research-enhanced analysis incorporating both the document content and current facts."
     ),
     "file_describe": "Please describe what is in this image in detail.",
     "file_read_text": "Please read and transcribe all text visible in this image.",
@@ -495,6 +503,12 @@ def _build_file_blocks(
                 "type": "button",
                 "text": {"type": "plain_text", "text": "🔍 Find errors", "emoji": True},
                 "action_id": "file_errors",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🔬 Research", "emoji": True},
+                "action_id": "file_research",
                 "value": file_id,
             },
         ]
@@ -1319,10 +1333,7 @@ def create_slack_app():  # type: ignore[return]
 
         # Registry now stores {"file_obj": ..., "file_bytes": ...}
         if isinstance(file_obj, dict) and "file_obj" in file_obj:
-            file_bytes = file_obj.get("file_bytes")
             file_obj = file_obj["file_obj"]
-        else:
-            file_bytes = None
 
         prompt_text = _FILE_ACTION_PROMPTS.get(action_id, "Please analyze this file.")
 
