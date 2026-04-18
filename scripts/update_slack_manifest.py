@@ -180,6 +180,12 @@ MANIFEST: dict = {
                 "usage_hint": "[list]",
                 "should_escape": False,
             },
+            {
+                "command": "/channels",
+                "description": "List or archive Slack channels (admin)",
+                "usage_hint": "[list | archive <name>]",
+                "should_escape": False,
+            },
         ],
     },
     "oauth_config": {
@@ -196,7 +202,13 @@ MANIFEST: dict = {
                 "im:write",
                 "reactions:read",
                 "reactions:write",
-            ]
+            ],
+            "user": [
+                "channels:read",
+                "channels:manage",
+                "groups:read",
+                "groups:write",
+            ],
         }
     },
     "settings": {
