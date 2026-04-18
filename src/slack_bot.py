@@ -393,6 +393,10 @@ _DIGEST_PREFS_PATH = Path(__file__).parent.parent / "data" / "digest_prefs.json"
 _DIGEST_CHECK_INTERVAL: int = int(os.getenv("DIGEST_CHECK_INTERVAL", "3600"))  # check every hour
 _DIGEST_LOOKBACK_HOURS: int = int(os.getenv("DIGEST_LOOKBACK_HOURS", "24"))  # show files modified in last N hours
 
+# --- Wave 5: templates ---
+_DATA_DIR = Path(__file__).parent.parent / "data"
+_TEMPLATES_DIR = _DATA_DIR / "templates"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -838,6 +842,39 @@ def _build_file_blocks(
                 "type": "button",
                 "text": {"type": "plain_text", "text": "📝 Read text in image", "emoji": True},
                 "action_id": "file_read_text",
+                "value": file_id,
+            },
+        ]
+    elif (mimetype or "").lower() == "application/pdf" or filename.lower().endswith(".pdf"):
+        buttons = [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📋 Summarize", "emoji": True},
+                "action_id": "file_summarize",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "📌 Key Points", "emoji": True},
+                "action_id": "file_explain",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "✅ Action Items", "emoji": True},
+                "action_id": "file_errors",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🌍 Translate", "emoji": True},
+                "action_id": "file_translate",
+                "value": file_id,
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🔀 Compare", "emoji": True},
+                "action_id": "file_compare_start",
                 "value": file_id,
             },
         ]
@@ -2732,6 +2769,190 @@ def create_slack_app():  # type: ignore[return]
     # ------------------------------------------------------------------
     # Handler: /clear — reset session state for the calling user
     # ------------------------------------------------------------------
+
+    @app.command("/brief")
+    async def handle_slash_brief(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id = body.get("user_id", "")
+        entries = _file_history.get(user_id, [])
+        if not entries:
+            await client.chat_postEphemeral(
+                channel=body["channel_id"],
+                user=user_id,
+                text="📂 You haven't uploaded any files yet. Drop a file here to get started!",
+            )
+            return
+
+        import datetime
+
+        recent = list(reversed(entries))[:5]
+        lines = []
+        for entry in recent:
+            name = entry.get("name", "unknown")
+            uploaded_at = entry.get("uploaded_at", "")
+            if uploaded_at:
+                try:
+                    dt = datetime.datetime.fromisoformat(uploaded_at)
+                    delta = datetime.datetime.now() - dt
+                    days = delta.days
+                    if days == 0:
+                        when = "today"
+                    elif days == 1:
+                        when = "yesterday"
+                    else:
+                        when = f"{days} days ago"
+                except Exception:
+                    when = uploaded_at[:10]
+            else:
+                when = "recently"
+            lines.append(f"• *{name}* — {when}")
+
+        text = "*📂 Your recent files:*\n" + "\n".join(lines)
+        text += "\n\n_Type `/files recent` to see the full list, or just upload a new file!_"
+        await client.chat_postEphemeral(
+            channel=body["channel_id"],
+            user=user_id,
+            text=text,
+        )
+
+    @app.command("/mystats")
+    async def handle_slash_mystats(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        import hashlib
+
+        user_id = body.get("user_id", "")
+        channel_id = body.get("channel_id", "")
+        user_hash = hashlib.sha256(user_id.encode()).hexdigest()[:12]
+
+        metrics_path = Path(__file__).parent.parent / "logs" / "slack_metrics.jsonl"
+
+        query_count = 0
+        file_count = 0
+        total_ms = 0
+        error_count = 0
+        action_counts: dict[str, int] = {}
+
+        if metrics_path.exists():
+            try:
+                with open(metrics_path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            rec = json.loads(line)
+                        except Exception:
+                            continue
+                        if rec.get("user_id") != user_hash:
+                            continue
+                        query_count += 1
+                        action = rec.get("action", "")
+                        action_counts[action] = action_counts.get(action, 0) + 1
+                        if "file" in action.lower():
+                            file_count += 1
+                        dur = rec.get("duration_ms", 0)
+                        if dur:
+                            total_ms += dur
+                        if rec.get("status") == "error":
+                            error_count += 1
+            except Exception as exc:
+                log.warning("mystats: error reading metrics: %s", exc)
+
+        avg_ms = int(total_ms / query_count) if query_count > 0 else 0
+        top_actions = sorted(action_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+        top_str = ", ".join(f"{a} ({c})" for a, c in top_actions) if top_actions else "none yet"
+
+        text = (
+            f"*📊 Your OpenClaw Stats*\n\n"
+            f"• Queries answered: *{query_count}*\n"
+            f"• Files processed: *{file_count}*\n"
+            f"• Average response time: *{avg_ms}ms*\n"
+            f"• Errors: *{error_count}*\n"
+            f"• Top actions: {top_str}\n\n"
+            f"_Stats tracked since OpenClaw Wave 4. Your ID is anonymized._"
+        )
+        await client.chat_postEphemeral(
+            channel=channel_id,
+            user=user_id,
+            text=text,
+        )
+
+    @app.command("/template")
+    async def handle_slash_template(ack: Any, body: dict[str, Any], client: Any) -> None:
+        await ack()
+        user_id: str = body.get("user_id", "unknown")
+        channel_id: str = body.get("channel_id", user_id)
+        arg: str = (body.get("text") or "").strip().lower()
+
+        _TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+        available: list[Path] = sorted(
+            [f for f in _TEMPLATES_DIR.iterdir() if f.is_file() and f.suffix in {".xlsx", ".docx", ".pdf", ".txt"}]
+            if _TEMPLATES_DIR.exists() else []
+        )
+
+        if not arg or arg == "list":
+            if not available:
+                await client.chat_postEphemeral(
+                    channel=channel_id,
+                    user=user_id,
+                    text="📂 No templates available yet. Contact your OpenClaw admin to add templates to `data/templates/`.",
+                )
+                return
+            names = "\n".join(f"• `{f.stem}` ({f.suffix[1:].upper()})" for f in available)
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    f"📄 *Available templates ({len(available)})* — type `/template <name>` to download:\n\n"
+                    + names
+                ),
+            )
+            return
+
+        match: Path | None = None
+        for tpl in available:
+            if tpl.stem.lower() == arg:
+                match = tpl
+                break
+        if not match:
+            for tpl in available:
+                if tpl.stem.lower().startswith(arg):
+                    match = tpl
+                    break
+
+        if not match:
+            names_str = ", ".join(f"`{f.stem}`" for f in available)
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=(
+                    f"❓ Template `{arg}` not found.\n"
+                    f"Available: {names_str or 'none yet'}\n"
+                    f"Type `/template list` to see all options."
+                ),
+            )
+            return
+
+        try:
+            file_bytes = match.read_bytes()
+            await client.files_upload_v2(
+                channel=user_id,
+                filename=match.name,
+                content=file_bytes,
+                initial_comment=f"📄 Here's your *{match.stem}* template! Fill in the highlighted areas and you're good to go.",
+            )
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"✅ *{match.name}* sent to your DMs!",
+            )
+        except Exception as exc:
+            log.warning("handle_slash_template: failed to upload %s: %s", match.name, exc)
+            await client.chat_postEphemeral(
+                channel=channel_id,
+                user=user_id,
+                text=f"⚠️ Couldn't upload {match.name}. Please try again in a moment.",
+            )
 
     @app.command("/clear")
     async def handle_slash_clear(ack: Any, body: dict[str, Any], say: Any) -> None:

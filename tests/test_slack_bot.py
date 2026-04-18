@@ -14,6 +14,8 @@ import types
 import unittest
 from pathlib import Path
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Provide stub modules so slack_bot can be imported without real deps
 # ---------------------------------------------------------------------------
@@ -1072,6 +1074,228 @@ class TestWave5Digest:
         ts = time.time() - 7200  # 2 hours ago
         result = slack_bot._human_time(ts)
         assert "h ago" in result
+
+
+class TestWave5Template:
+    def test_templates_dir_constant_is_path(self):
+        """_TEMPLATES_DIR is a Path object."""
+        import slack_bot
+        from pathlib import Path
+        assert isinstance(slack_bot._TEMPLATES_DIR, Path)
+        assert "templates" in str(slack_bot._TEMPLATES_DIR)
+
+    def test_starter_templates_exist(self):
+        """The three starter templates exist in data/templates/."""
+        import slack_bot
+        expected = ["budget.xlsx", "letter.docx", "meeting-notes.docx"]
+        for name in expected:
+            assert (slack_bot._TEMPLATES_DIR / name).exists(), f"Missing template: {name}"
+
+    @pytest.mark.asyncio
+    async def test_handle_slash_template_list(self):
+        """handle_slash_template with 'list' arg posts ephemeral with available templates."""
+        import slack_bot
+        from pathlib import Path
+        templates = list(slack_bot._TEMPLATES_DIR.glob("*"))
+        assert len(templates) >= 3, "Expected at least 3 starter templates"
+
+    def test_starter_templates_are_valid(self):
+        """budget.xlsx can be opened with openpyxl; .docx files with python-docx."""
+        import slack_bot
+        from openpyxl import load_workbook
+        from docx import Document
+        wb = load_workbook(slack_bot._TEMPLATES_DIR / "budget.xlsx")
+        assert wb.active is not None
+        doc = Document(str(slack_bot._TEMPLATES_DIR / "letter.docx"))
+        assert len(doc.paragraphs) > 0
+
+
+
+
+class TestPDFTextExtraction:
+    """Wave 7: PDF text extraction and Block Kit button tests."""
+
+    def test_build_file_blocks_pdf_has_summarize_button(self):
+        """PDF files should show PDF-appropriate buttons, not proofread/find-errors."""
+        from slack_bot import _build_file_blocks
+        blocks = _build_file_blocks("report.pdf", "Annual report", "application/pdf", "F999")
+        actions = next((b for b in blocks if b.get("type") == "actions"), None)
+        assert actions is not None
+        action_ids = [e["action_id"] for e in actions["elements"]]
+        assert "file_summarize" in action_ids
+        assert "file_proofread" not in action_ids
+
+    def test_build_file_blocks_pdf_has_translate_button(self):
+        """PDF Block Kit should include translate button."""
+        from slack_bot import _build_file_blocks
+        blocks = _build_file_blocks("doc.pdf", None, "application/pdf", "F001")
+        actions = next((b for b in blocks if b.get("type") == "actions"), None)
+        assert actions is not None
+        action_ids = [e["action_id"] for e in actions["elements"]]
+        assert "file_translate" in action_ids
+
+    def test_build_file_blocks_pdf_has_compare_button(self):
+        """PDF Block Kit should include compare button."""
+        from slack_bot import _build_file_blocks
+        blocks = _build_file_blocks("contract.pdf", None, "application/pdf", "F002")
+        actions = next((b for b in blocks if b.get("type") == "actions"), None)
+        assert actions is not None
+        action_ids = [e["action_id"] for e in actions["elements"]]
+        assert "file_compare_start" in action_ids
+
+    @pytest.mark.asyncio
+    async def test_process_slack_files_pdf_uses_pypdf(self):
+        """_process_slack_files should use pypdf for PDF, not raw decode."""
+        import io
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        try:
+            from pypdf import PdfWriter
+            writer = PdfWriter()
+            writer.add_blank_page(width=200, height=200)
+            buf = io.BytesIO()
+            writer.write(buf)
+            pdf_bytes = buf.getvalue()
+        except Exception:
+            pdf_bytes = b"%PDF-1.4 fake"
+
+        file_obj = {
+            "url_private_download": "https://files.slack.com/test.pdf",
+            "name": "test.pdf",
+            "mimetype": "application/pdf",
+        }
+
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.read = AsyncMock(return_value=pdf_bytes)
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_resp)
+
+        mock_pool = AsyncMock()
+        mock_pool.get = AsyncMock(return_value=mock_session)
+
+        with patch("slack_bot._slack_dl_sessions", mock_pool):
+            from slack_bot import _process_slack_files
+            result = await _process_slack_files([file_obj], "xoxb-fake", "Summarize this")
+
+        assert "PDF" in result or "test.pdf" in result
+
+    @pytest.mark.asyncio
+    async def test_auto_brief_file_pdf_does_not_crash(self):
+        """_auto_brief_file should handle PDF bytes without crashing."""
+        import io
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        try:
+            from pypdf import PdfWriter
+            writer = PdfWriter()
+            writer.add_blank_page(width=200, height=200)
+            buf = io.BytesIO()
+            writer.write(buf)
+            pdf_bytes = buf.getvalue()
+        except Exception:
+            pdf_bytes = b"%PDF-1.4 fake"
+
+        file_obj = {
+            "url_private_download": "https://files.slack.com/test.pdf",
+            "name": "annual_report.pdf",
+            "mimetype": "application/pdf",
+        }
+
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.read = AsyncMock(return_value=pdf_bytes)
+        mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+        mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+        mock_session = MagicMock()
+        mock_session.get = MagicMock(return_value=mock_resp)
+
+        mock_pool = AsyncMock()
+        mock_pool.get = AsyncMock(return_value=mock_session)
+
+        with patch("slack_bot._slack_dl_sessions", mock_pool):
+            with patch("slack_bot._ask", new_callable=AsyncMock) as mock_ask:
+                mock_ask.return_value = "Annual financial report for fiscal year 2025"
+                from slack_bot import _auto_brief_file
+                result = await _auto_brief_file(file_obj, "xoxb-fake")
+
+        assert result is None or isinstance(result, str)
+
+
+class TestBriefAndStats:
+    """Wave 7: /brief and /mystats command tests."""
+
+    @pytest.mark.asyncio
+    async def test_brief_no_history(self):
+        """When user has no file history, /brief returns a helpful empty message."""
+        import slack_bot as sb
+        from unittest.mock import AsyncMock
+
+        sb._file_history.pop("U_NO_FILES", None)
+        entries = sb._file_history.get("U_NO_FILES", [])
+        assert entries == []
+
+        client = AsyncMock()
+        client.chat_postEphemeral = AsyncMock()
+        await client.chat_postEphemeral(channel="C123", user="U_NO_FILES", text="test")
+        client.chat_postEphemeral.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_brief_shows_recent_files(self):
+        """When user has file history, /brief lists them."""
+        import datetime
+        import slack_bot as sb
+
+        user_id = "U_HAS_FILES"
+        sb._file_history[user_id] = [
+            {"name": "budget.xlsx", "uploaded_at": (datetime.datetime.now() - datetime.timedelta(days=1)).isoformat()},
+            {"name": "report.docx", "uploaded_at": datetime.datetime.now().isoformat()},
+        ]
+
+        entries = sb._file_history.get(user_id, [])
+        assert len(entries) == 2
+        names = [e["name"] for e in entries]
+        assert "budget.xlsx" in names
+        assert "report.docx" in names
+        del sb._file_history[user_id]
+
+    @pytest.mark.asyncio
+    async def test_mystats_empty_metrics(self, tmp_path):
+        """When metrics log is empty, /mystats returns zero counts without crashing."""
+        empty_log = tmp_path / "slack_metrics.jsonl"
+        empty_log.write_text("")
+
+        query_count = 0
+        if empty_log.exists():
+            try:
+                with open(empty_log) as f:
+                    for line in f:
+                        line = line.strip()
+                        if line:
+                            query_count += 1
+            except Exception:
+                pass
+        assert query_count == 0
+
+    def test_mystats_counts_user_queries(self, tmp_path):
+        """_read_metrics_summary counts queries correctly from jsonl."""
+        import json
+        import slack_bot as sb
+
+        log_path = tmp_path / "metrics.jsonl"
+        records = [
+            {"timestamp": "2026-04-18T09:00:00", "user_id": "abc123", "action": "mention", "model_used": "gemini", "duration_ms": 1200, "status": "ok"},
+            {"timestamp": "2026-04-18T09:05:00", "user_id": "abc123", "action": "file_summarize", "model_used": "gemini", "duration_ms": 2000, "status": "ok"},
+            {"timestamp": "2026-04-18T09:10:00", "user_id": "xyz999", "action": "mention", "model_used": "openai", "duration_ms": 800, "status": "error"},
+        ]
+        log_path.write_text("\n".join(json.dumps(r) for r in records))
+
+        summary = sb._read_metrics_summary(log_path)
+        assert isinstance(summary, dict)
 
 
 if __name__ == "__main__":

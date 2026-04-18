@@ -85,6 +85,12 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
+                "command": "/template",
+                "description": "Download a starter document template. Use: /template list or /template <name>",
+                "usage_hint": "[list|budget|letter|meeting-notes]",
+                "should_escape": False,
+            },
+            {
                 "command": "/metrics",
                 "description": "Show OpenClaw usage metrics for the last 7 days (admin).",
                 "usage_hint": "",
