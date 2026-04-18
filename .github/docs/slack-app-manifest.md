@@ -30,7 +30,7 @@ Click **Create New App** → **From an app manifest** → pick your workspace �
       {
         "command": "/help",
         "description": "Show examples and tips for using OpenClaw.",
-        "usage_hint": "",
+        "usage_hint": "(no arguments needed)",
         "should_escape": false
       }
     ]
