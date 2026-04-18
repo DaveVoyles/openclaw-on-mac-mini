@@ -507,13 +507,37 @@ If OpenClaw ever replies with an error message, you'll see a **🔁 Try again** 
 
 ## 🔗 Connecting Your Accounts
 
-OpenClaw can connect to your Gmail and Dropbox, making it even easier to get help without switching apps. Everything below is **one-time setup** — Dave handles the technical part once, and from then on it just works.
+OpenClaw can connect to **your own** Gmail and Dropbox accounts. You set this up yourself with a quick command in Slack — no need to ask Dave. Each person connects their own account, so Chuck's email stays Chuck's and Lisa's stays Lisa's.
 
 ---
 
-### 📧 Check Your Gmail — `/email`
+### 📧 Connect Your Gmail — `/email setup`
 
-Once Gmail is connected, you can check your inbox right from Slack:
+**Step 1 — Turn on 2-Step Verification** (if not already on):
+
+1. Go to [myaccount.google.com/security](https://myaccount.google.com/security)
+2. Scroll to "How you sign in to Google" and enable **2-Step Verification**
+
+**Step 2 — Create an App Password:**
+
+1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+2. Sign in if asked
+3. Under "App name" type **OpenClaw**, then click **Create**
+4. Google shows you a 16-character password like `abcd efgh ijkl mnop` — copy it
+
+**Step 3 — Connect in Slack:**
+
+```
+/email setup yourname@gmail.com abcdefghijklmnop
+```
+
+*(paste your Gmail address and the app password — no spaces in the password)*
+
+That's it! OpenClaw will confirm it's connected.
+
+---
+
+**Using `/email` once connected:**
 
 ```
 /email                    — shows your last 10 emails
@@ -522,14 +546,11 @@ Once Gmail is connected, you can check your inbox right from Slack:
 /email insurance          — find anything about insurance
 ```
 
-**What you need (Dave sets this up once):**
+**To disconnect your Gmail:**
 
-1. Make sure 2-Step Verification is on for your Google account
-2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-3. Create an App Password (label it "OpenClaw")
-4. Dave adds it to the server — that's it!
-
-You'll never need to log in separately — OpenClaw handles it automatically.
+```
+/email forget
+```
 
 ---
 
@@ -543,29 +564,48 @@ View your Google Calendar without opening the app:
 /calendar week            — what's coming up this week
 ```
 
-**What you need (Dave sets this up once):**
-
-Dave runs a one-time setup that connects your Google account. After that, your calendar events appear whenever you ask.
+> 📝 Calendar connection is set up by Dave once for the household. Ask Dave if you'd like it activated.
 
 ---
 
-### 📦 Dropbox Folder Watcher — `/dropbox`
+### 📦 Connect Your Dropbox — `/dropbox setup`
 
-If you drop a file into a special Dropbox folder, OpenClaw will **automatically notice and send you a message in Slack** — no uploading needed!
+**Step 1 — Get your Dropbox access token:**
+
+1. Go to [dropbox.com/developers/apps](https://www.dropbox.com/developers/apps)
+2. Click **Create app** → choose **Scoped access** → **Full Dropbox** → name it "OpenClaw"
+3. On the app settings page, scroll to **Generated access token** and click **Generate**
+4. Copy the long token that appears
+
+**Step 2 — Connect in Slack:**
+
+```
+/dropbox setup sl.ABCDEFGHyourTokenHere
+```
+
+OpenClaw will confirm your Dropbox is connected.
+
+---
+
+**Using `/dropbox` once connected:**
 
 ```
 /dropbox                  — see recent files in your Dropbox folder
+/dropbox list             — list files in your watched folder
+/dropbox status           — check if your Dropbox connection is working
 ```
 
-**How it works:**
+**How the automatic watcher works:**
 
-1. Dave sets up a folder called **OpenClaw** in your Dropbox
-2. Whenever you drop a PDF, photo, or document into that folder, OpenClaw will DM you within 30 seconds: *"New file detected! Want me to summarise it?"*
-3. Just say yes and OpenClaw reads it for you
+Once connected, whenever you drop a file into the **OpenClaw** folder in your Dropbox, OpenClaw will message you in Slack within 30 seconds:  
+*"New file detected! Want me to summarise it?"*  
+Just say yes and OpenClaw reads it for you.
 
-**What you need (Dave sets this up once):**
+**To disconnect your Dropbox:**
 
-Dave gets a Dropbox API key from [dropbox.com/developers](https://www.dropbox.com/developers/apps) and adds it to the server.
+```
+/dropbox forget
+```
 
 ---
 
