@@ -181,7 +181,7 @@ MANIFEST: dict = {
                 "should_escape": False,
             },
             {
-                "command": "/channel-admin",
+                "command": "/chanadmin",
                 "description": "List or archive Slack channels (admin)",
                 "usage_hint": "[list | archive <name>]",
                 "should_escape": False,
