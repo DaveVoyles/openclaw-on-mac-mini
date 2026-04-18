@@ -13,7 +13,6 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Provide stub modules so slack_bot can be imported without real deps
@@ -43,7 +42,6 @@ os.environ.setdefault("SLACK_APP_TOKEN", "")
 sys.path.insert(0, "src")
 
 import slack_bot  # noqa: E402  (imported after stubs)
-
 from slack_bot import (  # noqa: E402
     _HELP_TEXT,
     _WELCOME_MESSAGE,
@@ -222,7 +220,7 @@ class TestSlackBot(unittest.TestCase):
         self.assertIn("A monthly budget with 3 sheets", section_text)
 
     def test_register_file_stored_and_retrievable(self):
-        from slack_bot import _register_file, _file_registry
+        from slack_bot import _file_registry, _register_file
         _register_file("FTEST1", {"name": "test.docx", "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
         self.assertIn("FTEST1", _file_registry)
         self.assertEqual(_file_registry["FTEST1"]["name"], "test.docx")
