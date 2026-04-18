@@ -816,3 +816,8 @@ SKILLS.update({
     "diagnose_patreon_downloads": diagnose_patreon_downloads,
     "attempt_patreon_recovery": attempt_patreon_recovery,
 })
+
+# Local file access — shared /ai-files mount (list and read host files)
+from file_skills import FILE_SKILLS
+
+SKILLS.update(FILE_SKILLS)

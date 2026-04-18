@@ -89,6 +89,9 @@ services:
       # Obsidian vault — stores all research reports, bookmarks, and notes as .md files
       - ./data/vault:/vault:rw
 
+      # Shared AI files — accessible to OpenClaw as /ai-files
+      - /Users/davevoyles/ai-files:/ai-files:ro
+
       # Auto-Dream memory files (persistent cognitive memory)
       - ./data/dream:/app/data/dream:rw
 
@@ -199,6 +202,8 @@ services:
 
     volumes:
       - open-webui-data:/app/backend/data
+      # Shared AI files — accessible to Open WebUI as /ai-files
+      - /Users/davevoyles/ai-files:/ai-files:ro
 
     logging:
       driver: "json-file"
