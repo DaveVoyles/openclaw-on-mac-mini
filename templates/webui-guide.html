@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Chat — OpenClaw</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+
+        .container {
+            max-width: 820px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 36px;
+        }
+
+        .header h1 {
+            font-size: 2.4em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.15em;
+            opacity: 0.92;
+            max-width: 580px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 18px;
+            padding: 30px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        }
+
+        .card h2 {
+            font-size: 1.4em;
+            color: #333;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card p {
+            color: #555;
+            line-height: 1.7;
+            margin-bottom: 12px;
+        }
+
+        .card p:last-child { margin-bottom: 0; }
+
+        /* Comparison table */
+        .compare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 8px;
+        }
+
+        .compare-col {
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .compare-col.gemini {
+            background: #f0f9ff;
+            border: 2px solid #bde3ff;
+        }
+
+        .compare-col.openclaw {
+            background: #f0f4ff;
+            border: 2px solid #c3cfff;
+        }
+
+        .compare-col h3 {
+            font-size: 1.1em;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .compare-col.gemini h3 { color: #1a73e8; }
+        .compare-col.openclaw h3 { color: #667eea; }
+
+        .compare-col ul {
+            list-style: none;
+            color: #555;
+            font-size: 0.97em;
+            line-height: 1.65;
+        }
+
+        .compare-col ul li {
+            padding: 4px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .compare-col ul li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        /* Steps */
+        .step-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .step-row:last-child { margin-bottom: 0; }
+
+        .step-badge {
+            min-width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: bold;
+            font-size: 1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .step-body strong {
+            display: block;
+            color: #333;
+            margin-bottom: 4px;
+            font-size: 1em;
+        }
+
+        .step-body span {
+            color: #666;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        /* Tip box */
+        .tip-box {
+            background: #f9f0ff;
+            border-left: 4px solid #764ba2;
+            border-radius: 10px;
+            padding: 16px 20px;
+            color: #555;
+            font-size: 0.95em;
+            line-height: 1.65;
+            margin-top: 12px;
+        }
+
+        .tip-box strong { color: #764ba2; }
+
+        /* Callout */
+        .callout-green {
+            background: #f0fff4;
+            border-left: 4px solid #4caf50;
+            border-radius: 10px;
+            padding: 16px 20px;
+            color: #555;
+            font-size: 0.95em;
+            line-height: 1.65;
+        }
+
+        .callout-green strong { color: #2e7d32; }
+
+        /* Account highlight */
+        .account-box {
+            background: #fff8e1;
+            border: 2px solid #ffe082;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 12px;
+        }
+
+        .account-box h3 {
+            color: #f57f17;
+            font-size: 1.05em;
+            margin-bottom: 10px;
+        }
+
+        .account-box p {
+            color: #555;
+            font-size: 0.95em;
+            line-height: 1.65;
+            margin-bottom: 8px;
+        }
+
+        /* CTA button */
+        .cta-wrap {
+            text-align: center;
+            margin-top: 30px;
+            margin-bottom: 10px;
+        }
+
+        .btn-open-chat {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            font-size: 1.15em;
+            font-weight: 600;
+            padding: 16px 40px;
+            border-radius: 50px;
+            box-shadow: 0 4px 18px rgba(102,126,234,0.5);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+
+        .btn-open-chat:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(102,126,234,0.6);
+        }
+
+        .btn-secondary {
+            display: inline-block;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            font-size: 1em;
+            font-weight: 600;
+            padding: 12px 30px;
+            border-radius: 50px;
+            border: 2px solid #667eea;
+            margin-top: 14px;
+            transition: background 0.15s;
+        }
+
+        .btn-secondary:hover { background: #f0f4ff; }
+
+        @media (max-width: 600px) {
+            .compare-grid { grid-template-columns: 1fr; }
+            .header h1 { font-size: 1.8em; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <div class="header">
+        <h1>💻 Web Chat</h1>
+        <p>Use OpenClaw from your browser — no Slack needed. If you've used Gemini or ChatGPT, you'll feel right at home.</p>
+    </div>
+
+    <!-- Comparison -->
+    <div class="card">
+        <h2>🤔 How is this like Gemini?</h2>
+        <p>Web Chat works almost exactly like Google Gemini — you type a question, the AI answers. The biggest differences are <strong>who can see it</strong> and <strong>where it runs</strong>.</p>
+
+        <div class="compare-grid">
+            <div class="compare-col gemini">
+                <h3>🔵 Google Gemini</h3>
+                <ul>
+                    <li>Type a question, get an answer</li>
+                    <li>Keeps your chat history</li>
+                    <li>Works in your browser</li>
+                    <li>Free to use</li>
+                    <li>Google can see your chats</li>
+                    <li>Answers trained on the internet</li>
+                </ul>
+            </div>
+            <div class="compare-col openclaw">
+                <h3>🟣 OpenClaw Web Chat</h3>
+                <ul>
+                    <li>Type a question, get an answer</li>
+                    <li>Keeps your chat history</li>
+                    <li>Works in your browser</li>
+                    <li>Free to use</li>
+                    <li>Private — only your family</li>
+                    <li>Can use multiple AI models</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="tip-box" style="margin-top:20px;">
+            <strong>Bottom line:</strong> If you already know how to use Gemini, you already know how to use Web Chat. Same idea — just private, just for you.
+        </div>
+    </div>
+
+    <!-- Account info -->
+    <div class="card">
+        <h2>👤 Do I need my own account?</h2>
+        <p>Yes — and it only takes a minute. Each person has their own private account. Dave's account is separate from yours, and your chats are completely your own.</p>
+
+        <div class="account-box">
+            <h3>⭐ Your account is independent</h3>
+            <p>Chuck and Lisa each get their own login. You won't see each other's conversations, and Dave can't see them either (unless you choose to share).</p>
+            <p>Think of it like having your own Gmail inbox — Dave set up the service, but your messages are private to you.</p>
+        </div>
+    </div>
+
+    <!-- How to sign up -->
+    <div class="card">
+        <h2>✏️ How to create your account</h2>
+
+        <div class="step-row">
+            <div class="step-badge">1</div>
+            <div class="step-body">
+                <strong>Go to the Web Chat site</strong>
+                <span>Click the button below — or go to <strong>chat.davevoyles.synology.me</strong> in any browser on your phone or computer.</span>
+            </div>
+        </div>
+
+        <div class="step-row">
+            <div class="step-badge">2</div>
+            <div class="step-body">
+                <strong>Click "Sign Up"</strong>
+                <span>You'll see a login screen. Click <em>Sign Up</em> (or <em>Create Account</em>) and enter your name, email address, and a password you choose.</span>
+            </div>
+        </div>
+
+        <div class="step-row">
+            <div class="step-badge">3</div>
+            <div class="step-body">
+                <strong>Start chatting!</strong>
+                <span>That's it. You're in. Click the ✏️ pencil icon (or "New Chat") to start a conversation — just like starting a new chat in Gemini.</span>
+            </div>
+        </div>
+
+        <div class="tip-box">
+            <strong>💡 Tip:</strong> Use the same email you use for everything else. There's no spam — it's just for logging in.
+        </div>
+    </div>
+
+    <!-- How to use -->
+    <div class="card">
+        <h2>🖥️ How to use it</h2>
+        <p>Once you're logged in, it works just like Gemini:</p>
+
+        <div class="step-row" style="margin-top:16px;">
+            <div class="step-badge">💬</div>
+            <div class="step-body">
+                <strong>Type your question in the box at the bottom</strong>
+                <span>Press Enter or click the send button. The AI replies instantly.</span>
+            </div>
+        </div>
+
+        <div class="step-row">
+            <div class="step-badge">📂</div>
+            <div class="step-body">
+                <strong>It remembers your conversation</strong>
+                <span>Your past chats are saved on the left sidebar. Click any one to go back to it.</span>
+            </div>
+        </div>
+
+        <div class="step-row">
+            <div class="step-badge">✨</div>
+            <div class="step-body">
+                <strong>Start a new chat</strong>
+                <span>Click the ✏️ pencil icon (top left) to start a fresh conversation — like opening a new tab in Gemini.</span>
+            </div>
+        </div>
+
+        <div class="step-row">
+            <div class="step-badge">📁</div>
+            <div class="step-body">
+                <strong>Share files (optional)</strong>
+                <span>Click the 📎 paperclip to attach a document, photo, or file and ask the AI to help with it.</span>
+            </div>
+        </div>
+
+        <div class="callout-green" style="margin-top:16px;">
+            <strong>✅ Works on anything:</strong> iPhone, Android, Mac, Windows, tablet — any modern web browser. No app to install.
+        </div>
+    </div>
+
+    <!-- When to use Slack vs Web Chat -->
+    <div class="card">
+        <h2>🤷 Slack or Web Chat — which should I use?</h2>
+        <p>Either works! Here's a simple guide:</p>
+
+        <div style="margin-top:12px;">
+            <p><strong>Use Slack when…</strong></p>
+            <ul style="color:#555;line-height:2;padding-left:20px;margin-top:6px;">
+                <li>You want to use special commands like <code>/ask</code>, <code>/email</code>, or <code>/dropbox</code></li>
+                <li>You're already in Slack for other things</li>
+                <li>You want to share a file directly from your phone</li>
+            </ul>
+        </div>
+
+        <div style="margin-top:16px;">
+            <p><strong>Use Web Chat when…</strong></p>
+            <ul style="color:#555;line-height:2;padding-left:20px;margin-top:6px;">
+                <li>You want a clean, focused chat experience (like Gemini)</li>
+                <li>You want to keep a long conversation and come back to it later</li>
+                <li>You're on a computer and want a bigger screen</li>
+                <li>You don't feel like opening Slack</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Open button -->
+    <div class="cta-wrap">
+        <a href="https://chat.davevoyles.synology.me" class="btn-open-chat" target="_blank" rel="noopener">
+            🚀 Open Web Chat
+        </a>
+        <br>
+        <a href="/onboarding" class="btn-secondary">← Back to Getting Started</a>
+    </div>
+
+</div>
+</body>
+</html>

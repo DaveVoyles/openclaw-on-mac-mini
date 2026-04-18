@@ -9,6 +9,7 @@ from .helpers import (
     GUIDE_HTML,
     ONBOARDING_HTML,
     TERMINAL_HTML,
+    WEBUI_GUIDE_HTML,
     build_openclaw_cli_installer,
     load_openclaw_cli_source,
     load_openclaw_cli_support_source,
@@ -36,6 +37,11 @@ async def terminal_handler(request: web.Request) -> web.Response:
 async def onboarding_handler(request: web.Request) -> web.Response:
     """Serve the new-user onboarding page."""
     return web.Response(text=ONBOARDING_HTML, content_type="text/html")
+
+
+async def webui_guide_handler(request: web.Request) -> web.Response:
+    """Serve the Open WebUI vs Gemini comparison guide page."""
+    return web.Response(text=WEBUI_GUIDE_HTML, content_type="text/html")
 
 
 async def openclaw_cli_download_handler(request: web.Request) -> web.Response:

@@ -57,6 +57,7 @@ from .html_handlers import (
     openclaw_cli_support_download_handler,
     openclaw_cli_windows_installer_handler,
     terminal_handler,
+    webui_guide_handler,
 )
 
 
@@ -83,6 +84,7 @@ def setup_dashboard(
     app.router.add_get("/guide", guide_handler)
     app.router.add_get("/terminal", terminal_handler)
     app.router.add_get("/onboarding", onboarding_handler)
+    app.router.add_get("/webui-guide", webui_guide_handler)
     app.router.add_get("/install", openclaw_cli_installer_handler)
     app.router.add_get("/install-remote", openclaw_cli_remote_installer_handler)
     app.router.add_get("/install.ps1", openclaw_cli_windows_installer_handler)
