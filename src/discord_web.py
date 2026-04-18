@@ -743,12 +743,22 @@ async def start_health_server(bot) -> web.AppRunner:
     app.router.add_get("/cli-update/meta", _cli_update_meta_handler)
     app.router.add_get("/v1/models", _v1_models_handler)
     app.router.add_post("/v1/chat/completions", _v1_chat_completions_handler)
+
+    # Wave 4: file upload endpoint (POST /upload) — registered here so it
+    # shares the existing aiohttp server instead of spawning a second one.
+    try:
+        from slack_bot import _handle_upload
+        app.router.add_post("/upload", _handle_upload)
+        log.info("POST /upload route registered (Wave 4 file upload endpoint)")
+    except Exception as exc:
+        log.warning("Could not register /upload route: %s", exc)
+
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", HEALTH_PORT)
     await site.start()
     log.info(
-        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>, /cli-update/meta)",
+        "Health endpoint listening on :%d/health (and /metrics, /smoke, /dashboard, /guide, /webhook/<source>, /cli-update/<filename>, /cli-update/meta, /upload)",
         HEALTH_PORT,
     )
     return runner

@@ -110,6 +110,60 @@ def _set_user_simple(user_id: str, value: bool) -> None:
 _load_prefs()
 
 # ---------------------------------------------------------------------------
+# File history (stub — populated by Han's lane or persisted on disk)
+# ---------------------------------------------------------------------------
+# Structure: {"U123": [{"name": "budget.xlsx", "file_id": "F123"}, ...], ...}
+# Newest entries first.  Han's wave adds persistence; this stub satisfies
+# _match_question_to_history and _check_new_user_onboarding at import time.
+# ---------------------------------------------------------------------------
+_file_history: dict[str, list[dict]] = {}
+
+# ---------------------------------------------------------------------------
+# Onboarding state
+# ---------------------------------------------------------------------------
+_onboarded_users: set[str] = set()  # users who have received onboarding or used the bot
+
+
+def _match_question_to_history(user_id: str, question: str) -> dict | None:
+    """Return the best-matching file from history for this question, or None.
+
+    Matches on filename keywords (minus extension). Returns the most recently
+    used match if any keyword appears in the question text (case-insensitive).
+    """
+    history = _file_history.get(user_id, [])
+    if not history:
+        return None
+    question_lower = question.lower()
+    for entry in history:  # history is newest-first
+        name = entry.get("name", "")
+        stem = Path(name).stem.lower().replace("_", " ").replace("-", " ")
+        keywords = [w for w in stem.split() if len(w) > 3]
+        if any(kw in question_lower for kw in keywords):
+            return entry
+    return None
+
+
+async def _check_new_user_onboarding(user_id: str, client: Any) -> None:
+    """Send a welcome DM to a new user after a delay if they haven't interacted."""
+    delay = int(os.environ.get("OPENCLAW_ONBOARDING_DELAY_SECS", "60"))
+    if user_id in _onboarded_users:
+        return
+    _onboarded_users.add(user_id)
+    await asyncio.sleep(delay)
+    # After delay, check if they've actually used the bot (prefs exist or history exists)
+    if _user_prefs.get(user_id) or _file_history.get(user_id):
+        return  # they've already used it, skip
+    try:
+        await client.chat_postMessage(
+            channel=user_id,
+            text=_WELCOME_MESSAGE,
+        )
+        log.info("Sent onboarding DM to new user %s", user_id)
+    except Exception as exc:
+        log.debug("Onboarding DM failed for %s: %s", user_id, exc)
+
+
+# ---------------------------------------------------------------------------
 # File attachment support
 # NOTE: The Slack app requires the `files:read` Bot Token Scope to download
 # private file URLs. Add files:read in the Slack app manifest if not present.
@@ -1672,6 +1726,8 @@ def create_slack_app():  # type: ignore[return]
         thread_ts: str = event.get("thread_ts") or msg_ts
         raw_text: str = event.get("text", "")
 
+        asyncio.create_task(_check_new_user_onboarding(user_id, client))
+
         # Strip @mention token(s) and extract optional --model flag
         prompt_raw = _MENTION_RE.sub("", raw_text).strip()
         files: list[dict] = event.get("files", [])
@@ -1685,6 +1741,17 @@ def create_slack_app():  # type: ignore[return]
 
         prompt, model_pref, use_simple = _parse_flags(prompt_raw)
         use_simple = use_simple or _get_user_simple(user_id)
+
+        # Smart file suggestion — only when no file is attached
+        if not event.get("files"):
+            match = _match_question_to_history(user_id, prompt_raw)
+            if match:
+                filename = match.get("name", "")
+                suggestion_msg = (
+                    f"💡 Did you mean to use `{filename}`? "
+                    f"Type `/files {filename}` to select it, or just ask away!"
+                )
+                await say(text=suggestion_msg, thread_ts=thread_ts)
 
         # Enrich prompt with any uploaded file content
         if files:
@@ -1710,6 +1777,7 @@ def create_slack_app():  # type: ignore[return]
             history=history,
             simple=use_simple,
         )
+        _onboarded_users.add(user_id)
 
     # ------------------------------------------------------------------
     # Handler: DMs (direct messages)
@@ -2477,7 +2545,6 @@ async def start_slack_bot() -> None:
         return
 
     log.info("Starting Slack Socket Mode bot…")
-    asyncio.create_task(_run_upload_server())
 
     # Start proactive file-alert loop; reuse the handler's app client
     if SLACK_NOTIFY_USER_ID:
