@@ -129,7 +129,7 @@ MANIFEST: dict = {
             {
                 "command": "/saved",
                 "description": "View your bookmarked bot responses",
-                "usage_hint": "",
+                "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
             {
@@ -153,7 +153,7 @@ MANIFEST: dict = {
             {
                 "command": "/inbox",
                 "description": "Show your unread Gmail emails",
-                "usage_hint": "",
+                "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
             {
@@ -165,7 +165,7 @@ MANIFEST: dict = {
             {
                 "command": "/today",
                 "description": "Show today's Google Calendar events",
-                "usage_hint": "",
+                "usage_hint": "(no arguments needed)",
                 "should_escape": False,
             },
             {
