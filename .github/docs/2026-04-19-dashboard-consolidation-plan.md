@@ -106,4 +106,74 @@ After Wave 1 is deployed and verified:
 
 ---
 
+## Status: COMPLETE (Wave 1 + Wave 2 done, deployed 0b7c91f)
+
+---
+
+# Phase 2: Dashboard Simplification Plan
+
+**Date:** 2026-04-19  
+**Goal:** Remove visual clutter and merge redundant cards on the main dashboard homepage.
+
+---
+
+## Findings
+
+### 1. Three stale release-notes cards (~812 lines, ~14% of template)
+
+| Card | Lines | Content |
+|---|---|---|
+| `💬 Recent Features (v0.11.0)` | 862–1245 | Static grid of feature tiles |
+| `🚀 New in v0.12.0: Premium API Integrations` | 1248–1425 | Static grid of feature tiles |
+| `🚀 Phase 3 & 4: Advanced Capabilities` | 1428–1673 | Static grid of feature tiles |
+
+All three are **static changelog content** — no live data, no interaction, fully covered by `CHANGELOG.md`. They make the homepage extremely long to scroll through.
+
+**Proposal:** Remove all three. Add a single "📝 See CHANGELOG" link in the homepage header area.
+
+### 2. Duplicate orientation cards ("Access Points" + "Which Interface Should I Use?")
+
+| Card | Lines | Content |
+|---|---|---|
+| `🌐 Access Points` | 718–758 | Link tiles: Discord, Open WebUI, CLI, Slack |
+| `🗺️ Which Interface Should I Use?` | 761–807 | Comparison table: same 5 interfaces |
+
+Both cards cover the same 5 interfaces. The tiles link out; the table explains when to use each. **Proposal:** Merge into one card — tiles on top, comparison table collapsed inside a `<details>`.
+
+### 3. Channel Memory tools (medium priority, distinct workflows)
+
+`🧪 Channel Memory Inspector` and `🧠 Channel Profile Assistant` both take a channel ID input and operate on scoped memory — but serve different purposes (inspect/clear/retrain vs. recommend/apply/revert). These *could* be merged with a `<details>` separator but are lower priority. **Proposal:** Defer unless user wants it.
+
+---
+
+## Wave Plan
+
+### Wave 1 — Remove stale release-notes cards (S)
+
+- Remove card at lines 862–1245 (`v0.11.0 features`)
+- Remove card at lines 1248–1425 (`v0.12.0 features`)
+- Remove card at lines 1428–1673 (`Phase 3 & 4 features`)
+- Add a minimal "See full changelog →" link in the quick-actions strip or below the Ask card
+
+**Risk:** Low. Pure content removal, no live data affected.  
+**Savings:** ~812 lines removed.
+
+### Wave 2 — Merge Access Points + Interface Guide (S)
+
+- Combine `🌐 Access Points` (tiles) + `🗺️ Which Interface Should I Use?` (comparison table) into a single card
+- Tiles remain always-visible at top; comparison table wrapped in a `<details>` that is collapsed by default
+- Remove the second card entirely
+
+**Risk:** Low. Visual-only change.  
+**Savings:** ~40 lines, 2 cards → 1.
+
+---
+
+## Files to touch
+
+- `templates/dashboard.html` — remove 3 release-notes cards; merge 2 orientation cards
+- No backend changes required; no API changes
+
+---
+
 ## Status: PLANNING
