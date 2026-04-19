@@ -14,7 +14,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import discord
 from discord import Embed
@@ -41,9 +40,9 @@ class UserProgress:
     user_id: str
     started_at: datetime
     current_step: TutorialStep = TutorialStep.WELCOME
-    completed_steps: List[str] = field(default_factory=list)
+    completed_steps: list[str] = field(default_factory=list)
     skipped: bool = False
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
 
 class OnboardingManager:
@@ -53,7 +52,7 @@ class OnboardingManager:
         self.data_dir = data_dir
         self.data_dir.mkdir(exist_ok=True)
         self.progress_file = self.data_dir / "onboarding_progress.json"
-        self._user_progress: Dict[str, UserProgress] = {}
+        self._user_progress: dict[str, UserProgress] = {}
         self._load_progress()
 
     def _load_progress(self):
@@ -159,7 +158,7 @@ class OnboardingManager:
 
         self._save_progress()
 
-    def get_progress(self, user_id: str) -> Optional[UserProgress]:
+    def get_progress(self, user_id: str) -> UserProgress | None:
         """Get user's onboarding progress."""
         return self._user_progress.get(user_id)
 
@@ -246,7 +245,7 @@ class OnboardingManager:
         await channel.send(embed=embed)
         return embed
 
-    def _get_step_content(self, step: TutorialStep) -> Dict[str, str]:
+    def _get_step_content(self, step: TutorialStep) -> dict[str, str]:
         """Get content for a tutorial step."""
         content_map = {
             TutorialStep.WELCOME: {
@@ -375,7 +374,7 @@ class OnboardingManager:
 
 
 # Global onboarding manager
-_manager_instance: Optional[OnboardingManager] = None
+_manager_instance: OnboardingManager | None = None
 
 
 def get_onboarding_manager() -> OnboardingManager:

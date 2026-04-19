@@ -15,7 +15,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
 
 from patreon_monitor import PatreonHealthResult, PatreonHealthStatus
 
@@ -48,10 +47,10 @@ class PatreonRecoveryManager:
 
     def __init__(self):
         self.container_name = "monstervision"
-        self._recovery_history: List[RecoveryResult] = []
+        self._recovery_history: list[RecoveryResult] = []
         self._max_history = 100
 
-    async def attempt_recovery(self, health_result: PatreonHealthResult) -> Optional[RecoveryResult]:
+    async def attempt_recovery(self, health_result: PatreonHealthResult) -> RecoveryResult | None:
         """
         Attempt automatic recovery based on health status.
 
@@ -315,7 +314,7 @@ class PatreonRecoveryManager:
                 timestamp=timestamp,
             )
 
-    def get_recovery_history(self, limit: int = 10) -> List[RecoveryResult]:
+    def get_recovery_history(self, limit: int = 10) -> list[RecoveryResult]:
         """Get recent recovery attempts."""
         return self._recovery_history[-limit:]
 
@@ -325,7 +324,7 @@ class PatreonRecoveryManager:
 
 
 # Global instance
-_recovery_manager: Optional[PatreonRecoveryManager] = None
+_recovery_manager: PatreonRecoveryManager | None = None
 
 
 def get_recovery_manager() -> PatreonRecoveryManager:

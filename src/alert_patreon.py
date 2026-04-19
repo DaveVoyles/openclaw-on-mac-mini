@@ -13,7 +13,6 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict, Optional
 
 import discord
 
@@ -38,14 +37,14 @@ class PatreonAlertManager:
     """Manages Discord alerts for Patreon health issues."""
 
     def __init__(self):
-        self._alert_states: Dict[str, AlertState] = {}
+        self._alert_states: dict[str, AlertState] = {}
 
     async def send_alert_if_needed(
         self,
         health_result: PatreonHealthResult,
-        discord_client: Optional[discord.Client] = None,
-        user_id: Optional[int] = None,
-        channel_id: Optional[int] = None,
+        discord_client: discord.Client | None = None,
+        user_id: int | None = None,
+        channel_id: int | None = None,
     ) -> bool:
         """
         Send alert if health status warrants it and cooldown has passed.
@@ -221,8 +220,8 @@ class PatreonAlertManager:
         self,
         embed: discord.Embed,
         discord_client: discord.Client,
-        user_id: Optional[int] = None,
-        channel_id: Optional[int] = None,
+        user_id: int | None = None,
+        channel_id: int | None = None,
     ) -> bool:
         """Send alert via Discord DM or channel."""
         try:
@@ -258,7 +257,7 @@ class PatreonAlertManager:
             log.error("Error sending Patreon alert: %s", e)
             return False
 
-    def reset_alert_state(self, alert_key: Optional[str] = None):
+    def reset_alert_state(self, alert_key: str | None = None):
         """Reset alert state (for testing or manual reset)."""
         if alert_key:
             self._alert_states.pop(alert_key, None)
@@ -267,7 +266,7 @@ class PatreonAlertManager:
             self._alert_states.clear()
             log.info("Reset all alert states")
 
-    def get_alert_status(self) -> Dict[str, Dict]:
+    def get_alert_status(self) -> dict[str, Dict]:
         """Get current alert state (for debugging)."""
         return {
             key: {
@@ -285,7 +284,7 @@ class PatreonAlertManager:
 
 
 # Global instance
-_alert_manager: Optional[PatreonAlertManager] = None
+_alert_manager: PatreonAlertManager | None = None
 
 
 def get_alert_manager() -> PatreonAlertManager:

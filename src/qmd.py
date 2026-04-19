@@ -10,7 +10,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import List, Optional
 
 from utils import atomic_write
 
@@ -31,7 +30,7 @@ class QMDMemory:
         self._lock = asyncio.Lock()
         self._memory = self._load()
 
-    def _load(self) -> List[dict]:
+    def _load(self) -> list[dict]:
         if MEMORY_FILE.exists():
             try:
                 return json.loads(MEMORY_FILE.read_text())
@@ -46,7 +45,7 @@ class QMDMemory:
         except OSError as e:
             log.error("Failed to save QMD memory: %s", e)
 
-    async def add(self, content: str, tags: List[str] = None):
+    async def add(self, content: str, tags: list[str] = None):
         """Add a new fact to memory (deduplicates recent entries, caps at MAX_MEMORY_ENTRIES)."""
         async with self._lock:
             # Dedup: skip if identical content exists in last 100 entries
@@ -91,7 +90,7 @@ qmd_store = QMDMemory()
 # ---------------------------------------------------------------------------
 
 
-async def remember_fact(content: str, tags: Optional[str] = "", source: str = "user-explicit") -> str:
+async def remember_fact(content: str, tags: str | None = "", source: str = "user-explicit") -> str:
     """Store a fact in long-term memory with intelligent routing (Phase 14D).
 
     Routes facts to the most appropriate store based on content:

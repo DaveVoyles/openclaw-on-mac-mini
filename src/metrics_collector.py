@@ -16,7 +16,6 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 
 import psutil
 from prometheus_client import (
@@ -300,7 +299,7 @@ class CommandMetrics:
     duration: float
     timestamp: datetime
     success: bool
-    error_type: Optional[str] = None
+    error_type: str | None = None
 
 
 @dataclass
@@ -312,7 +311,7 @@ class APIMetrics:
     duration: float
     timestamp: datetime
     success: bool
-    error_type: Optional[str] = None
+    error_type: str | None = None
 
 
 class MetricsCollector:
@@ -323,12 +322,12 @@ class MetricsCollector:
         self._api_history: deque = deque(maxlen=10000)
         self._active_user_set: set = set()
         self._start_time = time.time()
-        self._resource_update_task: Optional[asyncio.Task] = None
+        self._resource_update_task: asyncio.Task | None = None
 
         # In-memory aggregations
-        self._response_times: Dict[str, List[float]] = defaultdict(list)
-        self._error_counts: Dict[str, int] = defaultdict(int)
-        self._command_counts: Dict[str, int] = defaultdict(int)
+        self._response_times: dict[str, list[float]] = defaultdict(list)
+        self._error_counts: dict[str, int] = defaultdict(int)
+        self._command_counts: dict[str, int] = defaultdict(int)
 
     async def start(self):
         """Start background metrics collection."""
@@ -381,7 +380,7 @@ class MetricsCollector:
         workspace: str,
         duration: float,
         success: bool = True,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
     ):
         """Record a command execution."""
         # Update Prometheus metrics
@@ -424,7 +423,7 @@ class MetricsCollector:
         method: str,
         duration: float,
         success: bool = True,
-        error_type: Optional[str] = None,
+        error_type: str | None = None,
     ):
         """Record an API call."""
         # Update Prometheus metrics
@@ -488,7 +487,7 @@ class MetricsCollector:
             context=path_label,
         )
 
-    def get_stats(self, hours: int = 1) -> Dict[str, any]:
+    def get_stats(self, hours: int = 1) -> dict[str, any]:
         """Get aggregated statistics for the last N hours."""
         cutoff = datetime.now() - timedelta(hours=hours)
 
@@ -547,20 +546,20 @@ class MetricsCollector:
             "uptime_seconds": int(time.time() - self._start_time),
         }
 
-    def get_top_commands(self, limit: int = 10) -> List[tuple]:
+    def get_top_commands(self, limit: int = 10) -> list[tuple]:
         """Get top N most used commands."""
         return sorted(
             self._command_counts.items(), key=lambda x: x[1], reverse=True
         )[:limit]
 
-    def get_top_users(self, limit: int = 10) -> List[tuple]:
+    def get_top_users(self, limit: int = 10) -> list[tuple]:
         """Get top N most active users."""
         user_counts = defaultdict(int)
         for cmd in self._command_history:
             user_counts[cmd.user] += 1
         return sorted(user_counts.items(), key=lambda x: x[1], reverse=True)[:limit]
 
-    def get_top_errors(self, limit: int = 10) -> List[tuple]:
+    def get_top_errors(self, limit: int = 10) -> list[tuple]:
         """Get top N most common errors."""
         return sorted(
             self._error_counts.items(), key=lambda x: x[1], reverse=True
@@ -740,7 +739,7 @@ def get_quality_event_snapshot(limit: int = 20) -> dict:
 
 
 # Global metrics collector instance
-_collector: Optional[MetricsCollector] = None
+_collector: MetricsCollector | None = None
 
 
 def get_collector() -> MetricsCollector:
