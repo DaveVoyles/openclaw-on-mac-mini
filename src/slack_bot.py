@@ -922,11 +922,31 @@ async def _process_slack_files(files: list[dict], token: str, question: str) -> 
                 data = await resp.read()
 
             if mimetype.startswith("image/"):
-                image_answer = await llm_analyze_image(data, mimetype, question)
-                question = f"{question}\n\n[Image attachment analysis: {image_answer}]"
+                # OCR intent: extract text verbatim instead of describing the image
+                from ocr_skill import is_ocr_request, ocr_file  # lazy import
+                if is_ocr_request(question):
+                    ocr_text = await ocr_file(data, mimetype, hint="")
+                    question = f"{question}\n\n[OCR result for {filename}]:\n{ocr_text}"
+                else:
+                    image_answer = await llm_analyze_image(data, mimetype, question)
+                    question = f"{question}\n\n[Image attachment analysis: {image_answer}]"
+            elif mimetype == "application/pdf":
+                # OCR intent on PDF: extract text layer (or ask user to send as image)
+                from ocr_skill import is_ocr_request, ocr_file  # lazy import
+                if is_ocr_request(question):
+                    ocr_text = await ocr_file(data, mimetype, hint="")
+                    question = f"{question}\n\n[OCR result for {filename}]:\n{ocr_text}"
+                else:
+                    doc_text = data.decode("utf-8", errors="replace")[:ATTACHMENT_TEXT_MAX_CHARS]
+                    question = (
+                        f"{question}\n\n--- Attached Document: {filename} "
+                        f"(first {ATTACHMENT_TEXT_MAX_CHARS} chars) ---\n"
+                        f"{doc_text}\n"
+                        f"--- End Document ---"
+                    )
             elif (
                 mimetype.startswith("text/")
-                or mimetype in ("application/pdf", "application/json")
+                or mimetype in ("application/json",)
                 or mimetype.startswith("application/vnd.")
             ):
                 doc_text = data.decode("utf-8", errors="replace")[:ATTACHMENT_TEXT_MAX_CHARS]
