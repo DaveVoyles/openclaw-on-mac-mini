@@ -52,6 +52,7 @@ addopts = [
 
 # Custom markers
 markers = [
+    "smoke: fast core tests covering critical paths; run with pytest -m smoke",
     "requires_python312: test requires Python 3.12 (run via ./run_tests.sh)",
     "slow: marks tests as slow (>2s)",
     "integration: marks tests as integration tests",

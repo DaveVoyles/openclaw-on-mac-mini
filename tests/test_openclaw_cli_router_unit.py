@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import openclaw_cli_router as mod  # type: ignore
+pytestmark = pytest.mark.smoke
 
 # ---------------------------------------------------------------------------
 # ReplRouteDecision – should_auto_route

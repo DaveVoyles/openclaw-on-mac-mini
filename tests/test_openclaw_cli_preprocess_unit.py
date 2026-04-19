@@ -10,6 +10,7 @@ import importlib
 
 mod = importlib.import_module('openclaw_cli_preprocess')
 _sanitize_source_url = getattr(mod, '_sanitize_source_url', None)
+pytestmark = pytest.mark.smoke
 
 if _sanitize_source_url is None:
     pytest.skip("_sanitize_source_url not found in module", allow_module_level=True)

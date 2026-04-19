@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import answer_policy as ap
+import pytest
+
+pytestmark = pytest.mark.smoke
 
 
 class TestResponseSeemsValidGemma:
