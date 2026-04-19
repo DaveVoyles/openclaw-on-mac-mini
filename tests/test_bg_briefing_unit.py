@@ -79,15 +79,14 @@ sys.modules["llm"].chat = AsyncMock(return_value=("Good morning! All looks great
 import bg_briefing  # noqa: E402
 from bg_briefing import (  # noqa: E402
     _owner_local_now,
-    send_morning_briefing,
     send_evening_digest,
+    send_morning_briefing,
 )
 from constants import (  # noqa: E402
     BRIEFING_HOUR,
     BRIEFING_MINUTE_WINDOW,
     EVENING_DIGEST_HOUR,
 )
-
 
 # ---------------------------------------------------------------------------
 # _owner_local_now
@@ -166,7 +165,6 @@ class TestSendMorningBriefing:
 
     async def test_embed_sent_has_correct_type(self):
         """The object passed to channel.send should be a discord.Embed (or mock)."""
-        import discord as _discord
 
         channel = AsyncMock()
         bot = MagicMock()

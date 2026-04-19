@@ -48,8 +48,6 @@ sys.path.insert(0, "src")
 
 import slack_bot  # noqa: E402  (imported after stubs)
 from slack_bot import (  # noqa: E402
-
-
     _FILE_HISTORY_MAX,
     _HELP_TEXT,
     _WELCOME_MESSAGE,
@@ -67,7 +65,6 @@ from slack_bot import (  # noqa: E402
     _set_user_simple,
     _suggest_actions_for_file,
 )
-
 
 # ---------------------------------------------------------------------------
 # Tests

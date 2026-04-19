@@ -5,6 +5,7 @@ Validates YAML defaults, env-var overrides, and allowed-user-ID parsing.
 """
 
 import importlib
+
 import pytest
 
 pytestmark = pytest.mark.smoke

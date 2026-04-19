@@ -21,7 +21,6 @@ from sms_ux import (
     validate_sms_body,
 )
 
-
 log = logging.getLogger(__name__)
 
 

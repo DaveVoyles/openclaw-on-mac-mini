@@ -10,7 +10,7 @@ import asyncio
 import importlib as _importlib
 import logging
 import sys
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -52,7 +52,6 @@ if "metrics_collector" not in sys.modules:
     sys.modules["metrics_collector"] = _mc
 
 from bg_tasks import get_active_task_count, managed_task  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # Helpers

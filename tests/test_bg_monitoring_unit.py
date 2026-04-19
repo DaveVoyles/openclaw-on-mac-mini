@@ -51,14 +51,13 @@ sys.modules["audit"].audit_log = MagicMock()
 
 import bg_monitoring  # noqa: E402
 from bg_monitoring import (  # noqa: E402
-    set_active_conversation_count,
-    get_active_conversation_count,
-    _post_error_alert,
-    _check_container_health,
-    _SAFE_RESTART_TARGETS,
     _AUTO_RESTART_THRESHOLD,
+    _SAFE_RESTART_TARGETS,
+    _check_container_health,
+    _post_error_alert,
+    get_active_conversation_count,
+    set_active_conversation_count,
 )
-
 
 # ---------------------------------------------------------------------------
 # Pure function tests

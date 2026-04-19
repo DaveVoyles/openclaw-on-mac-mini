@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import answer_policy as ap
 import pytest
+
+import answer_policy as ap
 
 pytestmark = pytest.mark.smoke
 

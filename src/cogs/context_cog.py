@@ -13,7 +13,6 @@ from discord.ext import commands
 from cog_helpers import audit_log, require_auth
 from discord_error import build_error_embed
 
-
 log = logging.getLogger(__name__)
 
 

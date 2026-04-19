@@ -6,8 +6,8 @@ alerts they receive, mute notifications temporarily, and toggle DM
 delivery.
 """
 
-import re
 import logging
+import re
 import time
 
 import discord

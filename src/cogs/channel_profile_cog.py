@@ -19,7 +19,6 @@ from runtime_state import (
     update_channel_profile_recommendation,
 )
 
-
 log = logging.getLogger(__name__)
 
 

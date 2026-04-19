@@ -487,7 +487,6 @@ def test_render_text_chart_with_category_and_width():
 # --- Merged from test_alert_manager.py ---
 """Tests for bounded alert routing helpers."""
 
-from alert_manager import reset_bounded_alert_cache, should_route_bounded_alert
 
 
 def test_bounded_alert_deduplicates_within_cooldown():

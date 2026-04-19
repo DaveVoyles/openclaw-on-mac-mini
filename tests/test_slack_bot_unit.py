@@ -14,8 +14,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 # ---------------------------------------------------------------------------
 # Stub heavy deps so slack_bot can be imported without real packages
 # ---------------------------------------------------------------------------
@@ -42,7 +40,6 @@ os.environ.setdefault("SLACK_APP_TOKEN", "")
 sys.path.insert(0, "src")
 
 import slack_bot as sb  # noqa: E402
-
 
 # ---------------------------------------------------------------------------
 # _clean_for_slack

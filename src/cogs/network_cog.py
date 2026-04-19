@@ -3,14 +3,14 @@ Network Cog — extracted from bot.py
 Handles: /network, /tailscale, /speedtest
 """
 
-import discord
 import logging
+
+import discord
 from discord import app_commands
 from discord.ext import commands
 
 from cog_helpers import audit_log
 from network import get_network_status, get_tailscale_status, run_speed_test
-
 
 log = logging.getLogger(__name__)
 

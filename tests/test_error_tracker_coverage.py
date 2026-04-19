@@ -197,9 +197,7 @@ class TestGetPastIncidents:
 # --- Merged from test_error_tracker.py ---
 """Tests for trace persistence in error_tracker outcomes."""
 
-import json
 
-import error_tracker as mod
 
 
 def test_record_outcome_persists_explicit_trace_id(tmp_path, monkeypatch):
