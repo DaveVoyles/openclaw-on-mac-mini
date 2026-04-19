@@ -1,4 +1,20 @@
-"""Shared orchestration helpers for /ask streaming flows."""
+"""Shared orchestration helpers for /ask streaming flows.
+
+Canonical ask flow — both Slack (slack_bot.handle_mention / handle_dm / _ask)
+and Discord (ask_handler.handle_ask) should delegate core LLM orchestration here.
+
+The primary entry point is ``run_ask_stream()``, which wraps the llm_stream call,
+collects routing metadata, context badges, and returns an ``AskStreamResult``.
+
+TODO: Remaining duplication between slack_bot._ask() and ask_handler.handle_ask():
+  - slack_bot._ask() calls dashboard.api_handlers._execute_agent_ask (different code path)
+    rather than run_ask_stream; unifying these would give Slack the same routing/retry logic
+  - Progress streaming (slack_bot._edit_thinking_with_progress vs ask_handler._think hook)
+    could share a common periodic-update abstraction
+  - Quality-retry logic (_run_quality_auto_repair) is only called in ask_handler;
+    Slack responses skip cross-provider retry
+  Tracked: td-wave5-slack-discord-dedup
+"""
 
 from __future__ import annotations
 

@@ -4,10 +4,26 @@
 Usage:
     python3 scripts/validate_env.py           # check .env
     python3 scripts/validate_env.py --strict  # exit 1 if any required var missing
+
+Schema:
+    If config/env_schema.yaml exists, required variables are sourced from it
+    (more reliable than comment-parsing). The schema also provides type metadata
+    and descriptions for future tooling.
 """
 import argparse
 import sys
 from pathlib import Path
+
+
+def load_schema(schema_path: Path) -> dict:
+    """Load env_schema.yaml if available; returns empty dict on any failure."""
+    try:
+        import yaml  # type: ignore[import]
+        if schema_path.exists():
+            return yaml.safe_load(schema_path.read_text()) or {}
+    except ImportError:
+        pass
+    return {}
 
 
 def load_env_file(path: Path) -> dict[str, str | None]:
@@ -62,6 +78,16 @@ def main() -> int:
     example_keys = set(load_env_file(example_path).keys())
     env_keys = set(load_env_file(env_path).keys())
     required_keys = find_required_keys(example_path)
+
+    schema_path = repo_root / "config" / "env_schema.yaml"
+    schema = load_schema(schema_path)
+    if schema:
+        schema_required = {
+            k for k, v in schema.get("variables", {}).items()
+            if v.get("required") is True
+        }
+        required_keys = required_keys | schema_required
+        print(f"📋 Schema loaded: {len(schema.get('variables', {}))} vars defined")
 
     missing_all = example_keys - env_keys
     missing_required = required_keys - env_keys

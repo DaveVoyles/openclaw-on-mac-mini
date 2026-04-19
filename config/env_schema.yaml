@@ -1,0 +1,712 @@
+# OpenClaw Environment Variable Schema
+# Used by scripts/validate_env.py for validation and documentation generation.
+# Generated: 2026-04-18
+#
+# Fields per variable:
+#   required    - true if bot fails at startup without it
+#   type        - string | bool | int | float | path | url | enum
+#   default     - value used when not set (omit if no default)
+#   description - human-readable purpose
+#   sensitive   - true for tokens, keys, passwords (never log)
+#   enum_values - valid values list (for type: enum)
+
+schema_version: "1.0"
+
+variables:
+
+  # ── Bot Core / Discord ─────────────────────────────────────────────────────
+  DISCORD_BOT_TOKEN:
+    required: true
+    type: string
+    description: "Discord bot token from Developer Portal (Bot → Token → Copy)"
+    sensitive: true
+
+  DISCORD_GUILD_ID:
+    required: true
+    type: string
+    description: "Discord server (guild) ID — enables slash command registration"
+
+  ALLOWED_USER_IDS:
+    required: false
+    type: string
+    description: "Comma-separated Discord user IDs allowed to use privileged commands"
+
+  ALERT_CHANNEL_ID:
+    required: false
+    type: string
+    description: "Discord channel ID for autonomous push notifications (morning briefing, alerts)"
+
+  WEBHOOK_SECRET:
+    required: false
+    type: string
+    description: "Webhook Bearer token; if set, all inbound webhooks require it"
+    sensitive: true
+
+  WEBHOOK_REQUIRE_AUTH:
+    required: false
+    type: bool
+    default: "true"
+    description: "Enforce webhook Bearer auth (recommended true outside local dev)"
+
+  DASHBOARD_API_TOKEN:
+    required: false
+    type: string
+    description: "API action auth token for mutating endpoints (/api/trigger-scan, etc.)"
+    sensitive: true
+
+  DASHBOARD_API_AUTH_REQUIRED:
+    required: false
+    type: bool
+    default: "true"
+    description: "Require auth for API action endpoints"
+
+  DISCORD_CHANNEL_RESEARCH_ID:
+    required: false
+    type: string
+    description: "Channel ID routed to research workflow (prevents context bleed)"
+
+  DISCORD_CHANNEL_ANALYTICS_ID:
+    required: false
+    type: string
+    description: "Channel ID routed to analytics workflow"
+
+  DISCORD_CHANNEL_BOOKMARKS_ID:
+    required: false
+    type: string
+    description: "Channel ID routed to bookmarks workflow"
+
+  DISCORD_CHANNEL_REAL_ESTATE_ID:
+    required: false
+    type: string
+    description: "Channel ID routed to real-estate workflow"
+
+  # ── LLM Providers ─────────────────────────────────────────────────────────
+  GOOGLE_API_KEY:
+    required: false
+    type: string
+    description: "Google Gemini API key — primary cloud LLM provider"
+    sensitive: true
+
+  LLM_MODEL:
+    required: false
+    type: string
+    default: "gemini-2.5-flash"
+    description: "Primary Gemini model name"
+
+  LLM_MAX_TOKENS:
+    required: false
+    type: int
+    default: "8192"
+    description: "Max output tokens per LLM response"
+
+  LLM_TEMPERATURE:
+    required: false
+    type: float
+    default: "0.7"
+    description: "Sampling temperature (0.0–2.0)"
+
+  LLM_RPM_LIMIT:
+    required: false
+    type: int
+    default: "60"
+    description: "Cloud LLM requests per minute rate limit"
+
+  LLM_RPH_LIMIT:
+    required: false
+    type: int
+    default: "500"
+    description: "Cloud LLM requests per hour rate limit"
+
+  LLM_MAX_TOOL_ROUNDS:
+    required: false
+    type: int
+    default: "12"
+    description: "Max tool-use rounds per single LLM request"
+
+  LLM_MAX_HISTORY_TURNS:
+    required: false
+    type: int
+    default: "50"
+    description: "How many past turns to include in conversation context"
+
+  CONVERSATION_TTL_MINUTES:
+    required: false
+    type: int
+    default: "30"
+    description: "Minutes of inactivity before a conversation session expires"
+
+  THINKING_MODEL:
+    required: false
+    type: string
+    default: "gemini-2.5-flash"
+    description: "Model used for /research command (supports extended thinking)"
+
+  THINKING_BUDGET:
+    required: false
+    type: int
+    default: "8000"
+    description: "Thinking token budget for extended reasoning (higher = more thorough)"
+
+  OLLAMA_URL:
+    required: false
+    type: url
+    default: "http://host.docker.internal:11434"
+    description: "Ollama API base URL — host.docker.internal resolves from inside container"
+
+  OLLAMA_MODEL:
+    required: false
+    type: string
+    default: "gemma4:e4b"
+    description: "Ollama model for conversational (non-tool) queries"
+
+  LOCAL_LLM_ENABLED:
+    required: false
+    type: bool
+    default: "true"
+    description: "Enable/disable local Ollama model routing"
+
+  DEFAULT_MODEL_PREFERENCE:
+    required: false
+    type: enum
+    default: "auto"
+    enum_values: ["auto", "local", "gemini", "copilot"]
+    description: "Default model routing: auto (smart), local, gemini (cloud), copilot"
+
+  ROUTING_PROFILE:
+    required: false
+    type: enum
+    default: "copilot-first"
+    enum_values: ["copilot-first", "balanced", "gemini-first", "cost-saver"]
+    description: "Auto routing profile for non-tool asks"
+
+  OLLAMA_TOOLS_ENABLED:
+    required: false
+    type: bool
+    default: "true"
+    description: "Whether Ollama model supports tool/function calling"
+
+  EMBEDDING_MODEL:
+    required: false
+    type: string
+    default: "all-MiniLM-L6-v2"
+    description: "Embedding model for ChromaDB vector search (must be pulled in Ollama)"
+
+  OPENAI_API_KEY:
+    required: false
+    type: string
+    description: "OpenAI API key — optional fallback for creative writing and code tasks"
+    sensitive: true
+
+  OPENAI_MODEL:
+    required: false
+    type: string
+    default: "gpt-4o"
+    description: "OpenAI model name when OPENAI_API_KEY is set"
+
+  ANTHROPIC_API_KEY:
+    required: false
+    type: string
+    description: "Anthropic Claude API key — optional fallback for code review and analysis"
+    sensitive: true
+
+  ANTHROPIC_MODEL:
+    required: false
+    type: string
+    default: "claude-sonnet-4-5"
+    description: "Anthropic model name when ANTHROPIC_API_KEY is set"
+
+  COPILOT_PROXY_URL:
+    required: false
+    type: url
+    description: "GitHub Copilot OpenAI-compatible proxy URL (e.g. http://localhost:9191/v1)"
+
+  COPILOT_PROXY_TOKEN:
+    required: false
+    type: string
+    description: "Auth token for Copilot proxy"
+    sensitive: true
+
+  # ── Web Search ─────────────────────────────────────────────────────────────
+  PERPLEXITY_API_KEY:
+    required: false
+    type: string
+    description: "Perplexity AI API key — primary search provider"
+    sensitive: true
+
+  TAVILY_API_KEY:
+    required: false
+    type: string
+    description: "Tavily AI Search API key — secondary search, higher quality"
+    sensitive: true
+
+  FIRECRAWL_API_KEY:
+    required: false
+    type: string
+    description: "Firecrawl API key — search + extract in one call (free: 500 pages/month)"
+    sensitive: true
+
+  SERPER_API_KEY:
+    required: false
+    type: string
+    description: "Serper Google SERP API key ($5/mo for 2500 queries)"
+    sensitive: true
+
+  # ── News & Data APIs ───────────────────────────────────────────────────────
+  NEWSAPI_KEY:
+    required: false
+    type: string
+    description: "NewsAPI.org key — news aggregation from 80K+ sources (free: 100 req/day)"
+    sensitive: true
+
+  APISPORTS_KEY:
+    required: false
+    type: string
+    description: "API-Sports key — multi-sport data: NBA, NFL, MLB, NHL (free: 100 req/day)"
+    sensitive: true
+
+  ALPHAVANTAGE_KEY:
+    required: false
+    type: string
+    description: "Alpha Vantage key — financial data, market news (free: 25 req/day)"
+    sensitive: true
+
+  OMDB_API_KEY:
+    required: false
+    type: string
+    description: "OMDb API key — movie/TV info (free: 1000 req/day)"
+    sensitive: true
+
+  TRAKT_CLIENT_ID:
+    required: false
+    type: string
+    description: "Trakt.tv OAuth2 client ID for TV & movie tracking"
+
+  TRAKT_CLIENT_SECRET:
+    required: false
+    type: string
+    description: "Trakt.tv OAuth2 client secret"
+    sensitive: true
+
+  TRAKT_ACCESS_TOKEN:
+    required: false
+    type: string
+    description: "Trakt.tv OAuth2 access token (generated after user authorization)"
+    sensitive: true
+
+  TRAKT_REFRESH_TOKEN:
+    required: false
+    type: string
+    description: "Trakt.tv OAuth2 refresh token"
+    sensitive: true
+
+  FITBIT_CLIENT_ID:
+    required: false
+    type: string
+    description: "Fitbit API OAuth2 client ID"
+
+  FITBIT_CLIENT_SECRET:
+    required: false
+    type: string
+    description: "Fitbit API OAuth2 client secret"
+    sensitive: true
+
+  FITBIT_ACCESS_TOKEN:
+    required: false
+    type: string
+    description: "Fitbit OAuth2 access token"
+    sensitive: true
+
+  FITBIT_REFRESH_TOKEN:
+    required: false
+    type: string
+    description: "Fitbit OAuth2 refresh token"
+    sensitive: true
+
+  OPENFOODFACTS_USER_AGENT:
+    required: false
+    type: string
+    default: "OpenClaw/0.6.0"
+    description: "User-agent string for Open Food Facts API (no key required)"
+
+  # ── Media Stack (*arr / Plex / Downloads) ─────────────────────────────────
+  SONARR_API_KEY:
+    required: false
+    type: string
+    description: "Sonarr API key for TV management"
+    sensitive: true
+
+  RADARR_API_KEY:
+    required: false
+    type: string
+    description: "Radarr API key for movie management"
+    sensitive: true
+
+  LIDARR_API_KEY:
+    required: false
+    type: string
+    description: "Lidarr API key for music management"
+    sensitive: true
+
+  PROWLARR_API_KEY:
+    required: false
+    type: string
+    description: "Prowlarr API key for indexer management"
+    sensitive: true
+
+  QBIT_URL:
+    required: false
+    type: url
+    default: "http://192.168.1.8:8080"
+    description: "qBittorrent WebUI URL"
+
+  SABNZBD_URL:
+    required: false
+    type: url
+    default: "http://192.168.1.8:8775"
+    description: "SABnzbd WebUI URL"
+
+  SABNZBD_API_KEY:
+    required: false
+    type: string
+    description: "SABnzbd API key"
+    sensitive: true
+
+  TAUTULLI_API_KEY:
+    required: false
+    type: string
+    description: "Tautulli API key for Plex activity monitoring"
+    sensitive: true
+
+  OVERSEERR_API_KEY:
+    required: false
+    type: string
+    description: "Overseerr API key for media request management"
+    sensitive: true
+
+  # ── Network / Infrastructure ───────────────────────────────────────────────
+  DOCKER_HOST_IP:
+    required: false
+    type: string
+    default: "192.168.1.93"
+    description: "Host machine IP running Docker containers"
+
+  COPILOT_CLI_PATH:
+    required: false
+    type: path
+    default: "/opt/homebrew/bin/copilot"
+    description: "Full path to GitHub Copilot CLI binary on the host (SSH BatchMode skips PATH)"
+
+  ADGUARD_USER:
+    required: false
+    type: string
+    default: "admin"
+    description: "AdGuard Home admin username"
+
+  ADGUARD_PASSWORD:
+    required: false
+    type: string
+    description: "AdGuard Home admin password"
+    sensitive: true
+
+  NAS_HOST:
+    required: false
+    type: string
+    default: "192.168.1.8"
+    description: "Synology NAS hostname or IP"
+
+  NAS_SSH_PORT:
+    required: false
+    type: int
+    default: "24"
+    description: "NAS SSH port"
+
+  NAS_SSH_USER:
+    required: false
+    type: string
+    default: "dave"
+    description: "NAS SSH username"
+
+  NAS_BACKUP_PATH:
+    required: false
+    type: path
+    default: "/volume1/docker/openclaw/backups"
+    description: "NAS path for OpenClaw backups"
+
+  # ── Storage / Directories ──────────────────────────────────────────────────
+  VAULT_DIR:
+    required: false
+    type: path
+    default: "/vault"
+    description: "Obsidian vault path inside the container"
+
+  MEMORY_DIR:
+    required: false
+    type: path
+    description: "Directory for memory/context storage"
+
+  AI_FILES_DIR:
+    required: false
+    type: path
+    default: "/ai-files"
+    description: "Path to watch for new AI-processable files (Slack file detection)"
+
+  # ── Feature Flags ──────────────────────────────────────────────────────────
+  THREAD_AUTO_CREATE:
+    required: false
+    type: bool
+    default: "true"
+    description: "Auto-create Discord threads after 3+ exchanges in /ask"
+
+  THREAD_ARCHIVE_MINUTES:
+    required: false
+    type: int
+    default: "60"
+    description: "Minutes before auto-created threads are archived"
+
+  THREAD_MAX_MESSAGES:
+    required: false
+    type: int
+    default: "50"
+    description: "Max messages per thread before a new thread is created"
+
+  REFLECTION_ENABLED:
+    required: false
+    type: bool
+    default: "true"
+    description: "Enable post-conversation self-reflection"
+
+  AUTO_RECALL_ENABLED:
+    required: false
+    type: bool
+    default: "true"
+    description: "Auto-recall relevant memories from vector store"
+
+  AUTO_RECALL_TOP_K:
+    required: false
+    type: int
+    default: "3"
+    description: "Number of top-k memory results to inject as context"
+
+  FEEDBACK_ENABLED:
+    required: false
+    type: bool
+    default: "true"
+    description: "Enable user feedback collection on responses"
+
+  # ── Email ──────────────────────────────────────────────────────────────────
+  GMAIL_USER:
+    required: false
+    type: string
+    description: "Gmail address for IMAP/SMTP access (requires 2FA + App Password)"
+
+  GMAIL_APP_PASSWORD:
+    required: false
+    type: string
+    description: "Gmail App Password (generated at myaccount.google.com/apppasswords)"
+    sensitive: true
+
+  # ── SMS / Twilio ───────────────────────────────────────────────────────────
+  SMS_PROVIDER:
+    required: false
+    type: enum
+    default: "twilio"
+    enum_values: ["twilio"]
+    description: "SMS provider (currently only twilio supported)"
+
+  TWILIO_ENABLED:
+    required: false
+    type: bool
+    default: "false"
+    description: "Enable Twilio SMS integration"
+
+  TWILIO_ACCOUNT_SID:
+    required: false
+    type: string
+    description: "Twilio Account SID"
+    sensitive: true
+
+  TWILIO_AUTH_TOKEN:
+    required: false
+    type: string
+    description: "Twilio auth token"
+    sensitive: true
+
+  TWILIO_FROM_NUMBER:
+    required: false
+    type: string
+    description: "Twilio sender phone number (E.164 format, e.g. +15551234567)"
+
+  TWILIO_MESSAGING_SERVICE_SID:
+    required: false
+    type: string
+    description: "Twilio Messaging Service SID (alternative to TWILIO_FROM_NUMBER)"
+
+  TWILIO_VERIFY_SERVICE_SID:
+    required: false
+    type: string
+    description: "Twilio Verify Service SID for OTP verification flows"
+
+  # ── Dropbox ────────────────────────────────────────────────────────────────
+  DROPBOX_APP_KEY:
+    required: false
+    type: string
+    description: "Dropbox OAuth2 app key from App Console"
+
+  DROPBOX_APP_SECRET:
+    required: false
+    type: string
+    description: "Dropbox OAuth2 app secret"
+    sensitive: true
+
+  OPENCLAW_PUBLIC_URL:
+    required: false
+    type: url
+    description: "Public URL this server is reachable at — used as OAuth redirect base"
+
+  # ── GitHub ─────────────────────────────────────────────────────────────────
+  GITHUB_TOKEN:
+    required: false
+    type: string
+    description: "GitHub personal access token (repo read-only scope for private repos)"
+    sensitive: true
+
+  GITHUB_DEFAULT_REPOS:
+    required: false
+    type: string
+    description: "Comma-separated default repos (owner/repo1,owner/repo2) for /github commands"
+
+  # ── Monitoring / Error Tracking ────────────────────────────────────────────
+  SENTRY_AUTH_TOKEN:
+    required: false
+    type: string
+    description: "Sentry auth token for error monitoring"
+    sensitive: true
+
+  SENTRY_ORG:
+    required: false
+    type: string
+    description: "Sentry organization slug (from URL: sentry.io/organizations/{slug}/)"
+
+  # ── Push Notifications (Ntfy) ─────────────────────────────────────────────
+  NTFY_URL:
+    required: false
+    type: url
+    default: "https://ntfy.sh"
+    description: "Ntfy server URL (self-hosted or public ntfy.sh)"
+
+  NTFY_TOPIC:
+    required: false
+    type: string
+    default: "openclaw-alerts"
+    description: "Ntfy topic name — keep secret (acts as password on public ntfy.sh)"
+
+  NTFY_TOKEN:
+    required: false
+    type: string
+    description: "Bearer token for self-hosted ntfy with auth"
+    sensitive: true
+
+  # ── External Services ──────────────────────────────────────────────────────
+  MATON_API_KEY:
+    required: false
+    type: string
+    description: "Maton API Gateway key — managed OAuth proxy to 100+ APIs"
+    sensitive: true
+
+  WEATHER_DEFAULT_LOCATION:
+    required: false
+    type: string
+    default: "Philadelphia, PA"
+    description: "Default location for weather queries (uses Open-Meteo, no API key required)"
+
+  # ── Slack Bot ──────────────────────────────────────────────────────────────
+  SLACK_ENABLED:
+    required: false
+    type: bool
+    default: "false"
+    description: "Enable Slack bot integration (requires SLACK_BOT_TOKEN and SLACK_APP_TOKEN)"
+
+  SLACK_BOT_TOKEN:
+    required: false
+    type: string
+    description: "Slack bot OAuth token (xoxb-...) — required if SLACK_ENABLED=true"
+    sensitive: true
+
+  SLACK_APP_TOKEN:
+    required: false
+    type: string
+    description: "Slack app-level token for Socket Mode (xapp-...) — required if SLACK_ENABLED=true"
+    sensitive: true
+
+  SLACK_APP_ID:
+    required: false
+    type: string
+    description: "Slack App ID (from api.slack.com/apps → Your app → App ID)"
+
+  SLACK_CONFIG_TOKEN:
+    required: false
+    type: string
+    description: "Slack config token (app_configurations:write) for manifest updates"
+    sensitive: true
+
+  SLACK_NOTIFY_USER_ID:
+    required: false
+    type: string
+    description: "Slack member ID to DM when a new file is detected in /ai-files"
+
+  # ── Upload Endpoint ────────────────────────────────────────────────────────
+  OPENCLAW_UPLOAD_KEY:
+    required: false
+    type: string
+    description: "Secret key for POST /upload endpoint (generate with uuid.uuid4())"
+    sensitive: true
+
+  OPENCLAW_UPLOAD_PORT:
+    required: false
+    type: int
+    default: "8080"
+    description: "Upload server port"
+
+  OPENCLAW_FILE_POLL_INTERVAL:
+    required: false
+    type: int
+    default: "60"
+    description: "Seconds between polls of /ai-files for new files"
+
+  # ── System Configuration ───────────────────────────────────────────────────
+  TZ:
+    required: false
+    type: string
+    default: "America/New_York"
+    description: "Container timezone (IANA timezone name)"
+
+  EVENING_DIGEST_HOUR:
+    required: false
+    type: int
+    default: "21"
+    description: "Hour (0–23) to send evening digest (default: 21 = 9 PM)"
+
+  HEALTH_PORT:
+    required: false
+    type: int
+    default: "8765"
+    description: "Health-check HTTP server port (for Prometheus/Uptime Kuma)"
+
+  # ── LLM Budget / Cost ──────────────────────────────────────────────────────
+  GEMINI_BUDGET_LIMIT:
+    required: false
+    type: float
+    default: "30.00"
+    description: "Monthly spending cap for Gemini API in USD (triggers alert when exceeded)"
+
+  GEMINI_PRICE_INPUT_PER_M:
+    required: false
+    type: float
+    default: "0.075"
+    description: "Gemini input pricing per million tokens (for cost tracking)"
+
+  GEMINI_PRICE_OUTPUT_PER_M:
+    required: false
+    type: float
+    default: "0.30"
+    description: "Gemini output pricing per million tokens (for cost tracking)"
