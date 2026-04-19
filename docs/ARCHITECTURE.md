@@ -91,11 +91,12 @@ These services run as separate containers on the `openclaw_default` Docker netwo
 | Service | Container | Port | Purpose | Connection |
 |---|---|---|---|---|
 | Open WebUI | `open-webui` | 3000 → 8080 | AI chat interface | `http://openclaw:8765/v1` (OpenAI-compat) |
-| Dashboard v2 | `dashboard-v2` | 7001 → 3001 | Monitoring dashboard | `http://openclaw:8765` (health/metrics/API) |
 
 External URLs (via Synology DDNS + reverse proxy):
 - Open WebUI: https://chat.davevoyles.synology.me
-- Dashboard: https://openclaw-dashboard.davevoyles.synology.me
+- Dashboard: https://openclaw.davevoyles.synology.me/dashboard
+
+> **Note:** The former `dashboard-v2` service (port 7001) was removed. Its two useful features — Docker container restart/stop and a container log viewer — were ported into the main `/dashboard`.
 
 ## Architecture deep dives
 

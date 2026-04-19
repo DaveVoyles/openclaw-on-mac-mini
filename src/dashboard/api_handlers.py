@@ -3249,3 +3249,112 @@ async def api_recap_generate_handler(request: web.Request) -> web.Response:
     except Exception as exc:  # broad: intentional
         log.error("api_recap_generate_handler error: %s", exc)
         return web.json_response({"error": str(exc)}, status=500)
+
+
+_ORBSTACK_DOCKER = "/Applications/OrbStack.app/Contents/MacOS/xbin/docker"
+_DOCKER_CONTAINER_RE = re.compile(r"^[a-zA-Z0-9_.\-]{1,128}$")
+
+
+def _docker_bin() -> str:
+    return _ORBSTACK_DOCKER if Path(_ORBSTACK_DOCKER).exists() else "docker"
+
+
+async def api_docker_action_handler(request: web.Request) -> web.Response:
+    """POST /api/docker/action — Run a lifecycle action on a Docker container.
+
+    Body (JSON):
+        action     (str, required) — one of: restart, stop, start
+        container  (str, required) — container name or ID
+
+    Returns JSON:
+        success  (bool)
+        output   (str)
+        error    (str)
+    """
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return web.json_response({"error": "Invalid JSON body"}, status=400)
+
+    action = (body.get("action") or "").strip().lower()
+    container = (body.get("container") or "").strip()
+
+    if action not in ("restart", "stop", "start"):
+        return web.json_response({"error": "action must be one of: restart, stop, start"}, status=400)
+
+    if not container or not _DOCKER_CONTAINER_RE.match(container):
+        return web.json_response(
+            {"error": "container must be a non-empty name (alphanumeric, dash, underscore, dot; max 128 chars)"},
+            status=400,
+        )
+
+    log.info("docker action %s on %s", action, container)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            _docker_bin(),
+            action,
+            container,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        success = proc.returncode == 0
+        return web.json_response(
+            {
+                "success": success,
+                "output": stdout.decode(errors="replace").strip(),
+                "error": stderr.decode(errors="replace").strip() if not success else "",
+            }
+        )
+    except asyncio.TimeoutError:
+        return web.json_response({"success": False, "output": "", "error": "docker command timed out"}, status=504)
+    except OSError as exc:
+        log.error("api_docker_action_handler OSError: %s", exc)
+        return web.json_response({"success": False, "output": "", "error": str(exc)}, status=500)
+
+
+async def api_docker_logs_handler(request: web.Request) -> web.Response:
+    """GET /api/docker/logs — Fetch recent logs for a Docker container.
+
+    Query params:
+        service  (str, required)      — container name or ID
+        lines    (int, optional=50)   — number of tail lines (max 200)
+
+    Returns JSON:
+        service  (str)
+        lines    (int)
+        output   (str)
+    """
+    service = (request.rel_url.query.get("service") or "").strip()
+    if not service or not _DOCKER_CONTAINER_RE.match(service):
+        return web.json_response(
+            {"error": "service must be a non-empty container name (alphanumeric, dash, underscore, dot; max 128 chars)"},
+            status=400,
+        )
+
+    try:
+        lines = int(request.rel_url.query.get("lines", 50))
+    except (TypeError, ValueError):
+        lines = 50
+    lines = max(1, min(lines, 200))
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            _docker_bin(),
+            "logs",
+            "--tail",
+            str(lines),
+            service,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        output = stdout.decode(errors="replace").strip()
+        if proc.returncode != 0 and not output:
+            return web.json_response({"error": f"docker logs exited {proc.returncode}"}, status=500)
+        return web.json_response({"service": service, "lines": lines, "output": output})
+    except asyncio.TimeoutError:
+        return web.json_response({"error": "docker logs timed out"}, status=504)
+    except OSError as exc:
+        log.error("api_docker_logs_handler OSError: %s", exc)
+        return web.json_response({"error": str(exc)}, status=500)

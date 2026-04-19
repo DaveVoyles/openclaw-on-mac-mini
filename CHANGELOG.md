@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 🗑️ Dashboard Consolidation (April 2026)
+- Removed `dashboard-v2` service (port 7001 / `openclaw-dashboard.davevoyles.synology.me`). It had 90% feature overlap with the main dashboard and its session stats showed all zeros (expected npm CLI sessions path `~/.openclaw/agents/main/sessions/` doesn't exist in Docker deployment).
+- Ported two unique features into the main dashboard at `openclaw.davevoyles.synology.me/dashboard`:
+  - **Docker container actions** — restart/stop buttons on each container in the Container Health Status grid; calls `POST /api/docker/action`
+  - **Container Log Viewer** — new card with service dropdown + line count selector; calls `GET /api/docker/logs`
+- Updated `docs/DASHBOARD_SURFACES.md`, `docs/ARCHITECTURE.md`, `docs/NETWORK-TOPOLOGY.md` to remove dashboard-v2 references
+
 ### 🔧 Code Quality & Refactoring — Tech Debt Waves P0–W8 (April 2026)
 - Extracted 8 module-level helper functions from `bot.py` into `src/bot_helpers.py` (−143L from `bot.py`) ([9f7fe33](../../commit/9f7fe33))
 - Added `managed_task()` wrapper in `src/bg_tasks.py` for all fire-and-forget asyncio tasks with timeout + error logging ([7d94d48](../../commit/7d94d48))

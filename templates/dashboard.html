@@ -1816,6 +1816,23 @@
           </div>
         </div>
 
+        <!-- Container Log Viewer -->
+        <div class="card" id="container-logs-card">
+          <h2>📋 Container Logs</h2>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-bottom:0.6rem">
+            <select id="log-service-select" style="padding:0.3rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#444);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.82rem;min-width:160px">
+              <option value="">Select container…</option>
+            </select>
+            <select id="log-lines-select" style="padding:0.3rem 0.5rem;background:var(--surface-solid,#1a1b2e);border:1px solid var(--border,#444);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.82rem">
+              <option value="50">50 lines</option>
+              <option value="100">100 lines</option>
+              <option value="200">200 lines</option>
+            </select>
+            <button onclick="fetchContainerLogs()" style="padding:0.3rem 0.75rem;background:var(--surface,#1a1b2e);border:1px solid var(--border,#444);border-radius:6px;color:var(--text,#e8e8e8);font-size:0.82rem;cursor:pointer">Fetch Logs</button>
+          </div>
+          <pre id="container-log-output" style="background:var(--surface-solid,#0d1117);border:1px solid var(--border,#333);border-radius:6px;padding:0.75rem;font-size:0.75rem;line-height:1.5;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:var(--text,#e8e8e8);font-family:'JetBrains Mono',monospace">Select a container and click Fetch Logs.</pre>
+        </div>
+
         <!-- Mac Mini Resource Usage -->
         <div class="card" id="mac-mini-usage" style="display: none">
           <h2>&#128187; Mac Mini Resource Usage</h2>
@@ -3021,7 +3038,14 @@
           const statusClass = c.is_up
             ? "health-status-up"
             : "health-status-down";
-          div.innerHTML = `<div class="health-status-dot ${statusClass}"></div><span class="health-name" style="cursor:help">${esc(c.name)}</span>`;
+          div.innerHTML = `
+            <div class="health-status-dot ${statusClass}"></div>
+            <span class="health-name" style="cursor:help">${esc(c.name)}</span>
+            <button onclick="dockerAction('restart','${esc(c.name)}')"
+              title="Restart container"
+              style="margin-left:auto;padding:1px 6px;font-size:0.65rem;background:transparent;border:1px solid var(--border,#444);border-radius:4px;color:var(--muted,#888);cursor:pointer;opacity:0.6;line-height:1.4"
+              onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">↺</button>
+          `;
           div.addEventListener('mouseenter', function(e) {
             let popup = document.getElementById('container-tooltip');
             if (!popup) {
@@ -3042,6 +3066,13 @@
           });
           cg.appendChild(div);
         });
+        // populate log-service-select
+        const sel = document.getElementById('log-service-select');
+        if (sel) {
+          const prev = sel.value;
+          sel.innerHTML = '<option value="">Select container…</option>' +
+            containers.map(c => `<option value="${esc(c.name)}"${c.name===prev?' selected':''}>${esc(c.name)}</option>`).join('');
+        }
       }
 
       function renderStats(stats) {
@@ -5107,6 +5138,43 @@
             }
           })
           .catch(err => alert('Error: ' + err));
+      }
+
+      async function dockerAction(action, container) {
+        if (!confirm(`${action} container "${container}"?`)) return;
+        try {
+          const res = await fetch('/api/docker/action', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action, container})
+          });
+          const d = await res.json();
+          if (d.success) {
+            showToast(`✅ ${action} "${container}" OK`, 'success');
+            setTimeout(() => loadDashboard(), 3000);
+          } else {
+            showToast(`❌ ${action} failed: ${d.error || 'unknown error'}`, 'error');
+          }
+        } catch(e) {
+          showToast(`❌ Docker action failed: ${e.message}`, 'error');
+        }
+      }
+
+      async function fetchContainerLogs() {
+        const service = document.getElementById('log-service-select').value;
+        const lines = document.getElementById('log-lines-select').value;
+        const out = document.getElementById('container-log-output');
+        if (!service) { out.textContent = 'Select a container first.'; return; }
+        out.textContent = 'Loading…';
+        try {
+          const res = await fetch(`/api/docker/logs?service=${encodeURIComponent(service)}&lines=${lines}`);
+          const d = await res.json();
+          if (d.error) { out.textContent = 'Error: ' + d.error; return; }
+          out.textContent = d.output || '(empty)';
+          out.scrollTop = out.scrollHeight;
+        } catch(e) {
+          out.textContent = 'Fetch error: ' + e.message;
+        }
       }
     </script>
     <script>

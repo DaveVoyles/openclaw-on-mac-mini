@@ -5,6 +5,8 @@ from collections.abc import Awaitable, Callable
 from aiohttp import web
 
 from .api_handlers import (
+    api_docker_action_handler,
+    api_docker_logs_handler,
     api_agent_ask_handler,
     api_agent_ask_stream_handler,
     api_agent_session_detail_handler,
@@ -142,6 +144,10 @@ def setup_dashboard(
     app.router.add_post("/api/sms/settings", action(api_sms_settings_handler))
     app.router.add_get("/api/sms/status", api_sms_status_handler)
     app.router.add_get("/api/sms/history", api_sms_history_handler)
+
+    # Docker management
+    app.router.add_post("/api/docker/action", action(api_docker_action_handler))
+    app.router.add_get("/api/docker/logs", api_docker_logs_handler)
 
     # Agent interaction
     app.router.add_post("/api/agent/ask", action(api_agent_ask_handler))

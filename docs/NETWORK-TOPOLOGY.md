@@ -13,7 +13,6 @@ Operator-facing reference for how traffic moves between the Mac Mini host, Docke
 | LAN host | Mac Mini M4 | Primary OpenClaw host | `192.168.1.93` | OpenClaw publishes the dashboard and health endpoints from here. |
 | Container | `openclaw` | Discord bot + dashboard + metrics | `:8765` | Docker publishes `8765:8765` in both compose files. |
 | Container | `open-webui` | AI chat UI | `:3000` (host) → `:8080` (container) | OpenAI-compat API → openclaw:8765/v1. External: chat.davevoyles.synology.me |
-| Container | `dashboard-v2` | OpenClaw monitoring dashboard | `:7001` (host) → `:3001` (container) | Node.js dashboard; auth required. External: openclaw-dashboard.davevoyles.synology.me |
 | LAN host | MonsterVision | Patreon downloader | `192.168.1.93:8766` | OpenClaw polls its API for cookie/download status. |
 | LAN host | Uptime Kuma | External uptime monitor | `192.168.1.93:3001` | Polls `/health` and `/metrics`. |
 | LAN host | Tautulli | Plex analytics | `192.168.1.93:8181` | Used for media/server health insights. |
@@ -87,27 +86,7 @@ openclaw container → LLM routing → response stream
 
 Models available: openclaw-auto, openclaw-gemini, openclaw-copilot, openclaw-openai, openclaw-anthropic.
 
-### 4. Dashboard v2 → OpenClaw
-
-Dashboard monitors openclaw health and metrics:
-
-```text
-Browser (openclaw-dashboard.davevoyles.synology.me)
-        |
-        v
-Synology DSM reverse proxy (HTTPS → HTTP)
-        |
-        v
-dashboard-v2 container (:7001)
-        |
-        v
-http://openclaw:8765 (Docker internal DNS)
-        |
-        v
-/health, /metrics, /api/dashboard/* endpoints
-```
-
-### 5. Nightly backup flow
+### 4. Nightly backup flow
 
 ```text
 openclaw container
@@ -137,7 +116,6 @@ OpenClaw checks MonsterVision roughly every 5 minutes for cookie expiry and stal
 | --- | --- | --- | --- | --- |
 | `8765` | `/health`, `/metrics`, `/dashboard`, `/api/dashboard` | OpenClaw | HTTP | Primary operator surface and probe target. |
 | `3000` | Open WebUI | open-webui container | HTTP | AI chat UI proxied to openclaw OpenAI API. External: chat.davevoyles.synology.me |
-| `7001` | Dashboard v2 | dashboard-v2 container | HTTP | OpenClaw monitoring dashboard. External: openclaw-dashboard.davevoyles.synology.me |
 | `19501` | NAS proxy | Mac Mini host helper | HTTP → HTTPS proxy | Required when Dockerized OpenClaw needs DSM API access. |
 | `8766` | MonsterVision API | Mac Mini host service | HTTP | Source for Patreon cookie/download monitoring. |
 | `3001` | Uptime Kuma | Mac Mini host service | HTTP | Where external uptime checks are configured. |

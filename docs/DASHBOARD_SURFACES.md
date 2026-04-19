@@ -25,15 +25,13 @@ Added April 2026. Use this as the single source of truth for which interface exi
 | 💬 **Open WebUI** | `chat.davevoyles.synology.me` | 3000 | Long chats, rich formatting, any device | Markdown · Tables · Code blocks · Chat history · Regenerate |
 | 💻 **CLI / Terminal** | `/terminal` (browser) or `openclaw` binary | 8765 | Power users, scripting, debugging | Low latency · Scriptable · Pipe-friendly |
 | 📨 **Slack bot** | Slack DM or `@openclaw` mention | — | Family file processing, async queries, plain-language mode | Wave 4 commands · Block Kit buttons · File alerts · `/simple` toggle · Windows HTTP upload |
-| 📊 **Dashboard v2** | `openclaw-dashboard.davevoyles.synology.me` | 7001 | Stats & monitoring at a glance | Always-on panel · Visual metrics |
-| 🛠️ **OpenClaw Dashboard** | `openclaw.davevoyles.synology.me` | 8765 | Ops, status, admin tasks | Live status · Skill list · Route map · Cookie refresh |
+| 🛠️ **OpenClaw Dashboard** | `openclaw.davevoyles.synology.me` | 8765 | Ops, status, admin tasks, container management | Live status · Skill list · Route map · Cookie refresh · Container restart · Log viewer |
 
 ### Technical wiring
 
 - **Open WebUI** (`ghcr.io/open-webui/open-webui:main`) → connects to `http://openclaw:8765/v1` (OpenAI-compatible). Auth disabled (`WEBUI_AUTH=False`). Data persisted in Docker named volume `open-webui-data`.
-- **Dashboard v2** (`openclaw-dashboard-v2` container) → port 7001. Lightweight stats view.
 - **Slack bot** (`src/slack_bot.py`) → Socket Mode. Requires `SLACK_APP_TOKEN` (xapp-) and `SLACK_BOT_TOKEN` (xoxb-) in `.env`. Wave 5 commands (13 total): `/chat`, `/help`, `/simple`, `/files`, `/research`, `/batch`, `/health`, `/digest`, `/template`, `/metrics`, `/clear`, `/brief`, `/mystats`. File uploads via DM Block Kit buttons (Summarize, Proofread, Explain, Chart, Translate, Compare). `/upload` endpoint: `POST http://192.168.1.93:8080/upload` with `X-OpenClaw-Key` header; allowed extensions `.docx .xlsx .pdf .txt .csv`. To update manifest: `make slack-manifest` (copies JSON + opens browser); after saving, update `SLACK_BOT_TOKEN` in `.env` and run `make ship-server`.
-- **Traefik routes**: `chat.*` → port 3000, `openclaw-dashboard.*` → port 7001. Dynamic config at `config/traefik/dynamic/mac-mini.yml`.
+- **Traefik routes**: `chat.*` → port 3000. Dynamic config at `config/traefik/dynamic/mac-mini.yml`.
 
 
 
