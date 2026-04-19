@@ -143,6 +143,18 @@
             margin-bottom: 2px;
         }
 
+        .toc-box li.toc-group {
+            counter-increment: none;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: #764ba2;
+            padding: 10px 6px 3px;
+            border-bottom: 1px solid #ede9fa;
+            margin-bottom: 6px;
+        }
+
         .toc-box a {
             display: flex;
             align-items: flex-start;
@@ -426,6 +438,7 @@
         <a href="#option-1-use-it-from-your-browser-easiest">🌐 Use in Browser</a>
         <a href="#option-2-use-it-from-slack">💬 Use in Slack</a>
         <a href="#working-with-word-documents">📄 Handle Files</a>
+        <a href="#frequently-asked-questions">❓ FAQ</a>
     </nav>
 
     <!-- ── Content area ──────────────────────────────────── -->
@@ -439,6 +452,7 @@
             <nav class="toc-box">
                 <h2>Contents</h2>
                 <ol>
+                    <li class="toc-group">🚀 Getting Started</li>
                     <li><a href="#option-1-use-it-from-your-browser-easiest">🌐 Use it from your browser</a></li>
                     <li><a href="#option-2-use-it-from-slack">💬 Use it from Slack</a></li>
                     <li><a href="#working-with-word-documents">📄 Working with Word documents</a></li>
@@ -446,34 +460,37 @@
                     <li><a href="#tips-for-getting-plain-easy-to-read-answers">💡 Tips for plain answers</a></li>
                     <li><a href="#common-things-you-can-ask">✉️ Common things to ask</a></li>
                     <li><a href="#need-help">❓ Need help?</a></li>
+                    <li class="toc-group">📁 Files & Advanced Tasks</li>
                     <li><a href="#sync-your-documents-folder-mac-only">📁 Sync your Documents folder</a></li>
                     <li><a href="#research-for-your-documents">🔍 Research for documents</a></li>
                     <li><a href="#process-multiple-files-at-once">📦 Batch files</a></li>
-                    <li><a href="#check-if-everything-is-working-status">/status</a></li>
+                    <li><a href="#check-if-everything-is-working-status">✅ /status</a></li>
                     <li><a href="#automatic-file-alerts">🔔 Automatic File Alerts</a></li>
                     <li><a href="#turn-excel-data-into-a-chart">📊 Turn Excel into Chart</a></li>
                     <li><a href="#translate-a-document">🌍 Translate a Document</a></li>
                     <li><a href="#compare-two-documents">🔀 Compare Two Documents</a></li>
                     <li><a href="#see-your-recent-files-files-recent">📁 /files recent</a></li>
-                    <li><a href="#start-fresh-clear">/clear</a></li>
+                    <li><a href="#start-fresh-clear">🔄 /clear</a></li>
                     <li><a href="#smart-suggestions">💡 Smart Suggestions</a></li>
                     <li><a href="#your-welcome-message">👋 Welcome Message</a></li>
-                    <li><a href="#your-recent-files-at-a-glance-brief">/brief</a></li>
-                    <li><a href="#search-your-files-search">/search</a></li>
-                    <li><a href="#your-personal-stats-mystats">/mystats</a></li>
+                    <li><a href="#your-recent-files-at-a-glance-brief">📂 /brief</a></li>
+                    <li><a href="#search-your-files-search">🔍 /filesearch</a></li>
+                    <li><a href="#your-personal-stats-mystats">📊 /mystats</a></li>
                     <li><a href="#save-any-bot-response">🔖 Save responses</a></li>
-                    <li><a href="#view-your-saved-notes-saved">/saved</a></li>
-                    <li><a href="#starter-templates-template">/template</a></li>
-                    <li><a href="#daily-file-digest-digest">/digest</a></li>
-                    <li><a href="#set-your-digest-time-schedule">/schedule</a></li>
-                    <li><a href="#set-your-name-nickname">/nickname</a></li>
+                    <li><a href="#view-your-saved-notes-saved">🔖 /mypins</a></li>
+                    <li><a href="#starter-templates-template">📋 /template</a></li>
+                    <li><a href="#daily-file-digest-digest">📬 /digest</a></li>
+                    <li><a href="#set-your-digest-time-schedule">⏰ /schedule</a></li>
+                    <li><a href="#set-your-name-nickname">👤 /nickname</a></li>
                     <li><a href="#your-openclaw-home-tab">🏠 Home Tab</a></li>
                     <li><a href="#retry-after-an-error">🔁 Retry after error</a></li>
+                    <li class="toc-group">🔗 Connect Your Accounts</li>
                     <li><a href="#connecting-your-accounts">🔗 Connecting Accounts</a></li>
                     <li><a href="#connect-your-gmail-email-setup">📧 Gmail /email setup</a></li>
                     <li><a href="#check-your-calendar-calendar">📅 /calendar</a></li>
                     <li><a href="#connect-your-dropbox-dropbox-connect">📦 /clawbox connect</a></li>
                     <li><a href="#windows-sync-without-extra-software">💻 Windows sync</a></li>
+                    <li class="toc-group">💬 Slack & Help</li>
                     <li><a href="#getting-started-with-slack">💬 Getting started with Slack</a></li>
                     <li><a href="#frequently-asked-questions">❓ FAQ</a></li>
                 </ol>
@@ -519,7 +536,7 @@
                     <li>Type your question and press Enter — OpenClaw will reply privately, just to you</li>
                 </ol>
                 <p>You can also use slash commands from any channel:</p>
-                <pre>/ask what does this word mean?</pre>
+                <pre>/chat what does this word mean?</pre>
                 <blockquote>
                     <p>📲 <strong>Don't have Slack yet?</strong> Download it free for
                     <a href="https://slack.com/downloads/mac" target="_blank">Mac</a>,
@@ -603,8 +620,14 @@
             <!-- ── Section 7 ── -->
             <div class="section-card">
                 <h2 id="need-help">❓ Need help?</h2>
-                <p>Type <code>/help</code> in Slack any time to see examples.</p>
-                <p>Or just ask: <code>what can you do?</code></p>
+                <p>Type <code>/help</code> in Slack any time to see a full list of things OpenClaw can do.</p>
+                <p>Or just ask in plain English: <em>"what can you help me with?"</em> — OpenClaw will explain.</p>
+                <ul>
+                    <li><strong>Something not working?</strong> Try again — if it fails twice, ask Dave.</li>
+                    <li><strong>Got a weird error?</strong> Type <code>/status</code> to check if everything is connected properly.</li>
+                    <li><strong>Forgot a command?</strong> Just describe what you want: "How do I search my files?" — OpenClaw will tell you the command.</li>
+                    <li><strong>Need step-by-step help?</strong> Visit the <a href="/onboarding">interactive setup guide</a> — it walks you through everything.</li>
+                </ul>
             </div>
 
             <!-- ── Section 8 ── -->
@@ -625,18 +648,10 @@
                     </li>
                 </ol>
 
-                <h3>One-time setup (ask Dave to help if needed)</h3>
-                <p>Run this once in Terminal on your Mac:</p>
-                <pre><code>bash ~/openclaw/scripts/install_watcher.sh</code></pre>
-                <p>The installer will:</p>
-                <ul>
-                    <li>Create the <code>~/Documents/OpenClaw/</code> folder for you</li>
-                    <li>Check that your Mac can reach the home server</li>
-                    <li>Set up automatic background syncing that starts at login</li>
-                </ul>
-                <p>If you see a friendly message saying <strong>"Your documents will now sync automatically!"</strong> — you're all set.</p>
+                <h3>One-time setup</h3>
+                <p>Ask Dave to help set this up — he has an installer script that handles everything automatically. Once done, just drop files in the folder and OpenClaw picks them up.</p>
                 <blockquote>
-                    <p><strong>Note:</strong> This requires your Mac to have SSH access to the home server. If the installer shows an error about SSH, ask Dave — it's a one-time 2-minute fix.</p>
+                    <p>💡 <strong>Not comfortable with Terminal commands?</strong> That's fine — just ask Dave. He can set this up for you in about 2 minutes, remotely.</p>
                 </blockquote>
 
                 <h3>Supported file types</h3>
@@ -654,9 +669,8 @@
 
                 <h3>Troubleshooting</h3>
                 <ul>
-                    <li><strong>File didn't sync?</strong> Check <code>~/Library/Logs/openclaw-watcher.log</code> (or ask Dave to look)</li>
-                    <li><strong>Want instant sync?</strong> Install fswatch: open Terminal and type <code>brew install fswatch</code></li>
-                    <li><strong>To stop syncing:</strong> Ask Dave, or run <code>launchctl unload ~/Library/LaunchAgents/com.openclaw.watcher.plist</code></li>
+                    <li><strong>File didn't sync?</strong> Wait 30 seconds and try dropping it again. If still nothing, ask Dave.</li>
+                    <li><strong>Want to stop syncing:</strong> Ask Dave — he can turn it off in under a minute.</li>
                 </ul>
             </div>
 
@@ -838,10 +852,10 @@
 
             <!-- ── Section 21 ── -->
             <div class="section-card">
-                <h2 id="search-your-files-search">🔍 Search Your Files — <code>/search</code></h2>
+                <h2 id="search-your-files-search">🔍 Search Your Files — <code>/filesearch</code></h2>
                 <p>Looking for a file you uploaded a while ago? Type a keyword from the filename or something you remember from the content:</p>
-                <pre>/search budget
-/search quarterly report</pre>
+                <pre>/filesearch budget
+/filesearch quarterly report</pre>
                 <p>OpenClaw will show you any matching files from your upload history — file name, type, and when you sent it. Only you can see the results.</p>
                 <p>If nothing comes up, try <code>/brief</code> to see everything you've uploaded recently.</p>
             </div>
@@ -871,9 +885,9 @@
 
             <!-- ── Section 24 ── -->
             <div class="section-card">
-                <h2 id="view-your-saved-notes-saved">🔖 View Your Saved Notes — <code>/saved</code></h2>
+                <h2 id="view-your-saved-notes-saved">🔖 View Your Saved Notes — <code>/mypins</code></h2>
                 <p>Want to look back at things you've bookmarked? Type:</p>
-                <pre>/saved</pre>
+                <pre>/mypins</pre>
                 <p>OpenClaw will show you your last 5 saved notes — a short preview of each one and when you saved it. Only you can see this list.</p>
                 <p>If you haven't saved anything yet, it'll remind you how: just react to any bot reply with the 🔖 emoji.</p>
             </div>
@@ -1005,6 +1019,9 @@
             <!-- ── Section 34 ── -->
             <div class="section-card">
                 <h2 id="connect-your-dropbox-dropbox-connect">📦 Connect Your Dropbox — <code>/clawbox connect</code></h2>
+                <blockquote>
+                    <p>💡 <strong>Note:</strong> The command is <code>/clawbox</code> — that's our name for your Dropbox connection. Slack reserves the name "/dropbox" so we use "/clawbox" instead. It's the same thing!</p>
+                </blockquote>
                 <p>Connecting your Dropbox is now <strong>one click</strong> — no developer accounts needed.</p>
                 <p><strong>Just type this in Slack:</strong></p>
                 <pre>/clawbox connect</pre>
@@ -1077,7 +1094,7 @@
                     <li><code>/help</code> — shows everything OpenClaw can do</li>
                     <li><code>/simple on</code> — switches to shorter, plain-English answers</li>
                     <li><code>/brief</code> — shows a summary of your recent files</li>
-                    <li><code>/ask what does this mean?</code> — ask a quick question from any channel</li>
+                    <li><code>/chat what does this mean?</code> — ask a quick question from any channel</li>
                 </ul>
                 <p>Whenever you see something in this guide starting with <code>/</code>, just type it into Slack and press Enter.</p>
 
@@ -1130,6 +1147,12 @@
                 <blockquote>
                     <p>💡 <strong>Rule of thumb:</strong> Use OpenClaw for questions, summaries, drafting text, and explaining things. For anything you'd normally call a professional about, use it as a starting point — not the final word.</p>
                 </blockquote>
+
+                <h3>What if OpenClaw stops responding?</h3>
+                <p>The home server may be restarting — this happens occasionally after updates and usually takes less than 2 minutes. Just wait a moment and try again. If OpenClaw is still unresponsive after 5 minutes, send Dave a text and he'll check the server.</p>
+
+                <h3>What happens to my uploaded files?</h3>
+                <p>Your files are stored privately on Dave's home server — they're not uploaded to any public cloud or shared service. Only you can see your files. You can ask OpenClaw to delete a file at any time: just say <em>"delete that file"</em> or <em>"clear my history."</em> Files are not kept forever — old files are automatically cleaned up after a period of inactivity.</p>
             </div>
 
         </main>
