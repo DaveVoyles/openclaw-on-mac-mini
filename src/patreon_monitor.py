@@ -223,6 +223,13 @@ class PatreonHealthChecker:
         cookie_info = api_data.get("cookie_status", {})
         if "age_hours" in cookie_info:
             return float(cookie_info["age_hours"])
+        if "age_days" in cookie_info:
+            return float(cookie_info["age_days"]) * 24
+        # remaining_hours + ttl_days gives us cookie age indirectly
+        if "remaining_hours" in cookie_info and "ttl_days" in cookie_info:
+            ttl_hours = float(cookie_info["ttl_days"]) * 24
+            age_hours = ttl_hours - float(cookie_info["remaining_hours"])
+            return max(0.0, age_hours)
 
         # Fallback: Parse from logs
         try:
