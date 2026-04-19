@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from vector_store_config import (
     CHROMA_DIR,
@@ -35,7 +35,7 @@ _collections: dict = {}
 _lock = asyncio.Lock()
 
 
-def _get_client():
+def _get_client() -> Any:
     """Return the ChromaDB PersistentClient, creating it on first call."""
     global _client
     if _client is None:
@@ -47,7 +47,7 @@ def _get_client():
     return _client
 
 
-def _get_collection(name: str):
+def _get_collection(name: str) -> Any:
     """Get or create a ChromaDB collection by name."""
     if name not in _collections:
         client = _get_client()
@@ -96,7 +96,7 @@ async def add_document(
     meta.setdefault("access_count", 0)
     meta.setdefault("last_accessed", 0.0)
 
-    def _upsert():
+    def _upsert() -> None:
         col = _get_collection(collection_name)
         col.upsert(
             ids=[doc_id],
@@ -144,7 +144,7 @@ async def search(
     fetch_k = top_k + 5
 
     async def _query_once(query_where: Optional[dict]) -> list[dict]:
-        def _query():
+        def _query() -> Any:
             col = _get_collection(collection_name)
             if col.count() == 0:
                 return []
@@ -352,7 +352,7 @@ async def search_all(
 async def delete_document(collection_name: str, doc_id: str) -> None:
     """Remove a document from a collection by ID."""
 
-    def _delete():
+    def _delete() -> None:
         col = _get_collection(collection_name)
         col.delete(ids=[doc_id])
 
@@ -364,7 +364,7 @@ async def delete_document(collection_name: str, doc_id: str) -> None:
 async def get_stats() -> dict:
     """Return stats for all collections."""
 
-    def _stats():
+    def _stats() -> dict:
         _get_client()  # ensure collections are initialized
         stats = {}
         for name in [MEMORIES_COLLECTION, CONVERSATIONS_COLLECTION, RESEARCH_COLLECTION]:

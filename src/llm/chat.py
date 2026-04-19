@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 import time as _time
-from typing import Any
+from typing import Any, AsyncGenerator
 
 from google import genai
 
@@ -430,7 +430,7 @@ async def _stream_copilot_chunks(
     history: list[dict],
     context: str,
     model_override: str | None = None,
-):
+) -> AsyncGenerator[tuple[str, bool, dict[str, Any]], None]:
     """Async generator for PROVIDER_STREAM=1 copilot proxy path.
 
     Yields ``(accumulated_partial, False, {})`` every _PROVIDER_STREAM_PARTIAL_INTERVAL chars
@@ -671,7 +671,7 @@ async def chat_stream(
     context_controls: dict[str, Any] | None = None,
     routing_profile: str = "",
     trace: RequestTrace | None = None,
-):
+) -> AsyncGenerator[tuple[str, bool, dict[str, Any]], None]:
     """Async generator yielding ``(chunk_text, is_final, metadata)`` tuples."""
     log.info("LLM chat_stream start model_pref=%s trace=%s msg=%.60s",
              model_preference, get_trace_id(), user_message)

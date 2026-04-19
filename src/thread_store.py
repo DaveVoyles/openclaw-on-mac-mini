@@ -52,7 +52,7 @@ def _get_db() -> sqlite3.Connection:
     return _db
 
 
-def _create_tables(db: sqlite3.Connection):
+def _create_tables(db: sqlite3.Connection) -> None:
     db.executescript("""
         CREATE TABLE IF NOT EXISTS threads (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +101,7 @@ async def create_thread(
     now = time.time()
 
     async with _lock:
-        def _insert():
+        def _insert() -> Optional[int]:
             db = _get_db()
             cur = db.execute(
                 "INSERT INTO threads (user_id, channel_id, name, status, created_at, updated_at) "
@@ -126,7 +126,7 @@ async def add_message(
     token_est = len(content) // 4  # rough estimate
 
     async with _lock:
-        def _insert():
+        def _insert() -> None:
             db = _get_db()
             db.execute(
                 "INSERT INTO messages (thread_id, role, content, timestamp, token_estimate) "
@@ -151,7 +151,7 @@ async def get_thread_messages(
     limit = limit or CONTEXT_WINDOW_SIZE
 
     async with _lock:
-        def _query():
+        def _query() -> list[dict]:
             db = _get_db()
             rows = db.execute(
                 "SELECT role, content, timestamp FROM messages "
@@ -180,7 +180,7 @@ async def get_thread_history_for_llm(thread_id: int) -> list[dict]:
 async def set_thread_title(thread_id: int, title: str) -> None:
     """Set a human-readable title for a thread."""
     async with _lock:
-        def _update():
+        def _update() -> None:
             db = _get_db()
             db.execute("UPDATE threads SET title = ? WHERE id = ?", (title, thread_id))
             db.commit()
@@ -192,7 +192,7 @@ async def set_thread_title(thread_id: int, title: str) -> None:
 async def set_thread_name(thread_id: int, name: str) -> None:
     """Set the slug/name for a thread."""
     async with _lock:
-        def _update():
+        def _update() -> None:
             db = _get_db()
             db.execute("UPDATE threads SET name = ? WHERE id = ?", (name, thread_id))
             db.commit()
@@ -207,7 +207,7 @@ async def set_thread_status(thread_id: int, status: str) -> None:
         raise ValueError(f"Invalid status: {status}")
 
     async with _lock:
-        def _update():
+        def _update() -> None:
             db = _get_db()
             db.execute("UPDATE threads SET status = ? WHERE id = ?", (status, thread_id))
             db.commit()
@@ -219,7 +219,7 @@ async def set_thread_status(thread_id: int, status: str) -> None:
 async def delete_thread(thread_id: int) -> None:
     """Delete a thread and all its messages."""
     async with _lock:
-        def _delete():
+        def _delete() -> None:
             db = _get_db()
             db.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
             db.commit()
@@ -241,7 +241,7 @@ async def list_user_threads(
     """List threads for a user, sorted by most recently active."""
 
     async with _lock:
-        def _query():
+        def _query() -> list[dict]:
             db = _get_db()
             sql = "SELECT * FROM threads WHERE user_id = ?"
             params: list = [user_id]
@@ -259,7 +259,7 @@ async def list_user_threads(
 async def find_thread_by_name(user_id: int, name: str) -> Optional[dict]:
     """Find a thread by user and name."""
     async with _lock:
-        def _query():
+        def _query() -> Optional[dict]:
             db = _get_db()
             row = db.execute(
                 "SELECT * FROM threads WHERE user_id = ? AND name = ?",
@@ -278,7 +278,7 @@ async def search_threads(
     query_like = f"%{query}%"
 
     async with _lock:
-        def _search():
+        def _search() -> list[dict]:
             db = _get_db()
             # Search in thread title/name
             thread_hits = db.execute(
@@ -316,7 +316,7 @@ async def auto_archive_stale(days: int = 7) -> int:
     cutoff = time.time() - (days * 86400)
 
     async with _lock:
-        def _archive():
+        def _archive() -> int:
             db = _get_db()
             cur = db.execute(
                 "UPDATE threads SET status = 'archived' "
@@ -387,7 +387,7 @@ async def migrate_json_threads(threads_dir: Path) -> int:
 async def get_stats() -> dict:
     """Return thread store statistics."""
     async with _lock:
-        def _stats():
+        def _stats() -> dict:
             db = _get_db()
             total = db.execute("SELECT COUNT(*) FROM threads").fetchone()[0]
             active = db.execute("SELECT COUNT(*) FROM threads WHERE status='active'").fetchone()[0]
