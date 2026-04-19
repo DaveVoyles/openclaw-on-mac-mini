@@ -67,7 +67,7 @@ _proxy_healthy: bool = False  # set by check_proxy_health() at startup
 # Override with GITHUB_MODELS_ENABLED=false to disable even when a token is present.
 _GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
 _GITHUB_MODELS_OVERRIDE: str = os.getenv("GITHUB_MODELS_ENABLED", "").lower()
-GITHUB_MODELS_BASE_URL: str = "https://models.inference.ai.azure.com/v1"
+GITHUB_MODELS_BASE_URL: str = "https://models.github.ai/inference"
 GITHUB_MODELS_ENABLED: bool = (
     bool(_GITHUB_TOKEN) if _GITHUB_MODELS_OVERRIDE == "" else _GITHUB_MODELS_OVERRIDE == "true"
 )
