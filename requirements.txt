@@ -41,7 +41,7 @@ python-docx~=1.1
 openpyxl~=3.1
 
 # Async file I/O for non-blocking disk operations
-aiofiles~=24.1
+aiofiles~=25.1
 
 # Interactive REPL input with richer completion/history
 prompt_toolkit~=3.0
