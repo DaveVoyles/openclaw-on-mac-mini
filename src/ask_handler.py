@@ -6,6 +6,7 @@ import asyncio
 import datetime
 import io
 import logging
+import functools
 import re
 import time
 from typing import Any
@@ -312,78 +313,407 @@ async def _ask_post_response_learning(
 
 # ---------------------------------------------------------------------------
 
-async def handle_ask(
-    interaction: discord.Interaction,
+async def _ask_prepare_response_payload(
+    *,
+    response_text: str,
+    model_used: str,
     question: str,
-    attachment: discord.Attachment | None = None,
-    model: app_commands.Choice[str] | None = None,
-    scope: app_commands.Choice[str] | None = None,
-    reset_context: bool | None = None,
-    anchor: str | None = None,
-) -> None:
-    """Main /ask handler — extracted from bot.py for modularity."""
+    trace_id: str,
+    routing_notes: list[str],
+    guardrail_note: str,
+    thread_hint: str,
+    ask_start: float,
+    context_channel_id: int | None,
+    context_thread_id: int | None,
+    final_meta: dict[str, Any],
+    interaction: discord.Interaction,
+    stream_result: Any,
+    conv: Any,
+) -> dict[str, Any]:
+    """Post-LLM response preparation: detection, telemetry, formatting, chunking, actions.
 
-    if is_emergency_stopped():
-        await interaction.response.send_message(
-            "🛑 **Emergency stop is active.** `/ask` is disabled. Use `/estop resume` to resume.",
-            ephemeral=True,
+    Returns a dict with keys: response_text, model_used, routing_notes,
+    table_image_file, chunks, image_url, file_attachment, force_file_response, action_view.
+    """
+    # Empty/useless response detection
+    if response_text and model_used != "error":
+        stripped = response_text.strip()
+        is_empty = len(stripped) < 10
+        is_echo = stripped.lower().replace("'", "").replace('"', "") == question.lower().replace("'", "").replace('"', "")[:len(stripped)]
+        if is_empty or is_echo:
+            log.warning("Empty/echo response detected for: %.80s (response: %.80s)", question, stripped)
+            response_text = (
+                f"⚠️ I wasn't able to generate a useful response for this query.\n\n"
+                f"**What happened:** The model returned {'an empty response' if is_empty else 'your question echoed back'}.\n"
+                f"**Trace ID:** `{trace_id}`\n"
+                f"**Suggestion:** Try rephrasing, or use `/ask model:gemini` to force Gemini with tools.\n\n"
+                f"```\n{question[:300]}\n```"
+            )
+            routing_notes.append("Empty/echo response detected")
+            model_used = "error"
+
+    if guardrail_note:
+        response_text += guardrail_note
+    if thread_hint:
+        response_text += thread_hint
+
+    if model_used and model_used not in ("error", "timeout", "unknown"):
+        _attr_model = model_used.replace("models/", "")
+        response_text += f"\n\n*🤖 Model: {_attr_model}*"
+
+    # Routing telemetry audit record
+    try:
+        from llm import telemetry as _telemetry
+        _telem_provider = model_used.split("/")[0] if model_used not in ("error", "timeout", "unknown") else model_used
+        _telem_latency = (time.monotonic() - ask_start) * 1000
+        _telemetry.record(
+            provider=_telem_provider,
+            model=model_used,
+            latency_ms=_telem_latency,
+            success=model_used not in ("error", "timeout"),
+            query_type=routing_notes[0] if routing_notes else "unknown",
+            retry_count=getattr(stream_result, "retry_count", 0),
         )
-        return
+    except Exception as _telem_exc:  # broad: intentional
+        log.debug("Telemetry record failed: %s", _telem_exc)
 
-    if not llm_is_configured():
-        await interaction.response.send_message(
-            "⚠️ LLM not configured. Set `GOOGLE_API_KEY` (Gemini), `COPILOT_PROXY_URL` (Copilot), or `LOCAL_LLM_ENABLED=true` in your `.env` file.",
-            ephemeral=True,
+    response_text = _strip_placeholder_table_rows(response_text)
+
+    # Optional image fallback for large/complex tables
+    table_image_file = None
+    try:
+        from table_renderer import extract_table_text, render_table_image, should_render_table_image
+        table_text = extract_table_text(response_text)
+        if table_text and should_render_table_image(table_text):
+            img_bytes = render_table_image(table_text)
+            if img_bytes:
+                table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
+    except (ImportError, OSError, ValueError, AttributeError) as e:
+        log.debug("Table image rendering failed: %s", e)
+
+    response_text = _format_markdown_for_discord(response_text)
+    response_text = _format_tables_for_context(
+        response_text,
+        channel_id=context_channel_id,
+        thread_id=context_thread_id,
+    )
+    if context_channel_id is not None and response_text.strip():
+        anchor_id = f"ask_{int(time.time())}_{interaction.id}"
+        set_anchor_state(
+            int(context_channel_id),
+            int(context_thread_id) if context_thread_id is not None else None,
+            anchor_id,
         )
-        return
-
-    await interaction.response.defer()
-    _ask_start = time.monotonic()
-
-    # Set up request tracing
-    from trace_context import TraceContext, _current_trace
-    _trace = TraceContext(command="ask", user_id=interaction.user.id,
-                          channel_id=interaction.channel_id)
-    _trace_token = _current_trace.set(_trace)
-    log.info("ask_cmd start question=%.80s", question)
-    context_channel_id, context_thread_id = _resolve_channel_thread_scope(
-        interaction.channel,
-        interaction.channel_id,
-        user_id=interaction.user.id,
+    chunks = _split_response(response_text)
+    image_url = _extract_image_url(response_text)
+    file_attachment = _extract_file_attachment(response_text)
+    force_file_response = _should_prefer_file_for_multichunk_response(
+        question=question,
+        chunks=chunks,
+        response_text=response_text,
     )
 
-    _progress_lines: list[str] = []
-    _progress_start = time.monotonic()
-
-    async def _think(status: str) -> None:
-        await _ask_think(status, interaction=interaction, question=question,
-                         progress_lines=_progress_lines, progress_start=_progress_start)
-
-    async def _on_tool_call(tool_name: str, round_num: int, *, args: dict | None = None, result_preview: str | None = None) -> None:
-        await _ask_on_tool_call(tool_name, round_num, args=args, result_preview=result_preview,
-                                interaction=interaction, question=question,
-                                progress_lines=_progress_lines, progress_start=_progress_start)
-
-    # If an attachment was provided, route through the appropriate analyzer
-    if attachment:
-        mime = (attachment.content_type or "").split(";")[0].strip()
-        if mime in SUPPORTED_IMAGE_MIMES and attachment.size <= MAX_FILE_SIZE:
-            question = await _handle_image_attachment(attachment, question)
-        elif attachment.size > MAX_FILE_SIZE:
-            log.info("ask_cmd: attachment too large (%d bytes), skipping", attachment.size)
-        else:
-            question = await _handle_doc_attachment(attachment, question)
-
-    from llm.context import _extract_cross_channel_opt_in
-    retrieval_question, cross_channel_retrieval = _extract_cross_channel_opt_in(question)
-
-    # Get or create conversation context
-    conv = conversation_store.get(
+    follow_ups = await _generate_follow_ups(question, response_text)
+    action_view = ResponseActions(
+        response_text=response_text,
+        question=question,
         user_id=interaction.user.id,
         channel_id=interaction.channel_id,
-        user_name=str(interaction.user.display_name),
+        thread_id=context_thread_id,
+        follow_ups=follow_ups,
+        bot=None,
+        show_download=len(chunks) > 3,
     )
 
+    return {
+        "response_text": response_text,
+        "model_used": model_used,
+        "routing_notes": routing_notes,
+        "table_image_file": table_image_file,
+        "chunks": chunks,
+        "image_url": image_url,
+        "file_attachment": file_attachment,
+        "force_file_response": force_file_response,
+        "action_view": action_view,
+    }
+
+
+# ---------------------------------------------------------------------------
+
+async def _ask_deliver_response(
+    *,
+    interaction: discord.Interaction,
+    response_text: str,
+    question: str,
+    chunks: list[str],
+    image_url: str | None,
+    file_attachment: Any,
+    action_view: Any,
+    table_image_file: Any,
+    build_footer: Any,
+    force_file_response: bool,
+    final_meta: dict[str, Any],
+) -> None:
+    """Send the final response to Discord — handles file, auto-thread, and chunked embed paths."""
+    _auto_thread = None
+    if (
+        cfg.thread_auto_create
+        and not isinstance(interaction.channel, discord.Thread)
+        and not isinstance(interaction.channel, discord.DMChannel)
+        and hasattr(interaction.channel, "create_thread")
+    ):
+        try:
+            _thread_name = question[:50].strip() + ("…" if len(question) > 50 else "")
+            _archive_dur = 60 if cfg.thread_archive_minutes <= 60 else 1440
+            _auto_thread = await interaction.channel.create_thread(
+                name=f"💬 {_thread_name}",
+                auto_archive_duration=_archive_dur,
+                reason="Auto-threaded /ask conversation",
+            )
+            log.info("Auto-created thread '%s' for %s", _auto_thread.name, interaction.user)
+        except discord.HTTPException as e:
+            log.debug("Auto-thread creation failed: %s", e)
+
+    display_question = question if len(question) < 200 else question[:197] + "..."
+
+    # Long-response path: send as downloadable .md file
+    if len(response_text) > _FILE_THRESHOLD or force_file_response:
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
+        md_file = discord.File(
+            io.BytesIO(response_text.encode()),
+            filename=f"openclaw-response-{ts}.md",
+        )
+        summary = _build_attachment_embed_summary(
+            response_text,
+            coverage_summary=_build_coverage_summary_for_embed(final_meta),
+            attachment_note="📎 **Full response attached as file**",
+        )
+        embed = discord.Embed(description=summary, color=discord.Color.purple())
+        embed.set_author(
+            name=f"Replying to: {display_question}",
+            icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+        )
+        if image_url:
+            embed.set_image(url=image_url)
+        embed.set_footer(text=build_footer())
+        attachments = [md_file]
+        if file_attachment:
+            attachments.append(file_attachment[0])
+        try:
+            await interaction.edit_original_response(
+                content=None, embed=embed, attachments=attachments, view=action_view,
+            )
+        except discord.NotFound:
+            log.warning("Interaction expired, using followup for long response file")
+            await interaction.followup.send(
+                embed=embed, file=md_file, view=action_view,
+            )
+
+    # Normal path: split across embeds
+    else:
+        if _auto_thread:
+            await interaction.edit_original_response(
+                content=f"💬 Conversation continued in {_auto_thread.mention}",
+                embed=None,
+            )
+            for i, chunk in enumerate(chunks):
+                embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                if i == 0:
+                    embed.set_author(
+                        name=f"Replying to: {display_question}",
+                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                    )
+                    if image_url:
+                        embed.set_image(url=image_url)
+                is_last = i == len(chunks) - 1
+                embed.set_footer(text=build_footer(chunk_idx=i, total_chunks=len(chunks)))
+                send_kwargs = {"embed": embed}
+                if is_last:
+                    send_kwargs["view"] = action_view
+                if file_attachment and is_last:
+                    send_kwargs["file"] = file_attachment[0]
+                await _auto_thread.send(**send_kwargs)
+        else:
+            for i, chunk in enumerate(chunks):
+                embed = discord.Embed(description=chunk, color=discord.Color.purple())
+                if i == 0:
+                    embed.set_author(
+                        name=f"Replying to: {display_question}",
+                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
+                    )
+                    if image_url:
+                        embed.set_image(url=image_url)
+                is_last = i == len(chunks) - 1
+                embed.set_footer(text=build_footer(chunk_idx=i, total_chunks=len(chunks)))
+                if i == 0:
+                    kwargs: dict[str, Any] = {"content": None, "embed": embed}
+                    if is_last:
+                        kwargs["view"] = action_view
+                    if file_attachment and is_last:
+                        kwargs["attachments"] = [file_attachment[0]]
+                    try:
+                        await interaction.edit_original_response(**kwargs)
+                    except discord.NotFound:
+                        log.warning("Interaction expired, using followup for response")
+                        fb_kwargs = {"embed": embed}
+                        if is_last:
+                            fb_kwargs["view"] = action_view
+                        if file_attachment and is_last:
+                            fb_kwargs["file"] = file_attachment[0]
+                        await interaction.followup.send(**fb_kwargs)
+                else:
+                    kwargs = {"embed": embed}
+                    if is_last:
+                        kwargs["view"] = action_view
+                    if file_attachment and is_last:
+                        kwargs["file"] = file_attachment[0]
+                    await interaction.followup.send(**kwargs)
+
+    # Send table image if one was rendered
+    if table_image_file:
+        try:
+            await interaction.followup.send(file=table_image_file)
+        except discord.HTTPException as e:
+            log.debug("Failed to send table image: %s", e)
+
+
+# ---------------------------------------------------------------------------
+
+async def _ask_finalize(
+    *,
+    interaction: discord.Interaction,
+    question: str,
+    response_text: str,
+    model_used: str,
+    routing_notes: list[str],
+    trace: Any,
+    ask_start: float,
+    conv: Any,
+    context_channel_id: int | None,
+    context_thread_id: int | None,
+    final_meta: dict[str, Any],
+) -> None:
+    """Audit, telemetry, cleanup, and fire-and-forget learning after /ask response is sent."""
+    audit_log(interaction.user, "ask", detail=question[:200])
+
+    try:
+        from error_tracker import record_outcome
+        explainability = final_meta.get("explainability") if isinstance(final_meta.get("explainability"), dict) else {}
+        scope_mode = final_meta.get("scope_mode") or explainability.get("scope_mode")
+        lock_mode = explainability.get("lock_mode")
+        anchor_id = explainability.get("anchor_id")
+        anchor_age = explainability.get("anchor_age_seconds")
+        profile_values = explainability.get("effective_profile") or explainability.get("effective_profile_values")
+        record_outcome(
+            user_id=interaction.user.id,
+            question=question,
+            model_used=model_used,
+            success=(model_used != "error"),
+            error_msg=response_text if model_used == "error" else "",
+            trace_id=get_trace_id(),
+            response_preview=response_text[:2000],
+            latency_ms=int((time.monotonic() - ask_start) * 1000),
+            routing_notes=routing_notes,
+            scope_mode=scope_mode,
+            lock_mode=lock_mode,
+            anchor_id=anchor_id,
+            anchor_age=anchor_age,
+            profile_values=profile_values if isinstance(profile_values, dict) else {},
+            explainability=explainability if isinstance(explainability, dict) else {},
+        )
+    except (ImportError, AttributeError, ValueError) as exc:
+        log.debug("Error tracking record failed: %s", exc)
+
+    try:
+        from spending import record_response_time
+        elapsed_ms = (time.monotonic() - ask_start) * 1000
+        record_response_time(elapsed_ms, model=model_used)
+    except (ImportError, AttributeError, ValueError) as exc:
+        log.debug("Response time tracking failed: %s", exc)
+
+    conversation_store.cleanup_expired()
+
+    asyncio.get_running_loop().create_task(_ask_post_response_learning(
+        context_channel_id=context_channel_id,
+        context_thread_id=context_thread_id,
+        conv=conv,
+        question=question,
+        interaction=interaction,
+        response_text=response_text,
+    ))
+
+
+# ---------------------------------------------------------------------------
+
+async def _ask_inject_recall_and_rules(
+    conv: Any,
+    *,
+    question: str,
+    retrieval_question: str,
+    context_channel_id: int | None,
+    context_thread_id: int | None,
+    cross_channel_retrieval: bool,
+    think_hook: Any,
+) -> None:
+    """Inject contextual recall, learned rules, and user profile into conv history."""
+    await think_hook("Recalling relevant memories…")
+    try:
+        import vector_store
+        context_hits = await vector_store.recall(
+            retrieval_question,
+            top_k=3,
+            channel_id=context_channel_id,
+            thread_id=context_thread_id,
+            cross_channel=cross_channel_retrieval,
+        )
+        if context_hits:
+            conv.history.append({
+                "role": "model",
+                "parts": [f"[Relevant context from memory]\n{context_hits}"],
+            })
+    except Exception as e:  # broad: intentional
+        log.debug("Contextual recall skipped: %s", e)
+
+    await think_hook("Checking learned rules…")
+    try:
+        from rules_engine import get_relevant_rules
+        rules = await get_relevant_rules(question, top_k=3)
+        if rules:
+            rules_block = "\n".join(f"• {r}" for r in rules)
+            conv.history.append({
+                "role": "model",
+                "parts": [f"[Learned rules — follow these]\n{rules_block}"],
+            })
+    except (ImportError, AttributeError, ValueError, RuntimeError) as e:
+        log.debug("Rules injection skipped: %s", e)
+
+    try:
+        from user_profile import get_profile_prompt
+        profile_ctx = get_profile_prompt()
+        if profile_ctx:
+            conv.history.append({
+                "role": "model",
+                "parts": [profile_ctx],
+            })
+    except (ImportError, AttributeError, ValueError, RuntimeError) as e:
+        log.debug("Profile injection skipped: %s", e)
+
+
+# ---------------------------------------------------------------------------
+
+async def _ask_inject_conv_context(
+    conv: Any,
+    *,
+    interaction: discord.Interaction,
+    retrieval_question: str,
+    context_channel_id: int | None,
+    context_thread_id: int | None,
+    cross_channel_retrieval: bool,
+) -> str:
+    """Inject research thread context, thread hints, and channel roles into conv.
+
+    Returns thread_hint string (empty if no hint).
+    """
     # Research thread context injection
     if isinstance(interaction.channel, discord.Thread) and not conv.history:
         thread_name = interaction.channel.name or ""
@@ -442,10 +772,101 @@ async def handle_ask(
                     "role": "model",
                     "parts": [f"📌 *{channel_role.capitalize()} mode active.* {role_prompt}"],
                 })
-                log.debug("Injected %s channel role prompt for channel %d", channel_role, interaction.channel_id)
+                log.debug("Injected %s channel role prompt for channel %d",
+                          channel_role, interaction.channel_id)
+
+    return thread_hint
+
+
+# ---------------------------------------------------------------------------
+
+async def handle_ask(
+    interaction: discord.Interaction,
+    question: str,
+    attachment: discord.Attachment | None = None,
+    model: app_commands.Choice[str] | None = None,
+    scope: app_commands.Choice[str] | None = None,
+    reset_context: bool | None = None,
+    anchor: str | None = None,
+) -> None:
+    """Main /ask handler — extracted from bot.py for modularity."""
+
+    if is_emergency_stopped():
+        await interaction.response.send_message(
+            "🛑 **Emergency stop is active.** `/ask` is disabled. Use `/estop resume` to resume.",
+            ephemeral=True,
+        )
+        return
+
+    if not llm_is_configured():
+        await interaction.response.send_message(
+            "⚠️ LLM not configured. Set `GOOGLE_API_KEY` (Gemini), `COPILOT_PROXY_URL` (Copilot), or `LOCAL_LLM_ENABLED=true` in your `.env` file.",
+            ephemeral=True,
+        )
+        return
+
+    await interaction.response.defer()
+    _ask_start = time.monotonic()
+
+    # Set up request tracing
+    from trace_context import TraceContext, _current_trace
+    _trace = TraceContext(command="ask", user_id=interaction.user.id,
+                          channel_id=interaction.channel_id)
+    _trace_token = _current_trace.set(_trace)
+    log.info("ask_cmd start question=%.80s", question)
+    context_channel_id, context_thread_id = _resolve_channel_thread_scope(
+        interaction.channel,
+        interaction.channel_id,
+        user_id=interaction.user.id,
+    )
+
+    _progress_lines: list[str] = []
+    _progress_start = time.monotonic()
+
+    _think = functools.partial(
+        _ask_think, interaction=interaction, question=question,
+        progress_lines=_progress_lines, progress_start=_progress_start,
+    )
+    _on_tool_call = functools.partial(
+        _ask_on_tool_call, interaction=interaction, question=question,
+        progress_lines=_progress_lines, progress_start=_progress_start,
+    )
+
+    # If an attachment was provided, route through the appropriate analyzer
+    if attachment:
+        mime = (attachment.content_type or "").split(";")[0].strip()
+        if mime in SUPPORTED_IMAGE_MIMES and attachment.size <= MAX_FILE_SIZE:
+            question = await _handle_image_attachment(attachment, question)
+        elif attachment.size > MAX_FILE_SIZE:
+            log.info("ask_cmd: attachment too large (%d bytes), skipping", attachment.size)
+        else:
+            question = await _handle_doc_attachment(attachment, question)
+
+    from llm.context import _extract_cross_channel_opt_in
+    retrieval_question, cross_channel_retrieval = _extract_cross_channel_opt_in(question)
+
+    # Get or create conversation context
+    conv = conversation_store.get(
+        user_id=interaction.user.id,
+        channel_id=interaction.channel_id,
+        user_name=str(interaction.user.display_name),
+    )
+
+    thread_hint = await _ask_inject_conv_context(
+        conv,
+        interaction=interaction,
+        retrieval_question=retrieval_question,
+        context_channel_id=context_channel_id,
+        context_thread_id=context_thread_id,
+        cross_channel_retrieval=cross_channel_retrieval,
+    )
 
     response_text = ""
     model_used = "unknown"
+    result = None
+    _routing_notes: list[str] = []
+    _context_explainability_note = ""
+    _final_meta: dict[str, Any] = {}
     model_pref = model.value if model else get_model_preference(interaction.user.id)
     user_routing_profile = get_routing_profile(interaction.user.id)
     context_controls = _build_ask_context_controls(
@@ -472,68 +893,30 @@ async def handle_ask(
         guardrail_note = ""
 
     try:
-        # Contextual recall
-        await _think("Recalling relevant memories…")
-        try:
-            import vector_store
-            context_hits = await vector_store.recall(
-                retrieval_question,
-                top_k=3,
-                channel_id=context_channel_id,
-                thread_id=context_thread_id,
-                cross_channel=cross_channel_retrieval,
-            )
-            if context_hits:
-                conv.history.append({
-                    "role": "model",
-                    "parts": [f"[Relevant context from memory]\n{context_hits}"],
-                })
-        except Exception as e:  # broad: intentional
-            log.debug("Contextual recall skipped: %s", e)
-
-        # Inject learned rules (Phase 14A)
-        await _think("Checking learned rules…")
-        try:
-            from rules_engine import get_relevant_rules
-            rules = await get_relevant_rules(question, top_k=3)
-            if rules:
-                rules_block = "\n".join(f"• {r}" for r in rules)
-                conv.history.append({
-                    "role": "model",
-                    "parts": [f"[Learned rules — follow these]\n{rules_block}"],
-                })
-        except (ImportError, AttributeError, ValueError, RuntimeError) as e:
-            log.debug("Rules injection skipped: %s", e)
-
-        # Inject user profile context (Phase 14C)
-        try:
-            from user_profile import get_profile_prompt
-            profile_ctx = get_profile_prompt()
-            if profile_ctx:
-                conv.history.append({
-                    "role": "model",
-                    "parts": [profile_ctx],
-                })
-        except (ImportError, AttributeError, ValueError, RuntimeError) as e:
-            log.debug("Profile injection skipped: %s", e)
+        await _ask_inject_recall_and_rules(
+            conv,
+            question=question,
+            retrieval_question=retrieval_question,
+            context_channel_id=context_channel_id,
+            context_thread_id=context_thread_id,
+            cross_channel_retrieval=cross_channel_retrieval,
+            think_hook=_think,
+        )
 
         # Streaming response with progressive Discord edits
-        _routing_notes: list[str] = []
-        _context_explainability_note = ""
-        _final_meta: dict[str, Any] = {}
         _model_labels = {"auto": "smart routing", "local": "Gemma (local)", "gemini": "Gemini", "openai": "GPT-4o", "anthropic": "Claude", "copilot": "Copilot"}
         await _think(f"Routing to {_model_labels.get(model_pref, model_pref)}…")
         _last_edit_ref: list[float] = [0.0]
         display_question = question if len(question) < 200 else question[:197] + "..."
 
         try:
-            def _update_history(updated_history: list[dict[str, Any]]) -> None:
-                _ask_update_history(updated_history, conv=conv, interaction=interaction)
-
-            async def _handle_partial_chunk(chunk_text: str) -> None:
-                await _ask_handle_partial_chunk(chunk_text, interaction=interaction,
-                                                display_question=display_question,
-                                                last_edit_ref=_last_edit_ref)
+            _update_history = functools.partial(
+                _ask_update_history, conv=conv, interaction=interaction,
+            )
+            _handle_partial_chunk = functools.partial(
+                _ask_handle_partial_chunk, interaction=interaction,
+                display_question=display_question, last_edit_ref=_last_edit_ref,
+            )
 
             result = await run_ask_stream(
                 llm_stream=llm_chat_stream,
@@ -565,15 +948,15 @@ async def handle_ask(
                 final_meta=_final_meta,
                 context="ask",
             )
-            async def _run_retry_stream(retry_question: str) -> Any:
-                return await _ask_run_retry_stream(
-                    retry_question, model_used=model_used, model_pref=model_pref,
-                    conv=conv, interaction=interaction,
-                    context_channel_id=context_channel_id, context_thread_id=context_thread_id,
-                    on_tool_call=_on_tool_call, on_partial_chunk=_handle_partial_chunk,
-                    update_history=_update_history, context_controls=context_controls,
-                    routing_profile=user_routing_profile,
-                )
+            _run_retry_stream = functools.partial(
+                _ask_run_retry_stream,
+                model_used=model_used, model_pref=model_pref,
+                conv=conv, interaction=interaction,
+                context_channel_id=context_channel_id, context_thread_id=context_thread_id,
+                on_tool_call=_on_tool_call, on_partial_chunk=_handle_partial_chunk,
+                update_history=_update_history, context_controls=context_controls,
+                routing_profile=user_routing_profile,
+            )
 
             repair_result = await _run_quality_auto_repair(
                 question=question,
@@ -636,292 +1019,60 @@ async def handle_ask(
         )
         model_used = "error"
 
-    # Empty/useless response detection
-    if response_text and model_used != "error":
-        stripped = response_text.strip()
-        is_empty = len(stripped) < 10
-        is_echo = stripped.lower().replace("'", "").replace('"', "") == question.lower().replace("'", "").replace('"', "")[:len(stripped)]
-        if is_empty or is_echo:
-            log.warning("Empty/echo response detected for: %.80s (response: %.80s)", question, stripped)
-            response_text = (
-                f"⚠️ I wasn't able to generate a useful response for this query.\n\n"
-                f"**What happened:** The model returned {'an empty response' if is_empty else 'your question echoed back'}.\n"
-                f"**Trace ID:** `{_trace.trace_id}`\n"
-                f"**Suggestion:** Try rephrasing, or use `/ask model:gemini` to force Gemini with tools.\n\n"
-                f"```\n{question[:300]}\n```"
-            )
-            _routing_notes.append("Empty/echo response detected")
-            model_used = "error"
-
-    # Final response with embeds, file attachments, and action buttons
-    if guardrail_note:
-        response_text += guardrail_note
-    if thread_hint:
-        response_text += thread_hint
-
-    # Append model attribution note to response body
-    if model_used and model_used not in ("error", "timeout", "unknown"):
-        _attr_model = model_used.replace("models/", "")
-        response_text += f"\n\n*🤖 Model: {_attr_model}*"
-
-    # Routing telemetry audit record (Task #14)
-    try:
-        from llm import telemetry as _telemetry
-        _telem_provider = model_used.split("/")[0] if model_used not in ("error", "timeout", "unknown") else model_used
-        _telem_latency = (time.monotonic() - _ask_start) * 1000
-        _telemetry.record(
-            provider=_telem_provider,
-            model=model_used,
-            latency_ms=_telem_latency,
-            success=model_used not in ("error", "timeout"),
-            query_type=_routing_notes[0] if _routing_notes else "unknown",
-            retry_count=getattr(result, "retry_count", 0),
-        )
-    except Exception as _telem_exc:  # broad: intentional
-        log.debug("Telemetry record failed: %s", _telem_exc)
-
-    # Strip table rows that are pure placeholders like [Opponent], [Time]
-    response_text = _strip_placeholder_table_rows(response_text)
-
-    # Optional image fallback for large/complex tables
-    table_image_file = None
-    try:
-        from table_renderer import (
-            extract_table_text,
-            render_table_image,
-            should_render_table_image,
-        )
-        table_text = extract_table_text(response_text)
-        if table_text and should_render_table_image(table_text):
-            img_bytes = render_table_image(table_text)
-            if img_bytes:
-                table_image_file = discord.File(io.BytesIO(img_bytes), filename="table.png")
-    except (ImportError, OSError, ValueError, AttributeError) as e:
-        log.debug("Table image rendering failed: %s", e)
-
-    response_text = _format_markdown_for_discord(response_text)
-    response_text = _format_tables_for_context(
-        response_text,
-        channel_id=context_channel_id,
-        thread_id=context_thread_id,
-    )
-    if context_channel_id is not None and response_text.strip():
-        anchor_id = f"ask_{int(time.time())}_{interaction.id}"
-        set_anchor_state(
-            int(context_channel_id),
-            int(context_thread_id) if context_thread_id is not None else None,
-            anchor_id,
-        )
-    chunks = _split_response(response_text)
-    image_url = _extract_image_url(response_text)
-    file_attachment = _extract_file_attachment(response_text)
-    force_file_response = _should_prefer_file_for_multichunk_response(
-        question=question,
-        chunks=chunks,
+    _payload = await _ask_prepare_response_payload(
         response_text=response_text,
-    )
-
-    # Generate follow-up questions asynchronously
-    follow_ups = await _generate_follow_ups(question, response_text)
-    action_view = ResponseActions(
-        response_text=response_text,
+        model_used=model_used,
         question=question,
-        user_id=interaction.user.id,
-        channel_id=interaction.channel_id,
-        thread_id=context_thread_id,
-        follow_ups=follow_ups,
-        bot=None,
-        show_download=len(chunks) > 3,
-    )
-
-    # Auto-create thread for /ask responses (if not already in a thread/DM)
-    _auto_thread = None
-    if (
-        cfg.thread_auto_create
-        and not isinstance(interaction.channel, discord.Thread)
-        and not isinstance(interaction.channel, discord.DMChannel)
-        and hasattr(interaction.channel, "create_thread")
-    ):
-        try:
-            _thread_name = question[:50].strip() + ("…" if len(question) > 50 else "")
-            _archive_dur = 60 if cfg.thread_archive_minutes <= 60 else 1440
-            _auto_thread = await interaction.channel.create_thread(
-                name=f"💬 {_thread_name}",
-                auto_archive_duration=_archive_dur,
-                reason="Auto-threaded /ask conversation",
-            )
-            log.info("Auto-created thread '%s' for %s",
-                     _auto_thread.name, interaction.user)
-        except discord.HTTPException as e:
-            log.debug("Auto-thread creation failed: %s", e)
-
-    def _build_footer(chunk_idx: int = 0, total_chunks: int = 1) -> str:
-        return _ask_build_footer(chunk_idx, total_chunks, ask_start=_ask_start,
-                                 model_used=model_used, conv=conv,
-                                 context_explainability_note=_context_explainability_note,
-                                 routing_notes=_routing_notes)
-
-    # Long-response path: send as downloadable .md file
-    if len(response_text) > _FILE_THRESHOLD or force_file_response:
-        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S")
-        md_file = discord.File(
-            io.BytesIO(response_text.encode()),
-            filename=f"openclaw-response-{ts}.md",
-        )
-
-        summary = _build_attachment_embed_summary(
-            response_text,
-            coverage_summary=_build_coverage_summary_for_embed(_final_meta),
-            attachment_note="📎 **Full response attached as file**",
-        )
-
-        embed = discord.Embed(description=summary, color=discord.Color.purple())
-        display_question = question if len(question) < 200 else question[:197] + "..."
-        embed.set_author(
-            name=f"Replying to: {display_question}",
-            icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-        )
-        if image_url:
-            embed.set_image(url=image_url)
-        embed.set_footer(text=_build_footer())
-
-        attachments = [md_file]
-        if file_attachment:
-            attachments.append(file_attachment[0])
-
-        try:
-            await interaction.edit_original_response(
-                content=None, embed=embed, attachments=attachments, view=action_view,
-            )
-        except discord.NotFound:
-            log.warning("Interaction expired, using followup for long response file")
-            await interaction.followup.send(
-                embed=embed, file=md_file, view=action_view,
-            )
-
-    # Normal path: split across embeds
-    else:
-        # If auto-threaded, redirect responses there and leave a link in the channel
-        if _auto_thread:
-            await interaction.edit_original_response(
-                content=f"💬 Conversation continued in {_auto_thread.mention}",
-                embed=None,
-            )
-            for i, chunk in enumerate(chunks):
-                embed = discord.Embed(description=chunk, color=discord.Color.purple())
-                if i == 0:
-                    display_question = question if len(question) < 200 else question[:197] + "..."
-                    embed.set_author(
-                        name=f"Replying to: {display_question}",
-                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                    )
-                    if image_url:
-                        embed.set_image(url=image_url)
-                is_last = i == len(chunks) - 1
-                # W4-4: Footer on ALL chunks with chunk index
-                embed.set_footer(text=_build_footer(chunk_idx=i, total_chunks=len(chunks)))
-                send_kwargs = {"embed": embed}
-                if is_last:
-                    send_kwargs["view"] = action_view
-                if file_attachment and is_last:
-                    send_kwargs["file"] = file_attachment[0]
-                await _auto_thread.send(**send_kwargs)
-        else:
-            for i, chunk in enumerate(chunks):
-                embed = discord.Embed(description=chunk, color=discord.Color.purple())
-                if i == 0:
-                    display_question = question if len(question) < 200 else question[:197] + "..."
-                    embed.set_author(
-                        name=f"Replying to: {display_question}",
-                        icon_url=interaction.user.display_avatar.url if interaction.user.display_avatar else None,
-                    )
-                    if image_url:
-                        embed.set_image(url=image_url)
-                is_last = i == len(chunks) - 1
-                # W4-4: Footer on ALL chunks with chunk index
-                embed.set_footer(text=_build_footer(chunk_idx=i, total_chunks=len(chunks)))
-
-                if i == 0:
-                    kwargs: dict[str, Any] = {"content": None, "embed": embed}
-                    if is_last:
-                        kwargs["view"] = action_view
-                    if file_attachment and is_last:
-                        kwargs["attachments"] = [file_attachment[0]]
-                    try:
-                        await interaction.edit_original_response(**kwargs)
-                    except discord.NotFound:
-                        log.warning("Interaction expired, using followup for response")
-                        fb_kwargs = {"embed": embed}
-                        if is_last:
-                            fb_kwargs["view"] = action_view
-                        if file_attachment and is_last:
-                            fb_kwargs["file"] = file_attachment[0]
-                        await interaction.followup.send(**fb_kwargs)
-                else:
-                    kwargs = {"embed": embed}
-                    if is_last:
-                        kwargs["view"] = action_view
-                    if file_attachment and is_last:
-                        kwargs["file"] = file_attachment[0]
-                    await interaction.followup.send(**kwargs)
-
-    # Send table image if one was rendered
-    if table_image_file:
-        try:
-            await interaction.followup.send(file=table_image_file)
-        except discord.HTTPException as e:
-            log.debug("Failed to send table image: %s", e)
-
-    audit_log(interaction.user, "ask", detail=question[:200])
-
-    # Error tracking: record /ask outcome
-    try:
-        from error_tracker import record_outcome
-        explainability = _final_meta.get("explainability") if isinstance(_final_meta.get("explainability"), dict) else {}
-        scope_mode = _final_meta.get("scope_mode") or explainability.get("scope_mode")
-        lock_mode = explainability.get("lock_mode")
-        anchor_id = explainability.get("anchor_id")
-        anchor_age = explainability.get("anchor_age_seconds")
-        profile_values = explainability.get("effective_profile") or explainability.get("effective_profile_values")
-        record_outcome(
-            user_id=interaction.user.id,
-            question=question,
-            model_used=model_used,
-            success=(model_used != "error"),
-            error_msg=response_text if model_used == "error" else "",
-            trace_id=get_trace_id(),
-            response_preview=response_text[:2000],
-            latency_ms=int((time.monotonic() - _ask_start) * 1000),
-            routing_notes=_routing_notes,
-            scope_mode=scope_mode,
-            lock_mode=lock_mode,
-            anchor_id=anchor_id,
-            anchor_age=anchor_age,
-            profile_values=profile_values if isinstance(profile_values, dict) else {},
-            explainability=explainability if isinstance(explainability, dict) else {},
-        )
-    except (ImportError, AttributeError, ValueError) as exc:
-        log.debug("Error tracking record failed: %s", exc)
-
-    # Response-time tracking
-    try:
-        from spending import record_response_time
-        elapsed_ms = (time.monotonic() - _ask_start) * 1000
-        record_response_time(elapsed_ms, model=model_used)
-    except (ImportError, AttributeError, ValueError) as exc:
-        log.debug("Response time tracking failed: %s", exc)
-
-    conversation_store.cleanup_expired()
-
-    # Fire-and-forget: correction detection & profile learning (Phase 14)
-    asyncio.get_running_loop().create_task(_ask_post_response_learning(
+        trace_id=_trace.trace_id,
+        routing_notes=_routing_notes,
+        guardrail_note=guardrail_note,
+        thread_hint=thread_hint,
+        ask_start=_ask_start,
         context_channel_id=context_channel_id,
         context_thread_id=context_thread_id,
-        conv=conv,
-        question=question,
+        final_meta=_final_meta,
         interaction=interaction,
+        stream_result=result,
+        conv=conv,
+    )
+    response_text = _payload["response_text"]
+    model_used = _payload["model_used"]
+    _routing_notes = _payload["routing_notes"]
+
+    _build_footer = functools.partial(
+        _ask_build_footer, ask_start=_ask_start,
+        model_used=model_used, conv=conv,
+        context_explainability_note=_context_explainability_note,
+        routing_notes=_routing_notes,
+    )
+
+    await _ask_deliver_response(
+        interaction=interaction,
+        response_text=_payload["response_text"],
+        question=question,
+        chunks=_payload["chunks"],
+        image_url=_payload["image_url"],
+        file_attachment=_payload["file_attachment"],
+        action_view=_payload["action_view"],
+        table_image_file=_payload["table_image_file"],
+        build_footer=_build_footer,
+        force_file_response=_payload["force_file_response"],
+        final_meta=_final_meta,
+    )
+
+    await _ask_finalize(
+        interaction=interaction,
+        question=question,
         response_text=response_text,
-    ))
+        model_used=model_used,
+        routing_notes=_routing_notes,
+        trace=_trace,
+        ask_start=_ask_start,
+        conv=conv,
+        context_channel_id=context_channel_id,
+        context_thread_id=context_thread_id,
+        final_meta=_final_meta,
+    )
 
 
 async def handle_metrics(interaction: discord.Interaction) -> None:
